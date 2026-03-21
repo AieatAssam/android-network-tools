@@ -1,25 +1,20 @@
 package com.example.netswissknife.app.ui.screens
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 
 @Composable
 fun PortsScreen() {
-    Box(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = "Port Scanner Tool\n(Coming soon)",
-            style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+    ToolPlaceholderContent(
+        toolName    = "Port Scanner",
+        toolIcon    = Icons.Default.Search,
+        description = "Scan TCP/UDP ports on any host to check which services are reachable.",
+        features    = listOf(
+            "Custom port range and common presets",
+            "Service name resolution per port",
+            "Animated real-time progress bar",
+            "Save and share scan reports"
         )
-    }
+    )
 }

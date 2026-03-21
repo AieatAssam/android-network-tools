@@ -168,17 +168,122 @@ class <ToolName>ViewModel @Inject constructor(
 
 **File: `app/src/main/kotlin/com/example/netswissknife/app/ui/screens/<ToolName>Screen.kt`**
 
+> **CRITICAL – High-Fidelity UI Required**
+> Every tool screen MUST implement the full UI specification below.
+> Bare placeholder text (`"Coming soon"`) is **not acceptable** in delivered code.
+
+#### Mandatory UI patterns
+
+| Pattern | How to implement |
+|---------|-----------------|
+| **Animated entry** | `LaunchedEffect(Unit) { visible = true }` + `AnimatedVisibility(fadeIn + slideInVertically)` |
+| **State transitions** | `AnimatedContent` or `Crossfade` between idle / loading / success / error |
+| **Loading indicator** | `CircularProgressIndicator` inside the loading state |
+| **Card layout** | `ElevatedCard` with `RoundedCornerShape(16.dp)` for result panels |
+| **Input field** | `OutlinedTextField` with leading icon and trailing clear button |
+| **Error state** | Red-tinted card with `MaterialTheme.colorScheme.error` + retry button |
+| **Gradient accents** | `Brush.verticalGradient` / `Brush.radialGradient` for hero areas |
+| **Typography** | `displaySmall` → title, `titleMedium` → sections, `bodyMedium` → content |
+| **Dark mode safe** | All colors via `MaterialTheme.colorScheme.*`, never hardcoded hex |
+
+#### Template
+
 ```kotlin
 package com.example.netswissknife.app.ui.screens
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.netswissknife.app.ui.screens.<toolname>.<ToolName>ViewModel
+import com.example.netswissknife.app.ui.screens.<toolname>.<ToolName>UiState
 
 @Composable
 fun <ToolName>Screen(viewModel: <ToolName>ViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsState()
-    // Build your Compose UI here
+
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { visible = true }
+
+    AnimatedVisibility(
+        visible = visible,
+        enter   = fadeIn(tween(400)) + slideInVertically(tween(400)) { 40 }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // ── Input ──────────────────────────────────────────────────
+            var input by remember { mutableStateOf("") }
+            OutlinedTextField(
+                value         = input,
+                onValueChange = { input = it },
+                label         = { Text("Host / IP") },
+                leadingIcon   = { Icon(/* tool icon */, null) },
+                trailingIcon  = {
+                    if (input.isNotEmpty()) {
+                        IconButton(onClick = { input = "" }) {
+                            Icon(Icons.Default.Clear, "Clear")
+                        }
+                    }
+                },
+                modifier      = Modifier.fillMaxWidth(),
+                singleLine    = true
+            )
+
+            Button(
+                onClick  = { viewModel.execute(input) },
+                modifier = Modifier.fillMaxWidth(),
+                enabled  = input.isNotBlank() && !uiState.isLoading
+            ) {
+                Text("Run")
+            }
+
+            // ── Result / loading / error ──────────────────────────────
+            AnimatedContent(
+                targetState = uiState,
+                label       = "<toolname>-state"
+            ) { state ->
+                when {
+                    state.isLoading -> {
+                        Box(Modifier.fillMaxWidth(), Alignment.Center) {
+                            CircularProgressIndicator()
+                        }
+                    }
+                    state.error != null -> {
+                        ElevatedCard(
+                            colors = CardDefaults.elevatedCardColors(
+                                containerColor = MaterialTheme.colorScheme.errorContainer
+                            ),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Text(
+                                text     = state.error,
+                                color    = MaterialTheme.colorScheme.onErrorContainer,
+                                modifier = Modifier.padding(16.dp)
+                            )
+                        }
+                    }
+                    state.result != null -> {
+                        ElevatedCard(shape = RoundedCornerShape(16.dp)) {
+                            // Render result fields here
+                            Column(Modifier.padding(16.dp)) {
+                                Text(state.result.toString())
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 ```
 

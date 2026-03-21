@@ -5,25 +5,52 @@ plugins {
     alias(libs.plugins.hilt)
 }
 
+// ── CI-supplied properties ────────────────────────────────────────────────────
+// Pass via: ./gradlew :app:assembleRelease -PversionName=1.2.3 -PversionCode=100
+val ciVersionName: String? = findProperty("versionName") as String?
+val ciVersionCode: Int?    = (findProperty("versionCode") as String?)?.toIntOrNull()
+
+// Signing – set these secrets in GitHub Actions:
+//   RELEASE_KEYSTORE_BASE64, RELEASE_KEYSTORE_PASSWORD, RELEASE_KEY_ALIAS, RELEASE_KEY_PASSWORD
+val ciStoreFile:     String? = findProperty("storeFile")     as String?
+val ciStorePassword: String? = findProperty("storePassword") as String?
+val ciKeyAlias:      String? = findProperty("keyAlias")      as String?
+val ciKeyPassword:   String? = findProperty("keyPassword")   as String?
+
 android {
-    namespace = "com.example.netswissknife.app"
+    namespace  = "com.example.netswissknife.app"
     compileSdk = 34
 
     defaultConfig {
         applicationId = "com.example.netswissknife"
-        minSdk = 26
-        targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        minSdk        = 26
+        targetSdk     = 34
+        versionCode   = ciVersionCode ?: 1
+        versionName   = ciVersionName ?: "1.0.0"
+    }
+
+    signingConfigs {
+        if (ciStoreFile != null) {
+            create("release") {
+                storeFile     = file(ciStoreFile)
+                storePassword = ciStorePassword
+                keyAlias      = ciKeyAlias
+                keyPassword   = ciKeyPassword
+            }
+        }
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled    = true
+            isShrinkResources  = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            if (ciStoreFile != null) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 
@@ -61,6 +88,7 @@ dependencies {
     implementation(libs.compose.ui.tooling.preview)
     implementation(libs.compose.material3)
     implementation(libs.compose.material.icons.extended)
+    implementation(libs.compose.animation)
     debugImplementation(libs.compose.ui.tooling)
 
     // Navigation

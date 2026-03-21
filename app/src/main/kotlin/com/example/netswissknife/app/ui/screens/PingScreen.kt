@@ -1,25 +1,20 @@
 package com.example.netswissknife.app.ui.screens
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.NetworkCheck
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 
 @Composable
 fun PingScreen() {
-    Box(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = "Ping Tool\n(Coming soon)",
-            style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+    ToolPlaceholderContent(
+        toolName    = "Ping",
+        toolIcon    = Icons.Default.NetworkCheck,
+        description = "Send ICMP echo requests to measure round-trip time and packet loss to any host.",
+        features    = listOf(
+            "Continuous ping with live chart",
+            "Configurable packet size and TTL",
+            "Min / avg / max / jitter statistics",
+            "Export results as CSV"
         )
-    }
+    )
 }

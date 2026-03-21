@@ -3,6 +3,7 @@ package com.example.netswissknife.app
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -23,6 +24,7 @@ import dagger.hilt.android.AndroidEntryPoint
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         setContent {
             NetSwissKnifeTheme {
@@ -36,13 +38,11 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun NetSwissKnifeApp(navController: NavHostController) {
     Scaffold(
-        bottomBar = {
-            AppBottomNavigationBar(navController)
-        }
+        bottomBar = { AppBottomNavigationBar(navController) }
     ) { innerPadding ->
         AppNavHost(
             navController = navController,
-            modifier = Modifier.padding(innerPadding)
+            modifier      = Modifier.padding(innerPadding)
         )
     }
 }
@@ -54,13 +54,14 @@ private fun AppBottomNavigationBar(navController: NavHostController) {
 
     NavigationBar {
         NavRoutes.bottomNavItems.forEach { item ->
+            val selected = currentRoute == item.route
             NavigationBarItem(
-                selected = currentRoute == item.route,
-                onClick = {
+                selected = selected,
+                onClick  = {
                     navController.navigate(item.route) {
                         popUpTo(navController.graph.startDestinationId) { saveState = true }
                         launchSingleTop = true
-                        restoreState = true
+                        restoreState    = true
                     }
                 },
                 icon = {
