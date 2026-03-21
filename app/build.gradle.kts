@@ -48,8 +48,10 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            if (ciStoreFile != null) {
-                signingConfig = signingConfigs.getByName("release")
+            signingConfig = if (ciStoreFile != null) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
             }
         }
     }
