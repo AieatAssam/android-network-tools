@@ -72,9 +72,9 @@ class DnsRepositoryImpl : DnsRepository {
                     rawResponse = rawResponse
                 )
             )
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             NetworkResult.Error(
-                message = "DNS lookup failed: ${e.message ?: "Unknown error"}",
+                message = "DNS lookup failed: ${e.message ?: e.javaClass.simpleName}",
                 cause = e
             )
         }
@@ -101,7 +101,7 @@ class DnsRepositoryImpl : DnsRepository {
             // ExtendedResolver auto-detects system DNS servers from OS configuration.
             // Falls back to localhost / platform defaults if none found.
             ExtendedResolver().also { it.setTimeout(TIMEOUT) }
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             // Absolute fallback: use Cloudflare when system DNS can't be detected
             simpleResolver(DnsServer.Cloudflare.PRIMARY)
         }
