@@ -186,6 +186,13 @@ The release workflow uses GitHub Actions secrets for signing:
 
 Set these in **GitHub → Settings → Secrets and variables → Actions** before running the workflow.
 
+> **Important – GitHub Actions limitation:** The `secrets` context is **not** available
+> inside `if:` expressions. The workflow works around this by running a detection step
+> (`signing`) that reads the secret into an env var and emits a `has_keystore` output;
+> all conditional steps then use `steps.signing.outputs.has_keystore == 'true'`.
+> Do **not** write `if: secrets.XYZ != ''` in this workflow — it will cause a parse
+> error and the entire workflow will fail to load.
+
 ---
 
 ## File Naming Conventions
