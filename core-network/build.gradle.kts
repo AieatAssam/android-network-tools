@@ -12,6 +12,9 @@ kotlin {
 }
 
 dependencies {
+    implementation(libs.coroutines.core)
+    implementation(libs.dnsjava)
+
     testImplementation(libs.junit5.api)
     testImplementation(libs.junit5.params)
     testRuntimeOnly(libs.junit5.engine)

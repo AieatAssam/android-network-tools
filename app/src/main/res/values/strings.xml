@@ -1,4 +1,48 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Net Swiss Knife</string>
+
+    <!-- DNS Screen -->
+    <string name="dns_screen_title">DNS Lookup</string>
+    <string name="dns_screen_subtitle">Query DNS records for any domain</string>
+
+    <!-- DNS Input -->
+    <string name="dns_domain_label">Domain or IP address</string>
+    <string name="dns_domain_placeholder">e.g. example.com or 8.8.8.8</string>
+    <string name="dns_record_type_label">Record type</string>
+    <string name="dns_server_label">DNS server</string>
+    <string name="dns_server_custom">Custom server…</string>
+    <string name="dns_custom_server_label">Custom DNS server IP</string>
+    <string name="dns_custom_server_placeholder">e.g. 192.168.1.1</string>
+    <string name="dns_lookup_button">Look up</string>
+    <string name="dns_looking_up">Looking up…</string>
+    <string name="clear">Clear</string>
+
+    <!-- DNS States -->
+    <string name="dns_idle_title">Enter a domain to look up</string>
+    <string name="dns_idle_subtitle">Supports A, AAAA, MX, TXT, CNAME, NS, SOA, PTR and more</string>
+    <string name="dns_querying">Querying DNS…</string>
+    <string name="dns_querying_subtitle">Sending query to DNS server</string>
+    <string name="dns_error_title">Lookup failed</string>
+    <string name="dns_retry">Retry</string>
+
+    <!-- DNS Results -->
+    <string name="dns_record_singular">record</string>
+    <string name="dns_record_plural">records</string>
+    <string name="dns_ms">ms</string>
+    <string name="dns_copy_value">Copy value</string>
+    <string name="dns_copy_raw">Copy raw response</string>
+    <string name="dns_raw_response">Raw DNS response</string>
+    <string name="dns_no_records_title">No records found</string>
+    <string name="dns_no_records_subtitle">No %1$s records exist for %2$s</string>
+
+    <!-- DNS Record labels -->
+    <string name="dns_ipv4_prefix">IPv4</string>
+    <string name="dns_ipv6_prefix">IPv6</string>
+    <string name="dns_mx_priority">Priority</string>
+    <string name="dns_mx_host">Mail server</string>
+    <string name="dns_srv_priority">Priority</string>
+    <string name="dns_srv_weight">Weight</string>
+    <string name="dns_srv_port">Port</string>
+    <string name="dns_srv_target">Target</string>
 </resources>
