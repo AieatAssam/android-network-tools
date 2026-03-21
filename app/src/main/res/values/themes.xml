@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Base app theme. The Compose theme is defined in Theme.kt -->
+    <style name="Theme.NetSwissKnife" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>

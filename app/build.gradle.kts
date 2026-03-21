@@ -1,0 +1,104 @@
+plugins {
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.kapt)
+    alias(libs.plugins.hilt)
+}
+
+// ── CI-supplied properties ────────────────────────────────────────────────────
+// Pass via: ./gradlew :app:assembleRelease -PversionName=1.2.3 -PversionCode=100
+val ciVersionName: String? = findProperty("versionName") as String?
+val ciVersionCode: Int?    = (findProperty("versionCode") as String?)?.toIntOrNull()
+
+// Signing – set these secrets in GitHub Actions:
+//   RELEASE_KEYSTORE_BASE64, RELEASE_KEYSTORE_PASSWORD, RELEASE_KEY_ALIAS, RELEASE_KEY_PASSWORD
+val ciStoreFile:     String? = findProperty("storeFile")     as String?
+val ciStorePassword: String? = findProperty("storePassword") as String?
+val ciKeyAlias:      String? = findProperty("keyAlias")      as String?
+val ciKeyPassword:   String? = findProperty("keyPassword")   as String?
+
+android {
+    namespace  = "com.example.netswissknife.app"
+    compileSdk = 34
+
+    defaultConfig {
+        applicationId = "com.example.netswissknife"
+        minSdk        = 26
+        targetSdk     = 34
+        versionCode   = ciVersionCode ?: 1
+        versionName   = ciVersionName ?: "1.0.0"
+    }
+
+    signingConfigs {
+        if (ciStoreFile != null) {
+            create("release") {
+                storeFile     = file(ciStoreFile)
+                storePassword = ciStorePassword
+                keyAlias      = ciKeyAlias
+                keyPassword   = ciKeyPassword
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            isMinifyEnabled    = true
+            isShrinkResources  = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+            if (ciStoreFile != null) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
+    }
+
+    kotlinOptions {
+        jvmTarget = "21"
+    }
+
+    buildFeatures {
+        compose = true
+    }
+
+    composeOptions {
+        kotlinCompilerExtensionVersion = libs.versions.composeCompiler.get()
+    }
+}
+
+dependencies {
+    implementation(project(":core-domain"))
+    implementation(project(":core-network"))
+
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+
+    // Compose BOM
+    val composeBom = platform(libs.compose.bom)
+    implementation(composeBom)
+    implementation(libs.compose.ui)
+    implementation(libs.compose.ui.graphics)
+    implementation(libs.compose.ui.tooling.preview)
+    implementation(libs.compose.material3)
+    implementation(libs.compose.material.icons.extended)
+    implementation(libs.compose.animation)
+    debugImplementation(libs.compose.ui.tooling)
+
+    // Navigation
+    implementation(libs.navigation.compose)
+
+    // Hilt
+    implementation(libs.hilt.android)
+    kapt(libs.hilt.android.compiler)
+    implementation(libs.hilt.navigation.compose)
+
+    // Coroutines
+    implementation(libs.coroutines.core)
+}

@@ -1,0 +1,202 @@
+name: Release – Package & Publish
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'   # e.g. v1.2.3
+  workflow_dispatch:
+    inputs:
+      version_name:
+        description: 'Version name (e.g. 1.2.3)'
+        required: true
+        default: '1.0.0'
+      create_github_release:
+        description: 'Create a GitHub Release?'
+        required: false
+        default: 'true'
+        type: boolean
+
+jobs:
+  build-and-publish:
+    name: Build, Sign & Publish
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── 1. Source ──────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history for version tagging
+
+      # ── 2. Java toolchain ─────────────────────────────────────────────────
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      # ── 3. Gradle cache ───────────────────────────────────────────────────
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      # ── 4. Determine version ──────────────────────────────────────────────
+      - name: Resolve version name
+        id: version
+        run: |
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            # Strip leading 'v' from tag name
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="${{ github.event.inputs.version_name }}"
+          fi
+          echo "name=${VERSION}" >> "$GITHUB_OUTPUT"
+          # versionCode = epoch-based integer, always increasing
+          echo "code=$(date +%s)" >> "$GITHUB_OUTPUT"
+
+      # ── 5. Unit tests ─────────────────────────────────────────────────────
+      - name: Run unit tests
+        run: ./gradlew test --no-daemon
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: '**/build/reports/tests/'
+
+      # ── 6. Decode keystore ────────────────────────────────────────────────
+      - name: Decode release keystore
+        # Only attempt signing when the secret is present
+        if: ${{ secrets.RELEASE_KEYSTORE_BASE64 != '' }}
+        run: |
+          echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 --decode > "$RUNNER_TEMP/release.keystore"
+
+      # ── 7. Build release APK ──────────────────────────────────────────────
+      - name: Build release APK (unsigned fallback when no keystore)
+        if: ${{ secrets.RELEASE_KEYSTORE_BASE64 == '' }}
+        run: |
+          ./gradlew :app:assembleRelease \
+            -PversionName="${{ steps.version.outputs.name }}" \
+            -PversionCode="${{ steps.version.outputs.code }}" \
+            --no-daemon
+
+      - name: Build release APK (signed)
+        if: ${{ secrets.RELEASE_KEYSTORE_BASE64 != '' }}
+        run: |
+          ./gradlew :app:assembleRelease \
+            -PversionName="${{ steps.version.outputs.name }}" \
+            -PversionCode="${{ steps.version.outputs.code }}" \
+            -PstoreFile="$RUNNER_TEMP/release.keystore" \
+            -PstorePassword="${{ secrets.RELEASE_KEYSTORE_PASSWORD }}" \
+            -PkeyAlias="${{ secrets.RELEASE_KEY_ALIAS }}" \
+            -PkeyPassword="${{ secrets.RELEASE_KEY_PASSWORD }}" \
+            --no-daemon
+
+      # ── 8. Build release AAB ──────────────────────────────────────────────
+      - name: Build release AAB (unsigned fallback when no keystore)
+        if: ${{ secrets.RELEASE_KEYSTORE_BASE64 == '' }}
+        run: |
+          ./gradlew :app:bundleRelease \
+            -PversionName="${{ steps.version.outputs.name }}" \
+            -PversionCode="${{ steps.version.outputs.code }}" \
+            --no-daemon
+
+      - name: Build release AAB (signed)
+        if: ${{ secrets.RELEASE_KEYSTORE_BASE64 != '' }}
+        run: |
+          ./gradlew :app:bundleRelease \
+            -PversionName="${{ steps.version.outputs.name }}" \
+            -PversionCode="${{ steps.version.outputs.code }}" \
+            -PstoreFile="$RUNNER_TEMP/release.keystore" \
+            -PstorePassword="${{ secrets.RELEASE_KEYSTORE_PASSWORD }}" \
+            -PkeyAlias="${{ secrets.RELEASE_KEY_ALIAS }}" \
+            -PkeyPassword="${{ secrets.RELEASE_KEY_PASSWORD }}" \
+            --no-daemon
+
+      # ── 9. Locate artefacts ───────────────────────────────────────────────
+      - name: Locate build artefacts
+        id: artefacts
+        run: |
+          APK=$(find app/build/outputs/apk/release -name '*.apk' | head -1)
+          AAB=$(find app/build/outputs/bundle/release -name '*.aab' | head -1)
+          echo "apk=${APK}" >> "$GITHUB_OUTPUT"
+          echo "aab=${AAB}" >> "$GITHUB_OUTPUT"
+          echo "Found APK: ${APK}"
+          echo "Found AAB: ${AAB}"
+
+      # ── 10. Rename artefacts with version ─────────────────────────────────
+      - name: Rename artefacts
+        run: |
+          VERSION="${{ steps.version.outputs.name }}"
+          APK="${{ steps.artefacts.outputs.apk }}"
+          AAB="${{ steps.artefacts.outputs.aab }}"
+          DIR=$(dirname "$APK")
+          cp "$APK" "${DIR}/NetSwissKnife-${VERSION}.apk"
+          DIR_AAB=$(dirname "$AAB")
+          cp "$AAB" "${DIR_AAB}/NetSwissKnife-${VERSION}.aab"
+          echo "apk_named=${DIR}/NetSwissKnife-${VERSION}.apk"   >> "$GITHUB_OUTPUT"
+          echo "aab_named=${DIR_AAB}/NetSwissKnife-${VERSION}.aab" >> "$GITHUB_OUTPUT"
+        id: rename
+
+      # ── 11. Upload artefacts to workflow run ──────────────────────────────
+      - name: Upload APK artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NetSwissKnife-${{ steps.version.outputs.name }}-apk
+          path: ${{ steps.rename.outputs.apk_named }}
+          if-no-files-found: error
+
+      - name: Upload AAB artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NetSwissKnife-${{ steps.version.outputs.name }}-aab
+          path: ${{ steps.rename.outputs.aab_named }}
+          if-no-files-found: error
+
+      # ── 12. Create GitHub Release ─────────────────────────────────────────
+      - name: Create GitHub Release
+        if: >
+          github.event_name == 'push' ||
+          github.event.inputs.create_github_release == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event_name == 'push' && github.ref_name || format('v{0}', steps.version.outputs.name) }}
+          name: "Net Swiss Knife ${{ steps.version.outputs.name }}"
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            ${{ steps.rename.outputs.apk_named }}
+            ${{ steps.rename.outputs.aab_named }}
+          body: |
+            ## Net Swiss Knife v${{ steps.version.outputs.name }}
+
+            ### Installation
+
+            **Direct install (sideload)**
+            1. Download `NetSwissKnife-${{ steps.version.outputs.name }}.apk`
+            2. Enable *Install from unknown sources* in Android settings
+            3. Open the APK to install
+
+            **Play Store (AAB)**
+            The `.aab` bundle is intended for Google Play internal testing / production upload.
+
+            ### Requirements
+            - Android 8.0 (API 26) or higher
+
+            ### Build info
+            - Version code: `${{ steps.version.outputs.code }}`
+            - Commit: `${{ github.sha }}`
+            - Signed: ${{ secrets.RELEASE_KEYSTORE_BASE64 != '' && 'Yes' || 'No (unsigned – development build)' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
