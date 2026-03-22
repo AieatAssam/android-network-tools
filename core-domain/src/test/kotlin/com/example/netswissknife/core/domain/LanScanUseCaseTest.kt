@@ -79,8 +79,10 @@ class LanScanUseCaseTest {
 
         @Test
         fun `valid slash-16 subnet is accepted`() = runTest {
-            val results = makeUseCase().invoke(LanScanParams(subnet = "10.0.0.0/16")).toList()
-            assertTrue(results.none { it is LanScanFlowResult.ValidationError })
+            // Use .first() to avoid collecting all 65 534 host results from a /16 scan.
+            // If validation fails the first emission is ValidationError; otherwise validation passed.
+            val first = makeUseCase().invoke(LanScanParams(subnet = "10.0.0.0/16")).first()
+            assertTrue(first !is LanScanFlowResult.ValidationError)
         }
 
         @Test
