@@ -24,11 +24,6 @@ import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.filled.NetworkCheck
-import androidx.compose.material.icons.filled.Router
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material.icons.outlined.Hub
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.Icon
@@ -46,28 +41,17 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.example.netswissknife.app.R
+import com.example.netswissknife.app.ui.navigation.NavRoutes
+import com.example.netswissknife.app.ui.navigation.ToolInfo
 import kotlinx.coroutines.delay
 
-private data class ToolCardItem(
-    val name: String,
-    val description: String,
-    val icon: ImageVector
-)
-
-private val toolCards = listOf(
-    ToolCardItem("Ping",         "ICMP round-trip latency",     Icons.Default.NetworkCheck),
-    ToolCardItem("Traceroute",   "Network path hop analysis",   Icons.Default.Router),
-    ToolCardItem("Port Scanner", "TCP port reachability",       Icons.Default.Search),
-    ToolCardItem("LAN Scanner",  "Local device discovery",      Icons.Default.Wifi),
-    ToolCardItem("DNS Lookup",   "Resolve hostnames & records", Icons.Default.Language),
-)
-
 @Composable
-fun HomeScreen() {
+fun HomeScreen(onNavigate: (String) -> Unit) {
     var headerVisible by remember { mutableStateOf(false) }
     var cardsVisible  by remember { mutableStateOf(false) }
 
@@ -94,7 +78,7 @@ fun HomeScreen() {
             visible = cardsVisible,
             enter   = fadeIn(tween(400, delayMillis = 100))
         ) {
-            ToolGrid()
+            ToolGrid(onNavigate = onNavigate)
         }
     }
 }
@@ -112,7 +96,7 @@ private fun HeroHeader() {
                     )
                 )
             )
-            .padding(horizontal = 24.dp, vertical = 32.dp),
+            .padding(horizontal = 24.dp, vertical = 28.dp),
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -131,7 +115,7 @@ private fun HeroHeader() {
             Box(
                 modifier = Modifier
                     .scale(iconScale)
-                    .size(80.dp)
+                    .size(72.dp)
                     .clip(CircleShape)
                     .background(MaterialTheme.colorScheme.primary),
                 contentAlignment = Alignment.Center
@@ -140,23 +124,23 @@ private fun HeroHeader() {
                     imageVector        = Icons.Outlined.Hub,
                     contentDescription = null,
                     tint               = MaterialTheme.colorScheme.onPrimary,
-                    modifier           = Modifier.size(44.dp)
+                    modifier           = Modifier.size(40.dp)
                 )
             }
 
-            Box(Modifier.height(16.dp))
+            Box(Modifier.height(12.dp))
 
             Text(
-                text      = "Net Swiss Knife",
+                text      = stringResource(R.string.app_name),
                 style     = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Bold),
                 color     = MaterialTheme.colorScheme.onPrimaryContainer,
                 textAlign = TextAlign.Center
             )
 
-            Box(Modifier.height(6.dp))
+            Box(Modifier.height(4.dp))
 
             Text(
-                text      = "Your all-in-one Android networking toolkit",
+                text      = stringResource(R.string.home_subtitle),
                 style     = MaterialTheme.typography.bodyMedium,
                 color     = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
@@ -166,21 +150,33 @@ private fun HeroHeader() {
 }
 
 @Composable
-private fun ToolGrid() {
-    LazyVerticalGrid(
-        columns               = GridCells.Fixed(2),
-        contentPadding        = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalArrangement   = Arrangement.spacedBy(12.dp)
-    ) {
-        itemsIndexed(toolCards) { index, tool ->
-            AnimatedToolCard(tool = tool, delayMs = index * 60)
+private fun ToolGrid(onNavigate: (String) -> Unit) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text     = stringResource(R.string.home_all_tools),
+            style    = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+            color    = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+        )
+        LazyVerticalGrid(
+            columns               = GridCells.Fixed(2),
+            contentPadding        = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement   = Arrangement.spacedBy(12.dp)
+        ) {
+            itemsIndexed(NavRoutes.allTools) { index, tool ->
+                AnimatedToolCard(
+                    tool    = tool,
+                    delayMs = index * 60,
+                    onClick = { onNavigate(tool.route) }
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun AnimatedToolCard(tool: ToolCardItem, delayMs: Int) {
+private fun AnimatedToolCard(tool: ToolInfo, delayMs: Int, onClick: () -> Unit) {
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         delay(delayMs.toLong())
@@ -190,15 +186,16 @@ private fun AnimatedToolCard(tool: ToolCardItem, delayMs: Int) {
     val cardScale by animateFloatAsState(
         targetValue   = if (visible) 1f else 0.85f,
         animationSpec = tween(durationMillis = 300, easing = EaseOutBack),
-        label         = "card-scale-${tool.name}"
+        label         = "card-scale-${tool.route}"
     )
     val cardAlpha by animateFloatAsState(
         targetValue   = if (visible) 1f else 0f,
         animationSpec = tween(250),
-        label         = "card-alpha-${tool.name}"
+        label         = "card-alpha-${tool.route}"
     )
 
     ElevatedCard(
+        onClick  = onClick,
         modifier = Modifier
             .fillMaxWidth()
             .scale(cardScale)
@@ -225,7 +222,7 @@ private fun AnimatedToolCard(tool: ToolCardItem, delayMs: Int) {
             }
 
             Text(
-                text  = tool.name,
+                text  = tool.label,
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
             )
 
