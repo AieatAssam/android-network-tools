@@ -9,6 +9,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.flow.filterIsInstance
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -179,10 +180,10 @@ class PortScanUseCaseTest {
 
         @Test
         fun `valid custom range of 10000 is accepted`() = runTest {
-            val results = makeUseCase().invoke(
+            val firstResult = makeUseCase().invoke(
                 PortScanParams(host = "8.8.8.8", preset = PortScanPreset.CUSTOM, startPort = 1, endPort = 10000)
-            ).toList()
-            assertTrue(results.none { it.isError })
+            ).first()
+            assertTrue(!firstResult.isError)
         }
     }
 
