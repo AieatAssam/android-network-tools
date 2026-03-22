@@ -2,6 +2,20 @@
 <resources>
     <string name="app_name">Net Swiss Knife</string>
 
+    <!-- Home Screen -->
+    <string name="home_subtitle">Your all-in-one Android networking toolkit</string>
+    <string name="home_all_tools">All Tools</string>
+
+    <!-- Bottom Navigation -->
+    <string name="nav_home">Home</string>
+    <string name="nav_more">More</string>
+
+    <!-- More Tools Sheet -->
+    <string name="more_sheet_title">All Tools</string>
+    <string name="more_sheet_subtitle">Pin up to %1$d tools to the navigation bar</string>
+    <string name="more_pin_description">Pin %1$s</string>
+    <string name="more_unpin_description">Unpin %1$s</string>
+
     <!-- DNS Screen -->
     <string name="dns_screen_title">DNS Lookup</string>
     <string name="dns_screen_subtitle">Query DNS records for any domain</string>

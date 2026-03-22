@@ -74,7 +74,15 @@ fun AppNavHost(navController: NavHostController, modifier: Modifier = Modifier) 
             exitTransition   = { homeExitTransition() },
             popEnterTransition  = { homeEnterTransition() },
             popExitTransition   = { homeExitTransition() }
-        ) { HomeScreen() }
+        ) {
+            HomeScreen(onNavigate = { route ->
+                navController.navigate(route) {
+                    popUpTo(navController.graph.startDestinationId) { saveState = true }
+                    launchSingleTop = true
+                    restoreState    = true
+                }
+            })
+        }
 
         composable(NavRoutes.Ping.route)       { PingScreen() }
         composable(NavRoutes.Traceroute.route) { TracerouteScreen() }
