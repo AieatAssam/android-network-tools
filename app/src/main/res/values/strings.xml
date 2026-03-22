@@ -36,6 +36,46 @@
     <string name="dns_no_records_title">No records found</string>
     <string name="dns_no_records_subtitle">No %1$s records exist for %2$s</string>
 
+    <!-- Ping Screen -->
+    <string name="ping_screen_title">Ping</string>
+    <string name="ping_screen_subtitle">Measure round-trip time and packet loss to any host</string>
+
+    <!-- Ping Input -->
+    <string name="ping_host_label">Host or IP address</string>
+    <string name="ping_host_placeholder">e.g. google.com or 8.8.8.8</string>
+    <string name="ping_count_label">Count</string>
+    <string name="ping_timeout_label">Timeout (ms)</string>
+    <string name="ping_packet_size_label">Packet size (bytes)</string>
+    <string name="ping_start_button">Start Ping</string>
+    <string name="ping_stop_button">Stop</string>
+    <string name="ping_retry">Retry</string>
+
+    <!-- Ping States -->
+    <string name="ping_idle_title">Enter a host to ping</string>
+    <string name="ping_idle_subtitle">Supports hostnames and IPv4 addresses</string>
+    <string name="ping_running_title">Pinging…</string>
+    <string name="ping_error_title">Ping failed</string>
+
+    <!-- Ping Results -->
+    <string name="ping_result_header">Ping Results</string>
+    <string name="ping_stats_header">Statistics</string>
+    <string name="ping_packets_sent">Sent</string>
+    <string name="ping_packets_received">Received</string>
+    <string name="ping_packet_loss">Loss</string>
+    <string name="ping_rtt_min">Min</string>
+    <string name="ping_rtt_avg">Avg</string>
+    <string name="ping_rtt_max">Max</string>
+    <string name="ping_rtt_jitter">Jitter</string>
+    <string name="ping_ms_suffix">ms</string>
+    <string name="ping_seq_prefix">seq=</string>
+    <string name="ping_timeout_label_result">Timeout</string>
+    <string name="ping_error_label_result">Error</string>
+    <string name="ping_raw_output">Raw Output</string>
+    <string name="ping_copy_raw">Copy raw output</string>
+    <string name="ping_copy_csv">Copy as CSV</string>
+    <string name="ping_chart_title">RTT Chart</string>
+    <string name="ping_progress_format">%1$d / %2$d</string>
+
     <!-- DNS Record labels -->
     <string name="dns_ipv4_prefix">IPv4</string>
     <string name="dns_ipv6_prefix">IPv6</string>
