@@ -128,6 +128,62 @@
     <string name="ports_resolved_ip">Resolved IP: %1$s</string>
     <string name="ports_scan_duration">%1$d ms</string>
 
+    <!-- LAN Scanner Screen -->
+    <string name="lan_screen_title">LAN Scanner</string>
+    <string name="lan_screen_subtitle">Discover devices on your local network</string>
+
+    <!-- LAN Config -->
+    <string name="lan_config_title">Scan Configuration</string>
+    <string name="lan_subnet_label">Subnet (CIDR)</string>
+    <string name="lan_subnet_placeholder">e.g. 192.168.1.0/24</string>
+    <string name="lan_detect_subnet">Detect current subnet</string>
+    <string name="lan_timeout_label">Timeout: %1$d ms</string>
+    <string name="lan_concurrency_label">Concurrency: %1$d</string>
+    <string name="lan_scan_button">Scan Network</string>
+    <string name="lan_stop_button">Stop Scan</string>
+    <string name="lan_rescan_button">Re-scan</string>
+    <string name="lan_clear_button">Clear</string>
+    <string name="lan_retry_button">Retry</string>
+
+    <!-- LAN States -->
+    <string name="lan_idle_title">Enter a subnet to scan</string>
+    <string name="lan_idle_subtitle">Discovers live hosts, MAC addresses, vendors and open ports</string>
+    <string name="lan_scanning_title">Scanning…</string>
+    <string name="lan_scan_complete_title">Scan Complete</string>
+    <string name="lan_error_title">Scan failed</string>
+
+    <!-- LAN Results -->
+    <string name="lan_progress_format">%1$d / %2$d</string>
+    <string name="lan_hosts_found_format">%1$d host(s) found so far</string>
+    <string name="lan_live_hosts_header">Live Hosts</string>
+    <string name="lan_hosts_header">Discovered Hosts (%1$d)</string>
+    <string name="lan_no_hosts_found">No live hosts found on this subnet</string>
+    <string name="lan_stat_scanned">Scanned</string>
+    <string name="lan_stat_alive">Alive</string>
+    <string name="lan_stat_subnet">Subnet</string>
+    <string name="lan_duration_format">%1$d ms</string>
+    <string name="lan_ping_format">%1$d ms</string>
+    <string name="lan_unknown_device">Unknown device</string>
+    <string name="lan_gateway_badge">GW</string>
+    <string name="lan_gateway_label">Gateway</string>
+
+    <!-- LAN Topology -->
+    <string name="lan_topology_title">Network Map</string>
+    <string name="lan_more_devices">more…</string>
+
+    <!-- LAN Host Details -->
+    <string name="lan_details_title">Device Details</string>
+    <string name="lan_detail_ip">IP Address</string>
+    <string name="lan_detail_hostname">Hostname</string>
+    <string name="lan_detail_mac">MAC Address</string>
+    <string name="lan_detail_vendor">Vendor</string>
+    <string name="lan_detail_ping">Ping</string>
+    <string name="lan_detail_role">Role</string>
+    <string name="lan_role_gateway">Gateway / Router</string>
+    <string name="lan_role_device">Network device</string>
+    <string name="lan_open_ports_title">Open Ports (%1$d)</string>
+    <string name="lan_no_open_ports">None detected</string>
+
     <!-- DNS Record labels -->
     <string name="dns_ipv4_prefix">IPv4</string>
     <string name="dns_ipv6_prefix">IPv6</string>
