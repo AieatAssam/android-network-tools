@@ -49,16 +49,18 @@ import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -317,29 +319,10 @@ private fun DnsInputCard(
                 )
                 DnsServerSelector(
                     selectedServer = selectedServer,
-                    onServerChange = onServerChange
+                    customServerAddress = customServerAddress,
+                    onServerChange = onServerChange,
+                    onCustomAddressChange = onCustomServerAddressChange
                 )
-                if (selectedServer is DnsServer.Custom) {
-                    OutlinedTextField(
-                        value = customServerAddress,
-                        onValueChange = onCustomServerAddressChange,
-                        label = { Text(stringResource(R.string.dns_custom_server_label)) },
-                        placeholder = { Text(stringResource(R.string.dns_custom_server_placeholder)) },
-                        leadingIcon = {
-                            Icon(Icons.Default.Storage, contentDescription = null)
-                        },
-                        trailingIcon = {
-                            if (customServerAddress.isNotEmpty()) {
-                                IconButton(onClick = { onCustomServerAddressChange("") }) {
-                                    Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.clear))
-                                }
-                            }
-                        },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                }
             }
 
             // Lookup button
@@ -442,96 +425,110 @@ private fun RecordTypeDescription(recordType: DnsRecordType) {
     }
 }
 
-// ── DNS server selector ───────────────────────────────────────────────────────
+// ── DNS server selector (combo box) ──────────────────────────────────────────
 
+/**
+ * An editable combo box for DNS server selection.
+ * - Preset servers (System, Google, Cloudflare, OpenDNS, Quad9) are offered in the dropdown.
+ * - The user can also type a custom IP address directly into the field; this switches the
+ *   server to [DnsServer.Custom] automatically.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DnsServerSelector(
     selectedServer: DnsServer,
-    onServerChange: (DnsServer) -> Unit
+    customServerAddress: String,
+    onServerChange: (DnsServer) -> Unit,
+    onCustomAddressChange: (String) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
-    val presets = DnsServer.presets + listOf(DnsServer.Custom(""))
-    val displayLabel = if (selectedServer is DnsServer.Custom) {
-        stringResource(R.string.dns_server_custom)
-    } else {
-        selectedServer.displayName
-    }
 
-    Box {
-        OutlinedCard(
+    // Text shown in the field: preset display name, or the typed custom address.
+    val fieldValue = if (selectedServer is DnsServer.Custom) customServerAddress
+                     else selectedServer.displayName
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it }
+    ) {
+        OutlinedTextField(
+            value = fieldValue,
+            onValueChange = { text ->
+                // Any manual edit → treat as a custom DNS address.
+                onCustomAddressChange(text)
+            },
+            label = { Text(stringResource(R.string.dns_server_label)) },
+            placeholder = { Text(stringResource(R.string.dns_custom_server_placeholder)) },
+            leadingIcon = {
+                Icon(
+                    imageVector = Icons.Default.Dns,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            },
+            trailingIcon = {
+                ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+            },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable { expanded = true },
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text(
-                        text = displayLabel,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    if (selectedServer !is DnsServer.Custom) {
-                        Text(
-                            text = selectedServer.description,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-                Icon(
-                    imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
+                .menuAnchor(MenuAnchorType.PrimaryEditable, enabled = true),
+            shape = RoundedCornerShape(12.dp),
+            colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors()
+        )
 
-        DropdownMenu(
+        ExposedDropdownMenu(
             expanded = expanded,
-            onDismissRequest = { expanded = false },
-            modifier = Modifier.fillMaxWidth(0.85f)
+            onDismissRequest = { expanded = false }
         ) {
-            presets.forEach { server ->
-                val isCustomOption = server is DnsServer.Custom
-                val isSelectedOption = when {
-                    isCustomOption -> selectedServer is DnsServer.Custom
+            DnsServer.presets.forEach { server ->
+                val isSelected = when {
+                    server is DnsServer.System && selectedServer is DnsServer.System -> true
                     else -> selectedServer == server
                 }
                 DropdownMenuItem(
                     text = {
                         Column {
                             Text(
-                                text = if (isCustomOption) stringResource(R.string.dns_server_custom) else server.displayName,
+                                text = server.displayName,
                                 style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = if (isSelectedOption) FontWeight.SemiBold else FontWeight.Normal,
-                                color = if (isSelectedOption) MaterialTheme.colorScheme.primary
+                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                color = if (isSelected) MaterialTheme.colorScheme.primary
                                         else MaterialTheme.colorScheme.onSurface
                             )
-                            if (!isCustomOption) {
-                                Text(
-                                    text = server.description,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
+                            Text(
+                                text = server.description,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     },
                     onClick = {
-                        onServerChange(if (isCustomOption) DnsServer.Custom("") else server)
+                        onServerChange(server)
                         expanded = false
-                    }
+                    },
+                    contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
                 )
             }
+            // "Custom…" sentinel at the bottom of the list
+            val isCustomSelected = selectedServer is DnsServer.Custom
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        text = stringResource(R.string.dns_server_custom),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = if (isCustomSelected) FontWeight.SemiBold else FontWeight.Normal,
+                        color = if (isCustomSelected) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurface
+                    )
+                },
+                onClick = {
+                    onCustomAddressChange("")
+                    expanded = false
+                },
+                contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
+            )
         }
     }
 }
