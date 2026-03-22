@@ -76,6 +76,58 @@
     <string name="ping_chart_title">RTT Chart</string>
     <string name="ping_progress_format">%1$d / %2$d</string>
 
+    <!-- Port Scanner Screen -->
+    <string name="ports_screen_title">Port Scanner</string>
+    <string name="ports_screen_subtitle">Probe TCP ports and identify running services</string>
+
+    <!-- Port Scanner Input -->
+    <string name="ports_host_label">Host or IP address</string>
+    <string name="ports_host_placeholder">e.g. example.com or 192.168.1.1</string>
+    <string name="ports_preset_label">Port preset</string>
+    <string name="ports_start_port_label">Start port</string>
+    <string name="ports_end_port_label">End port</string>
+    <string name="ports_timeout_label">Timeout (ms)</string>
+    <string name="ports_concurrency_label">Concurrency</string>
+    <string name="ports_scan_button">Scan Ports</string>
+    <string name="ports_stop_button">Stop Scan</string>
+    <string name="ports_clear_button">Clear</string>
+    <string name="ports_retry_button">Retry</string>
+    <string name="ports_share_button">Share Report</string>
+
+    <!-- Port Scanner States -->
+    <string name="ports_idle_title">Enter a host to scan</string>
+    <string name="ports_idle_subtitle">Supports hostnames and IPv4/IPv6 addresses</string>
+    <string name="ports_scanning_title">Scanning ports…</string>
+    <string name="ports_error_title">Scan failed</string>
+    <string name="ports_complete_title">Scan complete</string>
+
+    <!-- Port Scanner Results -->
+    <string name="ports_result_header">Scan Results</string>
+    <string name="ports_open_ports">Open</string>
+    <string name="ports_closed_ports">Closed</string>
+    <string name="ports_filtered_ports">Filtered</string>
+    <string name="ports_total_scanned">Scanned</string>
+    <string name="ports_duration_label">Duration</string>
+    <string name="ports_host_label_result">Host</string>
+    <string name="ports_ip_label">IP Address</string>
+    <string name="ports_progress_format">%1$d / %2$d ports</string>
+    <string name="ports_port_prefix">Port</string>
+    <string name="ports_service_label">Service</string>
+    <string name="ports_banner_label">Banner</string>
+    <string name="ports_response_time_label">Response</string>
+    <string name="ports_ms_suffix">ms</string>
+    <string name="ports_no_open_ports">No open ports found</string>
+    <string name="ports_open_label">OPEN</string>
+    <string name="ports_closed_label">CLOSED</string>
+    <string name="ports_filtered_label">FILTERED</string>
+    <string name="ports_section_open">Open Ports</string>
+    <string name="ports_section_all">All Results</string>
+    <string name="ports_copy_report">Copy report</string>
+    <string name="ports_show_all">Show all ports</string>
+    <string name="ports_show_open">Show open only</string>
+    <string name="ports_resolved_ip">Resolved IP: %1$s</string>
+    <string name="ports_scan_duration">%1$d ms</string>
+
     <!-- DNS Record labels -->
     <string name="dns_ipv4_prefix">IPv4</string>
     <string name="dns_ipv6_prefix">IPv6</string>
