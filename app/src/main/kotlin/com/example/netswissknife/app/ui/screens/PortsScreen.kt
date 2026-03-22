@@ -119,6 +119,7 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
 
     val keyboardController = LocalSoftwareKeyboardController.current
     val clipboard = LocalClipboardManager.current
+    var showAll by remember { mutableStateOf(false) }
 
     AnimatedVisibility(
         visible = screenVisible,
@@ -212,7 +213,6 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
                 // ── All Results Section ─────────────────────────────────────────
                 val allNonOpen = summary.results.filter { it.status != PortStatus.OPEN }
                 if (allNonOpen.isNotEmpty()) {
-                    var showAll by remember { mutableStateOf(false) }
                     item {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
