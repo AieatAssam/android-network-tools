@@ -20,6 +20,7 @@ dependencies {
     testRuntimeOnly(libs.junit5.engine)
     testRuntimeOnly(libs.junit5.launcher)
     testImplementation(libs.mockk)
+    testImplementation(libs.coroutines.test)
 }
 
 tasks.withType<Test> {
