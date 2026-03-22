@@ -84,7 +84,7 @@ class DnsRepositoryImpl : DnsRepository {
 
     private fun buildResolver(server: DnsServer): Resolver {
         return when (server) {
-            is DnsServer.System     -> buildSystemResolver()
+            is DnsServer.System     -> buildSystemResolver(server)
             is DnsServer.Google     -> simpleResolver(DnsServer.Google.PRIMARY)
             is DnsServer.Cloudflare -> simpleResolver(DnsServer.Cloudflare.PRIMARY)
             is DnsServer.OpenDns    -> simpleResolver(DnsServer.OpenDns.PRIMARY)
@@ -96,13 +96,17 @@ class DnsRepositoryImpl : DnsRepository {
     private fun simpleResolver(address: String): Resolver =
         SimpleResolver(address).also { it.setTimeout(TIMEOUT) }
 
-    private fun buildSystemResolver(): Resolver {
-        return try {
-            // ExtendedResolver auto-detects system DNS servers from OS configuration.
-            // Falls back to localhost / platform defaults if none found.
-            ExtendedResolver().also { it.setTimeout(TIMEOUT) }
-        } catch (e: Throwable) {
-            // Absolute fallback: use Cloudflare when system DNS can't be detected
+    private fun buildSystemResolver(server: DnsServer.System): Resolver {
+        // serverAddresses are populated by the app layer (ConnectivityManager / LinkProperties).
+        // Never use ExtendedResolver() with no args – on Android that falls back to localhost:53
+        // which has no DNS listener and throws "Port unreachable".
+        return if (server.serverAddresses.isNotEmpty()) {
+            try {
+                ExtendedResolver(server.serverAddresses.toTypedArray()).also { it.setTimeout(TIMEOUT) }
+            } catch (e: Throwable) {
+                simpleResolver(DnsServer.Cloudflare.PRIMARY)
+            }
+        } else {
             simpleResolver(DnsServer.Cloudflare.PRIMARY)
         }
     }

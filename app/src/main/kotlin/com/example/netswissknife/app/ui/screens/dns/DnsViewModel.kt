@@ -2,6 +2,7 @@ package com.example.netswissknife.app.ui.screens.dns
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.netswissknife.app.util.SystemDnsAddressProvider
 import com.example.netswissknife.core.domain.DnsLookupParams
 import com.example.netswissknife.core.domain.DnsLookupUseCase
 import com.example.netswissknife.core.network.NetworkResult
@@ -25,7 +26,8 @@ sealed interface DnsUiState {
 
 @HiltViewModel
 class DnsViewModel @Inject constructor(
-    private val dnsLookupUseCase: DnsLookupUseCase
+    private val dnsLookupUseCase: DnsLookupUseCase,
+    private val systemDnsAddressProvider: SystemDnsAddressProvider
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<DnsUiState>(DnsUiState.Idle)
@@ -39,7 +41,7 @@ class DnsViewModel @Inject constructor(
     private val _recordType = MutableStateFlow(DnsRecordType.A)
     val recordType: StateFlow<DnsRecordType> = _recordType.asStateFlow()
 
-    private val _selectedServer = MutableStateFlow<DnsServer>(DnsServer.System)
+    private val _selectedServer = MutableStateFlow<DnsServer>(DnsServer.System())
     val selectedServer: StateFlow<DnsServer> = _selectedServer.asStateFlow()
 
     private val _customServerAddress = MutableStateFlow("")
@@ -82,10 +84,10 @@ class DnsViewModel @Inject constructor(
     }
 
     fun performLookup() {
-        val server = if (_selectedServer.value is DnsServer.Custom) {
-            DnsServer.Custom(_customServerAddress.value)
-        } else {
-            _selectedServer.value
+        val server = when (val s = _selectedServer.value) {
+            is DnsServer.Custom -> DnsServer.Custom(_customServerAddress.value)
+            is DnsServer.System -> DnsServer.System(systemDnsAddressProvider.getAddresses())
+            else -> s
         }
 
         val params = DnsLookupParams(

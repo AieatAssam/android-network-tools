@@ -13,5 +13,5 @@ import com.example.netswissknife.core.network.dns.DnsServer
 data class DnsLookupParams(
     val domain: String,
     val recordType: DnsRecordType = DnsRecordType.A,
-    val server: DnsServer = DnsServer.System
+    val server: DnsServer = DnsServer.System()
 )

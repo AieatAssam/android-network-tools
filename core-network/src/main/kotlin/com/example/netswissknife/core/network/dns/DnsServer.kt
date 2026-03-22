@@ -8,8 +8,12 @@ sealed class DnsServer(
     val displayName: String,
     val description: String
 ) {
-    /** Uses the device's configured DNS resolver (system-detected or InetAddress fallback). */
-    object System : DnsServer(
+    /**
+     * Uses the device's configured DNS resolver.
+     * [serverAddresses] must be populated by the app layer (via ConnectivityManager / LinkProperties)
+     * before performing a lookup. If empty the repository falls back to Cloudflare.
+     */
+    data class System(val serverAddresses: List<String> = emptyList()) : DnsServer(
         displayName = "System DNS",
         description = "Uses the DNS server configured on your device"
     )
@@ -56,6 +60,6 @@ sealed class DnsServer(
     )
 
     companion object {
-        val presets: List<DnsServer> = listOf(System, Google, Cloudflare, OpenDns, Quad9)
+        val presets: List<DnsServer> = listOf(System(), Google, Cloudflare, OpenDns, Quad9)
     }
 }

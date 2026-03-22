@@ -51,7 +51,7 @@ class DnsServerTest {
 
         @Test
         fun `System has human-readable display name`() {
-            assertTrue(DnsServer.System.displayName.isNotBlank())
+            assertTrue(DnsServer.System().displayName.isNotBlank())
         }
 
         @Test
