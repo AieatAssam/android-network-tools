@@ -61,9 +61,13 @@ object AppLogger {
         val file = logFile ?: return "Logger not initialized – call AppLogger.init() first."
         if (!file.exists()) return "(No log entries yet)"
         return synchronized(this) {
-            val backup = File(file.parent, LOG_BACKUP_NAME)
-            val backupText = if (backup.exists()) backup.readText() + "\n--- LOG ROTATED ---\n\n" else ""
-            backupText + file.readText()
+            try {
+                val backup = File(file.parent ?: return@synchronized "", LOG_BACKUP_NAME)
+                val backupText = if (backup.exists()) backup.readText() + "\n--- LOG ROTATED ---\n\n" else ""
+                backupText + file.readText()
+            } catch (e: Exception) {
+                "(Error reading log file: ${e.javaClass.simpleName}: ${e.message})"
+            }
         }
     }
 

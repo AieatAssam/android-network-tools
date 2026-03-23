@@ -69,7 +69,11 @@ fun DebugLogScreen() {
 
     fun reload() {
         scope.launch {
-            logContent = withContext(Dispatchers.IO) { AppLogger.getLogContent() }
+            try {
+                logContent = withContext(Dispatchers.IO) { AppLogger.getLogContent() }
+            } catch (e: Exception) {
+                logContent = "Failed to load logs: ${e.javaClass.simpleName}: ${e.message}"
+            }
         }
     }
 
@@ -208,7 +212,9 @@ fun DebugLogScreen() {
                 TextButton(onClick = {
                     showClearDialog = false
                     scope.launch {
-                        withContext(Dispatchers.IO) { AppLogger.clearLogs() }
+                        try {
+                            withContext(Dispatchers.IO) { AppLogger.clearLogs() }
+                        } catch (_: Exception) { /* ignore */ }
                         reload()
                     }
                 }) {
