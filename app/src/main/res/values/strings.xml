@@ -198,6 +198,16 @@
     <string name="lan_open_ports_title">Open Ports (%1$d)</string>
     <string name="lan_no_open_ports">None detected</string>
 
+    <!-- Debug Log Screen -->
+    <string name="debug_log_title">Debug Logs</string>
+    <string name="debug_log_subtitle">Internal app diagnostics and crash traces</string>
+    <string name="debug_log_refresh">Refresh</string>
+    <string name="debug_log_copy">Copy</string>
+    <string name="debug_log_clear">Clear</string>
+    <string name="debug_log_clear_confirm_title">Clear all logs?</string>
+    <string name="debug_log_clear_confirm_body">This will permanently delete the debug log file. This action cannot be undone.</string>
+    <string name="debug_log_cancel">Cancel</string>
+
     <!-- DNS Record labels -->
     <string name="dns_ipv4_prefix">IPv4</string>
     <string name="dns_ipv6_prefix">IPv6</string>
