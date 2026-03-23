@@ -2,6 +2,7 @@ package com.example.netswissknife.app.ui.screens.lan
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.netswissknife.app.util.AppLogger
 import com.example.netswissknife.core.domain.LanScanFlowResult
 import com.example.netswissknife.core.domain.LanScanParams
 import com.example.netswissknife.core.domain.LanScanUseCase
@@ -9,12 +10,16 @@ import com.example.netswissknife.core.network.lan.LanHost
 import com.example.netswissknife.core.network.lan.LanScanSummary
 import com.example.netswissknife.core.network.lan.SubnetUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
+
+private const val TAG = "LanScanViewModel"
 
 /** All possible UI states for the LAN scanner screen. */
 sealed interface LanScanUiState {
@@ -60,6 +65,7 @@ class LanScanViewModel @Inject constructor(
     private var scanJob: Job? = null
 
     init {
+        AppLogger.i(TAG, "ViewModel created")
         refreshSubnet()
     }
 
@@ -71,17 +77,28 @@ class LanScanViewModel @Inject constructor(
 
     fun onConcurrencyChange(value: Int) { _concurrency.value = value }
 
-    /** Detects the current subnet from active network interfaces. */
+    /** Detects the current subnet from active network interfaces on an IO thread. */
     fun refreshSubnet() {
         viewModelScope.launch {
             _isSubnetLoading.value = true
-            // SubnetUtils.getCurrentSubnet() uses java.net.NetworkInterface (blocking I/O on a
-            // background dispatcher would be ideal but it's very fast on device).
-            val detected = SubnetUtils.getCurrentSubnet()
-            if (_subnet.value.isBlank()) {
-                _subnet.value = detected ?: "192.168.1.0/24"
+            AppLogger.d(TAG, "refreshSubnet: starting subnet detection")
+            try {
+                // Run on IO – NetworkInterface reads from /proc/net, which is blocking I/O
+                val detected = withContext(Dispatchers.IO) {
+                    SubnetUtils.getCurrentSubnet()
+                }
+                AppLogger.i(TAG, "refreshSubnet: detected subnet = $detected")
+                if (_subnet.value.isBlank()) {
+                    _subnet.value = detected ?: "192.168.1.0/24"
+                }
+            } catch (e: Exception) {
+                AppLogger.e(TAG, "refreshSubnet: failed to detect subnet", e)
+                if (_subnet.value.isBlank()) {
+                    _subnet.value = "192.168.1.0/24"
+                }
+            } finally {
+                _isSubnetLoading.value = false
             }
-            _isSubnetLoading.value = false
         }
     }
 
@@ -95,6 +112,8 @@ class LanScanViewModel @Inject constructor(
             concurrency = _concurrency.value,
         )
 
+        AppLogger.i(TAG, "startScan: subnet=${params.subnet} timeoutMs=${params.timeoutMs} concurrency=${params.concurrency}")
+
         _uiState.value = LanScanUiState.Scanning(
             hosts = emptyList(),
             scannedCount = 0,
@@ -102,40 +121,49 @@ class LanScanViewModel @Inject constructor(
         )
 
         scanJob = viewModelScope.launch {
-            lanScanUseCase(params).collect { result ->
-                when (result) {
-                    is LanScanFlowResult.ValidationError -> {
-                        _uiState.value = LanScanUiState.Error(result.message)
-                    }
+            try {
+                lanScanUseCase(params).collect { result ->
+                    when (result) {
+                        is LanScanFlowResult.ValidationError -> {
+                            AppLogger.w(TAG, "startScan: validation error – ${result.message}")
+                            _uiState.value = LanScanUiState.Error(result.message)
+                        }
 
-                    is LanScanFlowResult.HostFound -> {
-                        liveHosts.add(result.host)
-                        _uiState.value = LanScanUiState.Scanning(
-                            hosts = liveHosts.toList(),
-                            scannedCount = result.scannedCount,
-                            totalCount = result.totalCount,
-                        )
-                    }
-
-                    is LanScanFlowResult.ScanProgress -> {
-                        val current = _uiState.value
-                        if (current is LanScanUiState.Scanning) {
-                            _uiState.value = current.copy(
+                        is LanScanFlowResult.HostFound -> {
+                            AppLogger.d(TAG, "startScan: host found – ip=${result.host.ip} ping=${result.host.pingTimeMs}ms ports=${result.host.openPorts}")
+                            liveHosts.add(result.host)
+                            _uiState.value = LanScanUiState.Scanning(
+                                hosts = liveHosts.toList(),
                                 scannedCount = result.scannedCount,
                                 totalCount = result.totalCount,
                             )
                         }
-                    }
 
-                    is LanScanFlowResult.ScanComplete -> {
-                        _uiState.value = LanScanUiState.Finished(result.summary)
+                        is LanScanFlowResult.ScanProgress -> {
+                            val current = _uiState.value
+                            if (current is LanScanUiState.Scanning) {
+                                _uiState.value = current.copy(
+                                    scannedCount = result.scannedCount,
+                                    totalCount = result.totalCount,
+                                )
+                            }
+                        }
+
+                        is LanScanFlowResult.ScanComplete -> {
+                            AppLogger.i(TAG, "startScan: scan complete – scanned=${result.summary.totalScanned} alive=${result.summary.aliveHosts} duration=${result.summary.scanDurationMs}ms")
+                            _uiState.value = LanScanUiState.Finished(result.summary)
+                        }
                     }
                 }
+            } catch (e: Exception) {
+                AppLogger.e(TAG, "startScan: unexpected exception during scan", e)
+                _uiState.value = LanScanUiState.Error("Scan failed: ${e.message ?: "Unknown error"}")
             }
         }
     }
 
     fun onStopScan() {
+        AppLogger.i(TAG, "onStopScan: cancelling scan job")
         scanJob?.cancel()
         val current = _uiState.value
         if (current is LanScanUiState.Scanning) {
@@ -151,6 +179,7 @@ class LanScanViewModel @Inject constructor(
     }
 
     fun onClear() {
+        AppLogger.d(TAG, "onClear")
         scanJob?.cancel()
         _uiState.value = LanScanUiState.Idle
     }

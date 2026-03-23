@@ -1,6 +1,7 @@
 package com.example.netswissknife.app.ui.navigation
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.NetworkCheck
@@ -28,6 +29,7 @@ sealed class NavRoutes(
     object Ports : NavRoutes("ports", "Port Scanner", Icons.Default.Search)
     object Lan : NavRoutes("lan", "LAN Scanner", Icons.Default.Wifi)
     object Dns : NavRoutes("dns", "DNS Lookup", Icons.Default.Language)
+    object DebugLogs : NavRoutes("debug_logs", "Debug Logs", Icons.Default.BugReport)
 
     companion object {
         /** All navigable tool screens (excluding Home). */

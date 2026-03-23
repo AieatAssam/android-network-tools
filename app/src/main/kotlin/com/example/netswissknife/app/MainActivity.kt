@@ -80,7 +80,13 @@ fun NetSwissKnifeApp(navController: NavHostController) {
             },
             onTogglePin  = navViewModel::togglePin,
             maxPinned    = AppNavigationViewModel.MAX_PINNED,
-            onDismiss    = { showMoreSheet = false }
+            onDismiss    = { showMoreSheet = false },
+            onDebugLogsClick = {
+                showMoreSheet = false
+                navController.navigate(NavRoutes.DebugLogs.route) {
+                    launchSingleTop = true
+                }
+            },
         )
     }
 }
