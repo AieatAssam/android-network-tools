@@ -65,7 +65,6 @@ class LanScanViewModel @Inject constructor(
     private var scanJob: Job? = null
 
     init {
-        AppLogger.i(TAG, "ViewModel created")
         refreshSubnet()
     }
 
@@ -81,18 +80,23 @@ class LanScanViewModel @Inject constructor(
     fun refreshSubnet() {
         viewModelScope.launch {
             _isSubnetLoading.value = true
-            AppLogger.d(TAG, "refreshSubnet: starting subnet detection")
             try {
-                // Run on IO – NetworkInterface reads from /proc/net, which is blocking I/O
+                // Run on IO – NetworkInterface reads from /proc/net, which is blocking I/O.
+                // All AppLogger calls are also inside withContext(IO) to avoid disk writes on
+                // the main thread (which can trigger StrictMode violations on some devices).
                 val detected = withContext(Dispatchers.IO) {
-                    SubnetUtils.getCurrentSubnet()
+                    AppLogger.d(TAG, "refreshSubnet: starting subnet detection")
+                    SubnetUtils.getCurrentSubnet().also { result ->
+                        AppLogger.i(TAG, "refreshSubnet: detected subnet = $result")
+                    }
                 }
-                AppLogger.i(TAG, "refreshSubnet: detected subnet = $detected")
                 if (_subnet.value.isBlank()) {
                     _subnet.value = detected ?: "192.168.1.0/24"
                 }
             } catch (e: Exception) {
-                AppLogger.e(TAG, "refreshSubnet: failed to detect subnet", e)
+                withContext(Dispatchers.IO) {
+                    AppLogger.e(TAG, "refreshSubnet: failed to detect subnet", e)
+                }
                 if (_subnet.value.isBlank()) {
                     _subnet.value = "192.168.1.0/24"
                 }
@@ -112,8 +116,6 @@ class LanScanViewModel @Inject constructor(
             concurrency = _concurrency.value,
         )
 
-        AppLogger.i(TAG, "startScan: subnet=${params.subnet} timeoutMs=${params.timeoutMs} concurrency=${params.concurrency}")
-
         _uiState.value = LanScanUiState.Scanning(
             hosts = emptyList(),
             scannedCount = 0,
@@ -121,6 +123,9 @@ class LanScanViewModel @Inject constructor(
         )
 
         scanJob = viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                AppLogger.i(TAG, "startScan: subnet=${params.subnet} timeoutMs=${params.timeoutMs} concurrency=${params.concurrency}")
+            }
             try {
                 lanScanUseCase(params).collect { result ->
                     when (result) {
