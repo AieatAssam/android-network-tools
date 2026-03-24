@@ -100,7 +100,8 @@ class TracerouteRepositoryImplTest {
     inner class CommandBuilderTests {
 
         @Test
-        fun `custom command builder is used`() = runTest {
+        @DisplayName("custom command builder is used")
+        fun customCommandBuilderIsUsed() = runTest {
             var capturedHost: String? = null
             var capturedMaxHops = 0
             val fakeBuilder = TracerouteRepositoryImpl.CommandBuilder { host, maxHops, _, _ ->
@@ -127,27 +128,32 @@ class TracerouteRepositoryImplTest {
         private val geoRepo = GeoIpRepositoryImpl()
 
         @Test
-        fun `lookup returns null for 192-168 range`() = runTest {
+        @DisplayName("lookup returns null for 192.168 range")
+        fun lookupReturnsNullForRfc1918Class192() = runTest {
             assertNull(geoRepo.lookup("192.168.1.100"))
         }
 
         @Test
-        fun `lookup returns null for 10-x range`() = runTest {
+        @DisplayName("lookup returns null for 10.x range")
+        fun lookupReturnsNullForRfc1918Class10() = runTest {
             assertNull(geoRepo.lookup("10.0.0.1"))
         }
 
         @Test
-        fun `lookup returns null for 172-16 range`() = runTest {
+        @DisplayName("lookup returns null for 172.16 range")
+        fun lookupReturnsNullForRfc1918Class172() = runTest {
             assertNull(geoRepo.lookup("172.16.5.5"))
         }
 
         @Test
-        fun `lookup returns null for loopback`() = runTest {
+        @DisplayName("lookup returns null for loopback")
+        fun lookupReturnsNullForLoopback() = runTest {
             assertNull(geoRepo.lookup("127.0.0.1"))
         }
 
         @Test
-        fun `lookup returns null for link-local`() = runTest {
+        @DisplayName("lookup returns null for link-local")
+        fun lookupReturnsNullForLinkLocal() = runTest {
             assertNull(geoRepo.lookup("169.254.1.1"))
         }
     }
