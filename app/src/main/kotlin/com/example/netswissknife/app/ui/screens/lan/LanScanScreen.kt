@@ -184,7 +184,7 @@ private fun LanHeaderCard() {
                             MaterialTheme.colorScheme.secondaryContainer,
                         ),
                         start = Offset(0f, 0f),
-                        end = Offset(Float.MAX_VALUE, Float.MAX_VALUE),
+                        end = Offset.Infinite,
                     )
                 )
                 .padding(20.dp),
