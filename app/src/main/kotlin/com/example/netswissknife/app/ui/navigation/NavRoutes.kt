@@ -8,6 +8,7 @@ import androidx.compose.material.icons.filled.NetworkCheck
 import androidx.compose.material.icons.filled.Router
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Wifi
+import androidx.compose.material.icons.filled.WifiFind
 import androidx.compose.ui.graphics.vector.ImageVector
 
 data class ToolInfo(
@@ -30,15 +31,17 @@ sealed class NavRoutes(
     object Lan : NavRoutes("lan", "LAN Scanner", Icons.Default.Wifi)
     object Dns : NavRoutes("dns", "DNS Lookup", Icons.Default.Language)
     object DebugLogs : NavRoutes("debug_logs", "Debug Logs", Icons.Default.BugReport)
+    object WifiScan : NavRoutes("wifi_scan", "Wi-Fi Scanner", Icons.Default.WifiFind)
 
     companion object {
         /** All navigable tool screens (excluding Home). */
         val allTools = listOf(
-            ToolInfo("ping",       "Ping",         "Ping",  Icons.Default.NetworkCheck, "ICMP round-trip latency"),
-            ToolInfo("traceroute", "Traceroute",   "Trace", Icons.Default.Router,       "Network path hop analysis"),
-            ToolInfo("ports",      "Port Scanner", "Ports", Icons.Default.Search,       "TCP port reachability"),
-            ToolInfo("lan",        "LAN Scanner",  "LAN",   Icons.Default.Wifi,         "Local device discovery"),
-            ToolInfo("dns",        "DNS Lookup",   "DNS",   Icons.Default.Language,     "Resolve hostnames & records"),
+            ToolInfo("ping",       "Ping",          "Ping",  Icons.Default.NetworkCheck, "ICMP round-trip latency"),
+            ToolInfo("traceroute", "Traceroute",    "Trace", Icons.Default.Router,       "Network path hop analysis"),
+            ToolInfo("ports",      "Port Scanner",  "Ports", Icons.Default.Search,       "TCP port reachability"),
+            ToolInfo("lan",        "LAN Scanner",   "LAN",   Icons.Default.Wifi,         "Local device discovery"),
+            ToolInfo("dns",        "DNS Lookup",    "DNS",   Icons.Default.Language,     "Resolve hostnames & records"),
+            ToolInfo("wifi_scan",  "Wi-Fi Scanner", "Wi-Fi", Icons.Default.WifiFind,     "Scan channels & access points"),
         )
 
         /** Default pinned routes shown in the bottom nav (max MAX_PINNED). */

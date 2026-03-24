@@ -21,6 +21,7 @@ import com.example.netswissknife.app.ui.screens.LanScreen
 import com.example.netswissknife.app.ui.screens.PingScreen
 import com.example.netswissknife.app.ui.screens.PortsScreen
 import com.example.netswissknife.app.ui.screens.TracerouteScreen
+import com.example.netswissknife.app.ui.screens.WifiScanScreen
 import com.example.netswissknife.app.ui.screens.debug.DebugLogScreen
 
 // ── Transition helpers ────────────────────────────────────────────────────────
@@ -90,6 +91,7 @@ fun AppNavHost(navController: NavHostController, modifier: Modifier = Modifier) 
         composable(NavRoutes.Ports.route)      { PortsScreen() }
         composable(NavRoutes.Lan.route)        { LanScreen() }
         composable(NavRoutes.Dns.route)        { DnsScreen() }
+        composable(NavRoutes.WifiScan.route)   { WifiScanScreen() }
         composable(NavRoutes.DebugLogs.route)  { DebugLogScreen() }
     }
 }
