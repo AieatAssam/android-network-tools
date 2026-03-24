@@ -224,6 +224,44 @@
     <string name="crash_share_subject">Net Swiss Knife – Crash Report</string>
     <string name="crash_share_title">Share crash report via…</string>
 
+    <!-- Wi-Fi Scanner Screen -->
+    <string name="wifi_screen_title">Wi-Fi Scanner</string>
+    <string name="wifi_screen_subtitle">Scan nearby access points and analyse channel utilisation</string>
+    <string name="wifi_scan_button">Scan</string>
+    <string name="wifi_scanning">Scanning for networks…</string>
+    <string name="wifi_auto_refresh">Auto-refresh</string>
+    <string name="wifi_networks_found">%1$d networks · %2$d SSIDs</string>
+    <string name="wifi_no_permission_title">Location Permission Required</string>
+    <string name="wifi_no_permission_body">Android requires Location permission to scan for nearby Wi-Fi networks.</string>
+    <string name="wifi_grant_permission">Grant Permission</string>
+    <string name="wifi_disabled_title">Wi-Fi is Off</string>
+    <string name="wifi_disabled_body">Enable Wi-Fi in device settings, then tap Retry.</string>
+    <string name="wifi_not_supported_title">Wi-Fi Not Available</string>
+    <string name="wifi_not_supported_body">This device does not have Wi-Fi hardware.</string>
+    <string name="wifi_error_title">Scan Failed</string>
+    <string name="wifi_retry">Retry</string>
+    <string name="wifi_filter_all">All</string>
+    <string name="wifi_band_ghz">%1$s GHz</string>
+    <string name="wifi_sort_label">Sort:</string>
+    <string name="wifi_channel_chart_title">Channel Utilisation</string>
+    <string name="wifi_connected_badge">Connected</string>
+    <string name="wifi_hidden_badge">Hidden</string>
+    <string name="wifi_detail_band">Band</string>
+    <string name="wifi_detail_channel">Channel</string>
+    <string name="wifi_detail_width">Width</string>
+    <string name="wifi_detail_standard">Standard</string>
+    <string name="wifi_detail_max_speed">Max Speed</string>
+    <string name="wifi_detail_vendor">Vendor</string>
+    <string name="wifi_detail_security">Security</string>
+    <string name="wifi_detail_ip">IP Address</string>
+    <string name="wifi_detail_link_speed">Link Speed</string>
+    <string name="wifi_detail_tx_speed">TX Speed</string>
+    <string name="wifi_detail_rx_speed">RX Speed</string>
+    <string name="wifi_detail_signal">Signal</string>
+    <string name="wifi_connected_network_header">Currently Connected</string>
+    <string name="wifi_network_info_header">Network Information</string>
+    <string name="wifi_live_connection_header">Live Connection</string>
+
     <!-- DNS Record labels -->
     <string name="dns_ipv4_prefix">IPv4</string>
     <string name="dns_ipv6_prefix">IPv6</string>
