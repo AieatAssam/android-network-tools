@@ -1,6 +1,7 @@
 package com.example.netswissknife.app
 
 import android.app.Application
+import com.example.netswissknife.app.crash.CrashHandler
 import com.example.netswissknife.app.util.AppLogger
 import dagger.hilt.android.HiltAndroidApp
 
@@ -15,13 +16,18 @@ class NetSwissKnifeApp : Application() {
 
     private fun installCrashHandler() {
         val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
-        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
-            try {
-                AppLogger.e("CRASH", "Uncaught exception on thread '${thread.name}'", throwable)
-            } catch (_: Exception) {
-                // Never block the default handler
-            }
-            defaultHandler?.uncaughtException(thread, throwable)
-        }
+        Thread.setDefaultUncaughtExceptionHandler(
+            CrashHandler(
+                context = this,
+                defaultHandler = defaultHandler,
+                onBeforeHandle = { thread, throwable ->
+                    try {
+                        AppLogger.e("CRASH", "Uncaught exception on thread '${thread.name}'", throwable)
+                    } catch (_: Exception) {
+                        // Never block crash reporting
+                    }
+                },
+            )
+        )
     }
 }

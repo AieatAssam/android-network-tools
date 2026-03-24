@@ -208,6 +208,22 @@
     <string name="debug_log_clear_confirm_body">This will permanently delete the debug log file. This action cannot be undone.</string>
     <string name="debug_log_cancel">Cancel</string>
 
+    <!-- Crash Dialog -->
+    <string name="crash_title">App Crashed</string>
+    <string name="crash_subtitle">Something went wrong. The details below can help diagnose the issue.</string>
+    <string name="crash_summary_header">Crash Summary</string>
+    <string name="crash_stack_trace_header">Stack Trace</string>
+    <string name="crash_label_time">Time</string>
+    <string name="crash_label_thread">Thread</string>
+    <string name="crash_label_exception">Exception</string>
+    <string name="crash_label_message">Message</string>
+    <string name="crash_copy">Copy</string>
+    <string name="crash_share">Share</string>
+    <string name="crash_restart">Restart App</string>
+    <string name="crash_copied">Crash report copied to clipboard</string>
+    <string name="crash_share_subject">Net Swiss Knife – Crash Report</string>
+    <string name="crash_share_title">Share crash report via…</string>
+
     <!-- DNS Record labels -->
     <string name="dns_ipv4_prefix">IPv4</string>
     <string name="dns_ipv6_prefix">IPv6</string>
