@@ -8,9 +8,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.flowOn
+import me.impa.icmpenguin.ProbeType
 import me.impa.icmpenguin.trace.PortStrategy
 import me.impa.icmpenguin.trace.ProbeSize
-import me.impa.icmpenguin.trace.ProbeType
 import me.impa.icmpenguin.trace.Response
 import me.impa.icmpenguin.trace.SimpleTracer
 import java.net.InetAddress
