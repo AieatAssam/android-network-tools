@@ -18,7 +18,10 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -43,6 +46,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FmdGood
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Map
@@ -524,8 +529,8 @@ private fun TracerouteRunningPanel(state: TracerouteUiState.Running) {
             }
         }
 
-        // Live hop list
-        state.hops.forEachIndexed { index, hop ->
+        // Live hop list – always render in hop-number order
+        state.hops.sortedBy { it.hopNumber }.forEachIndexed { index, hop ->
             var shown by remember(hop.hopNumber) { mutableStateOf(false) }
             LaunchedEffect(hop.hopNumber) { shown = true }
             AnimatedVisibility(
@@ -818,7 +823,7 @@ private fun rttColor(rtTimeMs: Long?): Color = when {
 @Composable
 private fun HopDetailList(hops: List<HopResult>) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        hops.forEachIndexed { index, hop ->
+        hops.sortedBy { it.hopNumber }.forEachIndexed { index, hop ->
             HopCard(hop = hop, index = index)
         }
     }
@@ -827,102 +832,179 @@ private fun HopDetailList(hops: List<HopResult>) {
 @Composable
 private fun HopCard(hop: HopResult, index: Int) {
     val hopColor = rttColor(hop.rtTimeMs)
-    OutlinedCard(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier          = Modifier.padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Hop number badge
-            Box(
-                modifier         = Modifier
-                    .size(36.dp)
-                    .clip(CircleShape)
-                    .background(hopColor.copy(alpha = 0.15f))
-                    .border(1.5.dp, hopColor, CircleShape),
-                contentAlignment = Alignment.Center
+    var expanded by remember(hop.hopNumber) { mutableStateOf(false) }
+
+    OutlinedCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { expanded = !expanded }
+    ) {
+        Column {
+            Row(
+                modifier          = Modifier.padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text  = "${hop.hopNumber}",
-                    style = MaterialTheme.typography.labelMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        color      = hopColor
+                // Hop number badge
+                Box(
+                    modifier         = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(hopColor.copy(alpha = 0.15f))
+                        .border(1.5.dp, hopColor, CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text  = "${hop.hopNumber}",
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            color      = hopColor
+                        )
                     )
-                )
-            }
+                }
 
-            Spacer(Modifier.width(12.dp))
+                Spacer(Modifier.width(12.dp))
 
-            // Main info
-            Column(modifier = Modifier.weight(1f)) {
-                when (hop.status) {
-                    HopStatus.TIMEOUT -> {
-                        Text(
-                            text  = "* * *",
-                            style = MaterialTheme.typography.bodyMedium.copy(
-                                fontFamily = FontFamily.Monospace,
-                                color      = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        )
-                        Text(
-                            stringResource(R.string.traceroute_hop_timeout),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    HopStatus.ERROR -> {
-                        Text(
-                            hop.ip ?: "Error",
-                            style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
-                            color = MaterialTheme.colorScheme.error
-                        )
-                    }
-                    HopStatus.SUCCESS -> {
-                        Text(
-                            hop.ip ?: "",
-                            style = MaterialTheme.typography.bodyMedium.copy(
-                                fontWeight = FontWeight.Medium,
-                                fontFamily = FontFamily.Monospace
-                            ),
-                            maxLines  = 1,
-                            overflow  = TextOverflow.Ellipsis
-                        )
-                        if (hop.hostname != null) {
+                // Main info
+                Column(modifier = Modifier.weight(1f)) {
+                    when (hop.status) {
+                        HopStatus.TIMEOUT -> {
                             Text(
-                                hop.hostname!!,
+                                text  = "* * *",
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontFamily = FontFamily.Monospace,
+                                    color      = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            )
+                            Text(
+                                stringResource(R.string.traceroute_hop_timeout),
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-                        if (hop.geoLocation != null) {
-                            GeoLocationChip(hop.geoLocation!!)
+                        HopStatus.ERROR -> {
+                            Text(
+                                hop.ip ?: "Error",
+                                style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                        HopStatus.SUCCESS -> {
+                            Text(
+                                hop.ip ?: "",
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontWeight = FontWeight.Medium,
+                                    fontFamily = FontFamily.Monospace
+                                ),
+                                maxLines  = 1,
+                                overflow  = TextOverflow.Ellipsis
+                            )
+                            if (hop.hostname != null) {
+                                Text(
+                                    hop.hostname!!,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            if (hop.geoLocation != null) {
+                                GeoLocationChip(hop.geoLocation!!)
+                            }
                         }
                     }
                 }
+
+                Spacer(Modifier.width(8.dp))
+
+                // RTT badge + expand chevron
+                Column(horizontalAlignment = Alignment.End) {
+                    if (hop.rtTimeMs != null) {
+                        Surface(
+                            color  = hopColor.copy(alpha = 0.15f),
+                            shape  = RoundedCornerShape(6.dp)
+                        ) {
+                            Text(
+                                text     = "${hop.rtTimeMs}ms",
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                style    = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color      = hopColor
+                                )
+                            )
+                        }
+                        Spacer(Modifier.height(4.dp))
+                    }
+                    Icon(
+                        imageVector        = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = null,
+                        modifier           = Modifier.size(16.dp),
+                        tint               = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
 
-            Spacer(Modifier.width(8.dp))
-
-            // RTT badge
-            Column(horizontalAlignment = Alignment.End) {
-                if (hop.rtTimeMs != null) {
-                    Surface(
-                        color  = hopColor.copy(alpha = 0.15f),
-                        shape  = RoundedCornerShape(6.dp)
-                    ) {
-                        Text(
-                            text     = "${hop.rtTimeMs}ms",
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                            style    = MaterialTheme.typography.labelSmall.copy(
-                                fontWeight = FontWeight.Bold,
-                                color      = hopColor
-                            )
+            // Expanded detail section
+            AnimatedVisibility(
+                visible = expanded,
+                enter   = expandVertically() + fadeIn(),
+                exit    = shrinkVertically() + fadeOut()
+            ) {
+                Column(
+                    modifier            = Modifier.padding(start = 60.dp, end = 12.dp, bottom = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    HorizontalDivider(modifier = Modifier.padding(bottom = 4.dp))
+                    hop.ip?.let {
+                        HopDetailRow(stringResource(R.string.traceroute_hop_detail_ip), it)
+                    }
+                    hop.hostname?.let {
+                        HopDetailRow(stringResource(R.string.traceroute_hop_detail_hostname), it)
+                    }
+                    hop.rtTimeMs?.let {
+                        HopDetailRow(stringResource(R.string.traceroute_hop_detail_rtt), "${it}ms")
+                    }
+                    HopDetailRow(
+                        label = stringResource(R.string.traceroute_hop_detail_status),
+                        value = when (hop.status) {
+                            HopStatus.SUCCESS -> stringResource(R.string.traceroute_hop_detail_status_success)
+                            HopStatus.TIMEOUT -> stringResource(R.string.traceroute_hop_detail_status_timeout)
+                            HopStatus.ERROR   -> stringResource(R.string.traceroute_hop_detail_status_error)
+                        }
+                    )
+                    hop.geoLocation?.let { geo ->
+                        val location = buildString {
+                            if (geo.city.isNotBlank()) append("${geo.city}, ")
+                            append(geo.country)
+                        }
+                        HopDetailRow(stringResource(R.string.traceroute_hop_detail_location), location)
+                        geo.isp?.let { HopDetailRow(stringResource(R.string.traceroute_hop_detail_isp), it) }
+                        geo.asn?.let { HopDetailRow(stringResource(R.string.traceroute_hop_detail_asn), it) }
+                        HopDetailRow(
+                            label = stringResource(R.string.traceroute_hop_detail_coordinates),
+                            value = "%.4f, %.4f".format(geo.lat, geo.lon)
                         )
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun HopDetailRow(label: String, value: String) {
+    Row(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text     = label,
+            style    = MaterialTheme.typography.labelSmall,
+            color    = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.width(88.dp)
+        )
+        Text(
+            text     = value,
+            style    = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
+            color    = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f)
+        )
     }
 }
 

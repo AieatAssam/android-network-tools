@@ -306,6 +306,17 @@
     <string name="traceroute_resolved_ip">Resolved IP: %1$s</string>
     <string name="traceroute_hop_timeout">No response (timeout)</string>
     <string name="traceroute_hop_label">Hop</string>
+    <string name="traceroute_hop_detail_ip">IP Address</string>
+    <string name="traceroute_hop_detail_hostname">Hostname</string>
+    <string name="traceroute_hop_detail_rtt">RTT</string>
+    <string name="traceroute_hop_detail_status">Status</string>
+    <string name="traceroute_hop_detail_status_success">Responded</string>
+    <string name="traceroute_hop_detail_status_timeout">Timed out</string>
+    <string name="traceroute_hop_detail_status_error">Error</string>
+    <string name="traceroute_hop_detail_location">Location</string>
+    <string name="traceroute_hop_detail_isp">ISP</string>
+    <string name="traceroute_hop_detail_asn">ASN</string>
+    <string name="traceroute_hop_detail_coordinates">Coordinates</string>
 
     <!-- DNS Record labels -->
     <string name="dns_ipv4_prefix">IPv4</string>
