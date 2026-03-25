@@ -59,6 +59,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -67,6 +68,7 @@ import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
@@ -110,6 +112,7 @@ import com.example.netswissknife.app.ui.screens.traceroute.WorldMapData
 import com.example.netswissknife.core.network.traceroute.HopGeoLocation
 import com.example.netswissknife.core.network.traceroute.HopResult
 import com.example.netswissknife.core.network.traceroute.HopStatus
+import com.example.netswissknife.core.network.traceroute.TracerouteProbeType
 import com.example.netswissknife.core.network.traceroute.TracerouteResult
 import kotlin.math.sqrt
 
@@ -117,10 +120,13 @@ import kotlin.math.sqrt
 
 @Composable
 fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
-    val uiState   by viewModel.uiState.collectAsStateWithLifecycle()
-    val host      by viewModel.host.collectAsStateWithLifecycle()
-    val maxHops   by viewModel.maxHops.collectAsStateWithLifecycle()
-    val timeoutMs by viewModel.timeoutMs.collectAsStateWithLifecycle()
+    val uiState      by viewModel.uiState.collectAsStateWithLifecycle()
+    val host         by viewModel.host.collectAsStateWithLifecycle()
+    val maxHops      by viewModel.maxHops.collectAsStateWithLifecycle()
+    val timeoutMs    by viewModel.timeoutMs.collectAsStateWithLifecycle()
+    val probesPerHop by viewModel.probesPerHop.collectAsStateWithLifecycle()
+    val probeType    by viewModel.probeType.collectAsStateWithLifecycle()
+    val packetSize   by viewModel.packetSize.collectAsStateWithLifecycle()
 
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
@@ -138,15 +144,22 @@ fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
 
             item {
                 TracerouteInputCard(
-                    host          = host,
-                    maxHops       = maxHops,
-                    timeoutMs     = timeoutMs,
-                    isRunning     = uiState is TracerouteUiState.Running,
-                    onHostChange  = viewModel::onHostChange,
-                    onMaxHopsChange = viewModel::onMaxHopsChange,
-                    onTimeoutChange = viewModel::onTimeoutChange,
-                    onStart       = viewModel::startTrace,
-                    onStop        = viewModel::onStop
+                    host                = host,
+                    maxHops             = maxHops,
+                    timeoutMs           = timeoutMs,
+                    probesPerHop        = probesPerHop,
+                    probeType           = probeType,
+                    packetSize          = packetSize,
+                    isRunning           = uiState is TracerouteUiState.Running,
+                    onHostChange        = viewModel::onHostChange,
+                    onMaxHopsChange     = viewModel::onMaxHopsChange,
+                    onTimeoutChange     = viewModel::onTimeoutChange,
+                    onProbesPerHopChange = viewModel::onProbesPerHopChange,
+                    onProbeTypeChange   = viewModel::onProbeTypeChange,
+                    onPacketSizeChange  = viewModel::onPacketSizeChange,
+                    onToggleMtuDiscovery = viewModel::onToggleMtuDiscovery,
+                    onStart             = viewModel::startTrace,
+                    onStop              = viewModel::onStop
                 )
             }
 
@@ -254,14 +267,22 @@ private fun TracerouteInputCard(
     host: String,
     maxHops: Int,
     timeoutMs: Int,
+    probesPerHop: Int,
+    probeType: TracerouteProbeType,
+    packetSize: Int,
     isRunning: Boolean,
     onHostChange: (String) -> Unit,
     onMaxHopsChange: (Int) -> Unit,
     onTimeoutChange: (Int) -> Unit,
+    onProbesPerHopChange: (Int) -> Unit,
+    onProbeTypeChange: (TracerouteProbeType) -> Unit,
+    onPacketSizeChange: (Int) -> Unit,
+    onToggleMtuDiscovery: (Boolean) -> Unit,
     onStart: () -> Unit,
     onStop: () -> Unit
 ) {
     val keyboard = LocalSoftwareKeyboardController.current
+    val mtuDiscovery = packetSize == 0
 
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -297,6 +318,28 @@ private fun TracerouteInputCard(
                 })
             )
 
+            // Probe protocol selector (ICMP / UDP)
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text  = stringResource(R.string.traceroute_probe_type_label),
+                    style = MaterialTheme.typography.labelMedium
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = probeType == TracerouteProbeType.ICMP,
+                        onClick  = { if (!isRunning) onProbeTypeChange(TracerouteProbeType.ICMP) },
+                        label    = { Text(stringResource(R.string.traceroute_probe_icmp)) },
+                        enabled  = !isRunning
+                    )
+                    FilterChip(
+                        selected = probeType == TracerouteProbeType.UDP,
+                        onClick  = { if (!isRunning) onProbeTypeChange(TracerouteProbeType.UDP) },
+                        label    = { Text(stringResource(R.string.traceroute_probe_udp)) },
+                        enabled  = !isRunning
+                    )
+                }
+            }
+
             // Max hops slider
             SliderRow(
                 label    = stringResource(R.string.traceroute_max_hops_label),
@@ -318,6 +361,46 @@ private fun TracerouteInputCard(
                 enabled  = !isRunning,
                 onValueChangeFinished = { onTimeoutChange(it.toInt()) }
             )
+
+            // Probes per hop slider
+            SliderRow(
+                label    = stringResource(R.string.traceroute_probes_per_hop_label),
+                value    = probesPerHop.toFloat(),
+                valueRange = 1f..5f,
+                steps    = 3,
+                display  = "$probesPerHop",
+                enabled  = !isRunning,
+                onValueChangeFinished = { onProbesPerHopChange(it.toInt()) }
+            )
+
+            // Packet size: MTU discovery toggle + fixed-size slider
+            Row(
+                modifier              = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment     = Alignment.CenterVertically
+            ) {
+                Text(
+                    text  = stringResource(R.string.traceroute_mtu_discovery_label),
+                    style = MaterialTheme.typography.labelMedium
+                )
+                Switch(
+                    checked         = mtuDiscovery,
+                    onCheckedChange = { if (!isRunning) onToggleMtuDiscovery(it) },
+                    enabled         = !isRunning
+                )
+            }
+
+            AnimatedVisibility(visible = !mtuDiscovery) {
+                SliderRow(
+                    label    = stringResource(R.string.traceroute_packet_size_label),
+                    value    = packetSize.toFloat().coerceIn(28f, 1472f),
+                    valueRange = 28f..1472f,
+                    steps    = 0,
+                    display  = "$packetSize B",
+                    enabled  = !isRunning,
+                    onValueChangeFinished = { onPacketSizeChange(it.toInt()) }
+                )
+            }
 
             // Action button
             if (isRunning) {

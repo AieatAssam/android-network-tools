@@ -1,10 +1,10 @@
 package com.example.netswissknife.app.di
 
+import com.example.netswissknife.app.traceroute.IcmpEnginTracerouteRepositoryImpl
 import com.example.netswissknife.core.domain.TracerouteUseCase
 import com.example.netswissknife.core.network.traceroute.GeoIpRepository
 import com.example.netswissknife.core.network.traceroute.GeoIpRepositoryImpl
 import com.example.netswissknife.core.network.traceroute.TracerouteRepository
-import com.example.netswissknife.core.network.traceroute.TracerouteRepositoryImpl
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -17,7 +17,7 @@ object TracerouteModule {
 
     @Provides
     @Singleton
-    fun provideTracerouteRepository(): TracerouteRepository = TracerouteRepositoryImpl()
+    fun provideTracerouteRepository(): TracerouteRepository = IcmpEnginTracerouteRepositoryImpl()
 
     @Provides
     @Singleton

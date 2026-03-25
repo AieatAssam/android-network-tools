@@ -19,7 +19,7 @@ val ciKeyPassword:   String? = findProperty("keyPassword")   as String?
 
 android {
     namespace  = "com.example.netswissknife.app"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.example.netswissknife"
@@ -100,4 +100,7 @@ dependencies {
 
     // Coroutines
     implementation(libs.coroutines.core)
+
+    // ICMP traceroute (replaces binary-dependent implementation)
+    implementation(libs.icmpenguin)
 }

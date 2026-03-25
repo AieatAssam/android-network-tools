@@ -3,7 +3,7 @@ package com.example.netswissknife.core.network.traceroute
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
-import java.net.URL
+import java.net.URI
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -29,8 +29,7 @@ class GeoIpRepositoryImpl : GeoIpRepository {
 
     private suspend fun fetchGeoIp(ip: String): HopGeoLocation? = withContext(Dispatchers.IO) {
         try {
-            val url = URL("https://ipinfo.io/$ip/json")
-            val conn = url.openConnection() as HttpURLConnection
+            val conn = URI("https://ipinfo.io/$ip/json").toURL().openConnection() as HttpURLConnection
             conn.connectTimeout = 5_000
             conn.readTimeout    = 5_000
             conn.requestMethod  = "GET"

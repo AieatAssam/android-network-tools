@@ -69,6 +69,37 @@ class TracerouteUseCaseTest {
             val results = useCase(TracerouteParams(host = "google.com", timeoutMs = 31_000)).toList()
             assertInstanceOf(TracerouteFlowResult.ValidationError::class.java, results[0])
         }
+
+        @Test
+        fun `probesPerHop below 1 emits ValidationError`() = runTest {
+            val results = useCase(TracerouteParams(host = "google.com", probesPerHop = 0)).toList()
+            assertInstanceOf(TracerouteFlowResult.ValidationError::class.java, results[0])
+        }
+
+        @Test
+        fun `probesPerHop above 5 emits ValidationError`() = runTest {
+            val results = useCase(TracerouteParams(host = "google.com", probesPerHop = 6)).toList()
+            assertInstanceOf(TracerouteFlowResult.ValidationError::class.java, results[0])
+        }
+
+        @Test
+        fun `packetSize below 28 emits ValidationError`() = runTest {
+            val results = useCase(TracerouteParams(host = "google.com", packetSize = 10)).toList()
+            assertInstanceOf(TracerouteFlowResult.ValidationError::class.java, results[0])
+        }
+
+        @Test
+        fun `packetSize above 1472 emits ValidationError`() = runTest {
+            val results = useCase(TracerouteParams(host = "google.com", packetSize = 1500)).toList()
+            assertInstanceOf(TracerouteFlowResult.ValidationError::class.java, results[0])
+        }
+
+        @Test
+        fun `packetSize 0 (MTU discovery) is accepted`() = runTest {
+            every { tracerouteRepo.trace(any(), any(), any(), any(), any(), any()) } returns flowOf()
+            val results = useCase(TracerouteParams(host = "google.com", packetSize = 0)).toList()
+            assertEquals(0, results.size)
+        }
     }
 
     // ── Happy path ─────────────────────────────────────────────────────────────
@@ -83,7 +114,7 @@ class TracerouteUseCaseTest {
 
         @Test
         fun `valid params emit Hop results`() = runTest {
-            every { tracerouteRepo.trace(any(), any(), any(), any()) } returns flowOf(hop1, hop2)
+            every { tracerouteRepo.trace(any(), any(), any(), any(), any(), any()) } returns flowOf(hop1, hop2)
             coEvery { geoRepo.lookup("192.168.1.1") } returns null
             coEvery { geoRepo.lookup("8.8.8.8")     } returns geo
 
@@ -94,7 +125,7 @@ class TracerouteUseCaseTest {
 
         @Test
         fun `geo location is attached to hop with public IP`() = runTest {
-            every { tracerouteRepo.trace(any(), any(), any(), any()) } returns flowOf(hop2)
+            every { tracerouteRepo.trace(any(), any(), any(), any(), any(), any()) } returns flowOf(hop2)
             coEvery { geoRepo.lookup("8.8.8.8") } returns geo
 
             val results = useCase(TracerouteParams("google.com")).toList()
@@ -105,7 +136,7 @@ class TracerouteUseCaseTest {
         @Test
         fun `timeout hop with null IP gets no geo lookup`() = runTest {
             val timeoutHop = HopResult(1, null, null, null, HopStatus.TIMEOUT)
-            every { tracerouteRepo.trace(any(), any(), any(), any()) } returns flowOf(timeoutHop)
+            every { tracerouteRepo.trace(any(), any(), any(), any(), any(), any()) } returns flowOf(timeoutHop)
 
             val results = useCase(TracerouteParams("google.com")).toList()
             val hopResult = (results[0] as TracerouteFlowResult.Hop).hop
@@ -115,7 +146,7 @@ class TracerouteUseCaseTest {
         @Test
         fun `host is trimmed before passing to repository`() = runTest {
             var capturedHost: String? = null
-            every { tracerouteRepo.trace(any(), any(), any(), any()) } answers {
+            every { tracerouteRepo.trace(any(), any(), any(), any(), any(), any()) } answers {
                 capturedHost = firstArg()
                 flow {}
             }
@@ -127,7 +158,7 @@ class TracerouteUseCaseTest {
 
         @Test
         fun `IPv4 address is accepted as valid host`() = runTest {
-            every { tracerouteRepo.trace(any(), any(), any(), any()) } returns flowOf(hop1)
+            every { tracerouteRepo.trace(any(), any(), any(), any(), any(), any()) } returns flowOf(hop1)
             coEvery { geoRepo.lookup(any()) } returns null
 
             val results = useCase(TracerouteParams("8.8.8.8")).toList()
