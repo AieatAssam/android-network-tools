@@ -166,6 +166,7 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
                     transitionSpec = {
                         fadeIn(tween(300)) togetherWith fadeOut(tween(200))
                     },
+                    contentKey = { it::class },
                     label = "PortScanStateTransition"
                 ) { state ->
                     when (state) {

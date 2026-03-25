@@ -170,6 +170,7 @@ fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
                         (fadeIn(tween(300)) + slideInVertically(tween(300)) { it / 6 })
                             .togetherWith(fadeOut(tween(200)))
                     },
+                    contentKey = { it::class },
                     label = "traceroute-state"
                 ) { state ->
                     when (state) {
