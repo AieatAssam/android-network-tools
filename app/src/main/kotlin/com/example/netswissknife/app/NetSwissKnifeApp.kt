@@ -1,7 +1,6 @@
 package com.example.netswissknife.app
 
 import android.app.Application
-import com.example.netswissknife.app.BuildConfig
 import com.example.netswissknife.app.crash.CrashHandler
 import com.example.netswissknife.app.util.AppLogger
 import dagger.hilt.android.HiltAndroidApp
@@ -11,9 +10,10 @@ import org.osmdroid.config.Configuration
 class NetSwissKnifeApp : Application() {
     override fun onCreate() {
         super.onCreate()
-        // OSMDroid: identify this app to tile servers using the application ID per
+        // OSMDroid: identify this app to tile servers per
         // https://github.com/osmdroid/osmdroid/wiki/Important-notes-on-using-osmdroid-in-your-app
-        Configuration.getInstance().userAgentValue = BuildConfig.APPLICATION_ID
+        // packageName == BuildConfig.APPLICATION_ID at runtime
+        Configuration.getInstance().userAgentValue = packageName
         AppLogger.init(this)
         installCrashHandler()
         AppLogger.i("App", "NetSwissKnife started (versionName=${packageManager.getPackageInfo(packageName, 0).versionName})")
