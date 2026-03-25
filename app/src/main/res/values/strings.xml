@@ -262,6 +262,45 @@
     <string name="wifi_network_info_header">Network Information</string>
     <string name="wifi_live_connection_header">Live Connection</string>
 
+    <!-- Traceroute Screen -->
+    <string name="traceroute_screen_title">Traceroute</string>
+    <string name="traceroute_screen_subtitle">Trace the network path hop by hop to any host</string>
+
+    <!-- Traceroute Input -->
+    <string name="traceroute_config_title">Trace Configuration</string>
+    <string name="traceroute_host_label">Host or IP address</string>
+    <string name="traceroute_host_placeholder">e.g. google.com or 8.8.8.8</string>
+    <string name="traceroute_max_hops_label">Max hops</string>
+    <string name="traceroute_timeout_label">Timeout per hop</string>
+    <string name="traceroute_start_button">Start Trace</string>
+    <string name="traceroute_stop_button">Stop</string>
+    <string name="traceroute_retry_button">Retry</string>
+    <string name="traceroute_clear_button">Clear</string>
+
+    <!-- Traceroute States -->
+    <string name="traceroute_idle_title">Enter a host to trace</string>
+    <string name="traceroute_idle_subtitle">Supports hostnames and IPv4 addresses. Shows each hop with geolocation on a world map.</string>
+    <string name="traceroute_running_title">Tracing to %1$s…</string>
+    <string name="traceroute_running_subtitle">%1$d hop(s) discovered so far</string>
+    <string name="traceroute_error_title">Trace failed</string>
+
+    <!-- Traceroute Results -->
+    <string name="traceroute_result_header">Trace Results</string>
+    <string name="traceroute_map_title">Geographic Path</string>
+    <string name="traceroute_map_geo_count">%1$d geolocated</string>
+    <string name="traceroute_map_no_geo">No public IPs found — all hops are on private networks</string>
+    <string name="traceroute_tab_hops">Hop Details</string>
+    <string name="traceroute_tab_raw">Raw Output</string>
+    <string name="traceroute_raw_title">Raw Trace Output</string>
+    <string name="traceroute_stat_hops">Hops</string>
+    <string name="traceroute_stat_time">Time</string>
+    <string name="traceroute_stat_reached">Reached</string>
+    <string name="traceroute_stat_yes">Yes</string>
+    <string name="traceroute_stat_no">No</string>
+    <string name="traceroute_resolved_ip">Resolved IP: %1$s</string>
+    <string name="traceroute_hop_timeout">No response (timeout)</string>
+    <string name="traceroute_hop_label">Hop</string>
+
     <!-- DNS Record labels -->
     <string name="dns_ipv4_prefix">IPv4</string>
     <string name="dns_ipv6_prefix">IPv6</string>
