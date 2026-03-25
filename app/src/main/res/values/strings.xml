@@ -316,4 +316,7 @@
     <string name="dns_srv_weight">Weight</string>
     <string name="dns_srv_port">Port</string>
     <string name="dns_srv_target">Target</string>
+
+    <!-- OpenStreetMap attribution – required by tile usage policy -->
+    <string name="osm_attribution">© OpenStreetMap contributors</string>
 </resources>

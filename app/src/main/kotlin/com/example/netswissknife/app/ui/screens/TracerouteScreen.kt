@@ -726,6 +726,9 @@ private fun OsmTracerouteMap(hops: List<HopResult>, modifier: Modifier = Modifie
     // Keep a stable reference so we can call onPause / onResume / onDetach
     val mapViewRef = remember { mutableStateOf<MapView?>(null) }
 
+    // Wrapper Box so we can overlay the mandatory OSM attribution text
+    // per https://github.com/osmdroid/osmdroid/wiki/Important-notes-on-using-osmdroid-in-your-app
+
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
@@ -741,64 +744,81 @@ private fun OsmTracerouteMap(hops: List<HopResult>, modifier: Modifier = Modifie
         }
     }
 
-    AndroidView(
-        modifier = modifier,
-        factory = { ctx ->
-            MapView(ctx).also { mapViewRef.value = it }.apply {
-                setTileSource(TileSourceFactory.MAPNIK)   // OSM standard tiles
-                setMultiTouchControls(true)
-                controller.setZoom(2.0)
-                controller.setCenter(GeoPoint(20.0, 10.0))
-            }
-        },
-        update = { mapView ->
-            mapView.overlays.clear()
-
-            if (geoHops.isNotEmpty()) {
-                val geoPoints = geoHops.map { GeoPoint(it.geoLocation!!.lat, it.geoLocation!!.lon) }
-
-                // Polyline connecting hops
-                val polyline = Polyline(mapView).apply {
-                    setPoints(geoPoints)
-                    outlinePaint.color       = android.graphics.Color.parseColor("#64C8FF")
-                    outlinePaint.strokeWidth = 5f
-                    outlinePaint.alpha       = 200
-                    outlinePaint.isAntiAlias = true
+    Box(modifier = modifier) {
+        AndroidView(
+            modifier = Modifier.matchParentSize(),
+            factory = { ctx ->
+                MapView(ctx).also { mapViewRef.value = it }.apply {
+                    setTileSource(TileSourceFactory.MAPNIK)   // OSM standard tiles
+                    setMultiTouchControls(true)
+                    controller.setZoom(2.0)
+                    controller.setCenter(GeoPoint(20.0, 10.0))
                 }
-                mapView.overlays.add(polyline)
+            },
+            update = { mapView ->
+                mapView.overlays.clear()
 
-                // One marker per geo-located hop
-                geoHops.forEach { hop ->
-                    val geo = hop.geoLocation!!
-                    val marker = Marker(mapView).apply {
-                        position = GeoPoint(geo.lat, geo.lon)
-                        title    = "Hop ${hop.hopNumber}  •  ${hop.ip ?: "—"}"
-                        snippet  = buildString {
-                            if (geo.city.isNotBlank()) append("${geo.city}, ")
-                            append(geo.country)
-                            hop.rtTimeMs?.let { append("  •  ${it}ms") }
-                            geo.isp?.let { if (it.isNotBlank()) append("\n$it") }
+                if (geoHops.isNotEmpty()) {
+                    val geoPoints = geoHops.map { GeoPoint(it.geoLocation!!.lat, it.geoLocation!!.lon) }
+
+                    // Polyline connecting hops
+                    val polyline = Polyline(mapView).apply {
+                        setPoints(geoPoints)
+                        outlinePaint.color       = android.graphics.Color.parseColor("#64C8FF")
+                        outlinePaint.strokeWidth = 5f
+                        outlinePaint.alpha       = 200
+                        outlinePaint.isAntiAlias = true
+                    }
+                    mapView.overlays.add(polyline)
+
+                    // One marker per geo-located hop
+                    geoHops.forEach { hop ->
+                        val geo = hop.geoLocation!!
+                        val marker = Marker(mapView).apply {
+                            position = GeoPoint(geo.lat, geo.lon)
+                            title    = "Hop ${hop.hopNumber}  •  ${hop.ip ?: "—"}"
+                            snippet  = buildString {
+                                if (geo.city.isNotBlank()) append("${geo.city}, ")
+                                append(geo.country)
+                                hop.rtTimeMs?.let { append("  •  ${it}ms") }
+                                geo.isp?.let { if (it.isNotBlank()) append("\n$it") }
+                            }
+                            icon     = buildHopMarkerIcon(context, hop)
+                            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
                         }
-                        icon     = buildHopMarkerIcon(context, hop)
-                        setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                        mapView.overlays.add(marker)
                     }
-                    mapView.overlays.add(marker)
-                }
 
-                // Auto-zoom to show all hops (deferred so layout is ready)
-                mapView.post {
-                    if (geoPoints.size == 1) {
-                        mapView.controller.setZoom(8.0)
-                        mapView.controller.setCenter(geoPoints[0])
-                    } else {
-                        val box = BoundingBox.fromGeoPoints(geoPoints)
-                        mapView.zoomToBoundingBox(box, true, 80)
+                    // Auto-zoom to show all hops (deferred so layout is ready)
+                    mapView.post {
+                        if (geoPoints.size == 1) {
+                            mapView.controller.setZoom(8.0)
+                            mapView.controller.setCenter(geoPoints[0])
+                        } else {
+                            val box = BoundingBox.fromGeoPoints(geoPoints)
+                            mapView.zoomToBoundingBox(box, true, 80)
+                        }
                     }
                 }
+                mapView.invalidate()
             }
-            mapView.invalidate()
-        }
-    )
+        )
+
+        // Mandatory OpenStreetMap attribution – required by osmdroid usage policy
+        // https://github.com/osmdroid/osmdroid/wiki/Important-notes-on-using-osmdroid-in-your-app
+        Text(
+            text     = stringResource(R.string.osm_attribution),
+            style    = MaterialTheme.typography.labelSmall,
+            color    = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .background(
+                    MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
+                    RoundedCornerShape(topStart = 4.dp)
+                )
+                .padding(horizontal = 6.dp, vertical = 2.dp)
+        )
+    }
 }
 
 /** Colored circle bitmap showing the hop number, tinted by RTT. */
