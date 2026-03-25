@@ -155,6 +155,7 @@ fun PingScreen(
                         (fadeIn(tween(300)) + slideInVertically(tween(300)) { it / 8 })
                             .togetherWith(fadeOut(tween(200)))
                     },
+                    contentKey = { it::class },
                     label = "ping_state"
                 ) { state ->
                     when (state) {
@@ -855,8 +856,10 @@ private fun RttChartCard(packets: List<PingPacketResult>) {
 
 @Composable
 private fun PacketRow(packet: PingPacketResult) {
+    var targetAlpha by remember { mutableStateOf(0f) }
+    LaunchedEffect(Unit) { targetAlpha = 1f }
     val animatedAlpha by animateFloatAsState(
-        targetValue = 1f,
+        targetValue = targetAlpha,
         animationSpec = spring(stiffness = Spring.StiffnessLow),
         label = "packet_alpha"
     )

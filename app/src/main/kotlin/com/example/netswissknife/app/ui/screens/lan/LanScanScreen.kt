@@ -146,6 +146,7 @@ fun LanScreen(viewModel: LanScanViewModel = hiltViewModel()) {
                     (fadeIn(tween(300)) + slideInVertically(tween(300)) { it / 8 })
                         .togetherWith(fadeOut(tween(200)))
                 },
+                contentKey = { it::class },
                 label = "lan_state",
             ) { state ->
                 when (state) {
