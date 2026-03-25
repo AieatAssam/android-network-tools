@@ -272,6 +272,12 @@
     <string name="traceroute_host_placeholder">e.g. google.com or 8.8.8.8</string>
     <string name="traceroute_max_hops_label">Max hops</string>
     <string name="traceroute_timeout_label">Timeout per hop</string>
+    <string name="traceroute_probe_type_label">Probe protocol</string>
+    <string name="traceroute_probe_icmp">ICMP</string>
+    <string name="traceroute_probe_udp">UDP</string>
+    <string name="traceroute_probes_per_hop_label">Probes per hop</string>
+    <string name="traceroute_mtu_discovery_label">MTU discovery (auto packet size)</string>
+    <string name="traceroute_packet_size_label">Packet size</string>
     <string name="traceroute_start_button">Start Trace</string>
     <string name="traceroute_stop_button">Stop</string>
     <string name="traceroute_retry_button">Retry</string>

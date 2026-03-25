@@ -100,4 +100,7 @@ dependencies {
 
     // Coroutines
     implementation(libs.coroutines.core)
+
+    // ICMP traceroute (replaces binary-dependent implementation)
+    implementation(libs.icmpenguin)
 }

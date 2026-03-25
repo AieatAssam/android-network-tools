@@ -1,181 +1,28 @@
 package com.example.netswissknife.core.network.traceroute
 
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 
+/**
+ * Unit tests for [GeoIpRepositoryImpl].
+ *
+ * The old binary-based [TracerouteRepositoryImpl] has been replaced by
+ * [com.example.netswissknife.app.traceroute.IcmpEnginTracerouteRepositoryImpl] which lives in
+ * the :app module and depends on the icmpenguin JNI library — not unit-testable here.
+ */
 @OptIn(ExperimentalCoroutinesApi::class)
-@DisplayName("TracerouteRepositoryImpl – line parsing")
+@DisplayName("GeoIpRepositoryImpl – private IP detection")
 class TracerouteRepositoryImplTest {
 
-    private val impl = TracerouteRepositoryImpl()
-
-    // ── parseTracerouteLine ────────────────────────────────────────────────────
+    private val geoRepo = GeoIpRepositoryImpl()
 
     @Nested
-    @DisplayName("parseTracerouteLine")
-    inner class ParseLine {
-
-        @Test
-        fun `returns null for blank line`() {
-            assertNull(impl.parseTracerouteLine(""))
-        }
-
-        @Test
-        fun `returns null for header line`() {
-            assertNull(impl.parseTracerouteLine("traceroute to google.com, 30 hops max"))
-        }
-
-        @Test
-        fun `parses successful hop with IP and RTT`() {
-            val result = impl.parseTracerouteLine(" 1  192.168.1.1  1.234 ms  1.456 ms  1.789 ms")
-            assertNotNull(result)
-            assertEquals(1, result!!.hopNumber)
-            assertEquals("192.168.1.1", result.ip)
-            assertEquals(HopStatus.SUCCESS, result.status)
-            assertEquals(1L, result.rtTimeMs)
-        }
-
-        @Test
-        fun `parses all-timeout hop`() {
-            val result = impl.parseTracerouteLine(" 3  * * *")
-            assertNotNull(result)
-            assertEquals(3, result!!.hopNumber)
-            assertNull(result.ip)
-            assertEquals(HopStatus.TIMEOUT, result.status)
-            assertNull(result.rtTimeMs)
-        }
-
-        @Test
-        fun `parses mixed hop where first probe timed out`() {
-            val result = impl.parseTracerouteLine(" 2  10.0.0.1  10.234 ms  *  11.234 ms")
-            assertNotNull(result)
-            assertEquals(2, result!!.hopNumber)
-            assertEquals("10.0.0.1", result.ip)
-            assertEquals(HopStatus.SUCCESS, result.status)
-        }
-
-        @Test
-        fun `parses hop number correctly`() {
-            val result = impl.parseTracerouteLine("15  8.8.8.8  12.3 ms")
-            assertNotNull(result)
-            assertEquals(15, result!!.hopNumber)
-        }
-
-        @Test
-        fun `returns null when line starts with non-numeric`() {
-            assertNull(impl.parseTracerouteLine("  traceroute header text"))
-        }
-
-        @Test
-        fun `parses IP at position 2 even with leading spaces`() {
-            val result = impl.parseTracerouteLine("   4  172.16.0.1  5.0 ms")
-            assertNotNull(result)
-            assertEquals("172.16.0.1", result!!.ip)
-        }
-
-        @Test
-        fun `timeout hop has null geoLocation by default`() {
-            val result = impl.parseTracerouteLine(" 5  * * *")
-            assertNull(result?.geoLocation)
-        }
-
-        @Test
-        fun `success hop has null geoLocation before enrichment`() {
-            val result = impl.parseTracerouteLine(" 1  8.8.8.8  15 ms")
-            assertNull(result?.geoLocation)
-        }
-    }
-
-    // ── parseTracepathLine ────────────────────────────────────────────────────
-
-    @Nested
-    @DisplayName("parseTracepathLine")
-    inner class ParseTracepathLine {
-
-        @Test
-        fun `returns null for blank line`() {
-            assertNull(impl.parseTracepathLine(""))
-        }
-
-        @Test
-        fun `skips localhost PMTU line`() {
-            assertNull(impl.parseTracepathLine(" 1?: [LOCALHOST]                                         pmtu 1500"))
-        }
-
-        @Test
-        fun `parses successful hop`() {
-            val result = impl.parseTracepathLine(" 1:  192.168.1.1                                           1.234ms")
-            assertNotNull(result)
-            assertEquals(1, result!!.hopNumber)
-            assertEquals("192.168.1.1", result.ip)
-            assertEquals(HopStatus.SUCCESS, result.status)
-            assertEquals(1L, result.rtTimeMs)
-        }
-
-        @Test
-        fun `parses timeout hop (no reply)`() {
-            val result = impl.parseTracepathLine(" 3:  no reply")
-            assertNotNull(result)
-            assertEquals(3, result!!.hopNumber)
-            assertNull(result.ip)
-            assertEquals(HopStatus.TIMEOUT, result.status)
-        }
-
-        @Test
-        fun `parses hop with asymm annotation`() {
-            val result = impl.parseTracepathLine(" 2:  10.0.0.1                                              5.6ms asymm 2")
-            assertNotNull(result)
-            assertEquals(2, result!!.hopNumber)
-            assertEquals("10.0.0.1", result.ip)
-            assertEquals(HopStatus.SUCCESS, result.status)
-        }
-
-        @Test
-        fun `returns null for non-numeric start`() {
-            assertNull(impl.parseTracepathLine("Resume: pmtu 1500 hops 8 back 8"))
-        }
-    }
-
-    // ── Command builder injection ──────────────────────────────────────────────
-
-    @Nested
-    @DisplayName("CommandBuilder")
-    inner class CommandBuilderTests {
-
-        @Test
-        @DisplayName("custom command builder is used")
-        fun customCommandBuilderIsUsed() = runTest {
-            var capturedHost: String? = null
-            var capturedMaxHops = 0
-            val fakeBuilder = TracerouteRepositoryImpl.CommandBuilder { host, maxHops, _, _ ->
-                capturedHost    = host
-                capturedMaxHops = maxHops
-                // Return a command that produces minimal output and exits quickly
-                listOf("echo", "traceroute header\n 1  127.0.0.1  0.1 ms")
-            }
-
-            val repo = TracerouteRepositoryImpl(commandBuilder = fakeBuilder)
-            repo.trace("8.8.8.8", maxHops = 5, timeoutMs = 1000, queriesPerHop = 1).toList()
-
-            assertEquals("8.8.8.8", capturedHost)
-            assertEquals(5, capturedMaxHops)
-        }
-    }
-
-    // ── GeoIpRepositoryImpl private-IP detection ───────────────────────────────
-
-    @Nested
-    @DisplayName("GeoIpRepositoryImpl – private IP detection")
+    @DisplayName("private / reserved addresses are skipped")
     inner class PrivateIpTest {
-
-        private val geoRepo = GeoIpRepositoryImpl()
 
         @Test
         @DisplayName("lookup returns null for 192.168 range")
