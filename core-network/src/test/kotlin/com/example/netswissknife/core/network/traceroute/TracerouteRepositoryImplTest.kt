@@ -93,6 +93,56 @@ class TracerouteRepositoryImplTest {
         }
     }
 
+    // ── parseTracepathLine ────────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("parseTracepathLine")
+    inner class ParseTracepathLine {
+
+        @Test
+        fun `returns null for blank line`() {
+            assertNull(impl.parseTracepathLine(""))
+        }
+
+        @Test
+        fun `skips localhost PMTU line`() {
+            assertNull(impl.parseTracepathLine(" 1?: [LOCALHOST]                                         pmtu 1500"))
+        }
+
+        @Test
+        fun `parses successful hop`() {
+            val result = impl.parseTracepathLine(" 1:  192.168.1.1                                           1.234ms")
+            assertNotNull(result)
+            assertEquals(1, result!!.hopNumber)
+            assertEquals("192.168.1.1", result.ip)
+            assertEquals(HopStatus.SUCCESS, result.status)
+            assertEquals(1L, result.rtTimeMs)
+        }
+
+        @Test
+        fun `parses timeout hop (no reply)`() {
+            val result = impl.parseTracepathLine(" 3:  no reply")
+            assertNotNull(result)
+            assertEquals(3, result!!.hopNumber)
+            assertNull(result.ip)
+            assertEquals(HopStatus.TIMEOUT, result.status)
+        }
+
+        @Test
+        fun `parses hop with asymm annotation`() {
+            val result = impl.parseTracepathLine(" 2:  10.0.0.1                                              5.6ms asymm 2")
+            assertNotNull(result)
+            assertEquals(2, result!!.hopNumber)
+            assertEquals("10.0.0.1", result.ip)
+            assertEquals(HopStatus.SUCCESS, result.status)
+        }
+
+        @Test
+        fun `returns null for non-numeric start`() {
+            assertNull(impl.parseTracepathLine("Resume: pmtu 1500 hops 8 back 8"))
+        }
+    }
+
     // ── Command builder injection ──────────────────────────────────────────────
 
     @Nested
