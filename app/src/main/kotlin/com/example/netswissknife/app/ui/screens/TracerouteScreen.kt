@@ -803,12 +803,13 @@ private fun OsmTracerouteMap(hops: List<HopResult>, modifier: Modifier = Modifie
 
 /** Colored circle bitmap showing the hop number, tinted by RTT. */
 private fun buildHopMarkerIcon(context: Context, hop: HopResult): BitmapDrawable {
+    val rtt = hop.rtTimeMs
     val fillArgb = when {
-        hop.rtTimeMs == null -> android.graphics.Color.parseColor("#9E9E9E")
-        hop.rtTimeMs < 50    -> android.graphics.Color.parseColor("#4CAF50")
-        hop.rtTimeMs < 150   -> android.graphics.Color.parseColor("#CDDC39")
-        hop.rtTimeMs < 300   -> android.graphics.Color.parseColor("#FF9800")
-        else                 -> android.graphics.Color.parseColor("#F44336")
+        rtt == null -> android.graphics.Color.parseColor("#9E9E9E")
+        rtt < 50    -> android.graphics.Color.parseColor("#4CAF50")
+        rtt < 150   -> android.graphics.Color.parseColor("#CDDC39")
+        rtt < 300   -> android.graphics.Color.parseColor("#FF9800")
+        else        -> android.graphics.Color.parseColor("#F44336")
     }
     val size   = 72
     val radius = size / 2f - 3f
@@ -845,6 +846,14 @@ private fun buildHopMarkerIcon(context: Context, hop: HopResult): BitmapDrawable
     canvas.drawText("${hop.hopNumber}", size / 2f, textY, paint)
 
     return BitmapDrawable(context.resources, bitmap)
+}
+
+private fun rttColor(rtTimeMs: Long?): Color = when {
+    rtTimeMs == null -> Color(0xFF9E9E9E)
+    rtTimeMs < 50    -> Color(0xFF4CAF50)
+    rtTimeMs < 150   -> Color(0xFFCDDC39)
+    rtTimeMs < 300   -> Color(0xFFFF9800)
+    else             -> Color(0xFFF44336)
 }
 
 // ── Hop detail list ───────────────────────────────────────────────────────────
