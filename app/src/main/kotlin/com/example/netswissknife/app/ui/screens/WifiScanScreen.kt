@@ -460,7 +460,7 @@ fun WifiScanScreen(
     channels: List<com.example.netswissknife.core.network.wifi.WifiChannelInfo>
 ) {
     val trackColor  = MaterialTheme.colorScheme.surfaceVariant
-    val labelColorArgb = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f).hashCode()
+    val labelColorArgb = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f).toArgb()
     val density     = LocalDensity.current
 
     val barWidth    = 36.dp

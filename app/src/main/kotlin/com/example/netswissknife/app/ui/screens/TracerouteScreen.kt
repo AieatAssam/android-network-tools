@@ -1,11 +1,12 @@
 package com.example.netswissknife.app.ui.screens
 
-import android.graphics.Paint as NativePaint
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.drawable.BitmapDrawable
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
@@ -19,7 +20,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
@@ -77,6 +77,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -84,16 +85,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
-import androidx.compose.ui.graphics.drawscope.Fill
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -108,13 +107,17 @@ import com.example.netswissknife.app.R
 import com.example.netswissknife.app.ui.screens.traceroute.TracerouteUiState
 import com.example.netswissknife.app.ui.screens.traceroute.TracerouteViewModel
 import com.example.netswissknife.app.ui.screens.traceroute.TracerouteViewMode
-import com.example.netswissknife.app.ui.screens.traceroute.WorldMapData
 import com.example.netswissknife.core.network.traceroute.HopGeoLocation
 import com.example.netswissknife.core.network.traceroute.HopResult
 import com.example.netswissknife.core.network.traceroute.HopStatus
 import com.example.netswissknife.core.network.traceroute.TracerouteProbeType
 import com.example.netswissknife.core.network.traceroute.TracerouteResult
-import kotlin.math.sqrt
+import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.util.BoundingBox
+import org.osmdroid.util.GeoPoint
+import org.osmdroid.views.MapView
+import org.osmdroid.views.overlay.Marker
+import org.osmdroid.views.overlay.Polyline
 
 // ── Screen entry point ────────────────────────────────────────────────────────
 
@@ -607,11 +610,11 @@ private fun TracerouteFinishedPanel(
                         }
                     }
                 } else {
-                    WorldMapCanvas(
+                    OsmTracerouteMap(
                         hops     = result.hops,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(220.dp)
+                            .height(280.dp)
                             .clip(RoundedCornerShape(8.dp))
                     )
                 }
@@ -712,170 +715,136 @@ private fun StatChip(label: String, value: String) {
     }
 }
 
-// ── World map canvas ──────────────────────────────────────────────────────────
+// ── OpenStreetMap traceroute map (OSMDroid, CC BY-SA, no API key) ──────────────
 
 @Composable
-private fun WorldMapCanvas(hops: List<HopResult>, modifier: Modifier = Modifier) {
-    val infiniteTransition = rememberInfiniteTransition(label = "map-pulse")
-    val pulseScale by infiniteTransition.animateFloat(
-        initialValue  = 1f,
-        targetValue   = 1.4f,
-        animationSpec = infiniteRepeatable(tween(1000, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label         = "pulse-scale"
-    )
-    val dashOffset by infiniteTransition.animateFloat(
-        initialValue  = 0f,
-        targetValue   = 30f,
-        animationSpec = infiniteRepeatable(tween(1500, easing = LinearEasing), RepeatMode.Restart),
-        label         = "dash-offset"
-    )
+private fun OsmTracerouteMap(hops: List<HopResult>, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val geoHops = remember(hops) { hops.filter { it.geoLocation != null } }
+    val lifecycleOwner = LocalLifecycleOwner.current
 
-    // Geo-located hops only
-    val geoHops = hops.filter { it.geoLocation != null }
+    // Keep a stable reference so we can call onPause / onResume / onDetach
+    val mapViewRef = remember { mutableStateOf<MapView?>(null) }
 
-    Canvas(modifier = modifier) {
-        val w = size.width
-        val h = size.height
-
-        // ── Background ─────────────────────────────────────────────────────
-        drawRect(
-            brush = Brush.linearGradient(
-                listOf(Color(0xFF0A1628), Color(0xFF0D2240))
-            )
-        )
-
-        // ── Grid lines ─────────────────────────────────────────────────────
-        val gridColor = Color(0xFF1E3A5F)
-        val gridStroke = Stroke(1f)
-        // Latitude lines every 30°
-        for (lat in listOf(60, 30, 0, -30, -60)) {
-            val y = ((90f - lat) / 180f) * h
-            drawLine(gridColor, Offset(0f, y), Offset(w, y), strokeWidth = 1f)
-        }
-        // Longitude lines every 60°
-        for (lon in listOf(-120, -60, 0, 60, 120)) {
-            val x = ((lon + 180f) / 360f) * w
-            drawLine(gridColor, Offset(x, 0f), Offset(x, h), strokeWidth = 1f)
-        }
-
-        // ── Continent fills ────────────────────────────────────────────────
-        val landColor  = Color(0xFF1A4040)
-        val landBorder = Color(0xFF2A6060)
-
-        WorldMapData.continents.forEach { points ->
-            if (points.size < 4) return@forEach
-            val path = Path()
-            path.moveTo(points[0] * w, points[1] * h)
-            var i = 2
-            while (i < points.size - 1) {
-                path.lineTo(points[i] * w, points[i + 1] * h)
-                i += 2
-            }
-            path.close()
-            drawPath(path, landColor, style = Fill)
-            drawPath(path, landBorder, style = Stroke(width = 1.5f))
-        }
-
-        // ── Arc lines between consecutive geo-located hops ─────────────────
-        if (geoHops.size >= 2) {
-            for (idx in 0 until geoHops.size - 1) {
-                val a = geoHops[idx].geoLocation!!
-                val b = geoHops[idx + 1].geoLocation!!
-
-                val x1 = ((a.lon + 180f) / 360f).toFloat() * w
-                val y1 = ((90f - a.lat) / 180f).toFloat() * h
-                val x2 = ((b.lon + 180f) / 360f).toFloat() * w
-                val y2 = ((90f - b.lat) / 180f).toFloat() * h
-
-                val dx   = x2 - x1
-                val dy   = y2 - y1
-                val dist = sqrt(dx * dx + dy * dy)
-                val midX = (x1 + x2) / 2f
-                val midY = (y1 + y2) / 2f - dist * 0.35f  // arc control point
-
-                // Glow trail
-                drawContext.canvas.nativeCanvas.apply {
-                    val glowPaint = NativePaint().apply {
-                        isAntiAlias = true
-                        style       = NativePaint.Style.STROKE
-                        strokeWidth = 6f
-                        color       = android.graphics.Color.argb(40, 100, 200, 255)
-                        strokeCap   = NativePaint.Cap.ROUND
-                    }
-                    val path = android.graphics.Path().apply {
-                        moveTo(x1, y1)
-                        quadTo(midX, midY, x2, y2)
-                    }
-                    drawPath(path, glowPaint)
-                }
-
-                // Main arc (dashed, animated)
-                val arcPath = Path()
-                arcPath.moveTo(x1, y1)
-                // Approximate quadratic curve with line segments
-                val segments = 20
-                for (s in 1..segments) {
-                    val t  = s.toFloat() / segments
-                    val qx = (1 - t) * (1 - t) * x1 + 2 * (1 - t) * t * midX + t * t * x2
-                    val qy = (1 - t) * (1 - t) * y1 + 2 * (1 - t) * t * midY + t * t * y2
-                    arcPath.lineTo(qx, qy)
-                }
-                drawPath(
-                    arcPath,
-                    Color(0xFF64C8FF),
-                    style = Stroke(
-                        width    = 2f,
-                        cap      = StrokeCap.Round,
-                        join     = StrokeJoin.Round,
-                        pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(
-                            floatArrayOf(12f, 8f), dashOffset
-                        )
-                    )
-                )
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> mapViewRef.value?.onResume()
+                Lifecycle.Event.ON_PAUSE  -> mapViewRef.value?.onPause()
+                else -> {}
             }
         }
-
-        // ── Hop markers ───────────────────────────────────────────────────
-        geoHops.forEachIndexed { idx, hop ->
-            val geo = hop.geoLocation!!
-            val x   = ((geo.lon + 180f) / 360f).toFloat() * w
-            val y   = ((90f - geo.lat) / 180f).toFloat() * h
-
-            val isLast = idx == geoHops.lastIndex
-            val color  = rttColor(hop.rtTimeMs)
-
-            // Outer glow ring (pulsing on last hop)
-            val outerR = if (isLast) 14f * pulseScale else 12f
-            drawCircle(color.copy(alpha = 0.25f), outerR, Offset(x, y))
-            // Mid ring
-            drawCircle(color.copy(alpha = 0.5f), 8f, Offset(x, y))
-            // Core dot
-            drawCircle(color, 5f, Offset(x, y))
-            // White center
-            drawCircle(Color.White, 2f, Offset(x, y))
-
-            // Hop number label
-            drawContext.canvas.nativeCanvas.apply {
-                val textPaint = NativePaint().apply {
-                    isAntiAlias = true
-                    textSize    = 20f
-                    this.color  = android.graphics.Color.WHITE
-                    typeface    = android.graphics.Typeface.DEFAULT_BOLD
-                    textAlign   = NativePaint.Align.CENTER
-                    setShadowLayer(3f, 0f, 1f, android.graphics.Color.BLACK)
-                }
-                drawText("${hop.hopNumber}", x, y - 14f, textPaint)
-            }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            mapViewRef.value?.onDetach()
         }
     }
+
+    AndroidView(
+        modifier = modifier,
+        factory = { ctx ->
+            MapView(ctx).also { mapViewRef.value = it }.apply {
+                setTileSource(TileSourceFactory.MAPNIK)   // OSM standard tiles
+                setMultiTouchControls(true)
+                controller.setZoom(2.0)
+                controller.setCenter(GeoPoint(20.0, 10.0))
+            }
+        },
+        update = { mapView ->
+            mapView.overlays.clear()
+
+            if (geoHops.isNotEmpty()) {
+                val geoPoints = geoHops.map { GeoPoint(it.geoLocation!!.lat, it.geoLocation!!.lon) }
+
+                // Polyline connecting hops
+                val polyline = Polyline(mapView).apply {
+                    setPoints(geoPoints)
+                    outlinePaint.color       = android.graphics.Color.parseColor("#64C8FF")
+                    outlinePaint.strokeWidth = 5f
+                    outlinePaint.alpha       = 200
+                    outlinePaint.isAntiAlias = true
+                }
+                mapView.overlays.add(polyline)
+
+                // One marker per geo-located hop
+                geoHops.forEach { hop ->
+                    val geo = hop.geoLocation!!
+                    val marker = Marker(mapView).apply {
+                        position = GeoPoint(geo.lat, geo.lon)
+                        title    = "Hop ${hop.hopNumber}  •  ${hop.ip ?: "—"}"
+                        snippet  = buildString {
+                            if (geo.city.isNotBlank()) append("${geo.city}, ")
+                            append(geo.country)
+                            hop.rtTimeMs?.let { append("  •  ${it}ms") }
+                            geo.isp?.let { if (it.isNotBlank()) append("\n$it") }
+                        }
+                        icon     = buildHopMarkerIcon(context, hop)
+                        setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                    }
+                    mapView.overlays.add(marker)
+                }
+
+                // Auto-zoom to show all hops (deferred so layout is ready)
+                mapView.post {
+                    if (geoPoints.size == 1) {
+                        mapView.controller.setZoom(8.0)
+                        mapView.controller.setCenter(geoPoints[0])
+                    } else {
+                        val box = BoundingBox.fromGeoPoints(geoPoints)
+                        mapView.zoomToBoundingBox(box, true, 80)
+                    }
+                }
+            }
+            mapView.invalidate()
+        }
+    )
 }
 
-private fun rttColor(rtTimeMs: Long?): Color = when {
-    rtTimeMs == null     -> Color(0xFF9E9E9E)
-    rtTimeMs < 50        -> Color(0xFF4CAF50)
-    rtTimeMs < 150       -> Color(0xFFCDDC39)
-    rtTimeMs < 300       -> Color(0xFFFF9800)
-    else                 -> Color(0xFFF44336)
+/** Colored circle bitmap showing the hop number, tinted by RTT. */
+private fun buildHopMarkerIcon(context: Context, hop: HopResult): BitmapDrawable {
+    val fillArgb = when {
+        hop.rtTimeMs == null -> android.graphics.Color.parseColor("#9E9E9E")
+        hop.rtTimeMs < 50    -> android.graphics.Color.parseColor("#4CAF50")
+        hop.rtTimeMs < 150   -> android.graphics.Color.parseColor("#CDDC39")
+        hop.rtTimeMs < 300   -> android.graphics.Color.parseColor("#FF9800")
+        else                 -> android.graphics.Color.parseColor("#F44336")
+    }
+    val size   = 72
+    val radius = size / 2f - 3f
+    val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    val canvas = android.graphics.Canvas(bitmap)
+
+    val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+
+    // Shadow / glow
+    paint.color = android.graphics.Color.BLACK
+    paint.alpha = 60
+    canvas.drawCircle(size / 2f + 1f, size / 2f + 2f, radius, paint)
+
+    // Filled circle
+    paint.color = fillArgb
+    paint.alpha = 230
+    canvas.drawCircle(size / 2f, size / 2f, radius, paint)
+
+    // White border
+    paint.color       = android.graphics.Color.WHITE
+    paint.alpha       = 255
+    paint.style       = android.graphics.Paint.Style.STROKE
+    paint.strokeWidth = 3.5f
+    canvas.drawCircle(size / 2f, size / 2f, radius, paint)
+
+    // Hop number label
+    paint.style          = android.graphics.Paint.Style.FILL
+    paint.color          = android.graphics.Color.WHITE
+    paint.textAlign      = android.graphics.Paint.Align.CENTER
+    paint.textSize       = if (hop.hopNumber < 10) 26f else 22f
+    paint.isFakeBoldText = true
+    paint.setShadowLayer(3f, 0f, 1f, android.graphics.Color.argb(120, 0, 0, 0))
+    val textY = size / 2f - (paint.descent() + paint.ascent()) / 2f
+    canvas.drawText("${hop.hopNumber}", size / 2f, textY, paint)
+
+    return BitmapDrawable(context.resources, bitmap)
 }
 
 // ── Hop detail list ───────────────────────────────────────────────────────────
