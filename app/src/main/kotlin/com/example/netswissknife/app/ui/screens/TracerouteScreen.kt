@@ -103,18 +103,18 @@ import com.example.netswissknife.core.network.traceroute.HopResult
 import com.example.netswissknife.core.network.traceroute.HopStatus
 import com.example.netswissknife.core.network.traceroute.TracerouteProbeType
 import com.example.netswissknife.core.network.traceroute.TracerouteResult
-import org.maplibre.compose.MaplibreMap
-import org.maplibre.compose.BaseStyle
+import org.maplibre.compose.map.MaplibreMap
+import org.maplibre.compose.style.BaseStyle
 import org.maplibre.compose.camera.CameraPosition
-import org.maplibre.compose.camera.Position
-import org.maplibre.compose.rememberCameraState
+import org.maplibre.compose.camera.rememberCameraState
 import org.maplibre.compose.sources.GeoJsonData
 import org.maplibre.compose.sources.rememberGeoJsonSource
 import org.maplibre.compose.layers.CircleLayer
 import org.maplibre.compose.layers.LineLayer
-import org.maplibre.compose.layers.LineCap
-import org.maplibre.compose.layers.LineJoin
+import org.maplibre.compose.expressions.value.LineCap
+import org.maplibre.compose.expressions.value.LineJoin
 import org.maplibre.compose.expressions.dsl.const
+import org.maplibre.spatialk.geojson.Position
 
 // ── Screen entry point ────────────────────────────────────────────────────────
 
