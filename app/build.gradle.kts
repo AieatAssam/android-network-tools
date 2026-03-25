@@ -104,6 +104,6 @@ dependencies {
     // ICMP traceroute (replaces binary-dependent implementation)
     implementation(libs.icmpenguin)
 
-    // OpenStreetMap (Creative Commons, no API key) for traceroute world map
-    implementation(libs.osmdroid)
+    // MapLibre Compose (OpenFreeMap tiles, no API key) for traceroute world map
+    implementation(libs.maplibre.compose)
 }

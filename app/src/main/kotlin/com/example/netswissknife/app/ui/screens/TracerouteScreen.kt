@@ -1,8 +1,5 @@
 package com.example.netswissknife.app.ui.screens
 
-import android.content.Context
-import android.graphics.Bitmap
-import android.graphics.drawable.BitmapDrawable
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
@@ -77,7 +74,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -87,12 +83,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -112,12 +103,18 @@ import com.example.netswissknife.core.network.traceroute.HopResult
 import com.example.netswissknife.core.network.traceroute.HopStatus
 import com.example.netswissknife.core.network.traceroute.TracerouteProbeType
 import com.example.netswissknife.core.network.traceroute.TracerouteResult
-import com.example.netswissknife.app.util.LoggingMapTileProvider
-import org.osmdroid.util.BoundingBox
-import org.osmdroid.util.GeoPoint
-import org.osmdroid.views.MapView
-import org.osmdroid.views.overlay.Marker
-import org.osmdroid.views.overlay.Polyline
+import org.maplibre.compose.map.MaplibreMap
+import org.maplibre.compose.style.BaseStyle
+import org.maplibre.compose.camera.CameraPosition
+import org.maplibre.compose.camera.rememberCameraState
+import org.maplibre.compose.sources.GeoJsonData
+import org.maplibre.compose.sources.rememberGeoJsonSource
+import org.maplibre.compose.layers.CircleLayer
+import org.maplibre.compose.layers.LineLayer
+import org.maplibre.compose.expressions.value.LineCap
+import org.maplibre.compose.expressions.value.LineJoin
+import org.maplibre.compose.expressions.dsl.const
+import org.maplibre.spatialk.geojson.Position
 
 // ── Screen entry point ────────────────────────────────────────────────────────
 
@@ -610,7 +607,7 @@ private fun TracerouteFinishedPanel(
                         }
                     }
                 } else {
-                    OsmTracerouteMap(
+                    MaplibreTracerouteMap(
                         hops     = result.hops,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -715,158 +712,96 @@ private fun StatChip(label: String, value: String) {
     }
 }
 
-// ── OpenStreetMap traceroute map (OSMDroid, CC BY-SA, no API key) ──────────────
+// ── MapLibre traceroute map (OpenFreeMap vector tiles, no API key) ─────────────
 
 @Composable
-private fun OsmTracerouteMap(hops: List<HopResult>, modifier: Modifier = Modifier) {
-    val context = LocalContext.current
+private fun MaplibreTracerouteMap(hops: List<HopResult>, modifier: Modifier = Modifier) {
     val geoHops = remember(hops) { hops.filter { it.geoLocation != null } }
-    val lifecycleOwner = LocalLifecycleOwner.current
 
-    // Keep a stable reference so we can call onPause / onResume / onDetach
-    val mapViewRef = remember { mutableStateOf<MapView?>(null) }
+    val cameraState = rememberCameraState(
+        firstPosition = CameraPosition(
+            target = Position(latitude = 20.0, longitude = 0.0),
+            zoom   = 1.5
+        )
+    )
 
-    // Wrapper Box so we can overlay the mandatory OSM attribution text
-    // per https://github.com/osmdroid/osmdroid/wiki/Important-notes-on-using-osmdroid-in-your-app
+    // Build GeoJSON once per unique hop set; single FeatureCollection holds
+    // the LineString (rendered by LineLayer) and Points (rendered by CircleLayer).
+    val geoJson = remember(geoHops) { buildTracerouteGeoJson(geoHops) }
 
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            when (event) {
-                Lifecycle.Event.ON_RESUME -> mapViewRef.value?.onResume()
-                Lifecycle.Event.ON_PAUSE  -> mapViewRef.value?.onPause()
-                else -> {}
-            }
+    // Animate camera to fit all geo-located hops whenever the set changes
+    LaunchedEffect(geoHops) {
+        if (geoHops.isEmpty()) return@LaunchedEffect
+        val lats = geoHops.map { it.geoLocation!!.lat }
+        val lons = geoHops.map { it.geoLocation!!.lon }
+        val centerLat = (lats.min() + lats.max()) / 2.0
+        val centerLon = (lons.min() + lons.max()) / 2.0
+        val span = maxOf(lats.max() - lats.min(), lons.max() - lons.min())
+        val zoom = when {
+            span < 1.0  -> 9.0
+            span < 5.0  -> 6.0
+            span < 20.0 -> 4.0
+            span < 60.0 -> 2.5
+            else        -> 1.5
         }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-            mapViewRef.value?.onDetach()
-        }
+        cameraState.animateTo(
+            CameraPosition(
+                target = Position(latitude = centerLat, longitude = centerLon),
+                zoom   = zoom
+            )
+        )
     }
 
-    Box(modifier = modifier) {
-        AndroidView(
-            modifier = Modifier.matchParentSize(),
-            factory = { ctx ->
-                // LoggingMapTileProvider wraps MAPNIK and writes tile failures to AppLogger
-                val tileProvider = LoggingMapTileProvider(ctx)
-                MapView(ctx, tileProvider).also { mapViewRef.value = it }.apply {
-                    setMultiTouchControls(true)
-                    controller.setZoom(2.0)
-                    controller.setCenter(GeoPoint(20.0, 10.0))
-                }
-            },
-            update = { mapView ->
-                mapView.overlays.clear()
+    // Single GeoJSON source shared by both layers; MapLibre routes geometry types
+    // to the appropriate layer automatically (LineString → LineLayer, Point → CircleLayer).
+    val source = rememberGeoJsonSource(GeoJsonData.JsonString(geoJson))
 
-                if (geoHops.isNotEmpty()) {
-                    val geoPoints = geoHops.map { GeoPoint(it.geoLocation!!.lat, it.geoLocation!!.lon) }
-
-                    // Polyline connecting hops
-                    val polyline = Polyline(mapView).apply {
-                        setPoints(geoPoints)
-                        outlinePaint.color       = android.graphics.Color.parseColor("#64C8FF")
-                        outlinePaint.strokeWidth = 5f
-                        outlinePaint.alpha       = 200
-                        outlinePaint.isAntiAlias = true
-                    }
-                    mapView.overlays.add(polyline)
-
-                    // One marker per geo-located hop
-                    geoHops.forEach { hop ->
-                        val geo = hop.geoLocation!!
-                        val marker = Marker(mapView).apply {
-                            position = GeoPoint(geo.lat, geo.lon)
-                            title    = "Hop ${hop.hopNumber}  •  ${hop.ip ?: "—"}"
-                            snippet  = buildString {
-                                if (geo.city.isNotBlank()) append("${geo.city}, ")
-                                append(geo.country)
-                                hop.rtTimeMs?.let { append("  •  ${it}ms") }
-                                geo.isp?.let { if (it.isNotBlank()) append("\n$it") }
-                            }
-                            icon     = buildHopMarkerIcon(context, hop)
-                            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
-                        }
-                        mapView.overlays.add(marker)
-                    }
-
-                    // Auto-zoom to show all hops (deferred so layout is ready)
-                    mapView.post {
-                        if (geoPoints.size == 1) {
-                            mapView.controller.setZoom(8.0)
-                            mapView.controller.setCenter(geoPoints[0])
-                        } else {
-                            val box = BoundingBox.fromGeoPoints(geoPoints)
-                            mapView.zoomToBoundingBox(box, true, 80)
-                        }
-                    }
-                }
-                mapView.invalidate()
-            }
+    MaplibreMap(
+        modifier   = modifier,
+        cameraState = cameraState,
+        baseStyle  = BaseStyle.Uri("https://tiles.openfreemap.org/styles/liberty")
+    ) {
+        // Polyline connecting hops in order
+        LineLayer(
+            id     = "traceroute-line",
+            source = source,
+            color  = const(Color(0xFF64C8FF)),
+            width  = const(3.dp),
+            cap    = const(LineCap.Round),
+            join   = const(LineJoin.Round)
         )
-
-        // Mandatory OpenStreetMap attribution – required by osmdroid usage policy
-        // https://github.com/osmdroid/osmdroid/wiki/Important-notes-on-using-osmdroid-in-your-app
-        Text(
-            text     = stringResource(R.string.osm_attribution),
-            style    = MaterialTheme.typography.labelSmall,
-            color    = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .background(
-                    MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
-                    RoundedCornerShape(topStart = 4.dp)
-                )
-                .padding(horizontal = 6.dp, vertical = 2.dp)
+        // Circle marker at each geo-located hop
+        CircleLayer(
+            id          = "traceroute-hops",
+            source      = source,
+            color       = const(Color(0xFF2196F3)),
+            radius      = const(7.dp),
+            strokeColor = const(Color.White),
+            strokeWidth = const(2.dp)
         )
     }
 }
 
-/** Colored circle bitmap showing the hop number, tinted by RTT. */
-private fun buildHopMarkerIcon(context: Context, hop: HopResult): BitmapDrawable {
-    val rtt = hop.rtTimeMs
-    val fillArgb = when {
-        rtt == null -> android.graphics.Color.parseColor("#9E9E9E")
-        rtt < 50    -> android.graphics.Color.parseColor("#4CAF50")
-        rtt < 150   -> android.graphics.Color.parseColor("#CDDC39")
-        rtt < 300   -> android.graphics.Color.parseColor("#FF9800")
-        else        -> android.graphics.Color.parseColor("#F44336")
+/** Builds a GeoJSON FeatureCollection containing one LineString and one Point per hop. */
+private fun buildTracerouteGeoJson(geoHops: List<HopResult>): String {
+    if (geoHops.isEmpty()) return """{"type":"FeatureCollection","features":[]}"""
+    return buildString {
+        append("""{"type":"FeatureCollection","features":[""")
+        // LineString connecting all hops
+        append("""{"type":"Feature","geometry":{"type":"LineString","coordinates":[""")
+        geoHops.forEachIndexed { i, hop ->
+            if (i > 0) append(",")
+            val geo = hop.geoLocation!!
+            append("[${geo.lon},${geo.lat}]")
+        }
+        append("""]},"properties":{}}""")
+        // One Point per hop (CircleLayer renders only Point geometries)
+        geoHops.forEach { hop ->
+            val geo = hop.geoLocation!!
+            append(""",{"type":"Feature","geometry":{"type":"Point","coordinates":[${geo.lon},${geo.lat}]},"properties":{"hop":${hop.hopNumber}}}""")
+        }
+        append("]}")
     }
-    val size   = 72
-    val radius = size / 2f - 3f
-    val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
-    val canvas = android.graphics.Canvas(bitmap)
-
-    val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
-
-    // Shadow / glow
-    paint.color = android.graphics.Color.BLACK
-    paint.alpha = 60
-    canvas.drawCircle(size / 2f + 1f, size / 2f + 2f, radius, paint)
-
-    // Filled circle
-    paint.color = fillArgb
-    paint.alpha = 230
-    canvas.drawCircle(size / 2f, size / 2f, radius, paint)
-
-    // White border
-    paint.color       = android.graphics.Color.WHITE
-    paint.alpha       = 255
-    paint.style       = android.graphics.Paint.Style.STROKE
-    paint.strokeWidth = 3.5f
-    canvas.drawCircle(size / 2f, size / 2f, radius, paint)
-
-    // Hop number label
-    paint.style          = android.graphics.Paint.Style.FILL
-    paint.color          = android.graphics.Color.WHITE
-    paint.textAlign      = android.graphics.Paint.Align.CENTER
-    paint.textSize       = if (hop.hopNumber < 10) 26f else 22f
-    paint.isFakeBoldText = true
-    paint.setShadowLayer(3f, 0f, 1f, android.graphics.Color.argb(120, 0, 0, 0))
-    val textY = size / 2f - (paint.descent() + paint.ascent()) / 2f
-    canvas.drawText("${hop.hopNumber}", size / 2f, textY, paint)
-
-    return BitmapDrawable(context.resources, bitmap)
 }
 
 private fun rttColor(rtTimeMs: Long?): Color = when {
