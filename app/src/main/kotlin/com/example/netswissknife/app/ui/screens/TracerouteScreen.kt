@@ -604,7 +604,7 @@ private fun TraceStatsSummary(result: TracerouteResult, onClear: () -> Unit) {
             if (result.resolvedIp != null) {
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    stringResource(R.string.traceroute_resolved_ip, result.resolvedIp),
+                    stringResource(R.string.traceroute_resolved_ip, result.resolvedIp!!),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -776,7 +776,7 @@ private fun WorldMapCanvas(hops: List<HopResult>, modifier: Modifier = Modifier)
                 val textPaint = NativePaint().apply {
                     isAntiAlias = true
                     textSize    = 20f
-                    color       = android.graphics.Color.WHITE
+                    this.color  = android.graphics.Color.WHITE
                     typeface    = android.graphics.Typeface.DEFAULT_BOLD
                     textAlign   = NativePaint.Align.CENTER
                     setShadowLayer(3f, 0f, 1f, android.graphics.Color.BLACK)
@@ -854,7 +854,7 @@ private fun HopCard(hop: HopResult, index: Int) {
                     HopStatus.ERROR -> {
                         Text(
                             hop.ip ?: "Error",
-                            style = MaterialTheme.typography.bodyMedium.copy(FontFamily.Monospace),
+                            style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
                             color = MaterialTheme.colorScheme.error
                         )
                     }
@@ -870,7 +870,7 @@ private fun HopCard(hop: HopResult, index: Int) {
                         )
                         if (hop.hostname != null) {
                             Text(
-                                hop.hostname,
+                                hop.hostname!!,
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
@@ -878,7 +878,7 @@ private fun HopCard(hop: HopResult, index: Int) {
                             )
                         }
                         if (hop.geoLocation != null) {
-                            GeoLocationChip(hop.geoLocation)
+                            GeoLocationChip(hop.geoLocation!!)
                         }
                     }
                 }

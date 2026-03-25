@@ -146,8 +146,7 @@ class TracerouteViewModel @Inject constructor(
             val ip      = hop.ip ?: "*"
             val host2   = if (hop.hostname != null) " (${hop.hostname})" else ""
             val rtt     = if (hop.rtTimeMs != null) " ${hop.rtTimeMs} ms" else " *"
-            val geo     = if (hop.geoLocation != null)
-                " [${hop.geoLocation.city.ifBlank { hop.geoLocation.country }}]" else ""
+            val geo     = hop.geoLocation?.let { gl -> " [${gl.city.ifBlank { gl.country }}]" } ?: ""
             appendLine("$num  $ip$host2$rtt$geo")
         }
     }
