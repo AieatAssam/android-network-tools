@@ -112,7 +112,7 @@ import com.example.netswissknife.core.network.traceroute.HopResult
 import com.example.netswissknife.core.network.traceroute.HopStatus
 import com.example.netswissknife.core.network.traceroute.TracerouteProbeType
 import com.example.netswissknife.core.network.traceroute.TracerouteResult
-import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import com.example.netswissknife.app.util.LoggingMapTileProvider
 import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
@@ -748,8 +748,9 @@ private fun OsmTracerouteMap(hops: List<HopResult>, modifier: Modifier = Modifie
         AndroidView(
             modifier = Modifier.matchParentSize(),
             factory = { ctx ->
-                MapView(ctx).also { mapViewRef.value = it }.apply {
-                    setTileSource(TileSourceFactory.MAPNIK)   // OSM standard tiles
+                // LoggingMapTileProvider wraps MAPNIK and writes tile failures to AppLogger
+                val tileProvider = LoggingMapTileProvider(ctx)
+                MapView(ctx, tileProvider).also { mapViewRef.value = it }.apply {
                     setMultiTouchControls(true)
                     controller.setZoom(2.0)
                     controller.setCenter(GeoPoint(20.0, 10.0))

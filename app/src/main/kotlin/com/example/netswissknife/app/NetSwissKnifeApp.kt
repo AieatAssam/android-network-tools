@@ -11,8 +11,8 @@ import org.osmdroid.config.Configuration
 class NetSwissKnifeApp : Application() {
     override fun onCreate() {
         super.onCreate()
-        initOsmdroid()
         AppLogger.init(this)
+        initOsmdroid()
         installCrashHandler()
         AppLogger.i("App", "NetSwissKnife started (versionName=${packageManager.getPackageInfo(packageName, 0).versionName})")
     }
@@ -37,6 +37,10 @@ class NetSwissKnifeApp : Application() {
         // Keep concurrent downloads low to avoid triggering rate-limit blocks
         osmConfig.tileDownloadThreads = 2
         osmConfig.tileDownloadMaxQueueSize = 40
+        // Enable osmdroid's verbose HTTP logging so tile errors (including 403 status codes)
+        // appear in logcat under tag "OsmDroid" – invaluable for diagnosing tile server rejections
+        osmConfig.isDebugMode = true
+        AppLogger.i("OsmInit", "OSM tile provider configured – User-Agent: ${osmConfig.userAgentValue}")
     }
 
     private fun installCrashHandler() {
