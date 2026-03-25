@@ -19,7 +19,7 @@ val ciKeyPassword:   String? = findProperty("keyPassword")   as String?
 
 android {
     namespace  = "com.example.netswissknife.app"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.example.netswissknife"
