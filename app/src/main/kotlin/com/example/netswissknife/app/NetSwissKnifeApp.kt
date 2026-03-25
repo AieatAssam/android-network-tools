@@ -6,6 +6,7 @@ import com.example.netswissknife.app.crash.CrashHandler
 import com.example.netswissknife.app.util.AppLogger
 import dagger.hilt.android.HiltAndroidApp
 import org.osmdroid.config.Configuration
+import java.io.File
 
 @HiltAndroidApp
 class NetSwissKnifeApp : Application() {
@@ -28,6 +29,13 @@ class NetSwissKnifeApp : Application() {
         val prefs = PreferenceManager.getDefaultSharedPreferences(this)
         val osmConfig = Configuration.getInstance()
         osmConfig.load(this, prefs)
+        // Override cache path to app-internal storage so no WRITE_EXTERNAL_STORAGE permission
+        // is required on any API level. The default path (external storage) is inaccessible on
+        // Android 10+ (targetSdk 29+) without legacy external storage, causing the SQLite tile
+        // cache DB to fail → every session re-downloads all tiles → OSM rate-limits with 403.
+        val osmBaseDir = File(filesDir, "osmdroid").also { it.mkdirs() }
+        osmConfig.osmdroidBasePath = osmBaseDir
+        osmConfig.osmdroidTileCache = File(osmBaseDir, "tiles").also { it.mkdirs() }
         // Distinctive User-Agent required by https://operations.osmfoundation.org/policies/tiles/
         // Format: AppName/version (+contact_url) — generic/example IDs are blocked with 403
         osmConfig.userAgentValue =
