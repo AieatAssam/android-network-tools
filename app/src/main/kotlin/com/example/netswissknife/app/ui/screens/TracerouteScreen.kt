@@ -182,9 +182,10 @@ fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
                         is TracerouteUiState.Idle     -> TracerouteIdlePrompt()
                         is TracerouteUiState.Running  -> TracerouteRunningPanel(state)
                         is TracerouteUiState.Finished -> TracerouteFinishedPanel(
-                            state          = state,
-                            onToggleMode   = viewModel::onToggleViewMode,
-                            onClear        = viewModel::onClear
+                            state               = state,
+                            onToggleMode        = viewModel::onToggleViewMode,
+                            onClear             = viewModel::onClear,
+                            mapCompositionReady = !transition.isRunning
                         )
                         is TracerouteUiState.Error    -> TracerouteErrorPanel(
                             state   = state,
@@ -549,7 +550,8 @@ private fun TracerouteRunningPanel(state: TracerouteUiState.Running) {
 private fun TracerouteFinishedPanel(
     state: TracerouteUiState.Finished,
     onToggleMode: () -> Unit,
-    onClear: () -> Unit
+    onClear: () -> Unit,
+    mapCompositionReady: Boolean = false
 ) {
     val result = state.result
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -611,6 +613,24 @@ private fun TracerouteFinishedPanel(
                                 textAlign = TextAlign.Center
                             )
                         }
+                    }
+                } else if (!mapCompositionReady) {
+                    // Defer MaplibreMap until the AnimatedContent enter-transition has
+                    // fully settled.  Composing MaplibreMap while the transition frame
+                    // is still executing causes the library's internal CompositionLocal
+                    // reads to fail with IllegalStateException.
+                    Box(
+                        modifier         = Modifier
+                            .fillMaxWidth()
+                            .height(280.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(
+                            modifier    = Modifier.size(28.dp),
+                            strokeWidth = 2.dp
+                        )
                     }
                 } else {
                     MaplibreTracerouteMap(
@@ -1092,8 +1112,10 @@ private fun TracerouteErrorPanel(
     onRetry: () -> Unit,
     onClear: () -> Unit
 ) {
+    var scaleTarget by remember { mutableStateOf(0.85f) }
+    LaunchedEffect(Unit) { scaleTarget = 1f }
     val scale by animateFloatAsState(
-        targetValue   = 1f,
+        targetValue   = scaleTarget,
         animationSpec = spring(Spring.DampingRatioMediumBouncy),
         label         = "error-scale"
     )
