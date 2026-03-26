@@ -785,7 +785,7 @@ private fun MaplibreTracerouteMap(hops: List<HopResult>, modifier: Modifier = Mo
     MaplibreMap(
         modifier   = modifier,
         cameraState = cameraState,
-        baseStyle  = BaseStyle.Uri("https://demotiles.maplibre.org/style.json")
+        baseStyle  = BaseStyle.Uri("https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json")
     ) {
         // Polyline connecting hops in order
         LineLayer(
