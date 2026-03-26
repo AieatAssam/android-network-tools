@@ -530,15 +530,22 @@ private fun TracerouteRunningPanel(state: TracerouteUiState.Running) {
             }
         }
 
-        // Live hop list – always render in hop-number order
+        // Live hop list – always render in hop-number order.
+        // key(hop.hopNumber) gives Compose a stable identity per hop so that existing
+        // AnimatedVisibility enter-animations are preserved across recompositions and
+        // AnimatedContent's SubcomposeLayout only inserts one new slot per new hop,
+        // preventing the IllegalStateException that occurs when slot positions shift
+        // while the Idle→Running transition animation is still in progress.
         state.hops.sortedBy { it.hopNumber }.forEachIndexed { index, hop ->
-            var shown by remember(hop.hopNumber) { mutableStateOf(false) }
-            LaunchedEffect(hop.hopNumber) { shown = true }
-            AnimatedVisibility(
-                visible = shown,
-                enter   = fadeIn(tween(250)) + slideInVertically(tween(250)) { it / 2 }
-            ) {
-                HopCard(hop = hop, index = index)
+            key(hop.hopNumber) {
+                var shown by remember { mutableStateOf(false) }
+                LaunchedEffect(Unit) { shown = true }
+                AnimatedVisibility(
+                    visible = shown,
+                    enter   = fadeIn(tween(250)) + slideInVertically(tween(250)) { it / 2 }
+                ) {
+                    HopCard(hop = hop, index = index)
+                }
             }
         }
     }
