@@ -146,6 +146,7 @@ fun DnsScreen(viewModel: DnsViewModel = hiltViewModel()) {
                         (fadeIn(tween(300)) + slideInVertically(tween(300)) { it / 8 })
                             .togetherWith(fadeOut(tween(200)))
                     },
+                    contentKey = { it::class },
                     label = "dns-result-state"
                 ) { state ->
                     when (state) {

@@ -1092,8 +1092,10 @@ private fun TracerouteErrorPanel(
     onRetry: () -> Unit,
     onClear: () -> Unit
 ) {
+    var scaleTarget by remember { mutableStateOf(0.85f) }
+    LaunchedEffect(Unit) { scaleTarget = 1f }
     val scale by animateFloatAsState(
-        targetValue   = 1f,
+        targetValue   = scaleTarget,
         animationSpec = spring(Spring.DampingRatioMediumBouncy),
         label         = "error-scale"
     )

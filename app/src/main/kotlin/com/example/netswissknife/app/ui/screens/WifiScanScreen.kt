@@ -130,6 +130,7 @@ fun WifiScanScreen(
         AnimatedContent(
             targetState = uiState,
             transitionSpec = { fadeIn() togetherWith fadeOut() },
+            contentKey = { it::class },
             modifier = Modifier.fillMaxSize(),
             label = "wifi_state"
         ) { state ->
