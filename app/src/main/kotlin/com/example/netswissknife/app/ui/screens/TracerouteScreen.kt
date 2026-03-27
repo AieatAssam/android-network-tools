@@ -2,7 +2,6 @@ package com.example.netswissknife.app.ui.screens
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
@@ -681,11 +680,15 @@ private fun TracerouteFinishedPanel(
             )
         }
 
-        Crossfade(targetState = state.viewMode, label = "view-mode") { mode ->
-            when (mode) {
-                TracerouteViewMode.Visual -> HopDetailList(result.hops)
-                TracerouteViewMode.Raw    -> RawOutputCard(result.rawOutput)
-            }
+        // Crossfade (= AnimatedContent internally, uses SubcomposeLayout) must NOT be
+        // nested inside the outer AnimatedContent – when both animations run simultaneously
+        // (e.g. outer Running→Finished transition still in flight while the user taps a tab)
+        // the two SubcomposeLayout instances fight over the slot table and the outgoing
+        // subcomposition reads a disposed State<T>, causing IllegalStateException.
+        // Plain when-branch with no animation is safe and avoids the nesting entirely.
+        when (state.viewMode) {
+            TracerouteViewMode.Visual -> HopDetailList(result.hops)
+            TracerouteViewMode.Raw    -> RawOutputCard(result.rawOutput)
         }
     }
 }
@@ -805,7 +808,7 @@ private fun MaplibreTracerouteMap(hops: List<HopResult>, modifier: Modifier = Mo
     MaplibreMap(
         modifier   = modifier,
         cameraState = cameraState,
-        baseStyle  = BaseStyle.Uri("https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json")
+        baseStyle  = BaseStyle.Uri("https://demotiles.maplibre.org/style.json")
     ) {
         // Polyline connecting hops in order
         LineLayer(
