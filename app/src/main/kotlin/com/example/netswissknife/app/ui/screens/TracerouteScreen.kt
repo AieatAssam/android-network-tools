@@ -177,12 +177,22 @@ fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
                     when (state) {
                         is TracerouteUiState.Idle     -> TracerouteIdlePrompt()
                         is TracerouteUiState.Running  -> TracerouteRunningPanel(state)
-                        is TracerouteUiState.Finished -> TracerouteFinishedPanel(
-                            state               = state,
-                            onToggleMode        = viewModel::onToggleViewMode,
-                            onClear             = viewModel::onClear,
-                            mapCompositionReady = !transition.isRunning
-                        )
+                        is TracerouteUiState.Finished -> {
+                            // mapCompositionReady is sticky: once the enter-transition
+                            // settles it stays true so MaplibreMap is never torn down
+                            // and re-composed just because transition.isRunning briefly
+                            // flips again (e.g. on a subsequent viewMode change).
+                            var mapCompositionReady by remember { mutableStateOf(false) }
+                            LaunchedEffect(transition.isRunning) {
+                                if (!transition.isRunning) mapCompositionReady = true
+                            }
+                            TracerouteFinishedPanel(
+                                state               = state,
+                                onToggleMode        = viewModel::onToggleViewMode,
+                                onClear             = viewModel::onClear,
+                                mapCompositionReady = mapCompositionReady
+                            )
+                        }
                         is TracerouteUiState.Error    -> TracerouteErrorPanel(
                             state   = state,
                             onRetry = viewModel::onRetry,
@@ -528,18 +538,26 @@ private fun TracerouteRunningPanel(state: TracerouteUiState.Running) {
 
         // Live hop list – always render in hop-number order.
         // key(hop.hopNumber) gives Compose a stable identity per hop so that existing
-        // AnimatedVisibility enter-animations are preserved across recompositions and
-        // AnimatedContent's SubcomposeLayout only inserts one new slot per new hop,
-        // preventing the IllegalStateException that occurs when slot positions shift
-        // while the Idle→Running transition animation is still in progress.
+        // animations are preserved across recompositions and AnimatedContent's
+        // SubcomposeLayout only inserts one new slot per new hop.
+        //
+        // Each hop fades in via animateFloatAsState rather than AnimatedVisibility.
+        // AnimatedVisibility creates its own animation infrastructure (Transition<Boolean>)
+        // inside AnimatedContent's SubcomposeLayout; when the Running panel exits while
+        // per-hop enter-animations are still in progress the outgoing subcomposition reads
+        // a disposed State<Boolean>, causing IllegalStateException.  animateFloatAsState
+        // is a plain value animation with no SubcomposeLayout of its own, so it is safe
+        // to interrupt mid-animation when the outer AnimatedContent exits.
         state.hops.sortedBy { it.hopNumber }.forEachIndexed { index, hop ->
             key(hop.hopNumber) {
                 var shown by remember { mutableStateOf(false) }
                 LaunchedEffect(Unit) { shown = true }
-                AnimatedVisibility(
-                    visible = shown,
-                    enter   = fadeIn(tween(250)) + slideInVertically(tween(250)) { it / 2 }
-                ) {
+                val hopAlpha by animateFloatAsState(
+                    targetValue   = if (shown) 1f else 0f,
+                    animationSpec = tween(250),
+                    label         = "hop-alpha"
+                )
+                Box(Modifier.alpha(hopAlpha)) {
                     HopCard(hop = hop, index = index)
                 }
             }
