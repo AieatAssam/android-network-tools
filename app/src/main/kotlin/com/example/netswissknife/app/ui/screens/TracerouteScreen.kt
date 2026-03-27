@@ -127,18 +127,28 @@ fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
     val probeType    by viewModel.probeType.collectAsStateWithLifecycle()
     val packetSize   by viewModel.packetSize.collectAsStateWithLifecycle()
 
+    // Use animateFloatAsState + alpha instead of AnimatedVisibility for the screen
+    // entrance animation.  AnimatedVisibility is backed by SubcomposeLayout; the
+    // AnimatedContent inside the LazyColumn item is also backed by SubcomposeLayout.
+    // If the ViewModel already holds a non-Idle state when the user navigates back to
+    // this screen (e.g. a trace is still running), the AnimatedContent can begin its
+    // own transition while the outer AnimatedVisibility entrance is still in flight.
+    // Two simultaneously-animating nested SubcomposeLayouts read each other's slot
+    // tables and produce IllegalStateException.  animateFloatAsState is a plain value
+    // animation with no SubcomposeLayout of its own, so nesting is safe.
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
+    val screenAlpha by animateFloatAsState(
+        targetValue   = if (visible) 1f else 0f,
+        animationSpec = tween(400),
+        label         = "screen-alpha"
+    )
 
-    AnimatedVisibility(
-        visible = visible,
-        enter   = fadeIn(tween(400)) + slideInVertically(tween(400)) { it / 4 }
+    LazyColumn(
+        modifier          = Modifier.fillMaxSize().alpha(screenAlpha),
+        contentPadding    = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        LazyColumn(
-            modifier          = Modifier.fillMaxSize(),
-            contentPadding    = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
             item { TracerouteHeroHeader() }
 
             item {
@@ -200,7 +210,6 @@ fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
                 }
             }
         }
-    }
 }
 
 // ── Hero header ───────────────────────────────────────────────────────────────

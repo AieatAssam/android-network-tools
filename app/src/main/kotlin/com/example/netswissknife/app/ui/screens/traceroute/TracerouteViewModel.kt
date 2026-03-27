@@ -10,6 +10,7 @@ import com.example.netswissknife.core.network.traceroute.HopStatus
 import com.example.netswissknife.core.network.traceroute.TracerouteProbeType
 import com.example.netswissknife.core.network.traceroute.TracerouteResult
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -116,6 +117,10 @@ class TracerouteViewModel @Inject constructor(
         val startTime   = System.currentTimeMillis()
         val accumulated = mutableListOf<HopResult>()
 
+        // Transition to Running immediately so the UI responds before the first hop
+        // arrives.  If validation fails the first emission will overwrite this with Error.
+        _uiState.value = TracerouteUiState.Running(host = params.host.trim(), hops = emptyList())
+
         traceJob = viewModelScope.launch {
             try {
                 tracerouteUseCase(params).collect { result ->
@@ -144,6 +149,11 @@ class TracerouteViewModel @Inject constructor(
                         )
                     }
                 }
+            } catch (e: CancellationException) {
+                // Job was cancelled by onStop() or onClear(); those functions already set the
+                // correct UI state (Finished or Idle).  Re-throw so the coroutine machinery
+                // knows this coroutine ended due to cancellation, not a logic error.
+                throw e
             } catch (e: Exception) {
                 _uiState.value = TracerouteUiState.Error(e.message ?: "Traceroute failed")
             }
