@@ -16,9 +16,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -888,13 +887,23 @@ private fun HopDetailList(hops: List<HopResult>) {
 private fun HopCard(hop: HopResult, index: Int) {
     val hopColor = rttColor(hop.rtTimeMs)
     var expanded by remember(hop.hopNumber) { mutableStateOf(false) }
+    // animateFloatAsState + animateContentSize replace AnimatedVisibility(expandVertically/shrinkVertically).
+    // AnimatedVisibility with size enter/exit specs uses SubcomposeLayout internally; nested inside
+    // AnimatedContent (and Crossfade which is itself AnimatedContent) it causes IllegalStateException
+    // when the outer animation exits while the inner expand/collapse animation is in progress.
+    // animateContentSize is a plain Modifier that never uses SubcomposeLayout.
+    val expandedAlpha by animateFloatAsState(
+        targetValue   = if (expanded) 1f else 0f,
+        animationSpec = tween(200),
+        label         = "expanded-alpha"
+    )
 
     OutlinedCard(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { expanded = !expanded }
     ) {
-        Column {
+        Column(modifier = Modifier.animateContentSize(animationSpec = tween(200))) {
             Row(
                 modifier          = Modifier.padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -998,14 +1007,13 @@ private fun HopCard(hop: HopResult, index: Int) {
                 }
             }
 
-            // Expanded detail section
-            AnimatedVisibility(
-                visible = expanded,
-                enter   = expandVertically() + fadeIn(),
-                exit    = shrinkVertically() + fadeOut()
-            ) {
+            // Expanded detail section – rendered while alpha > 0 so the fade-out
+            // plays fully; animateContentSize on the parent Column handles height.
+            if (expanded || expandedAlpha > 0f) {
                 Column(
-                    modifier            = Modifier.padding(start = 60.dp, end = 12.dp, bottom = 12.dp),
+                    modifier            = Modifier
+                        .alpha(expandedAlpha)
+                        .padding(start = 60.dp, end = 12.dp, bottom = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     HorizontalDivider(modifier = Modifier.padding(bottom = 4.dp))
