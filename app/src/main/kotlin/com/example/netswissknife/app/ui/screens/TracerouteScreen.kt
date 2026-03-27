@@ -14,7 +14,6 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
@@ -22,11 +21,9 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -37,8 +34,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -816,23 +811,35 @@ private fun MaplibreTracerouteMap(hops: List<HopResult>, modifier: Modifier = Mo
     }
 }
 
-/** Builds a GeoJSON FeatureCollection containing one LineString and one Point per hop. */
+/**
+ * Builds a GeoJSON FeatureCollection containing:
+ *  - a LineString connecting all geo-located hops in order (only when there are 2+ hops,
+ *    because GeoJSON spec RFC 7946 §3.1.4 requires a LineString to have ≥ 2 positions;
+ *    a single-coordinate LineString is invalid and causes MapLibre to silently drop the layer)
+ *  - one Point feature per hop (always included)
+ */
 private fun buildTracerouteGeoJson(geoHops: List<HopResult>): String {
     if (geoHops.isEmpty()) return """{"type":"FeatureCollection","features":[]}"""
     return buildString {
         append("""{"type":"FeatureCollection","features":[""")
-        // LineString connecting all hops
-        append("""{"type":"Feature","geometry":{"type":"LineString","coordinates":[""")
-        geoHops.forEachIndexed { i, hop ->
-            if (i > 0) append(",")
-            val geo = hop.geoLocation!!
-            append("[${geo.lon},${geo.lat}]")
+        var needsComma = false
+        // LineString connecting all hops – only valid with 2+ coordinates
+        if (geoHops.size >= 2) {
+            append("""{"type":"Feature","geometry":{"type":"LineString","coordinates":[""")
+            geoHops.forEachIndexed { i, hop ->
+                if (i > 0) append(",")
+                val geo = hop.geoLocation!!
+                append("[${geo.lon},${geo.lat}]")
+            }
+            append("""]},"properties":{}}""")
+            needsComma = true
         }
-        append("""]},"properties":{}}""")
         // One Point per hop (CircleLayer renders only Point geometries)
         geoHops.forEach { hop ->
+            if (needsComma) append(",")
+            needsComma = true
             val geo = hop.geoLocation!!
-            append(""",{"type":"Feature","geometry":{"type":"Point","coordinates":[${geo.lon},${geo.lat}]},"properties":{"hop":${hop.hopNumber}}}""")
+            append("""{"type":"Feature","geometry":{"type":"Point","coordinates":[${geo.lon},${geo.lat}]},"properties":{"hop":${hop.hopNumber}}}""")
         }
         append("]}")
     }
@@ -852,7 +859,9 @@ private fun rttColor(rtTimeMs: Long?): Color = when {
 private fun HopDetailList(hops: List<HopResult>) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         hops.sortedBy { it.hopNumber }.forEachIndexed { index, hop ->
-            HopCard(hop = hop, index = index)
+            key(hop.hopNumber) {
+                HopCard(hop = hop, index = index)
+            }
         }
     }
 }
