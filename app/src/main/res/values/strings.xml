@@ -285,16 +285,30 @@
 
     <!-- Traceroute States -->
     <string name="traceroute_idle_title">Enter a host to trace</string>
-    <string name="traceroute_idle_subtitle">Supports hostnames and IPv4 addresses. Shows each hop with geolocation on a world map.</string>
+    <string name="traceroute_idle_subtitle">Supports hostnames and IPv4 addresses. Shows each hop with geolocation and journey statistics.</string>
     <string name="traceroute_running_title">Tracing to %1$s…</string>
     <string name="traceroute_running_subtitle">%1$d hop(s) discovered so far</string>
     <string name="traceroute_error_title">Trace failed</string>
 
     <!-- Traceroute Results -->
     <string name="traceroute_result_header">Trace Results</string>
-    <string name="traceroute_map_title">Geographic Path</string>
-    <string name="traceroute_map_geo_count">%1$d geolocated</string>
-    <string name="traceroute_map_no_geo">No public IPs found — all hops are on private networks</string>
+    <!-- Traceroute Journey Statistics -->
+    <string name="traceroute_stats_title">Journey Intelligence</string>
+    <string name="traceroute_stats_geo_section">GEOGRAPHIC JOURNEY</string>
+    <string name="traceroute_stats_rtt_section">RTT ANALYSIS</string>
+    <string name="traceroute_stats_distance">Distance</string>
+    <string name="traceroute_stats_countries">Countries</string>
+    <string name="traceroute_stats_isps">ISPs</string>
+    <string name="traceroute_stats_packet_speed">Pkt Speed</string>
+    <string name="traceroute_stats_packet_speed_value">~%1$d%% of ☀</string>
+    <string name="traceroute_stats_avg_rtt">Avg RTT</string>
+    <string name="traceroute_stats_min_rtt">Fastest</string>
+    <string name="traceroute_stats_max_rtt">Slowest</string>
+    <string name="traceroute_stats_timeout_rate">Timeouts</string>
+    <string name="traceroute_stats_hop_label">hop %1$d</string>
+    <string name="traceroute_stats_country_path">Route: %1$s</string>
+    <string name="traceroute_stats_no_geo">No public IPs resolved — geographic stats unavailable</string>
+    <string name="traceroute_stats_light_speed_note">Estimate based on speed of light in fibre ≈ 200 km/ms</string>
     <string name="traceroute_tab_hops">Hop Details</string>
     <string name="traceroute_tab_raw">Raw Output</string>
     <string name="traceroute_raw_title">Raw Trace Output</string>

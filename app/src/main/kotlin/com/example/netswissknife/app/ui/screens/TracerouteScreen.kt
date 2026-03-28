@@ -38,17 +38,20 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FmdGood
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Router
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.TextSnippet
+import androidx.compose.material.icons.filled.Timeline
+import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.TravelExplore
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -102,18 +105,11 @@ import com.example.netswissknife.core.network.traceroute.HopResult
 import com.example.netswissknife.core.network.traceroute.HopStatus
 import com.example.netswissknife.core.network.traceroute.TracerouteProbeType
 import com.example.netswissknife.core.network.traceroute.TracerouteResult
-import org.maplibre.compose.map.MaplibreMap
-import org.maplibre.compose.style.BaseStyle
-import org.maplibre.compose.camera.CameraPosition
-import org.maplibre.compose.camera.rememberCameraState
-import org.maplibre.compose.sources.GeoJsonData
-import org.maplibre.compose.sources.rememberGeoJsonSource
-import org.maplibre.compose.layers.CircleLayer
-import org.maplibre.compose.layers.LineLayer
-import org.maplibre.compose.expressions.value.LineCap
-import org.maplibre.compose.expressions.value.LineJoin
-import org.maplibre.compose.expressions.dsl.const
-import org.maplibre.spatialk.geojson.Position
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.roundToInt
+import kotlin.math.sin
+import kotlin.math.sqrt
 
 // ── Screen entry point ────────────────────────────────────────────────────────
 
@@ -181,19 +177,10 @@ fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
                         is TracerouteUiState.Idle     -> TracerouteIdlePrompt()
                         is TracerouteUiState.Running  -> TracerouteRunningPanel(state)
                         is TracerouteUiState.Finished -> {
-                            // mapCompositionReady is sticky: once the enter-transition
-                            // settles it stays true so MaplibreMap is never torn down
-                            // and re-composed just because transition.isRunning briefly
-                            // flips again (e.g. on a subsequent viewMode change).
-                            var mapCompositionReady by remember { mutableStateOf(false) }
-                            LaunchedEffect(transition.isRunning) {
-                                if (!transition.isRunning) mapCompositionReady = true
-                            }
                             TracerouteFinishedPanel(
-                                state               = state,
-                                onToggleMode        = viewModel::onToggleViewMode,
-                                onClear             = viewModel::onClear,
-                                mapCompositionReady = mapCompositionReady
+                                state        = state,
+                                onToggleMode = viewModel::onToggleViewMode,
+                                onClear      = viewModel::onClear
                             )
                         }
                         is TracerouteUiState.Error    -> TracerouteErrorPanel(
@@ -573,8 +560,7 @@ private fun TracerouteRunningPanel(state: TracerouteUiState.Running) {
 private fun TracerouteFinishedPanel(
     state: TracerouteUiState.Finished,
     onToggleMode: () -> Unit,
-    onClear: () -> Unit,
-    mapCompositionReady: Boolean = false
+    onClear: () -> Unit
 ) {
     val result = state.result
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -582,90 +568,8 @@ private fun TracerouteFinishedPanel(
         // Summary stats card
         TraceStatsSummary(result = result, onClear = onClear)
 
-        // World map (always visible)
-        ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(12.dp)) {
-                Row(
-                    modifier              = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment     = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Default.Map,
-                            null,
-                            modifier = Modifier.size(18.dp),
-                            tint     = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            stringResource(R.string.traceroute_map_title),
-                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold)
-                        )
-                    }
-                    val geoCount = result.geoLocatedHops.size
-                    if (geoCount > 0) {
-                        Text(
-                            stringResource(R.string.traceroute_map_geo_count, geoCount),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-                Spacer(Modifier.height(8.dp))
-
-                if (result.geoLocatedHops.isEmpty()) {
-                    Box(
-                        modifier          = Modifier
-                            .fillMaxWidth()
-                            .height(180.dp),
-                        contentAlignment  = Alignment.Center
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(
-                                Icons.Default.FmdGood,
-                                null,
-                                tint     = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(32.dp)
-                            )
-                            Spacer(Modifier.height(8.dp))
-                            Text(
-                                stringResource(R.string.traceroute_map_no_geo),
-                                style     = MaterialTheme.typography.bodySmall,
-                                color     = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = TextAlign.Center
-                            )
-                        }
-                    }
-                } else if (!mapCompositionReady) {
-                    // Defer MaplibreMap until the AnimatedContent enter-transition has
-                    // fully settled.  Composing MaplibreMap while the transition frame
-                    // is still executing causes the library's internal CompositionLocal
-                    // reads to fail with IllegalStateException.
-                    Box(
-                        modifier         = Modifier
-                            .fillMaxWidth()
-                            .height(280.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator(
-                            modifier    = Modifier.size(28.dp),
-                            strokeWidth = 2.dp
-                        )
-                    }
-                } else {
-                    MaplibreTracerouteMap(
-                        hops     = result.hops,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(280.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                    )
-                }
-            }
-        }
+        // Journey intelligence statistics card
+        TraceJourneyStats(result = result)
 
         // Tab row: Hop Details / Raw Output
         val tabIndex = if (state.viewMode == TracerouteViewMode.Visual) 0 else 1
@@ -765,108 +669,290 @@ private fun StatChip(label: String, value: String) {
     }
 }
 
-// ── MapLibre traceroute map (OpenFreeMap vector tiles, no API key) ─────────────
+// ── Journey statistics card ────────────────────────────────────────────────────
 
 @Composable
-private fun MaplibreTracerouteMap(hops: List<HopResult>, modifier: Modifier = Modifier) {
-    val geoHops = remember(hops) { hops.filter { it.geoLocation != null } }
+private fun TraceJourneyStats(result: TracerouteResult) {
+    val geoHops = result.geoLocatedHops
+    val successHops = result.hops.filter { it.status == HopStatus.SUCCESS && it.rtTimeMs != null }
+    val rtts = successHops.mapNotNull { it.rtTimeMs }
 
-    val cameraState = rememberCameraState(
-        firstPosition = CameraPosition(
-            target = Position(latitude = 20.0, longitude = 0.0),
-            zoom   = 1.5
-        )
+    // ── Geo stats ────────────────────────────────────────────────────────────
+    val totalDistanceKm: Double = remember(geoHops) {
+        if (geoHops.size < 2) 0.0
+        else geoHops.zipWithNext().sumOf { (a, b) ->
+            haversineKm(
+                a.geoLocation!!.lat, a.geoLocation!!.lon,
+                b.geoLocation!!.lat, b.geoLocation!!.lon
+            )
+        }
+    }
+    val countries = remember(geoHops) { geoHops.map { it.geoLocation!!.country }.distinct() }
+    val isps      = remember(geoHops) { geoHops.mapNotNull { it.geoLocation!!.isp }.distinct() }
+
+    // ── RTT stats ────────────────────────────────────────────────────────────
+    val avgRtt    = if (rtts.isNotEmpty()) rtts.average() else null
+    val minRttHop = successHops.minByOrNull { it.rtTimeMs!! }
+    val maxRttHop = successHops.maxByOrNull { it.rtTimeMs!! }
+    val timeoutCount = result.hops.count { it.status == HopStatus.TIMEOUT }
+    val timeoutPct   = if (result.hops.isNotEmpty()) timeoutCount * 100 / result.hops.size else 0
+
+    // ── Packet speed vs. speed of light in fibre (~200 km/ms) ───────────────
+    val packetSpeedPct: Int? = if (totalDistanceKm > 0 && avgRtt != null && avgRtt > 0) {
+        val oneWayMs  = avgRtt / 2.0
+        val speedKmMs = totalDistanceKm / oneWayMs
+        ((speedKmMs / 200.0) * 100.0).roundToInt().coerceIn(1, 100)
+    } else null
+
+    // Entrance animation
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { visible = true }
+    val cardAlpha by animateFloatAsState(
+        targetValue   = if (visible) 1f else 0f,
+        animationSpec = tween(500),
+        label         = "journey-stats-alpha"
     )
 
-    // Build GeoJSON once per unique hop set; single FeatureCollection holds
-    // the LineString (rendered by LineLayer) and Points (rendered by CircleLayer).
-    val geoJson = remember(geoHops) { buildTracerouteGeoJson(geoHops) }
+    ElevatedCard(modifier = Modifier.fillMaxWidth().alpha(cardAlpha)) {
+        Column(
+            modifier            = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // ── Header ───────────────────────────────────────────────────────
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(
+                            Brush.radialGradient(
+                                listOf(
+                                    MaterialTheme.colorScheme.primary,
+                                    MaterialTheme.colorScheme.tertiary
+                                )
+                            )
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.Timeline,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                        tint     = MaterialTheme.colorScheme.onPrimary
+                    )
+                }
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    stringResource(R.string.traceroute_stats_title),
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold)
+                )
+            }
 
-    // Animate camera to fit all geo-located hops whenever the set changes
-    LaunchedEffect(geoHops) {
-        if (geoHops.isEmpty()) return@LaunchedEffect
-        val lats = geoHops.map { it.geoLocation!!.lat }
-        val lons = geoHops.map { it.geoLocation!!.lon }
-        val centerLat = (lats.min() + lats.max()) / 2.0
-        val centerLon = (lons.min() + lons.max()) / 2.0
-        val span = maxOf(lats.max() - lats.min(), lons.max() - lons.min())
-        val zoom = when {
-            span < 1.0  -> 9.0
-            span < 5.0  -> 6.0
-            span < 20.0 -> 4.0
-            span < 60.0 -> 2.5
-            else        -> 1.5
-        }
-        cameraState.animateTo(
-            CameraPosition(
-                target = Position(latitude = centerLat, longitude = centerLon),
-                zoom   = zoom
+            // ── Geographic section ───────────────────────────────────────────
+            HorizontalDivider()
+            Text(
+                stringResource(R.string.traceroute_stats_geo_section),
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight  = FontWeight.Medium,
+                    letterSpacing = 0.8.sp
+                ),
+                color = MaterialTheme.colorScheme.primary
             )
-        )
-    }
 
-    // Single GeoJSON source shared by both layers; MapLibre routes geometry types
-    // to the appropriate layer automatically (LineString → LineLayer, Point → CircleLayer).
-    val source = rememberGeoJsonSource(GeoJsonData.JsonString(geoJson))
+            if (geoHops.isNotEmpty()) {
+                Row(
+                    modifier              = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (totalDistanceKm > 0) {
+                        JourneyStatBox(
+                            icon     = Icons.Default.TravelExplore,
+                            label    = stringResource(R.string.traceroute_stats_distance),
+                            value    = formatDistance(totalDistanceKm),
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    JourneyStatBox(
+                        icon     = Icons.Default.Public,
+                        label    = stringResource(R.string.traceroute_stats_countries),
+                        value    = "${countries.size}",
+                        modifier = Modifier.weight(1f)
+                    )
+                    if (isps.isNotEmpty()) {
+                        JourneyStatBox(
+                            icon     = Icons.Default.Router,
+                            label    = stringResource(R.string.traceroute_stats_isps),
+                            value    = "${isps.size}",
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    if (packetSpeedPct != null) {
+                        JourneyStatBox(
+                            icon     = Icons.Default.Bolt,
+                            label    = stringResource(R.string.traceroute_stats_packet_speed),
+                            value    = stringResource(R.string.traceroute_stats_packet_speed_value, packetSpeedPct),
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
 
-    MaplibreMap(
-        modifier   = modifier,
-        cameraState = cameraState,
-        baseStyle  = BaseStyle.Uri("https://demotiles.maplibre.org/style.json")
-    ) {
-        // Polyline connecting hops in order
-        LineLayer(
-            id     = "traceroute-line",
-            source = source,
-            color  = const(Color(0xFF64C8FF)),
-            width  = const(3.dp),
-            cap    = const(LineCap.Round),
-            join   = const(LineJoin.Round)
-        )
-        // Circle marker at each geo-located hop
-        CircleLayer(
-            id          = "traceroute-hops",
-            source      = source,
-            color       = const(Color(0xFF2196F3)),
-            radius      = const(7.dp),
-            strokeColor = const(Color.White),
-            strokeWidth = const(2.dp)
-        )
+                if (countries.size > 1) {
+                    Text(
+                        stringResource(R.string.traceroute_stats_country_path, countries.joinToString(" → ")),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier          = Modifier.fillMaxWidth()
+                ) {
+                    Icon(
+                        Icons.Default.FmdGood,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint     = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        stringResource(R.string.traceroute_stats_no_geo),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            // ── RTT section ──────────────────────────────────────────────────
+            if (avgRtt != null) {
+                HorizontalDivider()
+                Text(
+                    stringResource(R.string.traceroute_stats_rtt_section),
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontWeight    = FontWeight.Medium,
+                        letterSpacing = 0.8.sp
+                    ),
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Row(
+                    modifier              = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    JourneyStatBox(
+                        icon     = Icons.Default.Timer,
+                        label    = stringResource(R.string.traceroute_stats_avg_rtt),
+                        value    = "%.1f ms".format(avgRtt),
+                        modifier = Modifier.weight(1f)
+                    )
+                    minRttHop?.let { hop ->
+                        JourneyStatBox(
+                            icon     = Icons.Default.Bolt,
+                            label    = stringResource(R.string.traceroute_stats_min_rtt),
+                            value    = "${hop.rtTimeMs} ms",
+                            subValue = stringResource(R.string.traceroute_stats_hop_label, hop.hopNumber),
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    maxRttHop?.let { hop ->
+                        JourneyStatBox(
+                            icon     = Icons.Default.Warning,
+                            label    = stringResource(R.string.traceroute_stats_max_rtt),
+                            value    = "${hop.rtTimeMs} ms",
+                            subValue = stringResource(R.string.traceroute_stats_hop_label, hop.hopNumber),
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    if (timeoutCount > 0) {
+                        JourneyStatBox(
+                            icon     = Icons.Default.Warning,
+                            label    = stringResource(R.string.traceroute_stats_timeout_rate),
+                            value    = "$timeoutPct%",
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            }
+
+            // ── Fun-fact footer ───────────────────────────────────────────────
+            if (packetSpeedPct != null) {
+                HorizontalDivider()
+                Text(
+                    stringResource(R.string.traceroute_stats_light_speed_note),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
     }
 }
 
-/**
- * Builds a GeoJSON FeatureCollection containing:
- *  - a LineString connecting all geo-located hops in order (only when there are 2+ hops,
- *    because GeoJSON spec RFC 7946 §3.1.4 requires a LineString to have ≥ 2 positions;
- *    a single-coordinate LineString is invalid and causes MapLibre to silently drop the layer)
- *  - one Point feature per hop (always included)
- */
-private fun buildTracerouteGeoJson(geoHops: List<HopResult>): String {
-    if (geoHops.isEmpty()) return """{"type":"FeatureCollection","features":[]}"""
-    return buildString {
-        append("""{"type":"FeatureCollection","features":[""")
-        var needsComma = false
-        // LineString connecting all hops – only valid with 2+ coordinates
-        if (geoHops.size >= 2) {
-            append("""{"type":"Feature","geometry":{"type":"LineString","coordinates":[""")
-            geoHops.forEachIndexed { i, hop ->
-                if (i > 0) append(",")
-                val geo = hop.geoLocation!!
-                append("[${geo.lon},${geo.lat}]")
+@Composable
+private fun JourneyStatBox(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    value: String,
+    subValue: String? = null,
+    modifier: Modifier = Modifier
+) {
+    OutlinedCard(modifier = modifier) {
+        Column(
+            modifier            = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 6.dp, vertical = 10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(3.dp)
+        ) {
+            Icon(
+                imageVector        = icon,
+                contentDescription = null,
+                modifier           = Modifier.size(16.dp),
+                tint               = MaterialTheme.colorScheme.primary
+            )
+            Text(
+                text      = value,
+                style     = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                color     = MaterialTheme.colorScheme.primary,
+                textAlign = TextAlign.Center,
+                maxLines  = 1,
+                overflow  = TextOverflow.Ellipsis
+            )
+            if (subValue != null) {
+                Text(
+                    text      = subValue,
+                    style     = MaterialTheme.typography.labelSmall,
+                    color     = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
             }
-            append("""]},"properties":{}}""")
-            needsComma = true
+            Text(
+                text      = label,
+                style     = MaterialTheme.typography.labelSmall,
+                color     = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                maxLines  = 1,
+                overflow  = TextOverflow.Ellipsis
+            )
         }
-        // One Point per hop (CircleLayer renders only Point geometries)
-        geoHops.forEach { hop ->
-            if (needsComma) append(",")
-            needsComma = true
-            val geo = hop.geoLocation!!
-            append("""{"type":"Feature","geometry":{"type":"Point","coordinates":[${geo.lon},${geo.lat}]},"properties":{"hop":${hop.hopNumber}}}""")
-        }
-        append("]}")
     }
+}
+
+/** Haversine great-circle distance between two (lat, lon) pairs, in kilometres. */
+private fun haversineKm(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+    val R    = 6371.0
+    val phi1 = Math.toRadians(lat1)
+    val phi2 = Math.toRadians(lat2)
+    val dPhi = Math.toRadians(lat2 - lat1)
+    val dLam = Math.toRadians(lon2 - lon1)
+    val sinDPhi = sin(dPhi / 2)
+    val sinDLam = sin(dLam / 2)
+    val a = sinDPhi * sinDPhi + cos(phi1) * cos(phi2) * sinDLam * sinDLam
+    return R * 2.0 * atan2(sqrt(a), sqrt(1.0 - a))
+}
+
+private fun formatDistance(km: Double): String = when {
+    km >= 10_000 -> "${(km / 1_000).roundToInt()}k km"
+    km >= 1_000  -> "${"%.1f".format(km / 1_000)}k km"
+    else         -> "${km.roundToInt()} km"
 }
 
 private fun rttColor(rtTimeMs: Long?): Color = when {
