@@ -110,17 +110,19 @@ fun DnsScreen(viewModel: DnsViewModel = hiltViewModel()) {
 
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
+    val screenAlpha by animateFloatAsState(
+        targetValue   = if (visible) 1f else 0f,
+        animationSpec = tween(400),
+        label         = "screen-alpha"
+    )
 
-    AnimatedVisibility(
-        visible = visible,
-        enter = fadeIn(tween(400)) + slideInVertically(tween(400)) { it / 6 }
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .alpha(screenAlpha),
+        contentPadding = PaddingValues(bottom = 32.dp)
     ) {
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background),
-            contentPadding = PaddingValues(bottom = 32.dp)
-        ) {
             item { DnsHeroHeader() }
 
             item {
@@ -172,7 +174,6 @@ fun DnsScreen(viewModel: DnsViewModel = hiltViewModel()) {
                 }
             }
         }
-    }
 }
 
 // ── Hero header ───────────────────────────────────────────────────────────────

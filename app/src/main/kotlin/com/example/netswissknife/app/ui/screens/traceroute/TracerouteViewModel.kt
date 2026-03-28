@@ -10,6 +10,7 @@ import com.example.netswissknife.core.network.traceroute.HopStatus
 import com.example.netswissknife.core.network.traceroute.TracerouteProbeType
 import com.example.netswissknife.core.network.traceroute.TracerouteResult
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -113,8 +114,13 @@ class TracerouteViewModel @Inject constructor(
             probeType     = _probeType.value,
             packetSize    = _packetSize.value
         )
+        val trimmedHost = params.host.trim()
         val startTime   = System.currentTimeMillis()
         val accumulated = mutableListOf<HopResult>()
+
+        // Transition to Running immediately so the UI responds before the first hop
+        // arrives.  If validation fails the first emission will overwrite this with Error.
+        _uiState.value = TracerouteUiState.Running(host = trimmedHost, hops = emptyList())
 
         traceJob = viewModelScope.launch {
             try {
@@ -127,7 +133,7 @@ class TracerouteViewModel @Inject constructor(
                         is TracerouteFlowResult.Hop -> {
                             accumulated.add(result.hop)
                             _uiState.value = TracerouteUiState.Running(
-                                host = params.host.trim(),
+                                host = trimmedHost,
                                 hops = accumulated.toList()
                             )
                         }
@@ -137,13 +143,18 @@ class TracerouteViewModel @Inject constructor(
                 val current = _uiState.value
                 if (current is TracerouteUiState.Running) {
                     _uiState.value = if (current.hops.isEmpty()) {
-                        TracerouteUiState.Error("No route found to ${params.host.trim()}")
+                        TracerouteUiState.Error("No route found to $trimmedHost")
                     } else {
                         TracerouteUiState.Finished(
                             buildResult(current.host, current.hops, System.currentTimeMillis() - startTime)
                         )
                     }
                 }
+            } catch (e: CancellationException) {
+                // Job was cancelled by onStop() or onClear(); those functions already set the
+                // correct UI state (Finished or Idle).  Re-throw so the coroutine machinery
+                // knows this coroutine ended due to cancellation, not a logic error.
+                throw e
             } catch (e: Exception) {
                 _uiState.value = TracerouteUiState.Error(e.message ?: "Traceroute failed")
             }

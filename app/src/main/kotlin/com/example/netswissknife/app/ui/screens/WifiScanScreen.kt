@@ -16,6 +16,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
@@ -71,6 +72,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -121,17 +123,17 @@ fun WifiScanScreen(
     // ── Root animated state switcher ──────────────────────────────────────────
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
+    val screenAlpha by animateFloatAsState(
+        targetValue   = if (visible) 1f else 0f,
+        animationSpec = tween(400),
+        label         = "screen-alpha"
+    )
 
-    AnimatedVisibility(
-        visible = visible,
-        enter = fadeIn() + slideInVertically { it / 6 },
-        modifier = Modifier.fillMaxSize()
-    ) {
-        AnimatedContent(
-            targetState = uiState,
-            transitionSpec = { fadeIn() togetherWith fadeOut() },
-            contentKey = { it::class },
-            modifier = Modifier.fillMaxSize(),
+    AnimatedContent(
+        targetState = uiState,
+        transitionSpec = { fadeIn() togetherWith fadeOut() },
+        contentKey = { it::class },
+        modifier = Modifier.fillMaxSize().alpha(screenAlpha),
             label = "wifi_state"
         ) { state ->
             when (state) {
@@ -159,7 +161,6 @@ fun WifiScanScreen(
                 )
             }
         }
-    }
 }
 
 // ── Idle / loading ────────────────────────────────────────────────────────────

@@ -112,16 +112,16 @@ fun PingScreen(
     val timeoutMs by viewModel.timeoutMs.collectAsStateWithLifecycle()
     val packetSize by viewModel.packetSize.collectAsStateWithLifecycle()
 
-    // Screen entrance animation
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
+    val screenAlpha by animateFloatAsState(
+        targetValue   = if (visible) 1f else 0f,
+        animationSpec = tween(400),
+        label         = "screen-alpha"
+    )
 
-    AnimatedVisibility(
-        visible = visible,
-        enter = fadeIn(tween(400)) + slideInVertically(tween(400)) { it / 4 }
-    ) {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().alpha(screenAlpha),
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -175,7 +175,6 @@ fun PingScreen(
                 }
             }
         }
-    }
 }
 
 // ── Hero header ───────────────────────────────────────────────────────────────

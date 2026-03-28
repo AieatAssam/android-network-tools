@@ -127,18 +127,23 @@ fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
     val probeType    by viewModel.probeType.collectAsStateWithLifecycle()
     val packetSize   by viewModel.packetSize.collectAsStateWithLifecycle()
 
+    // animateFloatAsState instead of AnimatedVisibility: both AnimatedVisibility and the
+    // inner AnimatedContent use SubcomposeLayout.  Two simultaneously-animating nested
+    // SubcomposeLayouts throw IllegalStateException (e.g. when a running trace completes
+    // during the 400 ms entrance animation on navigation return).
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
+    val screenAlpha by animateFloatAsState(
+        targetValue   = if (visible) 1f else 0f,
+        animationSpec = tween(400),
+        label         = "screen-alpha"
+    )
 
-    AnimatedVisibility(
-        visible = visible,
-        enter   = fadeIn(tween(400)) + slideInVertically(tween(400)) { it / 4 }
+    LazyColumn(
+        modifier          = Modifier.fillMaxSize().alpha(screenAlpha),
+        contentPadding    = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        LazyColumn(
-            modifier          = Modifier.fillMaxSize(),
-            contentPadding    = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
             item { TracerouteHeroHeader() }
 
             item {
@@ -200,7 +205,6 @@ fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
                 }
             }
         }
-    }
 }
 
 // ── Hero header ───────────────────────────────────────────────────────────────
