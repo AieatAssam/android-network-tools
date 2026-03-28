@@ -18,11 +18,11 @@ val ciKeyAlias:      String? = findProperty("keyAlias")      as String?
 val ciKeyPassword:   String? = findProperty("keyPassword")   as String?
 
 android {
-    namespace  = "com.example.netswissknife.app"
+    namespace  = "net.aieat.netswissknife.app"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.example.netswissknife"
+        applicationId = "net.aieat.netswissknife"
         minSdk        = 26
         targetSdk     = 35
         versionCode   = ciVersionCode ?: 1

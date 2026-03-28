@@ -55,7 +55,7 @@ From `tool_prompt`, determine:
 Create `<ToolName>Test.kt`:
 
 ```kotlin
-package com.example.netswissknife.core.network
+package net.aieat.netswissknife.core.network
 
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
@@ -82,9 +82,9 @@ Create the minimum code to make the tests pass.
 **File: `core-network/src/main/kotlin/com/example/netswissknife/core/network/<toolname>/<ToolName>Repository.kt`**
 
 ```kotlin
-package com.example.netswissknife.core.network.<toolname>
+package net.aieat.netswissknife.core.network.<toolname>
 
-import com.example.netswissknife.core.network.NetworkResult
+import net.aieat.netswissknife.core.network.NetworkResult
 
 interface <ToolName>Repository {
     suspend fun lookup(input: String): NetworkResult<<ToolName>Result>
@@ -102,11 +102,11 @@ Provide a real or fake implementation just sufficient to make tests pass. Run `.
 **File: `core-domain/src/main/kotlin/com/example/netswissknife/core/domain/<ToolName>UseCase.kt`**
 
 ```kotlin
-package com.example.netswissknife.core.domain
+package net.aieat.netswissknife.core.domain
 
-import com.example.netswissknife.core.network.<toolname>.<ToolName>Repository
-import com.example.netswissknife.core.network.<toolname>.<ToolName>Result
-import com.example.netswissknife.core.network.NetworkResult
+import net.aieat.netswissknife.core.network.<toolname>.<ToolName>Repository
+import net.aieat.netswissknife.core.network.<toolname>.<ToolName>Result
+import net.aieat.netswissknife.core.network.NetworkResult
 import javax.inject.Inject
 
 class <ToolName>UseCase @Inject constructor(
@@ -125,13 +125,13 @@ Add corresponding unit tests in `:core-domain/src/test/.../<ToolName>UseCaseTest
 **File: `app/src/main/kotlin/com/example/netswissknife/app/ui/screens/<toolname>/<ToolName>ViewModel.kt`**
 
 ```kotlin
-package com.example.netswissknife.app.ui.screens.<toolname>
+package net.aieat.netswissknife.app.ui.screens.<toolname>
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.netswissknife.core.domain.<ToolName>UseCase
-import com.example.netswissknife.core.network.<toolname>.<ToolName>Result
-import com.example.netswissknife.core.network.NetworkResult
+import net.aieat.netswissknife.core.domain.<ToolName>UseCase
+import net.aieat.netswissknife.core.network.<toolname>.<ToolName>Result
+import net.aieat.netswissknife.core.network.NetworkResult
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -189,7 +189,7 @@ class <ToolName>ViewModel @Inject constructor(
 #### Template
 
 ```kotlin
-package com.example.netswissknife.app.ui.screens
+package net.aieat.netswissknife.app.ui.screens
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -201,8 +201,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.example.netswissknife.app.ui.screens.<toolname>.<ToolName>ViewModel
-import com.example.netswissknife.app.ui.screens.<toolname>.<ToolName>UiState
+import net.aieat.netswissknife.app.ui.screens.<toolname>.<ToolName>ViewModel
+import net.aieat.netswissknife.app.ui.screens.<toolname>.<ToolName>UiState
 
 @Composable
 fun <ToolName>Screen(viewModel: <ToolName>ViewModel = hiltViewModel()) {
