@@ -67,8 +67,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
+
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -572,20 +571,51 @@ private fun TracerouteFinishedPanel(
         TraceJourneyStats(result = result)
 
         // Tab row: Hop Details / Raw Output
+        // TabRow uses SubcomposeLayout internally, which causes IllegalStateException when
+        // nested inside the outer AnimatedContent (also SubcomposeLayout) during the
+        // Running→Finished transition – same root cause as the Crossfade issue above.
+        // Replaced with a plain Row of clickable surfaces; no SubcomposeLayout involved.
         val tabIndex = if (state.viewMode == TracerouteViewMode.Visual) 0 else 1
-        TabRow(selectedTabIndex = tabIndex) {
-            Tab(
-                selected = tabIndex == 0,
-                onClick  = { if (tabIndex != 0) onToggleMode() },
-                icon     = { Icon(Icons.Default.Router, null, Modifier.size(16.dp)) },
-                text     = { Text(stringResource(R.string.traceroute_tab_hops)) }
-            )
-            Tab(
-                selected = tabIndex == 1,
-                onClick  = { if (tabIndex != 1) onToggleMode() },
-                icon     = { Icon(Icons.Default.TextSnippet, null, Modifier.size(16.dp)) },
-                text     = { Text(stringResource(R.string.traceroute_tab_raw)) }
-            )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(MaterialTheme.shapes.small)
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+        ) {
+            listOf(
+                Icons.Default.Router      to stringResource(R.string.traceroute_tab_hops),
+                Icons.Default.TextSnippet to stringResource(R.string.traceroute_tab_raw)
+            ).forEachIndexed { index, (icon, label) ->
+                val selected = tabIndex == index
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(MaterialTheme.shapes.small)
+                        .background(
+                            if (selected) MaterialTheme.colorScheme.secondaryContainer
+                            else Color.Transparent
+                        )
+                        .clickable { if (tabIndex != index) onToggleMode() }
+                        .padding(vertical = 12.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment     = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector        = icon,
+                        contentDescription = null,
+                        modifier           = Modifier.size(16.dp),
+                        tint               = if (selected) MaterialTheme.colorScheme.onSecondaryContainer
+                                             else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text  = label,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = if (selected) MaterialTheme.colorScheme.onSecondaryContainer
+                                else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
         }
 
         // Crossfade (= AnimatedContent internally, uses SubcomposeLayout) must NOT be
