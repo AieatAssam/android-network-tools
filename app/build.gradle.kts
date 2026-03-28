@@ -104,6 +104,5 @@ dependencies {
     // ICMP traceroute (replaces binary-dependent implementation)
     implementation(libs.icmpenguin)
 
-    // MapLibre Compose (CARTO Voyager tiles, no API key) for traceroute world map
-    implementation(libs.maplibre.compose)
+
 }
