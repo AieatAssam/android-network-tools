@@ -8,6 +8,7 @@ import com.example.netswissknife.core.network.wifi.WifiAccessPoint
 import com.example.netswissknife.core.network.wifi.WifiBand
 import com.example.netswissknife.core.network.wifi.WifiScanResult
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -107,6 +108,8 @@ class WifiScanViewModel @Inject constructor(
                         sortOrder = prev?.sortOrder ?: ApSortOrder.SIGNAL
                     )
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: WifiNotSupportedException) {
                 _uiState.value = WifiScanUiState.NotSupported
             } catch (e: SecurityException) {

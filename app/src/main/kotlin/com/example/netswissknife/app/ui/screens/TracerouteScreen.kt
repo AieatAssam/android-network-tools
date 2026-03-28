@@ -127,15 +127,10 @@ fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
     val probeType    by viewModel.probeType.collectAsStateWithLifecycle()
     val packetSize   by viewModel.packetSize.collectAsStateWithLifecycle()
 
-    // Use animateFloatAsState + alpha instead of AnimatedVisibility for the screen
-    // entrance animation.  AnimatedVisibility is backed by SubcomposeLayout; the
-    // AnimatedContent inside the LazyColumn item is also backed by SubcomposeLayout.
-    // If the ViewModel already holds a non-Idle state when the user navigates back to
-    // this screen (e.g. a trace is still running), the AnimatedContent can begin its
-    // own transition while the outer AnimatedVisibility entrance is still in flight.
-    // Two simultaneously-animating nested SubcomposeLayouts read each other's slot
-    // tables and produce IllegalStateException.  animateFloatAsState is a plain value
-    // animation with no SubcomposeLayout of its own, so nesting is safe.
+    // animateFloatAsState instead of AnimatedVisibility: both AnimatedVisibility and the
+    // inner AnimatedContent use SubcomposeLayout.  Two simultaneously-animating nested
+    // SubcomposeLayouts throw IllegalStateException (e.g. when a running trace completes
+    // during the 400 ms entrance animation on navigation return).
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
     val screenAlpha by animateFloatAsState(

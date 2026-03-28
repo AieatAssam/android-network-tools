@@ -114,12 +114,13 @@ class TracerouteViewModel @Inject constructor(
             probeType     = _probeType.value,
             packetSize    = _packetSize.value
         )
+        val trimmedHost = params.host.trim()
         val startTime   = System.currentTimeMillis()
         val accumulated = mutableListOf<HopResult>()
 
         // Transition to Running immediately so the UI responds before the first hop
         // arrives.  If validation fails the first emission will overwrite this with Error.
-        _uiState.value = TracerouteUiState.Running(host = params.host.trim(), hops = emptyList())
+        _uiState.value = TracerouteUiState.Running(host = trimmedHost, hops = emptyList())
 
         traceJob = viewModelScope.launch {
             try {
@@ -132,7 +133,7 @@ class TracerouteViewModel @Inject constructor(
                         is TracerouteFlowResult.Hop -> {
                             accumulated.add(result.hop)
                             _uiState.value = TracerouteUiState.Running(
-                                host = params.host.trim(),
+                                host = trimmedHost,
                                 hops = accumulated.toList()
                             )
                         }
@@ -142,7 +143,7 @@ class TracerouteViewModel @Inject constructor(
                 val current = _uiState.value
                 if (current is TracerouteUiState.Running) {
                     _uiState.value = if (current.hops.isEmpty()) {
-                        TracerouteUiState.Error("No route found to ${params.host.trim()}")
+                        TracerouteUiState.Error("No route found to $trimmedHost")
                     } else {
                         TracerouteUiState.Finished(
                             buildResult(current.host, current.hops, System.currentTimeMillis() - startTime)

@@ -77,6 +77,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -113,23 +114,23 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
     val timeoutMs by viewModel.timeoutMs.collectAsStateWithLifecycle()
     val concurrency by viewModel.concurrency.collectAsStateWithLifecycle()
 
-    // Screen entrance animation
     var screenVisible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { screenVisible = true }
+    val screenAlpha by animateFloatAsState(
+        targetValue   = if (screenVisible) 1f else 0f,
+        animationSpec = tween(400),
+        label         = "screen-alpha"
+    )
 
     val keyboardController = LocalSoftwareKeyboardController.current
     val clipboard = LocalClipboardManager.current
     var showAll by remember { mutableStateOf(false) }
 
-    AnimatedVisibility(
-        visible = screenVisible,
-        enter = fadeIn(tween(400)) + slideInVertically(tween(400)) { it / 6 }
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().alpha(screenAlpha),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
             // ── Header ──────────────────────────────────────────────────────────
             item {
                 PortScanHeader()
@@ -279,7 +280,6 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
                 }
             }
         }
-    }
 }
 
 // ── Header ───────────────────────────────────────────────────────────────────
