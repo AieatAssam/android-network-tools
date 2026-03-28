@@ -1,6 +1,46 @@
 # Net Swiss Knife – Android Networking Utilities
 
-**Net Swiss Knife** is an Android "Swiss army knife" app for network diagnostics and utilities. It provides a collection of networking tools in a clean Jetpack Compose + Material 3 UI.
+**Net Swiss Knife** is an Android "Swiss army knife" app for network diagnostics and utilities. It provides a collection of networking tools in a clean, modern Jetpack Compose + Material 3 UI.
+
+---
+
+## Features
+
+### Ping
+ICMP round-trip latency measurement with real-time streaming results.
+- Configurable probe count (1–100), timeout (100–30,000 ms), and packet size (1–65,507 bytes)
+- Per-probe RTT reporting with sequence numbers and status (SUCCESS / TIMEOUT / ERROR)
+
+### Traceroute
+Network path analysis with per-hop geolocation enrichment.
+- Configurable max hops (1–64), timeout (500–30,000 ms), and probes per hop (1–5)
+- Dual protocol support: ICMP and UDP
+- Automatic MTU discovery or custom packet size (28–1,472 bytes)
+- Each hop shows IP address, reverse-DNS hostname, RTT, and geographic location
+
+### Port Scanner
+TCP port reachability scanning with service identification.
+- 7 preset port groups: Common Services, Well-Known (1–1024), Web, Databases, Mail, Remote Access, and Custom range (up to 10,000 ports)
+- Concurrent scanning (1–500 simultaneous probes), per-port timeout (100–30,000 ms)
+- Service name resolution and banner grabbing for open ports
+
+### LAN Scanner
+Local network device discovery across IPv4 subnets.
+- CIDR subnet scanning (/16–/30) with automatic current-subnet detection
+- Per-host details: IP, reverse-DNS hostname, MAC address, OUI vendor name, open ports, RTT, gateway flag
+- Concurrent host probes (1–500) with real-time progress streaming and final summary
+
+### DNS Lookup
+Full DNS record resolution with multiple resolver options.
+- 10 record types: A, AAAA, MX, TXT, CNAME, NS, SOA, PTR, SRV, CAA
+- Resolver options: system default, Google (8.8.8.8), Cloudflare (1.1.1.1), or custom server
+- Returns resolved records, query time, and raw DNS response
+
+### Wi-Fi Scanner
+Wi-Fi environment analysis and channel optimization.
+- Access point discovery with RSSI signal strength, sorted by signal
+- Per-channel congestion analysis across 2.4 GHz, 5 GHz, and 6 GHz bands
+- Connected network live info and best-channel recommendations (least-congested channels 1, 6, or 11 on 2.4 GHz)
 
 ---
 
@@ -14,6 +54,7 @@ android-network-tools/
 ├── .github/
 │   └── workflows/
 │       ├── ci.yml                  # Standard build & test CI
+│       ├── release.yml             # Sign & publish release APK/AAB
 │       └── claude_add_tool.yml     # Claude-driven "add tool" workflow
 ├── claude/
 │   └── tool_instructions.md        # Instructions for Claude when adding new tools
@@ -24,35 +65,36 @@ android-network-tools/
 Pure Kotlin module (no Android SDK dependency). Contains:
 - Network result wrappers (`NetworkResult`)
 - Host/IP validation utilities (`HostValidator`)
-- Interfaces and models for each networking tool (e.g. ping, DNS, port scanner)
-- This is where all TDD unit tests live.
+- Repository interfaces, models, and protocol implementations for each tool
+- All TDD unit tests
 
 ### `:core-domain`
 Pure Kotlin module that depends on `:core-network`. Contains:
-- Use cases (`UseCase<Params, Result>`) that orchestrate `:core-network` logic
+- Use cases that orchestrate `:core-network` logic
 - `ValidateHostUseCase` and similar helpers
-- Unit-tested independently.
+- Unit-tested independently
 
 ### `:app`
 Android module (Jetpack Compose, Material 3, Hilt). Contains:
 - Single-Activity architecture (`MainActivity`)
-- Navigation Compose with a bottom navigation bar
-- Screens for each tool (Home, Ping, Traceroute, Ports, LAN, DNS)
-- ViewModels injected via Hilt
+- Navigation Compose with a bottom navigation bar and animated transitions
+- Screens and ViewModels for every tool
+- Hilt dependency injection wiring
 
 ---
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| Language | Kotlin |
-| UI | Jetpack Compose + Material 3 |
-| Navigation | Navigation Compose |
-| DI | Hilt |
-| Build | Gradle Kotlin DSL + Version Catalog |
-| Testing | JUnit 5 + MockK |
-| Min SDK | 26 (Android 8.0) |
+| Layer | Technology | Notes |
+|-------|-----------|-------|
+| Language | Kotlin 1.9.x | JDK 21, Kotlin DSL everywhere |
+| UI | Jetpack Compose + Material 3 | Animated, high-fidelity UI |
+| Navigation | Navigation Compose 2.7.x | Bottom nav + animated transitions |
+| DI | Hilt 2.51.x | `@HiltViewModel`, `@AndroidEntryPoint` |
+| Async | Coroutines + Flow | `viewModelScope`, `StateFlow` |
+| Testing | JUnit 5 + MockK | TDD (Red → Green → Refactor) |
+| Build | Gradle 8.x Kotlin DSL + Version Catalog | `gradle/libs.versions.toml` |
+| Min SDK | 26 (Android 8.0) | Target SDK 34 |
 
 ---
 
@@ -78,18 +120,25 @@ Android module (Jetpack Compose, Material 3, Hilt). Contains:
 ./gradlew :app:assembleDebug
 ```
 
+### Build release APK / AAB (requires signing secrets)
+```bash
+./gradlew :app:assembleRelease
+./gradlew :app:bundleRelease
+```
+
 ---
 
 ## Available Tools
 
 | Route | Tool | Status |
 |-------|------|--------|
-| `home` | Home / Overview | Placeholder |
-| `ping` | Ping | Placeholder |
-| `traceroute` | Traceroute | Placeholder |
-| `ports` | Port Scanner | Placeholder |
-| `lan` | LAN Scanner | Placeholder |
-| `dns` | DNS Lookup | Placeholder |
+| `home` | Home / Overview | Implemented |
+| `ping` | Ping | Implemented |
+| `traceroute` | Traceroute | Implemented |
+| `ports` | Port Scanner | Implemented |
+| `lan` | LAN Scanner | Implemented |
+| `dns` | DNS Lookup | Implemented |
+| `wifi_scan` | Wi-Fi Scanner | Implemented |
 
 ---
 
@@ -101,6 +150,18 @@ Runs on every push to `main` and every PR targeting `main`:
 2. Caches Gradle
 3. Runs `./gradlew test`
 4. Runs `./gradlew :app:assembleDebug`
+
+### Release (`release.yml`)
+Triggered by a `v*.*.*` tag push or manual dispatch. Signs and publishes the release APK and AAB to GitHub Releases.
+
+Required GitHub Actions secrets:
+
+| Secret | Description |
+|--------|-------------|
+| `RELEASE_KEYSTORE_BASE64` | Base64-encoded `.jks` / `.keystore` file |
+| `RELEASE_KEYSTORE_PASSWORD` | Keystore password |
+| `RELEASE_KEY_ALIAS` | Key alias |
+| `RELEASE_KEY_PASSWORD` | Key password |
 
 ### Claude "Add Tool" Workflow (`claude_add_tool.yml`)
 Triggered manually via **Actions → Claude – Add Tool → Run workflow**:

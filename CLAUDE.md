@@ -128,7 +128,22 @@ Follow `claude/tool_instructions.md` exactly. Summary:
 7. Add Hilt module if needed
 8. Refactor while keeping tests green
 9. `./gradlew test && ./gradlew :app:assembleDebug` must both pass
-10. Update README and `claude/tool_instructions.md`
+10. **Update `README.md`** – add an entry in the Features section and update the Available Tools table (see README Sync policy below)
+
+### README Sync Policy – MANDATORY
+
+`README.md` is the source of truth for what the app can do. It **must** be kept in sync with the implementation at all times.
+
+**When adding a tool:**
+- Add a subsection under `## Features` describing the tool's capabilities, key parameters, and what it returns.
+- Add a row to the `## Available Tools` table with status `Implemented`.
+
+**When removing or significantly changing a tool:**
+- Update or remove the corresponding `## Features` subsection.
+- Update the `## Available Tools` table row accordingly.
+
+**Never leave a tool as `Placeholder` in the table if a working implementation exists.**
+The Features section must accurately reflect actual behaviour (parameters, record types, preset ranges, etc.) — not aspirational or planned behaviour.
 
 ### TDD Cycle
 
