@@ -61,6 +61,8 @@ class TracerouteViewModel @Inject constructor(
     val packetSize: StateFlow<Int> = _packetSize.asStateFlow()
 
     private var traceJob: Job? = null
+    /** Incremented each time a new trace is started; guards against stale emissions. */
+    private var traceGeneration = 0
 
     // ── User actions ─────────────────────────────────────────────────────────
 
@@ -105,6 +107,7 @@ class TracerouteViewModel @Inject constructor(
 
     fun startTrace() {
         traceJob?.cancel()
+        val generation = ++traceGeneration
 
         val params = TracerouteParams(
             host          = _host.value,
@@ -125,6 +128,8 @@ class TracerouteViewModel @Inject constructor(
         traceJob = viewModelScope.launch {
             try {
                 tracerouteUseCase(params).collect { result ->
+                    // Discard any emission that was dispatched before the cancel took effect.
+                    if (traceGeneration != generation) return@collect
                     when (result) {
                         is TracerouteFlowResult.ValidationError -> {
                             _uiState.value = TracerouteUiState.Error(result.message)
@@ -140,6 +145,7 @@ class TracerouteViewModel @Inject constructor(
                     }
                 }
 
+                if (traceGeneration != generation) return@launch
                 val current = _uiState.value
                 if (current is TracerouteUiState.Running) {
                     _uiState.value = if (current.hops.isEmpty()) {
@@ -156,7 +162,9 @@ class TracerouteViewModel @Inject constructor(
                 // knows this coroutine ended due to cancellation, not a logic error.
                 throw e
             } catch (e: Exception) {
-                _uiState.value = TracerouteUiState.Error(e.message ?: "Traceroute failed")
+                if (traceGeneration == generation) {
+                    _uiState.value = TracerouteUiState.Error(e.message ?: "Traceroute failed")
+                }
             }
         }
     }

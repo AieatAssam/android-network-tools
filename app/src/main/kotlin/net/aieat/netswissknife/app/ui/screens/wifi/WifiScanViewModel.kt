@@ -85,6 +85,7 @@ class WifiScanViewModel @Inject constructor(
             return
         }
         startScan()
+        startAutoRefresh()
     }
 
     /** Called by the screen when permission is denied. */
