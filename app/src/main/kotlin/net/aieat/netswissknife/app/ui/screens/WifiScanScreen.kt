@@ -50,6 +50,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -113,11 +114,19 @@ fun WifiScanScreen(
         else viewModel.onPermissionDenied()
     }
 
-    // Request permissions on first launch
+    // Request permissions on first launch; restart auto-refresh when returning to the screen.
     LaunchedEffect(Unit) {
         if (uiState is WifiScanUiState.Idle) {
             permissionLauncher.launch(requiredPermissions)
+        } else if (uiState !is WifiScanUiState.NoPermission && uiState !is WifiScanUiState.NotSupported) {
+            // Returning to the screen after navigating away – resume the refresh cycle.
+            viewModel.startAutoRefresh()
         }
+    }
+
+    // Stop auto-refresh whenever this composable leaves the composition (navigation away).
+    DisposableEffect(Unit) {
+        onDispose { viewModel.stopAutoRefresh() }
     }
 
     // ── Root animated state switcher ──────────────────────────────────────────

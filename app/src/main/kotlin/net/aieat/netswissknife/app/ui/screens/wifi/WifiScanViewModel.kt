@@ -85,7 +85,6 @@ class WifiScanViewModel @Inject constructor(
             return
         }
         startScan()
-        startAutoRefresh()
     }
 
     /** Called by the screen when permission is denied. */
@@ -108,6 +107,9 @@ class WifiScanViewModel @Inject constructor(
                         bandFilter = prev?.bandFilter,
                         sortOrder = prev?.sortOrder ?: ApSortOrder.SIGNAL
                     )
+                    // Begin automatic refresh after the first successful scan (idempotent
+                    // if the refresh cycle is already running from a previous call).
+                    if (!_autoRefresh.value) startAutoRefresh()
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -144,7 +146,7 @@ class WifiScanViewModel @Inject constructor(
         }
     }
 
-    private fun startAutoRefresh() {
+    fun startAutoRefresh() {
         _autoRefresh.value = true
         autoRefreshJob?.cancel()
         autoRefreshJob = viewModelScope.launch {
@@ -157,7 +159,7 @@ class WifiScanViewModel @Inject constructor(
         }
     }
 
-    private fun stopAutoRefresh() {
+    fun stopAutoRefresh() {
         _autoRefresh.value = false
         autoRefreshJob?.cancel()
         autoRefreshJob = null
