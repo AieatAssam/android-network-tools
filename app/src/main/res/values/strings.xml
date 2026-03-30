@@ -332,6 +332,28 @@
     <string name="traceroute_hop_detail_asn">ASN</string>
     <string name="traceroute_hop_detail_coordinates">Coordinates</string>
 
+    <!-- Topology Discovery Screen -->
+    <string name="topology_screen_title">Network Topology</string>
+    <string name="topology_target_ip_label">Target IP (seed switch/router)</string>
+    <string name="topology_snmp_version_label">SNMP Version</string>
+    <string name="topology_community_label">Community String</string>
+    <string name="topology_v3_username_label">Username</string>
+    <string name="topology_v3_auth_proto_label">Auth Protocol</string>
+    <string name="topology_v3_auth_password_label">Auth Password</string>
+    <string name="topology_v3_priv_proto_label">Priv Protocol</string>
+    <string name="topology_v3_priv_password_label">Priv Password</string>
+    <string name="topology_max_hops_label">Max Hops: %1$d</string>
+    <string name="topology_discover_button">Discover Topology</string>
+    <string name="topology_cancel_button">Cancel / Reset</string>
+    <string name="topology_idle_tagline">Discover your network topology</string>
+    <string name="topology_scanning_badge">Scanning… %1$d nodes found</string>
+    <string name="topology_node_detail_system">System</string>
+    <string name="topology_node_detail_interfaces">Interfaces</string>
+    <string name="topology_node_detail_vlans">VLANs</string>
+    <string name="topology_node_detail_neighbours">Neighbours</string>
+    <string name="topology_error_retry">Retry</string>
+    <string name="topology_fit_button_cd">Fit graph to screen</string>
+
     <!-- DNS Record labels -->
     <string name="dns_ipv4_prefix">IPv4</string>
     <string name="dns_ipv6_prefix">IPv6</string>

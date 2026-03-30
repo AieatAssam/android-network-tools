@@ -42,6 +42,16 @@ Wi-Fi environment analysis and channel optimization.
 - Per-channel congestion analysis across 2.4 GHz, 5 GHz, and 6 GHz bands
 - Connected network live info and best-channel recommendations (least-congested channels 1, 6, or 11 on 2.4 GHz)
 
+### Network Topology Discovery
+SNMP-based network topology discovery via BFS traversal.
+- Seed IP discovery using SNMP v1, v2c, or v3 with configurable community string / credentials
+- Neighbours discovered via LLDP (IEEE 802.1AB) and CDP (Cisco Discovery Protocol)
+- Per-node data: sysDescr, sysName, sysLocation, uptime, vendor, model, firmware version
+- Interface enumeration with speed, MAC address, and operational status (UP/DOWN)
+- VLAN discovery via Cisco VTP MIB and IEEE 802.1Q standard MIB
+- Interactive force-layout canvas with pan/zoom gestures and node detail bottom sheet
+- Configurable max hops (1–10), timeout, and SNMP v3 auth/priv protocols (MD5/SHA, DES/AES128)
+
 ---
 
 ## Module Layout
@@ -139,6 +149,7 @@ Android module (Jetpack Compose, Material 3, Hilt). Contains:
 | `lan` | LAN Scanner | Implemented |
 | `dns` | DNS Lookup | Implemented |
 | `wifi_scan` | Wi-Fi Scanner | Implemented |
+| `topology` | Network Topology Discovery | Implemented |
 
 ---
 
