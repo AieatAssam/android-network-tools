@@ -14,6 +14,7 @@ kotlin {
 dependencies {
     implementation(libs.coroutines.core)
     implementation(libs.dnsjava)
+    implementation(libs.snmp4j)
 
     testImplementation(libs.junit5.api)
     testImplementation(libs.junit5.params)
