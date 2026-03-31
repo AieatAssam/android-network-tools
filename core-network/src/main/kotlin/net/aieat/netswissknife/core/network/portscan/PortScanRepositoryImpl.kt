@@ -31,24 +31,23 @@ data class PortConnectResult(
  * Ports are tested in batches of [concurrency] simultaneously using coroutines.
  * For each open port, a brief banner read is attempted on well-known service ports.
  *
- * @param checker     Functional hook for the TCP probe. Defaults to the real socket implementation.
- * @param timeoutMs   Connection timeout (used in [DEFAULT_CHECKER] when [checker] is default).
+ * @param checker  Functional hook for the TCP probe. Pass null to use the real socket
+ *                 implementation, which honours the [scan] `timeoutMs` parameter.
  */
 class PortScanRepositoryImpl(
-    private val checker: PortConnectChecker = DEFAULT_CHECKER,
+    private val checker: PortConnectChecker? = null,
 ) : PortScanRepository {
 
     companion object {
         /**
-         * Default TCP checker: attempts a real socket connection and optionally reads a banner.
-         * The timeout is passed as the per-call socket timeout.
+         * Returns a TCP checker that uses [timeoutMs] for the connection timeout.
          */
-        val DEFAULT_CHECKER: PortConnectChecker = { host, port ->
+        fun defaultChecker(timeoutMs: Int): PortConnectChecker = { host, port ->
             val start = System.currentTimeMillis()
             var socket: Socket? = null
             try {
                 socket = Socket()
-                socket.connect(InetSocketAddress(host, port), 2000)
+                socket.connect(InetSocketAddress(host, port), timeoutMs)
                 val responseTime = System.currentTimeMillis() - start
 
                 // Attempt banner grab for open port (short read)
@@ -82,6 +81,7 @@ class PortScanRepositoryImpl(
         timeoutMs: Int,
         concurrency: Int
     ): Flow<PortScanUpdate> = flow {
+        val effectiveChecker = checker ?: defaultChecker(timeoutMs)
         val startTime = System.currentTimeMillis()
         val results = mutableListOf<PortScanResult>()
         var scannedCount = 0
@@ -99,7 +99,7 @@ class PortScanRepositoryImpl(
             coroutineScope {
                 val deferreds = chunk.map { port ->
                     async(Dispatchers.IO) {
-                        val connectResult = checker(host, port)
+                        val connectResult = effectiveChecker(host, port)
                         val portInfo = WellKnownPorts.getInfo(port)
                         PortScanResult(
                             port = port,
