@@ -35,9 +35,13 @@ class GeoIpRepositoryImpl : GeoIpRepository {
             conn.requestMethod  = "GET"
             conn.setRequestProperty("Accept", "application/json")
 
-            if (conn.responseCode != 200) return@withContext null
+            if (conn.responseCode != 200) {
+                conn.disconnect()
+                return@withContext null
+            }
 
-            val body = conn.inputStream.bufferedReader().readText()
+            val body = conn.inputStream.use { it.bufferedReader().readText() }
+            conn.disconnect()
             parseIpInfoResponse(ip, body)
         } catch (_: Exception) {
             null

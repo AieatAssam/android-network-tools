@@ -107,8 +107,6 @@ class WifiScanViewModel @Inject constructor(
                         bandFilter = prev?.bandFilter,
                         sortOrder = prev?.sortOrder ?: ApSortOrder.SIGNAL
                     )
-                    // Begin automatic refresh after the first successful scan (idempotent
-                    // if the refresh cycle is already running from a previous call).
                     if (!_autoRefresh.value) startAutoRefresh()
                 }
             } catch (e: CancellationException) {
