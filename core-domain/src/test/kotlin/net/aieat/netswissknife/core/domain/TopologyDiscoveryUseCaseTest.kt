@@ -58,4 +58,23 @@ class TopologyDiscoveryUseCaseTest {
         assertEquals(1, events.size)
         assertTrue(events[0] is TopologyDiscoveryEvent.Error)
     }
+
+    @Test
+    fun `invoke can be called using operator syntax`() = runTest {
+        val mockGraph = TopologyGraph(
+            nodes = emptyList(),
+            links = emptyList(),
+            seedIp = "192.168.1.1",
+            queriedAt = System.currentTimeMillis()
+        )
+        every { repository.discover(validParams) } returns flowOf(
+            TopologyDiscoveryEvent.Complete(mockGraph)
+        )
+
+        // operator syntax: useCase(params) instead of useCase.invoke(params)
+        val events = useCase(validParams).toList()
+
+        assertEquals(1, events.size)
+        assertTrue(events[0] is TopologyDiscoveryEvent.Complete)
+    }
 }

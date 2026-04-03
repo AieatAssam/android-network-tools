@@ -7,7 +7,7 @@ import net.aieat.netswissknife.core.network.topology.*
 class TopologyDiscoveryUseCase(
     private val repository: TopologyDiscoveryRepository
 ) {
-    fun invoke(params: TopologyParams): Flow<TopologyDiscoveryEvent> {
+    operator fun invoke(params: TopologyParams): Flow<TopologyDiscoveryEvent> {
         val validation = TopologyParamsValidator.validate(params)
         if (!validation.isValid) {
             return flow {

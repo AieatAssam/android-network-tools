@@ -90,5 +90,50 @@ class SubnetUtilsTest {
         fun `invalid prefix throws exception`() {
             assertThrows<Exception> { SubnetUtils.parseSubnet("192.168.1.0/33") }
         }
+
+        @Test
+        fun `octet above 255 throws IllegalArgumentException`() {
+            assertThrows<IllegalArgumentException> { SubnetUtils.parseSubnet("999.0.0.0/24") }
+        }
+
+        @Test
+        fun `octet above 255 in second position throws IllegalArgumentException`() {
+            assertThrows<IllegalArgumentException> { SubnetUtils.parseSubnet("192.300.0.0/24") }
+        }
+
+        @Test
+        fun `non-numeric octet throws IllegalArgumentException`() {
+            assertThrows<IllegalArgumentException> { SubnetUtils.parseSubnet("abc.0.0.0/24") }
+        }
+
+        @Test
+        fun `too few octets throws IllegalArgumentException`() {
+            assertThrows<IllegalArgumentException> { SubnetUtils.parseSubnet("192.168.1/24") }
+        }
+    }
+
+    @Nested
+    @DisplayName("parseIpToLong")
+    inner class ParseIpToLong {
+
+        @Test
+        fun `valid ip converts correctly`() {
+            assertEquals(0xC0A80101L, SubnetUtils.parseIpToLong("192.168.1.1"))
+        }
+
+        @Test
+        fun `octet above 255 throws IllegalArgumentException`() {
+            assertThrows<IllegalArgumentException> { SubnetUtils.parseIpToLong("256.0.0.1") }
+        }
+
+        @Test
+        fun `non-numeric octet throws IllegalArgumentException`() {
+            assertThrows<IllegalArgumentException> { SubnetUtils.parseIpToLong("192.168.x.1") }
+        }
+
+        @Test
+        fun `wrong number of octets throws IllegalArgumentException`() {
+            assertThrows<IllegalArgumentException> { SubnetUtils.parseIpToLong("192.168.1") }
+        }
     }
 }

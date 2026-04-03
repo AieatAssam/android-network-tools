@@ -94,8 +94,16 @@ object SubnetUtils {
         return longToIp(ipLong and mask)
     }
 
-    internal fun parseIpToLong(ip: String): Long =
-        ip.split(".").fold(0L) { acc, part -> (acc shl 8) or part.toLong() }
+    internal fun parseIpToLong(ip: String): Long {
+        val parts = ip.split(".")
+        require(parts.size == 4) { "Invalid IP address: $ip" }
+        return parts.fold(0L) { acc, part ->
+            val octet = part.toLongOrNull()
+                ?: throw IllegalArgumentException("Invalid IP address: $ip")
+            require(octet in 0..255) { "Invalid IP address octet $octet in: $ip" }
+            (acc shl 8) or octet
+        }
+    }
 
     private fun longToIp(ip: Long): String =
         "${(ip ushr 24) and 0xFF}.${(ip ushr 16) and 0xFF}.${(ip ushr 8) and 0xFF}.${ip and 0xFF}"
