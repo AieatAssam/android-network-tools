@@ -55,5 +55,34 @@ class HostValidatorTest {
         fun `blank string is rejected`() {
             assertFalse(HostValidator.isValidHostname("   "))
         }
+
+        @ParameterizedTest(name = "{0} is a valid IPv6 host")
+        @ValueSource(strings = ["::1", "fe80::1", "2001:db8::1", "2001:0db8:85a3:0000:0000:8a2e:0370:7334"])
+        fun `valid IPv6 addresses are accepted as hostnames`(host: String) {
+            assertTrue(HostValidator.isValidHostname(host))
+        }
+
+        @ParameterizedTest(name = "{0} is NOT a valid IPv6 address")
+        @ValueSource(strings = [":::1", "gggg::1", "2001:db8::xyz"])
+        fun `invalid IPv6 addresses are rejected`(host: String) {
+            assertFalse(HostValidator.isValidHostname(host))
+        }
+    }
+
+    @Nested
+    @DisplayName("isValidIpv6")
+    inner class IsValidIpv6 {
+
+        @ParameterizedTest(name = "{0} is a valid IPv6 address")
+        @ValueSource(strings = ["::1", "fe80::1", "2001:db8::1", "::"])
+        fun `valid IPv6 addresses are accepted`(address: String) {
+            assertTrue(HostValidator.isValidIpv6(address))
+        }
+
+        @ParameterizedTest(name = "{0} is NOT a valid IPv6 address")
+        @ValueSource(strings = ["192.168.1.1", "localhost", "", "gggg::1"])
+        fun `non-IPv6 strings are rejected`(address: String) {
+            assertFalse(HostValidator.isValidIpv6(address))
+        }
     }
 }

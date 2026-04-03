@@ -28,23 +28,21 @@ class GeoIpRepositoryImpl : GeoIpRepository {
     // ── Network ───────────────────────────────────────────────────────────────
 
     private suspend fun fetchGeoIp(ip: String): HopGeoLocation? = withContext(Dispatchers.IO) {
+        val conn = URI("https://ipinfo.io/$ip/json").toURL().openConnection() as HttpURLConnection
         try {
-            val conn = URI("https://ipinfo.io/$ip/json").toURL().openConnection() as HttpURLConnection
             conn.connectTimeout = 5_000
             conn.readTimeout    = 5_000
             conn.requestMethod  = "GET"
             conn.setRequestProperty("Accept", "application/json")
 
-            if (conn.responseCode != 200) {
-                conn.disconnect()
-                return@withContext null
-            }
+            if (conn.responseCode != 200) return@withContext null
 
             val body = conn.inputStream.use { it.bufferedReader().readText() }
-            conn.disconnect()
             parseIpInfoResponse(ip, body)
         } catch (_: Exception) {
             null
+        } finally {
+            conn.disconnect()
         }
     }
 

@@ -56,10 +56,7 @@ class PortScanRepositoryImpl(
                     val inputStream = socket.getInputStream()
                     val bytes = ByteArray(256)
                     val read = inputStream.read(bytes)
-                    if (read > 0) {
-                        String(bytes, 0, read).trim().take(200)
-                            .filter { it.isLetterOrDigit() || it.isWhitespace() || it in "-./()@:_+" }
-                    } else null
+                    if (read > 0) BannerSanitizer.sanitize(String(bytes, 0, read)) else null
                 } catch (_: Exception) { null }
 
                 PortConnectResult(PortStatus.OPEN, responseTime, banner)
