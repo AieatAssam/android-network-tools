@@ -23,8 +23,9 @@ import net.aieat.netswissknife.app.ui.screens.PortsScreen
 import net.aieat.netswissknife.app.ui.screens.TracerouteScreen
 import net.aieat.netswissknife.app.ui.screens.WifiScanScreen
 import net.aieat.netswissknife.app.ui.screens.debug.DebugLogScreen
-import net.aieat.netswissknife.app.ui.screens.topology.TopologyDiscoveryScreen
 import net.aieat.netswissknife.app.ui.screens.tls.TlsInspectorScreen
+import net.aieat.netswissknife.app.ui.screens.topology.TopologyDiscoveryScreen
+import net.aieat.netswissknife.app.ui.screens.whois.WhoisScreen
 
 // ── Transition helpers ────────────────────────────────────────────────────────
 
@@ -97,5 +98,6 @@ fun AppNavHost(navController: NavHostController, modifier: Modifier = Modifier) 
         composable(NavRoutes.DebugLogs.route)        { DebugLogScreen() }
         composable(NavRoutes.TopologyDiscovery.route) { TopologyDiscoveryScreen() }
         composable(NavRoutes.TlsInspector.route)      { TlsInspectorScreen() }
+        composable(NavRoutes.WhoisLookup.route)       { WhoisScreen() }
     }
 }

@@ -61,6 +61,17 @@ SNMP-based network topology discovery via BFS traversal.
 - Interactive force-layout canvas with pan/zoom gestures and node detail bottom sheet
 - Configurable max hops (1–10), timeout, and SNMP v3 auth/priv protocols (MD5/SHA, DES/AES128)
 
+### WHOIS Lookup
+Domain and IP registration lookup via three-hop WHOIS referral chain.
+- Supports domain names, IPv4, IPv6, and ASN queries
+- Three-hop chain for domains: IANA referral → TLD registry → registrar
+- Two-hop chain for IPs/ASNs: ARIN → referred RIR if needed
+- Static TLD fallback map for common TLDs (.com, .net, .org, .io, .co.uk, .de, .fr, .app, .dev)
+- Parsed fields: registrar, registration/expiry/update dates, name servers, WHOIS status codes, DNSSEC, registrant org & country
+- Human-readable status code labels (e.g. "clientTransferProhibited" → "Transfer Locked")
+- Live relay-chain visualiser: animates each server node PENDING → QUERYING → DONE as the chain progresses
+- Optional raw response per hop for power users
+
 ---
 
 ## Module Layout
@@ -160,6 +171,7 @@ Android module (Jetpack Compose, Material 3, Hilt). Contains:
 | `wifi_scan` | Wi-Fi Scanner | Implemented |
 | `topology` | Network Topology Discovery | Implemented |
 | `tls` | TLS Inspector | Implemented |
+| `whois` | WHOIS Lookup | Implemented |
 
 ---
 

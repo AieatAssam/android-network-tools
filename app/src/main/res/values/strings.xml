@@ -408,6 +408,34 @@
     <string name="tls_fingerprint_label">SHA-256 Fingerprint</string>
     <string name="tls_unknown_cn">(unknown)</string>
 
+    <!-- WHOIS Screen -->
+    <string name="whois_screen_title">WHOIS Lookup</string>
+    <string name="whois_screen_subtitle">Domain and IP registration lookup</string>
+    <string name="whois_query_label">Domain, IP, or ASN</string>
+    <string name="whois_query_placeholder">e.g. example.com, 8.8.8.8, AS15169</string>
+    <string name="whois_lookup_button">Look up</string>
+    <string name="whois_idle_title">Enter a domain or IP to look up</string>
+    <string name="whois_error_title">Lookup failed</string>
+    <string name="whois_retry">Retry</string>
+    <string name="whois_relay_chain">Query Chain</string>
+    <string name="whois_querying_server">Querying %1$s…</string>
+    <string name="whois_raw_responses">Raw WHOIS Responses</string>
+    <string name="whois_show_raw">Show raw response</string>
+    <string name="whois_lifecycle">Lifecycle</string>
+    <string name="whois_registered">Registered</string>
+    <string name="whois_updated">Updated</string>
+    <string name="whois_expires">Expires</string>
+    <string name="whois_domain_status">Domain Status</string>
+    <string name="whois_name_servers">Name Servers</string>
+    <string name="whois_dnssec">DNSSEC</string>
+    <string name="whois_registrant">Registrant</string>
+    <string name="whois_net_range">Network Range</string>
+    <string name="whois_org">Organization</string>
+    <string name="whois_country">Country</string>
+    <string name="whois_example_chip_domain">Domain</string>
+    <string name="whois_example_chip_ip">IP Address</string>
+    <string name="whois_example_chip_asn">ASN</string>
+
     <!-- DNS Record labels -->
     <string name="dns_ipv4_prefix">IPv4</string>
     <string name="dns_ipv6_prefix">IPv6</string>
