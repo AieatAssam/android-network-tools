@@ -35,3 +35,39 @@ class WhoisRepositoryImplTest {
         assertTrue(result is NetworkResult.Error)
     }
 }
+
+@DisplayName("WhoisRepositoryImpl – subdomain normalisation")
+class WhoisRegistrableDomainTest {
+
+    private val repo = WhoisRepositoryImpl()
+
+    @Test
+    @DisplayName("simple subdomain strips to eTLD+1")
+    fun `simple subdomain strips to eTLD+1`() {
+        assertEquals("example.com", repo.extractRegistrableDomain("sub.example.com"))
+    }
+
+    @Test
+    @DisplayName("deep subdomain strips to eTLD+1")
+    fun `deep subdomain strips to eTLD+1`() {
+        assertEquals("example.net", repo.extractRegistrableDomain("a.b.example.net"))
+    }
+
+    @Test
+    @DisplayName("compound TLD keeps three labels")
+    fun `compound TLD keeps three labels`() {
+        assertEquals("example.co.uk", repo.extractRegistrableDomain("sub.example.co.uk"))
+    }
+
+    @Test
+    @DisplayName("bare domain is returned unchanged")
+    fun `bare domain is returned unchanged`() {
+        assertEquals("example.com", repo.extractRegistrableDomain("example.com"))
+    }
+
+    @Test
+    @DisplayName("two-label compound TLD domain is returned unchanged")
+    fun `two-label compound TLD domain is returned unchanged`() {
+        assertEquals("example.co.uk", repo.extractRegistrableDomain("example.co.uk"))
+    }
+}
