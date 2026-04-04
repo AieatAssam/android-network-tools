@@ -24,6 +24,7 @@ import net.aieat.netswissknife.app.ui.screens.TracerouteScreen
 import net.aieat.netswissknife.app.ui.screens.WifiScanScreen
 import net.aieat.netswissknife.app.ui.screens.debug.DebugLogScreen
 import net.aieat.netswissknife.app.ui.screens.topology.TopologyDiscoveryScreen
+import net.aieat.netswissknife.app.ui.screens.tls.TlsInspectorScreen
 
 // ── Transition helpers ────────────────────────────────────────────────────────
 
@@ -95,5 +96,6 @@ fun AppNavHost(navController: NavHostController, modifier: Modifier = Modifier) 
         composable(NavRoutes.WifiScan.route)   { WifiScanScreen() }
         composable(NavRoutes.DebugLogs.route)        { DebugLogScreen() }
         composable(NavRoutes.TopologyDiscovery.route) { TopologyDiscoveryScreen() }
+        composable(NavRoutes.TlsInspector.route)      { TlsInspectorScreen() }
     }
 }

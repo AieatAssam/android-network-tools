@@ -5,6 +5,7 @@ import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.NetworkCheck
 import androidx.compose.material.icons.filled.Router
 import androidx.compose.material.icons.filled.Search
@@ -34,6 +35,7 @@ sealed class NavRoutes(
     object DebugLogs : NavRoutes("debug_logs", "Debug Logs", Icons.Default.BugReport)
     object WifiScan : NavRoutes("wifi_scan", "Wi-Fi Scanner", Icons.Default.WifiFind)
     object TopologyDiscovery : NavRoutes("topology", "Network Topology", Icons.Default.AccountTree)
+    object TlsInspector : NavRoutes("tls", "TLS Inspector", Icons.Default.Lock)
 
     companion object {
         /** All navigable tool screens (excluding Home). */
@@ -45,6 +47,7 @@ sealed class NavRoutes(
             ToolInfo("dns",        "DNS Lookup",    "DNS",   Icons.Default.Language,     "Resolve hostnames & records"),
             ToolInfo("wifi_scan",  "Wi-Fi Scanner", "Wi-Fi",     Icons.Default.WifiFind,     "Scan channels & access points"),
             ToolInfo("topology",   "Network Topology", "Topology", Icons.Default.AccountTree, "SNMP switch & neighbour discovery"),
+            ToolInfo("tls",        "TLS Inspector",    "TLS",      Icons.Default.Lock,         "SSL/TLS certificate chain inspector"),
         )
 
         /** Default pinned routes shown in the bottom nav (max MAX_PINNED). */

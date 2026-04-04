@@ -42,6 +42,15 @@ Wi-Fi environment analysis and channel optimization.
 - Per-channel congestion analysis across 2.4 GHz, 5 GHz, and 6 GHz bands
 - Connected network live info and best-channel recommendations (least-congested channels 1, 6, or 11 on 2.4 GHz)
 
+### TLS Inspector
+SSL/TLS certificate chain analysis for any TCP host.
+- Configurable host, port (default 443), and timeout (500–30 000 ms)
+- Full certificate chain: leaf, intermediates, and root
+- Per-certificate: subject/issuer CN & org, validity dates, SANs, serial number, signature algorithm, public key algorithm & bit length, SHA-256 fingerprint
+- Connection summary: TLS version, cipher suite, handshake time, chain trust status
+- Highlights expired certificates and self-signed certs
+- Works with any TCP host, not just HTTPS — does not send an HTTP request
+
 ### Network Topology Discovery
 SNMP-based network topology discovery via BFS traversal.
 - Seed IP discovery using SNMP v1, v2c, or v3 with configurable community string / credentials
@@ -150,6 +159,7 @@ Android module (Jetpack Compose, Material 3, Hilt). Contains:
 | `dns` | DNS Lookup | Implemented |
 | `wifi_scan` | Wi-Fi Scanner | Implemented |
 | `topology` | Network Topology Discovery | Implemented |
+| `tls` | TLS Inspector | Implemented |
 
 ---
 

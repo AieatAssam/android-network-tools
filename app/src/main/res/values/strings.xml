@@ -354,6 +354,60 @@
     <string name="topology_error_retry">Retry</string>
     <string name="topology_fit_button_cd">Fit graph to screen</string>
 
+    <!-- TLS Inspector Screen -->
+    <string name="tls_screen_title">TLS Inspector</string>
+    <string name="tls_screen_subtitle">SSL/TLS certificate chain inspector</string>
+
+    <!-- TLS Input -->
+    <string name="tls_host_label">Host or IP address</string>
+    <string name="tls_host_placeholder">e.g. example.com or 192.168.1.1</string>
+    <string name="tls_port_label">Port (default 443)</string>
+    <string name="tls_inspect_button">Inspect</string>
+    <string name="tls_inspecting">Inspecting…</string>
+
+    <!-- TLS States -->
+    <string name="tls_idle_title">Enter a host to inspect</string>
+    <string name="tls_idle_subtitle">Connects via TLS and returns the full certificate chain, including expired or self-signed certificates</string>
+    <string name="tls_error_title">Inspection failed</string>
+    <string name="tls_retry">Retry</string>
+
+    <!-- TLS Connection Card -->
+    <string name="tls_connection_header">Connection</string>
+    <string name="tls_trusted">Trusted</string>
+    <string name="tls_untrusted">Untrusted</string>
+    <string name="tls_host_port">Host / Port</string>
+    <string name="tls_version">TLS Version</string>
+    <string name="tls_cipher_suite">Cipher Suite</string>
+    <string name="tls_handshake_time">Handshake</string>
+    <string name="tls_ms_format">%1$d ms</string>
+
+    <!-- TLS Certificate Labels -->
+    <string name="tls_cert_leaf">Leaf</string>
+    <string name="tls_cert_intermediate">Intermediate</string>
+    <string name="tls_cert_root">Root</string>
+    <string name="tls_expand">Expand certificate</string>
+    <string name="tls_collapse">Collapse certificate</string>
+
+    <!-- TLS Expiry Badges -->
+    <string name="tls_expired">EXPIRED</string>
+    <string name="tls_days_left">%1$d days</string>
+
+    <!-- TLS Certificate Detail Fields -->
+    <string name="tls_subject_cn">Subject CN</string>
+    <string name="tls_subject_org">Subject Org</string>
+    <string name="tls_issuer_cn">Issuer CN</string>
+    <string name="tls_issuer_org">Issuer Org</string>
+    <string name="tls_valid_from">Valid From</string>
+    <string name="tls_valid_to">Valid To</string>
+    <string name="tls_self_signed">Self-Signed</string>
+    <string name="tls_sans_label">Subject Alternative Names</string>
+    <string name="tls_serial">Serial Number</string>
+    <string name="tls_sig_algo">Signature Algorithm</string>
+    <string name="tls_key_algo">Public Key</string>
+    <string name="tls_key_algo_bits">%1$s %2$d-bit</string>
+    <string name="tls_fingerprint_label">SHA-256 Fingerprint</string>
+    <string name="tls_unknown_cn">(unknown)</string>
+
     <!-- DNS Record labels -->
     <string name="dns_ipv4_prefix">IPv4</string>
     <string name="dns_ipv6_prefix">IPv6</string>
