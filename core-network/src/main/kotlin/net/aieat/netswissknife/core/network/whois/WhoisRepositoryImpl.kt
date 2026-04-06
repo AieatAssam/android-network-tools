@@ -86,6 +86,15 @@ class WhoisRepositoryImpl : WhoisRepository {
             val registrarHop = try {
                 queryServer(registrarWhoisServer, registrableDomain, timeoutMs)
             } catch (e: Exception) {
+                val failedHop = WhoisHop(
+                    server = WhoisServer(registrarWhoisServer, WhoisServerRole.REGISTRAR),
+                    rawResponse = "",
+                    queryTimeMs = 0L,
+                    referral = null,
+                    error = e.message ?: "Connection failed"
+                )
+                hops.add(failedHop)
+                _hopProgress.emit(failedHop)
                 return buildDomainResult(domain, WhoisQueryType.DOMAIN, hops, overallStart)
             }
             val hop3 = WhoisHop(
@@ -166,7 +175,7 @@ class WhoisRepositoryImpl : WhoisRepository {
         hops: List<WhoisHop>,
         overallStart: Long
     ): NetworkResult<WhoisResult> {
-        val lastResponse = hops.lastOrNull()?.rawResponse ?: ""
+        val lastResponse = hops.lastOrNull { it.error == null }?.rawResponse ?: ""
         val p = WhoisResponseParser
         return NetworkResult.Success(
             WhoisResult(

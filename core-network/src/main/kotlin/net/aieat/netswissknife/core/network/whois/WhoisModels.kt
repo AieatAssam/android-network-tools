@@ -13,7 +13,8 @@ data class WhoisHop(
     val server: WhoisServer,
     val rawResponse: String,
     val queryTimeMs: Long,
-    val referral: String?
+    val referral: String?,
+    val error: String? = null
 )
 
 data class WhoisResult(

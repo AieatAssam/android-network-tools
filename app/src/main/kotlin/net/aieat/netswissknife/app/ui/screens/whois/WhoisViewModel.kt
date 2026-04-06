@@ -71,7 +71,7 @@ class WhoisViewModel @Inject constructor(
                         if (h.status == HopStatus.QUERYING) h.copy(status = HopStatus.DONE) else h
                     } + HopUiState(
                         server = hop.server,
-                        status = HopStatus.DONE,
+                        status = if (hop.error != null) HopStatus.FAILED else HopStatus.DONE,
                         queryTimeMs = hop.queryTimeMs,
                         referral = hop.referral
                     )
@@ -94,7 +94,7 @@ class WhoisViewModel @Inject constructor(
                         hopStates = result.data.hops.map { hop ->
                             HopUiState(
                                 server = hop.server,
-                                status = HopStatus.DONE,
+                                status = if (hop.error != null) HopStatus.FAILED else HopStatus.DONE,
                                 queryTimeMs = hop.queryTimeMs,
                                 referral = hop.referral
                             )
