@@ -72,6 +72,18 @@ Domain and IP registration lookup via three-hop WHOIS referral chain.
 - Live relay-chain visualiser: animates each server node PENDING → QUERYING → DONE as the chain progresses
 - Optional raw response per hop for power users
 
+### HTTP Probe
+Full HTTP/HTTPS request tester with security header analysis.
+- Supports GET, POST, PUT, PATCH, DELETE, HEAD, and OPTIONS methods
+- Custom request headers: add/remove key-value pairs dynamically
+- Request body editor (enabled for POST, PUT, PATCH) with monospace text input
+- Follow-redirects toggle with full redirect chain display
+- Response display across four tabs:
+  - **Overview**: status code (color-coded 2xx/3xx/4xx/5xx), response time, final URL, redirect hops, body size, Content-Type
+  - **Headers**: collapsible request and response header sections
+  - **Body**: scrollable monospace response body with copy-to-clipboard; truncated at 512 KB with notice
+  - **Security**: per-header pass/warn/fail ratings for HSTS, CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy, and Server header information disclosure
+
 ---
 
 ## Module Layout
@@ -172,6 +184,7 @@ Android module (Jetpack Compose, Material 3, Hilt). Contains:
 | `topology` | Network Topology Discovery | Implemented |
 | `tls` | TLS Inspector | Implemented |
 | `whois` | WHOIS Lookup | Implemented |
+| `httprobe` | HTTP Probe | Implemented |
 
 ---
 

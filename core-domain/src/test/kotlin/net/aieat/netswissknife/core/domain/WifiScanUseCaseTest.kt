@@ -10,7 +10,7 @@ import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
-import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
@@ -59,9 +59,9 @@ class WifiScanUseCaseTest {
         @Test
         fun `throws WifiNotSupportedException when not supported`() = runTest {
             every { repository.isSupported } returns false
-            assertThrows(WifiNotSupportedException::class.java) {
-                kotlinx.coroutines.runBlocking { useCase() }
-            }
+            var caught: WifiNotSupportedException? = null
+            try { useCase() } catch (e: WifiNotSupportedException) { caught = e }
+            assertNotNull(caught)
         }
 
         @Test
@@ -77,10 +77,9 @@ class WifiScanUseCaseTest {
         fun `propagates repository exceptions`() = runTest {
             every { repository.isSupported } returns true
             coEvery { repository.scan() } throws SecurityException("Location permission denied")
-            val thrown = assertThrows(SecurityException::class.java) {
-                kotlinx.coroutines.runBlocking { useCase() }
-            }
-            assertEquals("Location permission denied", thrown.message)
+            var caught: SecurityException? = null
+            try { useCase() } catch (e: SecurityException) { caught = e }
+            assertEquals("Location permission denied", caught?.message)
         }
 
         @Test
