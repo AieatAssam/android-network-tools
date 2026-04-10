@@ -436,6 +436,55 @@
     <string name="whois_example_chip_ip">IP Address</string>
     <string name="whois_example_chip_asn">ASN</string>
 
+    <!-- HTTP Probe Screen -->
+    <string name="httprobe_screen_title">HTTP Probe</string>
+    <string name="httprobe_screen_subtitle">Test HTTP/HTTPS requests with full header and security analysis</string>
+
+    <!-- HTTP Probe Input -->
+    <string name="httprobe_url_label">URL</string>
+    <string name="httprobe_url_placeholder">https://example.com/api</string>
+    <string name="httprobe_method_label">HTTP Method</string>
+    <string name="httprobe_custom_headers_label">Custom Headers</string>
+    <string name="httprobe_add_header">Add header</string>
+    <string name="httprobe_remove_header">Remove header</string>
+    <string name="httprobe_header_key">Name</string>
+    <string name="httprobe_header_value">Value</string>
+    <string name="httprobe_body_label">Request Body</string>
+    <string name="httprobe_body_placeholder">{"key": "value"}</string>
+    <string name="httprobe_follow_redirects_label">Follow Redirects</string>
+    <string name="httprobe_follow_redirects_sub">Automatically follow HTTP 3xx responses</string>
+    <string name="httprobe_send_button">Send Request</string>
+    <string name="httprobe_sending">Sending…</string>
+
+    <!-- HTTP Probe States -->
+    <string name="httprobe_idle_title">Enter a URL to probe</string>
+    <string name="httprobe_idle_subtitle">Supports GET, POST, PUT, PATCH, DELETE, HEAD, and OPTIONS. Includes security header analysis.</string>
+    <string name="httprobe_error_title">Request failed</string>
+    <string name="httprobe_retry">Retry</string>
+
+    <!-- HTTP Probe Tabs -->
+    <string name="httprobe_tab_overview">Overview</string>
+    <string name="httprobe_tab_headers">Headers</string>
+    <string name="httprobe_tab_body">Body</string>
+    <string name="httprobe_tab_security">Security</string>
+
+    <!-- HTTP Probe Results -->
+    <string name="httprobe_response_time_label">Response time</string>
+    <string name="httprobe_redirects_label">%1$d redirect(s)</string>
+    <string name="httprobe_method_used">Method</string>
+    <string name="httprobe_final_url">Final URL</string>
+    <string name="httprobe_response_size">Body size</string>
+    <string name="httprobe_content_type">Content-Type</string>
+    <string name="httprobe_redirect_chain">Redirect chain</string>
+    <string name="httprobe_request_headers">Request Headers</string>
+    <string name="httprobe_response_headers">Response Headers</string>
+    <string name="httprobe_no_custom_headers">No custom headers sent</string>
+    <string name="httprobe_no_headers">No headers</string>
+    <string name="httprobe_response_body">Response Body</string>
+    <string name="httprobe_copy_body">Copy</string>
+    <string name="httprobe_body_truncated">Showing first 512 KB of %1$s response</string>
+    <string name="httprobe_empty_body">Empty body (HEAD or no content)</string>
+
     <!-- DNS Record labels -->
     <string name="dns_ipv4_prefix">IPv4</string>
     <string name="dns_ipv6_prefix">IPv6</string>

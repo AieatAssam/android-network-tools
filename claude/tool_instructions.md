@@ -387,3 +387,4 @@ Both must succeed before committing.
 | Port Scanner | `ports` | Placeholder for TCP port scanning |
 | LAN Scanner | `lan` | Placeholder for LAN device discovery |
 | DNS Lookup | `dns` | Placeholder for DNS resolution |
+| HTTP Probe | `httprobe` | HTTP/HTTPS request tester with security header analysis |

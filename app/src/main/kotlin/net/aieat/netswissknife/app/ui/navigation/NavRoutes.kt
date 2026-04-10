@@ -4,6 +4,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Http
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.ManageSearch
@@ -38,6 +39,7 @@ sealed class NavRoutes(
     object TopologyDiscovery : NavRoutes("topology", "Network Topology", Icons.Default.AccountTree)
     object TlsInspector : NavRoutes("tls", "TLS Inspector", Icons.Default.Lock)
     object WhoisLookup : NavRoutes("whois", "WHOIS Lookup", Icons.Default.ManageSearch)
+    object HttpProbe : NavRoutes("httprobe", "HTTP Probe", Icons.Default.Http)
 
     companion object {
         /** All navigable tool screens (excluding Home). */
@@ -51,6 +53,7 @@ sealed class NavRoutes(
             ToolInfo("topology",   "Network Topology", "Topology", Icons.Default.AccountTree, "SNMP switch & neighbour discovery"),
             ToolInfo("tls",        "TLS Inspector",    "TLS",      Icons.Default.Lock,         "SSL/TLS certificate chain inspector"),
             ToolInfo("whois",      "WHOIS Lookup",  "WHOIS", Icons.Default.ManageSearch, "Domain and IP registration lookup"),
+            ToolInfo("httprobe",   "HTTP Probe",    "HTTP",  Icons.Default.Http,          "HTTP/HTTPS request tester with security header analysis"),
         )
 
         /** Default pinned routes shown in the bottom nav (max MAX_PINNED). */
