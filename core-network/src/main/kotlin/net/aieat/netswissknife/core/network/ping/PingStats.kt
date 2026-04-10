@@ -36,7 +36,7 @@ data class PingStats(
             val avgMs = if (successRtts.isEmpty()) 0.0 else successRtts.average()
 
             val jitterMs = if (successRtts.size < 2) 0.0 else {
-                val diffs = successRtts.zipWithNext { a, b -> Math.abs(b - a).toDouble() }
+                val diffs = successRtts.zipWithNext { a, b -> kotlin.math.abs(b - a).toDouble() }
                 diffs.average()
             }
 

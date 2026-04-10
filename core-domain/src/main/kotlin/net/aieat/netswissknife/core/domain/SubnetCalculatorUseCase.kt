@@ -6,7 +6,7 @@ import net.aieat.netswissknife.core.network.subnet.SubnetInfo
 
 class SubnetCalculatorUseCase(
     private val repository: SubnetCalculatorRepository
-) : UseCase<String, NetworkResult<SubnetInfo>> {
-    override suspend fun invoke(params: String): NetworkResult<SubnetInfo> =
+) {
+    suspend operator fun invoke(params: String): NetworkResult<SubnetInfo> =
         repository.calculate(params)
 }
