@@ -495,4 +495,44 @@
     <string name="dns_srv_port">Port</string>
     <string name="dns_srv_target">Target</string>
 
+    <!-- Subnet Calculator -->
+    <string name="subnet_screen_title">Subnet Calculator</string>
+    <string name="subnet_screen_subtitle">IPv4 CIDR, mask, wildcard &amp; binary breakdown</string>
+    <string name="subnet_input_label">Network / Address</string>
+    <string name="subnet_input_placeholder">e.g. 192.168.1.0/24</string>
+    <string name="subnet_calculate_button">Calculate</string>
+    <string name="subnet_idle_title">Enter an IPv4 address or network</string>
+    <string name="subnet_idle_body">Supports CIDR (192.168.1.0/24), dot-decimal mask (192.168.1.0/255.255.255.0) or a bare IP (/32 assumed).</string>
+    <string name="subnet_error_title">Invalid Input</string>
+    <string name="subnet_retry">Retry</string>
+    <string name="subnet_overview_hosts">%1$s usable hosts</string>
+    <string name="subnet_network_address">Network address</string>
+    <string name="subnet_broadcast">Broadcast</string>
+    <string name="subnet_first_host">First host</string>
+    <string name="subnet_last_host">Last host</string>
+    <string name="subnet_total_hosts">Total addresses</string>
+    <string name="subnet_usable_hosts">Usable hosts</string>
+    <string name="subnet_binary_breakdown">Binary Breakdown</string>
+    <string name="subnet_network_bits">Network: %1$d bits</string>
+    <string name="subnet_host_bits">Host: %1$d bits</string>
+    <string name="subnet_binary_ip">IP address</string>
+    <string name="subnet_binary_mask">Subnet mask</string>
+    <string name="subnet_binary_network">Network addr</string>
+    <string name="subnet_notations_title">Notation Equivalents</string>
+    <string name="subnet_notation_cidr">CIDR</string>
+    <string name="subnet_notation_mask">Dot-decimal mask</string>
+    <string name="subnet_notation_wildcard">Wildcard mask</string>
+    <string name="subnet_notation_hex">Hex mask</string>
+    <string name="subnet_notation_binary">Binary mask</string>
+    <string name="subnet_properties_title">Address Properties</string>
+    <string name="subnet_ip_class">IP class</string>
+    <string name="subnet_class_label">Class %1$s</string>
+    <string name="subnet_scope">Scope</string>
+    <string name="subnet_scope_private">Private</string>
+    <string name="subnet_scope_public">Public</string>
+    <string name="subnet_prefix_bits">Prefix / host bits</string>
+    <string name="subnet_prefix_of_32">%1$d / 32</string>
+    <string name="subnet_host_bit_count">Host bits</string>
+    <string name="subnet_bits_count">%1$d bits</string>
+
 </resources>

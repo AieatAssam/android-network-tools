@@ -388,3 +388,4 @@ Both must succeed before committing.
 | LAN Scanner | `lan` | Placeholder for LAN device discovery |
 | DNS Lookup | `dns` | Placeholder for DNS resolution |
 | HTTP Probe | `httprobe` | HTTP/HTTPS request tester with security header analysis |
+| Subnet Calculator | `subnet` | IPv4 subnet calculator with binary breakdown and notation conversion |

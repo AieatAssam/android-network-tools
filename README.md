@@ -84,6 +84,15 @@ Full HTTP/HTTPS request tester with security header analysis.
   - **Body**: scrollable monospace response body with copy-to-clipboard; truncated at 512 KB with notice
   - **Security**: per-header pass/warn/fail ratings for HSTS, CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy, and Server header information disclosure
 
+### Subnet Calculator
+IPv4 subnet calculator with visual binary breakdown and multi-notation conversion.
+- Accepts CIDR (`192.168.1.0/24`), dot-decimal mask (`192.168.1.0/255.255.255.0`), space-separated mask, or bare IP (assumes `/32`)
+- Computes: network address, broadcast, first/last usable host, total and usable host counts
+- **Binary Breakdown card**: colour-coded bit grid distinguishing network bits (blue) from host bits (orange) for IP address, subnet mask, and network address rows
+- **Notation Equivalents card**: CIDR, dot-decimal mask, wildcard mask, hex mask (`0xFFFFFF00`), and binary mask
+- **Address Properties card**: IP class (A/B/C/D/E), private/public scope badge (RFC 1918 + loopback + link-local), prefix and host bit counts
+- Quick example chips for common subnets (`/8`, `/12`, `/16`, `/24`, `/30`, `/0`)
+
 ---
 
 ## Module Layout
@@ -185,6 +194,7 @@ Android module (Jetpack Compose, Material 3, Hilt). Contains:
 | `tls` | TLS Inspector | Implemented |
 | `whois` | WHOIS Lookup | Implemented |
 | `httprobe` | HTTP Probe | Implemented |
+| `subnet` | Subnet Calculator | Implemented |
 
 ---
 
