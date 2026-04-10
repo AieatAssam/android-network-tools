@@ -3,6 +3,7 @@ package net.aieat.netswissknife.app.ui.navigation
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Http
 import androidx.compose.material.icons.filled.Language
@@ -40,6 +41,7 @@ sealed class NavRoutes(
     object TlsInspector : NavRoutes("tls", "TLS Inspector", Icons.Default.Lock)
     object WhoisLookup : NavRoutes("whois", "WHOIS Lookup", Icons.Default.ManageSearch)
     object HttpProbe : NavRoutes("httprobe", "HTTP Probe", Icons.Default.Http)
+    object SubnetCalculator : NavRoutes("subnet", "Subnet Calc", Icons.Default.Calculate)
 
     companion object {
         /** All navigable tool screens (excluding Home). */
@@ -54,6 +56,7 @@ sealed class NavRoutes(
             ToolInfo("tls",        "TLS Inspector",    "TLS",      Icons.Default.Lock,         "SSL/TLS certificate chain inspector"),
             ToolInfo("whois",      "WHOIS Lookup",  "WHOIS", Icons.Default.ManageSearch, "Domain and IP registration lookup"),
             ToolInfo("httprobe",   "HTTP Probe",    "HTTP",  Icons.Default.Http,          "HTTP/HTTPS request tester with security header analysis"),
+            ToolInfo("subnet",     "Subnet Calc",   "Subnet", Icons.Default.Calculate,     "IPv4 subnet calculator with binary breakdown and notation conversion"),
         )
 
         /** Default pinned routes shown in the bottom nav (max MAX_PINNED). */
