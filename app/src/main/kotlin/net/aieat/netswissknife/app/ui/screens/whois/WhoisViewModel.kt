@@ -81,8 +81,8 @@ class WhoisViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            // Brief delay to let progress subscription attach
-            kotlinx.coroutines.delay(10)
+            // Yield so the progress-collection coroutine above can reach collect() first
+            kotlinx.coroutines.yield()
             val result = whoisLookupUseCase(WhoisParams(query = query))
             progressJob?.cancel()
             progressJob = null

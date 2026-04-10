@@ -99,57 +99,27 @@ class GeoIpRepositoryImpl : GeoIpRepository {
 
     // ── Country code → full name (ISO 3166-1 alpha-2 for common countries) ───
 
-    @Suppress("CyclomaticComplexMethod")
-    private fun countryName(code: String): String = when (code.uppercase()) {
-        "US" -> "United States"
-        "GB" -> "United Kingdom"
-        "DE" -> "Germany"
-        "FR" -> "France"
-        "JP" -> "Japan"
-        "CN" -> "China"
-        "CA" -> "Canada"
-        "AU" -> "Australia"
-        "BR" -> "Brazil"
-        "IN" -> "India"
-        "RU" -> "Russia"
-        "NL" -> "Netherlands"
-        "SE" -> "Sweden"
-        "SG" -> "Singapore"
-        "HK" -> "Hong Kong"
-        "KR" -> "South Korea"
-        "IT" -> "Italy"
-        "ES" -> "Spain"
-        "CH" -> "Switzerland"
-        "NO" -> "Norway"
-        "DK" -> "Denmark"
-        "FI" -> "Finland"
-        "PL" -> "Poland"
-        "ZA" -> "South Africa"
-        "MX" -> "Mexico"
-        "AR" -> "Argentina"
-        "TR" -> "Turkey"
-        "ID" -> "Indonesia"
-        "TH" -> "Thailand"
-        "PH" -> "Philippines"
-        "MY" -> "Malaysia"
-        "UA" -> "Ukraine"
-        "IE" -> "Ireland"
-        "NZ" -> "New Zealand"
-        "PT" -> "Portugal"
-        "AT" -> "Austria"
-        "BE" -> "Belgium"
-        "CZ" -> "Czech Republic"
-        "HU" -> "Hungary"
-        "RO" -> "Romania"
-        "GR" -> "Greece"
-        "TW" -> "Taiwan"
-        "VN" -> "Vietnam"
-        "EG" -> "Egypt"
-        "SA" -> "Saudi Arabia"
-        "AE" -> "UAE"
-        "IL" -> "Israel"
-        "PK" -> "Pakistan"
-        "NG" -> "Nigeria"
-        else -> code
+    private fun countryName(code: String): String = COUNTRY_NAMES[code.uppercase()] ?: code
+
+    companion object {
+        private val COUNTRY_NAMES = mapOf(
+            "US" to "United States",  "GB" to "United Kingdom", "DE" to "Germany",
+            "FR" to "France",         "JP" to "Japan",          "CN" to "China",
+            "CA" to "Canada",         "AU" to "Australia",      "BR" to "Brazil",
+            "IN" to "India",          "RU" to "Russia",         "NL" to "Netherlands",
+            "SE" to "Sweden",         "SG" to "Singapore",      "HK" to "Hong Kong",
+            "KR" to "South Korea",    "IT" to "Italy",          "ES" to "Spain",
+            "CH" to "Switzerland",    "NO" to "Norway",         "DK" to "Denmark",
+            "FI" to "Finland",        "PL" to "Poland",         "ZA" to "South Africa",
+            "MX" to "Mexico",         "AR" to "Argentina",      "TR" to "Turkey",
+            "ID" to "Indonesia",      "TH" to "Thailand",       "PH" to "Philippines",
+            "MY" to "Malaysia",       "UA" to "Ukraine",        "IE" to "Ireland",
+            "NZ" to "New Zealand",    "PT" to "Portugal",       "AT" to "Austria",
+            "BE" to "Belgium",        "CZ" to "Czech Republic", "HU" to "Hungary",
+            "RO" to "Romania",        "GR" to "Greece",         "TW" to "Taiwan",
+            "VN" to "Vietnam",        "EG" to "Egypt",          "SA" to "Saudi Arabia",
+            "AE" to "UAE",            "IL" to "Israel",         "PK" to "Pakistan",
+            "NG" to "Nigeria",
+        )
     }
 }

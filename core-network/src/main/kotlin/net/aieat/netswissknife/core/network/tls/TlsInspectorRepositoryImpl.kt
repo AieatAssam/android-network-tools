@@ -2,6 +2,7 @@ package net.aieat.netswissknife.core.network.tls
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.NetworkResult
 import java.net.InetSocketAddress
 import java.security.KeyStore
@@ -34,7 +35,7 @@ class TlsInspectorRepositoryImpl : TlsInspectorRepository {
                 val sslSocket = (trustAllCtx.socketFactory.createSocket() as SSLSocket).apply {
                     soTimeout = timeoutMs
                     // Set SNI for hostname-based hosts (not bare IPs)
-                    if (!host.contains(':') && !host.matches(Regex("""^\d+\.\d+\.\d+\.\d+$"""))) {
+                    if (!host.contains(':') && !HostValidator.isValidIpv4(host)) {
                         try {
                             val params = sslParameters
                             params.serverNames = listOf(javax.net.ssl.SNIHostName(host))
