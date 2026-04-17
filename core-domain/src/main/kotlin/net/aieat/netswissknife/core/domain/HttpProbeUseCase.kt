@@ -6,7 +6,7 @@ import net.aieat.netswissknife.core.network.httprobe.HttpProbeRepository
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeRequest
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeResult
 import java.net.MalformedURLException
-import java.net.URL
+import java.net.URI
 
 data class HttpProbeParams(
     val url: String,
@@ -25,10 +25,12 @@ class HttpProbeUseCase(private val repository: HttpProbeRepository) {
         if (url.isBlank()) return NetworkResult.Error("URL must not be blank")
 
         try {
-            val parsed = URL(url)
+            val parsed = URI(url).toURL()
             if (parsed.protocol !in listOf("http", "https"))
                 return NetworkResult.Error("Only HTTP and HTTPS URLs are supported")
         } catch (e: MalformedURLException) {
+            return NetworkResult.Error("Malformed URL: ${e.message}")
+        } catch (e: IllegalArgumentException) {
             return NetworkResult.Error("Malformed URL: ${e.message}")
         }
 
