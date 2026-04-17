@@ -141,7 +141,12 @@ class WifiScanRepositoryImpl(private val context: Context) : WifiScanRepository 
         val vendor = OuiDatabase.lookup(sr.BSSID ?: "") ?: ""
 
         return WifiAccessPoint(
-            ssid = sr.SSID?.removeSurrounding("\"") ?: "",
+            ssid = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                sr.wifiSsid?.toString()?.removeSurrounding("\"") ?: ""
+            } else {
+                @Suppress("DEPRECATION")
+                sr.SSID?.removeSurrounding("\"") ?: ""
+            },
             bssid = sr.BSSID ?: "",
             rssi = sr.level,
             frequency = sr.frequency,

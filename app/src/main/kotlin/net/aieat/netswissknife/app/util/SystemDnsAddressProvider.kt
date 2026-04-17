@@ -14,7 +14,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class SystemDnsAddressProvider @Inject constructor(
-    @ApplicationContext private val context: Context
+    @param:ApplicationContext private val context: Context
 ) {
     /**
      * Returns the DNS server IP strings for the active network, or an empty list if

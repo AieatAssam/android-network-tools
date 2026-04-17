@@ -79,7 +79,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalClipboardManager
+import android.content.ClipData
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -88,7 +91,8 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.screens.dns.DnsUiState
@@ -826,7 +830,8 @@ private fun SummaryMetric(
 
 @Composable
 private fun DnsRecordCard(record: DnsRecord, index: Int) {
-    val clipboardManager = LocalClipboardManager.current
+    val clipboard = LocalClipboard.current
+    val scope = rememberCoroutineScope()
 
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
@@ -873,7 +878,7 @@ private fun DnsRecordCard(record: DnsRecord, index: Int) {
                     TtlBadge(ttl = record.ttl)
                     IconButton(
                         onClick = {
-                            clipboardManager.setText(AnnotatedString(record.value))
+                            scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("", record.value))) }
                         },
                         modifier = Modifier.size(36.dp)
                     ) {
@@ -1163,7 +1168,8 @@ private fun DnsRawToggleCard(
             AnimatedVisibility(visible = showRaw) {
                 Column {
                     HorizontalDivider()
-                    val clipboardManager = LocalClipboardManager.current
+                    val clipboard2 = LocalClipboard.current
+                    val scope2 = rememberCoroutineScope()
                     Box(modifier = Modifier.fillMaxWidth()) {
                         SelectionContainer {
                             Text(
@@ -1179,7 +1185,7 @@ private fun DnsRawToggleCard(
                             )
                         }
                         IconButton(
-                            onClick = { clipboardManager.setText(AnnotatedString(rawResponse)) },
+                            onClick = { scope2.launch { clipboard2.setClipEntry(ClipEntry(ClipData.newPlainText("", rawResponse))) } },
                             modifier = Modifier
                                 .align(Alignment.TopEnd)
                                 .padding(4.dp)

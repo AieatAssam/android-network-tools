@@ -6,6 +6,8 @@ import net.aieat.netswissknife.core.network.NetworkResult
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.MalformedURLException
+import java.net.URI
+import java.net.URISyntaxException
 import java.net.URL
 
 class HttpProbeRepositoryImpl : HttpProbeRepository {
@@ -17,11 +19,15 @@ class HttpProbeRepositoryImpl : HttpProbeRepository {
             return NetworkResult.Error("Timeout must be between 500 ms and 60 000 ms")
 
         val parsedUrl = try {
-            URL(trimmedUrl).also { url ->
+            URI(trimmedUrl).toURL().also { url ->
                 if (url.protocol !in listOf("http", "https"))
                     return NetworkResult.Error("Only HTTP and HTTPS URLs are supported (got: ${url.protocol})")
             }
         } catch (e: MalformedURLException) {
+            return NetworkResult.Error("Malformed URL: ${e.message}")
+        } catch (e: URISyntaxException) {
+            return NetworkResult.Error("Malformed URL: ${e.message}")
+        } catch (e: IllegalArgumentException) {
             return NetworkResult.Error("Malformed URL: ${e.message}")
         }
 
@@ -132,9 +138,9 @@ class HttpProbeRepositoryImpl : HttpProbeRepository {
 
     private fun resolveUrl(base: URL, location: String): URL {
         return if (location.startsWith("http://") || location.startsWith("https://")) {
-            URL(location)
+            URI(location).toURL()
         } else {
-            URL(base, location)
+            URI(base.toString()).resolve(location).toURL()
         }
     }
 }

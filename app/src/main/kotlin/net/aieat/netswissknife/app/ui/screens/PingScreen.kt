@@ -81,7 +81,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.platform.LocalClipboardManager
+import android.content.ClipData
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
@@ -92,8 +95,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.screens.ping.PingUiState
 import net.aieat.netswissknife.app.ui.screens.ping.PingViewModel
@@ -525,7 +529,8 @@ private fun PingFinishedPanel(
     onToggleRaw: () -> Unit,
     onClear: () -> Unit
 ) {
-    val clipboard = LocalClipboardManager.current
+    val clipboard = LocalClipboard.current
+    val clipScope = rememberCoroutineScope()
     val result = state.result
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -551,7 +556,7 @@ private fun PingFinishedPanel(
                         fontWeight = FontWeight.SemiBold
                     )
                     IconButton(onClick = {
-                        clipboard.setText(AnnotatedString(buildCsvOutput(result)))
+                        clipScope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("", buildCsvOutput(result)))) }
                     }) {
                         Icon(Icons.Default.ContentCopy, contentDescription = stringResource(R.string.ping_copy_csv))
                     }
@@ -961,7 +966,8 @@ private fun RawOutputCard(
     showRaw: Boolean,
     onToggle: () -> Unit
 ) {
-    val clipboard = LocalClipboardManager.current
+    val clipboard = LocalClipboard.current
+    val scope = rememberCoroutineScope()
 
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -978,7 +984,7 @@ private fun RawOutputCard(
                 Row {
                     if (showRaw) {
                         IconButton(onClick = {
-                            clipboard.setText(AnnotatedString(rawOutput))
+                            scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("", rawOutput))) }
                         }) {
                             Icon(Icons.Default.ContentCopy, contentDescription = stringResource(R.string.ping_copy_raw))
                         }

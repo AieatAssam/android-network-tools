@@ -47,7 +47,7 @@ import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.EventBusy
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.ManageSearch
+import androidx.compose.material.icons.automirrored.filled.ManageSearch
 import androidx.compose.material.icons.filled.Update
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
@@ -86,7 +86,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.core.network.whois.WhoisQueryType
 import net.aieat.netswissknife.core.network.whois.WhoisResult
@@ -135,7 +135,7 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
                         modifier = Modifier.fillMaxWidth(),
                         label = { Text(stringResource(R.string.whois_query_label)) },
                         placeholder = { Text(stringResource(R.string.whois_query_placeholder)) },
-                        leadingIcon = { Icon(Icons.Default.ManageSearch, contentDescription = null) },
+                        leadingIcon = { Icon(Icons.AutoMirrored.Filled.ManageSearch, contentDescription = null) },
                         trailingIcon = {
                             if (uiState.query.isNotEmpty()) {
                                 IconButton(onClick = { viewModel.onQueryChange("") }) {
@@ -388,7 +388,7 @@ fun IdleCard(onExampleSelected: (String) -> Unit) {
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Icon(
-                Icons.Default.ManageSearch,
+                Icons.AutoMirrored.Filled.ManageSearch,
                 contentDescription = null,
                 modifier = Modifier.size(48.dp),
                 tint = MaterialTheme.colorScheme.primary
