@@ -36,6 +36,7 @@ class SubnetCalculatorUseCaseTest {
             ipClass = "C",
             isPrivate = true,
             cidrNotation = "192.168.1.0/24",
+            inputIsAligned = false,
         )
         coEvery { repository.calculate("192.168.1.100/24") } returns NetworkResult.Success(expectedInfo)
 

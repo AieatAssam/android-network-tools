@@ -184,4 +184,79 @@ class SubnetCalculatorRepositoryTest {
         val info = (result as NetworkResult.Success).data
         assertEquals("0xFFFFFF00", info.hexMask)
     }
+
+    // ── Alignment detection ────────────────────────────────────────────────────
+
+    @Test
+    fun `calculate marks aligned when input IP is already on network boundary`() {
+        val result = repo.calculate("192.168.1.0/24")
+        assertTrue(result is NetworkResult.Success)
+        val info = (result as NetworkResult.Success).data
+        assertTrue(info.inputIsAligned)
+    }
+
+    @Test
+    fun `calculate marks misaligned when input IP is not on network boundary`() {
+        val result = repo.calculate("10.0.71.0/23")
+        assertTrue(result is NetworkResult.Success)
+        val info = (result as NetworkResult.Success).data
+        assertEquals("10.0.70.0", info.networkAddress)
+        assertTrue(!info.inputIsAligned)
+    }
+
+    @Test
+    fun `calculate marks bare IP as aligned for slash 32`() {
+        val result = repo.calculate("192.168.1.1")
+        assertTrue(result is NetworkResult.Success)
+        val info = (result as NetworkResult.Success).data
+        assertTrue(info.inputIsAligned)
+    }
+
+    // ── Range calculation ──────────────────────────────────────────────────────
+
+    @Test
+    fun `calculateRange returns smallest subnet containing both IPs in same slash 24`() {
+        val result = repo.calculateRange("192.168.1.10", "192.168.1.200")
+        assertTrue(result is NetworkResult.Success)
+        val info = (result as NetworkResult.Success).data
+        assertEquals("192.168.1.0", info.networkAddress)
+        assertEquals(24, info.prefixLength)
+    }
+
+    @Test
+    fun `calculateRange returns slash 23 for IPs spanning two class C networks`() {
+        val result = repo.calculateRange("10.0.70.1", "10.0.71.254")
+        assertTrue(result is NetworkResult.Success)
+        val info = (result as NetworkResult.Success).data
+        assertEquals("10.0.70.0", info.networkAddress)
+        assertEquals(23, info.prefixLength)
+    }
+
+    @Test
+    fun `calculateRange returns slash 32 for identical IPs`() {
+        val result = repo.calculateRange("192.168.1.5", "192.168.1.5")
+        assertTrue(result is NetworkResult.Success)
+        val info = (result as NetworkResult.Success).data
+        assertEquals(32, info.prefixLength)
+    }
+
+    @Test
+    fun `calculateRange returns error when min IP is greater than max IP`() {
+        val result = repo.calculateRange("192.168.1.100", "192.168.1.1")
+        assertTrue(result is NetworkResult.Error)
+    }
+
+    @Test
+    fun `calculateRange returns error for invalid IP`() {
+        val result = repo.calculateRange("999.0.0.1", "192.168.1.1")
+        assertTrue(result is NetworkResult.Error)
+    }
+
+    @Test
+    fun `calculateRange result always has inputIsAligned true`() {
+        val result = repo.calculateRange("10.0.70.1", "10.0.71.254")
+        assertTrue(result is NetworkResult.Success)
+        val info = (result as NetworkResult.Success).data
+        assertTrue(info.inputIsAligned)
+    }
 }

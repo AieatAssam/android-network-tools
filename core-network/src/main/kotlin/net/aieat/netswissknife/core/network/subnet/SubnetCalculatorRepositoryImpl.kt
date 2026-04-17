@@ -42,12 +42,31 @@ class SubnetCalculatorRepositoryImpl : SubnetCalculatorRepository {
                 ipClass = classOf(ipLong),
                 isPrivate = isPrivate(ipLong),
                 cidrNotation = "$networkAddress/$prefix",
+                inputIsAligned = (ipLong == networkLong),
             )
         )
     } catch (e: IllegalArgumentException) {
         NetworkResult.Error(e.message ?: "Invalid input")
     } catch (e: Exception) {
         NetworkResult.Error("Invalid input: ${e.message}")
+    }
+
+    override fun calculateRange(minIp: String, maxIp: String): NetworkResult<SubnetInfo> = try {
+        val minLong = parseIpToLong(minIp.trim())
+        val maxLong = parseIpToLong(maxIp.trim())
+        require(minLong <= maxLong) { "Minimum IP must be ≤ maximum IP" }
+        val diff = minLong xor maxLong
+        // Number of bits needed to represent the difference determines host bit count
+        val hostBitsNeeded = Long.SIZE_BITS - diff.countLeadingZeroBits()
+        require(hostBitsNeeded <= 32) { "IP range too large for a valid IPv4 subnet" }
+        val prefix = 32 - hostBitsNeeded
+        // Use the masked minLong so the result is always on the network boundary
+        val networkIp = longToIp(minLong and prefixToMask(prefix))
+        calculate("$networkIp/$prefix")
+    } catch (e: IllegalArgumentException) {
+        NetworkResult.Error(e.message ?: "Invalid IP range")
+    } catch (e: Exception) {
+        NetworkResult.Error("Invalid IP range: ${e.message}")
     }
 
     // ── Parsing ────────────────────────────────────────────────────────────────
