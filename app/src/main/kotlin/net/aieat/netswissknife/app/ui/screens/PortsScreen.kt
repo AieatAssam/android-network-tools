@@ -55,6 +55,7 @@ import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -82,7 +83,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.platform.LocalClipboardManager
+import android.content.ClipData
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
@@ -93,8 +97,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.screens.portscan.PortScanUiState
 import net.aieat.netswissknife.app.ui.screens.portscan.PortScanViewModel
@@ -123,7 +128,8 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
     )
 
     val keyboardController = LocalSoftwareKeyboardController.current
-    val clipboard = LocalClipboardManager.current
+    val clipboard = LocalClipboard.current
+    val clipScope = rememberCoroutineScope()
     var showAll by remember { mutableStateOf(false) }
 
     LazyColumn(
@@ -190,7 +196,7 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
                     PortScanSummaryCard(
                         summary = summary,
                         onCopy = {
-                            clipboard.setText(AnnotatedString(buildScanReport(summary)))
+                            clipScope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("", buildScanReport(summary)))) }
                         },
                         onClear = viewModel::onClear
                     )
@@ -393,7 +399,7 @@ private fun PortScanInputCard(
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = presetExpanded) },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .menuAnchor()
+                        .menuAnchor(MenuAnchorType.PrimaryNotEditable)
                 )
                 ExposedDropdownMenu(
                     expanded = presetExpanded,

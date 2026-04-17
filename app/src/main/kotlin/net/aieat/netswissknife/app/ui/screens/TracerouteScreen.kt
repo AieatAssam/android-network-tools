@@ -48,7 +48,7 @@ import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Router
 import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material.icons.filled.TextSnippet
+import androidx.compose.material.icons.automirrored.filled.TextSnippet
 import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.TravelExplore
@@ -93,7 +93,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.screens.traceroute.TracerouteUiState
@@ -584,7 +584,7 @@ private fun TracerouteFinishedPanel(
         ) {
             listOf(
                 Icons.Default.Router      to stringResource(R.string.traceroute_tab_hops),
-                Icons.Default.TextSnippet to stringResource(R.string.traceroute_tab_raw)
+                Icons.AutoMirrored.Filled.TextSnippet to stringResource(R.string.traceroute_tab_raw)
             ).forEachIndexed { index, (icon, label) ->
                 val selected = tabIndex == index
                 Row(

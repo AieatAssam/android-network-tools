@@ -40,7 +40,7 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Http
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -72,7 +72,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalClipboardManager
+import android.content.ClipData
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
@@ -83,7 +86,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.core.network.httprobe.HttpMethod
@@ -435,7 +439,7 @@ private fun HttpProbeInputCard(
                     Spacer(Modifier.width(8.dp))
                     Text(stringResource(R.string.httprobe_sending))
                 } else {
-                    Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
                     Text(stringResource(R.string.httprobe_send_button))
                 }
@@ -756,7 +760,7 @@ private fun HeadersTabContent(result: HttpProbeResult) {
             expanded = showResponse,
             onToggle = { showResponse = !showResponse }
         ) {
-            val displayHeaders = result.responseHeaders.filter { it.key != null }
+            val displayHeaders = result.responseHeaders
             if (displayHeaders.isEmpty()) {
                 Text(
                     text = stringResource(R.string.httprobe_no_headers),
@@ -840,7 +844,8 @@ private fun HeaderRow(key: String, value: String) {
 
 @Composable
 private fun BodyTabContent(result: HttpProbeResult) {
-    val clipboardManager = LocalClipboardManager.current
+    val clipboard = LocalClipboard.current
+    val scope = rememberCoroutineScope()
 
     val responseBody = result.responseBody
 
@@ -857,7 +862,7 @@ private fun BodyTabContent(result: HttpProbeResult) {
             )
             if (!responseBody.isNullOrBlank()) {
                 TextButton(
-                    onClick = { clipboardManager.setText(AnnotatedString(responseBody)) }
+                    onClick = { scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("", responseBody))) } }
                 ) {
                     Text(stringResource(R.string.httprobe_copy_body), style = MaterialTheme.typography.labelSmall)
                 }

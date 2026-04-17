@@ -46,9 +46,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.platform.LocalClipboardManager
+import android.content.ClipData
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -64,7 +65,7 @@ fun DebugLogScreen() {
     var logContent by remember { mutableStateOf("Loading…") }
     var showClearDialog by remember { mutableStateOf(false) }
     var visible by remember { mutableStateOf(false) }
-    val clipboard = LocalClipboardManager.current
+    val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
 
     fun reload() {
@@ -158,7 +159,7 @@ fun DebugLogScreen() {
                     Text(stringResource(R.string.debug_log_refresh))
                 }
                 FilledTonalButton(
-                    onClick = { clipboard.setText(AnnotatedString(logContent)) },
+                    onClick = { scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("", logContent))) } },
                     modifier = Modifier.weight(1f),
                 ) {
                     Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp))

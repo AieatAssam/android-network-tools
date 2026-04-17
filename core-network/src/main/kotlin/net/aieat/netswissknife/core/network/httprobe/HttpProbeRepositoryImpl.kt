@@ -7,6 +7,7 @@ import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.MalformedURLException
 import java.net.URI
+import java.net.URISyntaxException
 import java.net.URL
 
 class HttpProbeRepositoryImpl : HttpProbeRepository {
@@ -23,6 +24,8 @@ class HttpProbeRepositoryImpl : HttpProbeRepository {
                     return NetworkResult.Error("Only HTTP and HTTPS URLs are supported (got: ${url.protocol})")
             }
         } catch (e: MalformedURLException) {
+            return NetworkResult.Error("Malformed URL: ${e.message}")
+        } catch (e: URISyntaxException) {
             return NetworkResult.Error("Malformed URL: ${e.message}")
         } catch (e: IllegalArgumentException) {
             return NetworkResult.Error("Malformed URL: ${e.message}")
@@ -137,8 +140,7 @@ class HttpProbeRepositoryImpl : HttpProbeRepository {
         return if (location.startsWith("http://") || location.startsWith("https://")) {
             URI(location).toURL()
         } else {
-            // Resolve relative location against the base URL
-            URI(base.toURI().resolve(location).toString()).toURL()
+            URI(base.toString()).resolve(location).toURL()
         }
     }
 }
