@@ -38,6 +38,7 @@ import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -45,8 +46,15 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.PlainTooltip
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TooltipBox
+import androidx.compose.material3.TooltipDefaults
+import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -109,55 +117,184 @@ fun SubnetCalculatorScreen(viewModel: SubnetCalculatorViewModel = hiltViewModel(
                         }
                     }
 
-                    OutlinedTextField(
-                        value = uiState.input,
-                        onValueChange = viewModel::onInputChange,
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text(stringResource(R.string.subnet_input_label)) },
-                        placeholder = { Text(stringResource(R.string.subnet_input_placeholder)) },
-                        leadingIcon = { Icon(Icons.Default.NetworkCheck, contentDescription = null) },
-                        trailingIcon = {
-                            if (uiState.input.isNotEmpty()) {
-                                IconButton(onClick = { viewModel.onInputChange("") }) {
-                                    Icon(Icons.Default.Close, contentDescription = stringResource(R.string.clear))
-                                }
-                            }
-                        },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                        keyboardActions = KeyboardActions(onDone = { viewModel.calculate() })
+                    // Mode toggle
+                    SubnetModeToggle(
+                        isRangeMode = uiState.isRangeMode,
+                        onToggle = viewModel::toggleMode
                     )
 
-                    Button(
-                        onClick = viewModel::calculate,
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = uiState.input.isNotBlank()
-                    ) {
-                        Icon(Icons.Default.Calculate, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(stringResource(R.string.subnet_calculate_button))
+                    // Animated switch between input modes
+                    AnimatedContent(
+                        targetState = uiState.isRangeMode,
+                        transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(150)) },
+                        label = "input-mode"
+                    ) { rangeMode ->
+                        if (rangeMode) {
+                            SubnetRangeInputs(
+                                minIp = uiState.minIpInput,
+                                maxIp = uiState.maxIpInput,
+                                onMinIpChange = viewModel::onMinIpChange,
+                                onMaxIpChange = viewModel::onMaxIpChange,
+                                onCalculate = viewModel::calculateRange,
+                                canCalculate = uiState.minIpInput.isNotBlank() && uiState.maxIpInput.isNotBlank()
+                            )
+                        } else {
+                            SubnetCidrInputs(
+                                input = uiState.input,
+                                onInputChange = viewModel::onInputChange,
+                                onCalculate = viewModel::calculate,
+                                onExampleSelected = viewModel::setExample,
+                                canCalculate = uiState.input.isNotBlank()
+                            )
+                        }
                     }
-
-                    // Quick example chips
-                    SubnetExampleChips(onExampleSelected = viewModel::setExample)
                 }
             }
 
             // ── Result / error area ─────────────────────────────────────────────
             AnimatedContent(
-                targetState = Pair(uiState.result, uiState.error),
+                targetState = Triple(uiState.result, uiState.error, uiState.isRangeMode),
                 transitionSpec = {
                     fadeIn(tween(300)) + slideInVertically(tween(300)) { it / 8 } togetherWith
                             fadeOut(tween(200))
                 },
                 label = "subnet-state"
-            ) { (result, error) ->
+            ) { (result, error, rangeMode) ->
                 when {
                     result != null -> SubnetResultContent(result)
-                    error != null  -> SubnetErrorCard(message = error, onRetry = viewModel::calculate)
-                    else           -> SubnetIdleCard()
+                    error != null  -> SubnetErrorCard(
+                        message = error,
+                        onRetry = if (rangeMode) viewModel::calculateRange else viewModel::calculate
+                    )
+                    else           -> SubnetIdleCard(isRangeMode = rangeMode)
                 }
             }
+        }
+    }
+}
+
+// ── Mode toggle ───────────────────────────────────────────────────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SubnetModeToggle(isRangeMode: Boolean, onToggle: () -> Unit) {
+    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+        SegmentedButton(
+            selected = !isRangeMode,
+            onClick = { if (isRangeMode) onToggle() },
+            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+            label = { Text(stringResource(R.string.subnet_mode_cidr)) }
+        )
+        SegmentedButton(
+            selected = isRangeMode,
+            onClick = { if (!isRangeMode) onToggle() },
+            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+            label = { Text(stringResource(R.string.subnet_mode_range)) }
+        )
+    }
+}
+
+// ── CIDR input panel ──────────────────────────────────────────────────────────
+
+@Composable
+private fun SubnetCidrInputs(
+    input: String,
+    onInputChange: (String) -> Unit,
+    onCalculate: () -> Unit,
+    onExampleSelected: (String) -> Unit,
+    canCalculate: Boolean
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        OutlinedTextField(
+            value = input,
+            onValueChange = onInputChange,
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text(stringResource(R.string.subnet_input_label)) },
+            placeholder = { Text(stringResource(R.string.subnet_input_placeholder)) },
+            leadingIcon = { Icon(Icons.Default.NetworkCheck, contentDescription = null) },
+            trailingIcon = {
+                if (input.isNotEmpty()) {
+                    IconButton(onClick = { onInputChange("") }) {
+                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.clear))
+                    }
+                }
+            },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { onCalculate() })
+        )
+
+        Button(
+            onClick = onCalculate,
+            modifier = Modifier.fillMaxWidth(),
+            enabled = canCalculate
+        ) {
+            Icon(Icons.Default.Calculate, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(stringResource(R.string.subnet_calculate_button))
+        }
+
+        SubnetExampleChips(onExampleSelected = onExampleSelected)
+    }
+}
+
+// ── Range input panel ─────────────────────────────────────────────────────────
+
+@Composable
+private fun SubnetRangeInputs(
+    minIp: String,
+    maxIp: String,
+    onMinIpChange: (String) -> Unit,
+    onMaxIpChange: (String) -> Unit,
+    onCalculate: () -> Unit,
+    canCalculate: Boolean
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        OutlinedTextField(
+            value = minIp,
+            onValueChange = onMinIpChange,
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text(stringResource(R.string.subnet_min_ip_label)) },
+            placeholder = { Text(stringResource(R.string.subnet_min_ip_placeholder)) },
+            leadingIcon = { Icon(Icons.Default.NetworkCheck, contentDescription = null) },
+            trailingIcon = {
+                if (minIp.isNotEmpty()) {
+                    IconButton(onClick = { onMinIpChange("") }) {
+                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.clear))
+                    }
+                }
+            },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
+        )
+
+        OutlinedTextField(
+            value = maxIp,
+            onValueChange = onMaxIpChange,
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text(stringResource(R.string.subnet_max_ip_label)) },
+            placeholder = { Text(stringResource(R.string.subnet_max_ip_placeholder)) },
+            leadingIcon = { Icon(Icons.Default.NetworkCheck, contentDescription = null) },
+            trailingIcon = {
+                if (maxIp.isNotEmpty()) {
+                    IconButton(onClick = { onMaxIpChange("") }) {
+                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.clear))
+                    }
+                }
+            },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { onCalculate() })
+        )
+
+        Button(
+            onClick = onCalculate,
+            modifier = Modifier.fillMaxWidth(),
+            enabled = canCalculate
+        ) {
+            Icon(Icons.Default.Calculate, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(stringResource(R.string.subnet_range_calculate_button))
         }
     }
 }
@@ -185,7 +322,7 @@ private fun SubnetExampleChips(onExampleSelected: (String) -> Unit) {
 // ── Idle card ─────────────────────────────────────────────────────────────────
 
 @Composable
-private fun SubnetIdleCard() {
+private fun SubnetIdleCard(isRangeMode: Boolean) {
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier
@@ -201,12 +338,16 @@ private fun SubnetIdleCard() {
                 tint = MaterialTheme.colorScheme.primary
             )
             Text(
-                text = stringResource(R.string.subnet_idle_title),
+                text = stringResource(
+                    if (isRangeMode) R.string.subnet_range_idle_title else R.string.subnet_idle_title
+                ),
                 style = MaterialTheme.typography.titleMedium,
                 textAlign = TextAlign.Center
             )
             Text(
-                text = stringResource(R.string.subnet_idle_body),
+                text = stringResource(
+                    if (isRangeMode) R.string.subnet_range_idle_body else R.string.subnet_idle_body
+                ),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
@@ -259,10 +400,56 @@ private fun SubnetErrorCard(message: String, onRetry: () -> Unit) {
 @Composable
 private fun SubnetResultContent(info: SubnetInfo) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        if (!info.inputIsAligned) {
+            SubnetAlignmentWarning(info)
+        }
         SubnetOverviewCard(info)
         SubnetBinaryVisualizerCard(info)
         SubnetNotationsCard(info)
         SubnetPropertiesCard(info)
+    }
+}
+
+// ── Alignment warning card ────────────────────────────────────────────────────
+
+@Composable
+private fun SubnetAlignmentWarning(info: SubnetInfo) {
+    OutlinedCard(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.outlinedCardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f)
+        )
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            Icon(
+                Icons.Default.Warning,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(20.dp)
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = stringResource(R.string.subnet_alignment_warning_title),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = stringResource(
+                        R.string.subnet_alignment_warning_body,
+                        info.inputIp,
+                        info.prefixLength,
+                        info.networkAddress
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onErrorContainer
+                )
+            }
+        }
     }
 }
 
@@ -310,19 +497,23 @@ private fun SubnetOverviewCard(info: SubnetInfo) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 SubnetInfoRow(
                     label = stringResource(R.string.subnet_network_address),
-                    value = info.networkAddress
+                    value = info.networkAddress,
+                    tooltip = stringResource(R.string.tooltip_network_address)
                 )
                 SubnetInfoRow(
                     label = stringResource(R.string.subnet_broadcast),
-                    value = info.broadcastAddress
+                    value = info.broadcastAddress,
+                    tooltip = stringResource(R.string.tooltip_broadcast)
                 )
                 SubnetInfoRow(
                     label = stringResource(R.string.subnet_first_host),
-                    value = info.firstHost
+                    value = info.firstHost,
+                    tooltip = stringResource(R.string.tooltip_first_host)
                 )
                 SubnetInfoRow(
                     label = stringResource(R.string.subnet_last_host),
-                    value = info.lastHost
+                    value = info.lastHost,
+                    tooltip = stringResource(R.string.tooltip_last_host)
                 )
                 SubnetInfoRow(
                     label = stringResource(R.string.subnet_total_hosts),
@@ -330,7 +521,8 @@ private fun SubnetOverviewCard(info: SubnetInfo) {
                 )
                 SubnetInfoRow(
                     label = stringResource(R.string.subnet_usable_hosts),
-                    value = formatHostCount(info.usableHosts)
+                    value = formatHostCount(info.usableHosts),
+                    tooltip = stringResource(R.string.tooltip_usable_hosts)
                 )
             }
         }
@@ -483,7 +675,8 @@ private fun SubnetNotationsCard(info: SubnetInfo) {
             SubnetInfoRow(
                 label = stringResource(R.string.subnet_notation_cidr),
                 value = info.cidrNotation,
-                monospace = true
+                monospace = true,
+                tooltip = stringResource(R.string.tooltip_cidr)
             )
             SubnetInfoRow(
                 label = stringResource(R.string.subnet_notation_mask),
@@ -493,7 +686,8 @@ private fun SubnetNotationsCard(info: SubnetInfo) {
             SubnetInfoRow(
                 label = stringResource(R.string.subnet_notation_wildcard),
                 value = info.wildcardMask,
-                monospace = true
+                monospace = true,
+                tooltip = stringResource(R.string.tooltip_wildcard)
             )
             SubnetInfoRow(
                 label = stringResource(R.string.subnet_notation_hex),
@@ -522,21 +716,13 @@ private fun SubnetPropertiesCard(info: SubnetInfo) {
             HorizontalDivider()
 
             // IP Class badge
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            SubnetInfoRow(
+                label = stringResource(R.string.subnet_ip_class),
+                tooltip = stringResource(R.string.tooltip_ip_class)
             ) {
-                Text(
-                    text = stringResource(R.string.subnet_ip_class),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(0.5f)
-                )
                 Surface(
                     shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                    modifier = Modifier.weight(0.5f)
+                    color = MaterialTheme.colorScheme.primaryContainer
                 ) {
                     Text(
                         text = stringResource(R.string.subnet_class_label, info.ipClass),
@@ -550,56 +736,43 @@ private fun SubnetPropertiesCard(info: SubnetInfo) {
             }
 
             // Private / Public badge
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            SubnetInfoRow(
+                label = stringResource(R.string.subnet_scope),
+                tooltip = stringResource(R.string.tooltip_scope)
             ) {
-                Text(
-                    text = stringResource(R.string.subnet_scope),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(0.5f)
-                )
-                Row(
-                    modifier = Modifier.weight(0.5f),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    val (scopeIcon, scopeLabel, scopeColor, scopeContainerColor) = if (info.isPrivate) {
-                        Quad(
-                            Icons.Default.Lock,
-                            stringResource(R.string.subnet_scope_private),
-                            MaterialTheme.colorScheme.onSecondaryContainer,
-                            MaterialTheme.colorScheme.secondaryContainer
+                val (scopeIcon, scopeLabel, scopeColor, scopeContainerColor) = if (info.isPrivate) {
+                    Quad(
+                        Icons.Default.Lock,
+                        stringResource(R.string.subnet_scope_private),
+                        MaterialTheme.colorScheme.onSecondaryContainer,
+                        MaterialTheme.colorScheme.secondaryContainer
+                    )
+                } else {
+                    Quad(
+                        Icons.Default.Public,
+                        stringResource(R.string.subnet_scope_public),
+                        MaterialTheme.colorScheme.onTertiaryContainer,
+                        MaterialTheme.colorScheme.tertiaryContainer
+                    )
+                }
+                Surface(shape = RoundedCornerShape(8.dp), color = scopeContainerColor) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            scopeIcon,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp),
+                            tint = scopeColor
                         )
-                    } else {
-                        Quad(
-                            Icons.Default.Public,
-                            stringResource(R.string.subnet_scope_public),
-                            MaterialTheme.colorScheme.onTertiaryContainer,
-                            MaterialTheme.colorScheme.tertiaryContainer
+                        Text(
+                            text = scopeLabel,
+                            style = MaterialTheme.typography.labelLarge,
+                            color = scopeColor,
+                            fontWeight = FontWeight.SemiBold
                         )
-                    }
-                    Surface(shape = RoundedCornerShape(8.dp), color = scopeContainerColor) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Icon(
-                                scopeIcon,
-                                contentDescription = null,
-                                modifier = Modifier.size(14.dp),
-                                tint = scopeColor
-                            )
-                            Text(
-                                text = scopeLabel,
-                                style = MaterialTheme.typography.labelLarge,
-                                color = scopeColor,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
                     }
                 }
             }
@@ -618,26 +791,76 @@ private fun SubnetPropertiesCard(info: SubnetInfo) {
 
 // ── Small helpers ─────────────────────────────────────────────────────────────
 
+/**
+ * Row with label on the left, arbitrary content on the right, and an optional tooltip
+ * info icon next to the label. Long-press the (i) icon to see the tooltip.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SubnetInfoRow(label: String, value: String, monospace: Boolean = false) {
+private fun SubnetInfoRow(
+    label: String,
+    tooltip: String? = null,
+    content: @Composable () -> Unit
+) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.Top
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.weight(0.45f)
-        )
+        Row(
+            modifier = Modifier.weight(0.5f),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (tooltip != null) {
+                val tooltipState = rememberTooltipState(isPersistent = true)
+                TooltipBox(
+                    positionProvider = TooltipDefaults.rememberRichTooltipPositionProvider(),
+                    tooltip = {
+                        PlainTooltip {
+                            Text(
+                                text = tooltip,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    },
+                    state = tooltipState
+                ) {
+                    Icon(
+                        Icons.Default.Info,
+                        contentDescription = "Info",
+                        modifier = Modifier.size(14.dp),
+                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+                    )
+                }
+            }
+        }
+        Box(modifier = Modifier.weight(0.5f), contentAlignment = Alignment.CenterEnd) {
+            content()
+        }
+    }
+}
+
+/** Convenience overload for rows with a plain text value. */
+@Composable
+private fun SubnetInfoRow(
+    label: String,
+    value: String,
+    monospace: Boolean = false,
+    tooltip: String? = null
+) {
+    SubnetInfoRow(label = label, tooltip = tooltip) {
         Text(
             text = value,
             style = if (monospace)
                 MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace)
             else
                 MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.weight(0.55f),
             textAlign = TextAlign.End,
             fontWeight = FontWeight.Medium
         )

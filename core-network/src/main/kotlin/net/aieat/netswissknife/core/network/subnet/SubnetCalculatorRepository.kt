@@ -13,4 +13,10 @@ import net.aieat.netswissknife.core.network.NetworkResult
  */
 interface SubnetCalculatorRepository {
     fun calculate(input: String): NetworkResult<SubnetInfo>
+
+    /**
+     * Finds the smallest subnet that contains both [minIp] and [maxIp].
+     * Both arguments should be bare IPv4 addresses (no prefix).
+     */
+    fun calculateRange(minIp: String, maxIp: String): NetworkResult<SubnetInfo>
 }

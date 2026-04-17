@@ -534,5 +534,29 @@
     <string name="subnet_prefix_of_32">%1$d / 32</string>
     <string name="subnet_host_bit_count">Host bits</string>
     <string name="subnet_bits_count">%1$d bits</string>
+    <!-- Mode toggle -->
+    <string name="subnet_mode_cidr">CIDR / Mask</string>
+    <string name="subnet_mode_range">IP Range</string>
+    <!-- Range mode inputs -->
+    <string name="subnet_range_idle_title">Enter an IP range</string>
+    <string name="subnet_range_idle_body">Enter the smallest and largest IP addresses you need. The calculator finds the tightest subnet that covers both.</string>
+    <string name="subnet_min_ip_label">Minimum IP</string>
+    <string name="subnet_min_ip_placeholder">e.g. 10.0.70.1</string>
+    <string name="subnet_max_ip_label">Maximum IP</string>
+    <string name="subnet_max_ip_placeholder">e.g. 10.0.71.254</string>
+    <string name="subnet_range_calculate_button">Find Subnet</string>
+    <!-- Alignment warning -->
+    <string name="subnet_alignment_warning_title">IP Not on Network Boundary</string>
+    <string name="subnet_alignment_warning_body">%1$s is not a valid network address for /%2$d. The actual network starts at %3$s. Cloud providers like Azure require the exact network address in subnet definitions.</string>
+    <!-- Tooltips -->
+    <string name="tooltip_network_address">The network address is the first address in a subnet, with all host bits set to 0. It identifies the subnet itself and cannot be assigned to any device. Example: in 192.168.1.0/24 the network address is 192.168.1.0.</string>
+    <string name="tooltip_broadcast">The broadcast address is the last address in a subnet, with all host bits set to 1. Packets sent here are delivered to every device in the subnet. Example: in 192.168.1.0/24 the broadcast is 192.168.1.255.</string>
+    <string name="tooltip_first_host">The first usable IP address — one above the network address. This is the lowest address you can assign to a device.</string>
+    <string name="tooltip_last_host">The last usable IP address — one below the broadcast address. This is the highest address you can assign to a device.</string>
+    <string name="tooltip_usable_hosts">The count of addresses that can be assigned to devices. Always (2^host_bits − 2) because the network and broadcast addresses are reserved.</string>
+    <string name="tooltip_wildcard">The wildcard mask is the bitwise inverse of the subnet mask. Bits set to 1 are "don\'t care" bits. Used in ACLs and OSPF configurations.</string>
+    <string name="tooltip_cidr">Classless Inter-Domain Routing notation combines an IP address with a prefix length (the number of network bits). Example: 192.168.1.0/24 means 24 network bits and 8 host bits.</string>
+    <string name="tooltip_ip_class">A legacy classification of IPv4 ranges before CIDR replaced it. Class A covers 0–127, B covers 128–191, C covers 192–223. Class D is multicast, E is reserved.</string>
+    <string name="tooltip_scope">Whether the address falls within RFC 1918 private ranges (10.x, 172.16–31.x, 192.168.x) or is publicly routable on the internet.</string>
 
 </resources>

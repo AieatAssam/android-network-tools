@@ -9,4 +9,7 @@ class SubnetCalculatorUseCase(
 ) {
     suspend operator fun invoke(params: String): NetworkResult<SubnetInfo> =
         repository.calculate(params)
+
+    suspend fun invokeRange(minIp: String, maxIp: String): NetworkResult<SubnetInfo> =
+        repository.calculateRange(minIp, maxIp)
 }

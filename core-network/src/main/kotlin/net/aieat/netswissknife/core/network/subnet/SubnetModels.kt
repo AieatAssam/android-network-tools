@@ -40,4 +40,10 @@ data class SubnetInfo(
     val isPrivate: Boolean,
     /** Canonical CIDR notation of the network, e.g. "192.168.1.0/24". */
     val cidrNotation: String,
+    /**
+     * True if the original input IP is already on the network boundary (host bits all zero).
+     * False when the user typed e.g. "10.0.71.0/23" but the real network is "10.0.70.0/23".
+     * Cloud providers like Azure require subnet addresses to be on the network boundary.
+     */
+    val inputIsAligned: Boolean,
 )

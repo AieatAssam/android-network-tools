@@ -16,6 +16,9 @@ data class SubnetCalculatorUiState(
     val input: String = "",
     val result: SubnetInfo? = null,
     val error: String? = null,
+    val isRangeMode: Boolean = false,
+    val minIpInput: String = "",
+    val maxIpInput: String = "",
 )
 
 @HiltViewModel
@@ -45,5 +48,34 @@ class SubnetCalculatorViewModel @Inject constructor(
     fun setExample(example: String) {
         _uiState.value = SubnetCalculatorUiState(input = example)
         calculate()
+    }
+
+    fun toggleMode() {
+        _uiState.value = _uiState.value.copy(
+            isRangeMode = !_uiState.value.isRangeMode,
+            result = null,
+            error = null
+        )
+    }
+
+    fun onMinIpChange(value: String) {
+        _uiState.value = _uiState.value.copy(minIpInput = value, error = null)
+    }
+
+    fun onMaxIpChange(value: String) {
+        _uiState.value = _uiState.value.copy(maxIpInput = value, error = null)
+    }
+
+    fun calculateRange() {
+        val min = _uiState.value.minIpInput.trim()
+        val max = _uiState.value.maxIpInput.trim()
+        if (min.isBlank() || max.isBlank()) return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(result = null, error = null)
+            when (val res = useCase.invokeRange(min, max)) {
+                is NetworkResult.Success -> _uiState.value = _uiState.value.copy(result = res.data)
+                is NetworkResult.Error   -> _uiState.value = _uiState.value.copy(error = res.message)
+            }
+        }
     }
 }
