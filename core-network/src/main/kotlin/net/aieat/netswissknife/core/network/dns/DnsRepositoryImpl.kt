@@ -12,6 +12,8 @@ import org.xbill.DNS.Resolver
 import org.xbill.DNS.Section
 import org.xbill.DNS.SimpleResolver
 import org.xbill.DNS.Type
+import java.net.Inet6Address
+import java.net.InetAddress
 import java.time.Duration
 
 /**
@@ -22,6 +24,45 @@ class DnsRepositoryImpl : DnsRepository {
 
     companion object {
         private val TIMEOUT = Duration.ofSeconds(8)
+
+        private val IPV4_REGEX = Regex("""^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$""")
+
+        /** Transforms a query name into the canonical fully-qualified form for the given record type.
+         *  PTR queries auto-reverse IPv4 (in-addr.arpa) and IPv6 (ip6.arpa) addresses. */
+        internal fun normalizeDomain(domain: String, recordType: DnsRecordType): String {
+            val stripped = domain.trimEnd('.')
+            if (recordType == DnsRecordType.PTR) {
+                // IPv4 – reverse octets and append .in-addr.arpa.
+                val ipv4Match = IPV4_REGEX.matchEntire(stripped)
+                if (ipv4Match != null) {
+                    val (a, b, c, d) = ipv4Match.destructured
+                    return "$d.$c.$b.$a.in-addr.arpa."
+                }
+                // IPv6 – expand to 32 nibbles, reverse, and append .ip6.arpa.
+                if (stripped.contains(':')) {
+                    val reversed = reverseIPv6(stripped)
+                    if (reversed != null) return reversed
+                }
+                // Already in reverse-lookup form – just ensure trailing dot
+                if (stripped.endsWith(".in-addr.arpa") || stripped.endsWith(".ip6.arpa")) {
+                    return "$stripped."
+                }
+            }
+            return if (domain.endsWith(".")) domain else "$domain."
+        }
+
+        /** Parses an IPv6 address string and returns its .ip6.arpa. PTR form, or null on failure. */
+        private fun reverseIPv6(ip: String): String? {
+            return try {
+                val addr = InetAddress.getByName(ip)
+                if (addr !is Inet6Address) return null
+                val hex = addr.address.joinToString("") { "%02x".format(it) }
+                val nibbles = hex.reversed().toList().joinToString(".")
+                "$nibbles.ip6.arpa."
+            } catch (_: Exception) {
+                null
+            }
+        }
     }
 
     override suspend fun lookup(
@@ -32,8 +73,7 @@ class DnsRepositoryImpl : DnsRepository {
         val startMs = System.currentTimeMillis()
 
         try {
-            // Normalize domain – append root dot if absent
-            val normalizedDomain = if (domain.endsWith(".")) domain else "$domain."
+            val normalizedDomain = normalizeDomain(domain, recordType)
             val queryName = Name.fromString(normalizedDomain)
             val dnsType = recordType.dnsTypeInt
 
