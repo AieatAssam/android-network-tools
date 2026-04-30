@@ -104,5 +104,15 @@ dependencies {
     // ICMP traceroute (replaces binary-dependent implementation)
     implementation(libs.icmpenguin)
 
+    // Unit tests
+    testImplementation(libs.junit5.api)
+    testImplementation(libs.junit5.params)
+    testRuntimeOnly(libs.junit5.engine)
+    testRuntimeOnly(libs.junit5.launcher)
+    testImplementation(libs.mockk)
+    testImplementation(libs.coroutines.test)
+}
 
+tasks.withType<Test> {
+    useJUnitPlatform()
 }

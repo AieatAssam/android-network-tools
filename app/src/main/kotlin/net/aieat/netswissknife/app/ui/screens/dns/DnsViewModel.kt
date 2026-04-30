@@ -63,9 +63,7 @@ class DnsViewModel @Inject constructor(
 
     fun onCustomServerAddressChange(address: String) {
         _customServerAddress.value = address
-        if (_selectedServer.value is DnsServer.Custom) {
-            _selectedServer.value = DnsServer.Custom(address)
-        }
+        _selectedServer.value = DnsServer.Custom(address)
     }
 
     fun onToggleRawView() {
