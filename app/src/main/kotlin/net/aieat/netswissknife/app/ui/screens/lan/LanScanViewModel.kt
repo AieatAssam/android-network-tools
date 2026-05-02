@@ -63,6 +63,9 @@ class LanScanViewModel @Inject constructor(
     private val _isSubnetLoading = MutableStateFlow(false)
     val isSubnetLoading: StateFlow<Boolean> = _isSubnetLoading.asStateFlow()
 
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+
     private var scanJob: Job? = null
 
     init {
@@ -76,6 +79,8 @@ class LanScanViewModel @Inject constructor(
     fun onTimeoutChange(value: Int) { _timeoutMs.value = value }
 
     fun onConcurrencyChange(value: Int) { _concurrency.value = value }
+
+    fun onSearchQueryChange(value: String) { _searchQuery.value = value }
 
     /** Detects the current subnet from active network interfaces on an IO thread. */
     fun refreshSubnet() {
@@ -189,6 +194,7 @@ class LanScanViewModel @Inject constructor(
     fun onClear() {
         AppLogger.d(TAG, "onClear")
         scanJob?.cancel()
+        _searchQuery.value = ""
         _uiState.value = LanScanUiState.Idle
     }
 
