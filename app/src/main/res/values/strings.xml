@@ -198,6 +198,14 @@
     <string name="lan_open_ports_title">Open Ports (%1$d)</string>
     <string name="lan_no_open_ports">None detected</string>
 
+    <!-- LAN Search / Filter -->
+    <string name="lan_search_placeholder">Search IP, hostname, vendor…</string>
+    <string name="lan_filter_all">All</string>
+    <string name="lan_filter_gateway">Gateway</string>
+    <string name="lan_filter_has_ports">Has Ports</string>
+    <string name="lan_hosts_filtered_header">Results (%1$d of %2$d)</string>
+    <string name="lan_no_search_results">No devices match your search</string>
+
     <!-- Debug Log Screen -->
     <string name="debug_log_title">Debug Logs</string>
     <string name="debug_log_subtitle">Internal app diagnostics and crash traces</string>

@@ -56,6 +56,7 @@ import androidx.compose.material.icons.filled.Lan
 import androidx.compose.material.icons.filled.NetworkCheck
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Router
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Wifi
@@ -63,6 +64,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.HorizontalDivider
@@ -109,6 +111,7 @@ fun LanScreen(viewModel: LanScanViewModel = hiltViewModel()) {
     val timeoutMs by viewModel.timeoutMs.collectAsState()
     val concurrency by viewModel.concurrency.collectAsState()
     val isSubnetLoading by viewModel.isSubnetLoading.collectAsState()
+    val searchQuery by viewModel.searchQuery.collectAsState()
 
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
@@ -155,6 +158,8 @@ fun LanScreen(viewModel: LanScanViewModel = hiltViewModel()) {
                     is LanScanUiState.Finished -> LanFinishedContent(
                         summary = state.summary,
                         expandedHostIp = state.expandedHostIp,
+                        searchQuery = searchQuery,
+                        onSearchQueryChange = viewModel::onSearchQueryChange,
                         onToggleExpand = viewModel::onToggleHostExpanded,
                         onClear = viewModel::onClear,
                         onRescan = viewModel::startScan,
@@ -506,14 +511,53 @@ private fun PulsingIndicator() {
 
 // ── Finished ──────────────────────────────────────────────────────────────────
 
+private enum class HostFilter { All, Gateway, HasPorts }
+
+@Composable
+private fun HostFilterChips(activeFilter: HostFilter, onFilterChange: (HostFilter) -> Unit) {
+    val labels = mapOf(
+        HostFilter.All to R.string.lan_filter_all,
+        HostFilter.Gateway to R.string.lan_filter_gateway,
+        HostFilter.HasPorts to R.string.lan_filter_has_ports,
+    )
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        labels.forEach { (filter, labelRes) ->
+            FilterChip(
+                selected = activeFilter == filter,
+                onClick = { onFilterChange(filter) },
+                label = { Text(stringResource(labelRes)) },
+            )
+        }
+    }
+}
+
 @Composable
 private fun LanFinishedContent(
     summary: LanScanSummary,
     expandedHostIp: String?,
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
     onToggleExpand: (String) -> Unit,
     onClear: () -> Unit,
     onRescan: () -> Unit,
 ) {
+    var activeFilter by remember { mutableStateOf(HostFilter.All) }
+
+    val filteredHosts = remember(summary.hosts, searchQuery, activeFilter) {
+        summary.hosts.filter { host ->
+            val passesFilter = when (activeFilter) {
+                HostFilter.All -> true
+                HostFilter.Gateway -> host.isGateway
+                HostFilter.HasPorts -> host.openPorts.isNotEmpty()
+            }
+            val passesSearch = searchQuery.isBlank() ||
+                host.ip.contains(searchQuery, ignoreCase = true) ||
+                host.hostname?.contains(searchQuery, ignoreCase = true) == true ||
+                host.vendor?.contains(searchQuery, ignoreCase = true) == true
+            passesFilter && passesSearch
+        }
+    }
+
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         // Summary stats card
         ElevatedCard(modifier = Modifier.fillMaxWidth()) {
@@ -546,7 +590,6 @@ private fun LanFinishedContent(
                     )
                 }
 
-                // Stats grid
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly,
@@ -570,7 +613,6 @@ private fun LanFinishedContent(
                     )
                 }
 
-                // Action buttons
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -595,7 +637,6 @@ private fun LanFinishedContent(
             }
         }
 
-        // Host list
         if (summary.hosts.isEmpty()) {
             OutlinedCard(modifier = Modifier.fillMaxWidth()) {
                 Box(
@@ -612,24 +653,61 @@ private fun LanFinishedContent(
                 }
             }
         } else {
+            NetworkTopologyCard(hosts = summary.hosts)
+
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = onSearchQueryChange,
+                placeholder = { Text(stringResource(R.string.lan_search_placeholder)) },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                trailingIcon = {
+                    if (searchQuery.isNotEmpty()) {
+                        IconButton(onClick = { onSearchQueryChange("") }) {
+                            Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.clear))
+                        }
+                    }
+                },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            HostFilterChips(activeFilter = activeFilter, onFilterChange = { activeFilter = it })
+
+            val headerText = if (searchQuery.isNotBlank() || activeFilter != HostFilter.All) {
+                stringResource(R.string.lan_hosts_filtered_header, filteredHosts.size, summary.hosts.size)
+            } else {
+                stringResource(R.string.lan_hosts_header, summary.hosts.size)
+            }
             Text(
-                text = stringResource(R.string.lan_hosts_header, summary.hosts.size),
+                text = headerText,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.padding(horizontal = 4.dp),
             )
 
-            // Network topology mini-map
-            NetworkTopologyCard(hosts = summary.hosts)
-
-            Spacer(Modifier.height(4.dp))
-
-            summary.hosts.forEach { host ->
-                HostCard(
-                    host = host,
-                    expanded = host.ip == expandedHostIp,
-                    onClick = { onToggleExpand(host.ip) },
-                )
+            if (filteredHosts.isEmpty()) {
+                OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(32.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = stringResource(R.string.lan_no_search_results),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            } else {
+                filteredHosts.forEach { host ->
+                    HostCard(
+                        host = host,
+                        expanded = host.ip == expandedHostIp,
+                        onClick = { onToggleExpand(host.ip) },
+                    )
+                }
             }
         }
     }
