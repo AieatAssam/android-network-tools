@@ -10,6 +10,12 @@
     <string name="nav_home">Home</string>
     <string name="nav_more">More</string>
 
+    <!-- Generic action content descriptions (used on standalone icon-only buttons) -->
+    <string name="action_expand">Expand</string>
+    <string name="action_collapse">Collapse</string>
+    <string name="action_show_password">Show password</string>
+    <string name="action_hide_password">Hide password</string>
+
     <!-- More Tools Sheet -->
     <string name="more_sheet_title">All Tools</string>
     <string name="more_sheet_subtitle">Pin up to %1$d tools to the navigation bar</string>

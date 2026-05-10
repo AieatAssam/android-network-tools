@@ -309,7 +309,7 @@ must pass.
 
 ---
 
-## 7. Fix accessibility gaps (contentDescription)
+## ~~7. Fix accessibility gaps (contentDescription)~~ ✓ done
 
 **Depends on:** nothing
 

@@ -326,7 +326,7 @@ private fun HttpProbeInputCard(
                 IconButton(onClick = onToggleHeaders, modifier = Modifier.size(32.dp)) {
                     Icon(
                         imageVector = if (uiState.headersExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                        contentDescription = null,
+                        contentDescription = stringResource(if (uiState.headersExpanded) R.string.action_collapse else R.string.action_expand),
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -800,7 +800,7 @@ private fun HeaderSection(
                 IconButton(onClick = onToggle, modifier = Modifier.size(32.dp)) {
                     Icon(
                         imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                        contentDescription = null,
+                        contentDescription = stringResource(if (expanded) R.string.action_collapse else R.string.action_expand),
                         modifier = Modifier.size(18.dp)
                     )
                 }
@@ -974,7 +974,7 @@ private fun SecurityCheckRow(check: SecurityHeaderCheck) {
                 IconButton(onClick = { expanded = !expanded }, modifier = Modifier.size(28.dp)) {
                     Icon(
                         imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                        contentDescription = null,
+                        contentDescription = stringResource(if (expanded) R.string.action_collapse else R.string.action_expand),
                         modifier = Modifier.size(16.dp)
                     )
                 }

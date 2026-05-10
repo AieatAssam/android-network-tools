@@ -992,7 +992,7 @@ private fun RawOutputCard(
                     IconButton(onClick = onToggle) {
                         Icon(
                             if (showRaw) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                            contentDescription = null
+                            contentDescription = stringResource(if (showRaw) R.string.action_collapse else R.string.action_expand)
                         )
                     }
                 }
