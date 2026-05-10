@@ -39,4 +39,11 @@ object AppPreferenceKeys {
     val RECENT_HTTP_HOSTS       = stringPreferencesKey("recent_http_hosts")
     /** Stores recent subnets for LAN Scanner (CIDR notation). */
     val RECENT_LAN_SUBNETS      = stringPreferencesKey("recent_lan_subnets")
+
+    /** All recent-host keys — iterate this to clear all at once. */
+    val ALL_RECENT_HOST_KEYS: List<Preferences.Key<String>> = listOf(
+        RECENT_PING_HOSTS, RECENT_DNS_HOSTS, RECENT_PORTS_HOSTS,
+        RECENT_TRACEROUTE_HOSTS, RECENT_TLS_HOSTS, RECENT_WHOIS_HOSTS,
+        RECENT_HTTP_HOSTS, RECENT_LAN_SUBNETS
+    )
 }

@@ -134,9 +134,6 @@ class PingViewModel @Inject constructor(
 
     fun startPing() {
         pingJob?.cancel()
-        viewModelScope.launch {
-            recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_PING_HOSTS, _host.value)
-        }
 
         val params = PingParams(
             host = _host.value,
@@ -144,9 +141,15 @@ class PingViewModel @Inject constructor(
             timeoutMs = _timeoutMs.value,
             packetSize = _packetSize.value
         )
+        val trimmedHost = params.host.trim()
+
+        // Enter Running state immediately so the UI shows activity and zero-packet
+        // flows (host unreachable, DNS failure) fall through to the Error branch below.
+        _uiState.value = PingUiState.Running(host = trimmedHost, packets = emptyList(), totalCount = params.count)
 
         pingJob = viewModelScope.launch {
             val accumulatedPackets = mutableListOf<PingPacketResult>()
+            var savedToRecents = false
 
             pingUseCase(params).collect { result ->
                 when (result) {
@@ -155,9 +158,15 @@ class PingViewModel @Inject constructor(
                         return@collect
                     }
                     is PingFlowResult.Packet -> {
+                        // Save to recents only on first valid packet — avoids persisting
+                        // hosts that immediately fail validation.
+                        if (!savedToRecents) {
+                            savedToRecents = true
+                            launch { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_PING_HOSTS, trimmedHost) }
+                        }
                         accumulatedPackets.add(result.packet)
                         _uiState.value = PingUiState.Running(
-                            host = params.host.trim(),
+                            host = trimmedHost,
                             packets = accumulatedPackets.toList(),
                             totalCount = params.count
                         )
@@ -165,11 +174,11 @@ class PingViewModel @Inject constructor(
                 }
             }
 
-            // Flow completed – move to Finished if we have packets
+            // Flow completed — move to Finished if we got packets, Error if not
             val current = _uiState.value
             if (current is PingUiState.Running) {
                 _uiState.value = if (current.packets.isEmpty()) {
-                    PingUiState.Error("No response received from ${params.host.trim()}")
+                    PingUiState.Error("No response received from $trimmedHost")
                 } else {
                     PingUiState.Finished(buildResult(current.host, current.packets, params.count))
                 }

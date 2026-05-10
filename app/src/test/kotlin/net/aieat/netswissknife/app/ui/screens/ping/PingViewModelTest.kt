@@ -135,12 +135,12 @@ class PingViewModelTest {
         }
 
         @Test
-        fun `stays Idle when flow completes with no packets`() = runTest {
+        fun `transitions to Error when flow completes with no packets`() = runTest {
             coEvery { pingUseCase(any()) } returns flowOf()
             viewModel.onHostChange("unreachable.host")
             viewModel.startPing()
-            // Running state is never entered when flow emits nothing, so state stays Idle
-            assertTrue(viewModel.uiState.value is PingUiState.Idle)
+            // Running is entered before collect; empty flow → Error
+            assertTrue(viewModel.uiState.value is PingUiState.Error)
         }
     }
 
@@ -175,11 +175,20 @@ class PingViewModelTest {
     inner class RecentHosts {
 
         @Test
-        fun `addRecent is called when startPing is invoked`() = runTest {
-            coEvery { pingUseCase(any()) } returns flowOf()
+        fun `addRecent is called on first valid packet`() = runTest {
+            val packet = PingPacketResult(sequence = 1, host = "example.com", status = PingStatus.SUCCESS, rtTimeMs = 10L)
+            coEvery { pingUseCase(any()) } returns flowOf(PingFlowResult.Packet(packet))
             viewModel.onHostChange("example.com")
             viewModel.startPing()
             coVerify { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_PING_HOSTS, "example.com") }
+        }
+
+        @Test
+        fun `addRecent is NOT called when ValidationError fires`() = runTest {
+            coEvery { pingUseCase(any()) } returns flowOf(PingFlowResult.ValidationError("bad host"))
+            viewModel.onHostChange("bad!!host")
+            viewModel.startPing()
+            coVerify(exactly = 0) { recentHostsRepository.addRecent(any(), any()) }
         }
     }
 }

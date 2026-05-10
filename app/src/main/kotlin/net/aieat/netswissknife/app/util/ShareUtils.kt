@@ -8,6 +8,7 @@ fun Context.shareText(text: String, subject: String) {
         type = "text/plain"
         putExtra(Intent.EXTRA_SUBJECT, subject)
         putExtra(Intent.EXTRA_TEXT, text)
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }
     startActivity(Intent.createChooser(intent, null))
 }

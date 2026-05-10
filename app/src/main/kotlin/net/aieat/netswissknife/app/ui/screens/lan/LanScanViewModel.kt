@@ -80,6 +80,7 @@ class LanScanViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private var scanJob: Job? = null
+    private var scanStartMs: Long = 0L
 
     init {
         viewModelScope.launch {
@@ -87,9 +88,6 @@ class LanScanViewModel @Inject constructor(
             _timeoutMs.value = prefs[AppPreferenceKeys.DEFAULT_TIMEOUT_MS] ?: 1_000
             _concurrency.value = prefs[AppPreferenceKeys.DEFAULT_CONCURRENCY] ?: 50
         }
-    }
-
-    init {
         refreshSubnet()
     }
 
@@ -147,10 +145,8 @@ class LanScanViewModel @Inject constructor(
 
     fun startScan() {
         scanJob?.cancel()
-        viewModelScope.launch {
-            recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_LAN_SUBNETS, _subnet.value)
-        }
         val liveHosts = mutableListOf<LanHost>()
+        scanStartMs = System.currentTimeMillis()
 
         val params = LanScanParams(
             subnet = _subnet.value,
@@ -168,6 +164,7 @@ class LanScanViewModel @Inject constructor(
             withContext(Dispatchers.IO) {
                 AppLogger.i(TAG, "startScan: subnet=${params.subnet} timeoutMs=${params.timeoutMs} concurrency=${params.concurrency}")
             }
+            var savedToRecents = false
             try {
                 lanScanUseCase(params).collect { result ->
                     when (result) {
@@ -178,6 +175,12 @@ class LanScanViewModel @Inject constructor(
 
                         is LanScanFlowResult.HostFound -> {
                             AppLogger.d(TAG, "startScan: host found – ip=${result.host.ip} ping=${result.host.pingTimeMs}ms ports=${result.host.openPorts}")
+                            // Save to recents only on first host found — avoids persisting
+                            // subnets that immediately fail validation.
+                            if (!savedToRecents) {
+                                savedToRecents = true
+                                launch { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_LAN_SUBNETS, params.subnet) }
+                            }
                             liveHosts.add(result.host)
                             _uiState.value = LanScanUiState.Scanning(
                                 hosts = liveHosts.toList(),
@@ -220,7 +223,7 @@ class LanScanViewModel @Inject constructor(
                 subnet = _subnet.value,
                 totalScanned = current.totalCount,
                 aliveHosts = current.hosts.size,
-                scanDurationMs = 0L,
+                scanDurationMs = System.currentTimeMillis() - scanStartMs,
                 hosts = current.hosts,
             )
             _uiState.value = LanScanUiState.Finished(partial)

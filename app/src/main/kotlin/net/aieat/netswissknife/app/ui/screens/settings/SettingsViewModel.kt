@@ -62,14 +62,7 @@ class SettingsViewModel @Inject constructor(
     fun clearAllRecentHosts() {
         viewModelScope.launch {
             dataStore.edit { prefs ->
-                prefs.remove(AppPreferenceKeys.RECENT_PING_HOSTS)
-                prefs.remove(AppPreferenceKeys.RECENT_DNS_HOSTS)
-                prefs.remove(AppPreferenceKeys.RECENT_PORTS_HOSTS)
-                prefs.remove(AppPreferenceKeys.RECENT_TRACEROUTE_HOSTS)
-                prefs.remove(AppPreferenceKeys.RECENT_TLS_HOSTS)
-                prefs.remove(AppPreferenceKeys.RECENT_WHOIS_HOSTS)
-                prefs.remove(AppPreferenceKeys.RECENT_HTTP_HOSTS)
-                prefs.remove(AppPreferenceKeys.RECENT_LAN_SUBNETS)
+                AppPreferenceKeys.ALL_RECENT_HOST_KEYS.forEach { prefs.remove(it) }
             }
         }
     }

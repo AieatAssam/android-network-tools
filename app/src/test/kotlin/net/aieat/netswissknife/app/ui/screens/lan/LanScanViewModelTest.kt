@@ -157,8 +157,9 @@ class LanScanViewModelTest {
     inner class RecentSubnets {
 
         @Test
-        fun `addRecent is called on startScan`() = runTest {
+        fun `addRecent is called on first host found`() = runTest {
             every { lanScanUseCase(any()) } returns flowOf(
+                LanScanFlowResult.HostFound(stubHost, scannedCount = 1, totalCount = 1),
                 LanScanFlowResult.ScanComplete(stubSummary)
             )
             viewModel.onSubnetChange("10.0.0.0/24")
@@ -167,6 +168,19 @@ class LanScanViewModelTest {
                 withTimeout(2000) { viewModel.uiState.first { it is LanScanUiState.Finished } }
             }
             coVerify { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_LAN_SUBNETS, "10.0.0.0/24") }
+        }
+
+        @Test
+        fun `addRecent is NOT called when ValidationError fires`() = runTest {
+            every { lanScanUseCase(any()) } returns flowOf(
+                LanScanFlowResult.ValidationError("invalid subnet")
+            )
+            viewModel.onSubnetChange("bad")
+            viewModel.startScan()
+            withContext(Dispatchers.Default) {
+                withTimeout(2000) { viewModel.uiState.first { it !is LanScanUiState.Scanning } }
+            }
+            coVerify(exactly = 0) { recentHostsRepository.addRecent(any(), any()) }
         }
     }
 }
