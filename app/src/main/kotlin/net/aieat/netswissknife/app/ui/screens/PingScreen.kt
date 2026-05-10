@@ -45,6 +45,7 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.NetworkCheck
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Warning
@@ -85,6 +86,7 @@ import android.content.ClipData
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
@@ -99,8 +101,10 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.ui.components.RecentHostsRow
 import net.aieat.netswissknife.app.ui.screens.ping.PingUiState
 import net.aieat.netswissknife.app.ui.screens.ping.PingViewModel
+import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.core.network.ping.PingPacketResult
 import net.aieat.netswissknife.core.network.ping.PingResult
 import net.aieat.netswissknife.core.network.ping.PingStats
@@ -115,6 +119,7 @@ fun PingScreen(
     val count by viewModel.count.collectAsStateWithLifecycle()
     val timeoutMs by viewModel.timeoutMs.collectAsStateWithLifecycle()
     val packetSize by viewModel.packetSize.collectAsStateWithLifecycle()
+    val recentHosts by viewModel.recentHosts.collectAsStateWithLifecycle()
 
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
@@ -142,12 +147,15 @@ fun PingScreen(
                     timeoutMs = timeoutMs,
                     packetSize = packetSize,
                     isRunning = uiState is PingUiState.Running,
+                    recentHosts = recentHosts,
                     onHostChange = viewModel::onHostChange,
                     onCountChange = viewModel::onCountChange,
                     onTimeoutChange = viewModel::onTimeoutChange,
                     onPacketSizeChange = viewModel::onPacketSizeChange,
                     onStart = viewModel::startPing,
-                    onStop = viewModel::onStop
+                    onStop = viewModel::onStop,
+                    onRemoveRecentHost = viewModel::removeRecentHost,
+                    onClearRecentHosts = viewModel::clearRecentHosts
                 )
             }
 
@@ -257,12 +265,15 @@ private fun PingInputCard(
     timeoutMs: Int,
     packetSize: Int,
     isRunning: Boolean,
+    recentHosts: List<String>,
     onHostChange: (String) -> Unit,
     onCountChange: (Int) -> Unit,
     onTimeoutChange: (Int) -> Unit,
     onPacketSizeChange: (Int) -> Unit,
     onStart: () -> Unit,
-    onStop: () -> Unit
+    onStop: () -> Unit,
+    onRemoveRecentHost: (String) -> Unit,
+    onClearRecentHosts: () -> Unit
 ) {
     val keyboardController = LocalSoftwareKeyboardController.current
 
@@ -298,6 +309,13 @@ private fun PingInputCard(
                 }),
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !isRunning
+            )
+
+            RecentHostsRow(
+                recentHosts = recentHosts,
+                onHostSelected = onHostChange,
+                onRemoveHost = onRemoveRecentHost,
+                onClearAll = onClearRecentHosts
             )
 
             // Count slider
@@ -532,6 +550,7 @@ private fun PingFinishedPanel(
     val clipboard = LocalClipboard.current
     val clipScope = rememberCoroutineScope()
     val result = state.result
+    val context = LocalContext.current
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         // Stats card
@@ -590,6 +609,19 @@ private fun PingFinishedPanel(
                 Icon(Icons.Default.Clear, contentDescription = null)
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(stringResource(R.string.clear))
+            }
+            FilledTonalButton(
+                onClick = {
+                    context.shareText(
+                        text = buildCsvOutput(result),
+                        subject = context.getString(R.string.share_subject_ping, result.host)
+                    )
+                },
+                modifier = Modifier.weight(1f)
+            ) {
+                Icon(Icons.Default.Share, contentDescription = null)
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(stringResource(R.string.action_share))
             }
         }
     }

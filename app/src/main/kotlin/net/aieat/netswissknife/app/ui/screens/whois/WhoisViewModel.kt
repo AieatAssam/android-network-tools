@@ -5,10 +5,14 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import net.aieat.netswissknife.app.data.AppPreferenceKeys
+import net.aieat.netswissknife.app.data.RecentHostsRepository
 import net.aieat.netswissknife.core.domain.WhoisLookupUseCase
 import net.aieat.netswissknife.core.domain.WhoisParams
 import net.aieat.netswissknife.core.network.NetworkResult
@@ -38,11 +42,16 @@ data class WhoisUiState(
 
 @HiltViewModel
 class WhoisViewModel @Inject constructor(
-    private val whoisLookupUseCase: WhoisLookupUseCase
+    private val whoisLookupUseCase: WhoisLookupUseCase,
+    private val recentHostsRepository: RecentHostsRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(WhoisUiState())
     val uiState: StateFlow<WhoisUiState> = _uiState.asStateFlow()
+
+    val recentHosts: StateFlow<List<String>> = recentHostsRepository
+        .getRecents(AppPreferenceKeys.RECENT_WHOIS_HOSTS)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private var progressJob: Job? = null
 
@@ -54,10 +63,25 @@ class WhoisViewModel @Inject constructor(
         _uiState.update { it.copy(showRawResponse = !it.showRawResponse) }
     }
 
+    fun removeRecentHost(host: String) {
+        viewModelScope.launch {
+            recentHostsRepository.removeRecent(AppPreferenceKeys.RECENT_WHOIS_HOSTS, host)
+        }
+    }
+
+    fun clearRecentHosts() {
+        viewModelScope.launch {
+            recentHostsRepository.clearAll(AppPreferenceKeys.RECENT_WHOIS_HOSTS)
+        }
+    }
+
     fun lookup() {
         val query = _uiState.value.query.trim()
         if (query.isBlank()) return
 
+        viewModelScope.launch {
+            recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_WHOIS_HOSTS, query)
+        }
         progressJob?.cancel()
         _uiState.update { it.copy(isLoading = true, hopStates = emptyList(), result = null, error = null) }
 

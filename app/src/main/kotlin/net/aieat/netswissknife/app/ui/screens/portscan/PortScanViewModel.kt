@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
+import net.aieat.netswissknife.app.data.RecentHostsRepository
 import net.aieat.netswissknife.core.domain.PortScanFlowResult
 import net.aieat.netswissknife.core.domain.PortScanParams
 import net.aieat.netswissknife.core.domain.PortScanPreset
@@ -14,9 +15,11 @@ import net.aieat.netswissknife.core.network.portscan.PortScanSummary
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -36,7 +39,8 @@ sealed interface PortScanUiState {
 @HiltViewModel
 class PortScanViewModel @Inject constructor(
     private val portScanUseCase: PortScanUseCase,
-    private val dataStore: DataStore<Preferences>
+    private val dataStore: DataStore<Preferences>,
+    private val recentHostsRepository: RecentHostsRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<PortScanUiState>(PortScanUiState.Idle)
@@ -62,6 +66,10 @@ class PortScanViewModel @Inject constructor(
     private val _concurrency = MutableStateFlow(100)
     val concurrency: StateFlow<Int> = _concurrency.asStateFlow()
 
+    val recentHosts: StateFlow<List<String>> = recentHostsRepository
+        .getRecents(AppPreferenceKeys.RECENT_PORTS_HOSTS)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
     private var scanJob: Job? = null
 
     init {
@@ -85,6 +93,18 @@ class PortScanViewModel @Inject constructor(
     fun onTimeoutChange(value: Int) { _timeoutMs.value = value }
 
     fun onConcurrencyChange(value: Int) { _concurrency.value = value }
+
+    fun removeRecentHost(host: String) {
+        viewModelScope.launch {
+            recentHostsRepository.removeRecent(AppPreferenceKeys.RECENT_PORTS_HOSTS, host)
+        }
+    }
+
+    fun clearRecentHosts() {
+        viewModelScope.launch {
+            recentHostsRepository.clearAll(AppPreferenceKeys.RECENT_PORTS_HOSTS)
+        }
+    }
 
     fun onClear() {
         scanJob?.cancel()
@@ -112,6 +132,9 @@ class PortScanViewModel @Inject constructor(
 
     fun startScan() {
         scanJob?.cancel()
+        viewModelScope.launch {
+            recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_PORTS_HOSTS, _host.value)
+        }
         val liveResults = mutableListOf<PortScanResult>()
 
         val params = PortScanParams(

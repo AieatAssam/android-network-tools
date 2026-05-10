@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
+import net.aieat.netswissknife.app.data.RecentHostsRepository
 import net.aieat.netswissknife.app.util.AppLogger
 import net.aieat.netswissknife.core.domain.LanScanFlowResult
 import net.aieat.netswissknife.core.domain.LanScanParams
@@ -17,9 +18,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -48,7 +51,8 @@ sealed interface LanScanUiState {
 @HiltViewModel
 class LanScanViewModel @Inject constructor(
     private val lanScanUseCase: LanScanUseCase,
-    private val dataStore: DataStore<Preferences>
+    private val dataStore: DataStore<Preferences>,
+    private val recentHostsRepository: RecentHostsRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<LanScanUiState>(LanScanUiState.Idle)
@@ -70,6 +74,10 @@ class LanScanViewModel @Inject constructor(
 
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+
+    val recentSubnets: StateFlow<List<String>> = recentHostsRepository
+        .getRecents(AppPreferenceKeys.RECENT_LAN_SUBNETS)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private var scanJob: Job? = null
 
@@ -125,8 +133,23 @@ class LanScanViewModel @Inject constructor(
         }
     }
 
+    fun removeRecentSubnet(subnet: String) {
+        viewModelScope.launch {
+            recentHostsRepository.removeRecent(AppPreferenceKeys.RECENT_LAN_SUBNETS, subnet)
+        }
+    }
+
+    fun clearRecentSubnets() {
+        viewModelScope.launch {
+            recentHostsRepository.clearAll(AppPreferenceKeys.RECENT_LAN_SUBNETS)
+        }
+    }
+
     fun startScan() {
         scanJob?.cancel()
+        viewModelScope.launch {
+            recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_LAN_SUBNETS, _subnet.value)
+        }
         val liveHosts = mutableListOf<LanHost>()
 
         val params = LanScanParams(

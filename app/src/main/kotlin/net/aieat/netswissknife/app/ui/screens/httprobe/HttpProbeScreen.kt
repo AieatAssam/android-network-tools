@@ -34,6 +34,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -76,6 +77,7 @@ import android.content.ClipData
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
@@ -90,6 +92,8 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.ui.components.RecentHostsRow
+import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.core.network.httprobe.HttpMethod
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeResult
 import net.aieat.netswissknife.core.network.httprobe.SecurityHeaderCheck
@@ -100,6 +104,8 @@ import net.aieat.netswissknife.core.network.httprobe.SecurityRating
 @Composable
 fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val recentHosts by viewModel.recentHosts.collectAsStateWithLifecycle()
+    val context = LocalContext.current
 
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
@@ -126,6 +132,7 @@ fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
             item {
                 HttpProbeInputCard(
                     uiState = uiState,
+                    recentHosts = recentHosts,
                     onUrlChange = viewModel::onUrlChange,
                     onMethodChange = viewModel::onMethodChange,
                     onBodyChange = viewModel::onBodyChange,
@@ -135,7 +142,9 @@ fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
                     onRemoveHeader = viewModel::removeHeader,
                     onHeaderKeyChange = viewModel::updateHeaderKey,
                     onHeaderValueChange = viewModel::updateHeaderValue,
-                    onSend = viewModel::send
+                    onSend = viewModel::send,
+                    onRemoveRecentHost = viewModel::removeRecentHost,
+                    onClearRecentHosts = viewModel::clearRecentHosts
                 )
             }
 
@@ -159,7 +168,13 @@ fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
                         is DisplayState.Success -> HttpProbeSuccessContent(
                             result = state.result,
                             selectedTab = uiState.selectedTab,
-                            onTabSelected = viewModel::onTabSelected
+                            onTabSelected = viewModel::onTabSelected,
+                            onShare = {
+                                context.shareText(
+                                    text = buildHttpShareText(state.result),
+                                    subject = context.getString(R.string.share_subject_http, state.result.request.url)
+                                )
+                            }
                         )
                     }
                 }
@@ -230,6 +245,7 @@ private fun HttpProbeHeaderCard() {
 @Composable
 private fun HttpProbeInputCard(
     uiState: HttpProbeUiState,
+    recentHosts: List<String>,
     onUrlChange: (String) -> Unit,
     onMethodChange: (HttpMethod) -> Unit,
     onBodyChange: (String) -> Unit,
@@ -239,7 +255,9 @@ private fun HttpProbeInputCard(
     onRemoveHeader: (Int) -> Unit,
     onHeaderKeyChange: (Int, String) -> Unit,
     onHeaderValueChange: (Int, String) -> Unit,
-    onSend: () -> Unit
+    onSend: () -> Unit,
+    onRemoveRecentHost: (String) -> Unit,
+    onClearRecentHosts: () -> Unit
 ) {
     val focusManager = LocalFocusManager.current
 
@@ -272,6 +290,13 @@ private fun HttpProbeInputCard(
                     focusManager.clearFocus()
                     onSend()
                 })
+            )
+
+            RecentHostsRow(
+                recentHosts = recentHosts,
+                onHostSelected = onUrlChange,
+                onRemoveHost = onRemoveRecentHost,
+                onClearAll = onClearRecentHosts
             )
 
             // Method selector
@@ -549,9 +574,21 @@ private fun HttpProbeErrorContent(message: String, onRetry: () -> Unit) {
 private fun HttpProbeSuccessContent(
     result: HttpProbeResult,
     selectedTab: Int,
-    onTabSelected: (Int) -> Unit
+    onTabSelected: (Int) -> Unit,
+    onShare: () -> Unit = {}
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End
+        ) {
+            IconButton(onClick = onShare) {
+                Icon(
+                    imageVector = Icons.Default.Share,
+                    contentDescription = stringResource(R.string.action_share)
+                )
+            }
+        }
         // Status banner
         StatusBannerCard(result)
 
@@ -1098,4 +1135,28 @@ private fun formatBytes(bytes: Long): String = when {
     bytes < 1024        -> "$bytes B"
     bytes < 1024 * 1024 -> "%.1f KB".format(bytes / 1024.0)
     else                -> "%.1f MB".format(bytes / (1024.0 * 1024.0))
+}
+
+private fun buildHttpShareText(result: net.aieat.netswissknife.core.network.httprobe.HttpProbeResult): String = buildString {
+    appendLine("HTTP – ${result.request.url}")
+    appendLine("Status: ${result.statusCode} ${result.statusMessage}")
+    appendLine("Time: ${result.responseTimeMs}ms")
+    appendLine("Size: ${formatBytes(result.responseBodyBytes)}")
+    if (result.redirectChain.isNotEmpty()) {
+        appendLine()
+        appendLine("Redirects:")
+        result.redirectChain.forEach { url -> appendLine("  → $url") }
+    }
+    if (result.responseHeaders.isNotEmpty()) {
+        appendLine()
+        appendLine("Response Headers:")
+        result.responseHeaders.forEach { (k, v) -> appendLine("  $k: ${v.joinToString(", ")}") }
+    }
+    if (result.securityChecks.isNotEmpty()) {
+        appendLine()
+        appendLine("Security Checks:")
+        result.securityChecks.forEach { check ->
+            appendLine("  ${check.headerName}: ${check.rating.name}")
+        }
+    }
 }

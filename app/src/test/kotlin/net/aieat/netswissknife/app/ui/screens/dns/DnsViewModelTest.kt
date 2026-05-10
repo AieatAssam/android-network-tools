@@ -4,11 +4,13 @@ import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import net.aieat.netswissknife.app.data.RecentHostsRepository
 import net.aieat.netswissknife.app.util.SystemDnsAddressProvider
 import net.aieat.netswissknife.core.domain.DnsLookupUseCase
 import net.aieat.netswissknife.core.network.NetworkResult
@@ -32,6 +34,7 @@ class DnsViewModelTest {
 
     private lateinit var useCase: DnsLookupUseCase
     private lateinit var systemDnsProvider: SystemDnsAddressProvider
+    private lateinit var recentHostsRepository: RecentHostsRepository
     private lateinit var viewModel: DnsViewModel
 
     private val stubResult = DnsResult(
@@ -48,7 +51,10 @@ class DnsViewModelTest {
         Dispatchers.setMain(testDispatcher)
         useCase = mockk()
         systemDnsProvider = mockk { every { getAddresses() } returns emptyList() }
-        viewModel = DnsViewModel(useCase, systemDnsProvider)
+        recentHostsRepository = mockk(relaxed = true) {
+            every { getRecents(any()) } returns flowOf(emptyList())
+        }
+        viewModel = DnsViewModel(useCase, systemDnsProvider, recentHostsRepository)
     }
 
     @AfterEach

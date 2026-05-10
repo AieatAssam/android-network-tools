@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
+import net.aieat.netswissknife.app.data.RecentHostsRepository
 import net.aieat.netswissknife.core.domain.PingFlowResult
 import net.aieat.netswissknife.core.domain.PingParams
 import net.aieat.netswissknife.core.domain.PingUseCase
@@ -14,9 +15,11 @@ import net.aieat.netswissknife.core.network.ping.PingStats
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -38,7 +41,8 @@ sealed interface PingUiState {
 @HiltViewModel
 class PingViewModel @Inject constructor(
     private val pingUseCase: PingUseCase,
-    private val dataStore: DataStore<Preferences>
+    private val dataStore: DataStore<Preferences>,
+    private val recentHostsRepository: RecentHostsRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<PingUiState>(PingUiState.Idle)
@@ -57,6 +61,10 @@ class PingViewModel @Inject constructor(
 
     private val _packetSize = MutableStateFlow(56)
     val packetSize: StateFlow<Int> = _packetSize.asStateFlow()
+
+    val recentHosts: StateFlow<List<String>> = recentHostsRepository
+        .getRecents(AppPreferenceKeys.RECENT_PING_HOSTS)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private var pingJob: Job? = null
 
@@ -112,8 +120,23 @@ class PingViewModel @Inject constructor(
         startPing()
     }
 
+    fun removeRecentHost(host: String) {
+        viewModelScope.launch {
+            recentHostsRepository.removeRecent(AppPreferenceKeys.RECENT_PING_HOSTS, host)
+        }
+    }
+
+    fun clearRecentHosts() {
+        viewModelScope.launch {
+            recentHostsRepository.clearAll(AppPreferenceKeys.RECENT_PING_HOSTS)
+        }
+    }
+
     fun startPing() {
         pingJob?.cancel()
+        viewModelScope.launch {
+            recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_PING_HOSTS, _host.value)
+        }
 
         val params = PingParams(
             host = _host.value,
