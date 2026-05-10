@@ -558,7 +558,7 @@ export mechanism at all. No tool has an `Intent.ACTION_SEND` share sheet.
 
 ---
 
-## ~~11. ViewModel unit tests~~ ✓ done (see below)
+## ~~11. ViewModel unit tests~~ ✓ done (3f6e69d)
 
 **Depends on:** Items 9 is complete (ViewModels are stable post-recent-hosts changes)
 
