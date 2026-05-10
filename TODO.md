@@ -118,7 +118,7 @@ Debug Logs entry is absent. Build a debug APK and confirm it is present.
 
 ---
 
-## ~~4. Network security config (cleartext traffic)~~ ✓ done
+## ~~4. Network security config (cleartext traffic)~~ ✓ done (b5dbcc8)
 
 **Depends on:** nothing
 
@@ -197,7 +197,7 @@ Android 9+ device or emulator.
 
 ---
 
-## ~~5. Fix hardcoded strings (localisation compliance)~~ ✓ done
+## ~~5. Fix hardcoded strings (localisation compliance)~~ ✓ done (5ef24b6)
 
 **Depends on:** nothing
 
@@ -251,7 +251,7 @@ Scanner screen still renders correctly.
 
 ---
 
-## ~~6. Fix hardcoded semantic colours (dark-mode correctness)~~ ✓ done
+## ~~6. Fix hardcoded semantic colours (dark-mode correctness)~~ ✓ done (fda2cac)
 
 **Depends on:** nothing (but do after item 5 so string and colour fixes are separate PRs)
 
