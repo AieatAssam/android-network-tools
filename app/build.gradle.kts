@@ -25,11 +25,18 @@ android {
         applicationId = "net.aieat.netswissknife"
         minSdk        = 26
         targetSdk     = 35
-        versionCode   = ciVersionCode ?: 1
+        versionCode   = ciVersionCode ?: (System.currentTimeMillis() / 1000).toInt()
         versionName   = ciVersionName ?: "1.0.0"
     }
 
     signingConfigs {
+        // Committed project keystore for consistent local/debug signing (password: "android")
+        getByName("debug") {
+            storeFile     = file("debug.keystore")
+            storePassword = "android"
+            keyAlias      = "androiddebugkey"
+            keyPassword   = "android"
+        }
         if (ciStoreFile != null) {
             create("release") {
                 storeFile     = file(ciStoreFile)

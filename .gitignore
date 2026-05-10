@@ -26,9 +26,10 @@ misc.xml
 deploymentTargetDropDown.xml
 render.experimental.xml
 
-# Keystore files
+# Keystore files (except the project debug keystore committed for consistent local signing)
 *.jks
 *.keystore
+!app/debug.keystore
 
 # Google Services (e.g. APIs or Firebase)
 google-services.json
