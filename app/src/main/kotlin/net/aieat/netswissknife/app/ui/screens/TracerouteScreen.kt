@@ -40,6 +40,7 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FmdGood
@@ -84,6 +85,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import net.aieat.netswissknife.app.ui.theme.StatusBad
+import net.aieat.netswissknife.app.ui.theme.StatusCritical
+import net.aieat.netswissknife.app.ui.theme.StatusGood
+import net.aieat.netswissknife.app.ui.theme.StatusLime
+import net.aieat.netswissknife.app.ui.theme.StatusUnknown
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
@@ -96,7 +103,9 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.ui.components.RecentHostsRow
 import net.aieat.netswissknife.app.ui.screens.traceroute.TracerouteUiState
+import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.app.ui.screens.traceroute.TracerouteViewModel
 import net.aieat.netswissknife.app.ui.screens.traceroute.TracerouteViewMode
 import net.aieat.netswissknife.core.network.traceroute.HopGeoLocation
@@ -121,6 +130,7 @@ fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
     val probesPerHop by viewModel.probesPerHop.collectAsStateWithLifecycle()
     val probeType    by viewModel.probeType.collectAsStateWithLifecycle()
     val packetSize   by viewModel.packetSize.collectAsStateWithLifecycle()
+    val recentHosts  by viewModel.recentHosts.collectAsStateWithLifecycle()
 
     // animateFloatAsState instead of AnimatedVisibility: both AnimatedVisibility and the
     // inner AnimatedContent use SubcomposeLayout.  Two simultaneously-animating nested
@@ -150,6 +160,7 @@ fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
                     probeType           = probeType,
                     packetSize          = packetSize,
                     isRunning           = uiState is TracerouteUiState.Running,
+                    recentHosts         = recentHosts,
                     onHostChange        = viewModel::onHostChange,
                     onMaxHopsChange     = viewModel::onMaxHopsChange,
                     onTimeoutChange     = viewModel::onTimeoutChange,
@@ -158,7 +169,9 @@ fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
                     onPacketSizeChange  = viewModel::onPacketSizeChange,
                     onToggleMtuDiscovery = viewModel::onToggleMtuDiscovery,
                     onStart             = viewModel::startTrace,
-                    onStop              = viewModel::onStop
+                    onStop              = viewModel::onStop,
+                    onRemoveRecentHost  = viewModel::removeRecentHost,
+                    onClearRecentHosts  = viewModel::clearRecentHosts
                 )
             }
 
@@ -272,6 +285,7 @@ private fun TracerouteInputCard(
     probeType: TracerouteProbeType,
     packetSize: Int,
     isRunning: Boolean,
+    recentHosts: List<String>,
     onHostChange: (String) -> Unit,
     onMaxHopsChange: (Int) -> Unit,
     onTimeoutChange: (Int) -> Unit,
@@ -280,7 +294,9 @@ private fun TracerouteInputCard(
     onPacketSizeChange: (Int) -> Unit,
     onToggleMtuDiscovery: (Boolean) -> Unit,
     onStart: () -> Unit,
-    onStop: () -> Unit
+    onStop: () -> Unit,
+    onRemoveRecentHost: (String) -> Unit,
+    onClearRecentHosts: () -> Unit
 ) {
     val keyboard = LocalSoftwareKeyboardController.current
     val mtuDiscovery = packetSize == 0
@@ -317,6 +333,13 @@ private fun TracerouteInputCard(
                     keyboard?.hide()
                     if (!isRunning) onStart()
                 })
+            )
+
+            RecentHostsRow(
+                recentHosts = recentHosts,
+                onHostSelected = onHostChange,
+                onRemoveHost = onRemoveRecentHost,
+                onClearAll = onClearRecentHosts
             )
 
             // Probe protocol selector (ICMP / UDP)
@@ -635,6 +658,7 @@ private fun TracerouteFinishedPanel(
 
 @Composable
 private fun TraceStatsSummary(result: TracerouteResult, onClear: () -> Unit) {
+    val context = LocalContext.current
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -646,8 +670,18 @@ private fun TraceStatsSummary(result: TracerouteResult, onClear: () -> Unit) {
                     stringResource(R.string.traceroute_result_header),
                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold)
                 )
-                TextButton(onClick = onClear) {
-                    Text(stringResource(R.string.traceroute_clear_button))
+                Row {
+                    IconButton(onClick = {
+                        context.shareText(
+                            text = result.rawOutput,
+                            subject = context.getString(R.string.share_subject_traceroute, result.host)
+                        )
+                    }) {
+                        Icon(Icons.Default.Share, contentDescription = stringResource(R.string.action_share))
+                    }
+                    TextButton(onClick = onClear) {
+                        Text(stringResource(R.string.traceroute_clear_button))
+                    }
                 }
             }
             Spacer(Modifier.height(8.dp))
@@ -986,11 +1020,11 @@ private fun formatDistance(km: Double): String = when {
 }
 
 private fun rttColor(rtTimeMs: Long?): Color = when {
-    rtTimeMs == null -> Color(0xFF9E9E9E)
-    rtTimeMs < 50    -> Color(0xFF4CAF50)
-    rtTimeMs < 150   -> Color(0xFFCDDC39)
-    rtTimeMs < 300   -> Color(0xFFFF9800)
-    else             -> Color(0xFFF44336)
+    rtTimeMs == null -> StatusUnknown
+    rtTimeMs < 50    -> StatusGood
+    rtTimeMs < 150   -> StatusLime
+    rtTimeMs < 300   -> StatusBad
+    else             -> StatusCritical
 }
 
 // ── Hop detail list ───────────────────────────────────────────────────────────

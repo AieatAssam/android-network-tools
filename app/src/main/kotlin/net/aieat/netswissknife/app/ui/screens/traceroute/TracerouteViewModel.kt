@@ -2,6 +2,8 @@ package net.aieat.netswissknife.app.ui.screens.traceroute
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import net.aieat.netswissknife.app.data.AppPreferenceKeys
+import net.aieat.netswissknife.app.data.RecentHostsRepository
 import net.aieat.netswissknife.core.domain.TracerouteFlowResult
 import net.aieat.netswissknife.core.domain.TracerouteParams
 import net.aieat.netswissknife.core.domain.TracerouteUseCase
@@ -13,8 +15,10 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -35,7 +39,8 @@ sealed interface TracerouteUiState {
 
 @HiltViewModel
 class TracerouteViewModel @Inject constructor(
-    private val tracerouteUseCase: TracerouteUseCase
+    private val tracerouteUseCase: TracerouteUseCase,
+    private val recentHostsRepository: RecentHostsRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<TracerouteUiState>(TracerouteUiState.Idle)
@@ -59,6 +64,10 @@ class TracerouteViewModel @Inject constructor(
     /** 0 = MTU discovery; positive value = fixed packet size in bytes. */
     private val _packetSize   = MutableStateFlow(56)
     val packetSize: StateFlow<Int> = _packetSize.asStateFlow()
+
+    val recentHosts: StateFlow<List<String>> = recentHostsRepository
+        .getRecents(AppPreferenceKeys.RECENT_TRACEROUTE_HOSTS)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private var traceJob: Job? = null
     /** Incremented each time a new trace is started; guards against stale emissions. */
@@ -105,8 +114,23 @@ class TracerouteViewModel @Inject constructor(
 
     fun onRetry() { startTrace() }
 
+    fun removeRecentHost(host: String) {
+        viewModelScope.launch {
+            recentHostsRepository.removeRecent(AppPreferenceKeys.RECENT_TRACEROUTE_HOSTS, host)
+        }
+    }
+
+    fun clearRecentHosts() {
+        viewModelScope.launch {
+            recentHostsRepository.clearAll(AppPreferenceKeys.RECENT_TRACEROUTE_HOSTS)
+        }
+    }
+
     fun startTrace() {
         traceJob?.cancel()
+        viewModelScope.launch {
+            recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_TRACEROUTE_HOSTS, _host.value)
+        }
         val generation = ++traceGeneration
 
         val params = TracerouteParams(

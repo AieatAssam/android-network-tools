@@ -193,7 +193,7 @@ private fun TopologyScreenContent(
                                         IconButton(onClick = { showCommunityPassword = !showCommunityPassword }) {
                                             Icon(
                                                 if (showCommunityPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                                contentDescription = null
+                                                contentDescription = stringResource(if (showCommunityPassword) R.string.action_hide_password else R.string.action_show_password)
                                             )
                                         }
                                     }
@@ -233,7 +233,7 @@ private fun TopologyScreenContent(
                                                 IconButton(onClick = { showAuthPassword = !showAuthPassword }) {
                                                     Icon(
                                                         if (showAuthPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                                        contentDescription = null
+                                                        contentDescription = stringResource(if (showAuthPassword) R.string.action_hide_password else R.string.action_show_password)
                                                     )
                                                 }
                                             }
@@ -264,7 +264,7 @@ private fun TopologyScreenContent(
                                                 IconButton(onClick = { showPrivPassword = !showPrivPassword }) {
                                                     Icon(
                                                         if (showPrivPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                                        contentDescription = null
+                                                        contentDescription = stringResource(if (showPrivPassword) R.string.action_hide_password else R.string.action_show_password)
                                                     )
                                                 }
                                             }
@@ -898,12 +898,12 @@ private fun NodeDetailSheet(
                                     FilterChip(
                                         selected = true,
                                         onClick = {},
-                                        label = { Text("${vlan.id}: ${vlan.name}", style = MaterialTheme.typography.labelSmall) }
+                                        label = { Text(stringResource(R.string.topology_vlan_label, vlan.id, vlan.name), style = MaterialTheme.typography.labelSmall) }
                                     )
                                 } else {
                                     AssistChip(
                                         onClick = {},
-                                        label = { Text("${vlan.id}: ${vlan.name}", style = MaterialTheme.typography.labelSmall) }
+                                        label = { Text(stringResource(R.string.topology_vlan_label, vlan.id, vlan.name), style = MaterialTheme.typography.labelSmall) }
                                     )
                                 }
                             }

@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
@@ -83,6 +84,7 @@ import android.content.ClipData
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -95,8 +97,10 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.ui.components.RecentHostsRow
 import net.aieat.netswissknife.app.ui.screens.dns.DnsUiState
 import net.aieat.netswissknife.app.ui.screens.dns.DnsViewModel
+import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.core.network.dns.DnsRecord
 import net.aieat.netswissknife.core.network.dns.DnsRecordType
 import net.aieat.netswissknife.core.network.dns.DnsResult
@@ -111,6 +115,7 @@ fun DnsScreen(viewModel: DnsViewModel = hiltViewModel()) {
     val recordType by viewModel.recordType.collectAsStateWithLifecycle()
     val selectedServer by viewModel.selectedServer.collectAsStateWithLifecycle()
     val customServerAddress by viewModel.customServerAddress.collectAsStateWithLifecycle()
+    val recentHosts by viewModel.recentHosts.collectAsStateWithLifecycle()
 
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
@@ -136,11 +141,14 @@ fun DnsScreen(viewModel: DnsViewModel = hiltViewModel()) {
                     selectedServer = selectedServer,
                     customServerAddress = customServerAddress,
                     isLoading = uiState is DnsUiState.Loading,
+                    recentHosts = recentHosts,
                     onDomainChange = viewModel::onDomainChange,
                     onRecordTypeChange = viewModel::onRecordTypeChange,
                     onServerChange = viewModel::onServerChange,
                     onCustomServerAddressChange = viewModel::onCustomServerAddressChange,
                     onLookup = viewModel::performLookup,
+                    onRemoveRecentHost = viewModel::removeRecentHost,
+                    onClearRecentHosts = viewModel::clearRecentHosts,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                 )
             }
@@ -254,11 +262,14 @@ private fun DnsInputCard(
     selectedServer: DnsServer,
     customServerAddress: String,
     isLoading: Boolean,
+    recentHosts: List<String>,
     onDomainChange: (String) -> Unit,
     onRecordTypeChange: (DnsRecordType) -> Unit,
     onServerChange: (DnsServer) -> Unit,
     onCustomServerAddressChange: (String) -> Unit,
     onLookup: () -> Unit,
+    onRemoveRecentHost: (String) -> Unit,
+    onClearRecentHosts: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     ElevatedCard(
@@ -299,6 +310,13 @@ private fun DnsInputCard(
                 ),
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp)
+            )
+
+            RecentHostsRow(
+                recentHosts = recentHosts,
+                onHostSelected = onDomainChange,
+                onRemoveHost = onRemoveRecentHost,
+                onClearAll = onClearRecentHosts
             )
 
             // Record type selector
@@ -708,6 +726,7 @@ private fun DnsResultSummaryCard(
     result: DnsResult,
     onClear: () -> Unit
 ) {
+    val context = LocalContext.current
     ElevatedCard(
         shape = RoundedCornerShape(20.dp),
         modifier = Modifier.fillMaxWidth()
@@ -750,12 +769,26 @@ private fun DnsResultSummaryCard(
                         )
                     }
                 }
-                IconButton(onClick = onClear) {
-                    Icon(
-                        imageVector = Icons.Default.Clear,
-                        contentDescription = stringResource(R.string.clear),
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
+                Row {
+                    IconButton(onClick = {
+                        context.shareText(
+                            text = buildDnsShareText(result),
+                            subject = context.getString(R.string.share_subject_dns, result.recordType.name, result.domain)
+                        )
+                    }) {
+                        Icon(
+                            imageVector = Icons.Default.Share,
+                            contentDescription = stringResource(R.string.action_share),
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                    IconButton(onClick = onClear) {
+                        Icon(
+                            imageVector = Icons.Default.Clear,
+                            contentDescription = stringResource(R.string.clear),
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
                 }
             }
 
@@ -1200,6 +1233,20 @@ private fun DnsRawToggleCard(
                     }
                 }
             }
+        }
+    }
+}
+
+private fun buildDnsShareText(result: DnsResult): String = buildString {
+    appendLine("DNS ${result.recordType.name} – ${result.domain}")
+    appendLine("Server: ${result.server.displayName}")
+    appendLine("Query time: ${result.queryTimeMs}ms")
+    appendLine()
+    if (result.records.isEmpty()) {
+        appendLine("No records found.")
+    } else {
+        result.records.forEach { record ->
+            appendLine("${record.type.name}\t${record.value}\tTTL: ${record.ttl}s")
         }
     }
 }

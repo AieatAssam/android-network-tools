@@ -47,6 +47,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.DeviceHub
 import androidx.compose.material.icons.filled.Error
@@ -97,8 +98,12 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.ui.components.RecentHostsRow
+import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.core.network.lan.LanHost
 import net.aieat.netswissknife.core.network.lan.LanScanSummary
 
@@ -112,6 +117,7 @@ fun LanScreen(viewModel: LanScanViewModel = hiltViewModel()) {
     val concurrency by viewModel.concurrency.collectAsState()
     val isSubnetLoading by viewModel.isSubnetLoading.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
+    val recentSubnets by viewModel.recentSubnets.collectAsStateWithLifecycle()
 
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
@@ -135,12 +141,15 @@ fun LanScreen(viewModel: LanScanViewModel = hiltViewModel()) {
                 concurrency = concurrency,
                 isSubnetLoading = isSubnetLoading,
                 isScanning = uiState is LanScanUiState.Scanning,
+                recentSubnets = recentSubnets,
                 onSubnetChange = viewModel::onSubnetChange,
                 onTimeoutChange = viewModel::onTimeoutChange,
                 onConcurrencyChange = viewModel::onConcurrencyChange,
                 onRefreshSubnet = viewModel::refreshSubnet,
                 onStartScan = viewModel::startScan,
                 onStopScan = viewModel::onStopScan,
+                onRemoveRecentSubnet = viewModel::removeRecentSubnet,
+                onClearRecentSubnets = viewModel::clearRecentSubnets,
             )
 
             AnimatedContent(
@@ -239,12 +248,15 @@ private fun LanInputCard(
     concurrency: Int,
     isSubnetLoading: Boolean,
     isScanning: Boolean,
+    recentSubnets: List<String>,
     onSubnetChange: (String) -> Unit,
     onTimeoutChange: (Int) -> Unit,
     onConcurrencyChange: (Int) -> Unit,
     onRefreshSubnet: () -> Unit,
     onStartScan: () -> Unit,
     onStopScan: () -> Unit,
+    onRemoveRecentSubnet: (String) -> Unit,
+    onClearRecentSubnets: () -> Unit,
 ) {
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -293,6 +305,13 @@ private fun LanInputCard(
                 singleLine = true,
                 enabled = !isScanning,
                 modifier = Modifier.fillMaxWidth(),
+            )
+
+            RecentHostsRow(
+                recentHosts = recentSubnets,
+                onHostSelected = onSubnetChange,
+                onRemoveHost = onRemoveRecentSubnet,
+                onClearAll = onClearRecentSubnets
             )
 
             // Timeout slider
@@ -541,6 +560,7 @@ private fun LanFinishedContent(
     onClear: () -> Unit,
     onRescan: () -> Unit,
 ) {
+    val context = LocalContext.current
     var activeFilter by remember { mutableStateOf(HostFilter.All) }
 
     val filteredHosts = remember(summary.hosts, searchQuery, activeFilter) {
@@ -624,6 +644,19 @@ private fun LanFinishedContent(
                         Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(4.dp))
                         Text(stringResource(R.string.lan_rescan_button))
+                    }
+                    FilledTonalButton(
+                        onClick = {
+                            context.shareText(
+                                text = buildLanShareText(summary),
+                                subject = context.getString(R.string.share_subject_lan, summary.subnet)
+                            )
+                        },
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text(stringResource(R.string.action_share))
                     }
                     FilledTonalButton(
                         onClick = onClear,
@@ -1214,4 +1247,19 @@ private fun portServiceName(port: Int): String = when (port) {
     8080 -> "HTTP-Alt"
     8443 -> "HTTPS-Alt"
     else -> "TCP/$port"
+}
+
+private fun buildLanShareText(summary: LanScanSummary): String = buildString {
+    appendLine("LAN scan – ${summary.subnet}")
+    appendLine("Hosts found: ${summary.aliveHosts} / ${summary.totalScanned}")
+    appendLine("Duration: ${summary.scanDurationMs}ms")
+    appendLine()
+    summary.hosts.forEach { host ->
+        append(host.ip)
+        host.hostname?.let { append(" ($it)") }
+        host.vendor?.let { append(" [$it]") }
+        append(" ${host.pingTimeMs}ms")
+        if (host.openPorts.isNotEmpty()) append(" ports:${host.openPorts.joinToString(",")}")
+        appendLine()
+    }
 }

@@ -87,6 +87,7 @@ import android.content.ClipData
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
@@ -101,8 +102,10 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.ui.components.RecentHostsRow
 import net.aieat.netswissknife.app.ui.screens.portscan.PortScanUiState
 import net.aieat.netswissknife.app.ui.screens.portscan.PortScanViewModel
+import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.core.domain.PortScanPreset
 import net.aieat.netswissknife.core.network.portscan.PortScanResult
 import net.aieat.netswissknife.core.network.portscan.PortScanSummary
@@ -118,6 +121,7 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
     val endPort by viewModel.endPort.collectAsStateWithLifecycle()
     val timeoutMs by viewModel.timeoutMs.collectAsStateWithLifecycle()
     val concurrency by viewModel.concurrency.collectAsStateWithLifecycle()
+    val recentHosts by viewModel.recentHosts.collectAsStateWithLifecycle()
 
     var screenVisible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { screenVisible = true }
@@ -130,6 +134,7 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
     val keyboardController = LocalSoftwareKeyboardController.current
     val clipboard = LocalClipboard.current
     val clipScope = rememberCoroutineScope()
+    val context = LocalContext.current
     var showAll by remember { mutableStateOf(false) }
 
     LazyColumn(
@@ -152,6 +157,7 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
                     timeoutMs = timeoutMs,
                     concurrency = concurrency,
                     isScanning = uiState is PortScanUiState.Scanning,
+                    recentHosts = recentHosts,
                     onHostChange = viewModel::onHostChange,
                     onPresetChange = viewModel::onPresetChange,
                     onStartPortChange = viewModel::onStartPortChange,
@@ -162,7 +168,9 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
                         keyboardController?.hide()
                         viewModel.startScan()
                     },
-                    onStopScan = viewModel::onStopScan
+                    onStopScan = viewModel::onStopScan,
+                    onRemoveRecentHost = viewModel::removeRecentHost,
+                    onClearRecentHosts = viewModel::clearRecentHosts
                 )
             }
 
@@ -197,6 +205,12 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
                         summary = summary,
                         onCopy = {
                             clipScope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("", buildScanReport(summary)))) }
+                        },
+                        onShare = {
+                            context.shareText(
+                                text = buildScanReport(summary),
+                                subject = context.getString(R.string.share_subject_ports, summary.host)
+                            )
                         },
                         onClear = viewModel::onClear
                     )
@@ -351,6 +365,7 @@ private fun PortScanInputCard(
     timeoutMs: Int,
     concurrency: Int,
     isScanning: Boolean,
+    recentHosts: List<String>,
     onHostChange: (String) -> Unit,
     onPresetChange: (PortScanPreset) -> Unit,
     onStartPortChange: (String) -> Unit,
@@ -358,7 +373,9 @@ private fun PortScanInputCard(
     onTimeoutChange: (Int) -> Unit,
     onConcurrencyChange: (Int) -> Unit,
     onStartScan: () -> Unit,
-    onStopScan: () -> Unit
+    onStopScan: () -> Unit,
+    onRemoveRecentHost: (String) -> Unit,
+    onClearRecentHosts: () -> Unit
 ) {
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -383,6 +400,13 @@ private fun PortScanInputCard(
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = { onStartScan() }),
                 modifier = Modifier.fillMaxWidth()
+            )
+
+            RecentHostsRow(
+                recentHosts = recentHosts,
+                onHostSelected = onHostChange,
+                onRemoveHost = onRemoveRecentHost,
+                onClearAll = onClearRecentHosts
             )
 
             // Preset selector
@@ -690,6 +714,7 @@ private fun PortScanErrorCard(
 private fun PortScanSummaryCard(
     summary: PortScanSummary,
     onCopy: () -> Unit,
+    onShare: () -> Unit,
     onClear: () -> Unit
 ) {
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
@@ -711,6 +736,9 @@ private fun PortScanSummaryCard(
                 Row {
                     IconButton(onClick = onCopy) {
                         Icon(Icons.Default.ContentCopy, contentDescription = stringResource(R.string.ports_copy_report))
+                    }
+                    IconButton(onClick = onShare) {
+                        Icon(Icons.Default.Share, contentDescription = stringResource(R.string.action_share))
                     }
                     IconButton(onClick = onClear) {
                         Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.ports_clear_button))

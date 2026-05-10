@@ -2,6 +2,7 @@ package net.aieat.netswissknife.app.util
 
 import android.content.Context
 import android.util.Log
+import net.aieat.netswissknife.app.BuildConfig
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -84,7 +85,8 @@ object AppLogger {
     // ── Internal ──────────────────────────────────────────────────────────────
 
     private fun write(level: String, tag: String, message: String) {
-        // Always emit to Logcat so adb logcat works too
+        if (!BuildConfig.DEBUG) return
+
         when (level) {
             "D" -> Log.d(LOGCAT_TAG, "[$tag] $message")
             "I" -> Log.i(LOGCAT_TAG, "[$tag] $message")

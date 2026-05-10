@@ -10,6 +10,12 @@
     <string name="nav_home">Home</string>
     <string name="nav_more">More</string>
 
+    <!-- Generic action content descriptions (used on standalone icon-only buttons) -->
+    <string name="action_expand">Expand</string>
+    <string name="action_collapse">Collapse</string>
+    <string name="action_show_password">Show password</string>
+    <string name="action_hide_password">Hide password</string>
+
     <!-- More Tools Sheet -->
     <string name="more_sheet_title">All Tools</string>
     <string name="more_sheet_subtitle">Pin up to %1$d tools to the navigation bar</string>
@@ -240,10 +246,10 @@
     <string name="wifi_auto_refresh">Auto-refresh</string>
     <string name="wifi_networks_found">%1$d networks · %2$d SSIDs</string>
     <string name="wifi_no_permission_title">Location Permission Required</string>
-    <string name="wifi_no_permission_body">Android requires Location permission to scan for nearby Wi-Fi networks.</string>
+    <string name="wifi_no_permission_body">Android requires Location permission to scan for nearby Wi-Fi networks. Your location is not sent anywhere.</string>
     <string name="wifi_grant_permission">Grant Permission</string>
     <string name="wifi_disabled_title">Wi-Fi is Off</string>
-    <string name="wifi_disabled_body">Enable Wi-Fi in device settings, then tap Retry.</string>
+    <string name="wifi_disabled_body">Enable Wi-Fi in your device settings, then scan again.</string>
     <string name="wifi_not_supported_title">Wi-Fi Not Available</string>
     <string name="wifi_not_supported_body">This device does not have Wi-Fi hardware.</string>
     <string name="wifi_error_title">Scan Failed</string>
@@ -267,6 +273,8 @@
     <string name="wifi_detail_rx_speed">RX Speed</string>
     <string name="wifi_detail_signal">Signal</string>
     <string name="wifi_connected_network_header">Currently Connected</string>
+    <string name="wifi_rssi_dbm">%1$d dBm</string>
+    <string name="wifi_signal_quality_pct">%1$d%%</string>
     <string name="wifi_network_info_header">Network Information</string>
     <string name="wifi_live_connection_header">Live Connection</string>
 
@@ -361,6 +369,7 @@
     <string name="topology_node_detail_neighbours">Neighbours</string>
     <string name="topology_error_retry">Retry</string>
     <string name="topology_fit_button_cd">Fit graph to screen</string>
+    <string name="topology_vlan_label">%1$d: %2$s</string>
 
     <!-- TLS Inspector Screen -->
     <string name="tls_screen_title">TLS Inspector</string>
@@ -566,5 +575,58 @@
     <string name="tooltip_cidr">Classless Inter-Domain Routing notation combines an IP address with a prefix length (the number of network bits). Example: 192.168.1.0/24 means 24 network bits and 8 host bits.</string>
     <string name="tooltip_ip_class">A legacy classification of IPv4 ranges before CIDR replaced it. Class A covers 0–127, B covers 128–191, C covers 192–223. Class D is multicast, E is reserved.</string>
     <string name="tooltip_scope">Whether the address falls within RFC 1918 private ranges (10.x, 172.16–31.x, 192.168.x) or is publicly routable on the internet.</string>
+
+    <!-- Settings Screen -->
+    <string name="settings_screen_title">Settings</string>
+    <string name="settings_screen_subtitle">Customise theme and tool defaults</string>
+    <string name="settings_entry_label">Settings</string>
+    <string name="settings_entry_subtitle">Theme, defaults and data management</string>
+
+    <!-- Settings – Theme -->
+    <string name="settings_theme_section">Appearance</string>
+    <string name="settings_theme_label">Theme</string>
+    <string name="settings_theme_system">System</string>
+    <string name="settings_theme_light">Light</string>
+    <string name="settings_theme_dark">Dark</string>
+
+    <!-- Settings – Defaults -->
+    <string name="settings_defaults_section">Tool Defaults</string>
+    <string name="settings_ping_count_label">Default ping count: %1$d</string>
+    <string name="settings_timeout_label">Default timeout: %1$d ms</string>
+    <string name="settings_concurrency_label">Default concurrency: %1$d</string>
+
+    <!-- Settings – Data -->
+    <string name="settings_data_section">Data</string>
+    <string name="settings_clear_recents_label">Clear recent hosts</string>
+    <string name="settings_clear_recents_subtitle">Remove all saved recent host entries from every tool.</string>
+    <string name="settings_clear_recents_button">Clear all recent hosts</string>
+    <string name="settings_clear_recents_confirm_title">Clear recent hosts?</string>
+    <string name="settings_clear_recents_confirm_message">This will permanently remove all saved recent host entries. This action cannot be undone.</string>
+    <string name="settings_clear_recents_confirm_button">Clear</string>
+
+    <!-- Settings – About -->
+    <string name="settings_about_section">About</string>
+    <string name="settings_version_label">Version</string>
+
+    <!-- Generic dialogs -->
+    <string name="cancel">Cancel</string>
+
+    <!-- Recent hosts (shared across all tools) -->
+    <string name="recent_hosts_label">Recent</string>
+    <string name="action_clear_recents">Clear recent hosts</string>
+    <string name="action_remove_recent">Remove from recents</string>
+
+    <!-- Share action -->
+    <string name="action_share">Share results</string>
+
+    <!-- Share subjects per tool -->
+    <string name="share_subject_ping">Ping – %1$s</string>
+    <string name="share_subject_traceroute">Traceroute – %1$s</string>
+    <string name="share_subject_ports">Port scan – %1$s</string>
+    <string name="share_subject_tls">TLS – %1$s:%2$d</string>
+    <string name="share_subject_whois">WHOIS – %1$s</string>
+    <string name="share_subject_lan">LAN scan – %1$s</string>
+    <string name="share_subject_http">HTTP – %1$s</string>
+    <string name="share_subject_dns">DNS %1$s – %2$s</string>
 
 </resources>

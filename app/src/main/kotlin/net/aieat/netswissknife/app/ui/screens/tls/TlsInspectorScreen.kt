@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -53,6 +54,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
@@ -64,6 +66,10 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.ui.components.RecentHostsRow
+import net.aieat.netswissknife.app.ui.theme.StatusBlue
+import net.aieat.netswissknife.app.util.shareText
+import net.aieat.netswissknife.app.ui.theme.StatusGood
 import net.aieat.netswissknife.core.network.tls.TlsCertificate
 import net.aieat.netswissknife.core.network.tls.TlsInspectorResult
 import java.time.Instant
@@ -76,6 +82,7 @@ import java.util.concurrent.TimeUnit
 @Composable
 fun TlsInspectorScreen(viewModel: TlsInspectorViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val recentHosts by viewModel.recentHosts.collectAsStateWithLifecycle()
 
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
@@ -108,9 +115,12 @@ fun TlsInspectorScreen(viewModel: TlsInspectorViewModel = hiltViewModel()) {
                     host      = uiState.host,
                     port      = uiState.port,
                     isLoading = uiState.isLoading,
+                    recentHosts = recentHosts,
                     onHostChange = viewModel::onHostChange,
                     onPortChange = viewModel::onPortChange,
-                    onInspect    = viewModel::inspect
+                    onInspect    = viewModel::inspect,
+                    onRemoveRecentHost = viewModel::removeRecentHost,
+                    onClearRecentHosts = viewModel::clearRecentHosts
                 )
             }
 
@@ -237,9 +247,12 @@ private fun TlsInputSection(
     host: String,
     port: String,
     isLoading: Boolean,
+    recentHosts: List<String>,
     onHostChange: (String) -> Unit,
     onPortChange: (String) -> Unit,
-    onInspect: () -> Unit
+    onInspect: () -> Unit,
+    onRemoveRecentHost: (String) -> Unit,
+    onClearRecentHosts: () -> Unit
 ) {
     val focusManager = LocalFocusManager.current
 
@@ -271,6 +284,13 @@ private fun TlsInputSection(
                     keyboardType = KeyboardType.Uri,
                     imeAction    = ImeAction.Next
                 )
+            )
+
+            RecentHostsRow(
+                recentHosts = recentHosts,
+                onHostSelected = onHostChange,
+                onRemoveHost = onRemoveRecentHost,
+                onClearAll = onClearRecentHosts
             )
 
             // Port field
@@ -420,7 +440,24 @@ private fun TlsErrorContent(message: String, onRetry: () -> Unit) {
 
 @Composable
 private fun TlsSuccessContent(result: TlsInspectorResult) {
+    val context = LocalContext.current
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End
+        ) {
+            IconButton(onClick = {
+                context.shareText(
+                    text = buildTlsShareText(result),
+                    subject = context.getString(R.string.share_subject_tls, result.host, result.port)
+                )
+            }) {
+                Icon(
+                    imageVector = Icons.Default.Share,
+                    contentDescription = stringResource(R.string.action_share)
+                )
+            }
+        }
         ConnectionCard(result)
         result.chain.forEachIndexed { index, cert ->
             val certLabel = when {
@@ -453,16 +490,7 @@ private fun ConnectionCard(result: TlsInspectorResult) {
                         .height(4.dp)
                 ) {
                     drawRect(
-                        brush = Brush.linearGradient(
-                            listOf(
-                                android.graphics.Color.parseColor("#4CAF50").let {
-                                    androidx.compose.ui.graphics.Color(it)
-                                },
-                                android.graphics.Color.parseColor("#2196F3").let {
-                                    androidx.compose.ui.graphics.Color(it)
-                                }
-                            )
-                        )
+                        brush = Brush.linearGradient(listOf(StatusGood, StatusBlue))
                     )
                 }
             }
@@ -759,3 +787,25 @@ private fun formatDate(epochMs: Long): String =
         .atZone(ZoneId.systemDefault())
         .toLocalDate()
         .format(dateFormatter)
+
+private fun buildTlsShareText(result: TlsInspectorResult): String = buildString {
+    appendLine("TLS – ${result.host}:${result.port}")
+    appendLine("Protocol: ${result.tlsVersion}")
+    appendLine("Cipher: ${result.cipherSuite}")
+    appendLine()
+    result.chain.forEachIndexed { index, cert ->
+        val label = when {
+            result.chain.size == 1 || index == 0 -> "Leaf"
+            index == result.chain.size - 1 -> "Root"
+            else -> "Intermediate"
+        }
+        appendLine("[$label] ${cert.subjectCN}")
+        appendLine("  Issuer: ${cert.issuerCN}")
+        appendLine("  Valid: ${formatDate(cert.notBefore)} – ${formatDate(cert.notAfter)}")
+        if (cert.sans.isNotEmpty()) {
+            appendLine("  SANs: ${cert.sans.joinToString(", ")}")
+        }
+        appendLine("  SHA-256: ${cert.sha256Fingerprint}")
+        appendLine()
+    }
+}

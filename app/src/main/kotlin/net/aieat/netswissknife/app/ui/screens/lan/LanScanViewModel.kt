@@ -1,7 +1,11 @@
 package net.aieat.netswissknife.app.ui.screens.lan
 
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import net.aieat.netswissknife.app.data.AppPreferenceKeys
+import net.aieat.netswissknife.app.data.RecentHostsRepository
 import net.aieat.netswissknife.app.util.AppLogger
 import net.aieat.netswissknife.core.domain.LanScanFlowResult
 import net.aieat.netswissknife.core.domain.LanScanParams
@@ -14,8 +18,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -44,6 +51,8 @@ sealed interface LanScanUiState {
 @HiltViewModel
 class LanScanViewModel @Inject constructor(
     private val lanScanUseCase: LanScanUseCase,
+    private val dataStore: DataStore<Preferences>,
+    private val recentHostsRepository: RecentHostsRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<LanScanUiState>(LanScanUiState.Idle)
@@ -66,9 +75,19 @@ class LanScanViewModel @Inject constructor(
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
+    val recentSubnets: StateFlow<List<String>> = recentHostsRepository
+        .getRecents(AppPreferenceKeys.RECENT_LAN_SUBNETS)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
     private var scanJob: Job? = null
+    private var scanStartMs: Long = 0L
 
     init {
+        viewModelScope.launch {
+            val prefs = dataStore.data.first()
+            _timeoutMs.value = prefs[AppPreferenceKeys.DEFAULT_TIMEOUT_MS] ?: 1_000
+            _concurrency.value = prefs[AppPreferenceKeys.DEFAULT_CONCURRENCY] ?: 50
+        }
         refreshSubnet()
     }
 
@@ -112,9 +131,22 @@ class LanScanViewModel @Inject constructor(
         }
     }
 
+    fun removeRecentSubnet(subnet: String) {
+        viewModelScope.launch {
+            recentHostsRepository.removeRecent(AppPreferenceKeys.RECENT_LAN_SUBNETS, subnet)
+        }
+    }
+
+    fun clearRecentSubnets() {
+        viewModelScope.launch {
+            recentHostsRepository.clearAll(AppPreferenceKeys.RECENT_LAN_SUBNETS)
+        }
+    }
+
     fun startScan() {
         scanJob?.cancel()
         val liveHosts = mutableListOf<LanHost>()
+        scanStartMs = System.currentTimeMillis()
 
         val params = LanScanParams(
             subnet = _subnet.value,
@@ -132,6 +164,7 @@ class LanScanViewModel @Inject constructor(
             withContext(Dispatchers.IO) {
                 AppLogger.i(TAG, "startScan: subnet=${params.subnet} timeoutMs=${params.timeoutMs} concurrency=${params.concurrency}")
             }
+            var savedToRecents = false
             try {
                 lanScanUseCase(params).collect { result ->
                     when (result) {
@@ -142,6 +175,12 @@ class LanScanViewModel @Inject constructor(
 
                         is LanScanFlowResult.HostFound -> {
                             AppLogger.d(TAG, "startScan: host found – ip=${result.host.ip} ping=${result.host.pingTimeMs}ms ports=${result.host.openPorts}")
+                            // Save to recents only on first host found — avoids persisting
+                            // subnets that immediately fail validation.
+                            if (!savedToRecents) {
+                                savedToRecents = true
+                                launch { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_LAN_SUBNETS, params.subnet) }
+                            }
                             liveHosts.add(result.host)
                             _uiState.value = LanScanUiState.Scanning(
                                 hosts = liveHosts.toList(),
@@ -184,7 +223,7 @@ class LanScanViewModel @Inject constructor(
                 subnet = _subnet.value,
                 totalScanned = current.totalCount,
                 aliveHosts = current.hosts.size,
-                scanDurationMs = 0L,
+                scanDurationMs = System.currentTimeMillis() - scanStartMs,
                 hosts = current.hosts,
             )
             _uiState.value = LanScanUiState.Finished(partial)

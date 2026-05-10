@@ -4,10 +4,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import net.aieat.netswissknife.app.data.AppPreferenceKeys
+import net.aieat.netswissknife.app.data.RecentHostsRepository
 import net.aieat.netswissknife.core.domain.HttpProbeParams
 import net.aieat.netswissknife.core.domain.HttpProbeUseCase
 import net.aieat.netswissknife.core.network.NetworkResult
@@ -32,11 +36,16 @@ data class HttpProbeUiState(
 
 @HiltViewModel
 class HttpProbeViewModel @Inject constructor(
-    private val useCase: HttpProbeUseCase
+    private val useCase: HttpProbeUseCase,
+    private val recentHostsRepository: RecentHostsRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HttpProbeUiState())
     val uiState: StateFlow<HttpProbeUiState> = _uiState.asStateFlow()
+
+    val recentHosts: StateFlow<List<String>> = recentHostsRepository
+        .getRecents(AppPreferenceKeys.RECENT_HTTP_HOSTS)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     fun onUrlChange(url: String) = _uiState.update { it.copy(url = url) }
 
@@ -70,10 +79,25 @@ class HttpProbeViewModel @Inject constructor(
         state.copy(customHeaders = updated)
     }
 
+    fun removeRecentHost(host: String) {
+        viewModelScope.launch {
+            recentHostsRepository.removeRecent(AppPreferenceKeys.RECENT_HTTP_HOSTS, host)
+        }
+    }
+
+    fun clearRecentHosts() {
+        viewModelScope.launch {
+            recentHostsRepository.clearAll(AppPreferenceKeys.RECENT_HTTP_HOSTS)
+        }
+    }
+
     fun send() {
         val state = _uiState.value
         if (state.url.isBlank() || state.isLoading) return
 
+        viewModelScope.launch {
+            recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_HTTP_HOSTS, state.url.trim())
+        }
         _uiState.update { it.copy(isLoading = true, result = null, error = null, selectedTab = 0) }
 
         viewModelScope.launch {

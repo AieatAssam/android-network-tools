@@ -42,6 +42,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.EventBusy
@@ -68,6 +69,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -88,6 +90,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.ui.components.RecentHostsRow
+import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.core.network.whois.WhoisQueryType
 import net.aieat.netswissknife.core.network.whois.WhoisResult
 import net.aieat.netswissknife.core.network.whois.WhoisServerRole
@@ -100,6 +104,7 @@ import kotlin.math.abs
 @Composable
 fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsState()
+    val recentHosts by viewModel.recentHosts.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     var visible by remember { mutableStateOf(false) }
@@ -145,6 +150,12 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
                         },
                         singleLine = true,
                         enabled = !uiState.isLoading
+                    )
+                    RecentHostsRow(
+                        recentHosts = recentHosts,
+                        onHostSelected = viewModel::onQueryChange,
+                        onRemoveHost = viewModel::removeRecentHost,
+                        onClearAll = viewModel::clearRecentHosts
                     )
                     Button(
                         onClick = viewModel::lookup,
@@ -202,6 +213,12 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
                             result = result,
                             showRaw = uiState.showRawResponse,
                             onToggleRaw = viewModel::onToggleRawResponse,
+                            onShare = {
+                                context.shareText(
+                                    text = buildWhoisShareText(result),
+                                    subject = context.getString(R.string.share_subject_whois, result.query)
+                                )
+                            },
                             onOpenUrl = { url ->
                                 try {
                                     context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
@@ -472,9 +489,21 @@ fun WhoisResultsSection(
     result: WhoisResult,
     showRaw: Boolean,
     onToggleRaw: () -> Unit,
+    onShare: () -> Unit,
     onOpenUrl: (String) -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End
+        ) {
+            IconButton(onClick = onShare) {
+                Icon(
+                    imageVector = Icons.Default.Share,
+                    contentDescription = stringResource(R.string.action_share)
+                )
+            }
+        }
         when (result.queryType) {
             WhoisQueryType.DOMAIN -> DomainResultCard(result, onOpenUrl)
             WhoisQueryType.IPV4, WhoisQueryType.IPV6, WhoisQueryType.ASN -> IpAsnResultCard(result)
@@ -875,4 +904,25 @@ private fun flagEmoji(countryCode: String): String {
     return countryCode.uppercase()
         .map { char -> String(Character.toChars(base + char.code)) }
         .joinToString("")
+}
+
+private fun buildWhoisShareText(result: net.aieat.netswissknife.core.network.whois.WhoisResult): String = buildString {
+    appendLine("WHOIS – ${result.query}")
+    appendLine()
+    result.registrar?.let { appendLine("Registrar: $it") }
+    result.registeredOn?.let { appendLine("Created: $it") }
+    result.updatedOn?.let { appendLine("Updated: $it") }
+    result.expiresOn?.let { appendLine("Expires: $it") }
+    if (result.nameServers.isNotEmpty()) {
+        appendLine("Name Servers: ${result.nameServers.joinToString(", ")}")
+    }
+    if (result.statusCodes.isNotEmpty()) {
+        appendLine("Status: ${result.statusCodes.joinToString(", ")}")
+    }
+    val rawWhois = result.hops.lastOrNull()?.rawResponse?.trim() ?: ""
+    if (rawWhois.isNotBlank()) {
+        appendLine()
+        appendLine("--- Raw WHOIS ---")
+        append(rawWhois)
+    }
 }

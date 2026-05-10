@@ -1,7 +1,11 @@
 package net.aieat.netswissknife.app.ui.screens.ping
 
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import net.aieat.netswissknife.app.data.AppPreferenceKeys
+import net.aieat.netswissknife.app.data.RecentHostsRepository
 import net.aieat.netswissknife.core.domain.PingFlowResult
 import net.aieat.netswissknife.core.domain.PingParams
 import net.aieat.netswissknife.core.domain.PingUseCase
@@ -11,8 +15,11 @@ import net.aieat.netswissknife.core.network.ping.PingStats
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -33,7 +40,9 @@ sealed interface PingUiState {
 
 @HiltViewModel
 class PingViewModel @Inject constructor(
-    private val pingUseCase: PingUseCase
+    private val pingUseCase: PingUseCase,
+    private val dataStore: DataStore<Preferences>,
+    private val recentHostsRepository: RecentHostsRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<PingUiState>(PingUiState.Idle)
@@ -44,16 +53,28 @@ class PingViewModel @Inject constructor(
     private val _host = MutableStateFlow("")
     val host: StateFlow<String> = _host.asStateFlow()
 
-    private val _count = MutableStateFlow(4)
+    private val _count = MutableStateFlow(10)
     val count: StateFlow<Int> = _count.asStateFlow()
 
-    private val _timeoutMs = MutableStateFlow(3_000)
+    private val _timeoutMs = MutableStateFlow(2_000)
     val timeoutMs: StateFlow<Int> = _timeoutMs.asStateFlow()
 
     private val _packetSize = MutableStateFlow(56)
     val packetSize: StateFlow<Int> = _packetSize.asStateFlow()
 
+    val recentHosts: StateFlow<List<String>> = recentHostsRepository
+        .getRecents(AppPreferenceKeys.RECENT_PING_HOSTS)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
     private var pingJob: Job? = null
+
+    init {
+        viewModelScope.launch {
+            val prefs = dataStore.data.first()
+            _count.value = prefs[AppPreferenceKeys.DEFAULT_PING_COUNT] ?: 10
+            _timeoutMs.value = prefs[AppPreferenceKeys.DEFAULT_TIMEOUT_MS] ?: 2_000
+        }
+    }
 
     // ── User actions ─────────────────────────────────────────────────────────
 
@@ -99,6 +120,18 @@ class PingViewModel @Inject constructor(
         startPing()
     }
 
+    fun removeRecentHost(host: String) {
+        viewModelScope.launch {
+            recentHostsRepository.removeRecent(AppPreferenceKeys.RECENT_PING_HOSTS, host)
+        }
+    }
+
+    fun clearRecentHosts() {
+        viewModelScope.launch {
+            recentHostsRepository.clearAll(AppPreferenceKeys.RECENT_PING_HOSTS)
+        }
+    }
+
     fun startPing() {
         pingJob?.cancel()
 
@@ -108,9 +141,15 @@ class PingViewModel @Inject constructor(
             timeoutMs = _timeoutMs.value,
             packetSize = _packetSize.value
         )
+        val trimmedHost = params.host.trim()
+
+        // Enter Running state immediately so the UI shows activity and zero-packet
+        // flows (host unreachable, DNS failure) fall through to the Error branch below.
+        _uiState.value = PingUiState.Running(host = trimmedHost, packets = emptyList(), totalCount = params.count)
 
         pingJob = viewModelScope.launch {
             val accumulatedPackets = mutableListOf<PingPacketResult>()
+            var savedToRecents = false
 
             pingUseCase(params).collect { result ->
                 when (result) {
@@ -119,9 +158,15 @@ class PingViewModel @Inject constructor(
                         return@collect
                     }
                     is PingFlowResult.Packet -> {
+                        // Save to recents only on first valid packet — avoids persisting
+                        // hosts that immediately fail validation.
+                        if (!savedToRecents) {
+                            savedToRecents = true
+                            launch { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_PING_HOSTS, trimmedHost) }
+                        }
                         accumulatedPackets.add(result.packet)
                         _uiState.value = PingUiState.Running(
-                            host = params.host.trim(),
+                            host = trimmedHost,
                             packets = accumulatedPackets.toList(),
                             totalCount = params.count
                         )
@@ -129,11 +174,11 @@ class PingViewModel @Inject constructor(
                 }
             }
 
-            // Flow completed – move to Finished if we have packets
+            // Flow completed — move to Finished if we got packets, Error if not
             val current = _uiState.value
             if (current is PingUiState.Running) {
                 _uiState.value = if (current.packets.isEmpty()) {
-                    PingUiState.Error("No response received from ${params.host.trim()}")
+                    PingUiState.Error("No response received from $trimmedHost")
                 } else {
                     PingUiState.Finished(buildResult(current.host, current.packets, params.count))
                 }
