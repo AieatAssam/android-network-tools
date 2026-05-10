@@ -425,7 +425,7 @@ that feature lands.
 
 ---
 
-## 9. Recent hosts per tool
+## ~~9. Recent hosts per tool~~ ✓ done (0ae578f)
 
 **Depends on:** Item 1 (DataStore)
 
@@ -496,7 +496,7 @@ HTTP Probe, LAN Scanner (subnets).
 
 ---
 
-## 10. Share results
+## ~~10. Share results~~ ✓ done (0ae578f)
 
 **Depends on:** nothing (independent of DataStore)
 
@@ -558,7 +558,7 @@ export mechanism at all. No tool has an `Intent.ACTION_SEND` share sheet.
 
 ---
 
-## 11. ViewModel unit tests
+## ~~11. ViewModel unit tests~~ ✓ done (see below)
 
 **Depends on:** Items 9 is complete (ViewModels are stable post-recent-hosts changes)
 

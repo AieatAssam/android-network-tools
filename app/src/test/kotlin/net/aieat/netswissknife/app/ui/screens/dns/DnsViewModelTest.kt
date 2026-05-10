@@ -1,6 +1,7 @@
 package net.aieat.netswissknife.app.ui.screens.dns
 
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -145,6 +146,54 @@ class DnsViewModelTest {
             coEvery { useCase(match { it.server == DnsServer.Custom("192.168.1.1") }) } returns NetworkResult.Success(stubResult)
             // Verify state transitioned to Success (not Error)
             assertTrue(viewModel.uiState.value is DnsUiState.Success)
+        }
+    }
+
+    @Nested
+    @DisplayName("state transitions")
+    inner class StateTransitions {
+
+        @Test
+        fun `initial state is Idle`() {
+            assertTrue(viewModel.uiState.value is DnsUiState.Idle)
+        }
+
+        @Test
+        fun `success transitions to Success`() = runTest {
+            coEvery { useCase(any()) } returns NetworkResult.Success(stubResult)
+            viewModel.onDomainChange("example.com")
+            viewModel.performLookup()
+            assertTrue(viewModel.uiState.value is DnsUiState.Success)
+        }
+
+        @Test
+        fun `error transitions to Error with message`() = runTest {
+            coEvery { useCase(any()) } returns NetworkResult.Error("nxdomain")
+            viewModel.onDomainChange("nonexistent.invalid")
+            viewModel.performLookup()
+            val state = viewModel.uiState.value
+            assertTrue(state is DnsUiState.Error)
+            assertEquals("nxdomain", (state as DnsUiState.Error).message)
+        }
+
+        @Test
+        fun `onClearResults resets to Idle`() = runTest {
+            coEvery { useCase(any()) } returns NetworkResult.Success(stubResult)
+            viewModel.onDomainChange("example.com")
+            viewModel.performLookup()
+            viewModel.onClearResults()
+            assertTrue(viewModel.uiState.value is DnsUiState.Idle)
+        }
+
+        @Test
+        fun `addRecent is called on performLookup`() = runTest {
+            coEvery { useCase(any()) } returns NetworkResult.Success(stubResult)
+            viewModel.onDomainChange("example.com")
+            viewModel.performLookup()
+            coVerify { recentHostsRepository.addRecent(
+                net.aieat.netswissknife.app.data.AppPreferenceKeys.RECENT_DNS_HOSTS,
+                "example.com"
+            ) }
         }
     }
 }
