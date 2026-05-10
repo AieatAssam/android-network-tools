@@ -1,6 +1,7 @@
 package net.aieat.netswissknife.app
 
 import android.os.Bundle
+import net.aieat.netswissknife.app.BuildConfig
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -81,12 +82,12 @@ fun NetSwissKnifeApp(navController: NavHostController) {
             onTogglePin  = navViewModel::togglePin,
             maxPinned    = AppNavigationViewModel.MAX_PINNED,
             onDismiss    = { showMoreSheet = false },
-            onDebugLogsClick = {
+            onDebugLogsClick = if (BuildConfig.DEBUG) ({
                 showMoreSheet = false
                 navController.navigate(NavRoutes.DebugLogs.route) {
                     launchSingleTop = true
                 }
-            },
+            }) else ({}),
         )
     }
 }

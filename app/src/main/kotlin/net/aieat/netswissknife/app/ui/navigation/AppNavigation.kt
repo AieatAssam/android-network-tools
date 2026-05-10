@@ -97,7 +97,9 @@ fun AppNavHost(navController: NavHostController, modifier: Modifier = Modifier) 
         composable(NavRoutes.Lan.route)        { LanScreen() }
         composable(NavRoutes.Dns.route)        { DnsScreen() }
         composable(NavRoutes.WifiScan.route)   { WifiScanScreen() }
-        composable(NavRoutes.DebugLogs.route)        { DebugLogScreen() }
+        if (net.aieat.netswissknife.app.BuildConfig.DEBUG) {
+            composable(NavRoutes.DebugLogs.route) { DebugLogScreen() }
+        }
         composable(NavRoutes.TopologyDiscovery.route) { TopologyDiscoveryScreen() }
         composable(NavRoutes.TlsInspector.route)      { TlsInspectorScreen() }
         composable(NavRoutes.WhoisLookup.route)       { WhoisScreen() }
