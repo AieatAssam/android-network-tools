@@ -672,7 +672,7 @@ fun WifiScanScreen(
     }
 }
 
-@Composable private fun signalLevelColor(
+private fun signalLevelColor(
     level: net.aieat.netswissknife.core.network.wifi.SignalLevel
 ): Color = when (level) {
     net.aieat.netswissknife.core.network.wifi.SignalLevel.EXCELLENT -> StatusGood
@@ -710,11 +710,12 @@ fun WifiScanScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Column(horizontalAlignment = Alignment.End) {
+                    val levelColor = signalLevelColor(ap.signalLevel)
                     Text(stringResource(R.string.wifi_rssi_dbm, ap.rssi), style = MaterialTheme.typography.titleMedium,
-                        color = signalLevelColor(ap.signalLevel))
+                        color = levelColor)
                     Text(ap.signalLevel.name.lowercase().replaceFirstChar { it.uppercase() },
                         style = MaterialTheme.typography.labelSmall,
-                        color = signalLevelColor(ap.signalLevel).copy(alpha = 0.7f))
+                        color = levelColor.copy(alpha = 0.7f))
                 }
             }
 
