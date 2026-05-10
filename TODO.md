@@ -309,7 +309,7 @@ must pass.
 
 ---
 
-## ~~7. Fix accessibility gaps (contentDescription)~~ ✓ done
+## ~~7. Fix accessibility gaps (contentDescription)~~ ✓ done (eff0ae9)
 
 **Depends on:** nothing
 
@@ -360,7 +360,7 @@ for every interactive element. `./gradlew :app:lintDebug` should produce zero
 
 ---
 
-## 8. Settings screen
+## ~~8. Settings screen~~ ✓ done
 
 **Depends on:** Item 1 (DataStore)
 

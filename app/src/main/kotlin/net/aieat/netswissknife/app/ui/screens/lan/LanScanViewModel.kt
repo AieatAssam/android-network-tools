@@ -1,7 +1,10 @@
 package net.aieat.netswissknife.app.ui.screens.lan
 
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.util.AppLogger
 import net.aieat.netswissknife.core.domain.LanScanFlowResult
 import net.aieat.netswissknife.core.domain.LanScanParams
@@ -16,6 +19,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -44,6 +48,7 @@ sealed interface LanScanUiState {
 @HiltViewModel
 class LanScanViewModel @Inject constructor(
     private val lanScanUseCase: LanScanUseCase,
+    private val dataStore: DataStore<Preferences>
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<LanScanUiState>(LanScanUiState.Idle)
@@ -67,6 +72,14 @@ class LanScanViewModel @Inject constructor(
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
     private var scanJob: Job? = null
+
+    init {
+        viewModelScope.launch {
+            val prefs = dataStore.data.first()
+            _timeoutMs.value = prefs[AppPreferenceKeys.DEFAULT_TIMEOUT_MS] ?: 1_000
+            _concurrency.value = prefs[AppPreferenceKeys.DEFAULT_CONCURRENCY] ?: 50
+        }
+    }
 
     init {
         refreshSubnet()

@@ -576,4 +576,39 @@
     <string name="tooltip_ip_class">A legacy classification of IPv4 ranges before CIDR replaced it. Class A covers 0–127, B covers 128–191, C covers 192–223. Class D is multicast, E is reserved.</string>
     <string name="tooltip_scope">Whether the address falls within RFC 1918 private ranges (10.x, 172.16–31.x, 192.168.x) or is publicly routable on the internet.</string>
 
+    <!-- Settings Screen -->
+    <string name="settings_screen_title">Settings</string>
+    <string name="settings_screen_subtitle">Customise theme and tool defaults</string>
+    <string name="settings_entry_label">Settings</string>
+    <string name="settings_entry_subtitle">Theme, defaults and data management</string>
+
+    <!-- Settings – Theme -->
+    <string name="settings_theme_section">Appearance</string>
+    <string name="settings_theme_label">Theme</string>
+    <string name="settings_theme_system">System</string>
+    <string name="settings_theme_light">Light</string>
+    <string name="settings_theme_dark">Dark</string>
+
+    <!-- Settings – Defaults -->
+    <string name="settings_defaults_section">Tool Defaults</string>
+    <string name="settings_ping_count_label">Default ping count: %1$d</string>
+    <string name="settings_timeout_label">Default timeout: %1$d ms</string>
+    <string name="settings_concurrency_label">Default concurrency: %1$d</string>
+
+    <!-- Settings – Data -->
+    <string name="settings_data_section">Data</string>
+    <string name="settings_clear_recents_label">Clear recent hosts</string>
+    <string name="settings_clear_recents_subtitle">Remove all saved recent host entries from every tool.</string>
+    <string name="settings_clear_recents_button">Clear all recent hosts</string>
+    <string name="settings_clear_recents_confirm_title">Clear recent hosts?</string>
+    <string name="settings_clear_recents_confirm_message">This will permanently remove all saved recent host entries. This action cannot be undone.</string>
+    <string name="settings_clear_recents_confirm_button">Clear</string>
+
+    <!-- Settings – About -->
+    <string name="settings_about_section">About</string>
+    <string name="settings_version_label">Version</string>
+
+    <!-- Generic dialogs -->
+    <string name="cancel">Cancel</string>
+
 </resources>

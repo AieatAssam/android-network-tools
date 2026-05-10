@@ -1,7 +1,10 @@
 package net.aieat.netswissknife.app.ui.screens.ping
 
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.core.domain.PingFlowResult
 import net.aieat.netswissknife.core.domain.PingParams
 import net.aieat.netswissknife.core.domain.PingUseCase
@@ -13,6 +16,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -33,7 +37,8 @@ sealed interface PingUiState {
 
 @HiltViewModel
 class PingViewModel @Inject constructor(
-    private val pingUseCase: PingUseCase
+    private val pingUseCase: PingUseCase,
+    private val dataStore: DataStore<Preferences>
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<PingUiState>(PingUiState.Idle)
@@ -44,16 +49,24 @@ class PingViewModel @Inject constructor(
     private val _host = MutableStateFlow("")
     val host: StateFlow<String> = _host.asStateFlow()
 
-    private val _count = MutableStateFlow(4)
+    private val _count = MutableStateFlow(10)
     val count: StateFlow<Int> = _count.asStateFlow()
 
-    private val _timeoutMs = MutableStateFlow(3_000)
+    private val _timeoutMs = MutableStateFlow(2_000)
     val timeoutMs: StateFlow<Int> = _timeoutMs.asStateFlow()
 
     private val _packetSize = MutableStateFlow(56)
     val packetSize: StateFlow<Int> = _packetSize.asStateFlow()
 
     private var pingJob: Job? = null
+
+    init {
+        viewModelScope.launch {
+            val prefs = dataStore.data.first()
+            _count.value = prefs[AppPreferenceKeys.DEFAULT_PING_COUNT] ?: 10
+            _timeoutMs.value = prefs[AppPreferenceKeys.DEFAULT_TIMEOUT_MS] ?: 2_000
+        }
+    }
 
     // ── User actions ─────────────────────────────────────────────────────────
 

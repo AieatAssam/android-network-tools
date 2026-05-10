@@ -12,6 +12,7 @@ import androidx.compose.material.icons.automirrored.filled.ManageSearch
 import androidx.compose.material.icons.filled.NetworkCheck
 import androidx.compose.material.icons.filled.Router
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material.icons.filled.WifiFind
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -42,6 +43,7 @@ sealed class NavRoutes(
     object WhoisLookup : NavRoutes("whois", "WHOIS Lookup", Icons.AutoMirrored.Filled.ManageSearch)
     object HttpProbe : NavRoutes("httprobe", "HTTP Probe", Icons.Default.Http)
     object SubnetCalculator : NavRoutes("subnet", "Subnet Calc", Icons.Default.Calculate)
+    object Settings : NavRoutes("settings", "Settings", Icons.Default.Settings)
 
     companion object {
         /** All navigable tool screens (excluding Home). */

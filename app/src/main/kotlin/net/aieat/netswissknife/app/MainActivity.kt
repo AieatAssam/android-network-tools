@@ -5,6 +5,7 @@ import net.aieat.netswissknife.app.BuildConfig
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
@@ -30,6 +31,7 @@ import net.aieat.netswissknife.app.ui.navigation.AppNavHost
 import net.aieat.netswissknife.app.ui.navigation.AppNavigationViewModel
 import net.aieat.netswissknife.app.ui.navigation.MoreToolsSheet
 import net.aieat.netswissknife.app.ui.navigation.NavRoutes
+import net.aieat.netswissknife.app.ui.screens.settings.SettingsViewModel
 import net.aieat.netswissknife.app.ui.theme.NetSwissKnifeTheme
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -39,7 +41,14 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         setContent {
-            NetSwissKnifeTheme {
+            val settingsViewModel: SettingsViewModel = hiltViewModel()
+            val themeOverride by settingsViewModel.themeOverride.collectAsState()
+            val darkTheme = when (themeOverride) {
+                "LIGHT" -> false
+                "DARK"  -> true
+                else    -> isSystemInDarkTheme()
+            }
+            NetSwissKnifeTheme(darkTheme = darkTheme) {
                 val navController = rememberNavController()
                 NetSwissKnifeApp(navController)
             }
@@ -82,6 +91,12 @@ fun NetSwissKnifeApp(navController: NavHostController) {
             onTogglePin  = navViewModel::togglePin,
             maxPinned    = AppNavigationViewModel.MAX_PINNED,
             onDismiss    = { showMoreSheet = false },
+            onSettingsClick = {
+                showMoreSheet = false
+                navController.navigate(NavRoutes.Settings.route) {
+                    launchSingleTop = true
+                }
+            },
             onDebugLogsClick = if (BuildConfig.DEBUG) ({
                 showMoreSheet = false
                 navController.navigate(NavRoutes.DebugLogs.route) {
