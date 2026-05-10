@@ -6,7 +6,7 @@ separately.
 
 ---
 
-## 1. DataStore infrastructure
+## ~~1. DataStore infrastructure~~ ✓ done (bb44d1d)
 
 **Why first:** Items 2, 8, and 9 all need persistent key-value storage. Establishing a single
 shared DataStore module first avoids duplication and ensures consistent serialization.
@@ -39,7 +39,7 @@ shared DataStore module first avoids duplication and ensures consistent serializ
 
 ---
 
-## 2. Persist pinned navigation routes
+## ~~2. Persist pinned navigation routes~~ ✓ done (e6192d6)
 
 **Depends on:** Item 1 (DataStore)
 
@@ -72,7 +72,7 @@ default `["ping", "dns", "ports"]`.
 
 ---
 
-## 3. Gate Debug Logs behind BuildConfig.DEBUG
+## ~~3. Gate Debug Logs behind BuildConfig.DEBUG~~ ✓ done (2c99564)
 
 **Depends on:** nothing
 
