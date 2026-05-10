@@ -16,6 +16,7 @@ coreKtx = "1.15.0"
 activityCompose = "1.10.1"
 lifecycleViewmodelCompose = "2.8.7"
 maplibreCompose = "0.12.1"
+datastorePreferences = "1.1.4"
 
 [libraries]
 # AndroidX Core
@@ -54,6 +55,7 @@ dnsjava = { group = "dnsjava", name = "dnsjava", version.ref = "dnsjava" }
 snmp4j = { group = "org.snmp4j", name = "snmp4j", version.ref = "snmp4j" }
 icmpenguin = { group = "me.impa", name = "icmpenguin", version.ref = "icmpenguin" }
 maplibre-compose = { module = "org.maplibre.compose:maplibre-compose-android", version.ref = "maplibreCompose" }
+datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastorePreferences" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
