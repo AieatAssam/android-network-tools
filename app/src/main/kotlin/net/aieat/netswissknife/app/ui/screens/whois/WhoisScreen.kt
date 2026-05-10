@@ -489,7 +489,7 @@ fun WhoisResultsSection(
     result: WhoisResult,
     showRaw: Boolean,
     onToggleRaw: () -> Unit,
-    onShare: () -> Unit = {},
+    onShare: () -> Unit,
     onOpenUrl: (String) -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {

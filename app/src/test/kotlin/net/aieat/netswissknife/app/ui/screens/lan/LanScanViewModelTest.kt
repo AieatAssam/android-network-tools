@@ -98,7 +98,7 @@ class LanScanViewModelTest {
             viewModel.onSubnetChange("192.168.1.0/24")
             viewModel.startScan()
             // withContext(Dispatchers.Default) uses real time so withTimeout works correctly
-            val state = withContext(Dispatchers.Default.limitedParallelism(1)) {
+            val state = withContext(Dispatchers.Default) {
                 withTimeout(2000) { viewModel.uiState.first { it !is LanScanUiState.Scanning } }
             }
             assertTrue(state is LanScanUiState.Finished, "Expected Finished but was $state")
@@ -111,7 +111,7 @@ class LanScanViewModelTest {
             )
             viewModel.onSubnetChange("bad")
             viewModel.startScan()
-            val state = withContext(Dispatchers.Default.limitedParallelism(1)) {
+            val state = withContext(Dispatchers.Default) {
                 withTimeout(2000) { viewModel.uiState.first { it !is LanScanUiState.Scanning } }
             }
             assertTrue(state is LanScanUiState.Error)
@@ -126,7 +126,7 @@ class LanScanViewModelTest {
             )
             viewModel.onSubnetChange("192.168.1.0/24")
             viewModel.startScan()
-            val state = withContext(Dispatchers.Default.limitedParallelism(1)) {
+            val state = withContext(Dispatchers.Default) {
                 withTimeout(2000) { viewModel.uiState.first { it is LanScanUiState.Finished } }
             } as LanScanUiState.Finished
             assertEquals(1, state.summary.hosts.size)
@@ -144,7 +144,7 @@ class LanScanViewModelTest {
             )
             viewModel.onSubnetChange("192.168.1.0/24")
             viewModel.startScan()
-            withContext(Dispatchers.Default.limitedParallelism(1)) {
+            withContext(Dispatchers.Default) {
                 withTimeout(2000) { viewModel.uiState.first { it is LanScanUiState.Finished } }
             }
             viewModel.onClear()
@@ -163,7 +163,7 @@ class LanScanViewModelTest {
             )
             viewModel.onSubnetChange("10.0.0.0/24")
             viewModel.startScan()
-            withContext(Dispatchers.Default.limitedParallelism(1)) {
+            withContext(Dispatchers.Default) {
                 withTimeout(2000) { viewModel.uiState.first { it is LanScanUiState.Finished } }
             }
             coVerify { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_LAN_SUBNETS, "10.0.0.0/24") }

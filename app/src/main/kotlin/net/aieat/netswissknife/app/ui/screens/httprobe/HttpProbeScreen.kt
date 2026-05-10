@@ -575,7 +575,7 @@ private fun HttpProbeSuccessContent(
     result: HttpProbeResult,
     selectedTab: Int,
     onTabSelected: (Int) -> Unit,
-    onShare: () -> Unit = {}
+    onShare: () -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(
@@ -1137,7 +1137,7 @@ private fun formatBytes(bytes: Long): String = when {
     else                -> "%.1f MB".format(bytes / (1024.0 * 1024.0))
 }
 
-private fun buildHttpShareText(result: net.aieat.netswissknife.core.network.httprobe.HttpProbeResult): String = buildString {
+private fun buildHttpShareText(result: HttpProbeResult): String = buildString {
     appendLine("HTTP – ${result.request.url}")
     appendLine("Status: ${result.statusCode} ${result.statusMessage}")
     appendLine("Time: ${result.responseTimeMs}ms")

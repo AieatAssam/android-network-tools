@@ -1255,10 +1255,11 @@ private fun buildLanShareText(summary: LanScanSummary): String = buildString {
     appendLine("Duration: ${summary.scanDurationMs}ms")
     appendLine()
     summary.hosts.forEach { host ->
-        val hostname = if (host.hostname != null) " (${host.hostname})" else ""
-        val vendor = if (host.vendor != null) " [${host.vendor}]" else ""
-        val rtt = if (host.pingTimeMs != null) " ${host.pingTimeMs}ms" else ""
-        val ports = if (host.openPorts.isNotEmpty()) " ports:${host.openPorts.joinToString(",")}" else ""
-        appendLine("${host.ip}$hostname$vendor$rtt$ports")
+        append(host.ip)
+        host.hostname?.let { append(" ($it)") }
+        host.vendor?.let { append(" [$it]") }
+        append(" ${host.pingTimeMs}ms")
+        if (host.openPorts.isNotEmpty()) append(" ports:${host.openPorts.joinToString(",")}")
+        appendLine()
     }
 }
