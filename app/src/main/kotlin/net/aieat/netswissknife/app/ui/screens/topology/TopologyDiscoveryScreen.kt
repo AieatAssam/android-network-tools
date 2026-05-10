@@ -898,12 +898,12 @@ private fun NodeDetailSheet(
                                     FilterChip(
                                         selected = true,
                                         onClick = {},
-                                        label = { Text("${vlan.id}: ${vlan.name}", style = MaterialTheme.typography.labelSmall) }
+                                        label = { Text(stringResource(R.string.topology_vlan_label, vlan.id, vlan.name), style = MaterialTheme.typography.labelSmall) }
                                     )
                                 } else {
                                     AssistChip(
                                         onClick = {},
-                                        label = { Text("${vlan.id}: ${vlan.name}", style = MaterialTheme.typography.labelSmall) }
+                                        label = { Text(stringResource(R.string.topology_vlan_label, vlan.id, vlan.name), style = MaterialTheme.typography.labelSmall) }
                                     )
                                 }
                             }

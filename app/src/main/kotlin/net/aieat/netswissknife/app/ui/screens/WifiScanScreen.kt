@@ -80,8 +80,14 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import net.aieat.netswissknife.app.ui.theme.StatusBad
+import net.aieat.netswissknife.app.ui.theme.StatusCritical
+import net.aieat.netswissknife.app.ui.theme.StatusGood
+import net.aieat.netswissknife.app.ui.theme.StatusOk
+import net.aieat.netswissknife.app.ui.theme.StatusWarn
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -90,6 +96,7 @@ import net.aieat.netswissknife.app.ui.screens.wifi.ApSortOrder
 import net.aieat.netswissknife.app.ui.screens.wifi.WifiScanUiState
 import net.aieat.netswissknife.app.ui.screens.wifi.WifiScanViewModel
 import net.aieat.netswissknife.core.network.wifi.WifiAccessPoint
+import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.core.network.wifi.WifiBand
 
 @Composable
@@ -209,10 +216,9 @@ fun WifiScanScreen(
     WifiStatusCard(
         icon   = { Icon(Icons.Default.LocationOff, null, Modifier.size(48.dp),
                        tint = MaterialTheme.colorScheme.error) },
-        title  = "Location Permission Required",
-        body   = "Android requires Location permission to scan for nearby Wi-Fi networks. " +
-                 "Your location is not sent anywhere.",
-        action = { Button(onRequest) { Text("Grant Permission") } }
+        title  = stringResource(R.string.wifi_no_permission_title),
+        body   = stringResource(R.string.wifi_no_permission_body),
+        action = { Button(onRequest) { Text(stringResource(R.string.wifi_grant_permission)) } }
     )
 }
 
@@ -220,8 +226,8 @@ fun WifiScanScreen(
     WifiStatusCard(
         icon  = { Icon(Icons.Default.WifiOff, null, Modifier.size(48.dp),
                       tint = MaterialTheme.colorScheme.onSurfaceVariant) },
-        title = "Wi-Fi Not Available",
-        body  = "This device does not have Wi-Fi hardware."
+        title = stringResource(R.string.wifi_not_supported_title),
+        body  = stringResource(R.string.wifi_not_supported_body)
     )
 }
 
@@ -229,9 +235,9 @@ fun WifiScanScreen(
     WifiStatusCard(
         icon   = { Icon(Icons.Default.SignalWifiOff, null, Modifier.size(48.dp),
                        tint = MaterialTheme.colorScheme.tertiary) },
-        title  = "Wi-Fi is Off",
-        body   = "Enable Wi-Fi in your device settings, then scan again.",
-        action = { Button(onRetry) { Text("Retry") } }
+        title  = stringResource(R.string.wifi_disabled_title),
+        body   = stringResource(R.string.wifi_disabled_body),
+        action = { Button(onRetry) { Text(stringResource(R.string.wifi_retry)) } }
     )
 }
 
@@ -239,9 +245,9 @@ fun WifiScanScreen(
     WifiStatusCard(
         icon   = { Icon(Icons.Default.WifiOff, null, Modifier.size(48.dp),
                        tint = MaterialTheme.colorScheme.error) },
-        title  = "Scan Failed",
+        title  = stringResource(R.string.wifi_error_title),
         body   = message,
-        action = { Button(onRetry) { Text("Retry") } }
+        action = { Button(onRetry) { Text(stringResource(R.string.wifi_retry)) } }
     )
 }
 
@@ -372,7 +378,7 @@ fun WifiScanScreen(
                     Icon(Icons.Default.Wifi, null, Modifier.size(28.dp),
                         tint = MaterialTheme.colorScheme.onPrimaryContainer)
                     Spacer(Modifier.width(10.dp))
-                    Text("Wi-Fi Scanner", style = MaterialTheme.typography.displaySmall,
+                    Text(stringResource(R.string.wifi_screen_title), style = MaterialTheme.typography.displaySmall,
                         color = MaterialTheme.colorScheme.onPrimaryContainer)
                     Spacer(Modifier.weight(1f))
                     FilledTonalIconButton(onClick = onScan) {
@@ -411,7 +417,7 @@ fun WifiScanScreen(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
-        FilterChip(selected = selected == null, onClick = { onSelect(null) }, label = { Text("All") })
+        FilterChip(selected = selected == null, onClick = { onSelect(null) }, label = { Text(stringResource(R.string.wifi_filter_all)) })
         detectedBands.forEach { band ->
             FilterChip(
                 selected = selected == band,
@@ -426,7 +432,7 @@ fun WifiScanScreen(
 
 @Composable private fun WifiSortRow(current: ApSortOrder, onSelect: (ApSortOrder) -> Unit) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Sort:", style = MaterialTheme.typography.labelMedium,
+        Text(stringResource(R.string.wifi_sort_label), style = MaterialTheme.typography.labelMedium,
             modifier = Modifier.align(Alignment.CenterVertically),
             color = MaterialTheme.colorScheme.onSurfaceVariant)
         ApSortOrder.values().forEach { order ->
@@ -450,7 +456,7 @@ fun WifiScanScreen(
 
     ElevatedCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
-            Text("Channel Utilisation", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.wifi_channel_chart_title), style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(4.dp))
 
             // Group by band for sub-headers
@@ -522,7 +528,7 @@ fun WifiScanScreen(
                     cornerRadius = CornerRadius(6f)
                 )
                 // Filled bar: green → amber → red by congestion score
-                val barFill = lerp(Color(0xFF4CAF50), Color(0xFFF44336), ch.congestionScore)
+                val barFill = lerp(StatusGood, StatusCritical, ch.congestionScore)
                 drawRoundRect(
                     color        = barFill,
                     topLeft      = Offset(x, barTop),
@@ -584,12 +590,12 @@ fun WifiScanScreen(
                     )
                     if (ap.isConnected) {
                         Badge(containerColor = MaterialTheme.colorScheme.primary) {
-                            Text("Connected", style = MaterialTheme.typography.labelSmall)
+                            Text(stringResource(R.string.wifi_connected_badge), style = MaterialTheme.typography.labelSmall)
                         }
                     }
                     if (ap.ssid.isBlank()) {
                         Badge(containerColor = MaterialTheme.colorScheme.surfaceVariant) {
-                            Text("Hidden", style = MaterialTheme.typography.labelSmall,
+                            Text(stringResource(R.string.wifi_hidden_badge), style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
@@ -622,8 +628,8 @@ fun WifiScanScreen(
             // RSSI column
             Column(horizontalAlignment = Alignment.End) {
                 val rssiColor = signalLevelColor(ap.signalLevel)
-                Text("${ap.rssi} dBm", style = MaterialTheme.typography.labelMedium, color = rssiColor)
-                Text("${ap.signalQualityPercent}%", style = MaterialTheme.typography.labelSmall,
+                Text(stringResource(R.string.wifi_rssi_dbm, ap.rssi), style = MaterialTheme.typography.labelMedium, color = rssiColor)
+                Text(stringResource(R.string.wifi_signal_quality_pct, ap.signalQualityPercent), style = MaterialTheme.typography.labelSmall,
                     color = rssiColor.copy(alpha = 0.7f))
             }
         }
@@ -669,11 +675,11 @@ fun WifiScanScreen(
 @Composable private fun signalLevelColor(
     level: net.aieat.netswissknife.core.network.wifi.SignalLevel
 ): Color = when (level) {
-    net.aieat.netswissknife.core.network.wifi.SignalLevel.EXCELLENT -> Color(0xFF4CAF50)
-    net.aieat.netswissknife.core.network.wifi.SignalLevel.GOOD      -> Color(0xFF8BC34A)
-    net.aieat.netswissknife.core.network.wifi.SignalLevel.FAIR      -> Color(0xFFFFC107)
-    net.aieat.netswissknife.core.network.wifi.SignalLevel.WEAK      -> Color(0xFFFF9800)
-    net.aieat.netswissknife.core.network.wifi.SignalLevel.POOR      -> Color(0xFFF44336)
+    net.aieat.netswissknife.core.network.wifi.SignalLevel.EXCELLENT -> StatusGood
+    net.aieat.netswissknife.core.network.wifi.SignalLevel.GOOD      -> StatusOk
+    net.aieat.netswissknife.core.network.wifi.SignalLevel.FAIR      -> StatusWarn
+    net.aieat.netswissknife.core.network.wifi.SignalLevel.WEAK      -> StatusBad
+    net.aieat.netswissknife.core.network.wifi.SignalLevel.POOR      -> StatusCritical
 }
 
 // ── AP Detail Bottom Sheet ────────────────────────────────────────────────────
@@ -704,7 +710,7 @@ fun WifiScanScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Column(horizontalAlignment = Alignment.End) {
-                    Text("${ap.rssi} dBm", style = MaterialTheme.typography.titleMedium,
+                    Text(stringResource(R.string.wifi_rssi_dbm, ap.rssi), style = MaterialTheme.typography.titleMedium,
                         color = signalLevelColor(ap.signalLevel))
                     Text(ap.signalLevel.name.lowercase().replaceFirstChar { it.uppercase() },
                         style = MaterialTheme.typography.labelSmall,
@@ -722,7 +728,7 @@ fun WifiScanScreen(
                         Icon(Icons.Default.Star, null, Modifier.size(16.dp),
                             tint = MaterialTheme.colorScheme.primary)
                         Spacer(Modifier.width(8.dp))
-                        Text("Currently Connected", style = MaterialTheme.typography.labelMedium,
+                        Text(stringResource(R.string.wifi_connected_network_header), style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onPrimaryContainer)
                     }
                 }
