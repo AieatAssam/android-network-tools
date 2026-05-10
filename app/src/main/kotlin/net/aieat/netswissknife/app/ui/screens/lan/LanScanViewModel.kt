@@ -179,7 +179,7 @@ class LanScanViewModel @Inject constructor(
                             // subnets that immediately fail validation.
                             if (!savedToRecents) {
                                 savedToRecents = true
-                                launch { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_LAN_SUBNETS, params.subnet) }
+                                recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_LAN_SUBNETS, params.subnet)
                             }
                             liveHosts.add(result.host)
                             _uiState.value = LanScanUiState.Scanning(

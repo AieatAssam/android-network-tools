@@ -162,7 +162,7 @@ class PingViewModel @Inject constructor(
                         // hosts that immediately fail validation.
                         if (!savedToRecents) {
                             savedToRecents = true
-                            launch { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_PING_HOSTS, trimmedHost) }
+                            recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_PING_HOSTS, trimmedHost)
                         }
                         accumulatedPackets.add(result.packet)
                         _uiState.value = PingUiState.Running(
