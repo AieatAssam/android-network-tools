@@ -84,6 +84,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import net.aieat.netswissknife.app.ui.theme.StatusBad
+import net.aieat.netswissknife.app.ui.theme.StatusCritical
+import net.aieat.netswissknife.app.ui.theme.StatusGood
+import net.aieat.netswissknife.app.ui.theme.StatusLime
+import net.aieat.netswissknife.app.ui.theme.StatusUnknown
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
@@ -986,11 +991,11 @@ private fun formatDistance(km: Double): String = when {
 }
 
 private fun rttColor(rtTimeMs: Long?): Color = when {
-    rtTimeMs == null -> Color(0xFF9E9E9E)
-    rtTimeMs < 50    -> Color(0xFF4CAF50)
-    rtTimeMs < 150   -> Color(0xFFCDDC39)
-    rtTimeMs < 300   -> Color(0xFFFF9800)
-    else             -> Color(0xFFF44336)
+    rtTimeMs == null -> StatusUnknown
+    rtTimeMs < 50    -> StatusGood
+    rtTimeMs < 150   -> StatusLime
+    rtTimeMs < 300   -> StatusBad
+    else             -> StatusCritical
 }
 
 // ── Hop detail list ───────────────────────────────────────────────────────────

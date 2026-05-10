@@ -64,6 +64,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.ui.theme.StatusBlue
+import net.aieat.netswissknife.app.ui.theme.StatusGood
 import net.aieat.netswissknife.core.network.tls.TlsCertificate
 import net.aieat.netswissknife.core.network.tls.TlsInspectorResult
 import java.time.Instant
@@ -453,16 +455,7 @@ private fun ConnectionCard(result: TlsInspectorResult) {
                         .height(4.dp)
                 ) {
                     drawRect(
-                        brush = Brush.linearGradient(
-                            listOf(
-                                android.graphics.Color.parseColor("#4CAF50").let {
-                                    androidx.compose.ui.graphics.Color(it)
-                                },
-                                android.graphics.Color.parseColor("#2196F3").let {
-                                    androidx.compose.ui.graphics.Color(it)
-                                }
-                            )
-                        )
+                        brush = Brush.linearGradient(listOf(StatusGood, StatusBlue))
                     )
                 }
             }
