@@ -360,7 +360,7 @@ for every interactive element. `./gradlew :app:lintDebug` should produce zero
 
 ---
 
-## ~~8. Settings screen~~ ✓ done
+## ~~8. Settings screen~~ ✓ done (e467ef6)
 
 **Depends on:** Item 1 (DataStore)
 
