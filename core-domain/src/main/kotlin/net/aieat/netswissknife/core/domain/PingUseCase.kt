@@ -13,7 +13,7 @@ import kotlinx.coroutines.flow.map
  * Validation rules:
  * - Host must not be blank
  * - Host must be a valid hostname or IPv4 address
- * - count must be in 1..100
+ * - count must be in 1..1000
  * - timeoutMs must be in 100..30_000
  * - packetSize must be in 1..65_507
  */
@@ -28,8 +28,8 @@ class PingUseCase(
                 "Host must not be empty"
             !HostValidator.isValidHostname(trimmedHost) ->
                 "Invalid host or IP address"
-            params.count !in 1..100 ->
-                "Count must be between 1 and 100"
+            params.count !in 1..1000 ->
+                "Count must be between 1 and 1000"
             params.timeoutMs !in 100..30_000 ->
                 "Timeout must be between 100 ms and 30 000 ms"
             params.packetSize !in 1..65_507 ->
