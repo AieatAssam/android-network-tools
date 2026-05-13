@@ -530,7 +530,7 @@ private fun PingRunningPanel(state: PingUiState.Running) {
                             MaterialTheme.colorScheme.error
                         LiveStatLabel(
                             label = stringResource(R.string.ping_packet_loss),
-                            value = "${"%.0f".format(liveStats.lossPercent)}%",
+                            value = "${"%.1f".format(liveStats.lossPercent)}%",
                             color = lossColor
                         )
                         if (liveStats.received > 0) {
@@ -752,7 +752,7 @@ private fun StatsCard(stats: PingStats, host: String) {
                 )
                 StatItem(
                     label = stringResource(R.string.ping_packet_loss),
-                    value = "${"%.0f".format(stats.lossPercent)}%",
+                    value = "${"%.1f".format(stats.lossPercent)}%",
                     color = if (stats.lossPercent == 0f)
                         MaterialTheme.colorScheme.tertiary
                     else
