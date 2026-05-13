@@ -83,7 +83,7 @@ class PingViewModel @Inject constructor(
     }
 
     fun onCountChange(value: Int) {
-        _count.value = value.coerceIn(1, 100)
+        _count.value = value.coerceIn(1, 1000)
     }
 
     fun onTimeoutChange(value: Int) {
