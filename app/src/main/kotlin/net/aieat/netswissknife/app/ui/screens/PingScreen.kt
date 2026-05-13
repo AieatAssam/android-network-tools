@@ -327,7 +327,7 @@ private fun PingInputCard(
             PingSliderRow(
                 label = "${stringResource(R.string.ping_count_label)}: $count",
                 value = count.toFloat(),
-                valueRange = 1f..50f,
+                valueRange = 1f..1000f,
                 steps = 48,
                 onValueChange = { onCountChange(it.toInt()) },
                 enabled = !isRunning
