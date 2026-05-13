@@ -95,35 +95,10 @@ jobs:
             -PversionCode="${{ steps.version.outputs.code }}" \
             --no-daemon
 
-      # ── 9. Locate artefacts ───────────────────────────────────────────────
-      - name: Locate build artefacts
-        id: artefacts
-        run: |
-          APK=$(find app/build/outputs/apk/release -name '*.apk' | head -1)
-          AAB=$(find app/build/outputs/bundle/release -name '*.aab' | head -1)
-          echo "apk=${APK}" >> "$GITHUB_OUTPUT"
-          echo "aab=${AAB}" >> "$GITHUB_OUTPUT"
-          echo "Found APK: ${APK}"
-          echo "Found AAB: ${AAB}"
-
-      # ── 10. Rename artefacts with version ─────────────────────────────────
-      - name: Rename artefacts
-        id: rename
-        run: |
-          VERSION="${{ steps.version.outputs.name }}"
-          APK="${{ steps.artefacts.outputs.apk }}"
-          AAB="${{ steps.artefacts.outputs.aab }}"
-          DIR=$(dirname "$APK")
-          DIR_AAB=$(dirname "$AAB")
-          cp "$APK" "${DIR}/NetSwissKnife-${VERSION}.apk"
-          cp "$AAB" "${DIR_AAB}/NetSwissKnife-${VERSION}.aab"
-          echo "apk_named=${DIR}/NetSwissKnife-${VERSION}.apk"    >> "$GITHUB_OUTPUT"
-          echo "aab_named=${DIR_AAB}/NetSwissKnife-${VERSION}.aab" >> "$GITHUB_OUTPUT"
-
       # ── 11. Upload artefacts to workflow run ──────────────────────────────
       - name: Upload APK artefact
         uses: actions/upload-artifact@v4
         with:
           name: NetSwissKnife-${{ steps.version.outputs.name }}-apk
-          path: ${{ steps.rename.outputs.apk_named }}
+          path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
