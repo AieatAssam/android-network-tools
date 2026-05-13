@@ -43,7 +43,7 @@ class SettingsViewModel @Inject constructor(
 
     fun setDefaultPingCount(value: Int) {
         viewModelScope.launch {
-            dataStore.edit { it[AppPreferenceKeys.DEFAULT_PING_COUNT] = value.coerceIn(1, 100) }
+            dataStore.edit { it[AppPreferenceKeys.DEFAULT_PING_COUNT] = value.coerceIn(1, 1000) }
         }
     }
 
