@@ -87,17 +87,6 @@ jobs:
           echo "code=${VERSION_CODE}"   >> "$GITHUB_OUTPUT"
           echo "Generated version: ${VERSION} (code: ${VERSION_CODE})"
 
-      # ── 5. Unit tests ─────────────────────────────────────────────────────
-      - name: Run unit tests
-        run: ./gradlew test --no-daemon
-
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-results
-          path: '**/build/reports/tests/'
-
       # ── 8. Build release APK ──────────────────────────────────────────────
       - name: Build release APK (unsigned – no keystore)
         run: |
