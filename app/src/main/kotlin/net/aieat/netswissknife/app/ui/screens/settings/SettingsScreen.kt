@@ -174,7 +174,7 @@ private fun DefaultsSection(
             SliderSetting(
                 label = stringResource(R.string.settings_ping_count_label, pingCount),
                 value = pingCount.toFloat(),
-                valueRange = 1f..100f,
+                valueRange = 1f..1000f,
                 steps = 98,
                 onValueChange = { onPingCountChange(it.roundToInt()) }
             )
