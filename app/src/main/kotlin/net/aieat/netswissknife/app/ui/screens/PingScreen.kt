@@ -87,6 +87,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
@@ -94,9 +95,13 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
@@ -512,6 +517,29 @@ private fun PingRunningPanel(state: PingUiState.Running) {
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                if (state.packets.isNotEmpty()) {
+                    val liveStats = PingStats.compute(state.packets)
+                    HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        val lossColor = if (liveStats.lossPercent == 0f)
+                            MaterialTheme.colorScheme.tertiary
+                        else
+                            MaterialTheme.colorScheme.error
+                        LiveStatLabel(
+                            label = stringResource(R.string.ping_packet_loss),
+                            value = "${"%.0f".format(liveStats.lossPercent)}%",
+                            color = lossColor
+                        )
+                        if (liveStats.received > 0) {
+                            LiveStatLabel(stringResource(R.string.ping_rtt_min), "${liveStats.minMs} ms")
+                            LiveStatLabel(stringResource(R.string.ping_rtt_avg), "${"%.0f".format(liveStats.avgMs)} ms")
+                            LiveStatLabel(stringResource(R.string.ping_rtt_max), "${liveStats.maxMs} ms")
+                        }
+                    }
+                }
             }
         }
 
@@ -742,22 +770,26 @@ private fun StatsCard(stats: PingStats, host: String) {
                 ) {
                     StatItem(
                         label = stringResource(R.string.ping_rtt_min),
-                        value = "${stats.minMs} ${stringResource(R.string.ping_ms_suffix)}",
+                        value = "${stats.minMs}",
+                        unit = stringResource(R.string.ping_ms_suffix),
                         color = MaterialTheme.colorScheme.onTertiaryContainer
                     )
                     StatItem(
                         label = stringResource(R.string.ping_rtt_avg),
-                        value = "${"%.1f".format(stats.avgMs)} ${stringResource(R.string.ping_ms_suffix)}",
+                        value = "${"%.1f".format(stats.avgMs)}",
+                        unit = stringResource(R.string.ping_ms_suffix),
                         color = MaterialTheme.colorScheme.onTertiaryContainer
                     )
                     StatItem(
                         label = stringResource(R.string.ping_rtt_max),
-                        value = "${stats.maxMs} ${stringResource(R.string.ping_ms_suffix)}",
+                        value = "${stats.maxMs}",
+                        unit = stringResource(R.string.ping_ms_suffix),
                         color = MaterialTheme.colorScheme.onTertiaryContainer
                     )
                     StatItem(
                         label = stringResource(R.string.ping_rtt_jitter),
-                        value = "${"%.1f".format(stats.jitterMs)} ${stringResource(R.string.ping_ms_suffix)}",
+                        value = "${"%.1f".format(stats.jitterMs)}",
+                        unit = stringResource(R.string.ping_ms_suffix),
                         color = MaterialTheme.colorScheme.onTertiaryContainer
                     )
                 }
@@ -767,19 +799,37 @@ private fun StatsCard(stats: PingStats, host: String) {
 }
 
 @Composable
-private fun StatItem(label: String, value: String, color: Color) {
+private fun StatItem(label: String, value: String, color: Color, unit: String = "") {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(
-            text = value,
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            color = color
-        )
+        Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.Center) {
+            Text(
+                text = value,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = color
+            )
+            if (unit.isNotEmpty()) {
+                Text(
+                    text = unit,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = color.copy(alpha = 0.7f),
+                    modifier = Modifier.padding(start = 2.dp, bottom = 2.dp)
+                )
+            }
+        }
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall,
             color = color.copy(alpha = 0.7f)
         )
+    }
+}
+
+@Composable
+private fun LiveStatLabel(label: String, value: String, color: Color = MaterialTheme.colorScheme.onSurface) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(text = value, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = color)
+        Text(text = label, style = MaterialTheme.typography.labelSmall, color = color.copy(alpha = 0.6f))
     }
 }
 
@@ -794,6 +844,12 @@ private fun RttChartCard(packets: List<PingPacketResult>) {
     val successColor = MaterialTheme.colorScheme.tertiary
     val errorColor = MaterialTheme.colorScheme.error
     val surfaceColor = MaterialTheme.colorScheme.surfaceVariant
+    val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val textMeasurer = rememberTextMeasurer()
+    val labelStyle = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, color = labelColor)
+    val density = LocalDensity.current
+    val leftPad = with(density) { 42.dp.toPx() }
+    val edgePad = with(density) { 8.dp.toPx() }
 
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -811,37 +867,42 @@ private fun RttChartCard(packets: List<PingPacketResult>) {
                 val maxRtt = successPackets.mapNotNull { it.rtTimeMs }.maxOrNull() ?: 1L
                 val chartWidth = size.width
                 val chartHeight = size.height
-                val padding = 16f
 
-                // Background grid
+                // Grid lines + Y-axis labels
                 val gridLines = 4
                 repeat(gridLines) { i ->
-                    val y = padding + (chartHeight - 2 * padding) * i / (gridLines - 1)
+                    val y = edgePad + (chartHeight - 2 * edgePad) * i / (gridLines - 1)
                     drawLine(
                         color = surfaceColor,
-                        start = Offset(padding, y),
-                        end = Offset(chartWidth - padding, y),
+                        start = Offset(leftPad, y),
+                        end = Offset(chartWidth - edgePad, y),
                         strokeWidth = 1f
+                    )
+                    val rttAtLine = maxRtt * (gridLines - 1 - i) / (gridLines - 1)
+                    val labelText = "${rttAtLine}ms"
+                    val measured = textMeasurer.measure(labelText, style = labelStyle)
+                    drawText(
+                        textLayoutResult = measured,
+                        topLeft = Offset(0f, y - measured.size.height / 2f)
                     )
                 }
 
                 // Build path of RTT values
                 val points = mutableListOf<Offset>()
                 packets.forEachIndexed { index, packet ->
-                    val x = padding + (chartWidth - 2 * padding) * index / (packets.size - 1).coerceAtLeast(1)
+                    val x = leftPad + (chartWidth - leftPad - edgePad) * index / (packets.size - 1).coerceAtLeast(1)
                     val rtt = packet.rtTimeMs
                     if (rtt != null) {
-                        val y = chartHeight - padding - (rtt.toFloat() / maxRtt) * (chartHeight - 2 * padding)
+                        val y = chartHeight - edgePad - (rtt.toFloat() / maxRtt) * (chartHeight - 2 * edgePad)
                         points.add(Offset(x, y))
                     }
                 }
 
                 if (points.size >= 2) {
-                    // Fill gradient beneath curve
                     val fillPath = Path().apply {
-                        moveTo(points.first().x, chartHeight - padding)
+                        moveTo(points.first().x, chartHeight - edgePad)
                         points.forEach { lineTo(it.x, it.y) }
-                        lineTo(points.last().x, chartHeight - padding)
+                        lineTo(points.last().x, chartHeight - edgePad)
                         close()
                     }
                     drawPath(
@@ -851,7 +912,6 @@ private fun RttChartCard(packets: List<PingPacketResult>) {
                             startY = 0f, endY = chartHeight
                         )
                     )
-                    // Line
                     val linePath = Path().apply {
                         moveTo(points.first().x, points.first().y)
                         points.drop(1).forEach { lineTo(it.x, it.y) }
@@ -865,23 +925,15 @@ private fun RttChartCard(packets: List<PingPacketResult>) {
 
                 // Dots per packet
                 packets.forEachIndexed { index, packet ->
-                    val x = padding + (chartWidth - 2 * padding) * index / (packets.size - 1).coerceAtLeast(1)
+                    val x = leftPad + (chartWidth - leftPad - edgePad) * index / (packets.size - 1).coerceAtLeast(1)
                     val rtt = packet.rtTimeMs
-                    val dotColor = when {
-                        rtt != null -> successColor
-                        else -> errorColor
-                    }
+                    val dotColor = if (rtt != null) successColor else errorColor
                     val y = if (rtt != null)
-                        chartHeight - padding - (rtt.toFloat() / maxRtt) * (chartHeight - 2 * padding)
+                        chartHeight - edgePad - (rtt.toFloat() / maxRtt) * (chartHeight - 2 * edgePad)
                     else
-                        chartHeight - padding
-
+                        chartHeight - edgePad
                     drawCircle(color = dotColor, radius = 5f, center = Offset(x, y))
-                    drawCircle(
-                        color = dotColor.copy(alpha = 0.3f),
-                        radius = 9f,
-                        center = Offset(x, y)
-                    )
+                    drawCircle(color = dotColor.copy(alpha = 0.3f), radius = 9f, center = Offset(x, y))
                 }
             }
         }
