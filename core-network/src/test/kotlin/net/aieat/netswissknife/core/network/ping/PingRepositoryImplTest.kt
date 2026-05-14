@@ -1,11 +1,13 @@
 package net.aieat.netswissknife.core.network.ping
 
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
@@ -151,6 +153,60 @@ class PingRepositoryImplTest {
             assertEquals(PingStatus.SUCCESS, packets[1].status)
             assertEquals(PingStatus.TIMEOUT, packets[2].status)
             assertEquals(PingStatus.SUCCESS, packets[3].status)
+        }
+    }
+
+    @Nested
+    @DisplayName("continuousPing")
+    inner class ContinuousPing {
+
+        @Test
+        fun `emits packets until flow is cancelled`() = runTest {
+            val repo = PingRepositoryImpl(checker = successChecker(), delayBetweenProbesMs = 0L)
+            val packets = repo.continuousPing("8.8.8.8", timeoutMs = 1000, packetSize = 56)
+                .take(5)
+                .toList()
+            assertEquals(5, packets.size)
+        }
+
+        @Test
+        fun `sequence numbers increment from 1`() = runTest {
+            val repo = PingRepositoryImpl(checker = successChecker(), delayBetweenProbesMs = 0L)
+            val packets = repo.continuousPing("8.8.8.8", timeoutMs = 1000, packetSize = 56)
+                .take(3)
+                .toList()
+            assertEquals(listOf(1, 2, 3), packets.map { it.sequence })
+        }
+
+        @Test
+        fun `successful probes produce SUCCESS packets`() = runTest {
+            val repo = PingRepositoryImpl(checker = successChecker(rtMs = 20L), delayBetweenProbesMs = 0L)
+            val packet = repo.continuousPing("8.8.8.8", timeoutMs = 1000, packetSize = 56)
+                .take(1)
+                .toList()
+                .first()
+            assertEquals(PingStatus.SUCCESS, packet.status)
+            assertEquals(20L, packet.rtTimeMs)
+        }
+
+        @Test
+        fun `timeout probes produce TIMEOUT packets with null rtt`() = runTest {
+            val repo = PingRepositoryImpl(checker = timeoutChecker(), delayBetweenProbesMs = 0L)
+            val packet = repo.continuousPing("10.0.0.1", timeoutMs = 100, packetSize = 56)
+                .take(1)
+                .toList()
+                .first()
+            assertEquals(PingStatus.TIMEOUT, packet.status)
+            assertNull(packet.rtTimeMs)
+        }
+
+        @Test
+        fun `host is set on every packet`() = runTest {
+            val repo = PingRepositoryImpl(checker = successChecker(), delayBetweenProbesMs = 0L)
+            val packets = repo.continuousPing("example.com", timeoutMs = 1000, packetSize = 56)
+                .take(3)
+                .toList()
+            assertTrue(packets.all { it.host == "example.com" })
         }
     }
 }
