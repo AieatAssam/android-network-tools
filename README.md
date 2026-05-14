@@ -8,8 +8,14 @@
 
 ### Ping
 ICMP round-trip latency measurement with real-time streaming results.
-- Configurable probe count (1–100), timeout (100–30,000 ms), and packet size (1–65,507 bytes)
+- Configurable probe count (1–50 via slider; default configurable up to 100 in Settings), timeout (100–30,000 ms), and packet size (1–65,507 bytes)
 - Per-probe RTT reporting with sequence numbers and status (SUCCESS / TIMEOUT / ERROR)
+- Live stats panel during active ping: packet loss %, min, avg, and max RTT updating after every packet
+- RTT chart with Y-axis ms labels and fill gradient, rendered as results arrive
+- **Continuous mode** — toggle replaces the count slider; pings indefinitely while the app is on screen, screen kept on automatically, stops when backgrounded or screen locked
+  - Rolling window of the last 100 packets drives live stats and chart
+  - Full session log streamed to a temp CSV file; shareable via the Share button on completion
+- Recent hosts saved per-session and offered as quick-select chips
 
 ### Traceroute
 Network path analysis with per-hop geolocation enrichment.
@@ -29,11 +35,13 @@ Local network device discovery across IPv4 subnets.
 - CIDR subnet scanning (/16–/30) with automatic current-subnet detection
 - Per-host details: IP, reverse-DNS hostname, MAC address, OUI vendor name, open ports, RTT, gateway flag
 - Concurrent host probes (1–500) with real-time progress streaming and final summary
+- Search results by IP, hostname, or vendor; filter by gateway or hosts with open ports
 
 ### DNS Lookup
 Full DNS record resolution with multiple resolver options.
 - 10 record types: A, AAAA, MX, TXT, CNAME, NS, SOA, PTR, SRV, CAA
 - Resolver options: system default, Google (8.8.8.8), Cloudflare (1.1.1.1), or custom server
+- PTR queries auto-reverse IPv4 addresses to `.in-addr.arpa` and IPv6 to `.ip6.arpa` form — just enter the IP
 - Returns resolved records, query time, and raw DNS response
 
 ### Wi-Fi Scanner
@@ -86,12 +94,14 @@ Full HTTP/HTTPS request tester with security header analysis.
 
 ### Subnet Calculator
 IPv4 subnet calculator with visual binary breakdown and multi-notation conversion.
-- Accepts CIDR (`192.168.1.0/24`), dot-decimal mask (`192.168.1.0/255.255.255.0`), space-separated mask, or bare IP (assumes `/32`)
+- Two input modes: **CIDR / Mask** and **IP Range** (finds the tightest subnet covering a given min–max IP pair)
+- CIDR mode accepts CIDR (`192.168.1.0/24`), dot-decimal mask (`192.168.1.0/255.255.255.0`), space-separated mask, or bare IP (assumes `/32`)
 - Computes: network address, broadcast, first/last usable host, total and usable host counts
 - **Binary Breakdown card**: colour-coded bit grid distinguishing network bits (blue) from host bits (orange) for IP address, subnet mask, and network address rows
 - **Notation Equivalents card**: CIDR, dot-decimal mask, wildcard mask, hex mask (`0xFFFFFF00`), and binary mask
 - **Address Properties card**: IP class (A/B/C/D/E), private/public scope badge (RFC 1918 + loopback + link-local), prefix and host bit counts
 - Quick example chips for common subnets (`/8`, `/12`, `/16`, `/24`, `/30`, `/0`)
+- Network alignment warning when the entered IP is not on a network boundary, showing the corrected network address
 
 ---
 
@@ -105,8 +115,7 @@ android-network-tools/
 ├── .github/
 │   └── workflows/
 │       ├── ci.yml                  # Standard build & test CI
-│       ├── release.yml             # Sign & publish release APK/AAB
-│       └── claude_add_tool.yml     # Claude-driven "add tool" workflow
+│       └── release.yml             # Sign & publish release APK/AAB
 ├── claude/
 │   └── tool_instructions.md        # Instructions for Claude when adding new tools
 └── README.md
@@ -219,18 +228,8 @@ Required GitHub Actions secrets:
 | `RELEASE_KEY_ALIAS` | Key alias |
 | `RELEASE_KEY_PASSWORD` | Key password |
 
-### Claude "Add Tool" Workflow (`claude_add_tool.yml`)
-Triggered manually via **Actions → Claude – Add Tool → Run workflow**:
-1. Accepts a `tool_prompt` describing the networking tool to add.
-2. Creates a date-stamped branch (`tool-YYYYMMDD-HHMMSS`).
-3. Invokes Claude Code to implement the tool following TDD.
-4. Runs tests and build to verify.
-5. Opens a PR to `main` for review.
-
 ---
 
 ## Adding a New Tool
 
 See [`claude/tool_instructions.md`](claude/tool_instructions.md) for the step-by-step guide.
-
-To trigger Claude automatically, go to **GitHub Actions → Claude – Add Tool → Run workflow** and enter your tool description.
