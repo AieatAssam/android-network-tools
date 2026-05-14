@@ -53,25 +53,35 @@ class PingRepositoryImpl(
         packetSize: Int
     ): Flow<PingPacketResult> = flow {
         for (seq in 1..count) {
-            val result = checker(host, timeoutMs)
-
-            val packet = PingPacketResult(
-                sequence = seq,
-                host = host,
-                rtTimeMs = if (result.reachable) result.rtTimeMs else null,
-                status = when {
-                    result.errorMessage != null -> PingStatus.ERROR
-                    result.reachable -> PingStatus.SUCCESS
-                    else -> PingStatus.TIMEOUT
-                },
-                errorMessage = result.errorMessage
-            )
-
-            emit(packet)
-
-            if (seq < count) {
-                delay(delayBetweenProbesMs)
-            }
+            emit(buildPacket(host, seq, timeoutMs))
+            if (seq < count) delay(delayBetweenProbesMs)
         }
     }.flowOn(Dispatchers.IO)
+
+    override fun continuousPing(
+        host: String,
+        timeoutMs: Int,
+        packetSize: Int
+    ): Flow<PingPacketResult> = flow {
+        var seq = 1
+        while (true) {
+            emit(buildPacket(host, seq++, timeoutMs))
+            delay(delayBetweenProbesMs)
+        }
+    }.flowOn(Dispatchers.IO)
+
+    private fun buildPacket(host: String, seq: Int, timeoutMs: Int): PingPacketResult {
+        val result = checker(host, timeoutMs)
+        return PingPacketResult(
+            sequence = seq,
+            host = host,
+            rtTimeMs = if (result.reachable) result.rtTimeMs else null,
+            status = when {
+                result.errorMessage != null -> PingStatus.ERROR
+                result.reachable -> PingStatus.SUCCESS
+                else -> PingStatus.TIMEOUT
+            },
+            errorMessage = result.errorMessage
+        )
+    }
 }

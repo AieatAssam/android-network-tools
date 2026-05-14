@@ -1,5 +1,6 @@
 package net.aieat.netswissknife.app.di
 
+import net.aieat.netswissknife.core.domain.ContinuousPingUseCase
 import net.aieat.netswissknife.core.domain.PingUseCase
 import net.aieat.netswissknife.core.network.ping.PingRepository
 import net.aieat.netswissknife.core.network.ping.PingRepositoryImpl
@@ -21,4 +22,9 @@ object PingModule {
     @Singleton
     fun providePingUseCase(repository: PingRepository): PingUseCase =
         PingUseCase(repository)
+
+    @Provides
+    @Singleton
+    fun provideContinuousPingUseCase(repository: PingRepository): ContinuousPingUseCase =
+        ContinuousPingUseCase(repository)
 }

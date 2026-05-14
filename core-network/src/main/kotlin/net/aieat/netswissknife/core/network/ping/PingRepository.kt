@@ -23,4 +23,18 @@ interface PingRepository {
         timeoutMs: Int,
         packetSize: Int
     ): Flow<PingPacketResult>
+
+    /**
+     * Sends probes to [host] indefinitely, emitting a [PingPacketResult] for each one.
+     * The flow runs until the collecting coroutine is cancelled.
+     *
+     * @param host       Hostname or IP address to ping
+     * @param timeoutMs  Per-probe timeout in milliseconds
+     * @param packetSize Payload size in bytes (informational)
+     */
+    fun continuousPing(
+        host: String,
+        timeoutMs: Int,
+        packetSize: Int
+    ): Flow<PingPacketResult>
 }

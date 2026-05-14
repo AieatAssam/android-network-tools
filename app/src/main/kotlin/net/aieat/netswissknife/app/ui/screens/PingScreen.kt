@@ -1,5 +1,7 @@
 package net.aieat.netswissknife.app.ui.screens
 
+import android.app.Activity
+import android.view.WindowManager
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
@@ -30,6 +32,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -39,6 +42,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AllInclusive
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ExpandLess
@@ -63,14 +67,19 @@ import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -104,7 +113,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.RecentHostsRow
 import net.aieat.netswissknife.app.ui.screens.ping.PingUiState
@@ -124,7 +135,28 @@ fun PingScreen(
     val count by viewModel.count.collectAsStateWithLifecycle()
     val timeoutMs by viewModel.timeoutMs.collectAsStateWithLifecycle()
     val packetSize by viewModel.packetSize.collectAsStateWithLifecycle()
+    val continuousMode by viewModel.continuousMode.collectAsStateWithLifecycle()
     val recentHosts by viewModel.recentHosts.collectAsStateWithLifecycle()
+
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    // Keep screen on during a continuous ping session.
+    val isRunningContinuous = uiState is PingUiState.Running && (uiState as PingUiState.Running).isContinuous
+    DisposableEffect(isRunningContinuous) {
+        val window = (context as? Activity)?.window
+        if (isRunningContinuous) window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        onDispose { window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
+    }
+
+    // Stop continuous ping when the activity is backgrounded or the screen is locked (ON_STOP).
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) viewModel.onLifecycleStop()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
@@ -152,11 +184,13 @@ fun PingScreen(
                     timeoutMs = timeoutMs,
                     packetSize = packetSize,
                     isRunning = uiState is PingUiState.Running,
+                    continuousMode = continuousMode,
                     recentHosts = recentHosts,
                     onHostChange = viewModel::onHostChange,
                     onCountChange = viewModel::onCountChange,
                     onTimeoutChange = viewModel::onTimeoutChange,
                     onPacketSizeChange = viewModel::onPacketSizeChange,
+                    onToggleContinuous = viewModel::onToggleContinuous,
                     onStart = viewModel::startPing,
                     onStop = viewModel::onStop,
                     onRemoveRecentHost = viewModel::removeRecentHost,
@@ -270,11 +304,13 @@ private fun PingInputCard(
     timeoutMs: Int,
     packetSize: Int,
     isRunning: Boolean,
+    continuousMode: Boolean,
     recentHosts: List<String>,
     onHostChange: (String) -> Unit,
     onCountChange: (Int) -> Unit,
     onTimeoutChange: (Int) -> Unit,
     onPacketSizeChange: (Int) -> Unit,
+    onToggleContinuous: (Boolean) -> Unit,
     onStart: () -> Unit,
     onStop: () -> Unit,
     onRemoveRecentHost: (String) -> Unit,
@@ -323,15 +359,46 @@ private fun PingInputCard(
                 onClearAll = onClearRecentHosts
             )
 
-            // Count slider
-            PingSliderRow(
-                label = "${stringResource(R.string.ping_count_label)}: $count",
-                value = count.toFloat(),
-                valueRange = 1f..50f,
-                steps = 48,
-                onValueChange = { onCountChange(it.toInt()) },
-                enabled = !isRunning
-            )
+            // Continuous mode toggle
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.AllInclusive,
+                        contentDescription = null,
+                        tint = if (continuousMode) MaterialTheme.colorScheme.primary
+                               else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = stringResource(R.string.ping_continuous_label),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (continuousMode) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = continuousMode,
+                    onCheckedChange = { if (!isRunning) onToggleContinuous(it) },
+                    enabled = !isRunning
+                )
+            }
+
+            // Count slider — hidden in continuous mode
+            if (!continuousMode) {
+                PingSliderRow(
+                    label = "${stringResource(R.string.ping_count_label)}: $count",
+                    value = count.toFloat(),
+                    valueRange = 1f..50f,
+                    steps = 48,
+                    onValueChange = { onCountChange(it.toInt()) },
+                    enabled = !isRunning
+                )
+            }
 
             // Timeout chips
             PingTimeoutRow(
@@ -489,7 +556,7 @@ private fun PingIdlePanel() {
 @Composable
 private fun PingRunningPanel(state: PingUiState.Running) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        // Progress card
+        // Progress / counter card
         ElevatedCard(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(
@@ -498,20 +565,33 @@ private fun PingRunningPanel(state: PingUiState.Running) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = stringResource(R.string.ping_running_title),
+                        text = if (state.isContinuous)
+                            stringResource(R.string.ping_continuous_running_title)
+                        else
+                            stringResource(R.string.ping_running_title),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold
                     )
-                    Text(
-                        text = stringResource(R.string.ping_progress_format, state.packets.size, state.totalCount),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary
+                    if (state.isContinuous) {
+                        Text(
+                            text = stringResource(R.string.ping_pings_sent, state.pingsSent),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    } else {
+                        Text(
+                            text = stringResource(R.string.ping_progress_format, state.packets.size, state.totalCount),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+                if (!state.isContinuous) {
+                    LinearProgressIndicator(
+                        progress = { state.packets.size.toFloat() / state.totalCount.coerceAtLeast(1) },
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
-                LinearProgressIndicator(
-                    progress = { state.packets.size.toFloat() / state.totalCount.coerceAtLeast(1) },
-                    modifier = Modifier.fillMaxWidth()
-                )
                 Text(
                     text = state.host,
                     style = MaterialTheme.typography.bodyMedium,
@@ -543,13 +623,14 @@ private fun PingRunningPanel(state: PingUiState.Running) {
             }
         }
 
-        // Live RTT chart
+        // Live RTT chart (rolling window in continuous mode)
         if (state.packets.any { it.rtTimeMs != null }) {
             RttChartCard(packets = state.packets)
         }
 
-        // Live packet list
+        // Live packet list — bounded to last 50 in continuous mode
         if (state.packets.isNotEmpty()) {
+            val displayPackets = if (state.isContinuous) state.packets.takeLast(50) else state.packets
             ElevatedCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
@@ -558,8 +639,8 @@ private fun PingRunningPanel(state: PingUiState.Running) {
                         fontWeight = FontWeight.SemiBold
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-                    state.packets.forEach { packet ->
-                        PacketRow(packet)
+                    LazyColumn(modifier = Modifier.heightIn(max = 320.dp)) {
+                        items(displayPackets) { packet -> PacketRow(packet) }
                     }
                 }
             }
@@ -576,7 +657,7 @@ private fun PingFinishedPanel(
     onClear: () -> Unit
 ) {
     val clipboard = LocalClipboard.current
-    val clipScope = rememberCoroutineScope()
+    val coroutineScope = rememberCoroutineScope()
     val result = state.result
     val context = LocalContext.current
 
@@ -603,7 +684,7 @@ private fun PingFinishedPanel(
                         fontWeight = FontWeight.SemiBold
                     )
                     IconButton(onClick = {
-                        clipScope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("", buildCsvOutput(result)))) }
+                        coroutineScope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("", buildCsvOutput(result)))) }
                     }) {
                         Icon(Icons.Default.ContentCopy, contentDescription = stringResource(R.string.ping_copy_csv))
                     }
@@ -640,10 +721,26 @@ private fun PingFinishedPanel(
             }
             FilledTonalButton(
                 onClick = {
-                    context.shareText(
-                        text = buildCsvOutput(result),
-                        subject = context.getString(R.string.share_subject_ping, result.host)
-                    )
+                    val logFile = state.sessionLogFile
+                    if (logFile != null) {
+                        // Continuous session: read full log from file on IO then share
+                        coroutineScope.launch(Dispatchers.IO) {
+                            val text = runCatching { logFile.readText() }.getOrElse { "" }
+                            if (text.isNotEmpty()) {
+                                withContext(Dispatchers.Main) {
+                                    context.shareText(
+                                        text = text,
+                                        subject = context.getString(R.string.share_subject_ping, result.host)
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        context.shareText(
+                            text = buildCsvOutput(result),
+                            subject = context.getString(R.string.share_subject_ping, result.host)
+                        )
+                    }
                 },
                 modifier = Modifier.weight(1f)
             ) {

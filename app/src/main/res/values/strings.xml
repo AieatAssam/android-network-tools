@@ -70,6 +70,11 @@
     <string name="ping_stop_button">Stop</string>
     <string name="ping_retry">Retry</string>
 
+    <!-- Ping Continuous Mode -->
+    <string name="ping_continuous_label">Continuous</string>
+    <string name="ping_pings_sent">Pings sent: %1$d</string>
+    <string name="ping_continuous_running_title">Pinging continuously…</string>
+
     <!-- Ping States -->
     <string name="ping_idle_title">Enter a host to ping</string>
     <string name="ping_idle_subtitle">Supports hostnames and IPv4 addresses</string>
