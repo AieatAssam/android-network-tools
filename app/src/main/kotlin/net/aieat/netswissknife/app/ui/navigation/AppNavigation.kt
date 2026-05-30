@@ -28,6 +28,7 @@ import net.aieat.netswissknife.app.ui.screens.topology.TopologyDiscoveryScreen
 import net.aieat.netswissknife.app.ui.screens.httprobe.HttpProbeScreen
 import net.aieat.netswissknife.app.ui.screens.subnet.SubnetCalculatorScreen
 import net.aieat.netswissknife.app.ui.screens.settings.SettingsScreen
+import net.aieat.netswissknife.app.ui.screens.mdns.MdnsDiscoveryScreen
 import net.aieat.netswissknife.app.ui.screens.whois.WhoisScreen
 
 // ── Transition helpers ────────────────────────────────────────────────────────
@@ -106,6 +107,7 @@ fun AppNavHost(navController: NavHostController, modifier: Modifier = Modifier) 
         composable(NavRoutes.WhoisLookup.route)       { WhoisScreen() }
         composable(NavRoutes.HttpProbe.route)         { HttpProbeScreen() }
         composable(NavRoutes.SubnetCalculator.route)  { SubnetCalculatorScreen() }
+        composable(NavRoutes.MdnsDiscovery.route)     { MdnsDiscoveryScreen() }
         composable(NavRoutes.Settings.route)           { SettingsScreen() }
     }
 }

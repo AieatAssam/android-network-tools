@@ -115,6 +115,9 @@ dependencies {
     // ICMP traceroute (replaces binary-dependent implementation)
     implementation(libs.icmpenguin)
 
+    // DNS message parsing for mDNS repository impl
+    implementation(libs.dnsjava)
+
     // Unit tests
     testImplementation(libs.junit5.api)
     testImplementation(libs.junit5.params)

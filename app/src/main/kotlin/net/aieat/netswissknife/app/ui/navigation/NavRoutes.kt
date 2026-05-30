@@ -4,6 +4,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Calculate
+import androidx.compose.material.icons.filled.CellTower
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Http
 import androidx.compose.material.icons.filled.Language
@@ -43,6 +44,7 @@ sealed class NavRoutes(
     object WhoisLookup : NavRoutes("whois", "WHOIS Lookup", Icons.AutoMirrored.Filled.ManageSearch)
     object HttpProbe : NavRoutes("httprobe", "HTTP Probe", Icons.Default.Http)
     object SubnetCalculator : NavRoutes("subnet", "Subnet Calc", Icons.Default.Calculate)
+    object MdnsDiscovery : NavRoutes("mdns", "mDNS Browser", Icons.Default.CellTower)
     object Settings : NavRoutes("settings", "Settings", Icons.Default.Settings)
 
     companion object {
@@ -59,6 +61,7 @@ sealed class NavRoutes(
             ToolInfo("whois",      "WHOIS Lookup",  "WHOIS", Icons.AutoMirrored.Filled.ManageSearch, "Domain and IP registration lookup"),
             ToolInfo("httprobe",   "HTTP Probe",    "HTTP",  Icons.Default.Http,          "HTTP/HTTPS request tester with security header analysis"),
             ToolInfo("subnet",     "Subnet Calc",   "Subnet", Icons.Default.Calculate,     "IPv4 subnet calculator with binary breakdown and notation conversion"),
+            ToolInfo("mdns",       "mDNS Browser",  "mDNS",  Icons.Default.CellTower,      "Discover LAN services via multicast DNS"),
         )
 
         /** Default pinned routes shown in the bottom nav (max MAX_PINNED). */
