@@ -195,10 +195,10 @@ class PortScanRepositoryImplTest {
 
         @Test
         fun `summary open count matches open results`() = runTest {
-            var callIndex = 0
-            val alternating: PortConnectChecker = { _, _ ->
-                callIndex++
-                if (callIndex % 2 == 1) PortConnectResult(PortStatus.OPEN, 5L, null)
+            // Use port number to decide open/closed so the result is deterministic
+            // regardless of concurrent execution order: 80 and 8080 are even → OPEN
+            val alternating: PortConnectChecker = { _, port ->
+                if (port % 2 == 0) PortConnectResult(PortStatus.OPEN, 5L, null)
                 else PortConnectResult(PortStatus.CLOSED, 1L, null)
             }
             val repo = PortScanRepositoryImpl(checker = alternating)
