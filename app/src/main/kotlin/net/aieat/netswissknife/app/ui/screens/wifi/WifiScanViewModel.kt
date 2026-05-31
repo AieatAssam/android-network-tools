@@ -6,6 +6,7 @@ import net.aieat.netswissknife.core.domain.WifiNotSupportedException
 import net.aieat.netswissknife.core.domain.WifiScanUseCase
 import net.aieat.netswissknife.core.network.wifi.WifiAccessPoint
 import net.aieat.netswissknife.core.network.wifi.WifiBand
+import net.aieat.netswissknife.core.network.wifi.WifiNetwork
 import net.aieat.netswissknife.core.network.wifi.WifiScanResult
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -49,6 +50,22 @@ sealed interface WifiScanUiState {
                 ApSortOrder.SIGNAL  -> base.sortedByDescending { it.rssi }
                 ApSortOrder.SSID    -> base.sortedBy { it.displaySsid.lowercase() }
                 ApSortOrder.CHANNEL -> base.sortedWith(compareBy({ it.band.ordinal }, { it.channel }, { -it.rssi }))
+            }
+        }
+
+        val filteredNetworks: List<WifiNetwork> get() {
+            val networks = if (bandFilter == null) result.networks
+                           else result.networks.filter { n -> n.accessPoints.any { it.band == bandFilter } }
+                               .map { n ->
+                                   n.copy(accessPoints = n.accessPoints.filter { it.band == bandFilter }
+                                       .sortedByDescending { it.rssi })
+                               }
+            return when (sortOrder) {
+                ApSortOrder.SIGNAL  -> networks.sortedByDescending { it.bestRssi }
+                ApSortOrder.SSID    -> networks.sortedBy { it.displaySsid.lowercase() }
+                ApSortOrder.CHANNEL -> networks.sortedWith(
+                    compareBy({ it.sortedBands.firstOrNull()?.ordinal ?: 99 }, { it.bestRssi * -1 })
+                )
             }
         }
     }
@@ -104,7 +121,7 @@ class WifiScanViewModel @Inject constructor(
                     val prev = _uiState.value as? WifiScanUiState.Success
                     _uiState.value = WifiScanUiState.Success(
                         result = result,
-                        bandFilter = prev?.bandFilter,
+                        bandFilter = prev?.bandFilter ?: result.detectedBands.firstOrNull(),
                         sortOrder = prev?.sortOrder ?: ApSortOrder.SIGNAL
                     )
                     if (!_autoRefresh.value) startAutoRefresh()

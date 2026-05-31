@@ -15,6 +15,9 @@ data class WifiScanResult(
     /** Whether Wi-Fi is currently enabled on the device. */
     val isWifiEnabled: Boolean
 ) {
+    /** Access points grouped into logical networks by (SSID, security). */
+    val networks: List<WifiNetwork> get() = WifiNetworkGrouper.group(accessPoints)
+
     /** Access points grouped by frequency band. */
     val byBand: Map<WifiBand, List<WifiAccessPoint>> get() =
         accessPoints.groupBy { it.band }

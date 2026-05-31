@@ -282,6 +282,11 @@
     <string name="wifi_signal_quality_pct">%1$d%%</string>
     <string name="wifi_network_info_header">Network Information</string>
     <string name="wifi_live_connection_header">Live Connection</string>
+    <string name="wifi_spectrum_title">Spectrum Analyser</string>
+    <string name="wifi_best_channel_title">Best Channel</string>
+    <string name="wifi_best_channel_body">Channel %1$d has the least congestion on 2.4 GHz</string>
+    <string name="wifi_networks_count">%1$d networks</string>
+    <string name="wifi_aps_count">%1$d APs</string>
 
     <!-- Traceroute Screen -->
     <string name="traceroute_screen_title">Traceroute</string>
