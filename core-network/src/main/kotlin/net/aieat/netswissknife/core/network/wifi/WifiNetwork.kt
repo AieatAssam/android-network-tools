@@ -38,7 +38,7 @@ data class WifiNetwork(
 
     /** Stable color index derived from SSID + security; same network → same color across scans. */
     val colorIndex: Int get() =
-        Math.abs((ssid + security.name).hashCode()) % PALETTE_SIZE
+        ((ssid + security.name).hashCode() and Int.MAX_VALUE) % PALETTE_SIZE
 
     companion object {
         const val PALETTE_SIZE = 12

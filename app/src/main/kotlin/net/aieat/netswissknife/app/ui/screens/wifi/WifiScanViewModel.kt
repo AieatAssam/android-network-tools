@@ -121,7 +121,9 @@ class WifiScanViewModel @Inject constructor(
                     val prev = _uiState.value as? WifiScanUiState.Success
                     _uiState.value = WifiScanUiState.Success(
                         result = result,
-                        bandFilter = prev?.bandFilter ?: result.detectedBands.firstOrNull(),
+                        bandFilter = prev?.bandFilter
+                            ?.takeIf { it in result.detectedBands }
+                            ?: result.detectedBands.firstOrNull(),
                         sortOrder = prev?.sortOrder ?: ApSortOrder.SIGNAL
                     )
                     if (!_autoRefresh.value) startAutoRefresh()

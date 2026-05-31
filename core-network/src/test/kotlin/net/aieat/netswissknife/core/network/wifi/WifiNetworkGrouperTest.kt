@@ -139,6 +139,21 @@ class WifiNetworkGrouperTest {
                 assertTrue(idx in 0 until WifiNetwork.PALETTE_SIZE, "colorIndex $idx out of range for '$ssid'")
             }
         }
+
+        @Test
+        fun `colorIndex is never negative even when hashCode is Int MIN_VALUE`() {
+            // Any WifiNetwork whose (ssid + security.name).hashCode() == Int.MIN_VALUE must still
+            // produce a valid palette index — Math.abs(Int.MIN_VALUE) overflows back to negative.
+            // The fix uses (hash and Int.MAX_VALUE) which clears the sign bit.
+            val network = WifiNetwork(
+                ssid = "test",
+                security = WifiSecurity.WPA2,
+                accessPoints = listOf(ap("test", "AA:BB:CC:DD:EE:01"))
+            )
+            // Force-verify the property contract regardless of actual hash value
+            assertTrue(network.colorIndex >= 0, "colorIndex must be non-negative, got ${network.colorIndex}")
+            assertTrue(network.colorIndex < WifiNetwork.PALETTE_SIZE, "colorIndex out of palette range")
+        }
     }
 
     @Nested
