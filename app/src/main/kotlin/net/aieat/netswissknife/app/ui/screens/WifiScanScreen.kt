@@ -128,6 +128,7 @@ fun WifiScanScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val autoRefresh by viewModel.autoRefresh.collectAsState()
+    val expandedNetworks by viewModel.expandedNetworks.collectAsState()
 
     val requiredPermissions = buildList {
         add(Manifest.permission.ACCESS_FINE_LOCATION)
@@ -179,11 +180,13 @@ fun WifiScanScreen(
             is WifiScanUiState.Success      -> WifiSuccessScreen(
                 state               = state,
                 autoRefresh         = autoRefresh,
+                expandedNetworks    = expandedNetworks,
                 onScan              = { viewModel.startScan() },
                 onToggleAutoRefresh = { viewModel.toggleAutoRefresh() },
                 onBandFilter        = { viewModel.setBandFilter(it) },
                 onSortOrder         = { viewModel.setSortOrder(it) },
-                onSelectAp          = { viewModel.selectAccessPoint(it) }
+                onSelectAp          = { viewModel.selectAccessPoint(it) },
+                onToggleNetworkExpanded = { viewModel.toggleNetworkExpanded(it) }
             )
             is WifiScanUiState.Error        -> WifiErrorScreen(
                 message = state.message,
@@ -302,11 +305,13 @@ fun WifiScanScreen(
 @Composable private fun WifiSuccessScreen(
     state: WifiScanUiState.Success,
     autoRefresh: Boolean,
+    expandedNetworks: Set<String>,
     onScan: () -> Unit,
     onToggleAutoRefresh: () -> Unit,
     onBandFilter: (WifiBand?) -> Unit,
     onSortOrder: (ApSortOrder) -> Unit,
     onSelectAp: (WifiAccessPoint?) -> Unit,
+    onToggleNetworkExpanded: (String) -> Unit,
 ) {
     val networks = state.filteredNetworks
 
@@ -361,7 +366,14 @@ fun WifiScanScreen(
 
         // Network cards (SSID grouped, expandable)
         items(networks.size) { i ->
-            WifiNetworkCard(network = networks[i], onSelectAp = onSelectAp)
+            val network = networks[i]
+            val networkId = "${network.ssid}|${network.security.name}"
+            WifiNetworkCard(
+                network = network,
+                expanded = networkId in expandedNetworks,
+                onToggleExpanded = { onToggleNetworkExpanded(networkId) },
+                onSelectAp = onSelectAp
+            )
         }
 
         item { Spacer(Modifier.height(80.dp)) }
@@ -636,13 +648,14 @@ private fun bandChannelLabels(band: WifiBand): List<Pair<Int, Float>> = when (ba
 
 @Composable private fun WifiNetworkCard(
     network: WifiNetwork,
+    expanded: Boolean,
+    onToggleExpanded: () -> Unit,
     onSelectAp: (WifiAccessPoint?) -> Unit
 ) {
-    var expanded by remember { mutableStateOf(false) }
     val accentColor = networkColor(network.colorIndex)
 
     ElevatedCard(
-        onClick  = { expanded = !expanded },
+        onClick  = onToggleExpanded,
         modifier = Modifier.fillMaxWidth()
     ) {
         Column {
