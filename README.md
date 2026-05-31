@@ -92,6 +92,17 @@ Full HTTP/HTTPS request tester with security header analysis.
   - **Body**: scrollable monospace response body with copy-to-clipboard; truncated at 512 KB with notice
   - **Security**: per-header pass/warn/fail ratings for HSTS, CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy, and Server header information disclosure
 
+### mDNS Service Browser
+LAN service discovery via multicast DNS (RFC 6762 / DNS-SD RFC 6763).
+- Discovers all advertised services on the local network without prior knowledge of service types
+- Two-phase discovery: enumerates service types via `_services._dns-sd._udp.local.`, then instances per type, then SRV/TXT/A/AAAA records per instance
+- Supported service examples: `_http._tcp`, `_airplay._tcp`, `_ipp._tcp`, `_homekit._tcp`, `_spotify-connect._tcp`, and any other DNS-SD service
+- Per-service details: display name, hostname, port, IP addresses (IPv4 and IPv6), and TXT record key-value pairs
+- Live streaming results: services appear as they are discovered, grouped by service type with animated list entries
+- Expandable service items show full TXT record details on tap
+- Configurable scan duration (8-second window); scan can be stopped at any time
+- Requires Wi-Fi multicast lock (`CHANGE_WIFI_MULTICAST_STATE`) for reliable reception on Android
+
 ### Subnet Calculator
 IPv4 subnet calculator with visual binary breakdown and multi-notation conversion.
 - Two input modes: **CIDR / Mask** and **IP Range** (finds the tightest subnet covering a given min–max IP pair)
@@ -204,6 +215,7 @@ Android module (Jetpack Compose, Material 3, Hilt). Contains:
 | `whois` | WHOIS Lookup | Implemented |
 | `httprobe` | HTTP Probe | Implemented |
 | `subnet` | Subnet Calculator | Implemented |
+| `mdns` | mDNS Service Browser | Implemented |
 
 ---
 
