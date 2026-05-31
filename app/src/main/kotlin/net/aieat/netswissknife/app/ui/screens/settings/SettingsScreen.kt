@@ -20,22 +20,29 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.foundation.clickable
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -91,6 +98,7 @@ fun SettingsScreen(
             )
             DataSection(onClearRecents = viewModel::clearAllRecentHosts)
             AboutSection()
+            LicensesSection()
             Spacer(Modifier.height(8.dp))
         }
     }
@@ -281,23 +289,148 @@ private fun DataSection(onClearRecents: () -> Unit) {
 
 @Composable
 private fun AboutSection() {
+    val uriHandler = LocalUriHandler.current
+
     SectionHeader(Icons.Default.Info, stringResource(R.string.settings_about_section))
 
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+        Column {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_version_label),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Text(
+                    text = BuildConfig.VERSION_NAME,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { uriHandler.openUri("https://github.com/AieatAssam/android-network-tools") }
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_source_code_label),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = stringResource(R.string.settings_source_code_url),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        textDecoration = TextDecoration.Underline
+                    )
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.OpenInNew,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+        }
+    }
+}
+
+private data class LibraryInfo(
+    val name: String,
+    val version: String,
+    val license: String,
+    val copyright: String? = null
+)
+
+private val THIRD_PARTY_LIBRARIES = listOf(
+    LibraryInfo("dnsjava", "3.6.2", "BSD 3-Clause",
+        "Copyright (c) 1998-2024, Brian Wellington and the dnsjava contributors"),
+    LibraryInfo("MapLibre Compose", "0.12.1", "BSD 3-Clause",
+        "Copyright (c) 2021-2024, MapLibre contributors"),
+    LibraryInfo("SNMP4J", "3.8.0", "Apache 2.0"),
+    LibraryInfo("icmpenguin", "1.0.0-rc.3", "Apache 2.0"),
+    LibraryInfo("Dagger Hilt", "2.59.2", "Apache 2.0"),
+    LibraryInfo("Kotlin Coroutines", "1.9.0", "Apache 2.0"),
+    LibraryInfo("AndroidX / Jetpack Compose", "—", "Apache 2.0"),
+    LibraryInfo("AndroidX DataStore", "1.1.4", "Apache 2.0"),
+)
+
+@Composable
+private fun LicensesSection() {
+    SectionHeader(Icons.Default.Info, stringResource(R.string.settings_licenses_section))
+
+    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(vertical = 8.dp)) {
+            Text(
+                text = stringResource(R.string.settings_licenses_subtitle),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+            )
+            HorizontalDivider(modifier = Modifier.padding(top = 8.dp))
+            THIRD_PARTY_LIBRARIES.forEachIndexed { index, lib ->
+                LibraryRow(lib)
+                if (index < THIRD_PARTY_LIBRARIES.lastIndex) {
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LibraryRow(lib: LibraryInfo) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = stringResource(R.string.settings_version_label),
-                style = MaterialTheme.typography.bodyMedium
+                text = lib.name,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold
             )
+            Surface(
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                shape = RoundedCornerShape(4.dp)
+            ) {
+                Text(
+                    text = lib.license,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                )
+            }
+        }
+        if (lib.version != "—") {
             Text(
-                text = BuildConfig.VERSION_NAME,
-                style = MaterialTheme.typography.labelMedium,
+                text = "v${lib.version}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        if (lib.copyright != null) {
+            Text(
+                text = lib.copyright,
+                style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }

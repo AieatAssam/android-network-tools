@@ -617,6 +617,14 @@
     <!-- Settings – About -->
     <string name="settings_about_section">About</string>
     <string name="settings_version_label">Version</string>
+    <string name="settings_source_code_label">Source Code</string>
+    <string name="settings_source_code_url">github.com/AieatAssam/android-network-tools</string>
+
+    <!-- Settings – Open Source Licenses -->
+    <string name="settings_licenses_section">Open Source Licenses</string>
+    <string name="settings_licenses_subtitle">Third-party libraries used in this app</string>
+    <string name="settings_license_apache2">Apache 2.0</string>
+    <string name="settings_license_bsd3">BSD 3-Clause</string>
 
     <!-- Generic dialogs -->
     <string name="cancel">Cancel</string>

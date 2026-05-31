@@ -92,6 +92,10 @@ class WifiScanViewModel @Inject constructor(
     private val _autoRefresh = MutableStateFlow(false)
     val autoRefresh: StateFlow<Boolean> = _autoRefresh.asStateFlow()
 
+    /** Network IDs (ssid|security) that the user has expanded. Survives scans. */
+    private val _expandedNetworks = MutableStateFlow<Set<String>>(emptySet())
+    val expandedNetworks: StateFlow<Set<String>> = _expandedNetworks.asStateFlow()
+
     private var scanJob: Job? = null
     private var autoRefreshJob: Job? = null
 
@@ -109,22 +113,31 @@ class WifiScanViewModel @Inject constructor(
         _uiState.value = WifiScanUiState.NoPermission
     }
 
-    fun startScan() {
+    /**
+     * @param silent When true (auto-refresh), keeps the current Success state visible
+     *   while the scan runs instead of replacing it with the Scanning shimmer.
+     */
+    fun startScan(silent: Boolean = false) {
+        // Capture user selections BEFORE any state mutation so they survive the scan.
+        val prev = _uiState.value as? WifiScanUiState.Success
         scanJob?.cancel()
         scanJob = viewModelScope.launch {
-            _uiState.value = WifiScanUiState.Scanning
+            if (!silent) _uiState.value = WifiScanUiState.Scanning
             try {
                 val result = wifiScanUseCase()
                 if (!result.isWifiEnabled) {
                     _uiState.value = WifiScanUiState.WifiDisabled
                 } else {
-                    val prev = _uiState.value as? WifiScanUiState.Success
                     _uiState.value = WifiScanUiState.Success(
                         result = result,
                         bandFilter = prev?.bandFilter
                             ?.takeIf { it in result.detectedBands }
                             ?: result.detectedBands.firstOrNull(),
-                        sortOrder = prev?.sortOrder ?: ApSortOrder.SIGNAL
+                        sortOrder = prev?.sortOrder ?: ApSortOrder.SIGNAL,
+                        // Keep the detail sheet open if the AP is still present in the new scan.
+                        selectedAp = prev?.selectedAp?.let { prevAp ->
+                            result.accessPoints.find { it.bssid == prevAp.bssid }
+                        }
                     )
                     if (!_autoRefresh.value) startAutoRefresh()
                 }
@@ -155,6 +168,12 @@ class WifiScanViewModel @Inject constructor(
         _uiState.value = current.copy(selectedAp = ap)
     }
 
+    fun toggleNetworkExpanded(networkId: String) {
+        val current = _expandedNetworks.value
+        _expandedNetworks.value =
+            if (networkId in current) current - networkId else current + networkId
+    }
+
     fun toggleAutoRefresh() {
         if (_autoRefresh.value) {
             stopAutoRefresh()
@@ -170,7 +189,7 @@ class WifiScanViewModel @Inject constructor(
             while (true) {
                 delay(AUTO_REFRESH_INTERVAL_MS)
                 if (_uiState.value !is WifiScanUiState.Scanning) {
-                    startScan()
+                    startScan(silent = true)
                 }
             }
         }
