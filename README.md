@@ -45,10 +45,14 @@ Full DNS record resolution with multiple resolver options.
 - Returns resolved records, query time, and raw DNS response
 
 ### Wi-Fi Scanner
-Wi-Fi environment analysis and channel optimization.
-- Access point discovery with RSSI signal strength, sorted by signal
-- Per-channel congestion analysis across 2.4 GHz, 5 GHz, and 6 GHz bands
-- Connected network live info and best-channel recommendations (least-congested channels 1, 6, or 11 on 2.4 GHz)
+Wi-Fi environment analysis with SSID grouping and spectrum visualisation.
+- Access points grouped by SSID + security; mesh/dual-band routers appear as one entry with a per-BSSID drill-down
+- **Spectrum Analyser** — frequency-domain triangle chart per AP (X = MHz, Y = RSSI −100 to −30 dBm) with SSID labels and channel gridlines; each network gets a stable accent colour derived from its SSID hash
+- Band tab-row switches between detected 2.4 / 5 / 6 GHz bands; spectrum and network list update per band
+- Best-channel callout recommends the least-congested channel (1, 6, or 11) when 2.4 GHz is active
+- Expandable network cards show each BSSID with channel, width, RSSI, and vendor; tap any BSSID for full detail sheet
+- Detail sheet: signal arc gauge, band/channel/width/standard/speed, security capability tokens, live connection stats (IP, TX/RX speed) when connected
+- Auto-refresh every 10 seconds; sort by signal strength, SSID name, or channel
 
 ### TLS Inspector
 SSL/TLS certificate chain analysis for any TCP host.
