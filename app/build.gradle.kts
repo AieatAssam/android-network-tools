@@ -65,7 +65,11 @@ android {
                 signingConfigs.getByName("debug")
             }
             ndk {
-                debugSymbolLevel = "FULL"
+                // FULL requires unstripped input .so files; our native deps ship pre-stripped
+                // in their AARs, so FULL produces nothing (mergeReleaseNativeDebugMetadata
+                // NO-SOURCE). SYMBOL_TABLE uses the stripped libs directly (.dynsym is
+                // preserved), which satisfies Play Store's native symbols check.
+                debugSymbolLevel = "SYMBOL_TABLE"
             }
         }
     }
