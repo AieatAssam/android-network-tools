@@ -65,10 +65,15 @@ android {
                 signingConfigs.getByName("debug")
             }
             ndk {
-                // FULL requires unstripped input .so files; our native deps ship pre-stripped
-                // in their AARs, so FULL produces nothing (mergeReleaseNativeDebugMetadata
-                // NO-SOURCE). SYMBOL_TABLE uses the stripped libs directly (.dynsym is
-                // preserved), which satisfies Play Store's native symbols check.
+                // All three native deps (libicmpenguin, libandroidx.graphics.path,
+                // libdatastore_shared_counter) ship pre-stripped AARs: only .dynsym
+                // survives, no .symtab or .debug_* sections. AGP's extraction tasks
+                // (extractReleaseNativeSymbolTables / extractReleaseNativeDebugMetadata)
+                // require .symtab or .debug_* respectively, so both produce NO-SOURCE
+                // and no symbols end up in the AAB regardless of this setting.
+                // Set SYMBOL_TABLE (correct intent); the CI workflow generates a
+                // native-debug-symbols.zip from the merged libs for manual Play Console
+                // upload until upstream deps ship unstripped libraries.
                 debugSymbolLevel = "SYMBOL_TABLE"
             }
         }
