@@ -620,6 +620,11 @@
     <string name="settings_source_code_label">Source Code</string>
     <string name="settings_source_code_url">github.com/AieatAssam/android-network-tools</string>
 
+    <!-- Settings – Data Source Attributions -->
+    <string name="settings_attributions_section">Data Source Attributions</string>
+    <string name="settings_attribution_speedtest_title">Speed Test — Cloudflare</string>
+    <string name="settings_attribution_speedtest_body">The Speed Test tool sends measurement traffic to and is timed against Cloudflare\'s public speed test service (the same backend that powers speed.cloudflare.com). Net Swiss Knife is an independent app and is not affiliated with, sponsored by, or endorsed by Cloudflare, Inc. Cloudflare and the Cloudflare logo are trademarks of Cloudflare, Inc.</string>
+
     <!-- Settings – Open Source Licenses -->
     <string name="settings_licenses_section">Open Source Licenses</string>
     <string name="settings_licenses_subtitle">Third-party libraries used in this app</string>
@@ -646,5 +651,45 @@
     <string name="share_subject_lan">LAN scan – %1$s</string>
     <string name="share_subject_http">HTTP – %1$s</string>
     <string name="share_subject_dns">DNS %1$s – %2$s</string>
+    <string name="share_subject_speedtest">Speed Test – %1$s</string>
+
+    <!-- Speed Test -->
+    <string name="speedtest_screen_title">Speed Test</string>
+    <string name="speedtest_screen_subtitle">Measure download, upload speed and latency against Cloudflare\'s global network</string>
+    <string name="speedtest_attribution">Powered by Cloudflare Speed Test</string>
+    <string name="speedtest_attribution_note">Test traffic is sent to and measured by Cloudflare\'s speed.cloudflare.com service. Net Swiss Knife is not affiliated with, sponsored by, or endorsed by Cloudflare, Inc.</string>
+
+    <string name="speedtest_idle_title">Ready to test your connection</string>
+    <string name="speedtest_idle_subtitle">Measures latency, download, and upload speed in sequence</string>
+    <string name="speedtest_start_button">Start Test</string>
+    <string name="speedtest_cancel_button">Cancel</string>
+    <string name="speedtest_retry">Run again</string>
+    <string name="speedtest_share">Share results</string>
+
+    <string name="speedtest_phase_latency">Latency</string>
+    <string name="speedtest_phase_download">Download</string>
+    <string name="speedtest_phase_upload">Upload</string>
+
+    <string name="speedtest_running_latency">Measuring latency…</string>
+    <string name="speedtest_running_download">Testing download speed…</string>
+    <string name="speedtest_running_upload">Testing upload speed…</string>
+    <string name="speedtest_error_title">Speed test failed</string>
+
+    <string name="speedtest_mbps_suffix">Mbps</string>
+    <string name="speedtest_ms_suffix">ms</string>
+
+    <string name="speedtest_latency_header">Latency</string>
+    <string name="speedtest_latency_min">Min</string>
+    <string name="speedtest_latency_avg">Avg</string>
+    <string name="speedtest_latency_max">Max</string>
+    <string name="speedtest_latency_jitter">Jitter</string>
+
+    <string name="speedtest_download_header">Download</string>
+    <string name="speedtest_upload_header">Upload</string>
+    <string name="speedtest_avg_speed">Average</string>
+    <string name="speedtest_peak_speed">Peak</string>
+    <string name="speedtest_data_transferred">Data transferred</string>
+    <string name="speedtest_chart_title">Throughput over time</string>
+    <string name="speedtest_results_header">Results</string>
 
 </resources>

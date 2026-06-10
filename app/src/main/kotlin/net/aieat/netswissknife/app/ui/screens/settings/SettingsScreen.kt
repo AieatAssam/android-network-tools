@@ -98,6 +98,7 @@ fun SettingsScreen(
             )
             DataSection(onClearRecents = viewModel::clearAllRecentHosts)
             AboutSection()
+            AttributionsSection()
             LicensesSection()
             Spacer(Modifier.height(8.dp))
         }
@@ -342,6 +343,53 @@ private fun AboutSection() {
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AttributionsSection() {
+    val uriHandler = LocalUriHandler.current
+
+    SectionHeader(Icons.Default.Info, stringResource(R.string.settings_attributions_section))
+
+    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Icon(imageVector = Icons.Default.Speed, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                Text(
+                    text = stringResource(R.string.settings_attribution_speedtest_title),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = stringResource(R.string.settings_attribution_speedtest_body),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier
+                    .clickable { uriHandler.openUri("https://speed.cloudflare.com") }
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "speed.cloudflare.com",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    textDecoration = TextDecoration.Underline
+                )
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.OpenInNew,
+                    contentDescription = null,
+                    modifier = Modifier.size(14.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
             }
         }
     }

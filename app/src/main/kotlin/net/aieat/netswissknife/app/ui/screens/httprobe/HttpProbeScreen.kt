@@ -93,6 +93,7 @@ import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.RecentHostsRow
+import net.aieat.netswissknife.app.util.formatBytes
 import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.core.network.httprobe.HttpMethod
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeResult
@@ -1129,12 +1130,6 @@ private fun methodColor(method: HttpMethod): Color = when (method) {
     HttpMethod.DELETE  -> MaterialTheme.colorScheme.error
     HttpMethod.HEAD    -> Color(0xFF00695C)
     HttpMethod.OPTIONS -> Color(0xFF4E342E)
-}
-
-private fun formatBytes(bytes: Long): String = when {
-    bytes < 1024        -> "$bytes B"
-    bytes < 1024 * 1024 -> "%.1f KB".format(bytes / 1024.0)
-    else                -> "%.1f MB".format(bytes / (1024.0 * 1024.0))
 }
 
 private fun buildHttpShareText(result: HttpProbeResult): String = buildString {

@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.NetworkCheck
 import androidx.compose.material.icons.filled.Router
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material.icons.filled.WifiFind
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -45,6 +46,7 @@ sealed class NavRoutes(
     object HttpProbe : NavRoutes("httprobe", "HTTP Probe", Icons.Default.Http)
     object SubnetCalculator : NavRoutes("subnet", "Subnet Calc", Icons.Default.Calculate)
     object MdnsDiscovery : NavRoutes("mdns", "mDNS Browser", Icons.Default.CellTower)
+    object SpeedTest : NavRoutes("speedtest", "Speed Test", Icons.Default.Speed)
     object Settings : NavRoutes("settings", "Settings", Icons.Default.Settings)
 
     companion object {
@@ -62,6 +64,7 @@ sealed class NavRoutes(
             ToolInfo("httprobe",   "HTTP Probe",    "HTTP",  Icons.Default.Http,          "HTTP/HTTPS request tester with security header analysis"),
             ToolInfo("subnet",     "Subnet Calc",   "Subnet", Icons.Default.Calculate,     "IPv4 subnet calculator with binary breakdown and notation conversion"),
             ToolInfo("mdns",       "mDNS Browser",  "mDNS",  Icons.Default.CellTower,      "Discover LAN services via multicast DNS"),
+            ToolInfo("speedtest",  "Speed Test",    "Speed", Icons.Default.Speed,          "Download, upload speed and latency via Cloudflare"),
         )
 
         /** Default pinned routes shown in the bottom nav (max MAX_PINNED). */

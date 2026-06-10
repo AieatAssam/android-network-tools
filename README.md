@@ -118,6 +118,14 @@ IPv4 subnet calculator with visual binary breakdown and multi-notation conversio
 - Quick example chips for common subnets (`/8`, `/12`, `/16`, `/24`, `/30`, `/0`)
 - Network alignment warning when the entered IP is not on a network boundary, showing the corrected network address
 
+### Speed Test
+Internet connection speed test measuring latency, download, and upload throughput.
+- Three-phase sequence: **latency** (10 round-trip probes), **download**, then **upload** — each streamed live as it runs
+- Animated phase stepper, live circular speed gauge, and a live throughput-over-time chart per phase
+- Final results: latency min/avg/max/jitter, download/upload average & peak Mbps, and total data transferred, each with its own throughput chart
+- Share button exports a plain-text summary of the results
+- **Powered by Cloudflare** — measurement traffic is sent to and timed against `speed.cloudflare.com` (`/__down` and `/__up`), the same backend that powers Cloudflare's public speed test at <https://speed.cloudflare.com>. Net Swiss Knife is an independent app and is **not affiliated with, sponsored by, or endorsed by Cloudflare, Inc.**; "Cloudflare" and the Cloudflare logo are trademarks of Cloudflare, Inc. Full attribution is also shown in-app under Settings → Data Source Attributions.
+
 ---
 
 ## Module Layout
@@ -220,6 +228,7 @@ Android module (Jetpack Compose, Material 3, Hilt). Contains:
 | `httprobe` | HTTP Probe | Implemented |
 | `subnet` | Subnet Calculator | Implemented |
 | `mdns` | mDNS Service Browser | Implemented |
+| `speedtest` | Speed Test | Implemented |
 
 ---
 
