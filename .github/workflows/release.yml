@@ -191,8 +191,8 @@ jobs:
           LIB_DIR=$(find app/build/intermediates/merged_native_libs/release \
                        -type d -name "lib" | head -1)
           if [ -n "$LIB_DIR" ] && [ -d "$LIB_DIR" ]; then
-            cd "$(dirname "$LIB_DIR")"
-            zip -r "$RUNNER_TEMP/native-debug-symbols.zip" lib/
+            cd "$LIB_DIR"
+            zip -r "$RUNNER_TEMP/native-debug-symbols.zip" .
             echo "zip=$RUNNER_TEMP/native-debug-symbols.zip" >> "$GITHUB_OUTPUT"
             echo "found=true" >> "$GITHUB_OUTPUT"
           else
