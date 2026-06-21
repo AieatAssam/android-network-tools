@@ -16,19 +16,27 @@ import java.util.concurrent.ConcurrentHashMap
  * Private / reserved IP ranges are skipped and return null immediately.
  * Results are cached in-memory to avoid repeat calls for the same IP.
  */
-class GeoIpRepositoryImpl : GeoIpRepository {
+class GeoIpRepositoryImpl(
+    private val baseUrl: String = "https://ipinfo.io"
+) : GeoIpRepository {
 
     private val cache = ConcurrentHashMap<String, HopGeoLocation?>()
 
     override suspend fun lookup(ip: String): HopGeoLocation? {
         if (isPrivateOrReserved(ip)) return null
-        return cache.getOrPut(ip) { fetchGeoIp(ip) }
+        cache[ip]?.let { return it }
+        // ConcurrentHashMap forbids null values, so cache.getOrPut would throw NPE
+        // whenever fetchGeoIp(ip) fails (timeout, rate limit, bad response) — cache
+        // only successful lookups and recompute on every miss/failure instead.
+        val result = fetchGeoIp(ip)
+        if (result != null) cache[ip] = result
+        return result
     }
 
     // ── Network ───────────────────────────────────────────────────────────────
 
     private suspend fun fetchGeoIp(ip: String): HopGeoLocation? = withContext(Dispatchers.IO) {
-        val conn = URI("https://ipinfo.io/$ip/json").toURL().openConnection() as HttpURLConnection
+        val conn = URI("$baseUrl/$ip/json").toURL().openConnection() as HttpURLConnection
         try {
             conn.connectTimeout = 5_000
             conn.readTimeout    = 5_000

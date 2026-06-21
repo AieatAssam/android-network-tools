@@ -1,11 +1,14 @@
 package net.aieat.netswissknife.core.network.httprobe
 
+import com.sun.net.httpserver.HttpServer
 import kotlinx.coroutines.test.runTest
 import net.aieat.netswissknife.core.network.NetworkResult
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import java.net.InetSocketAddress
 
 @DisplayName("HttpProbeRepositoryImpl – input validation")
 class HttpProbeRepositoryValidationTest {
@@ -200,5 +203,58 @@ class HttpMethodBodySupportTest {
     @DisplayName("DELETE does not support body")
     fun `DELETE does not support body`() {
         assertTrue(!HttpMethod.DELETE.supportsBody)
+    }
+}
+
+@DisplayName("HttpProbeRepositoryImpl – redirect handling")
+class HttpProbeRepositoryRedirectTest {
+
+    private var server: HttpServer? = null
+    private val repo = HttpProbeRepositoryImpl()
+
+    @AfterEach
+    fun tearDown() {
+        server?.stop(0)
+    }
+
+    private fun startServer(handler: (path: String) -> Triple<Int, String, String?>): String {
+        val httpServer = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        httpServer.createContext("/") { exchange ->
+            val (status, body, location) = handler(exchange.requestURI.path)
+            location?.let { exchange.responseHeaders.add("Location", it) }
+            val bytes = body.toByteArray()
+            exchange.sendResponseHeaders(status, bytes.size.toLong())
+            exchange.responseBody.use { it.write(bytes) }
+        }
+        httpServer.start()
+        server = httpServer
+        return "http://127.0.0.1:${httpServer.address.port}"
+    }
+
+    @Test
+    @DisplayName("probe rejects a redirect to a non-http(s) scheme")
+    fun `probe rejects redirect to file scheme`() = runTest {
+        val baseUrl = startServer { Triple(302, "", "file:///etc/passwd") }
+
+        val result = repo.probe(HttpProbeRequest(url = baseUrl))
+
+        assertTrue(result is NetworkResult.Error)
+        assertTrue((result as NetworkResult.Error).message.contains("protocol", ignoreCase = true))
+    }
+
+    @Test
+    @DisplayName("probe follows a normal http redirect to completion")
+    fun `probe follows http redirect`() = runTest {
+        lateinit var baseUrl: String
+        baseUrl = startServer { path ->
+            if (path == "/target") Triple(200, "ok", null)
+            else Triple(302, "", "$baseUrl/target")
+        }
+
+        val result = repo.probe(HttpProbeRequest(url = baseUrl))
+
+        assertTrue(result is NetworkResult.Success)
+        assertEquals(200, (result as NetworkResult.Success).data.statusCode)
+        assertTrue(result.data.redirectChain.isNotEmpty())
     }
 }

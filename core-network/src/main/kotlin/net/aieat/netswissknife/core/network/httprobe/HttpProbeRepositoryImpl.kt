@@ -79,8 +79,14 @@ class HttpProbeRepositoryImpl : HttpProbeRepository {
                 if (request.followRedirects && statusCode in 300..399 && attempt < maxRedirects) {
                     val location = conn.getHeaderField("Location")
                     if (!location.isNullOrBlank()) {
+                        val nextUrl = resolveUrl(currentUrl, location)
+                        if (nextUrl.protocol !in listOf("http", "https")) {
+                            return NetworkResult.Error(
+                                "Redirected to unsupported protocol: ${nextUrl.protocol}"
+                            )
+                        }
                         redirectChain.add(currentUrl.toString())
-                        currentUrl = resolveUrl(currentUrl, location)
+                        currentUrl = nextUrl
                         return@repeat // continue loop
                     }
                 }
