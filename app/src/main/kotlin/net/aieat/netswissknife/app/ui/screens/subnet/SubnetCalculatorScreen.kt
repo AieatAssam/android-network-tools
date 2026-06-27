@@ -74,6 +74,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.ui.components.HelpSection
+import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
 import net.aieat.netswissknife.core.network.subnet.SubnetInfo
 
 @Composable
@@ -82,6 +84,7 @@ fun SubnetCalculatorScreen(viewModel: SubnetCalculatorViewModel = hiltViewModel(
 
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
+    var showHelp by remember { mutableStateOf(false) }
 
     AnimatedVisibility(
         visible = visible,
@@ -97,14 +100,15 @@ fun SubnetCalculatorScreen(viewModel: SubnetCalculatorViewModel = hiltViewModel(
             // ── Input card ──────────────────────────────────────────────────────
             ElevatedCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
                             Icons.Default.Calculate,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(28.dp)
                         )
-                        Column {
+                        Spacer(Modifier.width(8.dp))
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = stringResource(R.string.subnet_screen_title),
                                 style = MaterialTheme.typography.displaySmall
@@ -113,6 +117,13 @@ fun SubnetCalculatorScreen(viewModel: SubnetCalculatorViewModel = hiltViewModel(
                                 text = stringResource(R.string.subnet_screen_subtitle),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        IconButton(onClick = { showHelp = true }) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = stringResource(R.string.action_help),
+                                tint = MaterialTheme.colorScheme.primary
                             )
                         }
                     }
@@ -170,6 +181,18 @@ fun SubnetCalculatorScreen(viewModel: SubnetCalculatorViewModel = hiltViewModel(
                 }
             }
         }
+    }
+
+    if (showHelp) {
+        ToolHelpSheet(
+            title = stringResource(R.string.help_subnet_title),
+            sections = listOf(
+                HelpSection(stringResource(R.string.help_subnet_what_heading), stringResource(R.string.help_subnet_what_body)),
+                HelpSection(stringResource(R.string.help_subnet_params_heading), stringResource(R.string.help_subnet_params_body)),
+                HelpSection(stringResource(R.string.help_subnet_results_heading), stringResource(R.string.help_subnet_results_body))
+            ),
+            onDismiss = { showHelp = false }
+        )
     }
 }
 

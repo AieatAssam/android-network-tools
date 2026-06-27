@@ -97,7 +97,9 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.RecentHostsRow
+import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
 import net.aieat.netswissknife.app.ui.screens.dns.DnsUiState
 import net.aieat.netswissknife.app.ui.screens.dns.DnsViewModel
 import net.aieat.netswissknife.app.util.shareText
@@ -124,6 +126,7 @@ fun DnsScreen(viewModel: DnsViewModel = hiltViewModel()) {
         animationSpec = tween(400),
         label         = "screen-alpha"
     )
+    var showHelp by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier = Modifier
@@ -132,7 +135,7 @@ fun DnsScreen(viewModel: DnsViewModel = hiltViewModel()) {
             .alpha(screenAlpha),
         contentPadding = PaddingValues(bottom = 32.dp)
     ) {
-            item { DnsHeroHeader() }
+            item { DnsHeroHeader(onHelpClick = { showHelp = true }) }
 
             item {
                 DnsInputCard(
@@ -186,12 +189,24 @@ fun DnsScreen(viewModel: DnsViewModel = hiltViewModel()) {
                 }
             }
         }
+
+    if (showHelp) {
+        ToolHelpSheet(
+            title = stringResource(R.string.help_dns_title),
+            sections = listOf(
+                HelpSection(stringResource(R.string.help_dns_what_heading), stringResource(R.string.help_dns_what_body)),
+                HelpSection(stringResource(R.string.help_dns_params_heading), stringResource(R.string.help_dns_params_body)),
+                HelpSection(stringResource(R.string.help_dns_results_heading), stringResource(R.string.help_dns_results_body))
+            ),
+            onDismiss = { showHelp = false }
+        )
+    }
 }
 
 // ── Hero header ───────────────────────────────────────────────────────────────
 
 @Composable
-private fun DnsHeroHeader() {
+private fun DnsHeroHeader(onHelpClick: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -237,7 +252,7 @@ private fun DnsHeroHeader() {
 
             Spacer(Modifier.width(16.dp))
 
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = stringResource(R.string.dns_screen_title),
                     style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Bold),
@@ -247,6 +262,13 @@ private fun DnsHeroHeader() {
                     text = stringResource(R.string.dns_screen_subtitle),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            IconButton(onClick = onHelpClick) {
+                Icon(
+                    imageVector = Icons.Default.Info,
+                    contentDescription = stringResource(R.string.action_help),
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer
                 )
             }
         }

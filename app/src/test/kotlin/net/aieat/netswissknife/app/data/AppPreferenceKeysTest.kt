@@ -25,6 +25,7 @@ class AppPreferenceKeysTest {
     @Test fun `RECENT_WHOIS_HOSTS key name`()      = assertKey("recent_whois_hosts",       AppPreferenceKeys.RECENT_WHOIS_HOSTS)
     @Test fun `RECENT_HTTP_HOSTS key name`()       = assertKey("recent_http_hosts",        AppPreferenceKeys.RECENT_HTTP_HOSTS)
     @Test fun `RECENT_LAN_SUBNETS key name`()      = assertKey("recent_lan_subnets",       AppPreferenceKeys.RECENT_LAN_SUBNETS)
+    @Test fun `ONBOARDING_COMPLETED key name`()    = assertKey("onboarding_completed",     AppPreferenceKeys.ONBOARDING_COMPLETED)
 
     private fun assertKey(expectedName: String, key: androidx.datastore.preferences.core.Preferences.Key<*>) {
         assertEquals(expectedName, key.name)

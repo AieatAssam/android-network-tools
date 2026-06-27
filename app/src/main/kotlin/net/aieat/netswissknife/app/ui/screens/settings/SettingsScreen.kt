@@ -22,8 +22,10 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.foundation.clickable
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -97,6 +99,7 @@ fun SettingsScreen(
                 onConcurrencyChange = viewModel::setDefaultConcurrency
             )
             DataSection(onClearRecents = viewModel::clearAllRecentHosts)
+            OnboardingResetSection(onReset = viewModel::resetOnboarding)
             AboutSection()
             AttributionsSection()
             LicensesSection()
@@ -277,6 +280,49 @@ private fun DataSection(onClearRecents: () -> Unit) {
                     )
                 ) {
                     Text(stringResource(R.string.settings_clear_recents_confirm_button))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showConfirmDialog = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun OnboardingResetSection(onReset: () -> Unit) {
+    var showConfirmDialog by remember { mutableStateOf(false) }
+
+    SectionHeader(Icons.Default.SmartToy, stringResource(R.string.settings_guide_section))
+
+    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                text = stringResource(R.string.settings_reset_onboarding_label),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = stringResource(R.string.settings_reset_onboarding_subtitle),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            OutlinedButton(onClick = { showConfirmDialog = true }) {
+                Text(stringResource(R.string.settings_reset_onboarding_button))
+            }
+        }
+    }
+
+    if (showConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showConfirmDialog = false },
+            title = { Text(stringResource(R.string.settings_reset_onboarding_confirm_title)) },
+            text = { Text(stringResource(R.string.settings_reset_onboarding_confirm_message)) },
+            confirmButton = {
+                TextButton(onClick = { onReset(); showConfirmDialog = false }) {
+                    Text(stringResource(R.string.settings_reset_onboarding_confirm_button))
                 }
             },
             dismissButton = {

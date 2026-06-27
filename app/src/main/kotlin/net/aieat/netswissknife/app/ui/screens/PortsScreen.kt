@@ -102,7 +102,9 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.RecentHostsRow
+import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
 import net.aieat.netswissknife.app.ui.screens.portscan.PortScanUiState
 import net.aieat.netswissknife.app.ui.screens.portscan.PortScanViewModel
 import net.aieat.netswissknife.app.util.shareText
@@ -136,6 +138,7 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
     val clipScope = rememberCoroutineScope()
     val context = LocalContext.current
     var showAll by remember { mutableStateOf(false) }
+    var showHelp by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().alpha(screenAlpha),
@@ -144,7 +147,7 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
     ) {
             // ── Header ──────────────────────────────────────────────────────────
             item {
-                PortScanHeader()
+                PortScanHeader(onHelpClick = { showHelp = true })
             }
 
             // ── Input Card ──────────────────────────────────────────────────────
@@ -300,12 +303,24 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
                 }
             }
         }
+
+    if (showHelp) {
+        ToolHelpSheet(
+            title = stringResource(R.string.help_portscan_title),
+            sections = listOf(
+                HelpSection(stringResource(R.string.help_portscan_what_heading), stringResource(R.string.help_portscan_what_body)),
+                HelpSection(stringResource(R.string.help_portscan_params_heading), stringResource(R.string.help_portscan_params_body)),
+                HelpSection(stringResource(R.string.help_portscan_results_heading), stringResource(R.string.help_portscan_results_body))
+            ),
+            onDismiss = { showHelp = false }
+        )
+    }
 }
 
 // ── Header ───────────────────────────────────────────────────────────────────
 
 @Composable
-private fun PortScanHeader() {
+private fun PortScanHeader(onHelpClick: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -336,7 +351,7 @@ private fun PortScanHeader() {
                 )
             }
             Spacer(Modifier.width(16.dp))
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = stringResource(R.string.ports_screen_title),
                     style = MaterialTheme.typography.displaySmall,
@@ -347,6 +362,13 @@ private fun PortScanHeader() {
                     text = stringResource(R.string.ports_screen_subtitle),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                )
+            }
+            IconButton(onClick = onHelpClick) {
+                Icon(
+                    imageVector = Icons.Default.Info,
+                    contentDescription = stringResource(R.string.action_help),
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer
                 )
             }
         }

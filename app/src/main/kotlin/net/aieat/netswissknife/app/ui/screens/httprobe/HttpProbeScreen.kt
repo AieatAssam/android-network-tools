@@ -92,7 +92,9 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.RecentHostsRow
+import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
 import net.aieat.netswissknife.app.util.formatBytes
 import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.core.network.httprobe.HttpMethod
@@ -110,6 +112,7 @@ fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
 
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
+    var showHelp by remember { mutableStateOf(false) }
 
     val alpha by animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
@@ -128,7 +131,7 @@ fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
                 horizontal = 16.dp, vertical = 16.dp
             )
         ) {
-            item { HttpProbeHeaderCard() }
+            item { HttpProbeHeaderCard(onHelpClick = { showHelp = true }) }
 
             item {
                 HttpProbeInputCard(
@@ -182,6 +185,18 @@ fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
             }
         }
     }
+
+    if (showHelp) {
+        ToolHelpSheet(
+            title = stringResource(R.string.help_httprobe_title),
+            sections = listOf(
+                HelpSection(stringResource(R.string.help_httprobe_what_heading), stringResource(R.string.help_httprobe_what_body)),
+                HelpSection(stringResource(R.string.help_httprobe_params_heading), stringResource(R.string.help_httprobe_params_body)),
+                HelpSection(stringResource(R.string.help_httprobe_results_heading), stringResource(R.string.help_httprobe_results_body))
+            ),
+            onDismiss = { showHelp = false }
+        )
+    }
 }
 
 // ── Display state ─────────────────────────────────────────────────────────────
@@ -196,45 +211,57 @@ private sealed class DisplayState {
 // ── Header card ───────────────────────────────────────────────────────────────
 
 @Composable
-private fun HttpProbeHeaderCard() {
+private fun HttpProbeHeaderCard(onHelpClick: () -> Unit) {
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-        Box(modifier = Modifier.fillMaxWidth().height(90.dp)) {
-            Canvas(modifier = Modifier.matchParentSize()) {
-                drawRect(
-                    brush = Brush.linearGradient(
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    Brush.linearGradient(
                         listOf(
-                            Color(0xFF1565C0),
-                            Color(0xFF0288D1)
+                            MaterialTheme.colorScheme.primaryContainer,
+                            MaterialTheme.colorScheme.secondaryContainer
                         )
                     )
                 )
-            }
-            Column(
-                modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .padding(horizontal = 20.dp, vertical = 16.dp)
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                .padding(20.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(52.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
+                ) {
                     Icon(
                         imageVector = Icons.Default.Http,
                         contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(26.dp)
-                    )
-                    Spacer(Modifier.width(10.dp))
-                    Text(
-                        text = stringResource(R.string.httprobe_screen_title),
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(28.dp)
                     )
                 }
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = stringResource(R.string.httprobe_screen_subtitle),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.85f)
-                )
+                Spacer(Modifier.width(16.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.httprobe_screen_title),
+                        style = MaterialTheme.typography.displaySmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = stringResource(R.string.httprobe_screen_subtitle),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                    )
+                }
+                IconButton(onClick = onHelpClick) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = stringResource(R.string.action_help),
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
             }
         }
     }

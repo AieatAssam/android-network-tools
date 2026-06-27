@@ -44,6 +44,7 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AllInclusive
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -117,7 +118,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.RecentHostsRow
+import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
 import net.aieat.netswissknife.app.ui.screens.ping.PingUiState
 import net.aieat.netswissknife.app.ui.screens.ping.PingViewModel
 import net.aieat.netswissknife.app.util.shareText
@@ -165,6 +168,7 @@ fun PingScreen(
         animationSpec = tween(400),
         label         = "screen-alpha"
     )
+    var showHelp by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().alpha(screenAlpha),
@@ -173,7 +177,7 @@ fun PingScreen(
         ) {
             // ── Hero header ─────────────────────────────────────────────────
             item {
-                PingHeroHeader()
+                PingHeroHeader(onHelpClick = { showHelp = true })
             }
 
             // ── Input card ──────────────────────────────────────────────────
@@ -226,12 +230,24 @@ fun PingScreen(
                 }
             }
         }
+
+    if (showHelp) {
+        ToolHelpSheet(
+            title = stringResource(R.string.help_ping_title),
+            sections = listOf(
+                HelpSection(stringResource(R.string.help_ping_what_heading), stringResource(R.string.help_ping_what_body)),
+                HelpSection(stringResource(R.string.help_ping_params_heading), stringResource(R.string.help_ping_params_body)),
+                HelpSection(stringResource(R.string.help_ping_results_heading), stringResource(R.string.help_ping_results_body))
+            ),
+            onDismiss = { showHelp = false }
+        )
+    }
 }
 
 // ── Hero header ───────────────────────────────────────────────────────────────
 
 @Composable
-private fun PingHeroHeader() {
+private fun PingHeroHeader(onHelpClick: () -> Unit) {
     val infiniteTransition = rememberInfiniteTransition(label = "ping_pulse")
     val pulse by infiniteTransition.animateFloat(
         initialValue = 0.85f, targetValue = 1.0f,
@@ -277,7 +293,7 @@ private fun PingHeroHeader() {
                     )
                 }
                 Spacer(modifier = Modifier.width(16.dp))
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = stringResource(R.string.ping_screen_title),
                         style = MaterialTheme.typography.displaySmall,
@@ -288,6 +304,13 @@ private fun PingHeroHeader() {
                         text = stringResource(R.string.ping_screen_subtitle),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                    )
+                }
+                IconButton(onClick = onHelpClick) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = stringResource(R.string.action_help),
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 }
             }

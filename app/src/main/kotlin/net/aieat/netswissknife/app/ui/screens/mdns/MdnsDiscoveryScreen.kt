@@ -74,7 +74,14 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material3.IconButton
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
+import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.ui.components.HelpSection
+import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
 import net.aieat.netswissknife.core.network.mdns.DiscoveredService
 
 @Composable
@@ -83,6 +90,7 @@ fun MdnsDiscoveryScreen(viewModel: MdnsDiscoveryViewModel = hiltViewModel()) {
 
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
+    var showHelp by remember { mutableStateOf(false) }
 
     AnimatedVisibility(
         visible = visible,
@@ -94,7 +102,7 @@ fun MdnsDiscoveryScreen(viewModel: MdnsDiscoveryViewModel = hiltViewModel()) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            HeroCard(uiState)
+            HeroCard(uiState, onHelpClick = { showHelp = true })
 
             ControlRow(
                 isScanning = uiState.isScanning,
@@ -128,12 +136,24 @@ fun MdnsDiscoveryScreen(viewModel: MdnsDiscoveryViewModel = hiltViewModel()) {
             }
         }
     }
+
+    if (showHelp) {
+        ToolHelpSheet(
+            title = stringResource(R.string.help_mdns_title),
+            sections = listOf(
+                HelpSection(stringResource(R.string.help_mdns_what_heading), stringResource(R.string.help_mdns_what_body)),
+                HelpSection(stringResource(R.string.help_mdns_params_heading), stringResource(R.string.help_mdns_params_body)),
+                HelpSection(stringResource(R.string.help_mdns_results_heading), stringResource(R.string.help_mdns_results_body))
+            ),
+            onDismiss = { showHelp = false }
+        )
+    }
 }
 
 // ── Hero card ─────────────────────────────────────────────────────────────────
 
 @Composable
-private fun HeroCard(state: MdnsDiscoveryUiState) {
+private fun HeroCard(state: MdnsDiscoveryUiState, onHelpClick: () -> Unit) {
     val gradient = Brush.linearGradient(
         colors = listOf(
             MaterialTheme.colorScheme.primaryContainer,
@@ -145,50 +165,65 @@ private fun HeroCard(state: MdnsDiscoveryUiState) {
         shape = RoundedCornerShape(20.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(gradient)
-                .padding(20.dp)
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Default.Devices,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(40.dp)
-                )
+                Box(
+                    modifier = Modifier
+                        .size(52.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Devices,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
                 Spacer(Modifier.width(16.dp))
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "mDNS Service Browser",
-                        style = MaterialTheme.typography.titleMedium,
+                        text = stringResource(R.string.mdns_screen_title),
+                        style = MaterialTheme.typography.displaySmall,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                     Text(
-                        text = "Discover services on your local network",
-                        style = MaterialTheme.typography.bodySmall,
+                        text = stringResource(R.string.mdns_screen_subtitle),
+                        style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                    )
+                }
+                IconButton(onClick = onHelpClick) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = stringResource(R.string.action_help),
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 }
             }
 
-            // Stats badges — top right
+            // Stats badges
             if (state.services.isNotEmpty() || state.isScanning) {
                 Row(
-                    modifier = Modifier.align(Alignment.TopEnd),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     StatBadge(
                         value = state.services.size.toString(),
-                        label = "found"
+                        label = stringResource(R.string.mdns_stat_found)
                     )
                     if (state.isScanning) {
                         StatBadge(
                             value = "${state.elapsedMs / 1000}s",
-                            label = "elapsed"
+                            label = stringResource(R.string.mdns_stat_elapsed)
                         )
                     }
                 }

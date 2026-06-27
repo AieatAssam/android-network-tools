@@ -103,7 +103,9 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.RecentHostsRow
+import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
 import net.aieat.netswissknife.app.ui.screens.traceroute.TracerouteUiState
 import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.app.ui.screens.traceroute.TracerouteViewModel
@@ -143,13 +145,14 @@ fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
         animationSpec = tween(400),
         label         = "screen-alpha"
     )
+    var showHelp by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier          = Modifier.fillMaxSize().alpha(screenAlpha),
         contentPadding    = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-            item { TracerouteHeroHeader() }
+            item { TracerouteHeroHeader(onHelpClick = { showHelp = true }) }
 
             item {
                 TracerouteInputCard(
@@ -204,12 +207,24 @@ fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
                 }
             }
         }
+
+    if (showHelp) {
+        ToolHelpSheet(
+            title = stringResource(R.string.help_traceroute_title),
+            sections = listOf(
+                HelpSection(stringResource(R.string.help_traceroute_what_heading), stringResource(R.string.help_traceroute_what_body)),
+                HelpSection(stringResource(R.string.help_traceroute_params_heading), stringResource(R.string.help_traceroute_params_body)),
+                HelpSection(stringResource(R.string.help_traceroute_results_heading), stringResource(R.string.help_traceroute_results_body))
+            ),
+            onDismiss = { showHelp = false }
+        )
+    }
 }
 
 // ── Hero header ───────────────────────────────────────────────────────────────
 
 @Composable
-private fun TracerouteHeroHeader() {
+private fun TracerouteHeroHeader(onHelpClick: () -> Unit) {
     val infiniteTransition = rememberInfiniteTransition(label = "hero-pulse")
     val pulseAlpha by infiniteTransition.animateFloat(
         initialValue  = 0.6f,
@@ -257,7 +272,7 @@ private fun TracerouteHeroHeader() {
                     )
                 }
                 Spacer(Modifier.width(16.dp))
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text  = stringResource(R.string.traceroute_screen_title),
                         style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Bold),
@@ -267,6 +282,13 @@ private fun TracerouteHeroHeader() {
                         text  = stringResource(R.string.traceroute_screen_subtitle),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                    )
+                }
+                IconButton(onClick = onHelpClick) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = stringResource(R.string.action_help),
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 }
             }

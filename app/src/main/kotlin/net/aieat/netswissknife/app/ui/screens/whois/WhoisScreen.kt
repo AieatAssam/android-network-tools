@@ -49,6 +49,7 @@ import androidx.compose.material.icons.filled.EventBusy
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.automirrored.filled.ManageSearch
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Update
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
@@ -90,7 +91,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.RecentHostsRow
+import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
 import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.core.network.whois.WhoisQueryType
 import net.aieat.netswissknife.core.network.whois.WhoisResult
@@ -109,6 +112,7 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
 
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
+    var showHelp by remember { mutableStateOf(false) }
 
     AnimatedVisibility(
         visible = visible,
@@ -121,19 +125,12 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            // ── Hero header ────────────────────────────────────────────────────
+            WhoisHeroHeader(onHelpClick = { showHelp = true })
+
             // ── Input card ─────────────────────────────────────────────────────
             ElevatedCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(
-                        text = stringResource(R.string.whois_screen_title),
-                        style = MaterialTheme.typography.displaySmall,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = stringResource(R.string.whois_screen_subtitle),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
                     OutlinedTextField(
                         value = uiState.query,
                         onValueChange = viewModel::onQueryChange,
@@ -205,7 +202,8 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
                 transitionSpec = {
                     fadeIn(tween(300)) + slideInVertically(tween(300)) { it / 8 } togetherWith
                             fadeOut(tween(200))
-                }
+                },
+                label = "whois-content-state"
             ) { (isLoading, result, error) ->
                 when {
                     result != null -> {
@@ -240,6 +238,77 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
                     else -> {
                         IdleCard(onExampleSelected = viewModel::onQueryChange)
                     }
+                }
+            }
+        }
+    }
+
+    if (showHelp) {
+        ToolHelpSheet(
+            title = stringResource(R.string.help_whois_title),
+            sections = listOf(
+                HelpSection(stringResource(R.string.help_whois_what_heading), stringResource(R.string.help_whois_what_body)),
+                HelpSection(stringResource(R.string.help_whois_params_heading), stringResource(R.string.help_whois_params_body)),
+                HelpSection(stringResource(R.string.help_whois_results_heading), stringResource(R.string.help_whois_results_body))
+            ),
+            onDismiss = { showHelp = false }
+        )
+    }
+}
+
+// ── Hero header ───────────────────────────────────────────────────────────────
+
+@Composable
+private fun WhoisHeroHeader(onHelpClick: () -> Unit) {
+    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    Brush.linearGradient(
+                        listOf(
+                            MaterialTheme.colorScheme.primaryContainer,
+                            MaterialTheme.colorScheme.secondaryContainer
+                        )
+                    )
+                )
+                .padding(20.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(52.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ManageSearch,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+                Spacer(Modifier.width(16.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.whois_screen_title),
+                        style = MaterialTheme.typography.displaySmall,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                    Text(
+                        text = stringResource(R.string.whois_screen_subtitle),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                    )
+                }
+                IconButton(onClick = onHelpClick) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = stringResource(R.string.action_help),
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
                 }
             }
         }

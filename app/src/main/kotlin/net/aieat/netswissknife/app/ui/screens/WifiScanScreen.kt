@@ -106,7 +106,11 @@ import net.aieat.netswissknife.app.ui.screens.wifi.WifiScanUiState
 import net.aieat.netswissknife.app.ui.screens.wifi.WifiScanViewModel
 import net.aieat.netswissknife.core.network.wifi.WifiAccessPoint
 import net.aieat.netswissknife.core.network.wifi.WifiNetwork
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material3.IconButton
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.ui.components.HelpSection
+import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
 import net.aieat.netswissknife.core.network.wifi.WifiBand
 
 // ── Network colour palette (12 visually distinct colours) ────────────────────
@@ -314,6 +318,7 @@ fun WifiScanScreen(
     onToggleNetworkExpanded: (String) -> Unit,
 ) {
     val networks = state.filteredNetworks
+    var showHelp by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
@@ -326,7 +331,8 @@ fun WifiScanScreen(
                 result = state.result,
                 autoRefresh = autoRefresh,
                 onScan = onScan,
-                onToggleAutoRefresh = onToggleAutoRefresh
+                onToggleAutoRefresh = onToggleAutoRefresh,
+                onHelpClick = { showHelp = true }
             )
         }
 
@@ -376,12 +382,24 @@ fun WifiScanScreen(
             )
         }
 
-        item { Spacer(Modifier.height(80.dp)) }
+        item { Spacer(Modifier.height(16.dp)) }
     }
 
     if (state.selectedAp != null) {
         WifiApDetailSheet(ap = state.selectedAp, connectedInfo = state.result.connectedNetwork,
             onDismiss = { onSelectAp(null) })
+    }
+
+    if (showHelp) {
+        ToolHelpSheet(
+            title = stringResource(R.string.help_wifi_title),
+            sections = listOf(
+                HelpSection(stringResource(R.string.help_wifi_what_heading), stringResource(R.string.help_wifi_what_body)),
+                HelpSection(stringResource(R.string.help_wifi_params_heading), stringResource(R.string.help_wifi_params_body)),
+                HelpSection(stringResource(R.string.help_wifi_results_heading), stringResource(R.string.help_wifi_results_body))
+            ),
+            onDismiss = { showHelp = false }
+        )
     }
 }
 
@@ -392,6 +410,7 @@ fun WifiScanScreen(
     autoRefresh: Boolean,
     onScan: () -> Unit,
     onToggleAutoRefresh: () -> Unit,
+    onHelpClick: () -> Unit,
 ) {
     val gradient = Brush.linearGradient(
         listOf(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.tertiaryContainer)
@@ -403,14 +422,18 @@ fun WifiScanScreen(
                     Icon(Icons.Default.Wifi, null, Modifier.size(28.dp),
                         tint = MaterialTheme.colorScheme.onPrimaryContainer)
                     Spacer(Modifier.width(10.dp))
-                    Text(stringResource(R.string.wifi_screen_title), style = MaterialTheme.typography.displaySmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer)
-                    Spacer(Modifier.weight(1f))
-                    FilledTonalIconButton(onClick = onScan) {
-                        Icon(Icons.Default.Refresh, "Scan")
+                    Text(
+                        stringResource(R.string.wifi_screen_title),
+                        style = MaterialTheme.typography.displaySmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(onClick = onHelpClick) {
+                        Icon(Icons.Default.Info, contentDescription = stringResource(R.string.action_help),
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer)
                     }
                 }
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(4.dp))
                 val time = remember(result.scanTimestampMs) {
                     SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(result.scanTimestampMs))
                 }
@@ -425,6 +448,10 @@ fun WifiScanScreen(
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
                     )
+                }
+                Spacer(Modifier.height(8.dp))
+                FilledTonalIconButton(onClick = onScan) {
+                    Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.wifi_scan_button))
                 }
             }
         }
