@@ -853,4 +853,8 @@
     <string name="speedtest_chart_title">Throughput over time</string>
     <string name="speedtest_results_header">Results</string>
 
+    <!-- Input validation -->
+    <string name="error_invalid_host">Hostname or IP cannot contain spaces</string>
+    <string name="error_invalid_url">Enter a valid URL (e.g. https://example.com)</string>
+
 </resources>

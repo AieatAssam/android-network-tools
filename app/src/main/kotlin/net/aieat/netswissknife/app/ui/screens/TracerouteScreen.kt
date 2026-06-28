@@ -56,6 +56,7 @@ import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.TravelExplore
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.FilledTonalButton
@@ -329,6 +330,7 @@ private fun TracerouteInputCard(
 ) {
     val keyboard = LocalSoftwareKeyboardController.current
     val mtuDiscovery = packetSize == 0
+    val isHostInvalid = host.isNotBlank() && host.contains(' ')
 
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -354,6 +356,10 @@ private fun TracerouteInputCard(
                         }
                     }
                 },
+                isError = isHostInvalid,
+                supportingText = if (isHostInvalid) {
+                    { Text(stringResource(R.string.error_invalid_host)) }
+                } else null,
                 singleLine    = true,
                 enabled       = !isRunning,
                 modifier      = Modifier.fillMaxWidth(),
@@ -459,7 +465,11 @@ private fun TracerouteInputCard(
             if (isRunning) {
                 Button(
                     onClick  = onStop,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError
+                    )
                 ) {
                     Icon(Icons.Default.Stop, null)
                     Spacer(Modifier.width(8.dp))
@@ -468,7 +478,7 @@ private fun TracerouteInputCard(
             } else {
                 Button(
                     onClick  = { keyboard?.hide(); onStart() },
-                    enabled  = host.isNotBlank(),
+                    enabled  = host.isNotBlank() && !isHostInvalid,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Icon(Icons.Default.Public, null)

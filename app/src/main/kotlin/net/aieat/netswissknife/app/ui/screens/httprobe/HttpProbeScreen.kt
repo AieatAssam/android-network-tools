@@ -289,6 +289,9 @@ private fun HttpProbeInputCard(
     onClearRecentHosts: () -> Unit
 ) {
     val focusManager = LocalFocusManager.current
+    val url = uiState.url
+    val isUrlInvalid = url.isNotBlank() &&
+        !url.startsWith("http://") && !url.startsWith("https://") && url.contains('.')
 
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -297,18 +300,22 @@ private fun HttpProbeInputCard(
         ) {
             // URL field
             OutlinedTextField(
-                value = uiState.url,
+                value = url,
                 onValueChange = onUrlChange,
                 label = { Text(stringResource(R.string.httprobe_url_label)) },
                 placeholder = { Text(stringResource(R.string.httprobe_url_placeholder)) },
                 leadingIcon = { Icon(Icons.Default.Http, contentDescription = null) },
                 trailingIcon = {
-                    if (uiState.url.isNotEmpty()) {
+                    if (url.isNotEmpty()) {
                         IconButton(onClick = { onUrlChange("") }) {
                             Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.clear))
                         }
                     }
                 },
+                isError = isUrlInvalid,
+                supportingText = if (isUrlInvalid) {
+                    { Text(stringResource(R.string.error_invalid_url)) }
+                } else null,
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(
@@ -478,7 +485,7 @@ private fun HttpProbeInputCard(
                     focusManager.clearFocus()
                     onSend()
                 },
-                enabled = uiState.url.isNotBlank() && !uiState.isLoading,
+                enabled = uiState.url.isNotBlank() && !uiState.isLoading && !isUrlInvalid,
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.primary

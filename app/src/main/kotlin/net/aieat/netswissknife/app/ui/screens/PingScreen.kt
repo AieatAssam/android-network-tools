@@ -55,6 +55,7 @@ import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.FilledTonalButton
@@ -341,6 +342,7 @@ private fun PingInputCard(
     onClearRecentHosts: () -> Unit
 ) {
     val keyboardController = LocalSoftwareKeyboardController.current
+    val isHostInvalid = host.isNotBlank() && host.contains(' ')
 
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -363,6 +365,10 @@ private fun PingInputCard(
                         }
                     }
                 },
+                isError = isHostInvalid,
+                supportingText = if (isHostInvalid) {
+                    { Text(stringResource(R.string.error_invalid_host)) }
+                } else null,
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Uri,
@@ -442,7 +448,11 @@ private fun PingInputCard(
             if (isRunning) {
                 Button(
                     onClick = onStop,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError
+                    )
                 ) {
                     Icon(Icons.Default.Stop, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
@@ -455,7 +465,7 @@ private fun PingInputCard(
                         onStart()
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    enabled = host.isNotBlank()
+                    enabled = host.isNotBlank() && !isHostInvalid
                 ) {
                     Icon(Icons.Default.Speed, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))

@@ -884,6 +884,7 @@ private fun PortResultRow(result: PortScanResult) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 2.dp)
+            .alpha(cardAlpha)
     ) {
         Row(
             modifier = Modifier.padding(12.dp),
