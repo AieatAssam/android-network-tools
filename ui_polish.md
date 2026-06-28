@@ -28,17 +28,17 @@ Updated as each item is completed.
 | 7 | Subnet Calculator buries identity in input card | Med | ⬜ TODO |
 | 8 | Settings screen has no hero card | Low | ⬜ TODO |
 | 9 | RecentHostsRow dismiss 24 dp — below 48 dp min | High | ✅ DONE |
-| 10 | No real-time input validation | Med | ⬜ TODO |
-| 11 | LAN Scanner no CIDR placeholder | Med | ⬜ TODO |
-| 12 | Subnet mode toggle clears input instead of converting | Med | ⬜ TODO |
+| 10 | No real-time input validation | Med | ✅ DONE (Ping, Traceroute, HTTP Probe) |
+| 11 | LAN Scanner no CIDR placeholder | Med | ✅ DONE |
+| 12 | Subnet mode toggle clears input instead of converting | Med | ✅ DONE |
 | 13 | Port Scanner two fields instead of range control | Low | ⬜ TODO |
 | 14 | DNS custom server no format validation | Low | ⬜ TODO |
-| 15 | Result values not individually copyable | Med | ⬜ TODO |
-| 16 | DNS results not grouped by type | Med | ⬜ TODO |
-| 17 | WHOIS dates have no relative time labels | Low | ⬜ TODO |
-| 18 | Port Scanner closed ports same visual weight as open | Low | ⬜ TODO |
-| 19 | No empty result state (LAN, mDNS) | Med | ✅ DONE (mDNS) |
-| 20 | LAN Scanner progress is indeterminate | Low | ⬜ TODO |
+| 15 | Result values not individually copyable | Med | ✅ DONE (DNS, WHOIS, TLS) |
+| 16 | DNS results not grouped by type | Med | N/A (no ALL query type) |
+| 17 | WHOIS dates have no relative time labels | Low | ✅ DONE |
+| 18 | Port Scanner closed ports same visual weight as open | Low | ✅ DONE |
+| 19 | No empty result state (LAN, mDNS) | Med | ✅ DONE |
+| 20 | LAN Scanner progress is indeterminate | Low | ✅ DONE (already deterministic) |
 | 21 | mDNS hardcoded user-visible strings | High | ✅ DONE |
 | 22 | displaySmall in-card title wraps on narrow devices | Med | ✅ DONE |
 | 23 | Vertical spacing mixes 12 dp and 16 dp | Low | ⬜ TODO |
@@ -47,12 +47,12 @@ Updated as each item is completed.
 | 26 | Progress indicators missing contentDescription | Med | ✅ DONE |
 | 27 | Expandable cards missing semantic role | Med | ✅ DONE |
 | 28 | Settings sliders have no value announcement | Low | ✅ DONE |
-| 29 | Onboarding "Don't show again" is a placebo | Med | ⬜ TODO |
-| 30 | No pull-to-refresh on results screens | Med | ⬜ TODO |
-| 31 | Stop button color inconsistent across tools | Med | ⬜ TODO |
+| 29 | Onboarding "Don't show again" is a placebo | Med | ✅ DONE (→ "Skip") |
+| 30 | No pull-to-refresh on results screens | Med | ✅ DONE (DNS, WHOIS) |
+| 31 | Stop button color inconsistent across tools | Med | ✅ DONE (Ping, Traceroute) |
 | 32 | Card corner radii inconsistent | Med | ✅ DONE |
-| 33 | Settings uses same slide transition as tools | Low | ⬜ TODO |
-| 34 | Nested scroll containers in Traceroute | Med | ⬜ TODO |
+| 33 | Settings uses same slide transition as tools | Low | ✅ DONE |
+| 34 | Nested scroll containers in Traceroute | Med | ✅ DONE |
 | 35 | mDNS LazyColumn height unbounded | High | ✅ DONE |
 
 ---
