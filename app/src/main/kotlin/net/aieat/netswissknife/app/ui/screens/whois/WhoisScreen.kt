@@ -56,6 +56,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -104,6 +105,7 @@ import java.util.Locale
 import java.util.concurrent.TimeUnit
 import kotlin.math.abs
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -114,6 +116,13 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
     LaunchedEffect(Unit) { visible = true }
     var showHelp by remember { mutableStateOf(false) }
 
+    val canRefresh = uiState.result != null || uiState.error != null
+
+    PullToRefreshBox(
+        isRefreshing = uiState.isLoading,
+        onRefresh = { if (canRefresh) viewModel.lookup() },
+        modifier = Modifier.fillMaxSize()
+    ) {
     AnimatedVisibility(
         visible = visible,
         enter = fadeIn(tween(300)) + slideInVertically(tween(300)) { it / 4 }
@@ -242,6 +251,7 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
             }
         }
     }
+    } // end PullToRefreshBox
 
     if (showHelp) {
         ToolHelpSheet(

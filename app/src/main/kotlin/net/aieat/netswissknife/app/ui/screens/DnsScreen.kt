@@ -95,6 +95,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -113,6 +114,7 @@ import net.aieat.netswissknife.core.network.dns.DnsServer
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DnsScreen(viewModel: DnsViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -130,7 +132,14 @@ fun DnsScreen(viewModel: DnsViewModel = hiltViewModel()) {
         label         = "screen-alpha"
     )
     var showHelp by remember { mutableStateOf(false) }
+    val isRefreshing = uiState is DnsUiState.Loading
+    val canRefresh = uiState is DnsUiState.Success || uiState is DnsUiState.Error
 
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = { if (canRefresh) viewModel.onRetry() },
+        modifier = Modifier.fillMaxSize()
+    ) {
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -192,6 +201,7 @@ fun DnsScreen(viewModel: DnsViewModel = hiltViewModel()) {
                 }
             }
         }
+    } // end PullToRefreshBox
 
     if (showHelp) {
         ToolHelpSheet(
