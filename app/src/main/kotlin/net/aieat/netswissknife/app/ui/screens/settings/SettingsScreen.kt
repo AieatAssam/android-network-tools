@@ -458,8 +458,6 @@ private data class LibraryInfo(
 private val THIRD_PARTY_LIBRARIES = listOf(
     LibraryInfo("dnsjava", "3.6.2", "BSD 3-Clause",
         "Copyright (c) 1998-2024, Brian Wellington and the dnsjava contributors"),
-    LibraryInfo("MapLibre Compose", "0.12.1", "BSD 3-Clause",
-        "Copyright (c) 2021-2024, MapLibre contributors"),
     LibraryInfo("SNMP4J", "3.8.0", "Apache 2.0"),
     LibraryInfo("icmpenguin", "1.0.0-rc.3", "Apache 2.0"),
     LibraryInfo("Dagger Hilt", "2.59.2", "Apache 2.0"),
