@@ -707,7 +707,7 @@ private fun DnsErrorPanel(
             )
             TextButton(
                 onClick = onRetry,
-                colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
+                colors = ButtonDefaults.textButtonColors(
                     contentColor = MaterialTheme.colorScheme.error
                 )
             ) {
