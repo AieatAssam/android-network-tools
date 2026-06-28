@@ -62,6 +62,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Wifi
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -81,7 +82,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+// collectAsState replaced by collectAsStateWithLifecycle below
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -93,6 +94,8 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
@@ -114,12 +117,12 @@ import net.aieat.netswissknife.core.network.lan.LanScanSummary
 
 @Composable
 fun LanScreen(viewModel: LanScanViewModel = hiltViewModel()) {
-    val uiState by viewModel.uiState.collectAsState()
-    val subnet by viewModel.subnet.collectAsState()
-    val timeoutMs by viewModel.timeoutMs.collectAsState()
-    val concurrency by viewModel.concurrency.collectAsState()
-    val isSubnetLoading by viewModel.isSubnetLoading.collectAsState()
-    val searchQuery by viewModel.searchQuery.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val subnet by viewModel.subnet.collectAsStateWithLifecycle()
+    val timeoutMs by viewModel.timeoutMs.collectAsStateWithLifecycle()
+    val concurrency by viewModel.concurrency.collectAsStateWithLifecycle()
+    val isSubnetLoading by viewModel.isSubnetLoading.collectAsStateWithLifecycle()
+    val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val recentSubnets by viewModel.recentSubnets.collectAsStateWithLifecycle()
 
     var visible by remember { mutableStateOf(false) }
@@ -243,6 +246,8 @@ private fun LanHeaderCard(onHelpClick: () -> Unit) {
                         text = stringResource(R.string.lan_screen_title),
                         style = MaterialTheme.typography.displaySmall,
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                     Text(
                         text = stringResource(R.string.lan_screen_subtitle),
@@ -310,7 +315,8 @@ private fun LanInputCard(
                         CircularProgressIndicator(
                             modifier = Modifier
                                 .size(24.dp)
-                                .padding(end = 8.dp),
+                                .padding(end = 8.dp)
+                                .semantics { contentDescription = "Loading" },
                             strokeWidth = 2.dp,
                         )
                     } else {
@@ -691,17 +697,30 @@ private fun LanFinishedContent(
         }
 
         if (summary.hosts.isEmpty()) {
-            OutlinedCard(modifier = Modifier.fillMaxWidth()) {
-                Box(
+            ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+                Column(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(32.dp),
-                    contentAlignment = Alignment.Center,
+                        .padding(24.dp)
+                        .fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
+                    Icon(
+                        imageVector = Icons.Default.Wifi,
+                        contentDescription = null,
+                        modifier = Modifier.size(48.dp),
+                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                    )
                     Text(
-                        text = stringResource(R.string.lan_no_hosts_found),
-                        style = MaterialTheme.typography.bodyMedium,
+                        text = stringResource(R.string.lan_empty_title),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = stringResource(R.string.lan_empty_body),
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
                     )
                 }
             }

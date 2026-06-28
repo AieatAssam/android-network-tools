@@ -106,7 +106,7 @@ import kotlin.math.abs
 
 @Composable
 fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val recentHosts by viewModel.recentHosts.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
@@ -294,8 +294,9 @@ private fun WhoisHeroHeader(onHelpClick: () -> Unit) {
                     Text(
                         text = stringResource(R.string.whois_screen_title),
                         style = MaterialTheme.typography.displaySmall,
-                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                     Text(
                         text = stringResource(R.string.whois_screen_subtitle),
@@ -906,12 +907,13 @@ fun LabeledRow(label: String, value: String) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.weight(0.4f)
         )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.weight(0.6f),
-            textAlign = TextAlign.End
-        )
+        SelectionContainer(modifier = Modifier.weight(0.6f)) {
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.End
+            )
+        }
     }
 }
 

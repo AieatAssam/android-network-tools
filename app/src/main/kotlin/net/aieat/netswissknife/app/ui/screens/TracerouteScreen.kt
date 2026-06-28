@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -81,6 +82,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
@@ -275,8 +280,10 @@ private fun TracerouteHeroHeader(onHelpClick: () -> Unit) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text  = stringResource(R.string.traceroute_screen_title),
-                        style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                        style = MaterialTheme.typography.displaySmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Text(
                         text  = stringResource(R.string.traceroute_screen_subtitle),
@@ -553,7 +560,7 @@ private fun TracerouteRunningPanel(state: TracerouteUiState.Running) {
                 modifier          = Modifier.padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                CircularProgressIndicator(modifier = Modifier.size(24.dp).semantics { contentDescription = "Loading" }, strokeWidth = 2.dp)
                 Spacer(Modifier.width(12.dp))
                 Column {
                     Text(
@@ -1081,6 +1088,7 @@ private fun HopCard(hop: HopResult, index: Int) {
         modifier = Modifier
             .fillMaxWidth()
             .clickable { expanded = !expanded }
+            .semantics { role = Role.Button }
     ) {
         Column(modifier = Modifier.animateContentSize(animationSpec = tween(200))) {
             Row(
@@ -1312,15 +1320,17 @@ private fun RawOutputCard(rawOutput: String) {
             Spacer(Modifier.height(8.dp))
             HorizontalDivider()
             Spacer(Modifier.height(8.dp))
-            SelectionContainer {
-                Text(
-                    text  = rawOutput,
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        fontFamily = FontFamily.Monospace,
-                        lineHeight = 20.sp
-                    ),
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+            Box(modifier = Modifier.heightIn(max = 280.dp)) {
+                SelectionContainer {
+                    Text(
+                        text  = rawOutput,
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontFamily = FontFamily.Monospace,
+                            lineHeight = 20.sp
+                        ),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
             }
         }
     }

@@ -21,6 +21,11 @@
     <string name="more_sheet_subtitle">Pin up to %1$d tools to the navigation bar</string>
     <string name="more_pin_description">Pin %1$s</string>
     <string name="more_unpin_description">Unpin %1$s</string>
+    <string name="more_section_diagnostics">Diagnostics</string>
+    <string name="more_section_wifi_lan">Wi-Fi &amp; LAN</string>
+    <string name="more_section_security">Security</string>
+    <string name="more_section_utilities">Utilities</string>
+    <string name="more_pin_limit_reached">Max %d tools pinned — unpin one first</string>
 
     <!-- DNS Screen -->
     <string name="dns_screen_title">DNS Lookup</string>
@@ -37,6 +42,7 @@
     <string name="dns_lookup_button">Look up</string>
     <string name="dns_looking_up">Looking up…</string>
     <string name="clear">Clear</string>
+    <string name="loading_indicator_description">Loading</string>
 
     <!-- DNS States -->
     <string name="dns_idle_title">Enter a domain to look up</string>
@@ -183,6 +189,8 @@
     <string name="lan_live_hosts_header">Live Hosts</string>
     <string name="lan_hosts_header">Discovered Hosts (%1$d)</string>
     <string name="lan_no_hosts_found">No live hosts found on this subnet</string>
+    <string name="lan_empty_title">No hosts found</string>
+    <string name="lan_empty_body">No devices responded on this subnet. Verify the network range and try increasing the timeout.</string>
     <string name="lan_stat_scanned">Scanned</string>
     <string name="lan_stat_alive">Alive</string>
     <string name="lan_stat_subnet">Subnet</string>
@@ -659,11 +667,23 @@
     <string name="mdns_screen_subtitle">Discover services on your local network via multicast DNS</string>
     <string name="mdns_stat_found">found</string>
     <string name="mdns_stat_elapsed">elapsed</string>
+    <string name="mdns_idle_hint">Tap Scan to discover services</string>
+    <string name="mdns_idle_body">Finds printers, Chromecasts, AirPlay, HomeKit, and more</string>
+    <string name="mdns_scanning_hint">Listening for mDNS announcements…</string>
+    <string name="mdns_scanning_inline_label">Scanning…</string>
+    <string name="mdns_error_title">Discovery failed</string>
+    <string name="mdns_error_dismiss">Dismiss</string>
+    <string name="mdns_scan_button">Scan Network</string>
+    <string name="mdns_stop_button">Stop</string>
+    <string name="mdns_clear_button">Clear</string>
+    <string name="mdns_empty_title">No services found</string>
+    <string name="mdns_empty_body">No mDNS services responded. Ensure devices are on the same network and try again.</string>
+    <string name="mdns_txt_records_label">TXT Records</string>
 
     <!-- Onboarding -->
     <string name="onboarding_subtitle">Your all-in-one Android networking toolkit</string>
     <string name="onboarding_get_started">Get Started</string>
-    <string name="onboarding_dont_show_again">Don\'t show again</string>
+    <string name="onboarding_dont_show_again">Skip</string>
 
     <!-- Settings – Guide section -->
     <string name="settings_guide_section">Guide</string>

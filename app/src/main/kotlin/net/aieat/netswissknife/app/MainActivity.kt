@@ -159,9 +159,12 @@ private fun AppBottomNavigationBar(
             )
         }
 
-        // "More" is always last
+        // "More" is always last — highlighted when the current screen is not Home and not a pinned tool
+        val isMoreSelected = currentRoute != null &&
+            currentRoute != NavRoutes.Home.route &&
+            pinnedTools.none { it.route == currentRoute }
         NavigationBarItem(
-            selected = false,
+            selected = isMoreSelected,
             onClick  = onMoreClick,
             icon     = { Icon(Icons.Default.MoreHoriz, contentDescription = null) },
             label    = { Text(stringResource(R.string.nav_more)) }

@@ -78,6 +78,7 @@ import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -222,7 +223,8 @@ private fun SpeedTestHeaderCard(onHelpClick: () -> Unit) {
                         text = stringResource(R.string.speedtest_screen_title),
                         style = MaterialTheme.typography.displaySmall,
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        fontWeight = FontWeight.Bold
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Text(
                         text = stringResource(R.string.speedtest_screen_subtitle),
@@ -537,7 +539,6 @@ private fun SpeedGauge(
             Text(
                 text = "%.1f".format(animatedValue),
                 style = MaterialTheme.typography.displaySmall,
-                fontWeight = FontWeight.Bold
             )
             Text(
                 text = stringResource(R.string.speedtest_mbps_suffix),

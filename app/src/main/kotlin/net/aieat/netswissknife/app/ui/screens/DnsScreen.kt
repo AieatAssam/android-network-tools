@@ -79,6 +79,8 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.vector.ImageVector
 import android.content.ClipData
 import androidx.compose.runtime.rememberCoroutineScope
@@ -99,6 +101,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.RecentHostsRow
+import net.aieat.netswissknife.app.ui.theme.AppShapes
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
 import net.aieat.netswissknife.app.ui.screens.dns.DnsUiState
 import net.aieat.netswissknife.app.ui.screens.dns.DnsViewModel
@@ -255,8 +258,10 @@ private fun DnsHeroHeader(onHelpClick: () -> Unit) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = stringResource(R.string.dns_screen_title),
-                    style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                    style = MaterialTheme.typography.displaySmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = stringResource(R.string.dns_screen_subtitle),
@@ -296,7 +301,7 @@ private fun DnsInputCard(
 ) {
     ElevatedCard(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp)
+        shape = AppShapes.large
     ) {
         Column(
             modifier = Modifier.padding(20.dp),
@@ -331,7 +336,7 @@ private fun DnsInputCard(
                     onSearch = { onLookup() }
                 ),
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp)
+                shape = AppShapes.medium
             )
 
             RecentHostsRow(
@@ -378,14 +383,14 @@ private fun DnsInputCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp),
-                shape = RoundedCornerShape(12.dp),
+                shape = AppShapes.medium,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.primary
                 )
             ) {
                 if (isLoading) {
                     CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
+                        modifier = Modifier.size(20.dp).semantics { contentDescription = "Loading" },
                         color = MaterialTheme.colorScheme.onPrimary,
                         strokeWidth = 2.dp
                     )
@@ -520,7 +525,7 @@ private fun DnsServerSelector(
             modifier = Modifier
                 .fillMaxWidth()
                 .menuAnchor(MenuAnchorType.PrimaryEditable, enabled = true),
-            shape = RoundedCornerShape(12.dp),
+            shape = AppShapes.medium,
             colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors()
         )
 
@@ -621,7 +626,7 @@ private fun DnsIdleHint(modifier: Modifier = Modifier) {
 private fun DnsLoadingPanel(modifier: Modifier = Modifier) {
     ElevatedCard(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp)
+        shape = AppShapes.large
     ) {
         Column(
             modifier = Modifier
@@ -631,7 +636,7 @@ private fun DnsLoadingPanel(modifier: Modifier = Modifier) {
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             CircularProgressIndicator(
-                modifier = Modifier.size(48.dp),
+                modifier = Modifier.size(48.dp).semantics { contentDescription = "Loading" },
                 color = MaterialTheme.colorScheme.primary,
                 strokeWidth = 3.dp
             )
@@ -659,7 +664,7 @@ private fun DnsErrorPanel(
 ) {
     ElevatedCard(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp)
+        shape = AppShapes.large
     ) {
         Column(
             modifier = Modifier
@@ -750,7 +755,7 @@ private fun DnsResultSummaryCard(
 ) {
     val context = LocalContext.current
     ElevatedCard(
-        shape = RoundedCornerShape(20.dp),
+        shape = AppShapes.large,
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
@@ -774,7 +779,7 @@ private fun DnsResultSummaryCard(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = result.domain,
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                        style = MaterialTheme.typography.titleLarge,
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
@@ -901,7 +906,7 @@ private fun DnsRecordCard(record: DnsRecord, index: Int) {
         modifier = Modifier
             .fillMaxWidth()
             .alpha(alpha),
-        shape = RoundedCornerShape(16.dp)
+        shape = AppShapes.large
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -1147,7 +1152,7 @@ private fun PlainValueDisplay(value: String) {
 private fun DnsNoRecordsCard(result: DnsResult) {
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp)
+        shape = AppShapes.large
     ) {
         Column(
             modifier = Modifier
@@ -1186,7 +1191,7 @@ private fun DnsRawToggleCard(
 ) {
     OutlinedCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp)
+        shape = AppShapes.large
     ) {
         Column {
             Row(

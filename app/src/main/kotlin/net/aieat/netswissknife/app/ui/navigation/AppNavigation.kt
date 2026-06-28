@@ -110,6 +110,12 @@ fun AppNavHost(navController: NavHostController, modifier: Modifier = Modifier) 
         composable(NavRoutes.SubnetCalculator.route)  { SubnetCalculatorScreen() }
         composable(NavRoutes.MdnsDiscovery.route)     { MdnsDiscoveryScreen() }
         composable(NavRoutes.SpeedTest.route)         { SpeedTestScreen() }
-        composable(NavRoutes.Settings.route)           { SettingsScreen() }
+        composable(
+            route            = NavRoutes.Settings.route,
+            enterTransition  = { fadeIn(tween(ANIM_DURATION)) },
+            exitTransition   = { fadeOut(tween(ANIM_DURATION)) },
+            popEnterTransition  = { fadeIn(tween(ANIM_DURATION)) },
+            popExitTransition   = { fadeOut(tween(ANIM_DURATION)) },
+        ) { SettingsScreen() }
     }
 }

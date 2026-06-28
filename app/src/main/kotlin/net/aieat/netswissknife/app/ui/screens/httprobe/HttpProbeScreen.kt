@@ -247,7 +247,8 @@ private fun HttpProbeHeaderCard(onHelpClick: () -> Unit) {
                         text = stringResource(R.string.httprobe_screen_title),
                         style = MaterialTheme.typography.displaySmall,
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        fontWeight = FontWeight.Bold
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                     Text(
                         text = stringResource(R.string.httprobe_screen_subtitle),

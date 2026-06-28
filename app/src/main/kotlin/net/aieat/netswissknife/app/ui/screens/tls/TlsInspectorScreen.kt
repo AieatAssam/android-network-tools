@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.ExpandLess
@@ -56,6 +57,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.background
 import androidx.compose.ui.platform.LocalFocusManager
@@ -222,7 +225,8 @@ private fun TlsHeaderCard(onHelpClick: () -> Unit) {
                         text = stringResource(R.string.tls_screen_title),
                         style = MaterialTheme.typography.displaySmall,
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        fontWeight = FontWeight.Bold
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Text(
                         text = stringResource(R.string.tls_screen_subtitle),
@@ -562,7 +566,10 @@ private fun CertificateCard(
 ) {
     var expanded by remember { mutableStateOf(expandedByDefault) }
 
-    OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+    OutlinedCard(
+        modifier = Modifier.fillMaxWidth(),
+        onClick = { expanded = !expanded }
+    ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             // Header row — always visible, tappable to expand/collapse
             Row(
@@ -772,13 +779,14 @@ private fun LabeledValue(label: String, value: String) {
                 .weight(0.4f)
                 .padding(end = 8.dp)
         )
-        Text(
-            text     = value,
-            style    = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.weight(0.6f),
-            maxLines = 3,
-            overflow = TextOverflow.Ellipsis
-        )
+        SelectionContainer(modifier = Modifier.weight(0.6f)) {
+            Text(
+                text     = value,
+                style    = MaterialTheme.typography.bodyMedium,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
     }
 }
 

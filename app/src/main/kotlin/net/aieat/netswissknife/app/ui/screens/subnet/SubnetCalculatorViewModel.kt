@@ -51,11 +51,30 @@ class SubnetCalculatorViewModel @Inject constructor(
     }
 
     fun toggleMode() {
-        _uiState.value = _uiState.value.copy(
-            isRangeMode = !_uiState.value.isRangeMode,
-            result = null,
-            error = null
-        )
+        val state = _uiState.value
+        if (!state.isRangeMode) {
+            // Switching CIDR → Range: pre-fill min/max from result or input
+            val minIp = state.result?.networkAddress
+                ?: state.input.substringBefore('/').trim().takeIf { it.isNotBlank() }
+                ?: ""
+            val maxIp = state.result?.broadcastAddress ?: ""
+            _uiState.value = state.copy(
+                isRangeMode = true,
+                minIpInput = minIp,
+                maxIpInput = maxIp,
+                result = null,
+                error = null,
+            )
+        } else {
+            // Switching Range → CIDR: copy minIp into CIDR input field
+            val cidrInput = state.minIpInput.takeIf { it.isNotBlank() } ?: state.input
+            _uiState.value = state.copy(
+                isRangeMode = false,
+                input = cidrInput,
+                result = null,
+                error = null,
+            )
+        }
     }
 
     fun onMinIpChange(value: String) {

@@ -45,9 +45,10 @@ import androidx.compose.material3.TextButton
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -55,21 +56,24 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import net.aieat.netswissknife.app.BuildConfig
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.ui.theme.AppShapes
 import kotlin.math.roundToInt
 
 @Composable
 fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
-    val themeOverride by viewModel.themeOverride.collectAsState()
-    val defaultPingCount by viewModel.defaultPingCount.collectAsState()
-    val defaultTimeoutMs by viewModel.defaultTimeoutMs.collectAsState()
-    val defaultConcurrency by viewModel.defaultConcurrency.collectAsState()
+    val themeOverride by viewModel.themeOverride.collectAsStateWithLifecycle()
+    val defaultPingCount by viewModel.defaultPingCount.collectAsStateWithLifecycle()
+    val defaultTimeoutMs by viewModel.defaultTimeoutMs.collectAsStateWithLifecycle()
+    val defaultConcurrency by viewModel.defaultConcurrency.collectAsStateWithLifecycle()
 
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
@@ -122,8 +126,9 @@ private fun SettingsHeader() {
             Text(
                 text = stringResource(R.string.settings_screen_title),
                 style = MaterialTheme.typography.displaySmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground
+                color = MaterialTheme.colorScheme.onBackground,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
             Text(
                 text = stringResource(R.string.settings_screen_subtitle),
@@ -227,7 +232,9 @@ private fun SliderSetting(
             onValueChange = onValueChange,
             valueRange = valueRange,
             steps = steps,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth().semantics {
+                contentDescription = "$label: ${value.toInt()}"
+            }
         )
     }
 }

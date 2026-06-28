@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.*
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.ui.theme.AppShapes
 import net.aieat.netswissknife.core.network.topology.*
 import kotlin.math.*
 
@@ -142,8 +143,9 @@ private fun TopologyScreenContent(
                         Text(
                             text = stringResource(R.string.topology_screen_title),
                             style = MaterialTheme.typography.displaySmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                         Text(
                             text = stringResource(R.string.topology_screen_subtitle),
@@ -167,7 +169,7 @@ private fun TopologyScreenContent(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 8.dp),
-            shape = RoundedCornerShape(16.dp)
+            shape = AppShapes.large
         ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Row(
@@ -588,7 +590,7 @@ private fun ErrorContent(message: String, onRetry: () -> Unit) {
             colors = CardDefaults.elevatedCardColors(
                 containerColor = MaterialTheme.colorScheme.errorContainer
             ),
-            shape = RoundedCornerShape(16.dp)
+            shape = AppShapes.large
         ) {
             Column(
                 modifier = Modifier.padding(24.dp),
@@ -638,7 +640,7 @@ private fun ScanningBadge(message: String) {
         label = "badge_alpha"
     )
     Surface(
-        shape = RoundedCornerShape(20.dp),
+        shape = AppShapes.large,
         color = MaterialTheme.colorScheme.primaryContainer,
         shadowElevation = 4.dp,
         modifier = Modifier.alpha(alpha)
@@ -990,7 +992,7 @@ private fun NodeDetailSheet(
 private fun SectionCard(title: String, content: @Composable ColumnScope.() -> Unit) {
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp)
+        shape = AppShapes.medium
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(

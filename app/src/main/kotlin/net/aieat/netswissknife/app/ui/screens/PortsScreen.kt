@@ -81,6 +81,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import android.content.ClipData
@@ -355,8 +357,9 @@ private fun PortScanHeader(onHelpClick: () -> Unit) {
                 Text(
                     text = stringResource(R.string.ports_screen_title),
                     style = MaterialTheme.typography.displaySmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
                 Text(
                     text = stringResource(R.string.ports_screen_subtitle),
@@ -632,7 +635,7 @@ private fun PortScanProgressCard(state: PortScanUiState.Scanning) {
                     fontWeight = FontWeight.Bold
                 )
                 CircularProgressIndicator(
-                    modifier = Modifier.size(28.dp),
+                    modifier = Modifier.size(28.dp).semantics { contentDescription = "Loading" },
                     strokeCap = StrokeCap.Round,
                     strokeWidth = 3.dp
                 )

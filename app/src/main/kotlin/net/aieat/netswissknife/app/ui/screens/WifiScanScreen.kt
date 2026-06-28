@@ -60,7 +60,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -88,6 +88,11 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import net.aieat.netswissknife.app.ui.theme.AppShapes
 import net.aieat.netswissknife.app.ui.theme.StatusBad
 import net.aieat.netswissknife.app.ui.theme.StatusCritical
 import net.aieat.netswissknife.app.ui.theme.StatusGood
@@ -99,6 +104,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import net.aieat.netswissknife.app.ui.screens.wifi.ApSortOrder
@@ -130,9 +136,9 @@ private fun networkColor(colorIndex: Int): Color =
 fun WifiScanScreen(
     viewModel: WifiScanViewModel = hiltViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
-    val autoRefresh by viewModel.autoRefresh.collectAsState()
-    val expandedNetworks by viewModel.expandedNetworks.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val autoRefresh by viewModel.autoRefresh.collectAsStateWithLifecycle()
+    val expandedNetworks by viewModel.expandedNetworks.collectAsStateWithLifecycle()
 
     val requiredPermissions = buildList {
         add(Manifest.permission.ACCESS_FINE_LOCATION)
@@ -204,7 +210,10 @@ fun WifiScanScreen(
 
 @Composable private fun WifiIdleScreen() {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+        CircularProgressIndicator(
+            modifier = Modifier.semantics { contentDescription = "Loading" },
+            color = MaterialTheme.colorScheme.primary
+        )
     }
 }
 
@@ -683,7 +692,7 @@ private fun bandChannelLabels(band: WifiBand): List<Pair<Int, Float>> = when (ba
 
     ElevatedCard(
         onClick  = onToggleExpanded,
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth().semantics { role = Role.Button }
     ) {
         Column {
             // ── Header row ────────────────────────────────────────────────────
