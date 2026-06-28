@@ -108,6 +108,13 @@ dependencies {
     implementation(libs.compose.material3)
     implementation(libs.compose.material.icons.extended)
     implementation(libs.compose.animation)
+    // foundation-layout:1.8.2 is pulled to the runtime classpath by
+    // navigation-compose:2.9.0 (via hilt-navigation-compose:1.3.0), but the BOM
+    // only pins the compile classpath to 1.7.6.  The 1.8.x API added
+    // itemVerticalAlignment to FlowRow, making it binary-incompatible with 1.7.x.
+    // Explicitly declaring 1.8.2 here aligns compile with runtime so calls compile
+    // against the same signature that is bundled at runtime.
+    implementation("androidx.compose.foundation:foundation-layout:1.8.2")
     debugImplementation(libs.compose.ui.tooling)
 
     // Navigation

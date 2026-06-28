@@ -74,15 +74,29 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material3.IconButton
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.ui.theme.AppShapes
+import net.aieat.netswissknife.app.ui.components.HelpSection
+import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
 import net.aieat.netswissknife.core.network.mdns.DiscoveredService
 
 @Composable
 fun MdnsDiscoveryScreen(viewModel: MdnsDiscoveryViewModel = hiltViewModel()) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
+    var showHelp by remember { mutableStateOf(false) }
 
     AnimatedVisibility(
         visible = visible,
@@ -94,7 +108,7 @@ fun MdnsDiscoveryScreen(viewModel: MdnsDiscoveryViewModel = hiltViewModel()) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            HeroCard(uiState)
+            HeroCard(uiState, onHelpClick = { showHelp = true })
 
             ControlRow(
                 isScanning = uiState.isScanning,
@@ -109,18 +123,21 @@ fun MdnsDiscoveryScreen(viewModel: MdnsDiscoveryViewModel = hiltViewModel()) {
                     uiState.error != null -> "error"
                     uiState.services.isEmpty() && !uiState.isScanning && !uiState.scanComplete -> "idle"
                     uiState.services.isEmpty() && uiState.isScanning -> "scanning_empty"
+                    uiState.services.isEmpty() && uiState.scanComplete -> "empty_done"
                     else -> "results"
                 },
                 transitionSpec = {
                     fadeIn(tween(300)) togetherWith fadeOut(tween(200))
                 },
-                label = "mdns-state"
+                label = "mdns-state",
+                modifier = Modifier.weight(1f)
             ) { state ->
                 when (state) {
                     "idle" -> IdleHint()
                     "scanning_empty" -> ScanningPlaceholder()
+                    "empty_done" -> EmptyResultHint()
                     "error" -> ErrorCard(uiState.error ?: "Unknown error") { viewModel.reset() }
-                    "results" -> ServiceList(
+                    else -> ServiceList(
                         servicesByType = uiState.servicesByType,
                         isScanning = uiState.isScanning
                     )
@@ -128,12 +145,24 @@ fun MdnsDiscoveryScreen(viewModel: MdnsDiscoveryViewModel = hiltViewModel()) {
             }
         }
     }
+
+    if (showHelp) {
+        ToolHelpSheet(
+            title = stringResource(R.string.help_mdns_title),
+            sections = listOf(
+                HelpSection(stringResource(R.string.help_mdns_what_heading), stringResource(R.string.help_mdns_what_body)),
+                HelpSection(stringResource(R.string.help_mdns_params_heading), stringResource(R.string.help_mdns_params_body)),
+                HelpSection(stringResource(R.string.help_mdns_results_heading), stringResource(R.string.help_mdns_results_body))
+            ),
+            onDismiss = { showHelp = false }
+        )
+    }
 }
 
 // ── Hero card ─────────────────────────────────────────────────────────────────
 
 @Composable
-private fun HeroCard(state: MdnsDiscoveryUiState) {
+private fun HeroCard(state: MdnsDiscoveryUiState, onHelpClick: () -> Unit) {
     val gradient = Brush.linearGradient(
         colors = listOf(
             MaterialTheme.colorScheme.primaryContainer,
@@ -142,53 +171,68 @@ private fun HeroCard(state: MdnsDiscoveryUiState) {
     )
 
     ElevatedCard(
-        shape = RoundedCornerShape(20.dp),
+        shape = AppShapes.large,
         modifier = Modifier.fillMaxWidth()
     ) {
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(gradient)
-                .padding(20.dp)
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Default.Devices,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(40.dp)
-                )
+                Box(
+                    modifier = Modifier
+                        .size(52.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Devices,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
                 Spacer(Modifier.width(16.dp))
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "mDNS Service Browser",
-                        style = MaterialTheme.typography.titleMedium,
+                        text = stringResource(R.string.mdns_screen_title),
+                        style = MaterialTheme.typography.displaySmall,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                     Text(
-                        text = "Discover services on your local network",
-                        style = MaterialTheme.typography.bodySmall,
+                        text = stringResource(R.string.mdns_screen_subtitle),
+                        style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                    )
+                }
+                IconButton(onClick = onHelpClick) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = stringResource(R.string.action_help),
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 }
             }
 
-            // Stats badges — top right
+            // Stats badges
             if (state.services.isNotEmpty() || state.isScanning) {
                 Row(
-                    modifier = Modifier.align(Alignment.TopEnd),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     StatBadge(
                         value = state.services.size.toString(),
-                        label = "found"
+                        label = stringResource(R.string.mdns_stat_found)
                     )
                     if (state.isScanning) {
                         StatBadge(
                             value = "${state.elapsedMs / 1000}s",
-                            label = "elapsed"
+                            label = stringResource(R.string.mdns_stat_elapsed)
                         )
                     }
                 }
@@ -246,7 +290,7 @@ private fun ControlRow(
                 ) {
                     Icon(Icons.Default.Close, null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Stop")
+                    Text(stringResource(R.string.mdns_stop_button))
                 }
             } else {
                 Button(
@@ -255,14 +299,14 @@ private fun ControlRow(
                 ) {
                     Icon(Icons.Default.PlayArrow, null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Scan Network")
+                    Text(stringResource(R.string.mdns_scan_button))
                 }
             }
         }
 
         if (hasPriorResults && !isScanning) {
             FilledTonalButton(onClick = onReset) {
-                Text("Clear")
+                Text(stringResource(R.string.mdns_clear_button))
             }
         }
     }
@@ -287,13 +331,13 @@ private fun IdleHint() {
             )
             Spacer(Modifier.height(12.dp))
             Text(
-                text = "Tap Scan to discover services",
+                text = stringResource(R.string.mdns_idle_hint),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                text = "Finds printers, Chromecasts, AirPlay, HomeKit, and more",
+                text = stringResource(R.string.mdns_idle_body),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
             )
@@ -319,12 +363,14 @@ private fun ScanningPlaceholder() {
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         CircularProgressIndicator(
-            modifier = Modifier.size(52.dp),
+            modifier = Modifier
+                .size(52.dp)
+                .semantics { contentDescription = "Scanning for mDNS services" },
             strokeCap = StrokeCap.Round,
             color = MaterialTheme.colorScheme.primary.copy(alpha = pulse)
         )
         Text(
-            text = "Listening for mDNS announcements…",
+            text = stringResource(R.string.mdns_scanning_hint),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
         )
@@ -334,14 +380,14 @@ private fun ScanningPlaceholder() {
 @Composable
 private fun ErrorCard(message: String, onRetry: () -> Unit) {
     ElevatedCard(
-        shape = RoundedCornerShape(16.dp),
+        shape = AppShapes.large,
         colors = CardDefaults.elevatedCardColors(
             containerColor = MaterialTheme.colorScheme.errorContainer
         )
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
-                text = "Discovery failed",
+                text = stringResource(R.string.mdns_error_title),
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onErrorContainer,
                 fontWeight = FontWeight.SemiBold
@@ -351,7 +397,7 @@ private fun ErrorCard(message: String, onRetry: () -> Unit) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f)
             )
-            FilledTonalButton(onClick = onRetry) { Text("Dismiss") }
+            FilledTonalButton(onClick = onRetry) { Text(stringResource(R.string.mdns_error_dismiss)) }
         }
     }
 }
@@ -374,11 +420,13 @@ private fun ServiceList(
                     modifier = Modifier.padding(vertical = 4.dp)
                 ) {
                     CircularProgressIndicator(
-                        modifier = Modifier.size(14.dp),
+                        modifier = Modifier
+                            .size(14.dp)
+                            .semantics { contentDescription = "Scanning in progress" },
                         strokeWidth = 2.dp
                     )
                     Text(
-                        "Scanning…",
+                        stringResource(R.string.mdns_scanning_inline_label),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
@@ -431,9 +479,10 @@ private fun ServiceTypeHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(AppShapes.medium)
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
             .clickable(onClick = onClick)
+            .semantics { role = Role.Button }
             .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -480,12 +529,13 @@ private fun ServiceItem(service: DiscoveredService) {
     var expanded by remember { mutableStateOf(false) }
 
     OutlinedCard(
-        shape = RoundedCornerShape(12.dp),
+        shape = AppShapes.medium,
         modifier = Modifier
             .fillMaxWidth()
             .padding(start = 8.dp)
             .animateContentSize()
             .clickable { expanded = !expanded }
+            .semantics { role = Role.Button }
     ) {
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -541,7 +591,7 @@ private fun ServiceItem(service: DiscoveredService) {
                     if (service.txtRecords.isNotEmpty()) {
                         HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                         Text(
-                            "TXT Records",
+                            stringResource(R.string.mdns_txt_records_label),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.SemiBold
@@ -568,6 +618,40 @@ private fun ServiceItem(service: DiscoveredService) {
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun EmptyResultHint() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 32.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.NetworkPing,
+                contentDescription = null,
+                modifier = Modifier.size(64.dp),
+                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
+            )
+            Text(
+                text = stringResource(R.string.mdns_empty_title),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+            )
+            Text(
+                text = stringResource(R.string.mdns_empty_body),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 24.dp)
+            )
         }
     }
 }

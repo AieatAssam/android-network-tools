@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.*
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.ui.theme.AppShapes
 import net.aieat.netswissknife.core.network.topology.*
 import kotlin.math.*
 
@@ -42,6 +43,7 @@ fun TopologyDiscoveryScreen(
 
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
+    var showHelp by remember { mutableStateOf(false) }
 
     AnimatedVisibility(
         visible = visible,
@@ -52,7 +54,20 @@ fun TopologyDiscoveryScreen(
             onStartDiscovery = { params -> viewModel.startDiscovery(params) },
             onSelectNode = { ip -> viewModel.selectNode(ip) },
             onDeselectNode = { viewModel.deselectNode() },
-            onReset = { viewModel.reset() }
+            onReset = { viewModel.reset() },
+            onHelpClick = { showHelp = true }
+        )
+    }
+
+    if (showHelp) {
+        net.aieat.netswissknife.app.ui.components.ToolHelpSheet(
+            title = stringResource(R.string.help_topology_title),
+            sections = listOf(
+                net.aieat.netswissknife.app.ui.components.HelpSection(stringResource(R.string.help_topology_what_heading), stringResource(R.string.help_topology_what_body)),
+                net.aieat.netswissknife.app.ui.components.HelpSection(stringResource(R.string.help_topology_params_heading), stringResource(R.string.help_topology_params_body)),
+                net.aieat.netswissknife.app.ui.components.HelpSection(stringResource(R.string.help_topology_results_heading), stringResource(R.string.help_topology_results_body))
+            ),
+            onDismiss = { showHelp = false }
         )
     }
 }
@@ -64,7 +79,8 @@ private fun TopologyScreenContent(
     onStartDiscovery: (TopologyParams) -> Unit,
     onSelectNode: (String) -> Unit,
     onDeselectNode: () -> Unit,
-    onReset: () -> Unit
+    onReset: () -> Unit,
+    onHelpClick: () -> Unit = {}
 ) {
     var targetIp by remember { mutableStateOf("") }
     var snmpVersion by remember { mutableStateOf(SnmpVersion.V2C) }
@@ -87,33 +103,74 @@ private fun TopologyScreenContent(
         else -> null
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = stringResource(R.string.topology_screen_title),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
-            )
-        }
-    ) { padding ->
-        Column(
+    Column(modifier = Modifier.fillMaxSize()) {
+        // ── Hero header ───────────────────────────────────────────────────────
+        ElevatedCard(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
-            ElevatedCard(
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                shape = RoundedCornerShape(16.dp)
+                    .background(
+                        Brush.linearGradient(
+                            listOf(
+                                MaterialTheme.colorScheme.primaryContainer,
+                                MaterialTheme.colorScheme.secondaryContainer
+                            )
+                        )
+                    )
+                    .padding(20.dp)
             ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(52.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Hub,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+                    Spacer(Modifier.width(16.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.topology_screen_title),
+                            style = MaterialTheme.typography.displaySmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = stringResource(R.string.topology_screen_subtitle),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                        )
+                    }
+                    IconButton(onClick = onHelpClick) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = stringResource(R.string.action_help),
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                }
+            }
+        }
+
+        // ── SNMP config card ──────────────────────────────────────────────────
+        ElevatedCard(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            shape = AppShapes.large
+        ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Row(
                         modifier = Modifier
@@ -404,7 +461,6 @@ private fun TopologyScreenContent(
                 }
             }
         }
-    }
 
     if (selectedNode != null) {
         NodeDetailSheet(
@@ -420,6 +476,7 @@ private fun TopologyScreenContent(
         )
     }
 }
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -533,7 +590,7 @@ private fun ErrorContent(message: String, onRetry: () -> Unit) {
             colors = CardDefaults.elevatedCardColors(
                 containerColor = MaterialTheme.colorScheme.errorContainer
             ),
-            shape = RoundedCornerShape(16.dp)
+            shape = AppShapes.large
         ) {
             Column(
                 modifier = Modifier.padding(24.dp),
@@ -583,7 +640,7 @@ private fun ScanningBadge(message: String) {
         label = "badge_alpha"
     )
     Surface(
-        shape = RoundedCornerShape(20.dp),
+        shape = AppShapes.large,
         color = MaterialTheme.colorScheme.primaryContainer,
         shadowElevation = 4.dp,
         modifier = Modifier.alpha(alpha)
@@ -935,7 +992,7 @@ private fun NodeDetailSheet(
 private fun SectionCard(title: String, content: @Composable ColumnScope.() -> Unit) {
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp)
+        shape = AppShapes.medium
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(

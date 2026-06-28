@@ -57,10 +57,12 @@ import androidx.compose.material.icons.filled.Lan
 import androidx.compose.material.icons.filled.NetworkCheck
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Router
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Wifi
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -80,7 +82,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+// collectAsState replaced by collectAsStateWithLifecycle below
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -92,6 +94,8 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
@@ -102,7 +106,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.RecentHostsRow
+import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
 import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.core.network.lan.LanHost
 import net.aieat.netswissknife.core.network.lan.LanScanSummary
@@ -111,16 +117,17 @@ import net.aieat.netswissknife.core.network.lan.LanScanSummary
 
 @Composable
 fun LanScreen(viewModel: LanScanViewModel = hiltViewModel()) {
-    val uiState by viewModel.uiState.collectAsState()
-    val subnet by viewModel.subnet.collectAsState()
-    val timeoutMs by viewModel.timeoutMs.collectAsState()
-    val concurrency by viewModel.concurrency.collectAsState()
-    val isSubnetLoading by viewModel.isSubnetLoading.collectAsState()
-    val searchQuery by viewModel.searchQuery.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val subnet by viewModel.subnet.collectAsStateWithLifecycle()
+    val timeoutMs by viewModel.timeoutMs.collectAsStateWithLifecycle()
+    val concurrency by viewModel.concurrency.collectAsStateWithLifecycle()
+    val isSubnetLoading by viewModel.isSubnetLoading.collectAsStateWithLifecycle()
+    val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val recentSubnets by viewModel.recentSubnets.collectAsStateWithLifecycle()
 
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
+    var showHelp by remember { mutableStateOf(false) }
 
     AnimatedVisibility(
         visible = visible,
@@ -133,7 +140,7 @@ fun LanScreen(viewModel: LanScanViewModel = hiltViewModel()) {
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            LanHeaderCard()
+            LanHeaderCard(onHelpClick = { showHelp = true })
 
             LanInputCard(
                 subnet = subnet,
@@ -182,12 +189,24 @@ fun LanScreen(viewModel: LanScanViewModel = hiltViewModel()) {
             }
         }
     }
+
+    if (showHelp) {
+        ToolHelpSheet(
+            title = stringResource(R.string.help_lan_title),
+            sections = listOf(
+                HelpSection(stringResource(R.string.help_lan_what_heading), stringResource(R.string.help_lan_what_body)),
+                HelpSection(stringResource(R.string.help_lan_params_heading), stringResource(R.string.help_lan_params_body)),
+                HelpSection(stringResource(R.string.help_lan_results_heading), stringResource(R.string.help_lan_results_body))
+            ),
+            onDismiss = { showHelp = false }
+        )
+    }
 }
 
 // ── Header card ───────────────────────────────────────────────────────────────
 
 @Composable
-private fun LanHeaderCard() {
+private fun LanHeaderCard(onHelpClick: () -> Unit) {
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Box(
             modifier = Modifier
@@ -222,16 +241,25 @@ private fun LanHeaderCard() {
                         modifier = Modifier.size(28.dp),
                     )
                 }
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = stringResource(R.string.lan_screen_title),
                         style = MaterialTheme.typography.displaySmall,
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                     Text(
                         text = stringResource(R.string.lan_screen_subtitle),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f),
+                    )
+                }
+                IconButton(onClick = onHelpClick) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = stringResource(R.string.action_help),
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 }
             }
@@ -279,26 +307,24 @@ private fun LanInputCard(
                     Icon(Icons.Default.Wifi, contentDescription = null)
                 },
                 trailingIcon = {
-                    Row {
-                        if (subnet.isNotEmpty()) {
-                            IconButton(onClick = { onSubnetChange("") }) {
-                                Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.clear))
-                            }
+                    if (subnet.isNotEmpty()) {
+                        IconButton(onClick = { onSubnetChange("") }) {
+                            Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.clear))
                         }
-                        if (isSubnetLoading) {
-                            CircularProgressIndicator(
-                                modifier = Modifier
-                                    .size(24.dp)
-                                    .padding(end = 8.dp),
-                                strokeWidth = 2.dp,
+                    } else if (isSubnetLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier
+                                .size(24.dp)
+                                .padding(end = 8.dp)
+                                .semantics { contentDescription = "Loading" },
+                            strokeWidth = 2.dp,
+                        )
+                    } else {
+                        IconButton(onClick = onRefreshSubnet) {
+                            Icon(
+                                Icons.Default.Refresh,
+                                contentDescription = stringResource(R.string.lan_detect_subnet),
                             )
-                        } else {
-                            IconButton(onClick = onRefreshSubnet) {
-                                Icon(
-                                    Icons.Default.Refresh,
-                                    contentDescription = stringResource(R.string.lan_detect_subnet),
-                                )
-                            }
                         }
                     }
                 },
@@ -671,17 +697,30 @@ private fun LanFinishedContent(
         }
 
         if (summary.hosts.isEmpty()) {
-            OutlinedCard(modifier = Modifier.fillMaxWidth()) {
-                Box(
+            ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+                Column(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(32.dp),
-                    contentAlignment = Alignment.Center,
+                        .padding(24.dp)
+                        .fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
+                    Icon(
+                        imageVector = Icons.Default.Wifi,
+                        contentDescription = null,
+                        modifier = Modifier.size(48.dp),
+                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                    )
                     Text(
-                        text = stringResource(R.string.lan_no_hosts_found),
-                        style = MaterialTheme.typography.bodyMedium,
+                        text = stringResource(R.string.lan_empty_title),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = stringResource(R.string.lan_empty_body),
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
                     )
                 }
             }

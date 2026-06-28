@@ -10,6 +10,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -22,9 +23,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Refresh
@@ -54,7 +57,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.background
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
@@ -66,7 +72,9 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.RecentHostsRow
+import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
 import net.aieat.netswissknife.app.ui.theme.StatusBlue
 import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.app.ui.theme.StatusGood
@@ -86,6 +94,7 @@ fun TlsInspectorScreen(viewModel: TlsInspectorViewModel = hiltViewModel()) {
 
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
+    var showHelp by remember { mutableStateOf(false) }
 
     val alpha by animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
@@ -107,7 +116,7 @@ fun TlsInspectorScreen(viewModel: TlsInspectorViewModel = hiltViewModel()) {
             )
         ) {
             // Header
-            item { TlsHeaderCard() }
+            item { TlsHeaderCard(onHelpClick = { showHelp = true }) }
 
             // Input section
             item {
@@ -150,6 +159,18 @@ fun TlsInspectorScreen(viewModel: TlsInspectorViewModel = hiltViewModel()) {
             }
         }
     }
+
+    if (showHelp) {
+        ToolHelpSheet(
+            title = stringResource(R.string.help_tls_title),
+            sections = listOf(
+                HelpSection(stringResource(R.string.help_tls_what_heading), stringResource(R.string.help_tls_what_body)),
+                HelpSection(stringResource(R.string.help_tls_params_heading), stringResource(R.string.help_tls_params_body)),
+                HelpSection(stringResource(R.string.help_tls_results_heading), stringResource(R.string.help_tls_results_body))
+            ),
+            onDismiss = { showHelp = false }
+        )
+    }
 }
 
 // ── Display state ─────────────────────────────────────────────────────────────
@@ -164,76 +185,61 @@ private sealed class DisplayState {
 // ── Header card ───────────────────────────────────────────────────────────────
 
 @Composable
-private fun TlsHeaderCard() {
+private fun TlsHeaderCard(onHelpClick: () -> Unit) {
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .then(
-                    Modifier.then(
-                        Modifier.height(90.dp)
-                    )
-                )
-        ) {
-            Surface(
-                modifier = Modifier.matchParentSize(),
-                color = androidx.compose.ui.graphics.Color.Transparent
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .then(
-                            Modifier.then(
-                                Modifier
+                    Modifier.background(
+                        Brush.linearGradient(
+                            listOf(
+                                MaterialTheme.colorScheme.primaryContainer,
+                                MaterialTheme.colorScheme.secondaryContainer
                             )
                         )
-                ) {
-                    val gradientColors = listOf(
-                        MaterialTheme.colorScheme.primaryContainer,
-                        MaterialTheme.colorScheme.secondaryContainer
                     )
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .then(
-                                Modifier.then(Modifier.fillMaxSize())
-                            )
-                    ) {
-                        androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
-                            drawRect(
-                                brush = Brush.linearGradient(gradientColors)
-                            )
-                        }
-                        Column(
-                            modifier = Modifier
-                                .align(Alignment.CenterStart)
-                                .padding(horizontal = 20.dp, vertical = 16.dp)
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.Lock,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(26.dp)
-                                )
-                                Spacer(Modifier.width(10.dp))
-                                Text(
-                                    text = stringResource(R.string.tls_screen_title),
-                                    style = MaterialTheme.typography.displaySmall.copy(
-                                        fontSize = MaterialTheme.typography.headlineMedium.fontSize
-                                    ),
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                            Spacer(Modifier.height(4.dp))
-                            Text(
-                                text = stringResource(R.string.tls_screen_subtitle),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-                            )
-                        }
-                    }
+                )
+                .padding(20.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(52.dp)
+                        .background(
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                            shape = CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Lock,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+                Spacer(Modifier.width(16.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.tls_screen_title),
+                        style = MaterialTheme.typography.displaySmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = stringResource(R.string.tls_screen_subtitle),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                    )
+                }
+                IconButton(onClick = onHelpClick) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = stringResource(R.string.action_help),
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
                 }
             }
         }
@@ -560,7 +566,10 @@ private fun CertificateCard(
 ) {
     var expanded by remember { mutableStateOf(expandedByDefault) }
 
-    OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+    OutlinedCard(
+        modifier = Modifier.fillMaxWidth(),
+        onClick = { expanded = !expanded }
+    ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             // Header row — always visible, tappable to expand/collapse
             Row(
@@ -770,13 +779,14 @@ private fun LabeledValue(label: String, value: String) {
                 .weight(0.4f)
                 .padding(end = 8.dp)
         )
-        Text(
-            text     = value,
-            style    = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.weight(0.6f),
-            maxLines = 3,
-            overflow = TextOverflow.Ellipsis
-        )
+        SelectionContainer(modifier = Modifier.weight(0.6f)) {
+            Text(
+                text     = value,
+                style    = MaterialTheme.typography.bodyMedium,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
     }
 }
 

@@ -44,6 +44,7 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AllInclusive
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -54,6 +55,7 @@ import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.FilledTonalButton
@@ -117,7 +119,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.RecentHostsRow
+import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
 import net.aieat.netswissknife.app.ui.screens.ping.PingUiState
 import net.aieat.netswissknife.app.ui.screens.ping.PingViewModel
 import net.aieat.netswissknife.app.util.shareText
@@ -165,6 +169,7 @@ fun PingScreen(
         animationSpec = tween(400),
         label         = "screen-alpha"
     )
+    var showHelp by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().alpha(screenAlpha),
@@ -173,7 +178,7 @@ fun PingScreen(
         ) {
             // ── Hero header ─────────────────────────────────────────────────
             item {
-                PingHeroHeader()
+                PingHeroHeader(onHelpClick = { showHelp = true })
             }
 
             // ── Input card ──────────────────────────────────────────────────
@@ -226,12 +231,24 @@ fun PingScreen(
                 }
             }
         }
+
+    if (showHelp) {
+        ToolHelpSheet(
+            title = stringResource(R.string.help_ping_title),
+            sections = listOf(
+                HelpSection(stringResource(R.string.help_ping_what_heading), stringResource(R.string.help_ping_what_body)),
+                HelpSection(stringResource(R.string.help_ping_params_heading), stringResource(R.string.help_ping_params_body)),
+                HelpSection(stringResource(R.string.help_ping_results_heading), stringResource(R.string.help_ping_results_body))
+            ),
+            onDismiss = { showHelp = false }
+        )
+    }
 }
 
 // ── Hero header ───────────────────────────────────────────────────────────────
 
 @Composable
-private fun PingHeroHeader() {
+private fun PingHeroHeader(onHelpClick: () -> Unit) {
     val infiniteTransition = rememberInfiniteTransition(label = "ping_pulse")
     val pulse by infiniteTransition.animateFloat(
         initialValue = 0.85f, targetValue = 1.0f,
@@ -277,17 +294,25 @@ private fun PingHeroHeader() {
                     )
                 }
                 Spacer(modifier = Modifier.width(16.dp))
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = stringResource(R.string.ping_screen_title),
                         style = MaterialTheme.typography.displaySmall,
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        fontWeight = FontWeight.Bold
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Text(
                         text = stringResource(R.string.ping_screen_subtitle),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                    )
+                }
+                IconButton(onClick = onHelpClick) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = stringResource(R.string.action_help),
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 }
             }
@@ -317,6 +342,7 @@ private fun PingInputCard(
     onClearRecentHosts: () -> Unit
 ) {
     val keyboardController = LocalSoftwareKeyboardController.current
+    val isHostInvalid = host.isNotBlank() && host.contains(' ')
 
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -339,6 +365,10 @@ private fun PingInputCard(
                         }
                     }
                 },
+                isError = isHostInvalid,
+                supportingText = if (isHostInvalid) {
+                    { Text(stringResource(R.string.error_invalid_host)) }
+                } else null,
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Uri,
@@ -418,7 +448,11 @@ private fun PingInputCard(
             if (isRunning) {
                 Button(
                     onClick = onStop,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError
+                    )
                 ) {
                     Icon(Icons.Default.Stop, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
@@ -431,7 +465,7 @@ private fun PingInputCard(
                         onStart()
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    enabled = host.isNotBlank()
+                    enabled = host.isNotBlank() && !isHostInvalid
                 ) {
                     Icon(Icons.Default.Speed, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))

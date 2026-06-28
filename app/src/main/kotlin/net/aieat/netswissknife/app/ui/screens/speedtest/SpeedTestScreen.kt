@@ -36,6 +36,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.NetworkCheck
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
@@ -45,6 +46,7 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -67,6 +69,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
@@ -75,11 +78,14 @@ import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.ui.components.HelpSection
+import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
 import net.aieat.netswissknife.app.util.formatBytes
 import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.core.network.speedtest.LatencyStats
@@ -100,6 +106,7 @@ fun SpeedTestScreen(viewModel: SpeedTestViewModel = hiltViewModel()) {
 
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
+    var showHelp by remember { mutableStateOf(false) }
 
     val phase = remember(uiState) {
         when (uiState) {
@@ -119,7 +126,7 @@ fun SpeedTestScreen(viewModel: SpeedTestViewModel = hiltViewModel()) {
             verticalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp)
         ) {
-            item { SpeedTestHeaderCard() }
+            item { SpeedTestHeaderCard(onHelpClick = { showHelp = true }) }
 
             item {
                 AnimatedContent(
@@ -158,6 +165,18 @@ fun SpeedTestScreen(viewModel: SpeedTestViewModel = hiltViewModel()) {
             item { CloudflareAttributionCard() }
         }
     }
+
+    if (showHelp) {
+        ToolHelpSheet(
+            title = stringResource(R.string.help_speedtest_title),
+            sections = listOf(
+                HelpSection(stringResource(R.string.help_speedtest_what_heading), stringResource(R.string.help_speedtest_what_body)),
+                HelpSection(stringResource(R.string.help_speedtest_phases_heading), stringResource(R.string.help_speedtest_phases_body)),
+                HelpSection(stringResource(R.string.help_speedtest_results_heading), stringResource(R.string.help_speedtest_results_body))
+            ),
+            onDismiss = { showHelp = false }
+        )
+    }
 }
 
 private enum class DisplayPhase { IDLE, RUNNING, FINISHED, ERROR }
@@ -165,67 +184,83 @@ private enum class DisplayPhase { IDLE, RUNNING, FINISHED, ERROR }
 // ── Header ────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun SpeedTestHeaderCard() {
+private fun SpeedTestHeaderCard(onHelpClick: () -> Unit) {
     val uriHandler = LocalUriHandler.current
 
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-        Box(modifier = Modifier.fillMaxWidth()) {
-            Canvas(modifier = Modifier.matchParentSize()) {
-                drawRect(
-                    brush = Brush.linearGradient(
-                        listOf(Color(0xFFF38020), Color(0xFF1565C0))
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    Brush.linearGradient(
+                        listOf(
+                            MaterialTheme.colorScheme.primaryContainer,
+                            MaterialTheme.colorScheme.secondaryContainer
+                        )
                     )
                 )
-            }
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 18.dp)
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                .padding(horizontal = 20.dp, vertical = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(52.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
+                ) {
                     Icon(
                         imageVector = Icons.Default.Speed,
                         contentDescription = null,
-                        tint = Color.White,
+                        tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(28.dp)
                     )
-                    Spacer(Modifier.width(10.dp))
+                }
+                Spacer(Modifier.width(16.dp))
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = stringResource(R.string.speedtest_screen_title),
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold
+                        style = MaterialTheme.typography.displaySmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = stringResource(R.string.speedtest_screen_subtitle),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
                     )
                 }
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = stringResource(R.string.speedtest_screen_subtitle),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.9f)
-                )
-                Spacer(Modifier.height(10.dp))
-                Surface(
-                    color = Color.White.copy(alpha = 0.18f),
-                    shape = RoundedCornerShape(50),
-                    modifier = Modifier.clickable { uriHandler.openUri(CLOUDFLARE_SPEED_URL) }
+                IconButton(onClick = onHelpClick) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = stringResource(R.string.action_help),
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+            }
+            Surface(
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                shape = RoundedCornerShape(50),
+                modifier = Modifier.clickable { uriHandler.openUri(CLOUDFLARE_SPEED_URL) }
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                    ) {
-                        Text(
-                            text = stringResource(R.string.speedtest_attribution),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = Color.White
-                        )
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.OpenInNew,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(14.dp)
-                        )
-                    }
+                    Text(
+                        text = stringResource(R.string.speedtest_attribution),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.OpenInNew,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.size(14.dp)
+                    )
                 }
             }
         }
@@ -504,7 +539,6 @@ private fun SpeedGauge(
             Text(
                 text = "%.1f".format(animatedValue),
                 style = MaterialTheme.typography.displaySmall,
-                fontWeight = FontWeight.Bold
             )
             Text(
                 text = stringResource(R.string.speedtest_mbps_suffix),

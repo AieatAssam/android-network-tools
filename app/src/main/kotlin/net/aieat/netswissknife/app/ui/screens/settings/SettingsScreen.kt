@@ -22,8 +22,10 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.foundation.clickable
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -43,9 +45,10 @@ import androidx.compose.material3.TextButton
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -53,21 +56,24 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import net.aieat.netswissknife.app.BuildConfig
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.ui.theme.AppShapes
 import kotlin.math.roundToInt
 
 @Composable
 fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
-    val themeOverride by viewModel.themeOverride.collectAsState()
-    val defaultPingCount by viewModel.defaultPingCount.collectAsState()
-    val defaultTimeoutMs by viewModel.defaultTimeoutMs.collectAsState()
-    val defaultConcurrency by viewModel.defaultConcurrency.collectAsState()
+    val themeOverride by viewModel.themeOverride.collectAsStateWithLifecycle()
+    val defaultPingCount by viewModel.defaultPingCount.collectAsStateWithLifecycle()
+    val defaultTimeoutMs by viewModel.defaultTimeoutMs.collectAsStateWithLifecycle()
+    val defaultConcurrency by viewModel.defaultConcurrency.collectAsStateWithLifecycle()
 
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
@@ -97,6 +103,7 @@ fun SettingsScreen(
                 onConcurrencyChange = viewModel::setDefaultConcurrency
             )
             DataSection(onClearRecents = viewModel::clearAllRecentHosts)
+            OnboardingResetSection(onReset = viewModel::resetOnboarding)
             AboutSection()
             AttributionsSection()
             LicensesSection()
@@ -119,8 +126,9 @@ private fun SettingsHeader() {
             Text(
                 text = stringResource(R.string.settings_screen_title),
                 style = MaterialTheme.typography.displaySmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground
+                color = MaterialTheme.colorScheme.onBackground,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
             Text(
                 text = stringResource(R.string.settings_screen_subtitle),
@@ -224,7 +232,9 @@ private fun SliderSetting(
             onValueChange = onValueChange,
             valueRange = valueRange,
             steps = steps,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth().semantics {
+                contentDescription = "$label: ${value.toInt()}"
+            }
         )
     }
 }
@@ -277,6 +287,49 @@ private fun DataSection(onClearRecents: () -> Unit) {
                     )
                 ) {
                     Text(stringResource(R.string.settings_clear_recents_confirm_button))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showConfirmDialog = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun OnboardingResetSection(onReset: () -> Unit) {
+    var showConfirmDialog by remember { mutableStateOf(false) }
+
+    SectionHeader(Icons.Default.SmartToy, stringResource(R.string.settings_guide_section))
+
+    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                text = stringResource(R.string.settings_reset_onboarding_label),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = stringResource(R.string.settings_reset_onboarding_subtitle),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            OutlinedButton(onClick = { showConfirmDialog = true }) {
+                Text(stringResource(R.string.settings_reset_onboarding_button))
+            }
+        }
+    }
+
+    if (showConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showConfirmDialog = false },
+            title = { Text(stringResource(R.string.settings_reset_onboarding_confirm_title)) },
+            text = { Text(stringResource(R.string.settings_reset_onboarding_confirm_message)) },
+            confirmButton = {
+                TextButton(onClick = { onReset(); showConfirmDialog = false }) {
+                    Text(stringResource(R.string.settings_reset_onboarding_confirm_button))
                 }
             },
             dismissButton = {
@@ -405,8 +458,6 @@ private data class LibraryInfo(
 private val THIRD_PARTY_LIBRARIES = listOf(
     LibraryInfo("dnsjava", "3.6.2", "BSD 3-Clause",
         "Copyright (c) 1998-2024, Brian Wellington and the dnsjava contributors"),
-    LibraryInfo("MapLibre Compose", "0.12.1", "BSD 3-Clause",
-        "Copyright (c) 2021-2024, MapLibre contributors"),
     LibraryInfo("SNMP4J", "3.8.0", "Apache 2.0"),
     LibraryInfo("icmpenguin", "1.0.0-rc.3", "Apache 2.0"),
     LibraryInfo("Dagger Hilt", "2.59.2", "Apache 2.0"),

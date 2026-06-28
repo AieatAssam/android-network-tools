@@ -12,10 +12,10 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.automirrored.filled.ManageSearch
 import androidx.compose.material.icons.filled.NetworkCheck
 import androidx.compose.material.icons.filled.Router
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Devices
+import androidx.compose.material.icons.filled.TravelExplore
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Speed
-import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material.icons.filled.WifiFind
 import androidx.compose.ui.graphics.vector.ImageVector
 
@@ -35,8 +35,8 @@ sealed class NavRoutes(
     object Home : NavRoutes("home", "Home", Icons.Default.Home)
     object Ping : NavRoutes("ping", "Ping", Icons.Default.NetworkCheck)
     object Traceroute : NavRoutes("traceroute", "Traceroute", Icons.Default.Router)
-    object Ports : NavRoutes("ports", "Port Scanner", Icons.Default.Search)
-    object Lan : NavRoutes("lan", "LAN Scanner", Icons.Default.Wifi)
+    object Ports : NavRoutes("ports", "Port Scanner", Icons.Default.TravelExplore)
+    object Lan : NavRoutes("lan", "LAN Scanner", Icons.Default.Devices)
     object Dns : NavRoutes("dns", "DNS Lookup", Icons.Default.Language)
     object DebugLogs : NavRoutes("debug_logs", "Debug Logs", Icons.Default.BugReport)
     object WifiScan : NavRoutes("wifi_scan", "Wi-Fi Scanner", Icons.Default.WifiFind)
@@ -54,8 +54,8 @@ sealed class NavRoutes(
         val allTools = listOf(
             ToolInfo("ping",       "Ping",          "Ping",  Icons.Default.NetworkCheck, "ICMP round-trip latency"),
             ToolInfo("traceroute", "Traceroute",    "Trace", Icons.Default.Router,       "Network path hop analysis"),
-            ToolInfo("ports",      "Port Scanner",  "Ports", Icons.Default.Search,       "TCP port reachability"),
-            ToolInfo("lan",        "LAN Scanner",   "LAN",   Icons.Default.Wifi,         "Local device discovery"),
+            ToolInfo("ports",      "Port Scanner",  "Ports", Icons.Default.TravelExplore, "TCP port reachability"),
+            ToolInfo("lan",        "LAN Scanner",   "LAN",   Icons.Default.Devices,       "Local device discovery"),
             ToolInfo("dns",        "DNS Lookup",    "DNS",   Icons.Default.Language,     "Resolve hostnames & records"),
             ToolInfo("wifi_scan",  "Wi-Fi Scanner", "Wi-Fi",     Icons.Default.WifiFind,     "Scan channels & access points"),
             ToolInfo("topology",   "Network Topology", "Topology", Icons.Default.AccountTree, "SNMP switch & neighbour discovery"),

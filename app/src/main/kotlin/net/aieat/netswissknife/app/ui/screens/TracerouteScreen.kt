@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -55,6 +56,7 @@ import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.TravelExplore
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.FilledTonalButton
@@ -81,6 +83,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
@@ -103,7 +109,9 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.RecentHostsRow
+import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
 import net.aieat.netswissknife.app.ui.screens.traceroute.TracerouteUiState
 import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.app.ui.screens.traceroute.TracerouteViewModel
@@ -143,13 +151,14 @@ fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
         animationSpec = tween(400),
         label         = "screen-alpha"
     )
+    var showHelp by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier          = Modifier.fillMaxSize().alpha(screenAlpha),
         contentPadding    = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-            item { TracerouteHeroHeader() }
+            item { TracerouteHeroHeader(onHelpClick = { showHelp = true }) }
 
             item {
                 TracerouteInputCard(
@@ -204,12 +213,24 @@ fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
                 }
             }
         }
+
+    if (showHelp) {
+        ToolHelpSheet(
+            title = stringResource(R.string.help_traceroute_title),
+            sections = listOf(
+                HelpSection(stringResource(R.string.help_traceroute_what_heading), stringResource(R.string.help_traceroute_what_body)),
+                HelpSection(stringResource(R.string.help_traceroute_params_heading), stringResource(R.string.help_traceroute_params_body)),
+                HelpSection(stringResource(R.string.help_traceroute_results_heading), stringResource(R.string.help_traceroute_results_body))
+            ),
+            onDismiss = { showHelp = false }
+        )
+    }
 }
 
 // ── Hero header ───────────────────────────────────────────────────────────────
 
 @Composable
-private fun TracerouteHeroHeader() {
+private fun TracerouteHeroHeader(onHelpClick: () -> Unit) {
     val infiniteTransition = rememberInfiniteTransition(label = "hero-pulse")
     val pulseAlpha by infiniteTransition.animateFloat(
         initialValue  = 0.6f,
@@ -257,16 +278,25 @@ private fun TracerouteHeroHeader() {
                     )
                 }
                 Spacer(Modifier.width(16.dp))
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text  = stringResource(R.string.traceroute_screen_title),
-                        style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                        style = MaterialTheme.typography.displaySmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Text(
                         text  = stringResource(R.string.traceroute_screen_subtitle),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                    )
+                }
+                IconButton(onClick = onHelpClick) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = stringResource(R.string.action_help),
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 }
             }
@@ -300,6 +330,7 @@ private fun TracerouteInputCard(
 ) {
     val keyboard = LocalSoftwareKeyboardController.current
     val mtuDiscovery = packetSize == 0
+    val isHostInvalid = host.isNotBlank() && host.contains(' ')
 
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -325,6 +356,10 @@ private fun TracerouteInputCard(
                         }
                     }
                 },
+                isError = isHostInvalid,
+                supportingText = if (isHostInvalid) {
+                    { Text(stringResource(R.string.error_invalid_host)) }
+                } else null,
                 singleLine    = true,
                 enabled       = !isRunning,
                 modifier      = Modifier.fillMaxWidth(),
@@ -430,7 +465,11 @@ private fun TracerouteInputCard(
             if (isRunning) {
                 Button(
                     onClick  = onStop,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError
+                    )
                 ) {
                     Icon(Icons.Default.Stop, null)
                     Spacer(Modifier.width(8.dp))
@@ -439,7 +478,7 @@ private fun TracerouteInputCard(
             } else {
                 Button(
                     onClick  = { keyboard?.hide(); onStart() },
-                    enabled  = host.isNotBlank(),
+                    enabled  = host.isNotBlank() && !isHostInvalid,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Icon(Icons.Default.Public, null)
@@ -531,7 +570,7 @@ private fun TracerouteRunningPanel(state: TracerouteUiState.Running) {
                 modifier          = Modifier.padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                CircularProgressIndicator(modifier = Modifier.size(24.dp).semantics { contentDescription = "Loading" }, strokeWidth = 2.dp)
                 Spacer(Modifier.width(12.dp))
                 Column {
                     Text(
@@ -1059,6 +1098,7 @@ private fun HopCard(hop: HopResult, index: Int) {
         modifier = Modifier
             .fillMaxWidth()
             .clickable { expanded = !expanded }
+            .semantics { role = Role.Button }
     ) {
         Column(modifier = Modifier.animateContentSize(animationSpec = tween(200))) {
             Row(
@@ -1290,15 +1330,17 @@ private fun RawOutputCard(rawOutput: String) {
             Spacer(Modifier.height(8.dp))
             HorizontalDivider()
             Spacer(Modifier.height(8.dp))
-            SelectionContainer {
-                Text(
-                    text  = rawOutput,
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        fontFamily = FontFamily.Monospace,
-                        lineHeight = 20.sp
-                    ),
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+            Box(modifier = Modifier.heightIn(max = 280.dp)) {
+                SelectionContainer {
+                    Text(
+                        text  = rawOutput,
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontFamily = FontFamily.Monospace,
+                            lineHeight = 20.sp
+                        ),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
             }
         }
     }

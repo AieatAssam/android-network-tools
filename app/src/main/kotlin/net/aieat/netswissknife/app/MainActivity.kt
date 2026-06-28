@@ -31,6 +31,8 @@ import net.aieat.netswissknife.app.ui.navigation.AppNavHost
 import net.aieat.netswissknife.app.ui.navigation.AppNavigationViewModel
 import net.aieat.netswissknife.app.ui.navigation.MoreToolsSheet
 import net.aieat.netswissknife.app.ui.navigation.NavRoutes
+import net.aieat.netswissknife.app.ui.screens.onboarding.OnboardingSheet
+import net.aieat.netswissknife.app.ui.screens.onboarding.OnboardingViewModel
 import net.aieat.netswissknife.app.ui.screens.settings.SettingsViewModel
 import net.aieat.netswissknife.app.ui.theme.NetSwissKnifeTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -61,6 +63,8 @@ fun NetSwissKnifeApp(navController: NavHostController) {
     val navViewModel: AppNavigationViewModel = hiltViewModel()
     val pinnedRoutes by navViewModel.pinnedRoutes.collectAsState()
     var showMoreSheet by remember { mutableStateOf(false) }
+    val onboardingViewModel: OnboardingViewModel = hiltViewModel()
+    val shouldShowOnboarding by onboardingViewModel.shouldShowOnboarding.collectAsState()
 
     Scaffold(
         bottomBar = {
@@ -104,6 +108,10 @@ fun NetSwissKnifeApp(navController: NavHostController) {
                 }
             }) else ({}),
         )
+    }
+
+    if (shouldShowOnboarding) {
+        OnboardingSheet(onDismiss = { onboardingViewModel.completeOnboarding() })
     }
 }
 
@@ -151,9 +159,12 @@ private fun AppBottomNavigationBar(
             )
         }
 
-        // "More" is always last
+        // "More" is always last — highlighted when the current screen is not Home and not a pinned tool
+        val isMoreSelected = currentRoute != null &&
+            currentRoute != NavRoutes.Home.route &&
+            pinnedTools.none { it.route == currentRoute }
         NavigationBarItem(
-            selected = false,
+            selected = isMoreSelected,
             onClick  = onMoreClick,
             icon     = { Icon(Icons.Default.MoreHoriz, contentDescription = null) },
             label    = { Text(stringResource(R.string.nav_more)) }

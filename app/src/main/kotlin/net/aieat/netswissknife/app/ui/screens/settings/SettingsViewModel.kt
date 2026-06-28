@@ -59,6 +59,12 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    fun resetOnboarding() {
+        viewModelScope.launch {
+            dataStore.edit { it[AppPreferenceKeys.ONBOARDING_COMPLETED] = false }
+        }
+    }
+
     fun clearAllRecentHosts() {
         viewModelScope.launch {
             dataStore.edit { prefs ->
