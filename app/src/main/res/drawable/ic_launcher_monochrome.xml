@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Swiss Army Knife handle with rivet cutouts (evenOdd punches holes) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M20,76 L88,76 Q96,76 96,84 L96,94 Q96,100 88,100 L20,100 Q12,100 12,94 L12,84 Q12,76 20,76 Z M22,88 m-5,0 a5,5 0 1,0 10,0 a5,5 0 1,0 -10,0 M86,88 m-5,0 a5,5 0 1,0 10,0 a5,5 0 1,0 -10,0"/>
+
+    <!-- Tool blade stem connecting handle to scope -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M78,44 L84,44 L84,76 L78,76 Z"/>
+
+    <!-- Network scope / magnifying glass ring -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="3.5"
+        android:pathData="M81,30 m-14,0 a14,14 0 1,0 28,0 a14,14 0 1,0 -28,0"/>
+
+    <!-- Scope crosshair tick marks -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M81,19 L81,23 M81,37 L81,41 M70,30 L74,30 M88,30 L92,30"/>
+
+    <!-- WiFi signal dot -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M19,57 m-3,0 a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0"/>
+
+    <!-- WiFi arcs — small -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:pathData="M13,61 Q13,52 22,50"/>
+
+    <!-- WiFi arcs — medium -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:pathData="M10,66 Q10,47 27,43"/>
+
+    <!-- WiFi arcs — large -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:pathData="M7,72 Q7,42 31,36"/>
+
+    <!-- ECG / heartbeat diagnostic line -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M8,65 L30,65 L35,51 L40,79 L45,65 L68,65"/>
+
+    <!-- Network diagnostic probe (diagonal line through node cluster) -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:pathData="M44,63 L67,38"/>
+
+    <!-- Network topology nodes -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M48,58 m-3.5,0 a3.5,3.5 0 1,0 7,0 a3.5,3.5 0 1,0 -7,0 M56,50 m-3.5,0 a3.5,3.5 0 1,0 7,0 a3.5,3.5 0 1,0 -7,0 M63,42 m-3.5,0 a3.5,3.5 0 1,0 7,0 a3.5,3.5 0 1,0 -7,0"/>
+
+    <!-- Network connections between nodes -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M51,55 L59,53 M52,57 L61,46"/>
+
+</vector>
