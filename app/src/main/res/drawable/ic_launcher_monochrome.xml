@@ -36,58 +36,51 @@
         android:fillColor="#FFFFFF"
         android:pathData="M19,57 m-3,0 a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0"/>
 
-    <!-- WiFi arcs — small -->
+    <!-- WiFi arcs — proper quarter-circle arcs centered on dot (19,57) -->
+    <!-- Small r=7: top (19,50) → right (26,57) clockwise -->
     <path
         android:fillColor="#00000000"
         android:strokeColor="#FFFFFF"
         android:strokeWidth="3"
         android:strokeLineCap="round"
-        android:pathData="M13,61 Q13,52 22,50"/>
+        android:pathData="M19,50 a7,7 0 0,1 7,7"/>
 
-    <!-- WiFi arcs — medium -->
+    <!-- Medium r=12: (19,45) → (31,57) -->
     <path
         android:fillColor="#00000000"
         android:strokeColor="#FFFFFF"
         android:strokeWidth="3"
         android:strokeLineCap="round"
-        android:pathData="M10,66 Q10,47 27,43"/>
+        android:pathData="M19,45 a12,12 0 0,1 12,12"/>
 
-    <!-- WiFi arcs — large -->
+    <!-- Large r=17: (19,40) → (36,57) -->
     <path
         android:fillColor="#00000000"
         android:strokeColor="#FFFFFF"
         android:strokeWidth="3"
         android:strokeLineCap="round"
-        android:pathData="M7,72 Q7,42 31,36"/>
+        android:pathData="M19,40 a17,17 0 0,1 17,17"/>
 
-    <!-- ECG / heartbeat diagnostic line -->
+    <!-- ECG / heartbeat line — spike shifted right to clear WiFi arcs -->
     <path
         android:fillColor="#00000000"
         android:strokeColor="#FFFFFF"
         android:strokeWidth="2.5"
         android:strokeLineCap="round"
         android:strokeLineJoin="round"
-        android:pathData="M8,65 L30,65 L35,51 L40,79 L45,65 L68,65"/>
+        android:pathData="M8,65 L38,65 L43,51 L48,79 L53,65 L70,65"/>
 
-    <!-- Network diagnostic probe (diagonal line through node cluster) -->
-    <path
-        android:fillColor="#00000000"
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="3"
-        android:strokeLineCap="round"
-        android:pathData="M44,63 L67,38"/>
-
-    <!-- Network topology nodes -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M48,58 m-3.5,0 a3.5,3.5 0 1,0 7,0 a3.5,3.5 0 1,0 -7,0 M56,50 m-3.5,0 a3.5,3.5 0 1,0 7,0 a3.5,3.5 0 1,0 -7,0 M63,42 m-3.5,0 a3.5,3.5 0 1,0 7,0 a3.5,3.5 0 1,0 -7,0"/>
-
-    <!-- Network connections between nodes -->
+    <!-- Network star topology — connections first, nodes on top -->
     <path
         android:fillColor="#00000000"
         android:strokeColor="#FFFFFF"
         android:strokeWidth="2"
         android:strokeLineCap="round"
-        android:pathData="M51,55 L59,53 M52,57 L61,46"/>
+        android:pathData="M57,44 L57,33 M57,44 L68,46 M57,44 L64,57"/>
+
+    <!-- Central hub + satellites: top, upper-right, lower-right (all clear of WiFi and ECG) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M57,44 m-4.5,0 a4.5,4.5 0 1,0 9,0 a4.5,4.5 0 1,0 -9,0 M57,33 m-3,0 a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0 M68,46 m-3,0 a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0 M64,57 m-3,0 a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0"/>
 
 </vector>
