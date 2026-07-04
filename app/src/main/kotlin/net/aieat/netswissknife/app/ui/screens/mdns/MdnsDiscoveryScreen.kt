@@ -75,7 +75,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -90,6 +92,7 @@ import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
 import net.aieat.netswissknife.core.network.mdns.DiscoveredService
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MdnsDiscoveryScreen(viewModel: MdnsDiscoveryViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -98,6 +101,11 @@ fun MdnsDiscoveryScreen(viewModel: MdnsDiscoveryViewModel = hiltViewModel()) {
     LaunchedEffect(Unit) { visible = true }
     var showHelp by remember { mutableStateOf(false) }
 
+    PullToRefreshBox(
+        isRefreshing = uiState.isScanning,
+        onRefresh = { viewModel.startScan(8_000L) },
+        modifier = Modifier.fillMaxSize()
+    ) {
     AnimatedVisibility(
         visible = visible,
         enter = fadeIn(tween(400)) + slideInVertically(tween(400)) { 40 }
@@ -145,6 +153,7 @@ fun MdnsDiscoveryScreen(viewModel: MdnsDiscoveryViewModel = hiltViewModel()) {
             }
         }
     }
+    } // end PullToRefreshBox
 
     if (showHelp) {
         ToolHelpSheet(
@@ -459,7 +468,7 @@ private fun ServiceList(
             }
         }
 
-        item { Spacer(Modifier.height(80.dp)) }
+        item { Spacer(Modifier.height(16.dp)) }
     }
 }
 
