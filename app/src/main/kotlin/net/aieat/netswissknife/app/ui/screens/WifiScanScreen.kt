@@ -15,6 +15,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
@@ -83,6 +84,7 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -435,6 +437,13 @@ fun WifiScanScreen(
     val gradient = Brush.linearGradient(
         listOf(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.tertiaryContainer)
     )
+    val spinTransition = rememberInfiniteTransition(label = "refresh_spin")
+    val spinAngle by spinTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(tween(2000, easing = LinearEasing)),
+        label = "spin_angle"
+    )
     ElevatedCard(Modifier.fillMaxWidth()) {
         Box(Modifier.background(gradient)) {
             Column(Modifier.padding(20.dp).fillMaxWidth()) {
@@ -471,7 +480,13 @@ fun WifiScanScreen(
                 }
                 Spacer(Modifier.height(8.dp))
                 FilledTonalIconButton(onClick = onScan) {
-                    Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.wifi_scan_button))
+                    Icon(
+                        Icons.Default.Refresh,
+                        contentDescription = stringResource(R.string.wifi_scan_button),
+                        modifier = Modifier.graphicsLayer {
+                            rotationZ = if (autoRefresh) spinAngle else 0f
+                        }
+                    )
                 }
             }
         }
