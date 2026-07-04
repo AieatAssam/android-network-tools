@@ -50,9 +50,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -78,6 +80,13 @@ fun SettingsScreen(
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
 
+    var visibleSections by remember { mutableIntStateOf(0) }
+    LaunchedEffect(visible) {
+        if (visible) {
+            repeat(8) { delay(60L); visibleSections++ }
+        }
+    }
+
     AnimatedVisibility(
         visible = visible,
         enter = fadeIn(tween(300)) + slideInVertically(tween(300)) { it / 8 }
@@ -90,23 +99,37 @@ fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             SettingsHeader()
-            ThemeSection(
-                themeOverride = themeOverride,
-                onThemeChange = viewModel::setThemeOverride
-            )
-            DefaultsSection(
-                pingCount = defaultPingCount,
-                timeoutMs = defaultTimeoutMs,
-                concurrency = defaultConcurrency,
-                onPingCountChange = viewModel::setDefaultPingCount,
-                onTimeoutChange = viewModel::setDefaultTimeoutMs,
-                onConcurrencyChange = viewModel::setDefaultConcurrency
-            )
-            DataSection(onClearRecents = viewModel::clearAllRecentHosts)
-            OnboardingResetSection(onReset = viewModel::resetOnboarding)
-            AboutSection()
-            AttributionsSection()
-            LicensesSection()
+            AnimatedVisibility(visible = visibleSections >= 1, enter = fadeIn(tween(250)) + slideInVertically(tween(250)) { it / 3 }) {
+                ThemeSection(
+                    themeOverride = themeOverride,
+                    onThemeChange = viewModel::setThemeOverride
+                )
+            }
+            AnimatedVisibility(visible = visibleSections >= 2, enter = fadeIn(tween(250)) + slideInVertically(tween(250)) { it / 3 }) {
+                DefaultsSection(
+                    pingCount = defaultPingCount,
+                    timeoutMs = defaultTimeoutMs,
+                    concurrency = defaultConcurrency,
+                    onPingCountChange = viewModel::setDefaultPingCount,
+                    onTimeoutChange = viewModel::setDefaultTimeoutMs,
+                    onConcurrencyChange = viewModel::setDefaultConcurrency
+                )
+            }
+            AnimatedVisibility(visible = visibleSections >= 3, enter = fadeIn(tween(250)) + slideInVertically(tween(250)) { it / 3 }) {
+                DataSection(onClearRecents = viewModel::clearAllRecentHosts)
+            }
+            AnimatedVisibility(visible = visibleSections >= 4, enter = fadeIn(tween(250)) + slideInVertically(tween(250)) { it / 3 }) {
+                OnboardingResetSection(onReset = viewModel::resetOnboarding)
+            }
+            AnimatedVisibility(visible = visibleSections >= 5, enter = fadeIn(tween(250)) + slideInVertically(tween(250)) { it / 3 }) {
+                AboutSection()
+            }
+            AnimatedVisibility(visible = visibleSections >= 6, enter = fadeIn(tween(250)) + slideInVertically(tween(250)) { it / 3 }) {
+                AttributionsSection()
+            }
+            AnimatedVisibility(visible = visibleSections >= 7, enter = fadeIn(tween(250)) + slideInVertically(tween(250)) { it / 3 }) {
+                LicensesSection()
+            }
             Spacer(Modifier.height(8.dp))
         }
     }

@@ -56,10 +56,12 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
@@ -668,6 +670,11 @@ private fun SpeedTestResultContent(
     onRetry: () -> Unit,
     onShare: () -> Unit
 ) {
+    var visibleCards by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) {
+        listOf(80L, 120L, 120L).forEach { d -> delay(d); visibleCards++ }
+    }
+
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(
             text = stringResource(R.string.speedtest_results_header),
@@ -675,19 +682,25 @@ private fun SpeedTestResultContent(
             fontWeight = FontWeight.SemiBold
         )
 
-        LatencyResultCard(result.latency)
-        ThroughputResultCard(
-            title = stringResource(R.string.speedtest_download_header),
-            icon = Icons.Default.ArrowDownward,
-            accentColor = MaterialTheme.colorScheme.primary,
-            result = result.download
-        )
-        ThroughputResultCard(
-            title = stringResource(R.string.speedtest_upload_header),
-            icon = Icons.Default.ArrowUpward,
-            accentColor = MaterialTheme.colorScheme.tertiary,
-            result = result.upload
-        )
+        AnimatedVisibility(visible = visibleCards >= 1, enter = fadeIn(tween(300)) + slideInVertically(tween(300)) { it / 4 }) {
+            LatencyResultCard(result.latency)
+        }
+        AnimatedVisibility(visible = visibleCards >= 2, enter = fadeIn(tween(300)) + slideInVertically(tween(300)) { it / 4 }) {
+            ThroughputResultCard(
+                title = stringResource(R.string.speedtest_download_header),
+                icon = Icons.Default.ArrowDownward,
+                accentColor = MaterialTheme.colorScheme.primary,
+                result = result.download
+            )
+        }
+        AnimatedVisibility(visible = visibleCards >= 3, enter = fadeIn(tween(300)) + slideInVertically(tween(300)) { it / 4 }) {
+            ThroughputResultCard(
+                title = stringResource(R.string.speedtest_upload_header),
+                icon = Icons.Default.ArrowUpward,
+                accentColor = MaterialTheme.colorScheme.tertiary,
+                result = result.upload
+            )
+        }
 
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             OutlinedButton(onClick = onShare, modifier = Modifier.weight(1f)) {

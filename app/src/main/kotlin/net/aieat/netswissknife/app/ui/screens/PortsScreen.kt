@@ -865,6 +865,14 @@ private fun StatChip(
 
 @Composable
 private fun PortResultRow(result: PortScanResult) {
+    var targetAlpha by remember { mutableStateOf(0f) }
+    LaunchedEffect(Unit) { targetAlpha = 1f }
+    val animatedAlpha by animateFloatAsState(
+        targetValue = targetAlpha,
+        animationSpec = spring(stiffness = Spring.StiffnessLow),
+        label = "port_row_alpha"
+    )
+
     val statusColor = when (result.status) {
         PortStatus.OPEN     -> MaterialTheme.colorScheme.primary
         PortStatus.CLOSED   -> MaterialTheme.colorScheme.onSurfaceVariant
@@ -875,7 +883,7 @@ private fun PortResultRow(result: PortScanResult) {
         PortStatus.CLOSED   -> R.string.ports_closed_label
         PortStatus.FILTERED -> R.string.ports_filtered_label
     }
-    val cardAlpha = when (result.status) {
+    val statusAlpha = when (result.status) {
         PortStatus.OPEN -> 1f
         else -> 0.65f
     }
@@ -884,7 +892,7 @@ private fun PortResultRow(result: PortScanResult) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 2.dp)
-            .alpha(cardAlpha)
+            .alpha(animatedAlpha * statusAlpha)
     ) {
         Row(
             modifier = Modifier.padding(12.dp),

@@ -37,9 +37,11 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -71,6 +73,17 @@ fun OnboardingSheet(onDismiss: () -> Unit) {
         OnboardingFeature(Icons.Default.Speed,        "Speed Test",     "Measure download, upload, and latency against Cloudflare's global network."),
         OnboardingFeature(Icons.Default.Language,     "DNS & Subnet",   "Resolve DNS records, calculate subnets, and browse mDNS services.")
     )
+
+    // Stagger: -1 = nothing visible yet, then each index becomes visible in turn
+    var visibleUpTo by remember { mutableIntStateOf(-1) }
+    LaunchedEffect(contentVisible) {
+        if (contentVisible) {
+            features.indices.forEach { i ->
+                delay(if (i == 0) 200L else 80L)
+                visibleUpTo = i
+            }
+        }
+    }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         AnimatedVisibility(
@@ -125,9 +138,16 @@ fun OnboardingSheet(onDismiss: () -> Unit) {
 
                 Spacer(Modifier.height(24.dp))
 
-                features.forEach { feature ->
-                    OnboardingFeatureRow(feature)
-                    Spacer(Modifier.height(12.dp))
+                features.forEachIndexed { index, feature ->
+                    AnimatedVisibility(
+                        visible = index <= visibleUpTo,
+                        enter = fadeIn(tween(250)) + slideInVertically(tween(250)) { it / 3 },
+                    ) {
+                        Column {
+                            OnboardingFeatureRow(feature)
+                            Spacer(Modifier.height(12.dp))
+                        }
+                    }
                 }
 
                 Spacer(Modifier.height(8.dp))
