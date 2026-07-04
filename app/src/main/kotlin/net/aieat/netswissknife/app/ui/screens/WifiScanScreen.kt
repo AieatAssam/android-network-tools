@@ -76,6 +76,7 @@ import androidx.compose.material3.Badge
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.ui.graphics.nativeCanvas
@@ -132,6 +133,7 @@ private fun networkColor(colorIndex: Int): Color =
 
 // ── Screen root ───────────────────────────────────────────────────────────────
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WifiScanScreen(
     viewModel: WifiScanViewModel = hiltViewModel()
@@ -172,36 +174,45 @@ fun WifiScanScreen(
         label = "screen-alpha"
     )
 
-    AnimatedContent(
-        targetState = uiState,
-        transitionSpec = { fadeIn() togetherWith fadeOut() },
-        contentKey = { it::class },
-        modifier = Modifier.fillMaxSize().alpha(screenAlpha),
-        label = "wifi_state"
-    ) { state ->
-        when (state) {
-            is WifiScanUiState.Idle         -> WifiIdleScreen()
-            is WifiScanUiState.NoPermission -> WifiNoPermissionScreen(
-                onRequest = { permissionLauncher.launch(requiredPermissions) }
-            )
-            is WifiScanUiState.NotSupported -> WifiNotSupportedScreen()
-            is WifiScanUiState.WifiDisabled -> WifiDisabledScreen(onRetry = { viewModel.startScan() })
-            is WifiScanUiState.Scanning     -> WifiScanningScreen()
-            is WifiScanUiState.Success      -> WifiSuccessScreen(
-                state               = state,
-                autoRefresh         = autoRefresh,
-                expandedNetworks    = expandedNetworks,
-                onScan              = { viewModel.startScan() },
-                onToggleAutoRefresh = { viewModel.toggleAutoRefresh() },
-                onBandFilter        = { viewModel.setBandFilter(it) },
-                onSortOrder         = { viewModel.setSortOrder(it) },
-                onSelectAp          = { viewModel.selectAccessPoint(it) },
-                onToggleNetworkExpanded = { viewModel.toggleNetworkExpanded(it) }
-            )
-            is WifiScanUiState.Error        -> WifiErrorScreen(
-                message = state.message,
-                onRetry = { viewModel.onRetry(); permissionLauncher.launch(requiredPermissions) }
-            )
+    val isRefreshing = uiState is WifiScanUiState.Scanning
+    val canRefresh = uiState is WifiScanUiState.Success || uiState is WifiScanUiState.Error
+
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = { if (canRefresh) viewModel.startScan() },
+        modifier = Modifier.fillMaxSize().alpha(screenAlpha)
+    ) {
+        AnimatedContent(
+            targetState = uiState,
+            transitionSpec = { fadeIn() togetherWith fadeOut() },
+            contentKey = { it::class },
+            modifier = Modifier.fillMaxSize(),
+            label = "wifi_state"
+        ) { state ->
+            when (state) {
+                is WifiScanUiState.Idle         -> WifiIdleScreen()
+                is WifiScanUiState.NoPermission -> WifiNoPermissionScreen(
+                    onRequest = { permissionLauncher.launch(requiredPermissions) }
+                )
+                is WifiScanUiState.NotSupported -> WifiNotSupportedScreen()
+                is WifiScanUiState.WifiDisabled -> WifiDisabledScreen(onRetry = { viewModel.startScan() })
+                is WifiScanUiState.Scanning     -> WifiScanningScreen()
+                is WifiScanUiState.Success      -> WifiSuccessScreen(
+                    state               = state,
+                    autoRefresh         = autoRefresh,
+                    expandedNetworks    = expandedNetworks,
+                    onScan              = { viewModel.startScan() },
+                    onToggleAutoRefresh = { viewModel.toggleAutoRefresh() },
+                    onBandFilter        = { viewModel.setBandFilter(it) },
+                    onSortOrder         = { viewModel.setSortOrder(it) },
+                    onSelectAp          = { viewModel.selectAccessPoint(it) },
+                    onToggleNetworkExpanded = { viewModel.toggleNetworkExpanded(it) }
+                )
+                is WifiScanUiState.Error        -> WifiErrorScreen(
+                    message = state.message,
+                    onRetry = { viewModel.onRetry(); permissionLauncher.launch(requiredPermissions) }
+                )
+            }
         }
     }
 }

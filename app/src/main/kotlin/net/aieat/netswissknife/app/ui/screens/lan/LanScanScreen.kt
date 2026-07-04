@@ -79,7 +79,9 @@ import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 // collectAsState replaced by collectAsStateWithLifecycle below
@@ -115,6 +117,7 @@ import net.aieat.netswissknife.core.network.lan.LanScanSummary
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LanScreen(viewModel: LanScanViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -129,6 +132,14 @@ fun LanScreen(viewModel: LanScanViewModel = hiltViewModel()) {
     LaunchedEffect(Unit) { visible = true }
     var showHelp by remember { mutableStateOf(false) }
 
+    val isRefreshing = uiState is LanScanUiState.Scanning
+    val canRefresh = uiState is LanScanUiState.Finished || uiState is LanScanUiState.Error
+
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = { if (canRefresh) viewModel.startScan() },
+        modifier = Modifier.fillMaxSize()
+    ) {
     AnimatedVisibility(
         visible = visible,
         enter = fadeIn(tween(400)) + slideInVertically(tween(400)) { it / 6 },
@@ -189,6 +200,7 @@ fun LanScreen(viewModel: LanScanViewModel = hiltViewModel()) {
             }
         }
     }
+    } // end PullToRefreshBox
 
     if (showHelp) {
         ToolHelpSheet(
