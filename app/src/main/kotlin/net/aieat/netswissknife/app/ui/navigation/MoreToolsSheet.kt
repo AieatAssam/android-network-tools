@@ -8,14 +8,16 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.PushPin
@@ -86,6 +88,7 @@ fun MoreToolsSheet(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .fillMaxHeight()
                     .padding(scaffoldPadding)
                     .padding(horizontal = 20.dp),
             ) {
@@ -106,53 +109,73 @@ fun MoreToolsSheet(
 
                 Spacer(Modifier.height(12.dp))
 
-                // ── Scrollable tools area ─────────────────────────────────────
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 460.dp)
-                        .verticalScroll(rememberScrollState()),
-                ) {
-                    TOOL_SECTIONS.forEach { section ->
-                        val sectionTools = NavRoutes.allTools.filter { it.route in section.routes }
-                        if (sectionTools.isEmpty()) return@forEach
+                // ── Scrollable tools area (expands to push footer down) ───────
+                val scrollState = rememberScrollState()
+                Box(modifier = Modifier.weight(1f)) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(scrollState),
+                    ) {
+                        TOOL_SECTIONS.forEach { section ->
+                            val sectionTools = NavRoutes.allTools.filter { it.route in section.routes }
+                            if (sectionTools.isEmpty()) return@forEach
 
-                        Text(
-                            text = stringResource(section.labelRes),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(top = 12.dp, bottom = 2.dp),
-                        )
-
-                        sectionTools.forEachIndexed { index, tool ->
-                            val isPinned = pinnedRoutes.contains(tool.route)
-                            val canPin = isPinned || pinnedRoutes.size < maxPinned
-
-                            ToolSheetRow(
-                                tool = tool,
-                                isPinned = isPinned,
-                                onNavigate = { onNavigate(tool.route) },
-                                onTogglePin = {
-                                    if (canPin) {
-                                        onTogglePin(tool.route)
-                                    } else {
-                                        coroutineScope.launch {
-                                            snackbarHostState.showSnackbar(pinLimitMessage)
-                                        }
-                                    }
-                                },
+                            Text(
+                                text = stringResource(section.labelRes),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(top = 12.dp, bottom = 2.dp),
                             )
 
-                            if (index < sectionTools.lastIndex) {
-                                HorizontalDivider(
-                                    modifier = Modifier.padding(start = 64.dp),
-                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                            sectionTools.forEachIndexed { index, tool ->
+                                val isPinned = pinnedRoutes.contains(tool.route)
+                                val canPin = isPinned || pinnedRoutes.size < maxPinned
+
+                                ToolSheetRow(
+                                    tool = tool,
+                                    isPinned = isPinned,
+                                    onNavigate = { onNavigate(tool.route) },
+                                    onTogglePin = {
+                                        if (canPin) {
+                                            onTogglePin(tool.route)
+                                        } else {
+                                            coroutineScope.launch {
+                                                snackbarHostState.showSnackbar(pinLimitMessage)
+                                            }
+                                        }
+                                    },
                                 )
+
+                                if (index < sectionTools.lastIndex) {
+                                    HorizontalDivider(
+                                        modifier = Modifier.padding(start = 64.dp),
+                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                                    )
+                                }
                             }
                         }
+
+                        Spacer(Modifier.height(8.dp))
                     }
 
-                    Spacer(Modifier.height(8.dp))
+                    // Fade gradient hints that the list scrolls
+                    if (scrollState.canScrollForward) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(40.dp)
+                                .align(Alignment.BottomCenter)
+                                .background(
+                                    Brush.verticalGradient(
+                                        colors = listOf(
+                                            MaterialTheme.colorScheme.surface.copy(alpha = 0f),
+                                            MaterialTheme.colorScheme.surface,
+                                        )
+                                    )
+                                )
+                        )
+                    }
                 }
 
                 // ── Sticky footer: Settings + Debug ───────────────────────────
@@ -244,7 +267,7 @@ fun MoreToolsSheet(
                     }
                 }
 
-                Spacer(Modifier.height(24.dp))
+                Spacer(Modifier.height(8.dp))
             }
         }
     }
