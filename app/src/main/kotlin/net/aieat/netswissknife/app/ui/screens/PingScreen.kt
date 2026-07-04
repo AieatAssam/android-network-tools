@@ -4,6 +4,7 @@ import android.app.Activity
 import android.view.WindowManager
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
@@ -837,6 +838,25 @@ private fun PingErrorPanel(
 
 @Composable
 private fun StatsCard(stats: PingStats, host: String) {
+    var targetLoss   by remember { mutableStateOf(0f) }
+    var targetMin    by remember { mutableStateOf(0f) }
+    var targetAvg    by remember { mutableStateOf(0f) }
+    var targetMax    by remember { mutableStateOf(0f) }
+    var targetJitter by remember { mutableStateOf(0f) }
+    LaunchedEffect(stats) {
+        targetLoss   = stats.lossPercent
+        targetMin    = stats.minMs.toFloat()
+        targetAvg    = stats.avgMs.toFloat()
+        targetMax    = stats.maxMs.toFloat()
+        targetJitter = stats.jitterMs.toFloat()
+    }
+    val animSpec = tween<Float>(700, easing = FastOutSlowInEasing)
+    val animLoss    by animateFloatAsState(targetLoss,   animSpec, label = "stat_loss")
+    val animMin     by animateFloatAsState(targetMin,    animSpec, label = "stat_min")
+    val animAvg     by animateFloatAsState(targetAvg,    animSpec, label = "stat_avg")
+    val animMax     by animateFloatAsState(targetMax,    animSpec, label = "stat_max")
+    val animJitter  by animateFloatAsState(targetJitter, animSpec, label = "stat_jitter")
+
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier
@@ -883,7 +903,7 @@ private fun StatsCard(stats: PingStats, host: String) {
                 )
                 StatItem(
                     label = stringResource(R.string.ping_packet_loss),
-                    value = "${"%.0f".format(stats.lossPercent)}%",
+                    value = "${"%.0f".format(animLoss)}%",
                     color = if (stats.lossPercent == 0f)
                         MaterialTheme.colorScheme.tertiary
                     else
@@ -901,25 +921,25 @@ private fun StatsCard(stats: PingStats, host: String) {
                 ) {
                     StatItem(
                         label = stringResource(R.string.ping_rtt_min),
-                        value = "${stats.minMs}",
+                        value = "${animMin.toLong()}",
                         unit = stringResource(R.string.ping_ms_suffix),
                         color = MaterialTheme.colorScheme.onTertiaryContainer
                     )
                     StatItem(
                         label = stringResource(R.string.ping_rtt_avg),
-                        value = "${"%.1f".format(stats.avgMs)}",
+                        value = "${"%.1f".format(animAvg)}",
                         unit = stringResource(R.string.ping_ms_suffix),
                         color = MaterialTheme.colorScheme.onTertiaryContainer
                     )
                     StatItem(
                         label = stringResource(R.string.ping_rtt_max),
-                        value = "${stats.maxMs}",
+                        value = "${animMax.toLong()}",
                         unit = stringResource(R.string.ping_ms_suffix),
                         color = MaterialTheme.colorScheme.onTertiaryContainer
                     )
                     StatItem(
                         label = stringResource(R.string.ping_rtt_jitter),
-                        value = "${"%.1f".format(stats.jitterMs)}",
+                        value = "${"%.1f".format(animJitter)}",
                         unit = stringResource(R.string.ping_ms_suffix),
                         color = MaterialTheme.colorScheme.onTertiaryContainer
                     )

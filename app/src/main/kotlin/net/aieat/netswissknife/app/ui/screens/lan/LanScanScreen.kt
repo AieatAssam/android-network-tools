@@ -86,11 +86,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 // collectAsState replaced by collectAsStateWithLifecycle below
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
@@ -530,7 +532,18 @@ private fun LanScanningContent(state: LanScanUiState.Scanning) {
                 modifier = Modifier.padding(horizontal = 4.dp),
             )
             state.hosts.forEach { host ->
-                HostCard(host = host, expanded = false, onClick = {})
+                key(host.ip) {
+                    var targetAlpha by remember { mutableStateOf(0f) }
+                    LaunchedEffect(Unit) { targetAlpha = 1f }
+                    val rowAlpha by animateFloatAsState(
+                        targetValue = targetAlpha,
+                        animationSpec = spring(stiffness = Spring.StiffnessLow),
+                        label = "host_alpha"
+                    )
+                    Box(Modifier.alpha(rowAlpha)) {
+                        HostCard(host = host, expanded = false, onClick = {})
+                    }
+                }
             }
         }
     }
