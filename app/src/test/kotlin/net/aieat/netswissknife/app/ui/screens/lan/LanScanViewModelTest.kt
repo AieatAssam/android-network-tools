@@ -3,10 +3,14 @@ package net.aieat.netswissknife.app.ui.screens.lan
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.emptyPreferences
+import androidx.lifecycle.viewModelScope
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.job
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
@@ -71,7 +75,11 @@ class LanScanViewModelTest {
     }
 
     @AfterEach
-    fun tearDown() {
+    fun tearDown() = runBlocking {
+        // The scan pipeline hops through Dispatchers.IO; its final resumption lands on
+        // Main. Cancel and join before resetMain() so no coroutine touches Main after
+        // the test dispatcher is gone (flaky Looper IllegalStateException otherwise).
+        viewModel.viewModelScope.coroutineContext.job.cancelAndJoin()
         Dispatchers.resetMain()
     }
 
