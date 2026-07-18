@@ -126,6 +126,14 @@ Internet connection speed test measuring latency, download, and upload throughpu
 - Share button exports a plain-text summary of the results
 - **Powered by Cloudflare** — measurement traffic is sent to and timed against `speed.cloudflare.com` (`/__down` and `/__up`), the same backend that powers Cloudflare's public speed test at <https://speed.cloudflare.com>. Net Swiss Knife is an independent app and is **not affiliated with, sponsored by, or endorsed by Cloudflare, Inc.**; "Cloudflare" and the Cloudflare logo are trademarks of Cloudflare, Inc. Full attribution is also shown in-app under Settings → Data Source Attributions.
 
+### Wake-on-LAN
+Wake sleeping or powered-down machines on the local network with a UDP magic packet.
+- Accepts all common MAC notations: `AA:BB:CC:DD:EE:FF`, `AA-BB-CC-DD-EE-FF`, `AABB.CCDD.EEFF`, and bare `AABBCCDDEEFF`
+- Real-time MAC validation with inline error feedback
+- Advanced options: custom broadcast address (default `255.255.255.255`) and UDP port (default 9)
+- Sends 3 duplicate packets per request for reliability over lossy UDP
+- Success card confirms target MAC, broadcast address, port, and packet count; in-app help explains BIOS/OS requirements
+
 ---
 
 ## Module Layout
@@ -229,6 +237,7 @@ Android module (Jetpack Compose, Material 3, Hilt). Contains:
 | `subnet` | Subnet Calculator | Implemented |
 | `mdns` | mDNS Service Browser | Implemented |
 | `speedtest` | Speed Test | Implemented |
+| `wol` | Wake-on-LAN | Implemented |
 
 ---
 

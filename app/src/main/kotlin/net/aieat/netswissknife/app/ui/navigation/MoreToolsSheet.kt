@@ -46,6 +46,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
+import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.R
 
 private data class ToolSection(val labelRes: Int, val routes: List<String>)
@@ -54,7 +55,7 @@ private val TOOL_SECTIONS = listOf(
     ToolSection(R.string.more_section_diagnostics, listOf("ping", "traceroute", "ports", "dns")),
     ToolSection(R.string.more_section_wifi_lan,    listOf("wifi_scan", "lan", "topology", "mdns")),
     ToolSection(R.string.more_section_security,    listOf("tls", "whois", "httprobe")),
-    ToolSection(R.string.more_section_utilities,   listOf("subnet", "speedtest")),
+    ToolSection(R.string.more_section_utilities,   listOf("subnet", "speedtest", "wol")),
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -344,7 +345,7 @@ private fun ToolSheetRow(
             )
         }
 
-        IconButton(onClick = onTogglePin) {
+        IconButton(onClick = hapticAction(onTogglePin)) {
             Icon(
                 imageVector = if (isPinned) Icons.Filled.PushPin else Icons.Outlined.PushPin,
                 contentDescription = if (isPinned)

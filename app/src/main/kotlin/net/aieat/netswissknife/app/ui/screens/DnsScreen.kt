@@ -99,6 +99,8 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
+import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.RecentHostsRow
@@ -107,6 +109,7 @@ import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
 import net.aieat.netswissknife.app.ui.screens.dns.DnsUiState
 import net.aieat.netswissknife.app.ui.screens.dns.DnsViewModel
 import net.aieat.netswissknife.app.util.shareText
+import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.dns.DnsRecord
 import net.aieat.netswissknife.core.network.dns.DnsRecordType
 import net.aieat.netswissknife.core.network.dns.DnsResult
@@ -145,7 +148,8 @@ fun DnsScreen(viewModel: DnsViewModel = hiltViewModel()) {
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
             .alpha(screenAlpha),
-        contentPadding = PaddingValues(bottom = 32.dp)
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
             item { DnsHeroHeader(onHelpClick = { showHelp = true }) }
 
@@ -163,8 +167,7 @@ fun DnsScreen(viewModel: DnsViewModel = hiltViewModel()) {
                     onCustomServerAddressChange = viewModel::onCustomServerAddressChange,
                     onLookup = viewModel::performLookup,
                     onRemoveRecentHost = viewModel::removeRecentHost,
-                    onClearRecentHosts = viewModel::clearRecentHosts,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    onClearRecentHosts = viewModel::clearRecentHosts
                 )
             }
 
@@ -180,22 +183,20 @@ fun DnsScreen(viewModel: DnsViewModel = hiltViewModel()) {
                 ) { state ->
                     when (state) {
                         is DnsUiState.Idle -> DnsIdleHint(
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp)
+                            modifier = Modifier.padding(vertical = 8.dp)
                         )
                         is DnsUiState.Loading -> DnsLoadingPanel(
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp)
+                            modifier = Modifier.padding(vertical = 8.dp)
                         )
                         is DnsUiState.Error -> DnsErrorPanel(
                             message = state.message,
-                            onRetry = viewModel::onRetry,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                            onRetry = viewModel::onRetry
                         )
                         is DnsUiState.Success -> DnsResultPanel(
                             result = state.result,
                             showRaw = state.showRaw,
                             onToggleRaw = viewModel::onToggleRawView,
-                            onClear = viewModel::onClearResults,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                            onClear = viewModel::onClearResults
                         )
                     }
                 }
@@ -220,37 +221,28 @@ fun DnsScreen(viewModel: DnsViewModel = hiltViewModel()) {
 
 @Composable
 private fun DnsHeroHeader(onHelpClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(
-                Brush.verticalGradient(
-                    listOf(
-                        MaterialTheme.colorScheme.primaryContainer,
-                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
-                        MaterialTheme.colorScheme.background
-                    )
-                )
-            )
-            .padding(horizontal = 24.dp, vertical = 28.dp)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            var iconReady by remember { mutableStateOf(false) }
-            LaunchedEffect(Unit) { iconReady = true }
+    var iconReady by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { iconReady = true }
 
-            val iconScale by animateFloatAsState(
-                targetValue = if (iconReady) 1f else 0.3f,
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessMediumLow
-                ),
-                label = "dns-icon-scale"
-            )
+    val iconScale by animateFloatAsState(
+        targetValue = if (iconReady) 1f else 0.3f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        ),
+        label = "dns-icon-scale"
+    )
 
+    ToolHeroHeader(
+        title = stringResource(R.string.dns_screen_title),
+        subtitle = stringResource(R.string.dns_screen_subtitle),
+        icon = Icons.Default.Language,
+        onHelpClick = onHelpClick,
+        iconContent = {
             Box(
                 modifier = Modifier
                     .scale(iconScale)
-                    .size(56.dp)
+                    .size(52.dp)
                     .clip(RoundedCornerShape(14.dp))
                     .background(MaterialTheme.colorScheme.primary),
                 contentAlignment = Alignment.Center
@@ -259,35 +251,11 @@ private fun DnsHeroHeader(onHelpClick: () -> Unit) {
                     imageVector = Icons.Default.Language,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier.size(30.dp)
-                )
-            }
-
-            Spacer(Modifier.width(16.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = stringResource(R.string.dns_screen_title),
-                    style = MaterialTheme.typography.displaySmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = stringResource(R.string.dns_screen_subtitle),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            IconButton(onClick = onHelpClick) {
-                Icon(
-                    imageVector = Icons.Default.Info,
-                    contentDescription = stringResource(R.string.action_help),
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                    modifier = Modifier.size(28.dp)
                 )
             }
         }
-    }
+    )
 }
 
 // ── Input card ────────────────────────────────────────────────────────────────
@@ -388,7 +356,7 @@ private fun DnsInputCard(
 
             // Lookup button
             Button(
-                onClick = onLookup,
+                onClick = hapticAction(onLookup),
                 enabled = !isLoading && domain.isNotBlank(),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -399,8 +367,9 @@ private fun DnsInputCard(
                 )
             ) {
                 if (isLoading) {
+                    val loadingCd = stringResource(R.string.a11y_loading)
                     CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp).semantics { contentDescription = "Loading" },
+                        modifier = Modifier.size(20.dp).semantics { contentDescription = loadingCd },
                         color = MaterialTheme.colorScheme.onPrimary,
                         strokeWidth = 2.dp
                     )
@@ -508,6 +477,12 @@ private fun DnsServerSelector(
     val fieldValue = if (selectedServer is DnsServer.Custom) customServerAddress
                      else selectedServer.displayName
 
+    // Custom server addresses must be literal IPs (IPv4 or IPv6).
+    val isCustomInvalid = selectedServer is DnsServer.Custom &&
+        customServerAddress.isNotBlank() &&
+        !HostValidator.isValidIpv4(customServerAddress) &&
+        !HostValidator.isValidIpv6(customServerAddress)
+
     ExposedDropdownMenuBox(
         expanded = expanded,
         onExpandedChange = { expanded = it }
@@ -530,6 +505,10 @@ private fun DnsServerSelector(
             trailingIcon = {
                 ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
             },
+            isError = isCustomInvalid,
+            supportingText = if (isCustomInvalid) {
+                { Text(stringResource(R.string.dns_custom_server_invalid)) }
+            } else null,
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
             modifier = Modifier
@@ -645,8 +624,9 @@ private fun DnsLoadingPanel(modifier: Modifier = Modifier) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            val loadingCd = stringResource(R.string.a11y_loading)
             CircularProgressIndicator(
-                modifier = Modifier.size(48.dp).semantics { contentDescription = "Loading" },
+                modifier = Modifier.size(48.dp).semantics { contentDescription = loadingCd },
                 color = MaterialTheme.colorScheme.primary,
                 strokeWidth = 3.dp
             )

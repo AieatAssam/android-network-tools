@@ -25,6 +25,9 @@ object AppPreferenceKeys {
     /** Theme override: "SYSTEM", "LIGHT", or "DARK". */
     val THEME_OVERRIDE = stringPreferencesKey("theme_override")
 
+    /** Material You dynamic colour (Android 12+). Defaults to true. */
+    val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
+
     /** Default ping packet count (1–100). */
     val DEFAULT_PING_COUNT = intPreferencesKey("default_ping_count")
 

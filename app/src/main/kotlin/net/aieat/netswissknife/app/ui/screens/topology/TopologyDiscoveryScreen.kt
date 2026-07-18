@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.*
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.ui.components.HeroTitleText
 import net.aieat.netswissknife.app.ui.theme.AppShapes
 import net.aieat.netswissknife.core.network.topology.*
 import kotlin.math.*
@@ -140,12 +141,9 @@ private fun TopologyScreenContent(
                     }
                     Spacer(Modifier.width(16.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(
+                        HeroTitleText(
                             text = stringResource(R.string.topology_screen_title),
-                            style = MaterialTheme.typography.displaySmall,
                             color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
                         )
                         Text(
                             text = stringResource(R.string.topology_screen_subtitle),

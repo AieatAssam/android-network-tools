@@ -95,12 +95,14 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.ui.theme.AppShapes
 import net.aieat.netswissknife.app.ui.theme.StatusBad
 import net.aieat.netswissknife.app.ui.theme.StatusCritical
 import net.aieat.netswissknife.app.ui.theme.StatusGood
 import net.aieat.netswissknife.app.ui.theme.StatusOk
 import net.aieat.netswissknife.app.ui.theme.StatusWarn
+import net.aieat.netswissknife.app.ui.theme.SpectrumPalette
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
@@ -124,14 +126,8 @@ import net.aieat.netswissknife.core.network.wifi.WifiBand
 
 // ── Network colour palette (12 visually distinct colours) ────────────────────
 
-private val NETWORK_PALETTE = listOf(
-    Color(0xFF2196F3), Color(0xFF4CAF50), Color(0xFFFF5722), Color(0xFF9C27B0),
-    Color(0xFFFF9800), Color(0xFF00BCD4), Color(0xFFE91E63), Color(0xFF8BC34A),
-    Color(0xFF3F51B5), Color(0xFFFFC107), Color(0xFF009688), Color(0xFFFF5252)
-)
-
 private fun networkColor(colorIndex: Int): Color =
-    NETWORK_PALETTE[colorIndex % NETWORK_PALETTE.size]
+    SpectrumPalette[colorIndex % SpectrumPalette.size]
 
 // ── Screen root ───────────────────────────────────────────────────────────────
 
@@ -222,9 +218,10 @@ fun WifiScanScreen(
 // ── Idle ──────────────────────────────────────────────────────────────────────
 
 @Composable private fun WifiIdleScreen() {
+    val loadingCd = stringResource(R.string.a11y_loading)
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         CircularProgressIndicator(
-            modifier = Modifier.semantics { contentDescription = "Loading" },
+            modifier = Modifier.semantics { contentDescription = loadingCd },
             color = MaterialTheme.colorScheme.primary
         )
     }
@@ -479,7 +476,7 @@ fun WifiScanScreen(
                     )
                 }
                 Spacer(Modifier.height(8.dp))
-                FilledTonalIconButton(onClick = onScan) {
+                FilledTonalIconButton(onClick = hapticAction(onScan)) {
                     Icon(
                         Icons.Default.Refresh,
                         contentDescription = stringResource(R.string.wifi_scan_button),
@@ -1001,6 +998,7 @@ private fun signalLevelColor(level: net.aieat.netswissknife.core.network.wifi.Si
     with(density) { labelPx = 11.sp.toPx(); bigPx = 22.sp.toPx() }
     val labelArgb  = MaterialTheme.colorScheme.onSurface.toArgb()
     val subArgb    = MaterialTheme.colorScheme.onSurfaceVariant.toArgb()
+    val gaugeLabel = stringResource(R.string.wifi_signal_quality)
 
     Box(Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
         Canvas(Modifier.size(200.dp, 100.dp)) {
@@ -1021,7 +1019,7 @@ private fun signalLevelColor(level: net.aieat.netswissknife.core.network.wifi.Si
                     color = labelArgb; textSize = bigPx; textAlign = android.graphics.Paint.Align.CENTER
                     isFakeBoldText = true; isAntiAlias = true
                 })
-            drawContext.canvas.nativeCanvas.drawText("Signal Quality", cx, cy - radius / 2.5f + labelPx * 1.6f,
+            drawContext.canvas.nativeCanvas.drawText(gaugeLabel, cx, cy - radius / 2.5f + labelPx * 1.6f,
                 android.graphics.Paint().apply {
                     color = subArgb; textSize = labelPx; textAlign = android.graphics.Paint.Align.CENTER
                     isAntiAlias = true

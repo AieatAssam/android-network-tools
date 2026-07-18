@@ -23,6 +23,10 @@ class SettingsViewModel @Inject constructor(
         .map { it[AppPreferenceKeys.THEME_OVERRIDE] ?: "SYSTEM" }
         .stateIn(viewModelScope, SharingStarted.Eagerly, "SYSTEM")
 
+    val dynamicColor: StateFlow<Boolean> = dataStore.data
+        .map { it[AppPreferenceKeys.DYNAMIC_COLOR] ?: true }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
     val defaultPingCount: StateFlow<Int> = dataStore.data
         .map { it[AppPreferenceKeys.DEFAULT_PING_COUNT] ?: 10 }
         .stateIn(viewModelScope, SharingStarted.Eagerly, 10)
@@ -38,6 +42,12 @@ class SettingsViewModel @Inject constructor(
     fun setThemeOverride(value: String) {
         viewModelScope.launch {
             dataStore.edit { it[AppPreferenceKeys.THEME_OVERRIDE] = value }
+        }
+    }
+
+    fun setDynamicColor(enabled: Boolean) {
+        viewModelScope.launch {
+            dataStore.edit { it[AppPreferenceKeys.DYNAMIC_COLOR] = enabled }
         }
     }
 

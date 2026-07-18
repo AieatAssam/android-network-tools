@@ -102,7 +102,7 @@ fun ToolPlaceholderContent(
             Column(
                 modifier            = Modifier.padding(28.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 // ── Icon ────────────────────────────────────────────────────
                 Box(

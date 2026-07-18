@@ -91,7 +91,23 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
+import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.ui.theme.AccentBlueLight
+import net.aieat.netswissknife.app.ui.theme.AccentBrown
+import net.aieat.netswissknife.app.ui.theme.AccentGreenLight
+import net.aieat.netswissknife.app.ui.theme.AccentGreyDeep
+import net.aieat.netswissknife.app.ui.theme.AccentGreyLight
+import net.aieat.netswissknife.app.ui.theme.AccentOrangeDeep
+import net.aieat.netswissknife.app.ui.theme.AccentOrangeLight
+import net.aieat.netswissknife.app.ui.theme.AccentPurple
+import net.aieat.netswissknife.app.ui.theme.AccentRedDeep
+import net.aieat.netswissknife.app.ui.theme.AccentRedLight
+import net.aieat.netswissknife.app.ui.theme.AccentTeal
+import net.aieat.netswissknife.app.ui.theme.StatusBlueDeep
+import net.aieat.netswissknife.app.ui.theme.StatusGoodDeep
+import net.aieat.netswissknife.app.ui.theme.StatusWarnDeep
 import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.RecentHostsRow
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
@@ -212,60 +228,12 @@ private sealed class DisplayState {
 
 @Composable
 private fun HttpProbeHeaderCard(onHelpClick: () -> Unit) {
-    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    Brush.linearGradient(
-                        listOf(
-                            MaterialTheme.colorScheme.primaryContainer,
-                            MaterialTheme.colorScheme.secondaryContainer
-                        )
-                    )
-                )
-                .padding(20.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(52.dp)
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Http,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(28.dp)
-                    )
-                }
-                Spacer(Modifier.width(16.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = stringResource(R.string.httprobe_screen_title),
-                        style = MaterialTheme.typography.displaySmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        text = stringResource(R.string.httprobe_screen_subtitle),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-                    )
-                }
-                IconButton(onClick = onHelpClick) {
-                    Icon(
-                        imageVector = Icons.Default.Info,
-                        contentDescription = stringResource(R.string.action_help),
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                }
-            }
-        }
-    }
+    ToolHeroHeader(
+        title = stringResource(R.string.httprobe_screen_title),
+        subtitle = stringResource(R.string.httprobe_screen_subtitle),
+        icon = Icons.Default.Http,
+        onHelpClick = onHelpClick
+    )
 }
 
 // ── Input card ────────────────────────────────────────────────────────────────
@@ -481,7 +449,7 @@ private fun HttpProbeInputCard(
 
             // Send button
             Button(
-                onClick = {
+                onClick = hapticAction {
                     focusManager.clearFocus()
                     onSend()
                 },
@@ -991,9 +959,9 @@ private fun SecurityTabContent(checks: List<SecurityHeaderCheck>) {
         val failCount = checks.count { it.rating == SecurityRating.FAIL }
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            SecuritySummaryChip(count = passCount, label = "Pass", color = Color(0xFF2E7D32))
-            SecuritySummaryChip(count = warnCount, label = "Warn", color = Color(0xFFF57F17))
-            SecuritySummaryChip(count = failCount, label = "Fail", color = MaterialTheme.colorScheme.error)
+            SecuritySummaryChip(count = passCount, label = stringResource(R.string.security_rating_pass), color = StatusGoodDeep)
+            SecuritySummaryChip(count = warnCount, label = stringResource(R.string.security_rating_warn), color = StatusWarnDeep)
+            SecuritySummaryChip(count = failCount, label = stringResource(R.string.security_rating_fail), color = MaterialTheme.colorScheme.error)
         }
 
         HorizontalDivider()
@@ -1081,8 +1049,8 @@ private fun SecurityCheckRow(check: SecurityHeaderCheck) {
 @Composable
 private fun SecurityRatingIcon(rating: SecurityRating, modifier: Modifier = Modifier) {
     when (rating) {
-        SecurityRating.PASS -> Icon(Icons.Default.Check, null, modifier = modifier, tint = Color(0xFF2E7D32))
-        SecurityRating.WARN -> Icon(Icons.Default.Warning, null, modifier = modifier, tint = Color(0xFFF57F17))
+        SecurityRating.PASS -> Icon(Icons.Default.Check, null, modifier = modifier, tint = StatusGoodDeep)
+        SecurityRating.WARN -> Icon(Icons.Default.Warning, null, modifier = modifier, tint = StatusWarnDeep)
         SecurityRating.FAIL -> Icon(Icons.Default.Clear, null, modifier = modifier, tint = MaterialTheme.colorScheme.error)
         SecurityRating.INFO -> Icon(Icons.Default.Info, null, modifier = modifier, tint = MaterialTheme.colorScheme.onSurfaceVariant)
     }
@@ -1091,14 +1059,15 @@ private fun SecurityRatingIcon(rating: SecurityRating, modifier: Modifier = Modi
 @Composable
 private fun SecurityRatingBadge(rating: SecurityRating) {
     val (bg, fg, label) = when (rating) {
-        SecurityRating.PASS -> Triple(Color(0xFF2E7D32).copy(alpha = 0.12f), Color(0xFF2E7D32), "PASS")
-        SecurityRating.WARN -> Triple(Color(0xFFF57F17).copy(alpha = 0.12f), Color(0xFFF57F17), "WARN")
-        SecurityRating.FAIL -> Triple(MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.error, "FAIL")
-        SecurityRating.INFO -> Triple(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.colorScheme.onSurfaceVariant, "INFO")
+        SecurityRating.PASS -> Triple(StatusGoodDeep.copy(alpha = 0.12f), StatusGoodDeep, stringResource(R.string.security_rating_pass))
+        SecurityRating.WARN -> Triple(StatusWarnDeep.copy(alpha = 0.12f), StatusWarnDeep, stringResource(R.string.security_rating_warn))
+        SecurityRating.FAIL -> Triple(MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.error, stringResource(R.string.security_rating_fail))
+        SecurityRating.INFO -> Triple(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.colorScheme.onSurfaceVariant, stringResource(R.string.security_rating_info))
     }
+    val badgeLabel = label.uppercase()
     Surface(shape = MaterialTheme.shapes.small, color = bg) {
         Text(
-            text = label,
+            text = badgeLabel,
             style = MaterialTheme.typography.labelSmall,
             color = fg,
             fontWeight = FontWeight.Bold,
@@ -1134,37 +1103,37 @@ private fun LabeledValue(label: String, value: String) {
 
 @Composable
 private fun statusCodeColor(code: Int): Color = when (code) {
-    in 200..299 -> Color(0xFF2E7D32)
+    in 200..299 -> StatusGoodDeep
     in 300..399 -> MaterialTheme.colorScheme.primary
-    in 400..499 -> Color(0xFFF57F17)
+    in 400..499 -> StatusWarnDeep
     in 500..599 -> MaterialTheme.colorScheme.error
     else        -> MaterialTheme.colorScheme.onSurface
 }
 
 private fun statusGradient(code: Int): List<Color> = when (code) {
-    in 200..299 -> listOf(Color(0xFF2E7D32), Color(0xFF66BB6A))
-    in 300..399 -> listOf(Color(0xFF1565C0), Color(0xFF42A5F5))
-    in 400..499 -> listOf(Color(0xFFE65100), Color(0xFFFFB74D))
-    in 500..599 -> listOf(Color(0xFFB71C1C), Color(0xFFEF9A9A))
-    else        -> listOf(Color(0xFF616161), Color(0xFFBDBDBD))
+    in 200..299 -> listOf(StatusGoodDeep, AccentGreenLight)
+    in 300..399 -> listOf(StatusBlueDeep, AccentBlueLight)
+    in 400..499 -> listOf(AccentOrangeDeep, AccentOrangeLight)
+    in 500..599 -> listOf(AccentRedDeep, AccentRedLight)
+    else        -> listOf(AccentGreyDeep, AccentGreyLight)
 }
 
 @Composable
 private fun timingColor(ms: Long): Color = when {
-    ms < 200  -> Color(0xFF2E7D32)
-    ms < 800  -> Color(0xFFF57F17)
+    ms < 200  -> StatusGoodDeep
+    ms < 800  -> StatusWarnDeep
     else      -> MaterialTheme.colorScheme.error
 }
 
 @Composable
 private fun methodColor(method: HttpMethod): Color = when (method) {
-    HttpMethod.GET     -> Color(0xFF1565C0)
-    HttpMethod.POST    -> Color(0xFF2E7D32)
-    HttpMethod.PUT     -> Color(0xFFF57F17)
-    HttpMethod.PATCH   -> Color(0xFF6A1B9A)
+    HttpMethod.GET     -> StatusBlueDeep
+    HttpMethod.POST    -> StatusGoodDeep
+    HttpMethod.PUT     -> StatusWarnDeep
+    HttpMethod.PATCH   -> AccentPurple
     HttpMethod.DELETE  -> MaterialTheme.colorScheme.error
-    HttpMethod.HEAD    -> Color(0xFF00695C)
-    HttpMethod.OPTIONS -> Color(0xFF4E342E)
+    HttpMethod.HEAD    -> AccentTeal
+    HttpMethod.OPTIONS -> AccentBrown
 }
 
 private fun buildHttpShareText(result: HttpProbeResult): String = buildString {

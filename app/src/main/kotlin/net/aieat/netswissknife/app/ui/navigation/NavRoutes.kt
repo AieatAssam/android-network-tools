@@ -11,6 +11,7 @@ import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.automirrored.filled.ManageSearch
 import androidx.compose.material.icons.filled.NetworkCheck
+import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.Router
 import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.TravelExplore
@@ -47,6 +48,7 @@ sealed class NavRoutes(
     object SubnetCalculator : NavRoutes("subnet", "Subnet Calc", Icons.Default.Calculate)
     object MdnsDiscovery : NavRoutes("mdns", "mDNS Browser", Icons.Default.CellTower)
     object SpeedTest : NavRoutes("speedtest", "Speed Test", Icons.Default.Speed)
+    object WakeOnLan : NavRoutes("wol", "Wake-on-LAN", Icons.Default.PowerSettingsNew)
     object Settings : NavRoutes("settings", "Settings", Icons.Default.Settings)
 
     companion object {
@@ -65,6 +67,7 @@ sealed class NavRoutes(
             ToolInfo("subnet",     "Subnet Calc",   "Subnet", Icons.Default.Calculate,     "IPv4 subnet calculator with binary breakdown and notation conversion"),
             ToolInfo("mdns",       "mDNS Browser",  "mDNS",  Icons.Default.CellTower,      "Discover LAN services via multicast DNS"),
             ToolInfo("speedtest",  "Speed Test",    "Speed", Icons.Default.Speed,          "Download, upload speed and latency via Cloudflare"),
+            ToolInfo("wol",        "Wake-on-LAN",   "WOL",   Icons.Default.PowerSettingsNew, "Wake sleeping devices with a magic packet"),
         )
 
         /** Default pinned routes shown in the bottom nav (max MAX_PINNED). */

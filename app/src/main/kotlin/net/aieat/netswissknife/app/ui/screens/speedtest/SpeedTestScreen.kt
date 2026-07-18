@@ -85,6 +85,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
@@ -300,7 +301,7 @@ private fun SpeedTestIdleContent(onStart: () -> Unit) {
                         ),
                         shape = CircleShape
                     )
-                    .clickable(onClick = onStart),
+                    .clickable(onClick = hapticAction(onStart)),
                 contentAlignment = Alignment.Center
             ) {
                 Surface(
@@ -331,7 +332,7 @@ private fun SpeedTestIdleContent(onStart: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(Modifier.height(20.dp))
-            Button(onClick = onStart, modifier = Modifier.fillMaxWidth()) {
+            Button(onClick = hapticAction(onStart), modifier = Modifier.fillMaxWidth()) {
                 Icon(Icons.Default.PlayArrow, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
                 Text(stringResource(R.string.speedtest_start_button))

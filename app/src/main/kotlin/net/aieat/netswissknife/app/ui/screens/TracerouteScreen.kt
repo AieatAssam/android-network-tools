@@ -91,6 +91,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
+import net.aieat.netswissknife.app.ui.components.ToolStopButton
+import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.ui.theme.StatusBad
 import net.aieat.netswissknife.app.ui.theme.StatusCritical
 import net.aieat.netswissknife.app.ui.theme.StatusGood
@@ -239,69 +242,36 @@ private fun TracerouteHeroHeader(onHelpClick: () -> Unit) {
         label         = "hero-alpha"
     )
 
-    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    Brush.linearGradient(
-                        listOf(
-                            MaterialTheme.colorScheme.primaryContainer,
-                            MaterialTheme.colorScheme.secondaryContainer,
-                            MaterialTheme.colorScheme.tertiaryContainer
-                        )
-                    )
-                )
-                .padding(20.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(56.dp)
-                        .clip(CircleShape)
-                        .background(
-                            Brush.radialGradient(
-                                listOf(
-                                    MaterialTheme.colorScheme.primary,
-                                    MaterialTheme.colorScheme.tertiary
-                                )
+    ToolHeroHeader(
+        title = stringResource(R.string.traceroute_screen_title),
+        subtitle = stringResource(R.string.traceroute_screen_subtitle),
+        icon = Icons.Default.Public,
+        onHelpClick = onHelpClick,
+        iconContent = {
+            Box(
+                modifier = Modifier
+                    .size(52.dp)
+                    .clip(CircleShape)
+                    .background(
+                        Brush.radialGradient(
+                            listOf(
+                                MaterialTheme.colorScheme.primary,
+                                MaterialTheme.colorScheme.tertiary
                             )
                         )
-                        .alpha(pulseAlpha),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector        = Icons.Default.Public,
-                        contentDescription = null,
-                        tint               = MaterialTheme.colorScheme.onPrimary,
-                        modifier           = Modifier.size(30.dp)
                     )
-                }
-                Spacer(Modifier.width(16.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text  = stringResource(R.string.traceroute_screen_title),
-                        style = MaterialTheme.typography.displaySmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text  = stringResource(R.string.traceroute_screen_subtitle),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-                    )
-                }
-                IconButton(onClick = onHelpClick) {
-                    Icon(
-                        imageVector = Icons.Default.Info,
-                        contentDescription = stringResource(R.string.action_help),
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                }
+                    .alpha(pulseAlpha),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector        = Icons.Default.Public,
+                    contentDescription = null,
+                    tint               = MaterialTheme.colorScheme.onPrimary,
+                    modifier           = Modifier.size(28.dp)
+                )
             }
         }
-    }
+    )
 }
 
 // ── Input card ────────────────────────────────────────────────────────────────
@@ -463,21 +433,14 @@ private fun TracerouteInputCard(
 
             // Action button
             if (isRunning) {
-                Button(
-                    onClick  = onStop,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error,
-                        contentColor = MaterialTheme.colorScheme.onError
-                    )
-                ) {
-                    Icon(Icons.Default.Stop, null)
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.traceroute_stop_button))
-                }
+                ToolStopButton(
+                    text = stringResource(R.string.traceroute_stop_button),
+                    onClick = onStop,
+                    modifier = Modifier.fillMaxWidth()
+                )
             } else {
                 Button(
-                    onClick  = { keyboard?.hide(); onStart() },
+                    onClick  = hapticAction { keyboard?.hide(); onStart() },
                     enabled  = host.isNotBlank() && !isHostInvalid,
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -570,7 +533,8 @@ private fun TracerouteRunningPanel(state: TracerouteUiState.Running) {
                 modifier          = Modifier.padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                CircularProgressIndicator(modifier = Modifier.size(24.dp).semantics { contentDescription = "Loading" }, strokeWidth = 2.dp)
+                val loadingCd = stringResource(R.string.a11y_loading)
+                CircularProgressIndicator(modifier = Modifier.size(24.dp).semantics { contentDescription = loadingCd }, strokeWidth = 2.dp)
                 Spacer(Modifier.width(12.dp))
                 Column {
                     Text(

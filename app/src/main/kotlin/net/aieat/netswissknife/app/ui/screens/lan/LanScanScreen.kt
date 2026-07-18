@@ -109,6 +109,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
+import net.aieat.netswissknife.app.ui.components.ToolStopButton
+import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.RecentHostsRow
@@ -221,64 +224,12 @@ fun LanScreen(viewModel: LanScanViewModel = hiltViewModel()) {
 
 @Composable
 private fun LanHeaderCard(onHelpClick: () -> Unit) {
-    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    Brush.linearGradient(
-                        colors = listOf(
-                            MaterialTheme.colorScheme.primaryContainer,
-                            MaterialTheme.colorScheme.secondaryContainer,
-                        ),
-                        start = Offset(0f, 0f),
-                        end = Offset.Infinite,
-                    )
-                )
-                .padding(20.dp),
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(52.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Lan,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(28.dp),
-                    )
-                }
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = stringResource(R.string.lan_screen_title),
-                        style = MaterialTheme.typography.displaySmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        text = stringResource(R.string.lan_screen_subtitle),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f),
-                    )
-                }
-                IconButton(onClick = onHelpClick) {
-                    Icon(
-                        imageVector = Icons.Default.Info,
-                        contentDescription = stringResource(R.string.action_help),
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                }
-            }
-        }
-    }
+    ToolHeroHeader(
+        title = stringResource(R.string.lan_screen_title),
+        subtitle = stringResource(R.string.lan_screen_subtitle),
+        icon = Icons.Default.Lan,
+        onHelpClick = onHelpClick
+    )
 }
 
 // ── Input card ────────────────────────────────────────────────────────────────
@@ -326,11 +277,12 @@ private fun LanInputCard(
                             Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.clear))
                         }
                     } else if (isSubnetLoading) {
+                        val loadingCd = stringResource(R.string.a11y_loading)
                         CircularProgressIndicator(
                             modifier = Modifier
                                 .size(24.dp)
                                 .padding(end = 8.dp)
-                                .semantics { contentDescription = "Loading" },
+                                .semantics { contentDescription = loadingCd },
                             strokeWidth = 2.dp,
                         )
                     } else {
@@ -376,24 +328,14 @@ private fun LanInputCard(
 
             // Action button
             if (isScanning) {
-                Button(
+                ToolStopButton(
+                    text = stringResource(R.string.lan_stop_button),
                     onClick = onStopScan,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error,
-                    ),
-                ) {
-                    Icon(
-                        Icons.Default.Stop,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.lan_stop_button))
-                }
+                    modifier = Modifier.fillMaxWidth()
+                )
             } else {
                 Button(
-                    onClick = onStartScan,
+                    onClick = hapticAction(onStartScan),
                     modifier = Modifier.fillMaxWidth(),
                     enabled = subnet.isNotBlank(),
                 ) {

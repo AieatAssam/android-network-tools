@@ -18,10 +18,16 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -42,7 +48,7 @@ fun ToolHeroHeader(
     title: String,
     subtitle: String,
     icon: ImageVector,
-    onHelpClick: () -> Unit,
+    onHelpClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     iconContent: @Composable (() -> Unit)? = null,
 ) {
@@ -93,12 +99,9 @@ fun ToolHeroHeader(
                 Spacer(modifier = Modifier.width(AppSpacing.m))
 
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
+                    HeroTitleText(
                         text = title,
-                        style = MaterialTheme.typography.displaySmall,
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
                     )
                     Text(
                         text = subtitle,
@@ -109,14 +112,49 @@ fun ToolHeroHeader(
                     )
                 }
 
-                IconButton(onClick = onHelpClick) {
-                    Icon(
-                        imageVector = Icons.Default.Info,
-                        contentDescription = stringResource(R.string.action_help),
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                    )
+                if (onHelpClick != null) {
+                    IconButton(onClick = onHelpClick) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = stringResource(R.string.action_help),
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        )
+                    }
                 }
             }
         }
     }
+}
+
+/**
+ * Hero title that starts at displaySmall and shrinks until the text fits on
+ * one line, so long tool names ("Wake-on-LAN", "Subnet Calculator") never
+ * truncate with an ellipsis.
+ */
+@Composable
+fun HeroTitleText(
+    text: String,
+    color: Color,
+    modifier: Modifier = Modifier,
+) {
+    val baseStyle = MaterialTheme.typography.displaySmall
+    var textStyle by remember(text) { mutableStateOf(baseStyle) }
+    var ready by remember(text) { mutableStateOf(false) }
+
+    Text(
+        text = text,
+        style = textStyle,
+        color = color,
+        maxLines = 1,
+        softWrap = false,
+        overflow = TextOverflow.Clip,
+        modifier = modifier.let { if (ready) it else it.alpha(0f) },
+        onTextLayout = { result ->
+            if (result.didOverflowWidth) {
+                textStyle = textStyle.copy(fontSize = textStyle.fontSize * 0.92f)
+            } else {
+                ready = true
+            }
+        },
+    )
 }
