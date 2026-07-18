@@ -40,6 +40,8 @@ import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import android.os.Build
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -65,6 +67,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import net.aieat.netswissknife.app.BuildConfig
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
 import net.aieat.netswissknife.app.ui.theme.AppShapes
 import kotlin.math.roundToInt
 
@@ -73,6 +76,7 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val themeOverride by viewModel.themeOverride.collectAsStateWithLifecycle()
+    val dynamicColor by viewModel.dynamicColor.collectAsStateWithLifecycle()
     val defaultPingCount by viewModel.defaultPingCount.collectAsStateWithLifecycle()
     val defaultTimeoutMs by viewModel.defaultTimeoutMs.collectAsStateWithLifecycle()
     val defaultConcurrency by viewModel.defaultConcurrency.collectAsStateWithLifecycle()
@@ -96,13 +100,15 @@ fun SettingsScreen(
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             SettingsHeader()
             AnimatedVisibility(visible = visibleSections >= 1, enter = fadeIn(tween(250)) + slideInVertically(tween(250)) { it / 3 }) {
                 ThemeSection(
                     themeOverride = themeOverride,
-                    onThemeChange = viewModel::setThemeOverride
+                    onThemeChange = viewModel::setThemeOverride,
+                    dynamicColor = dynamicColor,
+                    onDynamicColorChange = viewModel::setDynamicColor
                 )
             }
             AnimatedVisibility(visible = visibleSections >= 2, enter = fadeIn(tween(250)) + slideInVertically(tween(250)) { it / 3 }) {
@@ -137,36 +143,20 @@ fun SettingsScreen(
 
 @Composable
 private fun SettingsHeader() {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(
-            imageVector = Icons.Default.Settings,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(32.dp)
-        )
-        Spacer(Modifier.width(12.dp))
-        Column {
-            Text(
-                text = stringResource(R.string.settings_screen_title),
-                style = MaterialTheme.typography.displaySmall,
-                color = MaterialTheme.colorScheme.onBackground,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = stringResource(R.string.settings_screen_subtitle),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
+    ToolHeroHeader(
+        title = stringResource(R.string.settings_screen_title),
+        subtitle = stringResource(R.string.settings_screen_subtitle),
+        icon = Icons.Default.Settings,
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ThemeSection(
     themeOverride: String,
-    onThemeChange: (String) -> Unit
+    onThemeChange: (String) -> Unit,
+    dynamicColor: Boolean,
+    onDynamicColorChange: (Boolean) -> Unit
 ) {
     SectionHeader(Icons.Default.DarkMode, stringResource(R.string.settings_theme_section))
 
@@ -192,6 +182,30 @@ private fun ThemeSection(
                     ) {
                         Text(labels[index])
                     }
+                }
+            }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                HorizontalDivider()
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.settings_dynamic_color_label),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Text(
+                            text = stringResource(R.string.settings_dynamic_color_subtitle),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = dynamicColor,
+                        onCheckedChange = onDynamicColorChange
+                    )
                 }
             }
         }

@@ -18,7 +18,7 @@ object AppSpacing {
     val l: Dp = 24.dp
     val xl: Dp = 32.dp
     /** Standard gap between cards in a tool screen. */
-    val cardGap: Dp = 16.dp
+    val cardGap: Dp = 12.dp
     /** Horizontal screen padding. */
     val screenPadding: Dp = 16.dp
 }

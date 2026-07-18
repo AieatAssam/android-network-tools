@@ -44,7 +44,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.navigation.NavRoutes
 import net.aieat.netswissknife.app.ui.navigation.ToolInfo
@@ -132,7 +134,9 @@ private fun HeroHeader() {
 
             Text(
                 text      = stringResource(R.string.app_name),
-                style     = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Bold),
+                style     = MaterialTheme.typography.displaySmall,
+                maxLines  = 1,
+                overflow  = TextOverflow.Ellipsis,
                 color     = MaterialTheme.colorScheme.onPrimaryContainer,
                 textAlign = TextAlign.Center
             )
@@ -159,7 +163,7 @@ private fun ToolGrid(onNavigate: (String) -> Unit) {
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
         )
         LazyVerticalGrid(
-            columns               = GridCells.Fixed(2),
+            columns               = GridCells.Adaptive(minSize = 160.dp),
             contentPadding        = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement   = Arrangement.spacedBy(12.dp)
@@ -168,7 +172,7 @@ private fun ToolGrid(onNavigate: (String) -> Unit) {
                 AnimatedToolCard(
                     tool    = tool,
                     delayMs = index * 60,
-                    onClick = { onNavigate(tool.route) }
+                    onClick = hapticAction { onNavigate(tool.route) }
                 )
             }
         }

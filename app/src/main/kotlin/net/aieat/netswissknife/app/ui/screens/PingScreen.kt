@@ -119,6 +119,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
+import net.aieat.netswissknife.app.ui.components.ToolStopButton
+import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.RecentHostsRow
@@ -257,68 +260,36 @@ private fun PingHeroHeader(onHelpClick: () -> Unit) {
         label = "hero_pulse"
     )
 
-    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    Brush.linearGradient(
-                        listOf(
-                            MaterialTheme.colorScheme.primaryContainer,
-                            MaterialTheme.colorScheme.secondaryContainer
-                        )
-                    )
-                )
-                .padding(24.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(56.dp)
-                        .scale(pulse)
-                        .clip(CircleShape)
-                        .background(
-                            Brush.radialGradient(
-                                listOf(
-                                    MaterialTheme.colorScheme.primary,
-                                    MaterialTheme.colorScheme.tertiary
-                                )
+    ToolHeroHeader(
+        title = stringResource(R.string.ping_screen_title),
+        subtitle = stringResource(R.string.ping_screen_subtitle),
+        icon = Icons.Default.NetworkCheck,
+        onHelpClick = onHelpClick,
+        iconContent = {
+            Box(
+                modifier = Modifier
+                    .size(52.dp)
+                    .scale(pulse)
+                    .clip(CircleShape)
+                    .background(
+                        Brush.radialGradient(
+                            listOf(
+                                MaterialTheme.colorScheme.primary,
+                                MaterialTheme.colorScheme.tertiary
                             )
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.NetworkCheck,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.size(32.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.width(16.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = stringResource(R.string.ping_screen_title),
-                        style = MaterialTheme.typography.displaySmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = stringResource(R.string.ping_screen_subtitle),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-                    )
-                }
-                IconButton(onClick = onHelpClick) {
-                    Icon(
-                        imageVector = Icons.Default.Info,
-                        contentDescription = stringResource(R.string.action_help),
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                }
+                        )
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.NetworkCheck,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.size(28.dp)
+                )
             }
         }
-    }
+    )
 }
 
 // ── Input card ────────────────────────────────────────────────────────────────
@@ -447,21 +418,14 @@ private fun PingInputCard(
 
             // Action button
             if (isRunning) {
-                Button(
+                ToolStopButton(
+                    text = stringResource(R.string.ping_stop_button),
                     onClick = onStop,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error,
-                        contentColor = MaterialTheme.colorScheme.onError
-                    )
-                ) {
-                    Icon(Icons.Default.Stop, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(stringResource(R.string.ping_stop_button))
-                }
+                    modifier = Modifier.fillMaxWidth()
+                )
             } else {
                 Button(
-                    onClick = {
+                    onClick = hapticAction {
                         keyboardController?.hide()
                         onStart()
                     },

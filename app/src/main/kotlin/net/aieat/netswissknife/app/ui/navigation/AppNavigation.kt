@@ -31,6 +31,7 @@ import net.aieat.netswissknife.app.ui.screens.settings.SettingsScreen
 import net.aieat.netswissknife.app.ui.screens.mdns.MdnsDiscoveryScreen
 import net.aieat.netswissknife.app.ui.screens.speedtest.SpeedTestScreen
 import net.aieat.netswissknife.app.ui.screens.whois.WhoisScreen
+import net.aieat.netswissknife.app.ui.screens.wol.WakeOnLanScreen
 
 // ── Transition helpers ────────────────────────────────────────────────────────
 
@@ -110,6 +111,7 @@ fun AppNavHost(navController: NavHostController, modifier: Modifier = Modifier) 
         composable(NavRoutes.SubnetCalculator.route)  { SubnetCalculatorScreen() }
         composable(NavRoutes.MdnsDiscovery.route)     { MdnsDiscoveryScreen() }
         composable(NavRoutes.SpeedTest.route)         { SpeedTestScreen() }
+        composable(NavRoutes.WakeOnLan.route)         { WakeOnLanScreen() }
         composable(
             route            = NavRoutes.Settings.route,
             enterTransition  = { fadeIn(tween(ANIM_DURATION)) },

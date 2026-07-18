@@ -16,8 +16,9 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -40,17 +41,19 @@ import dagger.hilt.android.AndroidEntryPoint
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         setContent {
             val settingsViewModel: SettingsViewModel = hiltViewModel()
-            val themeOverride by settingsViewModel.themeOverride.collectAsState()
+            val themeOverride by settingsViewModel.themeOverride.collectAsStateWithLifecycle()
+            val dynamicColor by settingsViewModel.dynamicColor.collectAsStateWithLifecycle()
             val darkTheme = when (themeOverride) {
                 "LIGHT" -> false
                 "DARK"  -> true
                 else    -> isSystemInDarkTheme()
             }
-            NetSwissKnifeTheme(darkTheme = darkTheme) {
+            NetSwissKnifeTheme(darkTheme = darkTheme, dynamicColor = dynamicColor) {
                 val navController = rememberNavController()
                 NetSwissKnifeApp(navController)
             }
@@ -61,10 +64,10 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun NetSwissKnifeApp(navController: NavHostController) {
     val navViewModel: AppNavigationViewModel = hiltViewModel()
-    val pinnedRoutes by navViewModel.pinnedRoutes.collectAsState()
+    val pinnedRoutes by navViewModel.pinnedRoutes.collectAsStateWithLifecycle()
     var showMoreSheet by remember { mutableStateOf(false) }
     val onboardingViewModel: OnboardingViewModel = hiltViewModel()
-    val shouldShowOnboarding by onboardingViewModel.shouldShowOnboarding.collectAsState()
+    val shouldShowOnboarding by onboardingViewModel.shouldShowOnboarding.collectAsStateWithLifecycle()
 
     Scaffold(
         bottomBar = {

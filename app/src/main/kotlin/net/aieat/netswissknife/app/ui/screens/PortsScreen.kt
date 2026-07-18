@@ -41,7 +41,6 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
@@ -66,6 +65,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RangeSlider
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -80,7 +80,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.Color
@@ -103,6 +102,9 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
+import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
+import net.aieat.netswissknife.app.ui.components.ToolStopButton
+import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.RecentHostsRow
@@ -149,7 +151,12 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
     ) {
             // ── Header ──────────────────────────────────────────────────────────
             item {
-                PortScanHeader(onHelpClick = { showHelp = true })
+                ToolHeroHeader(
+                    title = stringResource(R.string.ports_screen_title),
+                    subtitle = stringResource(R.string.ports_screen_subtitle),
+                    icon = Icons.Default.Search,
+                    onHelpClick = { showHelp = true }
+                )
             }
 
             // ── Input Card ──────────────────────────────────────────────────────
@@ -319,65 +326,6 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
     }
 }
 
-// ── Header ───────────────────────────────────────────────────────────────────
-
-@Composable
-private fun PortScanHeader(onHelpClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(
-                Brush.linearGradient(
-                    colors = listOf(
-                        MaterialTheme.colorScheme.primaryContainer,
-                        MaterialTheme.colorScheme.secondaryContainer
-                    )
-                )
-            )
-            .padding(20.dp)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Search,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(28.dp)
-                )
-            }
-            Spacer(Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = stringResource(R.string.ports_screen_title),
-                    style = MaterialTheme.typography.displaySmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = stringResource(R.string.ports_screen_subtitle),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-                )
-            }
-            IconButton(onClick = onHelpClick) {
-                Icon(
-                    imageVector = Icons.Default.Info,
-                    contentDescription = stringResource(R.string.action_help),
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-            }
-        }
-    }
-}
-
 // ── Input Card ────────────────────────────────────────────────────────────────
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -467,27 +415,72 @@ private fun PortScanInputCard(
             }
 
             // Custom port range (only shown for CUSTOM preset)
+            val startNum = startPort.toIntOrNull()
+            val endNum = endPort.toIntOrNull()
+            val startInvalid = startPort.isNotEmpty() && (startNum == null || startNum !in 1..65535)
+            val endInvalid = endPort.isNotEmpty() && (endNum == null || endNum !in 1..65535)
+            val orderInvalid = startNum != null && endNum != null &&
+                !startInvalid && !endInvalid && startNum > endNum
+            val customRangeValid = selectedPreset != PortScanPreset.CUSTOM ||
+                (startNum != null && endNum != null && !startInvalid && !endInvalid && !orderInvalid)
+
             AnimatedVisibility(visible = selectedPreset == PortScanPreset.CUSTOM) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    OutlinedTextField(
-                        value = startPort,
-                        onValueChange = onStartPortChange,
-                        label = { Text(stringResource(R.string.ports_start_port_label)) },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.weight(1f)
-                    )
-                    OutlinedTextField(
-                        value = endPort,
-                        onValueChange = onEndPortChange,
-                        label = { Text(stringResource(R.string.ports_end_port_label)) },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.weight(1f)
-                    )
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        OutlinedTextField(
+                            value = startPort,
+                            onValueChange = { onStartPortChange(it.filter(Char::isDigit).take(5)) },
+                            label = { Text(stringResource(R.string.ports_start_port_label)) },
+                            singleLine = true,
+                            isError = startInvalid || orderInvalid,
+                            supportingText = if (startInvalid) {
+                                { Text(stringResource(R.string.ports_range_error)) }
+                            } else null,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.weight(1f)
+                        )
+                        OutlinedTextField(
+                            value = endPort,
+                            onValueChange = { onEndPortChange(it.filter(Char::isDigit).take(5)) },
+                            label = { Text(stringResource(R.string.ports_end_port_label)) },
+                            singleLine = true,
+                            isError = endInvalid || orderInvalid,
+                            supportingText = if (endInvalid) {
+                                { Text(stringResource(R.string.ports_range_error)) }
+                            } else null,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+
+                    if (startNum != null && endNum != null && !startInvalid && !endInvalid) {
+                        RangeSlider(
+                            value = startNum.coerceIn(1, 65535).toFloat()..
+                                endNum.coerceIn(startNum.coerceIn(1, 65535), 65535).toFloat(),
+                            onValueChange = { range ->
+                                onStartPortChange(range.start.toInt().toString())
+                                onEndPortChange(range.endInclusive.toInt().toString())
+                            },
+                            valueRange = 1f..65535f,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+
+                    when {
+                        orderInvalid -> Text(
+                            text = stringResource(R.string.ports_range_order_error),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        startNum != null && endNum != null && !startInvalid && !endInvalid -> Text(
+                            text = stringResource(R.string.ports_range_count, endNum - startNum + 1),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
 
@@ -529,21 +522,15 @@ private fun PortScanInputCard(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 if (isScanning) {
-                    Button(
+                    ToolStopButton(
+                        text = stringResource(R.string.ports_stop_button),
                         onClick = onStopScan,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.error
-                        ),
                         modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(Icons.Default.Stop, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text(stringResource(R.string.ports_stop_button))
-                    }
+                    )
                 } else {
                     Button(
-                        onClick = onStartScan,
-                        enabled = host.isNotBlank(),
+                        onClick = hapticAction(onStartScan),
+                        enabled = host.isNotBlank() && customRangeValid,
                         modifier = Modifier.weight(1f)
                     ) {
                         Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -634,8 +621,9 @@ private fun PortScanProgressCard(state: PortScanUiState.Scanning) {
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
+                val loadingCd = stringResource(R.string.a11y_loading)
                 CircularProgressIndicator(
-                    modifier = Modifier.size(28.dp).semantics { contentDescription = "Loading" },
+                    modifier = Modifier.size(28.dp).semantics { contentDescription = loadingCd },
                     strokeCap = StrokeCap.Round,
                     strokeWidth = 3.dp
                 )

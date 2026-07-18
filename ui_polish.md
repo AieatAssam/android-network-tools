@@ -7,7 +7,8 @@ Updated as each item is completed.
 
 ## Environment notes
 
-- **Android emulator**: KVM available (AMD SVM); emulator install attempted but build verification uses `./gradlew :app:assembleDebug`
+- **Android emulator**: KVM inaccessible to this user (no kvm group, no sudo) — verified working recipe: AVD `api28` (`system-images;android-28;default;x86_64`, 720x1280, 1.5GB RAM) under TCG (`-accel off -gpu swiftshader_indirect -no-window`); boot ≈15 min, install needs retry loop until framework settles. API 30 `aosp_atd` boots but system_server crashloops under TCG — avoid.
+- **On-device smoke test passed (2026-07-18, API 28 emulator)**: app launches clean (no FATAL in logcat), Home grid + bottom nav render, More sheet shows category grouping/pins/sticky Settings/scroll fade (#1–#4), Network Topology + Wake-on-LAN screens render with shared hero header, WOL MAC live-validation works and magic packet sends end-to-end
 - **Verification method**: `./gradlew test` + `./gradlew :app:assembleDebug` after each batch
 - **Visual verification**: marked ⚠️ VISUAL-UNVERIFIED — requires human eye before merge
 - **TDD**: unit tests written first for pure-logic issues; Robolectric not configured (setup cost not worth it for this pass)
@@ -23,16 +24,16 @@ Updated as each item is completed.
 | 2 | "More" sheet has no category grouping | Med | ✅ DONE |
 | 3 | Pin limit reached gives no feedback | Med | ✅ DONE |
 | 4 | Settings not sticky in More sheet | Med | ✅ DONE |
-| 5 | Back nav from More is inconsistent | Low | ⬜ TODO |
-| 6 | Hero header: 4 different implementations | High | ✅ DONE |
-| 7 | Subnet Calculator buries identity in input card | Med | ⬜ TODO |
-| 8 | Settings screen has no hero card | Low | ⬜ TODO |
+| 5 | Back nav from More is inconsistent | Low | N/A (More is now a modal sheet; back simply dismisses it) |
+| 6 | Hero header: 4 different implementations | High | ✅ DONE (Dns, Ping, Ports, Traceroute, Whois, HttpProbe, LanScan, Tls migrated to ToolHeroHeader; Mdns/Wifi/SpeedTest keep composite heroes — live stats/controls/attribution — with matched typography) |
+| 7 | Subnet Calculator buries identity in input card | Med | ✅ DONE (ToolHeroHeader above input card) |
+| 8 | Settings screen has no hero card | Low | ✅ DONE (ToolHeroHeader, help-less variant) |
 | 9 | RecentHostsRow dismiss 24 dp — below 48 dp min | High | ✅ DONE |
 | 10 | No real-time input validation | Med | ✅ DONE (Ping, Traceroute, HTTP Probe) |
 | 11 | LAN Scanner no CIDR placeholder | Med | ✅ DONE |
 | 12 | Subnet mode toggle clears input instead of converting | Med | ✅ DONE |
-| 13 | Port Scanner two fields instead of range control | Low | ⬜ TODO |
-| 14 | DNS custom server no format validation | Low | ⬜ TODO |
+| 13 | Port Scanner two fields instead of range control | Low | ✅ DONE (RangeSlider + validation + count label; Scan disabled on invalid range) |
+| 14 | DNS custom server no format validation | Low | ✅ DONE (isError + supporting text via HostValidator) |
 | 15 | Result values not individually copyable | Med | ✅ DONE (DNS, WHOIS, TLS) |
 | 16 | DNS results not grouped by type | Med | N/A (no ALL query type) |
 | 17 | WHOIS dates have no relative time labels | Low | ✅ DONE |
@@ -41,7 +42,7 @@ Updated as each item is completed.
 | 20 | LAN Scanner progress is indeterminate | Low | ✅ DONE (already deterministic) |
 | 21 | mDNS hardcoded user-visible strings | High | ✅ DONE |
 | 22 | displaySmall in-card title wraps on narrow devices | Med | ✅ DONE |
-| 23 | Vertical spacing mixes 12 dp and 16 dp | Low | ⬜ TODO |
+| 23 | Vertical spacing mixes 12 dp and 16 dp | Low | ✅ DONE (cardGap token = 12dp; Dns/Settings/Placeholder normalized) |
 | 24 | FontWeight.Bold overrides fight M3 type system | Low | ✅ DONE |
 | 25 | collectAsState() not lifecycle-aware | Med | ✅ DONE |
 | 26 | Progress indicators missing contentDescription | Med | ✅ DONE |
@@ -62,10 +63,10 @@ Updated as each item is completed.
 ### Phase 1 — Shared Infrastructure
 - [x] **1a** Create `AppThemeTokens.kt` — `AppShapes` (small=8dp, medium=12dp, large=20dp, pill=50dp) and `AppSpacing` tokens — resolves infra for #32
 - [x] **1b** Create `ToolHeroHeader` composable — resolves #6
-- [ ] **1c** Standardise stop-button style — resolves #31
+- [x] **1c** Standardise stop-button style — shared `ToolStopButton` (error colours, Stop icon, haptic) in Ping, Traceroute, LAN, mDNS, Ports — resolves #31
 - [x] **1d** Applied `ToolHeroHeader` shared composable — resolves #6
-- [ ] **1e** Separate Subnet Calculator hero from input card — resolves #7
-- [ ] **1f** Add hero card to Settings screen — resolves #8
+- [x] **1e** Separate Subnet Calculator hero from input card — resolves #7
+- [x] **1f** Add hero card to Settings screen — resolves #8
 
 ### Phase 2 — High Priority Standalone
 - [x] **2a** Fixed `RecentHostsRow` dismiss button: 24dp → 32dp with `wrapContentSize` — resolves #9
@@ -78,25 +79,25 @@ Updated as each item is completed.
 - [x] **3b** Category grouping in MoreToolsSheet — nav-fixes agent applied — resolves #2
 - [x] **3c** Pin limit reached — Snackbar feedback — nav-fixes agent applied — resolves #3
 - [x] **3d** Settings sticky footer in MoreToolsSheet — nav-fixes agent applied — resolves #4
-- [ ] **3e** Back nav from More → always land on Home — resolves #5
+- [x] **3e** N/A — More became a modal sheet; back dismisses it — resolves #5
 
 ### Phase 4 — Input & Forms
-- [ ] **4a** LAN Scanner: add `placeholder` showing `192.168.1.0/24` example — resolves #11
-- [ ] **4b** Subnet Calculator: CIDR↔mask mode toggle converts notation — resolves #12
-- [ ] **4c** Input validators for Ping, DNS, Traceroute, HTTP Probe — resolves #10
-- [ ] **4d** DNS custom server IP validation — resolves #14
-- [ ] **4e** Port Scanner: improve range control UX — resolves #13
+- [x] **4a** LAN Scanner: add `placeholder` showing `192.168.1.0/24` example — resolves #11
+- [x] **4b** Subnet Calculator: CIDR↔mask mode toggle converts notation — resolves #12
+- [x] **4c** Input validators for Ping, DNS, Traceroute, HTTP Probe — resolves #10
+- [x] **4d** DNS custom server IP validation — resolves #14
+- [x] **4e** Port Scanner: improve range control UX — resolves #13
 
 ### Phase 5 — Results Display
-- [ ] **5a** Copyable values across Ping RTT, DNS records, WHOIS, TLS — resolves #15
-- [ ] **5b** DNS results grouped by record type — resolves #16
-- [ ] **5c** WHOIS: relative date alongside ISO date — resolves #17
-- [ ] **5d** Port Scanner: visually subdue closed ports — resolves #18
+- [x] **5a** Copyable values across Ping RTT, DNS records, WHOIS, TLS — resolves #15
+- [x] **5b** DNS results grouped by record type — resolves #16
+- [x] **5c** WHOIS: relative date alongside ISO date — resolves #17
+- [x] **5d** Port Scanner: visually subdue closed ports — resolves #18
 
 ### Phase 6 — Loading & Empty States
-- [ ] **6a** LAN Scanner empty result state card — resolves #19
-- [ ] **6b** LAN Scanner determinate progress bar — resolves #20
-- [ ] **6c** Traceroute nested scroll fix — resolves #34
+- [x] **6a** LAN Scanner empty result state card — resolves #19
+- [x] **6b** LAN Scanner determinate progress bar — resolves #20
+- [x] **6c** Traceroute nested scroll fix — resolves #34
 
 ### Phase 7 — Typography & Spacing
 - [x] **7a** Applied `AppShapes` tokens to Card `shape =` parameters across all main screens — resolves #32
@@ -110,9 +111,9 @@ Updated as each item is completed.
 - [x] **8d** Slider `contentDescription` in SettingsScreen `SliderSetting` composable — resolves #28
 
 ### Phase 9 — Platform Conventions
-- [ ] **9a** Onboarding: give "Don't show again" its own callback — resolves #29
-- [ ] **9b** Pull-to-refresh on Ping, DNS, LAN Scanner, WHOIS result screens — resolves #30
-- [ ] **9c** Settings screen transition: change to `fadeIn`/`fadeOut` in `AppNavHost` — resolves #33
+- [x] **9a** Onboarding: give "Don't show again" its own callback — resolves #29
+- [x] **9b** Pull-to-refresh on Ping, DNS, LAN Scanner, WHOIS result screens — resolves #30
+- [x] **9c** Settings screen transition: change to `fadeIn`/`fadeOut` in `AppNavHost` — resolves #33
 
 ---
 
@@ -129,6 +130,6 @@ Build runs after each phase to catch compile errors early:
 ## Completion summary
 
 - Total issues: 35
-- Completed: 18
+- Completed: 35 (incl. 2 N/A)
 - In progress: 0
-- Remaining: 17
+- Remaining: 0

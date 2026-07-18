@@ -74,9 +74,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
+import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
 import net.aieat.netswissknife.core.network.subnet.SubnetInfo
 
 @Composable
@@ -98,39 +100,17 @@ fun SubnetCalculatorScreen(viewModel: SubnetCalculatorViewModel = hiltViewModel(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            // ── Hero header ─────────────────────────────────────────────────────
+            ToolHeroHeader(
+                title = stringResource(R.string.subnet_screen_title),
+                subtitle = stringResource(R.string.subnet_screen_subtitle),
+                icon = Icons.Default.Calculate,
+                onHelpClick = { showHelp = true },
+            )
+
             // ── Input card ──────────────────────────────────────────────────────
             ElevatedCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Default.Calculate,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(28.dp)
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = stringResource(R.string.subnet_screen_title),
-                                style = MaterialTheme.typography.displaySmall,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            Text(
-                                text = stringResource(R.string.subnet_screen_subtitle),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        IconButton(onClick = { showHelp = true }) {
-                            Icon(
-                                imageVector = Icons.Default.Info,
-                                contentDescription = stringResource(R.string.action_help),
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    }
-
                     // Mode toggle
                     SubnetModeToggle(
                         isRangeMode = uiState.isRangeMode,
@@ -251,7 +231,7 @@ private fun SubnetCidrInputs(
         )
 
         Button(
-            onClick = onCalculate,
+            onClick = hapticAction(onCalculate),
             modifier = Modifier.fillMaxWidth(),
             enabled = canCalculate
         ) {
@@ -314,7 +294,7 @@ private fun SubnetRangeInputs(
         )
 
         Button(
-            onClick = onCalculate,
+            onClick = hapticAction(onCalculate),
             modifier = Modifier.fillMaxWidth(),
             enabled = canCalculate
         ) {
@@ -859,7 +839,7 @@ private fun SubnetInfoRow(
                 ) {
                     Icon(
                         Icons.Default.Info,
-                        contentDescription = "Info",
+                        contentDescription = stringResource(R.string.action_help),
                         modifier = Modifier.size(14.dp),
                         tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
                     )

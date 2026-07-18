@@ -86,6 +86,9 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import net.aieat.netswissknife.app.ui.components.HeroTitleText
+import net.aieat.netswissknife.app.ui.components.ToolStopButton
+import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.theme.AppShapes
 import net.aieat.netswissknife.app.ui.components.HelpSection
@@ -207,11 +210,9 @@ private fun HeroCard(state: MdnsDiscoveryUiState, onHelpClick: () -> Unit) {
                 }
                 Spacer(Modifier.width(16.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
+                    HeroTitleText(
                         text = stringResource(R.string.mdns_screen_title),
-                        style = MaterialTheme.typography.displaySmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
                     )
                     Text(
                         text = stringResource(R.string.mdns_screen_subtitle),
@@ -290,20 +291,14 @@ private fun ControlRow(
             modifier = Modifier.weight(1f)
         ) { scanning ->
             if (scanning) {
-                Button(
+                ToolStopButton(
+                    text = stringResource(R.string.mdns_stop_button),
                     onClick = onStop,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error
-                    )
-                ) {
-                    Icon(Icons.Default.Close, null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.mdns_stop_button))
-                }
+                    modifier = Modifier.fillMaxWidth()
+                )
             } else {
                 Button(
-                    onClick = onScan,
+                    onClick = hapticAction(onScan),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Icon(Icons.Default.PlayArrow, null, modifier = Modifier.size(18.dp))
@@ -371,10 +366,11 @@ private fun ScanningPlaceholder() {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        val scanningCd = stringResource(R.string.a11y_scanning)
         CircularProgressIndicator(
             modifier = Modifier
                 .size(52.dp)
-                .semantics { contentDescription = "Scanning for mDNS services" },
+                .semantics { contentDescription = scanningCd },
             strokeCap = StrokeCap.Round,
             color = MaterialTheme.colorScheme.primary.copy(alpha = pulse)
         )
@@ -428,10 +424,11 @@ private fun ServiceList(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.padding(vertical = 4.dp)
                 ) {
+                    val scanningCd = stringResource(R.string.a11y_scanning)
                     CircularProgressIndicator(
                         modifier = Modifier
                             .size(14.dp)
-                            .semantics { contentDescription = "Scanning in progress" },
+                            .semantics { contentDescription = scanningCd },
                         strokeWidth = 2.dp
                     )
                     Text(

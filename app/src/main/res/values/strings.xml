@@ -117,6 +117,9 @@
     <string name="ports_preset_label">Port preset</string>
     <string name="ports_start_port_label">Start port</string>
     <string name="ports_end_port_label">End port</string>
+    <string name="ports_range_error">1–65535</string>
+    <string name="ports_range_order_error">Start port must be ≤ end port</string>
+    <string name="ports_range_count">%1$d ports selected</string>
     <string name="ports_timeout_label">Timeout (ms)</string>
     <string name="ports_concurrency_label">Concurrency</string>
     <string name="ports_scan_button">Scan Ports</string>
@@ -696,6 +699,9 @@
 
     <!-- Help button content description -->
     <string name="action_help">Help</string>
+    <string name="a11y_loading">Loading</string>
+    <string name="a11y_scanning">Scanning in progress</string>
+    <string name="wifi_signal_quality">Signal Quality</string>
 
     <!-- Ping help -->
     <string name="help_ping_title">Ping</string>
@@ -856,5 +862,46 @@
     <!-- Input validation -->
     <string name="error_invalid_host">Hostname or IP cannot contain spaces</string>
     <string name="error_invalid_url">Enter a valid URL (e.g. https://example.com)</string>
+
+    <!-- Wake-on-LAN -->
+    <string name="wol_screen_title">Wake-on-LAN</string>
+    <string name="wol_screen_subtitle">Wake sleeping devices with a magic packet</string>
+    <string name="wol_mac_label">MAC address</string>
+    <string name="wol_mac_placeholder">AA:BB:CC:DD:EE:FF</string>
+    <string name="wol_mac_invalid">Enter a valid MAC address (AA:BB:CC:DD:EE:FF)</string>
+    <string name="wol_advanced_options">Advanced options</string>
+    <string name="wol_broadcast_label">Broadcast address</string>
+    <string name="wol_broadcast_hint">255.255.255.255 reaches the whole local network</string>
+    <string name="wol_port_label">UDP port</string>
+    <string name="wol_port_hint">Port 9 (discard) is the convention; some devices use 7</string>
+    <string name="wol_send_button">Send magic packet</string>
+    <string name="wol_sending">Sending magic packet…</string>
+    <string name="wol_success_title">Magic packet sent</string>
+    <string name="wol_success_detail">Sent to %1$s via %2$s port %3$d (%4$d packets)</string>
+    <string name="wol_success_note">Delivery is fire-and-forget: the target machine must have Wake-on-LAN enabled in its firmware/OS and be on the same network.</string>
+    <string name="wol_send_again">Send again</string>
+    <string name="wol_error_title">Failed to send</string>
+    <string name="wol_retry_button">Retry</string>
+    <string name="wol_help_what_heading">What is Wake-on-LAN?</string>
+    <string name="wol_help_what_body">Wake-on-LAN (WOL) wakes a powered-down or sleeping computer by sending a special UDP "magic packet" containing its MAC address repeated 16 times. The network card listens for this pattern even while the machine sleeps.</string>
+    <string name="wol_help_mac_heading">Finding the MAC address</string>
+    <string name="wol_help_mac_body">Use the LAN Scanner tool to discover devices and their MAC addresses while they are awake, or check the device\'s network settings. Formats AA:BB:CC:DD:EE:FF, AA-BB-CC-DD-EE-FF, AABB.CCDD.EEFF and AABBCCDDEEFF are all accepted.</string>
+    <string name="wol_help_requirements_heading">Device requirements</string>
+    <string name="wol_help_requirements_body">Wake-on-LAN must be enabled in the target\'s BIOS/UEFI and operating system network adapter settings. Wired Ethernet is most reliable; Wi-Fi wake (WoWLAN) support varies by hardware.</string>
+    <string name="wol_help_broadcast_heading">Broadcast address and port</string>
+    <string name="wol_help_broadcast_body">The default 255.255.255.255 broadcasts to the whole local network. For a specific subnet use its directed broadcast address (e.g. 192.168.1.255). Port 9 is conventional; port 7 is a common alternative.</string>
+
+    <!-- DNS custom server validation -->
+    <string name="dns_custom_server_invalid">Enter a valid IPv4 or IPv6 address</string>
+
+    <!-- Settings: dynamic colour -->
+    <string name="settings_dynamic_color_label">Material You dynamic colour</string>
+    <string name="settings_dynamic_color_subtitle">Use wallpaper-based colours (Android 12+)</string>
+
+    <!-- HTTP Probe security ratings -->
+    <string name="security_rating_pass">Pass</string>
+    <string name="security_rating_warn">Warn</string>
+    <string name="security_rating_fail">Fail</string>
+    <string name="security_rating_info">Info</string>
 
 </resources>

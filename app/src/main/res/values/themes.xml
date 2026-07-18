@@ -2,4 +2,13 @@
 <resources>
     <!-- Base app theme. The Compose theme is defined in Theme.kt -->
     <style name="Theme.NetSwissKnife" parent="android:Theme.Material.NoActionBar" />
+
+    <!-- Cold-start splash theme (androidx.core:core-splashscreen).
+         MainActivity calls installSplashScreen(); postSplashScreenTheme
+         hands over to the regular theme once Compose content is up. -->
+    <style name="Theme.NetSwissKnife.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/ic_launcher_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.NetSwissKnife</item>
+    </style>
 </resources>

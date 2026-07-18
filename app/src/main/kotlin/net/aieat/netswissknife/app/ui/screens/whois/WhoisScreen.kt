@@ -91,6 +91,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
+import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.RecentHostsRow
@@ -102,8 +104,8 @@ import net.aieat.netswissknife.core.network.whois.WhoisServerRole
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import android.text.format.DateUtils
 import java.util.concurrent.TimeUnit
-import kotlin.math.abs
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -164,7 +166,7 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
                         onClearAll = viewModel::clearRecentHosts
                     )
                     Button(
-                        onClick = viewModel::lookup,
+                        onClick = hapticAction(viewModel::lookup),
                         modifier = Modifier.fillMaxWidth(),
                         enabled = !uiState.isLoading && uiState.query.isNotBlank()
                     ) {
@@ -270,60 +272,12 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
 
 @Composable
 private fun WhoisHeroHeader(onHelpClick: () -> Unit) {
-    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    Brush.linearGradient(
-                        listOf(
-                            MaterialTheme.colorScheme.primaryContainer,
-                            MaterialTheme.colorScheme.secondaryContainer
-                        )
-                    )
-                )
-                .padding(20.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(52.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ManageSearch,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(28.dp)
-                    )
-                }
-                Spacer(Modifier.width(16.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = stringResource(R.string.whois_screen_title),
-                        style = MaterialTheme.typography.displaySmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        text = stringResource(R.string.whois_screen_subtitle),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-                    )
-                }
-                IconButton(onClick = onHelpClick) {
-                    Icon(
-                        imageVector = Icons.Default.Info,
-                        contentDescription = stringResource(R.string.action_help),
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                }
-            }
-        }
-    }
+    ToolHeroHeader(
+        title = stringResource(R.string.whois_screen_title),
+        subtitle = stringResource(R.string.whois_screen_subtitle),
+        icon = Icons.AutoMirrored.Filled.ManageSearch,
+        onHelpClick = onHelpClick
+    )
 }
 
 // ── Relay Chain Visualiser ────────────────────────────────────────────────────
@@ -932,20 +886,13 @@ fun LabeledRow(label: String, value: String) {
 private fun formatDate(epochMs: Long): String =
     SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(epochMs))
 
-private fun relativeDate(epochMs: Long): String {
-    val now = System.currentTimeMillis()
-    val diffMs = epochMs - now
-    val days = TimeUnit.MILLISECONDS.toDays(abs(diffMs))
-    val years = days / 365
-    return when {
-        diffMs < 0 && years > 0 -> "$years years ago"
-        diffMs < 0 -> "$days days ago"
-        days == 0L -> "today"
-        days < 30 -> "$days days left"
-        years > 0 -> "$years years left"
-        else -> "$days days left"
-    }
-}
+private fun relativeDate(epochMs: Long): String =
+    DateUtils.getRelativeTimeSpanString(
+        epochMs,
+        System.currentTimeMillis(),
+        DateUtils.DAY_IN_MILLIS,
+        DateUtils.FORMAT_ABBREV_RELATIVE
+    ).toString()
 
 @Composable
 private fun expiryColor(epochMs: Long?): Color? {
