@@ -24,7 +24,7 @@ android {
     defaultConfig {
         applicationId = "net.aieat.netswissknife"
         minSdk        = 26
-        targetSdk     = 35
+        targetSdk     = 36
         versionCode   = ciVersionCode ?: (System.currentTimeMillis() / 1000).toInt()
         versionName   = ciVersionName ?: "1.0.0"
     }
