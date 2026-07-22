@@ -260,31 +260,12 @@ jobs:
             ${{ steps.rename.outputs.aab_named }}
             ${{ steps.rename.outputs.symbols_named }}
           body: |
-            ## Net Swiss Knife ${{ steps.version.outputs.name }}
-
-            ### Installation
-
-            **Direct install (sideload)**
-            1. Download `NetSwissKnife-${{ steps.version.outputs.name }}.apk`
-            2. Enable *Install from unknown sources* in Android settings
-            3. Open the APK to install
-
-            **Play Store (AAB)**
-            The `.aab` bundle is intended for Google Play internal testing / production upload.
-
-            **Native debug symbols**
-            Download `native-debug-symbols-${{ steps.version.outputs.name }}.zip` and upload it
-            in Play Console → App bundle explorer → select this release → Native debug symbols.
-            This clears the "no debug symbols" advisory warning. Note: these symbols contain
-            only exported function names (.dynsym); upstream deps ship pre-stripped AARs without
-            full debug info.
-
-            ### Requirements
-            - Android 8.0 (API 26) or higher
-
             ### Build info
             - Version code: `${{ steps.version.outputs.code }}`
             - Commit: `${{ github.sha }}`
             - Signed: ${{ steps.signing.outputs.has_keystore == 'true' && 'Yes (release key)' || 'Debug key (sideload only – not for Play Store)' }}
+            - Requires Android 8.0 (API 26) or higher
+
+            Install `NetSwissKnife-${{ steps.version.outputs.name }}.apk` directly, or use the `.aab` for Play Store upload. Native debug symbols zip is for Play Console → Native debug symbols (optional).
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
