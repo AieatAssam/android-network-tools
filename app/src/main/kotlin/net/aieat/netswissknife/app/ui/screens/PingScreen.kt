@@ -120,6 +120,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
+import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
 import net.aieat.netswissknife.app.ui.components.ToolStopButton
 import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.R
@@ -138,6 +139,9 @@ import net.aieat.netswissknife.core.network.ping.PingStatus
 fun PingScreen(
     viewModel: PingViewModel = hiltViewModel()
 ) {
+    val requestLocalNetworkPermission = rememberLocalNetworkPermissionRequester()
+    LaunchedEffect(Unit) { requestLocalNetworkPermission() }
+
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val host by viewModel.host.collectAsStateWithLifecycle()
     val count by viewModel.count.collectAsStateWithLifecycle()

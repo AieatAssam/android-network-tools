@@ -92,6 +92,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
+import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
 import net.aieat.netswissknife.app.ui.components.ToolStopButton
 import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.ui.theme.StatusBad
@@ -134,6 +135,9 @@ import kotlin.math.sqrt
 
 @Composable
 fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
+    val requestLocalNetworkPermission = rememberLocalNetworkPermissionRequester()
+    LaunchedEffect(Unit) { requestLocalNetworkPermission() }
+
     val uiState      by viewModel.uiState.collectAsStateWithLifecycle()
     val host         by viewModel.host.collectAsStateWithLifecycle()
     val maxHops      by viewModel.maxHops.collectAsStateWithLifecycle()

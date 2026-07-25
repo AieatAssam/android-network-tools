@@ -110,6 +110,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
+import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
 import net.aieat.netswissknife.app.ui.components.ToolStopButton
 import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.R
@@ -125,6 +126,9 @@ import net.aieat.netswissknife.core.network.lan.LanScanSummary
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LanScreen(viewModel: LanScanViewModel = hiltViewModel()) {
+    val requestLocalNetworkPermission = rememberLocalNetworkPermissionRequester()
+    LaunchedEffect(Unit) { requestLocalNetworkPermission() }
+
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val subnet by viewModel.subnet.collectAsStateWithLifecycle()
     val timeoutMs by viewModel.timeoutMs.collectAsStateWithLifecycle()

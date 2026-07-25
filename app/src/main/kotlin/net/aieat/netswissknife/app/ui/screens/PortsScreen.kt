@@ -103,6 +103,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
+import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
 import net.aieat.netswissknife.app.ui.components.ToolStopButton
 import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.R
@@ -120,6 +121,9 @@ import net.aieat.netswissknife.core.network.portscan.PortStatus
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
+    val requestLocalNetworkPermission = rememberLocalNetworkPermissionRequester()
+    LaunchedEffect(Unit) { requestLocalNetworkPermission() }
+
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val host by viewModel.host.collectAsStateWithLifecycle()
     val selectedPreset by viewModel.selectedPreset.collectAsStateWithLifecycle()

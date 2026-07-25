@@ -68,6 +68,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
+import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
 import net.aieat.netswissknife.app.ui.components.hapticAction
@@ -80,6 +81,9 @@ import net.aieat.netswissknife.core.network.wol.WolSendReport
 
 @Composable
 fun WakeOnLanScreen(viewModel: WakeOnLanViewModel = hiltViewModel()) {
+    val requestLocalNetworkPermission = rememberLocalNetworkPermissionRequester()
+    LaunchedEffect(Unit) { requestLocalNetworkPermission() }
+
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val macAddress by viewModel.macAddress.collectAsStateWithLifecycle()
     val broadcastAddress by viewModel.broadcastAddress.collectAsStateWithLifecycle()
