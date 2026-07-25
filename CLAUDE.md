@@ -45,14 +45,14 @@ android-network-tools/
 
 | Concern | Technology | Notes |
 |---------|-----------|-------|
-| Language | Kotlin 1.9.x | JDK 21, Kotlin DSL everywhere |
+| Language | Kotlin 2.3.x | JDK 21, Kotlin DSL everywhere |
 | UI | Jetpack Compose + Material 3 | **High-fidelity, animated UI required** |
-| Navigation | Navigation Compose 2.7.x | Bottom nav + animated transitions |
-| DI | Hilt 2.51.x | `@HiltViewModel`, `@AndroidEntryPoint` |
+| Navigation | Navigation Compose 2.9.x | Bottom nav + animated transitions |
+| DI | Hilt 2.60.x | `@HiltViewModel`, `@AndroidEntryPoint` |
 | Async | Coroutines + Flow | `viewModelScope`, `StateFlow` |
 | Testing | JUnit 5 + MockK | TDD (Red → Green → Refactor) |
-| Build | Gradle 8.x Kotlin DSL + Version Catalog | `gradle/libs.versions.toml` |
-| Min SDK | 26 (Android 8.0) | Target SDK 34 |
+| Build | Gradle 9.x Kotlin DSL + Version Catalog | `gradle/libs.versions.toml` |
+| Min SDK | 26 (Android 8.0) | Target SDK 37 |
 
 ---
 

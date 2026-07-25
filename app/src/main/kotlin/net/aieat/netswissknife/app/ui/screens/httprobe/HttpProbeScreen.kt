@@ -56,7 +56,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
@@ -604,7 +604,7 @@ private fun HttpProbeSuccessContent(
             stringResource(R.string.httprobe_tab_security)
         )
         ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-            ScrollableTabRow(
+            PrimaryScrollableTabRow(
                 selectedTabIndex = selectedTab,
                 edgePadding = 8.dp,
                 containerColor = MaterialTheme.colorScheme.surfaceVariant

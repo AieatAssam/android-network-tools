@@ -38,9 +38,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.LocationOff
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SignalWifiOff
@@ -56,7 +56,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
+import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -499,7 +499,7 @@ fun WifiScanScreen(
 ) {
     if (detectedBands.isEmpty()) return
     val selectedIndex = detectedBands.indexOf(selected).coerceAtLeast(0)
-    TabRow(
+    PrimaryTabRow(
         selectedTabIndex = selectedIndex,
         modifier = Modifier.clip(RoundedCornerShape(12.dp))
     ) {
@@ -823,7 +823,7 @@ private fun bandChannelLabels(band: WifiBand): List<Pair<Int, Float>> = when (ba
                             }
 
                             Spacer(Modifier.width(8.dp))
-                            Icon(Icons.Default.KeyboardArrowRight, null, Modifier.size(20.dp),
+                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, Modifier.size(20.dp),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
