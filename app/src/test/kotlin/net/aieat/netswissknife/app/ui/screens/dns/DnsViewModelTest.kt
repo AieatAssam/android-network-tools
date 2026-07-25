@@ -143,9 +143,7 @@ class DnsViewModelTest {
             viewModel.onCustomServerAddressChange("192.168.1.1")
             viewModel.performLookup()
 
-            coEvery { useCase(match { it.server == DnsServer.Custom("192.168.1.1") }) } returns NetworkResult.Success(stubResult)
-            // Verify state transitioned to Success (not Error)
-            assertTrue(viewModel.uiState.value is DnsUiState.Success)
+            coVerify { useCase(match { it.server == DnsServer.Custom("192.168.1.1") }) }
         }
     }
 

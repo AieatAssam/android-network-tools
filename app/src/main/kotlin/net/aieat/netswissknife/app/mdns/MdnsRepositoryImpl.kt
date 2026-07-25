@@ -27,7 +27,7 @@ import java.net.SocketTimeoutException
 import javax.inject.Inject
 
 class MdnsRepositoryImpl @Inject constructor(
-    @ApplicationContext private val context: Context
+    @param:ApplicationContext private val context: Context
 ) : MdnsRepository {
 
     companion object {
