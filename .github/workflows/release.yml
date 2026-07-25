@@ -243,7 +243,47 @@ jobs:
           path: ${{ steps.rename.outputs.symbols_named }}
           if-no-files-found: warn
 
-      # ── 12. Create GitHub Release ─────────────────────────────────────────
+      # ── 12. Build changelog since last release ────────────────────────────
+      # GitHub's generate_release_notes only surfaces PR-merge commits, so it
+      # silently drops direct pushes to main -- which is most of this repo's
+      # history. Build the "what changed" section ourselves from git log
+      # instead, grouped by conventional-commit prefix.
+      - name: Build changelog since last release
+        id: changelog
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PREV=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 1 --json tagName --jq '.[0].tagName // empty' 2>/dev/null || echo "")
+          RANGE=""
+          [ -n "$PREV" ] && RANGE="${PREV}..HEAD"
+
+          ALL=$(git log $RANGE --no-merges --pretty=format:'%s')
+
+          section() {
+            # $1 = heading, $2 = extended-regex prefix to include
+            local commits
+            commits=$(echo "$ALL" | grep -E "$2" \
+              | sed -E 's/^[a-z]+(\([^)]*\))?!?: //' \
+              | sed -E 's/ \(#[0-9]+\)$//' \
+              | sed 's/^/- /')
+            [ -n "$commits" ] && { echo "### $1"; echo "$commits"; echo; }
+          }
+
+          {
+            echo 'body<<CHANGELOG_EOF'
+            section "Features"      '^feat(\(|!|:)'
+            section "Fixes"         '^fix(\(|!|:)'
+            # everything else, minus deps-bump noise and the two buckets above
+            OTHER=$(echo "$ALL" \
+              | grep -vE '^feat(\(|!|:)|^fix(\(|!|:)|^chore\(deps\)' \
+              | sed -E 's/^[a-z]+(\([^)]*\))?!?: //' \
+              | sed -E 's/ \(#[0-9]+\)$//' \
+              | sed 's/^/- /')
+            [ -n "$OTHER" ] && { echo "### Other changes"; echo "$OTHER"; echo; }
+            echo 'CHANGELOG_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      # ── 13. Create GitHub Release ──────────────────────────────────────────
       - name: Create GitHub Release
         if: >
           github.event_name == 'push' ||
@@ -254,18 +294,18 @@ jobs:
           name: "Net Swiss Knife ${{ steps.version.outputs.name }}"
           draft: false
           prerelease: false
-          generate_release_notes: true
+          generate_release_notes: false
           files: |
             ${{ steps.rename.outputs.apk_named }}
             ${{ steps.rename.outputs.aab_named }}
             ${{ steps.rename.outputs.symbols_named }}
           body: |
+            ${{ steps.changelog.outputs.body }}
+
             ### Build info
             - Version code: `${{ steps.version.outputs.code }}`
-            - Commit: `${{ github.sha }}`
             - Signed: ${{ steps.signing.outputs.has_keystore == 'true' && 'Yes (release key)' || 'Debug key (sideload only – not for Play Store)' }}
-            - Requires Android 8.0 (API 26) or higher
 
-            Install `NetSwissKnife-${{ steps.version.outputs.name }}.apk` directly, or use the `.aab` for Play Store upload. Native debug symbols zip is for Play Console → Native debug symbols (optional).
+            Install the `.apk` directly, or use the `.aab` for Play Store upload.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
