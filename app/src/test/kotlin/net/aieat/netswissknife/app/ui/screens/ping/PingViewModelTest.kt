@@ -3,14 +3,18 @@ package net.aieat.netswissknife.app.ui.screens.ping
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.emptyPreferences
+import androidx.lifecycle.viewModelScope
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.job
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -63,7 +67,13 @@ class PingViewModelTest {
     }
 
     @AfterEach
-    fun tearDown() {
+    fun tearDown() = runBlocking {
+        // Continuous-mode pings hop a child coroutine onto Dispatchers.IO (real disk
+        // writes via PingSessionLogger). Cancel and join before resetMain() so that
+        // coroutine never touches Main after the test dispatcher is gone (flaky
+        // IllegalStateException otherwise) -- same class of race fixed for
+        // LanScanViewModelTest.
+        viewModel.viewModelScope.coroutineContext.job.cancelAndJoin()
         Dispatchers.resetMain()
     }
 

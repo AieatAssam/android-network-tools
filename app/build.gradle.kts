@@ -142,4 +142,9 @@ dependencies {
 
 tasks.withType<Test> {
     useJUnitPlatform()
+    // Keep test-worker memory bounded and serialized -- on memory-constrained
+    // hosts, multiple parallel forks each defaulting to a large heap causes
+    // GC thrashing severe enough to look like a hung build.
+    maxParallelForks = 1
+    maxHeapSize = "512m"
 }
