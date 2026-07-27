@@ -156,6 +156,16 @@ private fun HeroHeader() {
 
 @Composable
 private fun ToolGrid(onNavigate: (String) -> Unit) {
+    // Cards animate in with a per-index stagger only on the grid's first appearance.
+    // Off-screen grid items get disposed and recomposed as they scroll back into view;
+    // without this flag each recomposition would replay the stagger delay + fade/scale,
+    // making icons appear to vanish and slowly fade back in while scrolling.
+    var gridAppeared by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        delay(NavRoutes.allTools.size * 60L + AppMotion.DurationMedium)
+        gridAppeared = true
+    }
+
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
             text     = stringResource(R.string.home_all_tools),
@@ -169,11 +179,12 @@ private fun ToolGrid(onNavigate: (String) -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement   = Arrangement.spacedBy(12.dp)
         ) {
-            itemsIndexed(NavRoutes.allTools) { index, tool ->
+            itemsIndexed(NavRoutes.allTools, key = { _, tool -> tool.route }) { index, tool ->
                 AnimatedToolCard(
-                    tool    = tool,
-                    delayMs = index * 60,
-                    onClick = hapticAction { onNavigate(tool.route) }
+                    tool           = tool,
+                    delayMs        = index * 60,
+                    skipEntrance   = gridAppeared,
+                    onClick        = hapticAction { onNavigate(tool.route) }
                 )
             }
         }
@@ -181,11 +192,13 @@ private fun ToolGrid(onNavigate: (String) -> Unit) {
 }
 
 @Composable
-private fun AnimatedToolCard(tool: ToolInfo, delayMs: Int, onClick: () -> Unit) {
-    var visible by remember { mutableStateOf(false) }
+private fun AnimatedToolCard(tool: ToolInfo, delayMs: Int, skipEntrance: Boolean, onClick: () -> Unit) {
+    var visible by remember { mutableStateOf(skipEntrance) }
     LaunchedEffect(Unit) {
-        delay(delayMs.toLong())
-        visible = true
+        if (!skipEntrance) {
+            delay(delayMs.toLong())
+            visible = true
+        }
     }
 
     val cardScale by animateFloatAsState(
