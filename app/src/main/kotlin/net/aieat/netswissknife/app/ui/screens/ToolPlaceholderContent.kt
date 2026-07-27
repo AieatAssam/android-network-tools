@@ -2,6 +2,7 @@ package net.aieat.netswissknife.app.ui.screens
 
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
+import net.aieat.netswissknife.app.ui.theme.AppMotion
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
@@ -65,12 +66,12 @@ fun ToolPlaceholderContent(
 
     val contentAlpha by animateFloatAsState(
         targetValue   = if (visible) 1f else 0f,
-        animationSpec = tween(durationMillis = 400),
+        animationSpec = AppMotion.effect(400),
         label         = "content-alpha"
     )
     val contentScale by animateFloatAsState(
         targetValue   = if (visible) 1f else 0.9f,
-        animationSpec = tween(durationMillis = 400, easing = FastOutSlowInEasing),
+        animationSpec = AppMotion.effect(400),
         label         = "content-scale"
     )
 

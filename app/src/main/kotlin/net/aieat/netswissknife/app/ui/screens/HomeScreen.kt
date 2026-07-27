@@ -50,6 +50,7 @@ import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.navigation.NavRoutes
 import net.aieat.netswissknife.app.ui.navigation.ToolInfo
+import net.aieat.netswissknife.app.ui.theme.AppMotion
 import kotlinx.coroutines.delay
 
 @Composable
@@ -71,14 +72,14 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
     ) {
         AnimatedVisibility(
             visible = headerVisible,
-            enter   = fadeIn(tween(500)) + slideInVertically(tween(500)) { -40 }
+            enter   = fadeIn(AppMotion.enter(500)) + slideInVertically(AppMotion.enter(500)) { -40 }
         ) {
             HeroHeader()
         }
 
         AnimatedVisibility(
             visible = cardsVisible,
-            enter   = fadeIn(tween(400, delayMillis = 100))
+            enter   = fadeIn(tween(durationMillis = 400, delayMillis = 100, easing = AppMotion.EmphasizedDecelerate))
         ) {
             ToolGrid(onNavigate = onNavigate)
         }
@@ -194,7 +195,7 @@ private fun AnimatedToolCard(tool: ToolInfo, delayMs: Int, onClick: () -> Unit) 
     )
     val cardAlpha by animateFloatAsState(
         targetValue   = if (visible) 1f else 0f,
-        animationSpec = tween(250),
+        animationSpec = AppMotion.effect(250),
         label         = "card-alpha-${tool.route}"
     )
 

@@ -1,7 +1,6 @@
 package net.aieat.netswissknife.app.ui.screens.debug
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
@@ -55,6 +54,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.util.AppLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -85,7 +85,7 @@ fun DebugLogScreen() {
 
     AnimatedVisibility(
         visible = visible,
-        enter = fadeIn(tween(400)) + slideInVertically(tween(400)) { it / 6 },
+        enter = fadeIn(AppMotion.enter(400)) + slideInVertically(AppMotion.enter(400)) { it / 6 },
     ) {
         Column(
             modifier = Modifier

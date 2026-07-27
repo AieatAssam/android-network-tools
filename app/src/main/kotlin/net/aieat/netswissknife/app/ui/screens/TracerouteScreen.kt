@@ -95,6 +95,7 @@ import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
 import net.aieat.netswissknife.app.ui.components.ToolStopButton
 import net.aieat.netswissknife.app.ui.components.hapticAction
+import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.ui.theme.StatusBad
 import net.aieat.netswissknife.app.ui.theme.StatusCritical
 import net.aieat.netswissknife.app.ui.theme.StatusGood
@@ -155,7 +156,7 @@ fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
     LaunchedEffect(Unit) { visible = true }
     val screenAlpha by animateFloatAsState(
         targetValue   = if (visible) 1f else 0f,
-        animationSpec = tween(400),
+        animationSpec = AppMotion.enter(400),
         label         = "screen-alpha"
     )
     var showHelp by remember { mutableStateOf(false) }
@@ -195,8 +196,8 @@ fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
                 AnimatedContent(
                     targetState   = uiState,
                     transitionSpec = {
-                        (fadeIn(tween(300)) + slideInVertically(tween(300)) { it / 6 })
-                            .togetherWith(fadeOut(tween(200)))
+                        (fadeIn(AppMotion.enter(300)) + slideInVertically(AppMotion.enter(300)) { it / 6 })
+                            .togetherWith(fadeOut(AppMotion.exit(200)))
                     },
                     contentKey = { it::class },
                     label = "traceroute-state"
@@ -572,7 +573,7 @@ private fun TracerouteRunningPanel(state: TracerouteUiState.Running) {
                 LaunchedEffect(Unit) { shown = true }
                 val hopAlpha by animateFloatAsState(
                     targetValue   = if (shown) 1f else 0f,
-                    animationSpec = tween(250),
+                    animationSpec = AppMotion.enter(250),
                     label         = "hop-alpha"
                 )
                 Box(Modifier.alpha(hopAlpha)) {
@@ -781,7 +782,7 @@ private fun TraceJourneyStats(result: TracerouteResult) {
     LaunchedEffect(Unit) { visible = true }
     val cardAlpha by animateFloatAsState(
         targetValue   = if (visible) 1f else 0f,
-        animationSpec = tween(500),
+        animationSpec = AppMotion.enter(500),
         label         = "journey-stats-alpha"
     )
 
@@ -1059,7 +1060,7 @@ private fun HopCard(hop: HopResult, index: Int) {
     // animateContentSize is a plain Modifier that never uses SubcomposeLayout.
     val expandedAlpha by animateFloatAsState(
         targetValue   = if (expanded) 1f else 0f,
-        animationSpec = tween(200),
+        animationSpec = AppMotion.effect(200),
         label         = "expanded-alpha"
     )
 
@@ -1069,7 +1070,7 @@ private fun HopCard(hop: HopResult, index: Int) {
             .clickable { expanded = !expanded }
             .semantics { role = Role.Button }
     ) {
-        Column(modifier = Modifier.animateContentSize(animationSpec = tween(200))) {
+        Column(modifier = Modifier.animateContentSize(animationSpec = AppMotion.effect(200))) {
             Row(
                 modifier          = Modifier.padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically

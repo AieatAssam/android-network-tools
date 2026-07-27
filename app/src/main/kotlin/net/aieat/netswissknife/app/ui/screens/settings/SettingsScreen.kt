@@ -1,7 +1,6 @@
 package net.aieat.netswissknife.app.ui.screens.settings
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.layout.Arrangement
@@ -68,6 +67,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import net.aieat.netswissknife.app.BuildConfig
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
+import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.ui.theme.AppShapes
 import kotlin.math.roundToInt
 
@@ -93,7 +93,7 @@ fun SettingsScreen(
 
     AnimatedVisibility(
         visible = visible,
-        enter = fadeIn(tween(300)) + slideInVertically(tween(300)) { it / 8 }
+        enter = fadeIn(AppMotion.enter(300)) + slideInVertically(AppMotion.enter(300)) { it / 8 }
     ) {
         Column(
             modifier = Modifier
@@ -103,7 +103,7 @@ fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             SettingsHeader()
-            AnimatedVisibility(visible = visibleSections >= 1, enter = fadeIn(tween(250)) + slideInVertically(tween(250)) { it / 3 }) {
+            AnimatedVisibility(visible = visibleSections >= 1, enter = fadeIn(AppMotion.enter(250)) + slideInVertically(AppMotion.enter(250)) { it / 3 }) {
                 ThemeSection(
                     themeOverride = themeOverride,
                     onThemeChange = viewModel::setThemeOverride,
@@ -111,7 +111,7 @@ fun SettingsScreen(
                     onDynamicColorChange = viewModel::setDynamicColor
                 )
             }
-            AnimatedVisibility(visible = visibleSections >= 2, enter = fadeIn(tween(250)) + slideInVertically(tween(250)) { it / 3 }) {
+            AnimatedVisibility(visible = visibleSections >= 2, enter = fadeIn(AppMotion.enter(250)) + slideInVertically(AppMotion.enter(250)) { it / 3 }) {
                 DefaultsSection(
                     pingCount = defaultPingCount,
                     timeoutMs = defaultTimeoutMs,
@@ -121,19 +121,19 @@ fun SettingsScreen(
                     onConcurrencyChange = viewModel::setDefaultConcurrency
                 )
             }
-            AnimatedVisibility(visible = visibleSections >= 3, enter = fadeIn(tween(250)) + slideInVertically(tween(250)) { it / 3 }) {
+            AnimatedVisibility(visible = visibleSections >= 3, enter = fadeIn(AppMotion.enter(250)) + slideInVertically(AppMotion.enter(250)) { it / 3 }) {
                 DataSection(onClearRecents = viewModel::clearAllRecentHosts)
             }
-            AnimatedVisibility(visible = visibleSections >= 4, enter = fadeIn(tween(250)) + slideInVertically(tween(250)) { it / 3 }) {
+            AnimatedVisibility(visible = visibleSections >= 4, enter = fadeIn(AppMotion.enter(250)) + slideInVertically(AppMotion.enter(250)) { it / 3 }) {
                 OnboardingResetSection(onReset = viewModel::resetOnboarding)
             }
-            AnimatedVisibility(visible = visibleSections >= 5, enter = fadeIn(tween(250)) + slideInVertically(tween(250)) { it / 3 }) {
+            AnimatedVisibility(visible = visibleSections >= 5, enter = fadeIn(AppMotion.enter(250)) + slideInVertically(AppMotion.enter(250)) { it / 3 }) {
                 AboutSection()
             }
-            AnimatedVisibility(visible = visibleSections >= 6, enter = fadeIn(tween(250)) + slideInVertically(tween(250)) { it / 3 }) {
+            AnimatedVisibility(visible = visibleSections >= 6, enter = fadeIn(AppMotion.enter(250)) + slideInVertically(AppMotion.enter(250)) { it / 3 }) {
                 AttributionsSection()
             }
-            AnimatedVisibility(visible = visibleSections >= 7, enter = fadeIn(tween(250)) + slideInVertically(tween(250)) { it / 3 }) {
+            AnimatedVisibility(visible = visibleSections >= 7, enter = fadeIn(AppMotion.enter(250)) + slideInVertically(AppMotion.enter(250)) { it / 3 }) {
                 LicensesSection()
             }
             Spacer(Modifier.height(8.dp))

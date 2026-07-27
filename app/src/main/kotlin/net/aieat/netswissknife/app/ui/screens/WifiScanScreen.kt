@@ -122,6 +122,7 @@ import androidx.compose.material3.IconButton
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
+import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.core.network.wifi.WifiBand
 
 // ── Network colour palette (12 visually distinct colours) ────────────────────
@@ -168,7 +169,7 @@ fun WifiScanScreen(
     LaunchedEffect(Unit) { visible = true }
     val screenAlpha by animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
-        animationSpec = tween(400),
+        animationSpec = AppMotion.enter(400),
         label = "screen-alpha"
     )
 

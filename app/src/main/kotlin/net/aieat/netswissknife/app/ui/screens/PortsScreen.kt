@@ -103,6 +103,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
+import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
 import net.aieat.netswissknife.app.ui.components.ToolStopButton
 import net.aieat.netswissknife.app.ui.components.hapticAction
@@ -137,7 +138,7 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
     LaunchedEffect(Unit) { screenVisible = true }
     val screenAlpha by animateFloatAsState(
         targetValue   = if (screenVisible) 1f else 0f,
-        animationSpec = tween(400),
+        animationSpec = AppMotion.enter(400),
         label         = "screen-alpha"
     )
 
@@ -195,7 +196,7 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
                 AnimatedContent(
                     targetState = uiState,
                     transitionSpec = {
-                        fadeIn(tween(300)) togetherWith fadeOut(tween(200))
+                        fadeIn(AppMotion.enter(300)) togetherWith fadeOut(AppMotion.exit(200))
                     },
                     contentKey = { it::class },
                     label = "PortScanStateTransition"

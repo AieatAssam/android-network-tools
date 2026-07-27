@@ -4,8 +4,6 @@ import android.app.Activity
 import android.view.WindowManager
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
@@ -127,6 +125,7 @@ import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.RecentHostsRow
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
+import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.ui.screens.ping.PingUiState
 import net.aieat.netswissknife.app.ui.screens.ping.PingViewModel
 import net.aieat.netswissknife.app.util.shareText
@@ -174,7 +173,7 @@ fun PingScreen(
     LaunchedEffect(Unit) { visible = true }
     val screenAlpha by animateFloatAsState(
         targetValue   = if (visible) 1f else 0f,
-        animationSpec = tween(400),
+        animationSpec = AppMotion.enter(400),
         label         = "screen-alpha"
     )
     var showHelp by remember { mutableStateOf(false) }
@@ -216,8 +215,8 @@ fun PingScreen(
                 AnimatedContent(
                     targetState = uiState,
                     transitionSpec = {
-                        (fadeIn(tween(300)) + slideInVertically(tween(300)) { it / 8 })
-                            .togetherWith(fadeOut(tween(200)))
+                        (fadeIn(AppMotion.enter(300)) + slideInVertically(AppMotion.enter(300)) { it / 8 })
+                            .togetherWith(fadeOut(AppMotion.exit(200)))
                     },
                     contentKey = { it::class },
                     label = "ping_state"
@@ -819,7 +818,7 @@ private fun StatsCard(stats: PingStats, host: String) {
         targetMax    = stats.maxMs.toFloat()
         targetJitter = stats.jitterMs.toFloat()
     }
-    val animSpec = tween<Float>(700, easing = FastOutSlowInEasing)
+    val animSpec = AppMotion.effect<Float>(700)
     val animLoss    by animateFloatAsState(targetLoss,   animSpec, label = "stat_loss")
     val animMin     by animateFloatAsState(targetMin,    animSpec, label = "stat_min")
     val animAvg     by animateFloatAsState(targetAvg,    animSpec, label = "stat_avg")

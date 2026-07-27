@@ -6,7 +6,6 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
@@ -110,6 +109,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
+import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
 import net.aieat.netswissknife.app.ui.components.ToolStopButton
 import net.aieat.netswissknife.app.ui.components.hapticAction
@@ -151,7 +151,7 @@ fun LanScreen(viewModel: LanScanViewModel = hiltViewModel()) {
     ) {
     AnimatedVisibility(
         visible = visible,
-        enter = fadeIn(tween(400)) + slideInVertically(tween(400)) { it / 6 },
+        enter = fadeIn(AppMotion.enter(400)) + slideInVertically(AppMotion.enter(400)) { it / 6 },
     ) {
         Column(
             modifier = Modifier
@@ -182,8 +182,8 @@ fun LanScreen(viewModel: LanScanViewModel = hiltViewModel()) {
             AnimatedContent(
                 targetState = uiState,
                 transitionSpec = {
-                    (fadeIn(tween(300)) + slideInVertically(tween(300)) { it / 8 })
-                        .togetherWith(fadeOut(tween(200)))
+                    (fadeIn(AppMotion.enter(300)) + slideInVertically(AppMotion.enter(300)) { it / 8 })
+                        .togetherWith(fadeOut(AppMotion.exit(200)))
                 },
                 contentKey = { it::class },
                 label = "lan_state",
@@ -450,7 +450,7 @@ private fun LanScanningContent(state: LanScanUiState.Scanning) {
                 }
                 val animProgress by animateFloatAsState(
                     targetValue = state.progress,
-                    animationSpec = tween(300),
+                    animationSpec = AppMotion.effect(300),
                     label = "scan_progress",
                 )
                 LinearProgressIndicator(
@@ -934,7 +934,7 @@ private fun HostCard(
             MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
         else
             MaterialTheme.colorScheme.surface,
-        animationSpec = tween(250),
+        animationSpec = AppMotion.effect(250),
         label = "host_card_color",
     )
 
@@ -1061,8 +1061,8 @@ private fun HostCard(
                 // Expanded details
                 AnimatedVisibility(
                     visible = expanded,
-                    enter = expandVertically(tween(250)) + fadeIn(tween(250)),
-                    exit = shrinkVertically(tween(200)) + fadeOut(tween(200)),
+                    enter = expandVertically(AppMotion.enter(250)) + fadeIn(AppMotion.enter(250)),
+                    exit = shrinkVertically(AppMotion.exit(200)) + fadeOut(AppMotion.exit(200)),
                 ) {
                     HostDetailPanel(host)
                 }

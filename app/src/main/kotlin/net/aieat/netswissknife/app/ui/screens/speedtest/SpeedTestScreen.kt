@@ -89,6 +89,7 @@ import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
+import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.util.formatBytes
 import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.core.network.speedtest.LatencyStats
@@ -122,7 +123,7 @@ fun SpeedTestScreen(viewModel: SpeedTestViewModel = hiltViewModel()) {
 
     AnimatedVisibility(
         visible = visible,
-        enter = fadeIn(tween(400)) + slideInVertically(tween(400)) { it / 4 }
+        enter = fadeIn(AppMotion.enter(400)) + slideInVertically(AppMotion.enter(400)) { it / 4 }
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -135,7 +136,7 @@ fun SpeedTestScreen(viewModel: SpeedTestViewModel = hiltViewModel()) {
                 val shareSubject = stringResource(R.string.share_subject_speedtest, "results")
                 AnimatedContent(
                     targetState = phase,
-                    transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(200)) },
+                    transitionSpec = { fadeIn(AppMotion.enter(300)) togetherWith fadeOut(AppMotion.exit(200)) },
                     label = "speedtest_content_state"
                 ) { target ->
                     when (target) {
@@ -408,7 +409,7 @@ private fun PhaseStepper(currentPhase: SpeedTestPhase) {
             val isDone = phase.ordinal < currentPhase.ordinal
             val containerColor by animateFloatAsState(
                 targetValue = if (isActive || isDone) 1f else 0f,
-                animationSpec = tween(300),
+                animationSpec = AppMotion.effect(300),
                 label = "phase_chip_${phase.name}"
             )
             Surface(
@@ -498,7 +499,7 @@ private fun SpeedGauge(
 ) {
     val animatedValue by animateFloatAsState(
         targetValue = valueMbps.toFloat(),
-        animationSpec = tween(500),
+        animationSpec = AppMotion.effect(500),
         label = "speed_gauge_value"
     )
     val trackColor = MaterialTheme.colorScheme.surfaceVariant
@@ -684,10 +685,10 @@ private fun SpeedTestResultContent(
             fontWeight = FontWeight.SemiBold
         )
 
-        AnimatedVisibility(visible = visibleCards >= 1, enter = fadeIn(tween(300)) + slideInVertically(tween(300)) { it / 4 }) {
+        AnimatedVisibility(visible = visibleCards >= 1, enter = fadeIn(AppMotion.enter(300)) + slideInVertically(AppMotion.enter(300)) { it / 4 }) {
             LatencyResultCard(result.latency)
         }
-        AnimatedVisibility(visible = visibleCards >= 2, enter = fadeIn(tween(300)) + slideInVertically(tween(300)) { it / 4 }) {
+        AnimatedVisibility(visible = visibleCards >= 2, enter = fadeIn(AppMotion.enter(300)) + slideInVertically(AppMotion.enter(300)) { it / 4 }) {
             ThroughputResultCard(
                 title = stringResource(R.string.speedtest_download_header),
                 icon = Icons.Default.ArrowDownward,
@@ -695,7 +696,7 @@ private fun SpeedTestResultContent(
                 result = result.download
             )
         }
-        AnimatedVisibility(visible = visibleCards >= 3, enter = fadeIn(tween(300)) + slideInVertically(tween(300)) { it / 4 }) {
+        AnimatedVisibility(visible = visibleCards >= 3, enter = fadeIn(AppMotion.enter(300)) + slideInVertically(AppMotion.enter(300)) { it / 4 }) {
             ThroughputResultCard(
                 title = stringResource(R.string.speedtest_upload_header),
                 icon = Icons.Default.ArrowUpward,
