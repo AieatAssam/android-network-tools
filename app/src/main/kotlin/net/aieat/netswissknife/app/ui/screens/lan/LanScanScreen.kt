@@ -100,6 +100,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -462,7 +463,7 @@ private fun LanScanningContent(state: LanScanUiState.Scanning) {
                     strokeCap = StrokeCap.Round,
                 )
                 Text(
-                    text = stringResource(R.string.lan_hosts_found_format, state.hosts.size),
+                    text = pluralStringResource(R.plurals.lan_hosts_found_format, state.hosts.size, state.hosts.size),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Medium,

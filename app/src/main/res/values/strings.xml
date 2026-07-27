@@ -18,14 +18,20 @@
 
     <!-- More Tools Sheet -->
     <string name="more_sheet_title">All Tools</string>
-    <string name="more_sheet_subtitle">Pin up to %1$d tools to the navigation bar</string>
+    <plurals name="more_sheet_subtitle">
+        <item quantity="one">Pin up to %1$d tool to the navigation bar</item>
+        <item quantity="other">Pin up to %1$d tools to the navigation bar</item>
+    </plurals>
     <string name="more_pin_description">Pin %1$s</string>
     <string name="more_unpin_description">Unpin %1$s</string>
     <string name="more_section_diagnostics">Diagnostics</string>
     <string name="more_section_wifi_lan">Wi-Fi &amp; LAN</string>
     <string name="more_section_security">Security</string>
     <string name="more_section_utilities">Utilities</string>
-    <string name="more_pin_limit_reached">Max %d tools pinned — unpin one first</string>
+    <plurals name="more_pin_limit_reached">
+        <item quantity="one">Max %1$d tool pinned — unpin one first</item>
+        <item quantity="other">Max %1$d tools pinned — unpin one first</item>
+    </plurals>
 
     <!-- DNS Screen -->
     <string name="dns_screen_title">DNS Lookup</string>
@@ -116,7 +122,10 @@
     <string name="ports_end_port_label">End port</string>
     <string name="ports_range_error">1–65535</string>
     <string name="ports_range_order_error">Start port must be ≤ end port</string>
-    <string name="ports_range_count">%1$d ports selected</string>
+    <plurals name="ports_range_count">
+        <item quantity="one">%1$d port selected</item>
+        <item quantity="other">%1$d ports selected</item>
+    </plurals>
     <string name="ports_timeout_label">Timeout (ms)</string>
     <string name="ports_concurrency_label">Concurrency</string>
     <string name="ports_scan_button">Scan Ports</string>
@@ -138,7 +147,10 @@
     <string name="ports_total_scanned">Scanned</string>
     <string name="ports_duration_label">Duration</string>
     <string name="ports_host_label_result">Host</string>
-    <string name="ports_progress_format">%1$d / %2$d ports</string>
+    <plurals name="ports_progress_format">
+        <item quantity="one">%1$d / %2$d port</item>
+        <item quantity="other">%1$d / %2$d ports</item>
+    </plurals>
     <string name="ports_ms_suffix">ms</string>
     <string name="ports_no_open_ports">No open ports found</string>
     <string name="ports_open_label">OPEN</string>
@@ -178,7 +190,10 @@
 
     <!-- LAN Results -->
     <string name="lan_progress_format">%1$d / %2$d</string>
-    <string name="lan_hosts_found_format">%1$d host(s) found so far</string>
+    <plurals name="lan_hosts_found_format">
+        <item quantity="one">%1$d host found so far</item>
+        <item quantity="other">%1$d hosts found so far</item>
+    </plurals>
     <string name="lan_live_hosts_header">Live Hosts</string>
     <string name="lan_hosts_header">Discovered Hosts (%1$d)</string>
     <string name="lan_empty_title">No hosts found</string>
@@ -278,7 +293,10 @@
     <string name="wifi_spectrum_title">Spectrum Analyser</string>
     <string name="wifi_best_channel_title">Best Channel</string>
     <string name="wifi_best_channel_body">Channel %1$d has the least congestion on 2.4 GHz</string>
-    <string name="wifi_networks_count">%1$d networks</string>
+    <plurals name="wifi_networks_count">
+        <item quantity="one">%1$d network</item>
+        <item quantity="other">%1$d networks</item>
+    </plurals>
     <string name="wifi_aps_count">%1$d APs</string>
 
     <!-- Traceroute Screen -->
@@ -306,7 +324,10 @@
     <string name="traceroute_idle_title">Enter a host to trace</string>
     <string name="traceroute_idle_subtitle">Supports hostnames and IPv4 addresses. Shows each hop with geolocation and journey statistics.</string>
     <string name="traceroute_running_title">Tracing to %1$s…</string>
-    <string name="traceroute_running_subtitle">%1$d hop(s) discovered so far</string>
+    <plurals name="traceroute_running_subtitle">
+        <item quantity="one">%1$d hop discovered so far</item>
+        <item quantity="other">%1$d hops discovered so far</item>
+    </plurals>
     <string name="traceroute_error_title">Trace failed</string>
 
     <!-- Traceroute Results -->
@@ -365,7 +386,10 @@
     <string name="topology_discover_button">Discover Topology</string>
     <string name="topology_cancel_button">Cancel / Reset</string>
     <string name="topology_idle_tagline">Discover your network topology</string>
-    <string name="topology_scanning_badge">Scanning… %1$d nodes found</string>
+    <plurals name="topology_scanning_badge">
+        <item quantity="one">Scanning… %1$d node found</item>
+        <item quantity="other">Scanning… %1$d nodes found</item>
+    </plurals>
     <string name="topology_node_detail_system">System</string>
     <string name="topology_node_detail_interfaces">Interfaces</string>
     <string name="topology_node_detail_vlans">VLANs</string>
@@ -410,7 +434,10 @@
 
     <!-- TLS Expiry Badges -->
     <string name="tls_expired">EXPIRED</string>
-    <string name="tls_days_left">%1$d days</string>
+    <plurals name="tls_days_left">
+        <item quantity="one">%1$d day</item>
+        <item quantity="other">%1$d days</item>
+    </plurals>
 
     <!-- TLS Certificate Detail Fields -->
     <string name="tls_subject_cn">Subject CN</string>
@@ -490,7 +517,10 @@
 
     <!-- HTTP Probe Results -->
     <string name="httprobe_response_time_label">Response time</string>
-    <string name="httprobe_redirects_label">%1$d redirect(s)</string>
+    <plurals name="httprobe_redirects_label">
+        <item quantity="one">%1$d redirect</item>
+        <item quantity="other">%1$d redirects</item>
+    </plurals>
     <string name="httprobe_method_used">Method</string>
     <string name="httprobe_final_url">Final URL</string>
     <string name="httprobe_response_size">Body size</string>
@@ -533,8 +563,14 @@
     <string name="subnet_total_hosts">Total addresses</string>
     <string name="subnet_usable_hosts">Usable hosts</string>
     <string name="subnet_binary_breakdown">Binary Breakdown</string>
-    <string name="subnet_network_bits">Network: %1$d bits</string>
-    <string name="subnet_host_bits">Host: %1$d bits</string>
+    <plurals name="subnet_network_bits">
+        <item quantity="one">Network: %1$d bit</item>
+        <item quantity="other">Network: %1$d bits</item>
+    </plurals>
+    <plurals name="subnet_host_bits">
+        <item quantity="one">Host: %1$d bit</item>
+        <item quantity="other">Host: %1$d bits</item>
+    </plurals>
     <string name="subnet_binary_ip">IP address</string>
     <string name="subnet_binary_mask">Subnet mask</string>
     <string name="subnet_binary_network">Network addr</string>
@@ -553,7 +589,10 @@
     <string name="subnet_prefix_bits">Prefix / host bits</string>
     <string name="subnet_prefix_of_32">%1$d / 32</string>
     <string name="subnet_host_bit_count">Host bits</string>
-    <string name="subnet_bits_count">%1$d bits</string>
+    <plurals name="subnet_bits_count">
+        <item quantity="one">%1$d bit</item>
+        <item quantity="other">%1$d bits</item>
+    </plurals>
     <!-- Mode toggle -->
     <string name="subnet_mode_cidr">CIDR / Mask</string>
     <string name="subnet_mode_range">IP Range</string>

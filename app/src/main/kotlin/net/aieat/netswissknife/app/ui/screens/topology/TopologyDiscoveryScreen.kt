@@ -20,6 +20,7 @@ import androidx.compose.ui.geometry.*
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.*
 import androidx.compose.ui.input.pointer.*
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -420,8 +421,9 @@ private fun TopologyScreenContent(
                                         .padding(12.dp)
                                 ) {
                                     ScanningBadge(
-                                        message = stringResource(
-                                            R.string.topology_scanning_badge,
+                                        message = pluralStringResource(
+                                            R.plurals.topology_scanning_badge,
+                                            state.nodesDone,
                                             state.nodesDone
                                         )
                                     )

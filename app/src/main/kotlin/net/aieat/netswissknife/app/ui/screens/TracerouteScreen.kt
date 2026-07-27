@@ -103,6 +103,7 @@ import net.aieat.netswissknife.app.ui.theme.StatusLime
 import net.aieat.netswissknife.app.ui.theme.StatusUnknown
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -547,7 +548,7 @@ private fun TracerouteRunningPanel(state: TracerouteUiState.Running) {
                         style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold)
                     )
                     Text(
-                        text  = stringResource(R.string.traceroute_running_subtitle, state.hops.size),
+                        text  = pluralStringResource(R.plurals.traceroute_running_subtitle, state.hops.size, state.hops.size),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

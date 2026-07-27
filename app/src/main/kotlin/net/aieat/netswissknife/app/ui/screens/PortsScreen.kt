@@ -90,6 +90,7 @@ import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -482,7 +483,7 @@ private fun PortScanInputCard(
                             color = MaterialTheme.colorScheme.error
                         )
                         startNum != null && endNum != null && !startInvalid && !endInvalid -> Text(
-                            text = stringResource(R.string.ports_range_count, endNum - startNum + 1),
+                            text = pluralStringResource(R.plurals.ports_range_count, endNum - startNum + 1, endNum - startNum + 1),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -646,8 +647,9 @@ private fun PortScanProgressCard(state: PortScanUiState.Scanning) {
             )
 
             Text(
-                text = stringResource(
-                    R.string.ports_progress_format,
+                text = pluralStringResource(
+                    R.plurals.ports_progress_format,
+                    state.totalCount,
                     state.scannedCount,
                     state.totalCount
                 ),

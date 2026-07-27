@@ -66,6 +66,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -559,11 +560,11 @@ private fun SubnetBinaryVisualizerCard(info: SubnetInfo) {
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 LegendItem(
                     color = MaterialTheme.colorScheme.primary,
-                    label = stringResource(R.string.subnet_network_bits, info.prefixLength)
+                    label = pluralStringResource(R.plurals.subnet_network_bits, info.prefixLength, info.prefixLength)
                 )
                 LegendItem(
                     color = MaterialTheme.colorScheme.tertiary,
-                    label = stringResource(R.string.subnet_host_bits, info.hostBits)
+                    label = pluralStringResource(R.plurals.subnet_host_bits, info.hostBits, info.hostBits)
                 )
             }
 
@@ -790,7 +791,7 @@ private fun SubnetPropertiesCard(info: SubnetInfo) {
             )
             SubnetInfoRow(
                 label = stringResource(R.string.subnet_host_bit_count),
-                value = stringResource(R.string.subnet_bits_count, info.hostBits)
+                value = pluralStringResource(R.plurals.subnet_bits_count, info.hostBits, info.hostBits)
             )
         }
     }

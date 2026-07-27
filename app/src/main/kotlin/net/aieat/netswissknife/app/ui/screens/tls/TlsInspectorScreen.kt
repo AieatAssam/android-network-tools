@@ -63,6 +63,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.background
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -617,7 +618,7 @@ private fun ExpiryBadge(cert: TlsCertificate) {
                 color = MaterialTheme.colorScheme.secondaryContainer
             ) {
                 Text(
-                    text  = stringResource(R.string.tls_days_left, daysLeft),
+                    text  = pluralStringResource(R.plurals.tls_days_left, daysLeft.toInt(), daysLeft),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSecondaryContainer,
                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)

@@ -105,6 +105,7 @@ import net.aieat.netswissknife.app.ui.theme.StatusWarn
 import net.aieat.netswissknife.app.ui.theme.SpectrumPalette
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.sp
@@ -384,7 +385,7 @@ fun WifiScanScreen(
         // Network count
         item {
             Text(
-                stringResource(R.string.wifi_networks_count, networks.size),
+                pluralStringResource(R.plurals.wifi_networks_count, networks.size, networks.size),
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.padding(top = 4.dp)
             )
