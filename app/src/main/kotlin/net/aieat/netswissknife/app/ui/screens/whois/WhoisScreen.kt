@@ -1,7 +1,7 @@
 package net.aieat.netswissknife.app.ui.screens.whois
 
 import android.content.Intent
-import android.net.Uri
+import androidx.core.net.toUri
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
@@ -230,7 +230,7 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
                             },
                             onOpenUrl = { url ->
                                 try {
-                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                                    context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
                                 } catch (_: Exception) {}
                             }
                         )

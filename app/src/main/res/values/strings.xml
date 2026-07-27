@@ -37,12 +37,10 @@
     <string name="dns_record_type_label">Record type</string>
     <string name="dns_server_label">DNS server</string>
     <string name="dns_server_custom">Custom server…</string>
-    <string name="dns_custom_server_label">Custom DNS server IP</string>
     <string name="dns_custom_server_placeholder">e.g. 192.168.1.1</string>
     <string name="dns_lookup_button">Look up</string>
     <string name="dns_looking_up">Looking up…</string>
     <string name="clear">Clear</string>
-    <string name="loading_indicator_description">Loading</string>
 
     <!-- DNS States -->
     <string name="dns_idle_title">Enter a domain to look up</string>
@@ -98,7 +96,6 @@
     <string name="ping_rtt_max">Max</string>
     <string name="ping_rtt_jitter">Jitter</string>
     <string name="ping_ms_suffix">ms</string>
-    <string name="ping_seq_prefix">seq=</string>
     <string name="ping_timeout_label_result">Timeout</string>
     <string name="ping_error_label_result">Error</string>
     <string name="ping_raw_output">Raw Output</string>
@@ -126,14 +123,12 @@
     <string name="ports_stop_button">Stop Scan</string>
     <string name="ports_clear_button">Clear</string>
     <string name="ports_retry_button">Retry</string>
-    <string name="ports_share_button">Share Report</string>
 
     <!-- Port Scanner States -->
     <string name="ports_idle_title">Enter a host to scan</string>
     <string name="ports_idle_subtitle">Supports hostnames and IPv4/IPv6 addresses</string>
     <string name="ports_scanning_title">Scanning ports…</string>
     <string name="ports_error_title">Scan failed</string>
-    <string name="ports_complete_title">Scan complete</string>
 
     <!-- Port Scanner Results -->
     <string name="ports_result_header">Scan Results</string>
@@ -143,12 +138,7 @@
     <string name="ports_total_scanned">Scanned</string>
     <string name="ports_duration_label">Duration</string>
     <string name="ports_host_label_result">Host</string>
-    <string name="ports_ip_label">IP Address</string>
     <string name="ports_progress_format">%1$d / %2$d ports</string>
-    <string name="ports_port_prefix">Port</string>
-    <string name="ports_service_label">Service</string>
-    <string name="ports_banner_label">Banner</string>
-    <string name="ports_response_time_label">Response</string>
     <string name="ports_ms_suffix">ms</string>
     <string name="ports_no_open_ports">No open ports found</string>
     <string name="ports_open_label">OPEN</string>
@@ -191,7 +181,6 @@
     <string name="lan_hosts_found_format">%1$d host(s) found so far</string>
     <string name="lan_live_hosts_header">Live Hosts</string>
     <string name="lan_hosts_header">Discovered Hosts (%1$d)</string>
-    <string name="lan_no_hosts_found">No live hosts found on this subnet</string>
     <string name="lan_empty_title">No hosts found</string>
     <string name="lan_empty_body">No devices responded on this subnet. Verify the network range and try increasing the timeout.</string>
     <string name="lan_stat_scanned">Scanned</string>
@@ -256,11 +245,7 @@
 
     <!-- Wi-Fi Scanner Screen -->
     <string name="wifi_screen_title">Wi-Fi Scanner</string>
-    <string name="wifi_screen_subtitle">Scan nearby access points and analyse channel utilisation</string>
     <string name="wifi_scan_button">Scan</string>
-    <string name="wifi_scanning">Scanning for networks…</string>
-    <string name="wifi_auto_refresh">Auto-refresh</string>
-    <string name="wifi_networks_found">%1$d networks · %2$d SSIDs</string>
     <string name="wifi_no_permission_title">Location Permission Required</string>
     <string name="wifi_no_permission_body">Android requires Location permission to scan for nearby Wi-Fi networks. Your location is not sent anywhere.</string>
     <string name="wifi_grant_permission">Grant Permission</string>
@@ -270,10 +255,7 @@
     <string name="wifi_not_supported_body">This device does not have Wi-Fi hardware.</string>
     <string name="wifi_error_title">Scan Failed</string>
     <string name="wifi_retry">Retry</string>
-    <string name="wifi_filter_all">All</string>
-    <string name="wifi_band_ghz">%1$s GHz</string>
     <string name="wifi_sort_label">Sort:</string>
-    <string name="wifi_channel_chart_title">Channel Utilisation</string>
     <string name="wifi_connected_badge">Connected</string>
     <string name="wifi_hidden_badge">Hidden</string>
     <string name="wifi_detail_band">Band</string>
@@ -356,7 +338,6 @@
     <string name="traceroute_stat_no">No</string>
     <string name="traceroute_resolved_ip">Resolved IP: %1$s</string>
     <string name="traceroute_hop_timeout">No response (timeout)</string>
-    <string name="traceroute_hop_label">Hop</string>
     <string name="traceroute_hop_detail_ip">IP Address</string>
     <string name="traceroute_hop_detail_hostname">Hostname</string>
     <string name="traceroute_hop_detail_rtt">RTT</string>
@@ -640,8 +621,6 @@
     <!-- Settings – Open Source Licenses -->
     <string name="settings_licenses_section">Open Source Licenses</string>
     <string name="settings_licenses_subtitle">Third-party libraries used in this app</string>
-    <string name="settings_license_apache2">Apache 2.0</string>
-    <string name="settings_license_bsd3">BSD 3-Clause</string>
 
     <!-- Generic dialogs -->
     <string name="cancel">Cancel</string>

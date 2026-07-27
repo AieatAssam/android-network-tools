@@ -308,7 +308,6 @@ class PingViewModel @Inject constructor(
     }
 
     override fun onCleared() {
-        super.onCleared()
         cleanupSessionFile()
     }
 
