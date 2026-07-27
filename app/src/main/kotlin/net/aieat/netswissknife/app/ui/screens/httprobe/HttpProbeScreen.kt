@@ -185,17 +185,20 @@ fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
                         is DisplayState.Idle    -> HttpProbeIdlePlaceholder()
                         is DisplayState.Loading -> HttpProbeLoadingContent()
                         is DisplayState.Error   -> HttpProbeErrorContent(state.message) { viewModel.send() }
-                        is DisplayState.Success -> HttpProbeSuccessContent(
-                            result = state.result,
-                            selectedTab = uiState.selectedTab,
-                            onTabSelected = viewModel::onTabSelected,
-                            onShare = {
-                                context.shareText(
-                                    text = buildHttpShareText(state.result),
-                                    subject = context.getString(R.string.share_subject_http, state.result.request.url)
-                                )
-                            }
-                        )
+                        is DisplayState.Success -> {
+                            val shareSubject = stringResource(R.string.share_subject_http, state.result.request.url)
+                            HttpProbeSuccessContent(
+                                result = state.result,
+                                selectedTab = uiState.selectedTab,
+                                onTabSelected = viewModel::onTabSelected,
+                                onShare = {
+                                    context.shareText(
+                                        text = buildHttpShareText(state.result),
+                                        subject = shareSubject
+                                    )
+                                }
+                            )
+                        }
                     }
                 }
             }

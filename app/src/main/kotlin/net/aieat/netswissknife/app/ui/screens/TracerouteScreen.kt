@@ -666,6 +666,7 @@ private fun TracerouteFinishedPanel(
 @Composable
 private fun TraceStatsSummary(result: TracerouteResult, onClear: () -> Unit) {
     val context = LocalContext.current
+    val shareSubject = stringResource(R.string.share_subject_traceroute, result.host)
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -681,7 +682,7 @@ private fun TraceStatsSummary(result: TracerouteResult, onClear: () -> Unit) {
                     IconButton(onClick = {
                         context.shareText(
                             text = result.rawOutput,
-                            subject = context.getString(R.string.share_subject_traceroute, result.host)
+                            subject = shareSubject
                         )
                     }) {
                         Icon(Icons.Default.Share, contentDescription = stringResource(R.string.action_share))

@@ -558,6 +558,7 @@ private fun LanFinishedContent(
     onRescan: () -> Unit,
 ) {
     val context = LocalContext.current
+    val shareSubject = stringResource(R.string.share_subject_lan, summary.subnet)
     var activeFilter by remember { mutableStateOf(HostFilter.All) }
 
     val filteredHosts = remember(summary.hosts, searchQuery, activeFilter) {
@@ -646,7 +647,7 @@ private fun LanFinishedContent(
                         onClick = {
                             context.shareText(
                                 text = buildLanShareText(summary),
-                                subject = context.getString(R.string.share_subject_lan, summary.subnet)
+                                subject = shareSubject
                             )
                         },
                         modifier = Modifier.weight(1f),

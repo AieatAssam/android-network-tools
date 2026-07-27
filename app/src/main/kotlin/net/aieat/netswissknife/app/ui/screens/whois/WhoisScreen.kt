@@ -218,6 +218,7 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
             ) { (isLoading, result, error) ->
                 when {
                     result != null -> {
+                        val shareSubject = stringResource(R.string.share_subject_whois, result.query)
                         WhoisResultsSection(
                             result = result,
                             showRaw = uiState.showRawResponse,
@@ -225,7 +226,7 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
                             onShare = {
                                 context.shareText(
                                     text = buildWhoisShareText(result),
-                                    subject = context.getString(R.string.share_subject_whois, result.query)
+                                    subject = shareSubject
                                 )
                             },
                             onOpenUrl = { url ->

@@ -399,6 +399,7 @@ private fun TlsErrorContent(message: String, onRetry: () -> Unit) {
 @Composable
 private fun TlsSuccessContent(result: TlsInspectorResult) {
     val context = LocalContext.current
+    val shareSubject = stringResource(R.string.share_subject_tls, result.host, result.port)
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -407,7 +408,7 @@ private fun TlsSuccessContent(result: TlsInspectorResult) {
             IconButton(onClick = {
                 context.shareText(
                     text = buildTlsShareText(result),
-                    subject = context.getString(R.string.share_subject_tls, result.host, result.port)
+                    subject = shareSubject
                 )
             }) {
                 Icon(

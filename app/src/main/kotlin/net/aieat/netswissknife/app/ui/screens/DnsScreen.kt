@@ -744,6 +744,7 @@ private fun DnsResultSummaryCard(
     onClear: () -> Unit
 ) {
     val context = LocalContext.current
+    val shareSubject = stringResource(R.string.share_subject_dns, result.recordType.name, result.domain)
     ElevatedCard(
         shape = AppShapes.large,
         modifier = Modifier.fillMaxWidth()
@@ -790,7 +791,7 @@ private fun DnsResultSummaryCard(
                     IconButton(onClick = {
                         context.shareText(
                             text = buildDnsShareText(result),
-                            subject = context.getString(R.string.share_subject_dns, result.recordType.name, result.domain)
+                            subject = shareSubject
                         )
                     }) {
                         Icon(

@@ -217,6 +217,7 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
             if (uiState is PortScanUiState.Finished) {
                 val summary = (uiState as PortScanUiState.Finished).summary
                 item {
+                    val shareSubject = stringResource(R.string.share_subject_ports, summary.host)
                     PortScanSummaryCard(
                         summary = summary,
                         onCopy = {
@@ -225,7 +226,7 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
                         onShare = {
                             context.shareText(
                                 text = buildScanReport(summary),
-                                subject = context.getString(R.string.share_subject_ports, summary.host)
+                                subject = shareSubject
                             )
                         },
                         onClear = viewModel::onClear

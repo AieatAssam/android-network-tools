@@ -132,6 +132,7 @@ fun SpeedTestScreen(viewModel: SpeedTestViewModel = hiltViewModel()) {
             item { SpeedTestHeaderCard(onHelpClick = { showHelp = true }) }
 
             item {
+                val shareSubject = stringResource(R.string.share_subject_speedtest, "results")
                 AnimatedContent(
                     targetState = phase,
                     transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(200)) },
@@ -152,7 +153,7 @@ fun SpeedTestScreen(viewModel: SpeedTestViewModel = hiltViewModel()) {
                                     onShare = {
                                         context.shareText(
                                             text = buildSpeedTestShareText(finished.result),
-                                            subject = context.getString(R.string.share_subject_speedtest, "results")
+                                            subject = shareSubject
                                         )
                                     }
                                 )

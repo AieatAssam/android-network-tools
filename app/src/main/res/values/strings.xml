@@ -710,7 +710,7 @@
     <string name="help_ping_params_heading">Key parameters</string>
     <string name="help_ping_params_body">Count — number of ping packets to send.\nTimeout — how long to wait for each reply.\nPacket size — payload size in bytes.\nContinuous — pings indefinitely until you stop.</string>
     <string name="help_ping_results_heading">Reading the results</string>
-    <string name="help_ping_results_body">Min/Avg/Max shows the spread of RTT values. Jitter is the variation in RTT — high jitter indicates an unstable connection. Packet loss above 0% suggests congestion or firewall filtering.</string>
+    <string name="help_ping_results_body">Min/Avg/Max shows the spread of RTT values. Jitter is the variation in RTT — high jitter indicates an unstable connection. Packet loss above 0%% suggests congestion or firewall filtering.</string>
 
     <!-- Traceroute help -->
     <string name="help_traceroute_title">Traceroute</string>

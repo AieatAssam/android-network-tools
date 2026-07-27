@@ -663,6 +663,7 @@ private fun PingFinishedPanel(
     val coroutineScope = rememberCoroutineScope()
     val result = state.result
     val context = LocalContext.current
+    val shareSubject = stringResource(R.string.share_subject_ping, result.host)
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         // Stats card
@@ -733,7 +734,7 @@ private fun PingFinishedPanel(
                                 withContext(Dispatchers.Main) {
                                     context.shareText(
                                         text = text,
-                                        subject = context.getString(R.string.share_subject_ping, result.host)
+                                        subject = shareSubject
                                     )
                                 }
                             }
@@ -741,7 +742,7 @@ private fun PingFinishedPanel(
                     } else {
                         context.shareText(
                             text = buildCsvOutput(result),
-                            subject = context.getString(R.string.share_subject_ping, result.host)
+                            subject = shareSubject
                         )
                     }
                 },
