@@ -105,6 +105,7 @@ import net.aieat.netswissknife.app.ui.theme.StatusWarn
 import net.aieat.netswissknife.app.ui.theme.SpectrumPalette
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.sp
@@ -122,6 +123,7 @@ import androidx.compose.material3.IconButton
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
+import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.core.network.wifi.WifiBand
 
 // ── Network colour palette (12 visually distinct colours) ────────────────────
@@ -168,7 +170,7 @@ fun WifiScanScreen(
     LaunchedEffect(Unit) { visible = true }
     val screenAlpha by animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
-        animationSpec = tween(400),
+        animationSpec = AppMotion.enter(400),
         label = "screen-alpha"
     )
 
@@ -383,7 +385,7 @@ fun WifiScanScreen(
         // Network count
         item {
             Text(
-                stringResource(R.string.wifi_networks_count, networks.size),
+                pluralStringResource(R.plurals.wifi_networks_count, networks.size, networks.size),
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.padding(top = 4.dp)
             )

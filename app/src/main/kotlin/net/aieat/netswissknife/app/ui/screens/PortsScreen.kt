@@ -90,6 +90,7 @@ import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -103,6 +104,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
+import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
 import net.aieat.netswissknife.app.ui.components.ToolStopButton
 import net.aieat.netswissknife.app.ui.components.hapticAction
@@ -137,7 +139,7 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
     LaunchedEffect(Unit) { screenVisible = true }
     val screenAlpha by animateFloatAsState(
         targetValue   = if (screenVisible) 1f else 0f,
-        animationSpec = tween(400),
+        animationSpec = AppMotion.enter(400),
         label         = "screen-alpha"
     )
 
@@ -195,7 +197,7 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
                 AnimatedContent(
                     targetState = uiState,
                     transitionSpec = {
-                        fadeIn(tween(300)) togetherWith fadeOut(tween(200))
+                        fadeIn(AppMotion.enter(300)) togetherWith fadeOut(AppMotion.exit(200))
                     },
                     contentKey = { it::class },
                     label = "PortScanStateTransition"
@@ -217,6 +219,7 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
             if (uiState is PortScanUiState.Finished) {
                 val summary = (uiState as PortScanUiState.Finished).summary
                 item {
+                    val shareSubject = stringResource(R.string.share_subject_ports, summary.host)
                     PortScanSummaryCard(
                         summary = summary,
                         onCopy = {
@@ -225,7 +228,7 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
                         onShare = {
                             context.shareText(
                                 text = buildScanReport(summary),
-                                subject = context.getString(R.string.share_subject_ports, summary.host)
+                                subject = shareSubject
                             )
                         },
                         onClear = viewModel::onClear
@@ -480,7 +483,7 @@ private fun PortScanInputCard(
                             color = MaterialTheme.colorScheme.error
                         )
                         startNum != null && endNum != null && !startInvalid && !endInvalid -> Text(
-                            text = stringResource(R.string.ports_range_count, endNum - startNum + 1),
+                            text = pluralStringResource(R.plurals.ports_range_count, endNum - startNum + 1, endNum - startNum + 1),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -644,8 +647,9 @@ private fun PortScanProgressCard(state: PortScanUiState.Scanning) {
             )
 
             Text(
-                text = stringResource(
-                    R.string.ports_progress_format,
+                text = pluralStringResource(
+                    R.plurals.ports_progress_format,
+                    state.totalCount,
                     state.scannedCount,
                     state.totalCount
                 ),

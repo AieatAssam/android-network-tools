@@ -20,6 +20,7 @@ import androidx.compose.ui.geometry.*
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.*
 import androidx.compose.ui.input.pointer.*
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -32,6 +33,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HeroTitleText
+import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.ui.theme.AppShapes
 import net.aieat.netswissknife.core.network.topology.*
 import kotlin.math.*
@@ -48,7 +50,7 @@ fun TopologyDiscoveryScreen(
 
     AnimatedVisibility(
         visible = visible,
-        enter = fadeIn(tween(400)) + slideInVertically(tween(400)) { it / 8 }
+        enter = fadeIn(AppMotion.enter(400)) + slideInVertically(AppMotion.enter(400)) { it / 8 }
     ) {
         TopologyScreenContent(
             uiState = uiState,
@@ -397,7 +399,7 @@ private fun TopologyScreenContent(
                 AnimatedContent(
                     targetState = uiState,
                     transitionSpec = {
-                        fadeIn(tween(300)) togetherWith fadeOut(tween(300))
+                        fadeIn(AppMotion.enter(300)) togetherWith fadeOut(AppMotion.exit(300))
                     },
                     label = "topology_state"
                 ) { state ->
@@ -419,8 +421,9 @@ private fun TopologyScreenContent(
                                         .padding(12.dp)
                                 ) {
                                     ScanningBadge(
-                                        message = stringResource(
-                                            R.string.topology_scanning_badge,
+                                        message = pluralStringResource(
+                                            R.plurals.topology_scanning_badge,
+                                            state.nodesDone,
                                             state.nodesDone
                                         )
                                     )

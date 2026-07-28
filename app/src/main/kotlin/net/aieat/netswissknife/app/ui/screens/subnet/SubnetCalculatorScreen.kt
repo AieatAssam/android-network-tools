@@ -2,7 +2,6 @@ package net.aieat.netswissknife.app.ui.screens.subnet
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -67,6 +66,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -80,6 +80,7 @@ import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
+import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.core.network.subnet.SubnetInfo
 
 @Composable
@@ -92,7 +93,7 @@ fun SubnetCalculatorScreen(viewModel: SubnetCalculatorViewModel = hiltViewModel(
 
     AnimatedVisibility(
         visible = visible,
-        enter = fadeIn(tween(300)) + slideInVertically(tween(300)) { it / 4 }
+        enter = fadeIn(AppMotion.enter(300)) + slideInVertically(AppMotion.enter(300)) { it / 4 }
     ) {
         Column(
             modifier = Modifier
@@ -121,7 +122,7 @@ fun SubnetCalculatorScreen(viewModel: SubnetCalculatorViewModel = hiltViewModel(
                     // Animated switch between input modes
                     AnimatedContent(
                         targetState = uiState.isRangeMode,
-                        transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(150)) },
+                        transitionSpec = { fadeIn(AppMotion.enter(200)) togetherWith fadeOut(AppMotion.exit(150)) },
                         label = "input-mode"
                     ) { rangeMode ->
                         if (rangeMode) {
@@ -150,8 +151,8 @@ fun SubnetCalculatorScreen(viewModel: SubnetCalculatorViewModel = hiltViewModel(
             AnimatedContent(
                 targetState = Triple(uiState.result, uiState.error, uiState.isRangeMode),
                 transitionSpec = {
-                    fadeIn(tween(300)) + slideInVertically(tween(300)) { it / 8 } togetherWith
-                            fadeOut(tween(200))
+                    fadeIn(AppMotion.enter(300)) + slideInVertically(AppMotion.enter(300)) { it / 8 } togetherWith
+                            fadeOut(AppMotion.exit(200))
                 },
                 label = "subnet-state"
             ) { (result, error, rangeMode) ->
@@ -559,11 +560,11 @@ private fun SubnetBinaryVisualizerCard(info: SubnetInfo) {
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 LegendItem(
                     color = MaterialTheme.colorScheme.primary,
-                    label = stringResource(R.string.subnet_network_bits, info.prefixLength)
+                    label = pluralStringResource(R.plurals.subnet_network_bits, info.prefixLength, info.prefixLength)
                 )
                 LegendItem(
                     color = MaterialTheme.colorScheme.tertiary,
-                    label = stringResource(R.string.subnet_host_bits, info.hostBits)
+                    label = pluralStringResource(R.plurals.subnet_host_bits, info.hostBits, info.hostBits)
                 )
             }
 
@@ -790,7 +791,7 @@ private fun SubnetPropertiesCard(info: SubnetInfo) {
             )
             SubnetInfoRow(
                 label = stringResource(R.string.subnet_host_bit_count),
-                value = stringResource(R.string.subnet_bits_count, info.hostBits)
+                value = pluralStringResource(R.plurals.subnet_bits_count, info.hostBits, info.hostBits)
             )
         }
     }

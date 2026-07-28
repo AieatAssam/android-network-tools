@@ -42,6 +42,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -72,7 +73,7 @@ fun MoreToolsSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
-    val pinLimitMessage = stringResource(R.string.more_pin_limit_reached, maxPinned)
+    val pinLimitMessage = pluralStringResource(R.plurals.more_pin_limit_reached, maxPinned, maxPinned)
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -103,7 +104,7 @@ fun MoreToolsSheet(
                 Spacer(Modifier.height(4.dp))
 
                 Text(
-                    text = stringResource(R.string.more_sheet_subtitle, maxPinned),
+                    text = pluralStringResource(R.plurals.more_sheet_subtitle, maxPinned, maxPinned),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

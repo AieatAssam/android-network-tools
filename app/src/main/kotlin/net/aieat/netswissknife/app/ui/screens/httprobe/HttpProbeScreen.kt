@@ -3,7 +3,6 @@ package net.aieat.netswissknife.app.ui.screens.httprobe
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -79,6 +78,7 @@ import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -93,6 +93,7 @@ import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
 import net.aieat.netswissknife.app.ui.components.hapticAction
+import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.theme.AccentBlueLight
 import net.aieat.netswissknife.app.ui.theme.AccentBrown
@@ -132,13 +133,13 @@ fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
 
     val alpha by animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
-        animationSpec = tween(400),
+        animationSpec = AppMotion.enter(400),
         label = "httprobe_entrance_alpha"
     )
 
     AnimatedVisibility(
         visible = visible,
-        enter = fadeIn(tween(400)) + slideInVertically(tween(400)) { it / 4 }
+        enter = fadeIn(AppMotion.enter(400)) + slideInVertically(AppMotion.enter(400)) { it / 4 }
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -178,24 +179,27 @@ fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
 
                 AnimatedContent(
                     targetState = displayState,
-                    transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(200)) },
+                    transitionSpec = { fadeIn(AppMotion.enter(300)) togetherWith fadeOut(AppMotion.exit(200)) },
                     label = "httprobe_content_state"
                 ) { state ->
                     when (state) {
                         is DisplayState.Idle    -> HttpProbeIdlePlaceholder()
                         is DisplayState.Loading -> HttpProbeLoadingContent()
                         is DisplayState.Error   -> HttpProbeErrorContent(state.message) { viewModel.send() }
-                        is DisplayState.Success -> HttpProbeSuccessContent(
-                            result = state.result,
-                            selectedTab = uiState.selectedTab,
-                            onTabSelected = viewModel::onTabSelected,
-                            onShare = {
-                                context.shareText(
-                                    text = buildHttpShareText(state.result),
-                                    subject = context.getString(R.string.share_subject_http, state.result.request.url)
-                                )
-                            }
-                        )
+                        is DisplayState.Success -> {
+                            val shareSubject = stringResource(R.string.share_subject_http, state.result.request.url)
+                            HttpProbeSuccessContent(
+                                result = state.result,
+                                selectedTab = uiState.selectedTab,
+                                onTabSelected = viewModel::onTabSelected,
+                                onShare = {
+                                    context.shareText(
+                                        text = buildHttpShareText(state.result),
+                                        subject = shareSubject
+                                    )
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -626,7 +630,7 @@ private fun HttpProbeSuccessContent(
 
             AnimatedContent(
                 targetState = selectedTab,
-                transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(150)) },
+                transitionSpec = { fadeIn(AppMotion.enter(200)) togetherWith fadeOut(AppMotion.exit(150)) },
                 label = "httprobe_tab_content"
             ) { tab ->
                 when (tab) {
@@ -709,7 +713,7 @@ private fun StatusBannerCard(result: HttpProbeResult) {
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = stringResource(R.string.httprobe_redirects_label, result.redirectChain.size),
+                        text = pluralStringResource(R.plurals.httprobe_redirects_label, result.redirectChain.size, result.redirectChain.size),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

@@ -6,7 +6,6 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -104,6 +103,7 @@ import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.RecentHostsRow
+import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.ui.theme.AppShapes
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
 import net.aieat.netswissknife.app.ui.screens.dns.DnsUiState
@@ -131,7 +131,7 @@ fun DnsScreen(viewModel: DnsViewModel = hiltViewModel()) {
     LaunchedEffect(Unit) { visible = true }
     val screenAlpha by animateFloatAsState(
         targetValue   = if (visible) 1f else 0f,
-        animationSpec = tween(400),
+        animationSpec = AppMotion.enter(400),
         label         = "screen-alpha"
     )
     var showHelp by remember { mutableStateOf(false) }
@@ -175,8 +175,8 @@ fun DnsScreen(viewModel: DnsViewModel = hiltViewModel()) {
                 AnimatedContent(
                     targetState = uiState,
                     transitionSpec = {
-                        (fadeIn(tween(300)) + slideInVertically(tween(300)) { it / 8 })
-                            .togetherWith(fadeOut(tween(200)))
+                        (fadeIn(AppMotion.enter(300)) + slideInVertically(AppMotion.enter(300)) { it / 8 })
+                            .togetherWith(fadeOut(AppMotion.exit(200)))
                     },
                     contentKey = { it::class },
                     label = "dns-result-state"
@@ -428,7 +428,7 @@ private fun RecordTypeChips(
 private fun RecordTypeDescription(recordType: DnsRecordType) {
     Crossfade(
         targetState = recordType,
-        animationSpec = tween(200),
+        animationSpec = AppMotion.effect(200),
         label = "record-type-desc"
     ) { type ->
         Row(
@@ -744,6 +744,7 @@ private fun DnsResultSummaryCard(
     onClear: () -> Unit
 ) {
     val context = LocalContext.current
+    val shareSubject = stringResource(R.string.share_subject_dns, result.recordType.name, result.domain)
     ElevatedCard(
         shape = AppShapes.large,
         modifier = Modifier.fillMaxWidth()
@@ -790,7 +791,7 @@ private fun DnsResultSummaryCard(
                     IconButton(onClick = {
                         context.shareText(
                             text = buildDnsShareText(result),
-                            subject = context.getString(R.string.share_subject_dns, result.recordType.name, result.domain)
+                            subject = shareSubject
                         )
                     }) {
                         Icon(
@@ -888,7 +889,7 @@ private fun DnsRecordCard(record: DnsRecord, index: Int) {
 
     val alpha by animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
-        animationSpec = tween(200 + index * 40),
+        animationSpec = AppMotion.enter(200 + index * 40),
         label = "record-alpha-$index"
     )
 

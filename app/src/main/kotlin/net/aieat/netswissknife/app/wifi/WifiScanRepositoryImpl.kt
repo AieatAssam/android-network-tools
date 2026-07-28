@@ -1,5 +1,6 @@
 package net.aieat.netswissknife.app.wifi
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
 import android.net.ConnectivityManager
@@ -35,6 +36,10 @@ class WifiScanRepositoryImpl(private val context: Context) : WifiScanRepository 
     override val isSupported: Boolean
         get() = context.packageManager.hasSystemFeature(PackageManager.FEATURE_WIFI)
 
+    // Permission is verified by the caller (WifiScanScreen) before invoking scan(); a
+    // SecurityException here (e.g. permission revoked mid-session) is caught by
+    // WifiScanViewModel and surfaced as WifiScanUiState.NoPermission.
+    @SuppressLint("MissingPermission")
     override suspend fun scan(): WifiScanResult = withContext(Dispatchers.IO) {
         val rawResults: List<ScanResult> = wifiManager.scanResults ?: emptyList()
         val connectedBssid = getConnectedBssid()
@@ -86,6 +91,9 @@ class WifiScanRepositoryImpl(private val context: Context) : WifiScanRepository 
         }
     }
 
+    // Same permission guarantee as scan(): caller has already verified the permission
+    // before scan() (and transitively this) is invoked.
+    @SuppressLint("MissingPermission")
     private fun buildConnectionInfo(wi: WifiInfo): WifiConnectionInfo? {
         val rawSsid = wi.ssid ?: return null
         val ssid = rawSsid.removeSurrounding("\"")

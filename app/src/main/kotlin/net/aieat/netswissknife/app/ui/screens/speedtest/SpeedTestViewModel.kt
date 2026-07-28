@@ -110,7 +110,6 @@ class SpeedTestViewModel @Inject constructor(
     fun onRetry() = startTest()
 
     override fun onCleared() {
-        super.onCleared()
         testJob?.cancel()
     }
 }

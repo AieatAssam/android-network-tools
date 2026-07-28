@@ -1,13 +1,11 @@
 package net.aieat.netswissknife.app.ui.screens.whois
 
 import android.content.Intent
-import android.net.Uri
+import androidx.core.net.toUri
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -93,6 +91,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
 import net.aieat.netswissknife.app.ui.components.hapticAction
+import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.RecentHostsRow
@@ -127,7 +126,7 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
     ) {
     AnimatedVisibility(
         visible = visible,
-        enter = fadeIn(tween(300)) + slideInVertically(tween(300)) { it / 4 }
+        enter = fadeIn(AppMotion.enter(300)) + slideInVertically(AppMotion.enter(300)) { it / 4 }
     ) {
         Column(
             modifier = Modifier
@@ -211,13 +210,14 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
             AnimatedContent(
                 targetState = Triple(uiState.isLoading, uiState.result, uiState.error),
                 transitionSpec = {
-                    fadeIn(tween(300)) + slideInVertically(tween(300)) { it / 8 } togetherWith
-                            fadeOut(tween(200))
+                    fadeIn(AppMotion.enter(300)) + slideInVertically(AppMotion.enter(300)) { it / 8 } togetherWith
+                            fadeOut(AppMotion.exit(200))
                 },
                 label = "whois-content-state"
             ) { (isLoading, result, error) ->
                 when {
                     result != null -> {
+                        val shareSubject = stringResource(R.string.share_subject_whois, result.query)
                         WhoisResultsSection(
                             result = result,
                             showRaw = uiState.showRawResponse,
@@ -225,12 +225,12 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
                             onShare = {
                                 context.shareText(
                                     text = buildWhoisShareText(result),
-                                    subject = context.getString(R.string.share_subject_whois, result.query)
+                                    subject = shareSubject
                                 )
                             },
                             onOpenUrl = { url ->
                                 try {
-                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                                    context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
                                 } catch (_: Exception) {}
                             }
                         )

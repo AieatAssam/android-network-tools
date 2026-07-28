@@ -1,7 +1,6 @@
 package net.aieat.netswissknife.app.ui.screens.onboarding
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
@@ -52,6 +51,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.ui.theme.AppMotion
 
 private data class OnboardingFeature(
     val icon: ImageVector,
@@ -88,7 +88,7 @@ fun OnboardingSheet(onDismiss: () -> Unit) {
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         AnimatedVisibility(
             visible = contentVisible,
-            enter = fadeIn(tween(300)) + slideInVertically(tween(300)) { it / 4 }
+            enter = fadeIn(AppMotion.enter(300)) + slideInVertically(AppMotion.enter(300)) { it / 4 }
         ) {
             Column(
                 modifier = Modifier
@@ -141,7 +141,7 @@ fun OnboardingSheet(onDismiss: () -> Unit) {
                 features.forEachIndexed { index, feature ->
                     AnimatedVisibility(
                         visible = index <= visibleUpTo,
-                        enter = fadeIn(tween(250)) + slideInVertically(tween(250)) { it / 3 },
+                        enter = fadeIn(AppMotion.enter(250)) + slideInVertically(AppMotion.enter(250)) { it / 3 },
                     ) {
                         Column {
                             OnboardingFeatureRow(feature)

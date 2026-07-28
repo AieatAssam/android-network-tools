@@ -95,6 +95,7 @@ import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
 import net.aieat.netswissknife.app.ui.components.ToolStopButton
 import net.aieat.netswissknife.app.ui.components.hapticAction
+import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.ui.theme.StatusBad
 import net.aieat.netswissknife.app.ui.theme.StatusCritical
 import net.aieat.netswissknife.app.ui.theme.StatusGood
@@ -102,6 +103,7 @@ import net.aieat.netswissknife.app.ui.theme.StatusLime
 import net.aieat.netswissknife.app.ui.theme.StatusUnknown
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -155,7 +157,7 @@ fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
     LaunchedEffect(Unit) { visible = true }
     val screenAlpha by animateFloatAsState(
         targetValue   = if (visible) 1f else 0f,
-        animationSpec = tween(400),
+        animationSpec = AppMotion.enter(400),
         label         = "screen-alpha"
     )
     var showHelp by remember { mutableStateOf(false) }
@@ -195,8 +197,8 @@ fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
                 AnimatedContent(
                     targetState   = uiState,
                     transitionSpec = {
-                        (fadeIn(tween(300)) + slideInVertically(tween(300)) { it / 6 })
-                            .togetherWith(fadeOut(tween(200)))
+                        (fadeIn(AppMotion.enter(300)) + slideInVertically(AppMotion.enter(300)) { it / 6 })
+                            .togetherWith(fadeOut(AppMotion.exit(200)))
                     },
                     contentKey = { it::class },
                     label = "traceroute-state"
@@ -546,7 +548,7 @@ private fun TracerouteRunningPanel(state: TracerouteUiState.Running) {
                         style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold)
                     )
                     Text(
-                        text  = stringResource(R.string.traceroute_running_subtitle, state.hops.size),
+                        text  = pluralStringResource(R.plurals.traceroute_running_subtitle, state.hops.size, state.hops.size),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -572,7 +574,7 @@ private fun TracerouteRunningPanel(state: TracerouteUiState.Running) {
                 LaunchedEffect(Unit) { shown = true }
                 val hopAlpha by animateFloatAsState(
                     targetValue   = if (shown) 1f else 0f,
-                    animationSpec = tween(250),
+                    animationSpec = AppMotion.enter(250),
                     label         = "hop-alpha"
                 )
                 Box(Modifier.alpha(hopAlpha)) {
@@ -666,6 +668,7 @@ private fun TracerouteFinishedPanel(
 @Composable
 private fun TraceStatsSummary(result: TracerouteResult, onClear: () -> Unit) {
     val context = LocalContext.current
+    val shareSubject = stringResource(R.string.share_subject_traceroute, result.host)
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -681,7 +684,7 @@ private fun TraceStatsSummary(result: TracerouteResult, onClear: () -> Unit) {
                     IconButton(onClick = {
                         context.shareText(
                             text = result.rawOutput,
-                            subject = context.getString(R.string.share_subject_traceroute, result.host)
+                            subject = shareSubject
                         )
                     }) {
                         Icon(Icons.Default.Share, contentDescription = stringResource(R.string.action_share))
@@ -780,7 +783,7 @@ private fun TraceJourneyStats(result: TracerouteResult) {
     LaunchedEffect(Unit) { visible = true }
     val cardAlpha by animateFloatAsState(
         targetValue   = if (visible) 1f else 0f,
-        animationSpec = tween(500),
+        animationSpec = AppMotion.enter(500),
         label         = "journey-stats-alpha"
     )
 
@@ -1058,7 +1061,7 @@ private fun HopCard(hop: HopResult, index: Int) {
     // animateContentSize is a plain Modifier that never uses SubcomposeLayout.
     val expandedAlpha by animateFloatAsState(
         targetValue   = if (expanded) 1f else 0f,
-        animationSpec = tween(200),
+        animationSpec = AppMotion.effect(200),
         label         = "expanded-alpha"
     )
 
@@ -1068,7 +1071,7 @@ private fun HopCard(hop: HopResult, index: Int) {
             .clickable { expanded = !expanded }
             .semantics { role = Role.Button }
     ) {
-        Column(modifier = Modifier.animateContentSize(animationSpec = tween(200))) {
+        Column(modifier = Modifier.animateContentSize(animationSpec = AppMotion.effect(200))) {
             Row(
                 modifier          = Modifier.padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically

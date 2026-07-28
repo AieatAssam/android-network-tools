@@ -2,7 +2,6 @@ package net.aieat.netswissknife.app.ui.navigation
 
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -32,39 +31,40 @@ import net.aieat.netswissknife.app.ui.screens.mdns.MdnsDiscoveryScreen
 import net.aieat.netswissknife.app.ui.screens.speedtest.SpeedTestScreen
 import net.aieat.netswissknife.app.ui.screens.whois.WhoisScreen
 import net.aieat.netswissknife.app.ui.screens.wol.WakeOnLanScreen
+import net.aieat.netswissknife.app.ui.theme.AppMotion
 
 // ── Transition helpers ────────────────────────────────────────────────────────
-
-private const val ANIM_DURATION = 300
+// Entering content uses emphasized-decelerate (settles in), exiting content uses
+// emphasized-accelerate (leaves quickly) — see AppMotion / m3.material.io motion spec.
 
 /** Screens slide in from the right on forward navigation. */
 private fun enterTransition(): EnterTransition =
-    slideInHorizontally(tween(ANIM_DURATION)) { it / 4 } +
-    fadeIn(tween(ANIM_DURATION))
+    slideInHorizontally(AppMotion.enter()) { it / 4 } +
+    fadeIn(AppMotion.enter())
 
 /** Screens slide out to the left on forward navigation. */
 private fun exitTransition(): ExitTransition =
-    slideOutHorizontally(tween(ANIM_DURATION)) { -it / 4 } +
-    fadeOut(tween(ANIM_DURATION))
+    slideOutHorizontally(AppMotion.exit()) { -it / 4 } +
+    fadeOut(AppMotion.exit())
 
 /** Screens slide in from the left on back navigation. */
 private fun popEnterTransition(): EnterTransition =
-    slideInHorizontally(tween(ANIM_DURATION)) { -it / 4 } +
-    fadeIn(tween(ANIM_DURATION))
+    slideInHorizontally(AppMotion.enter()) { -it / 4 } +
+    fadeIn(AppMotion.enter())
 
 /** Screens slide out to the right on back navigation. */
 private fun popExitTransition(): ExitTransition =
-    slideOutHorizontally(tween(ANIM_DURATION)) { it / 4 } +
-    fadeOut(tween(ANIM_DURATION))
+    slideOutHorizontally(AppMotion.exit()) { it / 4 } +
+    fadeOut(AppMotion.exit())
 
 /** Home screen always fades in from the bottom for a distinct feel. */
 private fun homeEnterTransition(): EnterTransition =
-    slideInVertically(tween(ANIM_DURATION)) { it / 6 } +
-    fadeIn(tween(ANIM_DURATION))
+    slideInVertically(AppMotion.enter()) { it / 6 } +
+    fadeIn(AppMotion.enter())
 
 private fun homeExitTransition(): ExitTransition =
-    slideOutVertically(tween(ANIM_DURATION)) { -it / 8 } +
-    fadeOut(tween(ANIM_DURATION))
+    slideOutVertically(AppMotion.exit()) { -it / 8 } +
+    fadeOut(AppMotion.exit())
 
 // ── Navigation host ───────────────────────────────────────────────────────────
 
@@ -114,10 +114,10 @@ fun AppNavHost(navController: NavHostController, modifier: Modifier = Modifier) 
         composable(NavRoutes.WakeOnLan.route)         { WakeOnLanScreen() }
         composable(
             route            = NavRoutes.Settings.route,
-            enterTransition  = { fadeIn(tween(ANIM_DURATION)) },
-            exitTransition   = { fadeOut(tween(ANIM_DURATION)) },
-            popEnterTransition  = { fadeIn(tween(ANIM_DURATION)) },
-            popExitTransition   = { fadeOut(tween(ANIM_DURATION)) },
+            enterTransition  = { fadeIn(AppMotion.enter()) },
+            exitTransition   = { fadeOut(AppMotion.exit()) },
+            popEnterTransition  = { fadeIn(AppMotion.enter()) },
+            popExitTransition   = { fadeOut(AppMotion.exit()) },
         ) { SettingsScreen() }
     }
 }

@@ -206,7 +206,6 @@ class WifiScanViewModel @Inject constructor(
     }
 
     override fun onCleared() {
-        super.onCleared()
         stopAutoRefresh()
         scanJob?.cancel()
     }

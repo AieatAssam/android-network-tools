@@ -3,7 +3,6 @@ package net.aieat.netswissknife.app.ui.screens.tls
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -64,6 +63,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.background
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -75,6 +75,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
 import net.aieat.netswissknife.app.ui.components.hapticAction
+import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.RecentHostsRow
@@ -102,13 +103,13 @@ fun TlsInspectorScreen(viewModel: TlsInspectorViewModel = hiltViewModel()) {
 
     val alpha by animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
-        animationSpec = tween(400),
+        animationSpec = AppMotion.enter(400),
         label = "tls_entrance_alpha"
     )
 
     AnimatedVisibility(
         visible = visible,
-        enter = fadeIn(tween(400)) + slideInVertically(tween(400)) { it / 4 }
+        enter = fadeIn(AppMotion.enter(400)) + slideInVertically(AppMotion.enter(400)) { it / 4 }
     ) {
         LazyColumn(
             modifier = Modifier
@@ -149,7 +150,7 @@ fun TlsInspectorScreen(viewModel: TlsInspectorViewModel = hiltViewModel()) {
                 AnimatedContent(
                     targetState   = displayState,
                     transitionSpec = {
-                        fadeIn(tween(300)) togetherWith fadeOut(tween(200))
+                        fadeIn(AppMotion.enter(300)) togetherWith fadeOut(AppMotion.exit(200))
                     },
                     label = "tls_content_state"
                 ) { state ->
@@ -399,6 +400,7 @@ private fun TlsErrorContent(message: String, onRetry: () -> Unit) {
 @Composable
 private fun TlsSuccessContent(result: TlsInspectorResult) {
     val context = LocalContext.current
+    val shareSubject = stringResource(R.string.share_subject_tls, result.host, result.port)
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -407,7 +409,7 @@ private fun TlsSuccessContent(result: TlsInspectorResult) {
             IconButton(onClick = {
                 context.shareText(
                     text = buildTlsShareText(result),
-                    subject = context.getString(R.string.share_subject_tls, result.host, result.port)
+                    subject = shareSubject
                 )
             }) {
                 Icon(
@@ -578,8 +580,8 @@ private fun CertificateCard(
             // Expanded body
             AnimatedVisibility(
                 visible = expanded,
-                enter = expandVertically(tween(200)) + fadeIn(tween(200)),
-                exit  = shrinkVertically(tween(200)) + fadeOut(tween(150)),
+                enter = expandVertically(AppMotion.enter(200)) + fadeIn(AppMotion.enter(200)),
+                exit  = shrinkVertically(AppMotion.exit(200)) + fadeOut(AppMotion.exit(150)),
             ) {
                 Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
                     HorizontalDivider(modifier = Modifier.padding(bottom = 12.dp))
@@ -616,7 +618,7 @@ private fun ExpiryBadge(cert: TlsCertificate) {
                 color = MaterialTheme.colorScheme.secondaryContainer
             ) {
                 Text(
-                    text  = stringResource(R.string.tls_days_left, daysLeft),
+                    text  = pluralStringResource(R.plurals.tls_days_left, daysLeft.toInt(), daysLeft),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSecondaryContainer,
                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)

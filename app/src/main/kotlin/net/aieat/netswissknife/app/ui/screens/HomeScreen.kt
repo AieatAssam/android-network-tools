@@ -50,6 +50,7 @@ import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.navigation.NavRoutes
 import net.aieat.netswissknife.app.ui.navigation.ToolInfo
+import net.aieat.netswissknife.app.ui.theme.AppMotion
 import kotlinx.coroutines.delay
 
 @Composable
@@ -71,14 +72,14 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
     ) {
         AnimatedVisibility(
             visible = headerVisible,
-            enter   = fadeIn(tween(500)) + slideInVertically(tween(500)) { -40 }
+            enter   = fadeIn(AppMotion.enter(500)) + slideInVertically(AppMotion.enter(500)) { -40 }
         ) {
             HeroHeader()
         }
 
         AnimatedVisibility(
             visible = cardsVisible,
-            enter   = fadeIn(tween(400, delayMillis = 100))
+            enter   = fadeIn(tween(durationMillis = 400, delayMillis = 100, easing = AppMotion.EmphasizedDecelerate))
         ) {
             ToolGrid(onNavigate = onNavigate)
         }
@@ -155,6 +156,16 @@ private fun HeroHeader() {
 
 @Composable
 private fun ToolGrid(onNavigate: (String) -> Unit) {
+    // Cards animate in with a per-index stagger only on the grid's first appearance.
+    // Off-screen grid items get disposed and recomposed as they scroll back into view;
+    // without this flag each recomposition would replay the stagger delay + fade/scale,
+    // making icons appear to vanish and slowly fade back in while scrolling.
+    var gridAppeared by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        delay(NavRoutes.allTools.size * 60L + AppMotion.DurationMedium)
+        gridAppeared = true
+    }
+
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
             text     = stringResource(R.string.home_all_tools),
@@ -168,11 +179,12 @@ private fun ToolGrid(onNavigate: (String) -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement   = Arrangement.spacedBy(12.dp)
         ) {
-            itemsIndexed(NavRoutes.allTools) { index, tool ->
+            itemsIndexed(NavRoutes.allTools, key = { _, tool -> tool.route }) { index, tool ->
                 AnimatedToolCard(
-                    tool    = tool,
-                    delayMs = index * 60,
-                    onClick = hapticAction { onNavigate(tool.route) }
+                    tool           = tool,
+                    delayMs        = index * 60,
+                    skipEntrance   = gridAppeared,
+                    onClick        = hapticAction { onNavigate(tool.route) }
                 )
             }
         }
@@ -180,11 +192,13 @@ private fun ToolGrid(onNavigate: (String) -> Unit) {
 }
 
 @Composable
-private fun AnimatedToolCard(tool: ToolInfo, delayMs: Int, onClick: () -> Unit) {
-    var visible by remember { mutableStateOf(false) }
+private fun AnimatedToolCard(tool: ToolInfo, delayMs: Int, skipEntrance: Boolean, onClick: () -> Unit) {
+    var visible by remember { mutableStateOf(skipEntrance) }
     LaunchedEffect(Unit) {
-        delay(delayMs.toLong())
-        visible = true
+        if (!skipEntrance) {
+            delay(delayMs.toLong())
+            visible = true
+        }
     }
 
     val cardScale by animateFloatAsState(
@@ -194,7 +208,7 @@ private fun AnimatedToolCard(tool: ToolInfo, delayMs: Int, onClick: () -> Unit) 
     )
     val cardAlpha by animateFloatAsState(
         targetValue   = if (visible) 1f else 0f,
-        animationSpec = tween(250),
+        animationSpec = AppMotion.effect(250),
         label         = "card-alpha-${tool.route}"
     )
 

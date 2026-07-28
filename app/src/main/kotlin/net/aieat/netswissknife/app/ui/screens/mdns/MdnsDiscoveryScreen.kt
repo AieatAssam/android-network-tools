@@ -87,6 +87,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.aieat.netswissknife.app.ui.components.HeroTitleText
+import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
 import net.aieat.netswissknife.app.ui.components.ToolStopButton
 import net.aieat.netswissknife.app.ui.components.hapticAction
@@ -115,7 +116,7 @@ fun MdnsDiscoveryScreen(viewModel: MdnsDiscoveryViewModel = hiltViewModel()) {
     ) {
     AnimatedVisibility(
         visible = visible,
-        enter = fadeIn(tween(400)) + slideInVertically(tween(400)) { 40 }
+        enter = fadeIn(AppMotion.enter(400)) + slideInVertically(AppMotion.enter(400)) { 40 }
     ) {
         Column(
             modifier = Modifier
@@ -142,7 +143,7 @@ fun MdnsDiscoveryScreen(viewModel: MdnsDiscoveryViewModel = hiltViewModel()) {
                     else -> "results"
                 },
                 transitionSpec = {
-                    fadeIn(tween(300)) togetherWith fadeOut(tween(200))
+                    fadeIn(AppMotion.enter(300)) togetherWith fadeOut(AppMotion.exit(200))
                 },
                 label = "mdns-state",
                 modifier = Modifier.weight(1f)
@@ -482,7 +483,7 @@ private fun ServiceTypeHeader(
 ) {
     val rotationAngle by animateFloatAsState(
         targetValue = if (isExpanded) 0f else -90f,
-        animationSpec = tween(200),
+        animationSpec = AppMotion.effect(200),
         label = "chevron"
     )
 
