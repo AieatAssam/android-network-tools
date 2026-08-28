@@ -56,7 +56,7 @@ fun RecentHostsRow(
                 modifier = Modifier.weight(1f),
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                items(recentHosts) { host ->
+                items(recentHosts, key = { it }) { host ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         SuggestionChip(
                             onClick = { onHostSelected(host) },

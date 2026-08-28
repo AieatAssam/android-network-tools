@@ -246,7 +246,7 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
                             modifier = Modifier.padding(vertical = 4.dp)
                         )
                     }
-                    items(openPorts) { portResult ->
+                    items(openPorts, key = { it.port }) { portResult ->
                         PortResultRow(portResult)
                     }
                 }
@@ -274,7 +274,7 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
                         }
                     }
                     if (showAll) {
-                        items(allNonOpen) { portResult ->
+                        items(allNonOpen, key = { it.port }) { portResult ->
                             PortResultRow(portResult)
                         }
                     }
@@ -313,7 +313,7 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
                             modifier = Modifier.padding(vertical = 4.dp)
                         )
                     }
-                    items(openLive) { portResult ->
+                    items(openLive, key = { it.port }) { portResult ->
                         PortResultRow(portResult)
                     }
                 }

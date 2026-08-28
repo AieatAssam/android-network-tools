@@ -36,5 +36,8 @@ jobs:
       - name: Run unit tests
         run: ./gradlew test
 
+      - name: Verify coverage gate
+        run: ./gradlew :app:koverVerify
+
       - name: Build debug APK
         run: ./gradlew :app:assembleDebug

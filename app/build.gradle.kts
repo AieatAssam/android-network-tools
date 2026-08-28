@@ -3,6 +3,7 @@ plugins {
     alias(libs.plugins.compose.compiler)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
+    alias(libs.plugins.kover)
 }
 
 // ── CI-supplied properties ────────────────────────────────────────────────────
@@ -147,4 +148,35 @@ tasks.withType<Test> {
     // GC thrashing severe enough to look like a hung build.
     maxParallelForks = 1
     maxHeapSize = "512m"
+}
+
+// ── Coverage ──────────────────────────────────────────────────────────────────
+// Newly added, non-Compose logic must stay fully covered. The :app report is
+// deliberately scoped to that logic: the module's other ~17 Compose screens
+// cannot be exercised by plain JVM unit tests, so measuring them here would
+// only dilute the gate. Coverage for the pure-Kotlin modules is reported
+// unfiltered by :core-network and :core-domain.
+//
+//   ./gradlew :app:koverVerify        -- enforce the gate
+//   ./gradlew :app:koverHtmlReport    -- browse the scoped report
+kover {
+    reports {
+        filters {
+            includes {
+                classes(
+                    "net.aieat.netswissknife.app.ui.screens.whois.RelayChainGeometry",
+                    "net.aieat.netswissknife.app.ui.screens.whois.ConnectorSegment"
+                )
+            }
+            excludes {
+                androidGeneratedClasses()
+                annotatedBy("androidx.compose.runtime.Composable")
+            }
+        }
+        verify {
+            rule("Pure layout logic is fully covered") {
+                minBound(100)
+            }
+        }
+    }
 }

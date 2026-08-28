@@ -5,9 +5,12 @@ import kotlinx.coroutines.test.runTest
 import net.aieat.netswissknife.core.network.NetworkResult
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import java.net.InetSocketAddress
 
 @DisplayName("HttpProbeRepositoryImpl – input validation")
@@ -164,6 +167,153 @@ class HttpSecurityAnalyzerTest {
         val checks = HttpSecurityAnalyzer.analyze(emptyMap(), isHttps = true)
         assertTrue(checks.size >= 5)
     }
+
+    // ── Previously uncovered branches ────────────────────────────────────────
+
+    @Test
+    @DisplayName("analyze reports the same seven checks in a stable order")
+    fun `analyze reports the seven checks in order`() {
+        val checks = HttpSecurityAnalyzer.analyze(emptyMap(), isHttps = true)
+        assertEquals(
+            listOf(
+                "Strict-Transport-Security",
+                "Content-Security-Policy",
+                "X-Frame-Options",
+                "X-Content-Type-Options",
+                "Referrer-Policy",
+                "Permissions-Policy",
+                "Server"
+            ),
+            checks.map { it.headerName }
+        )
+    }
+
+    @Test
+    @DisplayName("analyze matches header names case-insensitively")
+    fun `analyze matches header names case-insensitively`() {
+        val headers = mapOf("CONTENT-security-Policy" to listOf("default-src 'self'"))
+        val check = HttpSecurityAnalyzer.analyze(headers, isHttps = true)
+            .first { it.headerName == "Content-Security-Policy" }
+        assertEquals(SecurityRating.PASS, check.rating)
+    }
+
+    @Test
+    @DisplayName("analyze treats a blank header value as absent")
+    fun `analyze treats a blank header value as absent`() {
+        val headers = mapOf("Content-Security-Policy" to listOf("   "))
+        val check = HttpSecurityAnalyzer.analyze(headers, isHttps = true)
+            .first { it.headerName == "Content-Security-Policy" }
+        assertNull(check.value)
+        assertEquals(SecurityRating.WARN, check.rating)
+    }
+
+    @Test
+    @DisplayName("analyze treats an empty value list as absent")
+    fun `analyze treats an empty value list as absent`() {
+        val headers = mapOf("Content-Security-Policy" to emptyList<String>())
+        val check = HttpSecurityAnalyzer.analyze(headers, isHttps = true)
+            .first { it.headerName == "Content-Security-Policy" }
+        assertNull(check.value)
+    }
+
+    @Test
+    @DisplayName("analyze uses the first value when a header repeats")
+    fun `analyze uses the first value when a header repeats`() {
+        val headers = mapOf("Server" to listOf("nginx", "apache"))
+        val check = HttpSecurityAnalyzer.analyze(headers, isHttps = true)
+            .first { it.headerName == "Server" }
+        assertEquals("nginx", check.value)
+    }
+
+    @Test
+    @DisplayName("HSTS present on plain HTTP still gets PASS")
+    fun `HSTS present on plain HTTP still gets PASS`() {
+        val headers = mapOf("Strict-Transport-Security" to listOf("max-age=1"))
+        val check = HttpSecurityAnalyzer.analyze(headers, isHttps = false)
+            .first { it.headerName == "Strict-Transport-Security" }
+        assertEquals(SecurityRating.PASS, check.rating)
+    }
+
+    @Test
+    @DisplayName("HSTS absent on plain HTTP gets INFO, not FAIL")
+    fun `HSTS absent on plain HTTP gets INFO`() {
+        val check = HttpSecurityAnalyzer.analyze(emptyMap(), isHttps = false)
+            .first { it.headerName == "Strict-Transport-Security" }
+        assertEquals(SecurityRating.INFO, check.rating)
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+        strings = [
+            "no-referrer",
+            "no-referrer-when-downgrade",
+            "strict-origin",
+            "strict-origin-when-cross-origin",
+            "same-origin",
+            "STRICT-ORIGIN"
+        ]
+    )
+    @DisplayName("privacy-preserving Referrer-Policy gets PASS")
+    fun `privacy preserving referrer policy gets PASS`(value: String) {
+        val headers = mapOf("Referrer-Policy" to listOf(value))
+        val check = HttpSecurityAnalyzer.analyze(headers, isHttps = true)
+            .first { it.headerName == "Referrer-Policy" }
+        assertEquals(SecurityRating.PASS, check.rating)
+    }
+
+    @Test
+    @DisplayName("leaky Referrer-Policy gets WARN and names the value")
+    fun `leaky referrer policy gets WARN`() {
+        val headers = mapOf("Referrer-Policy" to listOf("unsafe-url"))
+        val check = HttpSecurityAnalyzer.analyze(headers, isHttps = true)
+            .first { it.headerName == "Referrer-Policy" }
+        assertEquals(SecurityRating.WARN, check.rating)
+        assertTrue(check.description.contains("unsafe-url"))
+    }
+
+    @Test
+    @DisplayName("absent Referrer-Policy gets WARN")
+    fun `absent referrer policy gets WARN`() {
+        val check = HttpSecurityAnalyzer.analyze(emptyMap(), isHttps = true)
+            .first { it.headerName == "Referrer-Policy" }
+        assertEquals(SecurityRating.WARN, check.rating)
+    }
+
+    @Test
+    @DisplayName("Permissions-Policy present gets PASS")
+    fun `permissions policy present gets PASS`() {
+        val headers = mapOf("Permissions-Policy" to listOf("camera=()"))
+        val check = HttpSecurityAnalyzer.analyze(headers, isHttps = true)
+            .first { it.headerName == "Permissions-Policy" }
+        assertEquals(SecurityRating.PASS, check.rating)
+    }
+
+    @Test
+    @DisplayName("absent Permissions-Policy gets WARN")
+    fun `absent permissions policy gets WARN`() {
+        val check = HttpSecurityAnalyzer.analyze(emptyMap(), isHttps = true)
+            .first { it.headerName == "Permissions-Policy" }
+        assertEquals(SecurityRating.WARN, check.rating)
+    }
+
+    @Test
+    @DisplayName("X-Frame-Options with a non-protective value gets WARN and names it")
+    fun `non protective x frame options gets WARN`() {
+        val headers = mapOf("X-Frame-Options" to listOf("ALLOW-FROM https://example.com"))
+        val check = HttpSecurityAnalyzer.analyze(headers, isHttps = true)
+            .first { it.headerName == "X-Frame-Options" }
+        assertEquals(SecurityRating.WARN, check.rating)
+        assertTrue(check.description.contains("ALLOW-FROM https://example.com"))
+    }
+
+    @Test
+    @DisplayName("every check carries a non-blank description")
+    fun `every check carries a non-blank description`() {
+        HttpSecurityAnalyzer.analyze(emptyMap(), isHttps = false).forEach {
+            assertTrue(it.description.isNotBlank(), "${it.headerName} has a blank description")
+        }
+    }
+
 }
 
 @DisplayName("HttpMethod – body support")

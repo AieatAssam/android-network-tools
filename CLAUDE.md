@@ -176,7 +176,16 @@ REFACTOR: Clean up → ./gradlew test (all pass)
 
 # Clean
 ./gradlew clean
+
+# Coverage (Kover)
+./gradlew :app:koverVerify        # enforce 100% on pure, non-Compose app logic
+./gradlew :app:koverHtmlReport    # scoped :app report
+./gradlew :core-network:koverHtmlReport :core-domain:koverHtmlReport
 ```
+
+> Run only one Gradle invocation at a time on memory-constrained hosts.
+> Concurrent builds share `org.gradle.jvmargs=-Xmx1536m` and make test workers
+> time out or crash in ways that look like real test failures.
 
 ---
 

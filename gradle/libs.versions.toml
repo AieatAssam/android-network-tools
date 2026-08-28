@@ -6,6 +6,7 @@ snmp4j = "3.12.2"
 icmpenguin = "1.0.0-rc.4"
 kotlin = "2.4.10"
 ksp = "2.3.10"
+kover = "0.9.9"
 composeBom = "2026.06.01"
 navigationCompose = "2.9.8"
 hilt = "2.60.1"
@@ -64,3 +65,4 @@ kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
+kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
