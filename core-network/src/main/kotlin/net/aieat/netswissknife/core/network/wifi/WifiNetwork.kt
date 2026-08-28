@@ -13,6 +13,20 @@ data class WifiNetwork(
     /** All BSSIDs for this network, sorted strongest-first. */
     val accessPoints: List<WifiAccessPoint>
 ) {
+    /**
+     * Stable identity for list keys and per-row UI state.
+     *
+     * [WifiNetworkGrouper] emits one network per (SSID, security) pair, so that
+     * pair identifies a visible network and stays stable across rescans even as
+     * BSSIDs come and go. Hidden networks all share a blank SSID and are never
+     * grouped, so they are keyed by their single BSSID instead — without this
+     * they would collide, which both merges their expand state and makes them
+     * illegal duplicate keys in a lazy list.
+     */
+    val id: String get() =
+        if (ssid.isBlank()) "|hidden|${accessPoints.firstOrNull()?.bssid.orEmpty()}"
+        else "$ssid|${security.name}"
+
     /** Human-readable name. Hidden networks show last 8 chars of their BSSID. */
     val displaySsid: String get() = ssid.ifBlank {
         "<Hidden: ${accessPoints.first().bssid.takeLast(8)}>"

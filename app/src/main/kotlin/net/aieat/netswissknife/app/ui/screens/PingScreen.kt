@@ -642,7 +642,7 @@ private fun PingRunningPanel(state: PingUiState.Running) {
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     LazyColumn(modifier = Modifier.heightIn(max = 320.dp)) {
-                        items(displayPackets) { packet -> PacketRow(packet) }
+                        items(displayPackets, key = { it.sequence }) { packet -> PacketRow(packet) }
                     }
                 }
             }

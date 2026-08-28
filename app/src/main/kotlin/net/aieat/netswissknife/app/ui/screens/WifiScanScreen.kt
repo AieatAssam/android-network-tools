@@ -392,9 +392,12 @@ fun WifiScanScreen(
         }
 
         // Network cards (SSID grouped, expandable)
-        items(networks.size) { i ->
+        items(
+            count = networks.size,
+            key = { i -> networks[i].id }
+        ) { i ->
             val network = networks[i]
-            val networkId = "${network.ssid}|${network.security.name}"
+            val networkId = network.id
             WifiNetworkCard(
                 network = network,
                 expanded = networkId in expandedNetworks,

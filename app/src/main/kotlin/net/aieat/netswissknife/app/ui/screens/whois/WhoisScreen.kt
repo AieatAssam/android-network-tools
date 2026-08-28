@@ -6,6 +6,7 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.InfiniteTransition
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -25,6 +26,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -282,50 +284,71 @@ private fun WhoisHeroHeader(onHelpClick: () -> Unit) {
 
 // ── Relay Chain Visualiser ────────────────────────────────────────────────────
 
+private val HopNodeSize = 40.dp
+private val HopNodeRadius = HopNodeSize / 2
+private val HopConnectorStroke = 2.dp
+
 @Composable
 fun RelayChainVisualiser(hopStates: List<HopUiState>) {
     if (hopStates.isEmpty()) return
 
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+    val connectorColor = MaterialTheme.colorScheme.outlineVariant
 
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .height(100.dp)
+            .padding(vertical = 12.dp),
+        // The querying node pulses to 1.1x, so leave room for the enlarged
+        // circle rather than letting it touch the labels below.
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        // Canvas for lines and travelling dots
-        Canvas(modifier = Modifier.matchParentSize()) {
-            if (hopStates.size < 2) return@Canvas
-            val nodeRadius = 20.dp.toPx()
-            val totalWidth = size.width
-            val spacing = totalWidth / hopStates.size
-            val nodeY = size.height / 2f
+        // The circles get their own fixed-height row so the connector canvas can
+        // use size.height / 2 as the node centre. Drawing circles and labels in
+        // one row made the line drift downwards as per-hop timings appeared
+        // mid-scan and grew the row.
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(HopNodeSize)
+        ) {
+            Canvas(modifier = Modifier.matchParentSize()) {
+                val centerY = size.height / 2f
+                val stroke = HopConnectorStroke.toPx()
+                RelayChainGeometry
+                    .connectorSegments(hopStates.size, size.width, HopNodeRadius.toPx())
+                    .forEach { segment ->
+                        drawLine(
+                            color = connectorColor,
+                            start = Offset(segment.startX, centerY),
+                            end = Offset(segment.endX, centerY),
+                            strokeWidth = stroke
+                        )
+                    }
+            }
 
-            for (i in 0 until hopStates.size - 1) {
-                val startX = spacing * i + spacing / 2f
-                val endX = spacing * (i + 1) + spacing / 2f
-                drawLine(
-                    color = Color.Gray.copy(alpha = 0.3f),
-                    start = Offset(startX + nodeRadius, nodeY),
-                    end = Offset(endX - nodeRadius, nodeY),
-                    strokeWidth = 2.dp.toPx()
-                )
+            // Equal-weight cells, no arrangement spacing and no padding: this must
+            // stay in lockstep with RelayChainGeometry.nodeCenterX.
+            Row(modifier = Modifier.fillMaxSize()) {
+                hopStates.forEach { hop ->
+                    HopNodeCircle(
+                        hop = hop,
+                        infiniteTransition = infiniteTransition,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                    )
+                }
             }
         }
 
-        // Node composables in a Row
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 4.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        Row(modifier = Modifier.fillMaxWidth()) {
             hopStates.forEach { hop ->
-                HopNode(
+                HopNodeLabels(
                     hop = hop,
-                    infiniteTransition = infiniteTransition,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = 2.dp)
                 )
             }
         }
@@ -333,23 +356,13 @@ fun RelayChainVisualiser(hopStates: List<HopUiState>) {
 }
 
 @Composable
-fun HopNode(
+private fun HopNodeCircle(
     hop: HopUiState,
-    infiniteTransition: androidx.compose.animation.core.InfiniteTransition,
+    infiniteTransition: InfiniteTransition,
     modifier: Modifier = Modifier
 ) {
-    val roleColor = when (hop.server.role) {
-        WhoisServerRole.IANA -> MaterialTheme.colorScheme.tertiaryContainer
-        WhoisServerRole.REGISTRY -> MaterialTheme.colorScheme.primaryContainer
-        WhoisServerRole.REGISTRAR -> MaterialTheme.colorScheme.secondaryContainer
-        WhoisServerRole.RIR -> MaterialTheme.colorScheme.secondaryContainer
-    }
-    val roleOnColor = when (hop.server.role) {
-        WhoisServerRole.IANA -> MaterialTheme.colorScheme.onTertiaryContainer
-        WhoisServerRole.REGISTRY -> MaterialTheme.colorScheme.onPrimaryContainer
-        WhoisServerRole.REGISTRAR -> MaterialTheme.colorScheme.onSecondaryContainer
-        WhoisServerRole.RIR -> MaterialTheme.colorScheme.onSecondaryContainer
-    }
+    val roleColor = hopRoleContainerColor(hop.server.role)
+    val roleOnColor = hopRoleOnContainerColor(hop.server.role)
 
     val pulseScale by infiniteTransition.animateFloat(
         initialValue = 0.9f,
@@ -369,14 +382,10 @@ fun HopNode(
         label = "node_bg"
     )
 
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(2.dp)
-    ) {
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
         Box(
             modifier = Modifier
-                .size(40.dp)
+                .size(HopNodeSize)
                 .scale(if (hop.status == HopStatus.QUERYING) pulseScale else 1f)
                 .clip(CircleShape)
                 .background(bgColor),
@@ -384,12 +393,16 @@ fun HopNode(
         ) {
             when (hop.status) {
                 HopStatus.DONE ->
-                    Icon(Icons.Default.Check, contentDescription = null,
-                        modifier = Modifier.size(20.dp), tint = roleOnColor)
+                    Icon(
+                        Icons.Default.Check, contentDescription = null,
+                        modifier = Modifier.size(20.dp), tint = roleOnColor
+                    )
                 HopStatus.FAILED ->
-                    Icon(Icons.Default.Close, contentDescription = null,
+                    Icon(
+                        Icons.Default.Close, contentDescription = null,
                         modifier = Modifier.size(20.dp),
-                        tint = MaterialTheme.colorScheme.onErrorContainer)
+                        tint = MaterialTheme.colorScheme.onErrorContainer
+                    )
                 HopStatus.QUERYING ->
                     CircularProgressIndicator(
                         modifier = Modifier.size(20.dp),
@@ -399,7 +412,16 @@ fun HopNode(
                 else -> {}
             }
         }
+    }
+}
 
+@Composable
+private fun HopNodeLabels(hop: HopUiState, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
         Text(
             text = hop.server.host,
             style = MaterialTheme.typography.labelSmall,
@@ -417,7 +439,7 @@ fun HopNode(
 
         if (hop.status == HopStatus.DONE && hop.queryTimeMs != null) {
             Text(
-                text = "${hop.queryTimeMs} ms",
+                text = stringResource(R.string.whois_hop_latency_ms, hop.queryTimeMs),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
@@ -425,6 +447,23 @@ fun HopNode(
         }
     }
 }
+
+@Composable
+private fun hopRoleContainerColor(role: WhoisServerRole): Color = when (role) {
+    WhoisServerRole.IANA -> MaterialTheme.colorScheme.tertiaryContainer
+    WhoisServerRole.REGISTRY -> MaterialTheme.colorScheme.primaryContainer
+    WhoisServerRole.REGISTRAR -> MaterialTheme.colorScheme.secondaryContainer
+    WhoisServerRole.RIR -> MaterialTheme.colorScheme.secondaryContainer
+}
+
+@Composable
+private fun hopRoleOnContainerColor(role: WhoisServerRole): Color = when (role) {
+    WhoisServerRole.IANA -> MaterialTheme.colorScheme.onTertiaryContainer
+    WhoisServerRole.REGISTRY -> MaterialTheme.colorScheme.onPrimaryContainer
+    WhoisServerRole.REGISTRAR -> MaterialTheme.colorScheme.onSecondaryContainer
+    WhoisServerRole.RIR -> MaterialTheme.colorScheme.onSecondaryContainer
+}
+
 
 // ── Idle Card ─────────────────────────────────────────────────────────────────
 
