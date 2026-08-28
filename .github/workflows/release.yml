@@ -267,6 +267,10 @@ jobs:
               | sed -E 's/ \(#[0-9]+\)$//' \
               | sed 's/^/- /')
             [ -n "$commits" ] && { echo "### $1"; echo "$commits"; echo; }
+            # Never propagate a non-zero status: the step runs under `bash -e`,
+            # so an empty section would abort the script mid-heredoc and leave
+            # CHANGELOG_EOF unwritten ("Matching delimiter not found").
+            return 0
           }
 
           {
@@ -279,7 +283,7 @@ jobs:
               | sed -E 's/^[a-z]+(\([^)]*\))?!?: //' \
               | sed -E 's/ \(#[0-9]+\)$//' \
               | sed 's/^/- /')
-            [ -n "$OTHER" ] && { echo "### Other changes"; echo "$OTHER"; echo; }
+            [ -n "$OTHER" ] && { echo "### Other changes"; echo "$OTHER"; echo; } || true
             echo 'CHANGELOG_EOF'
           } >> "$GITHUB_OUTPUT"
 
