@@ -1,0 +1,47 @@
+14 network tools in one app. No ads, no tracking, no account, open source.
+
+Ping, traceroute, port and LAN scanners, Wi-Fi spectrum analyser, speed test, DNS, WHOIS, TLS inspector, HTTP probe, subnet calculator, mDNS browser, Wake-on-LAN and SNMP topology discovery — one clean Material You app, everything running from your device.
+
+━━ TOOLS ━━
+
+PING — per-packet RTT, packet loss and min/avg/max stats on a live chart. Configurable count, timeout and packet size. Continuous mode runs on a rolling 100-packet window and exports as CSV.
+
+TRACEROUTE — every hop with IP, reverse-DNS hostname, RTT and approximate location. ICMP or UDP, up to 64 hops, 1–5 probes per hop, automatic MTU discovery.
+
+PORT SCANNER — TCP reachability with service names and banner grabbing. Seven presets — Common Services, Well-Known 1–1024, Web, Databases, Mail, Remote Access — or a custom range up to 10,000 ports.
+
+LAN SCANNER — every active device on your network: IP, hostname, MAC address, vendor, open ports, response time and gateway flag. Subnet auto-detected or entered as CIDR, with live search and filters.
+
+WI-FI SCANNER — access points grouped by SSID with a spectrum analyser per band (2.4 / 5 / 6 GHz). Signal, channel, width, security and 802.11 standard per BSSID, plus a best-channel recommendation.
+
+SPEED TEST — latency, download and upload against Cloudflare's speed backend, streamed live with a gauge and throughput chart. Reports jitter, peak and average throughput.
+
+DNS LOOKUP — ten record types (A, AAAA, MX, TXT, CNAME, NS, SOA, PTR, SRV, CAA) against your system resolver, Google 8.8.8.8, Cloudflare 1.1.1.1 or a custom server. PTR accepts a plain IP; query time and raw response included.
+
+WHOIS LOOKUP — domains, IPv4, IPv6 and ASNs resolved through the real referral chain: IANA to TLD registry to registrar. Parsed registrar, dates, name servers, DNSSEC and status codes in plain English.
+
+TLS INSPECTOR — full certificate chain for any TCP host: subject, issuer, validity, SANs, algorithms and SHA-256 fingerprint, plus TLS version, cipher suite and trust status. Flags expired and self-signed certs.
+
+HTTP PROBE — GET, POST, PUT, PATCH, DELETE, HEAD and OPTIONS with custom headers, a body editor and the redirect chain. Overview, Headers and Body tabs, plus a Security tab rating HSTS, CSP, X-Frame-Options and four more security headers.
+
+SUBNET CALCULATOR — network, broadcast, first and last host and host counts from CIDR, mask or IP range. Colour-coded binary breakdown of network and host bits, conversion between CIDR, wildcard, hex and binary masks, plus class and scope.
+
+mDNS BROWSER — discover Bonjour / DNS-SD services on your LAN without knowing what to look for: AirPlay, printers, HomeKit, Spotify Connect and more, with hostname, port, IP addresses and TXT records.
+
+WAKE-ON-LAN — wake a sleeping machine with a magic packet. Accepts every common MAC format, with custom broadcast address and port.
+
+NETWORK TOPOLOGY — SNMP v1/v2c/v3 discovery walking LLDP and CDP neighbours from a seed device. Per-node vendor, model, firmware and uptime, interface status and VLANs, on an interactive pan-and-zoom map.
+
+━━ DESIGN ━━
+
+Material 3 with dynamic colour from your wallpaper, light and dark themes, results animated in as they stream. Pin your three most-used tools to the bottom bar and set your own defaults.
+
+━━ PRIVACY ━━
+
+No account. No analytics SDK. No ads. No usage tracking. Results stay on your device.
+
+The only outbound request beyond the targets you type is an IP geolocation lookup (ipinfo.io) labelling traceroute hops; private and reserved addresses are filtered out first. Speed test traffic goes to speed.cloudflare.com; Net Swiss Knife is independent and not affiliated with or endorsed by Cloudflare, Inc.
+
+Location permission is requested only because Android requires it for Wi-Fi scanning; your location is never recorded or transmitted.
+
+MIT licensed — source at github.com/AieatAssam/android-network-tools
