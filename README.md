@@ -178,14 +178,14 @@ Android module (Jetpack Compose, Material 3, Hilt). Contains:
 
 | Layer | Technology | Notes |
 |-------|-----------|-------|
-| Language | Kotlin 1.9.x | JDK 21, Kotlin DSL everywhere |
+| Language | Kotlin 2.4.x | JDK 21, Kotlin DSL everywhere |
 | UI | Jetpack Compose + Material 3 | Animated, high-fidelity UI |
-| Navigation | Navigation Compose 2.7.x | Bottom nav + animated transitions |
-| DI | Hilt 2.51.x | `@HiltViewModel`, `@AndroidEntryPoint` |
+| Navigation | Navigation Compose 2.9.x | Bottom nav + animated transitions |
+| DI | Hilt 2.60.x | `@HiltViewModel`, `@AndroidEntryPoint` |
 | Async | Coroutines + Flow | `viewModelScope`, `StateFlow` |
 | Testing | JUnit 5 + MockK | TDD (Red → Green → Refactor) |
-| Build | Gradle 8.x Kotlin DSL + Version Catalog | `gradle/libs.versions.toml` |
-| Min SDK | 26 (Android 8.0) | Target SDK 34 |
+| Build | AGP 9.x, Gradle 9.x Kotlin DSL + Version Catalog | `gradle/libs.versions.toml` |
+| Min SDK | 26 (Android 8.0) | Compile / Target SDK 37 |
 
 ---
 
@@ -193,7 +193,7 @@ Android module (Jetpack Compose, Material 3, Hilt). Contains:
 
 ### Prerequisites
 - JDK 21
-- Android SDK (API level 34)
+- Android SDK (API level 37)
 
 ### Run unit tests (all modules)
 ```bash
@@ -215,6 +215,13 @@ Android module (Jetpack Compose, Material 3, Hilt). Contains:
 ```bash
 ./gradlew :app:assembleRelease
 ./gradlew :app:bundleRelease
+```
+
+### Coverage (Kover)
+```bash
+./gradlew :app:koverVerify        # enforce 100% on pure, non-Compose app logic
+./gradlew :app:koverHtmlReport    # scoped :app report
+./gradlew :core-network:koverHtmlReport :core-domain:koverHtmlReport
 ```
 
 ---
