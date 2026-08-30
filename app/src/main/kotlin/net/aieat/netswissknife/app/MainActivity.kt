@@ -4,20 +4,25 @@ import android.os.Bundle
 import net.aieat.netswissknife.app.BuildConfig
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.union
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarDefaults
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,7 +47,16 @@ import dagger.hilt.android.AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
-        enableEdgeToEdge()
+        // Draw behind the system bars on every supported API level.
+        //
+        // NOTE: do NOT use androidx.activity's enableEdgeToEdge() here. It calls
+        // Window.setStatusBarColor / setNavigationBarColor and sets
+        // LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES, all deprecated in Android 15,
+        // which Play Console flags as "deprecated APIs for edge-to-edge".
+        // setDecorFitsSystemWindows() is the non-deprecated equivalent; the
+        // transparent system bar colours needed below API 35 come from themes.xml,
+        // and the bar icon appearance is set in NetSwissKnifeTheme.
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         super.onCreate(savedInstanceState)
         setContent {
             val settingsViewModel: SettingsViewModel = hiltViewModel()
@@ -80,7 +94,11 @@ fun NetSwissKnifeApp(navController: NavHostController) {
     ) { innerPadding ->
         AppNavHost(
             navController = navController,
-            modifier      = Modifier.padding(innerPadding)
+            // The bottom bar's window insets already include the IME, so
+            // innerPadding accounts for the keyboard — no imePadding() here.
+            modifier      = Modifier
+                .padding(innerPadding)
+                .consumeWindowInsets(innerPadding)
         )
     }
 
@@ -131,7 +149,11 @@ private fun AppBottomNavigationBar(
         NavRoutes.allTools.find { it.route == route }
     }
 
-    NavigationBar {
+    // union() takes the larger inset per side, so the bar sits above the keyboard
+    // when it is open and above the navigation bar otherwise. Modifier.imePadding()
+    // would instead stack on top of the bar's own navigationBars inset and leave a
+    // navigation-bar-sized gap while the IME is showing.
+    NavigationBar(windowInsets = NavigationBarDefaults.windowInsets.union(WindowInsets.ime)) {
         // Home is always first
         NavigationBarItem(
             selected = currentRoute == NavRoutes.Home.route,
