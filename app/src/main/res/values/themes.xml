@@ -19,5 +19,12 @@
         <item name="windowSplashScreenBackground">@color/ic_launcher_background</item>
         <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
         <item name="postSplashScreenTheme">@style/Theme.NetSwissKnife</item>
+        <!-- Repeated from Theme.NetSwissKnife: this theme derives from
+             Theme.SplashScreen, not from Theme.NetSwissKnife, and it is the theme
+             MainActivity's window is created with. Relying on the
+             postSplashScreenTheme handover to land before the decor view reads
+             these attributes would leave opaque bars on API 26-34. -->
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
     </style>
 </resources>

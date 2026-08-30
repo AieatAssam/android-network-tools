@@ -5,14 +5,17 @@ import net.aieat.netswissknife.app.BuildConfig
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
-import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.union
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarDefaults
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -85,15 +88,14 @@ fun NetSwissKnifeApp(navController: NavHostController) {
             AppBottomNavigationBar(
                 navController  = navController,
                 pinnedRoutes   = pinnedRoutes,
-                onMoreClick    = { showMoreSheet = true },
-                modifier       = Modifier.imePadding()
+                onMoreClick    = { showMoreSheet = true }
             )
         }
     ) { innerPadding ->
         AppNavHost(
             navController = navController,
-            // The bottom bar carries imePadding(), so innerPadding already
-            // accounts for the keyboard — do not add imePadding() again here.
+            // The bottom bar's window insets already include the IME, so
+            // innerPadding accounts for the keyboard — no imePadding() here.
             modifier      = Modifier
                 .padding(innerPadding)
                 .consumeWindowInsets(innerPadding)
@@ -138,8 +140,7 @@ fun NetSwissKnifeApp(navController: NavHostController) {
 private fun AppBottomNavigationBar(
     navController: NavHostController,
     pinnedRoutes: List<String>,
-    onMoreClick: () -> Unit,
-    modifier: Modifier = Modifier
+    onMoreClick: () -> Unit
 ) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
@@ -148,7 +149,11 @@ private fun AppBottomNavigationBar(
         NavRoutes.allTools.find { it.route == route }
     }
 
-    NavigationBar(modifier = modifier) {
+    // union() takes the larger inset per side, so the bar sits above the keyboard
+    // when it is open and above the navigation bar otherwise. Modifier.imePadding()
+    // would instead stack on top of the bar's own navigationBars inset and leave a
+    // navigation-bar-sized gap while the IME is showing.
+    NavigationBar(windowInsets = NavigationBarDefaults.windowInsets.union(WindowInsets.ime)) {
         // Home is always first
         NavigationBarItem(
             selected = currentRoute == NavRoutes.Home.route,
