@@ -4,8 +4,9 @@ import android.os.Bundle
 import net.aieat.netswissknife.app.BuildConfig
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
@@ -18,6 +19,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,7 +44,16 @@ import dagger.hilt.android.AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
-        enableEdgeToEdge()
+        // Draw behind the system bars on every supported API level.
+        //
+        // NOTE: do NOT use androidx.activity's enableEdgeToEdge() here. It calls
+        // Window.setStatusBarColor / setNavigationBarColor and sets
+        // LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES, all deprecated in Android 15,
+        // which Play Console flags as "deprecated APIs for edge-to-edge".
+        // setDecorFitsSystemWindows() is the non-deprecated equivalent; the
+        // transparent system bar colours needed below API 35 come from themes.xml,
+        // and the bar icon appearance is set in NetSwissKnifeTheme.
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         super.onCreate(savedInstanceState)
         setContent {
             val settingsViewModel: SettingsViewModel = hiltViewModel()
@@ -74,13 +85,18 @@ fun NetSwissKnifeApp(navController: NavHostController) {
             AppBottomNavigationBar(
                 navController  = navController,
                 pinnedRoutes   = pinnedRoutes,
-                onMoreClick    = { showMoreSheet = true }
+                onMoreClick    = { showMoreSheet = true },
+                modifier       = Modifier.imePadding()
             )
         }
     ) { innerPadding ->
         AppNavHost(
             navController = navController,
-            modifier      = Modifier.padding(innerPadding)
+            // The bottom bar carries imePadding(), so innerPadding already
+            // accounts for the keyboard — do not add imePadding() again here.
+            modifier      = Modifier
+                .padding(innerPadding)
+                .consumeWindowInsets(innerPadding)
         )
     }
 
@@ -122,7 +138,8 @@ fun NetSwissKnifeApp(navController: NavHostController) {
 private fun AppBottomNavigationBar(
     navController: NavHostController,
     pinnedRoutes: List<String>,
-    onMoreClick: () -> Unit
+    onMoreClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
@@ -131,7 +148,7 @@ private fun AppBottomNavigationBar(
         NavRoutes.allTools.find { it.route == route }
     }
 
-    NavigationBar {
+    NavigationBar(modifier = modifier) {
         // Home is always first
         NavigationBarItem(
             selected = currentRoute == NavRoutes.Home.route,

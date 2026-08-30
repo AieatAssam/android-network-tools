@@ -7,7 +7,6 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
@@ -53,6 +52,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
+import androidx.core.view.WindowCompat
 import androidx.compose.ui.unit.dp
 import net.aieat.netswissknife.app.MainActivity
 import net.aieat.netswissknife.app.R
@@ -62,7 +62,9 @@ import kotlinx.coroutines.launch
 class CrashActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        enableEdgeToEdge()
+        // See MainActivity: androidx.activity's enableEdgeToEdge() relies on APIs
+        // deprecated in Android 15. setDecorFitsSystemWindows() is the replacement.
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         super.onCreate(savedInstanceState)
 
         val stackTrace = intent.getStringExtra(EXTRA_STACK_TRACE) ?: "No stack trace"
