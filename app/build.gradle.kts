@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
     alias(libs.plugins.kover)
+    alias(libs.plugins.ktlint)
 }
 
 // ── CI-supplied properties ────────────────────────────────────────────────────
@@ -18,6 +19,17 @@ val ciStorePassword: String? = findProperty("storePassword") as String?
 val ciKeyAlias:      String? = findProperty("keyAlias")      as String?
 val ciKeyPassword:   String? = findProperty("keyPassword")   as String?
 
+private val releaseSigningValues = listOf(
+    "storeFile" to ciStoreFile,
+    "storePassword" to ciStorePassword,
+    "keyAlias" to ciKeyAlias,
+    "keyPassword" to ciKeyPassword,
+)
+private val releaseSigningConfigured = releaseSigningValues.any { !it.second.isNullOrBlank() }
+check(!releaseSigningConfigured || releaseSigningValues.all { !it.second.isNullOrBlank() }) {
+    "Release signing requires storeFile, storePassword, keyAlias, and keyPassword together."
+}
+
 android {
     namespace  = "net.aieat.netswissknife.app"
     compileSdk = 37
@@ -27,7 +39,9 @@ android {
         minSdk        = 26
         targetSdk     = 37
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        versionCode   = ciVersionCode ?: (System.currentTimeMillis() / 1000).toInt()
+        // Release workflows always provide these values. A stable local default keeps
+        // debug and unsigned release builds reproducible across machines and invocations.
+        versionCode   = ciVersionCode ?: 1
         versionName   = ciVersionName ?: "1.0.0"
     }
 
@@ -39,12 +53,16 @@ android {
             keyAlias      = "androiddebugkey"
             keyPassword   = "android"
         }
-        if (ciStoreFile != null) {
+        if (releaseSigningConfigured) {
             create("release") {
-                storeFile     = file(ciStoreFile)
-                storePassword = ciStorePassword
-                keyAlias      = ciKeyAlias
-                keyPassword   = ciKeyPassword
+                val keystore = file(requireNotNull(ciStoreFile))
+                check(keystore.isFile) {
+                    "Release keystore does not exist: ${keystore.absolutePath}"
+                }
+                storeFile     = keystore
+                storePassword = requireNotNull(ciStorePassword)
+                keyAlias      = requireNotNull(ciKeyAlias)
+                keyPassword   = requireNotNull(ciKeyPassword)
             }
         }
     }
@@ -61,10 +79,10 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = if (ciStoreFile != null) {
-                signingConfigs.getByName("release")
-            } else {
-                signingConfigs.getByName("debug")
+            // Deliberately leave this unset when no release key is supplied. AGP then
+            // emits an unsigned artifact; it must never silently use the debug key.
+            if (releaseSigningConfigured) {
+                signingConfig = signingConfigs.getByName("release")
             }
             ndk {
                 // All three native deps (libicmpenguin, libandroidx.graphics.path,
@@ -90,6 +108,14 @@ android {
         compose = true
         buildConfig = true
     }
+}
+
+configure<org.jlleitschuh.gradle.ktlint.KtlintExtension> {
+    // Pin the CLI independently from the wrapper plugin for reproducible checks.
+    version.set("1.7.1")
+    android.set(true)
+    outputToConsole.set(true)
+    ignoreFailures.set(false)
 }
 
 dependencies {

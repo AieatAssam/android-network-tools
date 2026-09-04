@@ -40,7 +40,7 @@ jobs:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle/libs.versions.toml', '**/gradle-wrapper.properties') }}
           restore-keys: |
             ${{ runner.os }}-gradle-
 
@@ -98,40 +98,41 @@ jobs:
           name: test-results
           path: '**/build/reports/tests/'
 
+      # Keep release builds subject to the same source and Android quality gates
+      # as pull requests, before any signing key is used.
+      - name: Run Android Lint
+        run: ./gradlew lintDebug --no-daemon
+
+      - name: Run Kotlin style checks
+        run: ./gradlew ktlintCheck --no-daemon
+
       # ── 6. Check signing configuration ────────────────────────────────────
-      # secrets context is not available in `if:` expressions, so we detect
-      # keystore presence here and expose it as a step output instead.
       - name: Check signing configuration
-        id: signing
         env:
           KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: |
-          if [ -n "$KEYSTORE_B64" ]; then
-            echo "has_keystore=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_keystore=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::No RELEASE_KEYSTORE_BASE64 secret found – building unsigned APK/AAB."
+          missing=()
+          [ -n "$KEYSTORE_B64" ] || missing+=(RELEASE_KEYSTORE_BASE64)
+          [ -n "$KEYSTORE_PASSWORD" ] || missing+=(RELEASE_KEYSTORE_PASSWORD)
+          [ -n "$KEY_ALIAS" ] || missing+=(RELEASE_KEY_ALIAS)
+          [ -n "$KEY_PASSWORD" ] || missing+=(RELEASE_KEY_PASSWORD)
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::error::Release signing is required; missing secret(s): ${missing[*]}"
+            exit 1
           fi
 
       # ── 7. Decode keystore ────────────────────────────────────────────────
       - name: Decode release keystore
-        if: steps.signing.outputs.has_keystore == 'true'
         env:
           KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
         run: |
-          echo "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/release.keystore"
+          echo "$KEYSTORE_B64" | base64 --decode --strict > "$RUNNER_TEMP/release.keystore"
 
       # ── 8. Build release APK ──────────────────────────────────────────────
-      - name: Build release APK (unsigned – no keystore)
-        if: steps.signing.outputs.has_keystore == 'false'
-        run: |
-          ./gradlew :app:assembleRelease \
-            -PversionName="${{ steps.version.outputs.name }}" \
-            -PversionCode="${{ steps.version.outputs.code }}" \
-            --no-daemon
-
-      - name: Build release APK (signed)
-        if: steps.signing.outputs.has_keystore == 'true'
+      - name: Build signed release APK
         run: |
           ./gradlew :app:assembleRelease \
             -PversionName="${{ steps.version.outputs.name }}" \
@@ -143,16 +144,7 @@ jobs:
             --no-daemon
 
       # ── 9. Build release AAB ──────────────────────────────────────────────
-      - name: Build release AAB (unsigned – no keystore)
-        if: steps.signing.outputs.has_keystore == 'false'
-        run: |
-          ./gradlew :app:bundleRelease \
-            -PversionName="${{ steps.version.outputs.name }}" \
-            -PversionCode="${{ steps.version.outputs.code }}" \
-            --no-daemon
-
-      - name: Build release AAB (signed)
-        if: steps.signing.outputs.has_keystore == 'true'
+      - name: Build signed release AAB
         run: |
           ./gradlew :app:bundleRelease \
             -PversionName="${{ steps.version.outputs.name }}" \
@@ -308,8 +300,8 @@ jobs:
 
             ### Build info
             - Version code: `${{ steps.version.outputs.code }}`
-            - Signed: ${{ steps.signing.outputs.has_keystore == 'true' && 'Yes (release key)' || 'Debug key (sideload only – not for Play Store)' }}
+            - Signed: Yes (release key)
 
-            Install the `.apk` directly, or use the `.aab` for Play Store upload.
+            Install the signed `.apk` directly, or use the signed `.aab` for Play Store upload.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

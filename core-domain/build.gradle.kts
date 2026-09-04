@@ -1,6 +1,13 @@
 plugins {
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.kover)
+    alias(libs.plugins.ktlint)
+}
+
+configure<org.jlleitschuh.gradle.ktlint.KtlintExtension> {
+    version.set("1.7.1")
+    outputToConsole.set(true)
+    ignoreFailures.set(false)
 }
 
 java {

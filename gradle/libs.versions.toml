@@ -1,5 +1,5 @@
 [versions]
-agp = "9.3.1"
+agp = "9.4.0"
 coroutines = "1.11.0"
 dnsjava = "3.6.5"
 snmp4j = "3.12.2"
@@ -7,8 +7,8 @@ icmpenguin = "1.0.0-rc.4"
 kotlin = "2.4.10"
 ksp = "2.3.10"
 kover = "0.9.9"
-composeBom = "2026.06.01"
-navigationCompose = "2.9.8"
+composeBom = "2026.08.00"
+navigationCompose = "2.10.0"
 hilt = "2.60.1"
 hiltNavigationCompose = "1.4.0"
 junit5 = "6.1.2"
@@ -20,6 +20,7 @@ lifecycleViewmodelCompose = "2.11.0"
 datastorePreferences = "1.2.1"
 androidxTestExtJunit = "1.2.1"
 androidxTestRules = "1.6.2"
+ktlint = "14.2.0"
 
 [libraries]
 # AndroidX Core
@@ -73,3 +74,4 @@ compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
 kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
+ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlint" }

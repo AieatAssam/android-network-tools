@@ -26,12 +26,29 @@ jobs:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle/libs.versions.toml', '**/gradle-wrapper.properties') }}
           restore-keys: |
             ${{ runner.os }}-gradle-
 
       - name: Make gradlew executable
         run: chmod +x ./gradlew
+
+      - name: Run Android Lint
+        run: ./gradlew lintDebug --no-daemon
+
+      - name: Run Kotlin style checks
+        run: ./gradlew ktlintCheck --no-daemon
+
+      - name: Report dependency updates
+        run: ./gradlew dependencyUpdates --no-daemon --no-parallel
+
+      - name: Upload dependency update report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-updates
+          path: build/dependencyUpdates/
+          if-no-files-found: warn
 
       - name: Run unit tests
         run: ./gradlew test

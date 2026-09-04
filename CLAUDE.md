@@ -47,9 +47,10 @@ android-network-tools/
 |---------|-----------|-------|
 | Language | Kotlin 2.4.x | JDK 21, Kotlin DSL everywhere |
 | UI | Jetpack Compose + Material 3 | **High-fidelity, animated UI required** |
-| Navigation | Navigation Compose 2.9.x | Bottom nav + animated transitions |
+| Navigation | Navigation Compose 2.10.x | Bottom nav + animated transitions |
 | DI | Hilt 2.60.x | `@HiltViewModel`, `@AndroidEntryPoint` |
 | Async | Coroutines + Flow | `viewModelScope`, `StateFlow` |
+| Quality | Android Lint + KtLint | Required in CI; dependency updates are reported from the root build |
 | Testing | JUnit 5 + MockK | TDD (Red → Green → Refactor) |
 | Build | AGP 9.x, Gradle 9.x Kotlin DSL + Version Catalog | `gradle/libs.versions.toml` |
 | Min SDK | 26 (Android 8.0) | Target SDK 37 |
