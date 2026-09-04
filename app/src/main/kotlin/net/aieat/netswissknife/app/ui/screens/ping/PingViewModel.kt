@@ -74,9 +74,6 @@ class PingViewModel @Inject constructor(
     private val _timeoutMs = MutableStateFlow(2_000)
     val timeoutMs: StateFlow<Int> = _timeoutMs.asStateFlow()
 
-    private val _packetSize = MutableStateFlow(56)
-    val packetSize: StateFlow<Int> = _packetSize.asStateFlow()
-
     private val _continuousMode = MutableStateFlow(false)
     val continuousMode: StateFlow<Boolean> = _continuousMode.asStateFlow()
 
@@ -102,8 +99,6 @@ class PingViewModel @Inject constructor(
     fun onCountChange(value: Int) { _count.value = value.coerceIn(1, 100) }
 
     fun onTimeoutChange(value: Int) { _timeoutMs.value = value.coerceIn(100, 30_000) }
-
-    fun onPacketSizeChange(value: Int) { _packetSize.value = value.coerceIn(1, 65_507) }
 
     fun onToggleContinuous(enabled: Boolean) { _continuousMode.value = enabled }
 
@@ -171,8 +166,7 @@ class PingViewModel @Inject constructor(
         val params = PingParams(
             host = _host.value,
             count = _count.value,
-            timeoutMs = _timeoutMs.value,
-            packetSize = _packetSize.value
+            timeoutMs = _timeoutMs.value
         )
         val trimmedHost = params.host.trim()
 
@@ -225,8 +219,7 @@ class PingViewModel @Inject constructor(
         val trimmedHost = _host.value.trim()
         val params = ContinuousPingParams(
             host = trimmedHost,
-            timeoutMs = _timeoutMs.value,
-            packetSize = _packetSize.value
+            timeoutMs = _timeoutMs.value
         )
 
         val logFile = File.createTempFile("ping_session_", ".csv")
@@ -315,22 +308,21 @@ class PingViewModel @Inject constructor(
 
     private fun buildResult(host: String, packets: List<PingPacketResult>, totalCount: Int): PingResult {
         val stats = PingStats.compute(packets)
-        val raw = buildRawOutput(host, packets, stats, _packetSize.value)
+        val raw = buildRawOutput(host, packets, stats)
         return PingResult(host = host, packets = packets, stats = stats, rawOutput = raw)
     }
 
     private fun buildRawOutput(
         host: String,
         packets: List<PingPacketResult>,
-        stats: PingStats,
-        packetSize: Int
+        stats: PingStats
     ): String = buildString {
-        appendLine("PING $host: $packetSize data bytes")
+        appendLine("PING $host")
         appendLine()
         packets.forEach { p ->
             when (p.status) {
                 PingStatus.SUCCESS ->
-                    appendLine("${packetSize + 8} bytes from ${p.host}: icmp_seq=${p.sequence} ttl=64 time=${p.rtTimeMs} ms")
+                    appendLine("${p.host}: icmp_seq=${p.sequence} ttl=64 time=${p.rtTimeMs} ms")
                 PingStatus.TIMEOUT ->
                     appendLine("Request timeout for icmp_seq ${p.sequence}")
                 PingStatus.ERROR ->

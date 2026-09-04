@@ -7,8 +7,8 @@
 ## Features
 
 ### Ping
-ICMP round-trip latency measurement with real-time streaming results.
-- Configurable probe count (1–50 via slider; default configurable up to 100 in Settings), timeout (100–30,000 ms), and packet size (1–65,507 bytes)
+Reachability and round-trip latency measurement with real-time streaming results. Android attempts ICMP and may fall back to TCP when ICMP is unavailable.
+- Configurable probe count (1–50 via slider; default configurable up to 100 in Settings) and timeout (100–30,000 ms)
 - Per-probe RTT reporting with sequence numbers and status (SUCCESS / TIMEOUT / ERROR)
 - Live stats panel during active ping: packet loss %, min, avg, and max RTT updating after every packet
 - RTT chart with Y-axis ms labels and fill gradient, rendered as results arrive
@@ -16,6 +16,7 @@ ICMP round-trip latency measurement with real-time streaming results.
   - Rolling window of the last 100 packets drives live stats and chart
   - Full session log streamed to a temp CSV file; shareable via the Share button on completion
 - Recent hosts saved per-session and offered as quick-select chips
+- Payload size is intentionally not configurable because Android's supported reachability API does not expose an ICMP payload-size control.
 
 ### Traceroute
 Network path analysis with per-hop geolocation enrichment.

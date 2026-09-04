@@ -28,18 +28,19 @@ class PingRepositoryImpl(
 
     companion object {
         val DEFAULT_CHECKER: (String, Int) -> ReachabilityResult = { host, timeoutMs ->
-            val start = System.currentTimeMillis()
+            val startNs = System.nanoTime()
+            fun elapsedMs(): Long = (System.nanoTime() - startNs) / 1_000_000L
             try {
                 val addr = InetAddress.getByName(host)
                 val reachable = addr.isReachable(timeoutMs)
                 ReachabilityResult(
                     reachable = reachable,
-                    rtTimeMs = System.currentTimeMillis() - start
+                    rtTimeMs = elapsedMs()
                 )
             } catch (e: Exception) {
                 ReachabilityResult(
                     reachable = false,
-                    rtTimeMs = System.currentTimeMillis() - start,
+                    rtTimeMs = elapsedMs(),
                     errorMessage = e.message ?: e.javaClass.simpleName
                 )
             }
@@ -49,8 +50,7 @@ class PingRepositoryImpl(
     override fun ping(
         host: String,
         count: Int,
-        timeoutMs: Int,
-        packetSize: Int
+        timeoutMs: Int
     ): Flow<PingPacketResult> = flow {
         for (seq in 1..count) {
             emit(buildPacket(host, seq, timeoutMs))
@@ -60,8 +60,7 @@ class PingRepositoryImpl(
 
     override fun continuousPing(
         host: String,
-        timeoutMs: Int,
-        packetSize: Int
+        timeoutMs: Int
     ): Flow<PingPacketResult> = flow {
         var seq = 1
         while (true) {

@@ -1,6 +1,7 @@
 package net.aieat.netswissknife.core.network.dns
 
 import net.aieat.netswissknife.core.network.NetworkResult
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.xbill.DNS.DClass
@@ -70,7 +71,7 @@ class DnsRepositoryImpl : DnsRepository {
         recordType: DnsRecordType,
         server: DnsServer
     ): NetworkResult<DnsResult> = withContext(Dispatchers.IO) {
-        val startMs = System.currentTimeMillis()
+        val startNs = System.nanoTime()
 
         try {
             val normalizedDomain = normalizeDomain(domain, recordType)
@@ -86,7 +87,7 @@ class DnsRepositoryImpl : DnsRepository {
 
             // Send query and receive response
             val response = resolver.send(queryMessage)
-            val queryTimeMs = System.currentTimeMillis() - startMs
+            val queryTimeMs = (System.nanoTime() - startNs) / 1_000_000L
 
             // Extract answer records
             val answerRecords = response.getSection(Section.ANSWER)
@@ -112,7 +113,9 @@ class DnsRepositoryImpl : DnsRepository {
                     rawResponse = rawResponse
                 )
             )
-        } catch (e: Throwable) {
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
             NetworkResult.Error(
                 message = "DNS lookup failed: ${e.message ?: e.javaClass.simpleName}",
                 cause = e
@@ -143,7 +146,7 @@ class DnsRepositoryImpl : DnsRepository {
         return if (server.serverAddresses.isNotEmpty()) {
             try {
                 ExtendedResolver(server.serverAddresses.toTypedArray()).also { it.setTimeout(TIMEOUT) }
-            } catch (e: Throwable) {
+            } catch (e: Exception) {
                 simpleResolver(DnsServer.Cloudflare.PRIMARY)
             }
         } else {

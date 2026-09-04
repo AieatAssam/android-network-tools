@@ -145,7 +145,6 @@ fun PingScreen(
     val host by viewModel.host.collectAsStateWithLifecycle()
     val count by viewModel.count.collectAsStateWithLifecycle()
     val timeoutMs by viewModel.timeoutMs.collectAsStateWithLifecycle()
-    val packetSize by viewModel.packetSize.collectAsStateWithLifecycle()
     val continuousMode by viewModel.continuousMode.collectAsStateWithLifecycle()
     val recentHosts by viewModel.recentHosts.collectAsStateWithLifecycle()
 
@@ -194,14 +193,12 @@ fun PingScreen(
                     host = host,
                     count = count,
                     timeoutMs = timeoutMs,
-                    packetSize = packetSize,
                     isRunning = uiState is PingUiState.Running,
                     continuousMode = continuousMode,
                     recentHosts = recentHosts,
                     onHostChange = viewModel::onHostChange,
                     onCountChange = viewModel::onCountChange,
                     onTimeoutChange = viewModel::onTimeoutChange,
-                    onPacketSizeChange = viewModel::onPacketSizeChange,
                     onToggleContinuous = viewModel::onToggleContinuous,
                     onStart = viewModel::startPing,
                     onStop = viewModel::onStop,
@@ -302,14 +299,12 @@ private fun PingInputCard(
     host: String,
     count: Int,
     timeoutMs: Int,
-    packetSize: Int,
     isRunning: Boolean,
     continuousMode: Boolean,
     recentHosts: List<String>,
     onHostChange: (String) -> Unit,
     onCountChange: (Int) -> Unit,
     onTimeoutChange: (Int) -> Unit,
-    onPacketSizeChange: (Int) -> Unit,
     onToggleContinuous: (Boolean) -> Unit,
     onStart: () -> Unit,
     onStop: () -> Unit,
@@ -412,13 +407,6 @@ private fun PingInputCard(
                 enabled = !isRunning
             )
 
-            // Packet size chips
-            PingPacketSizeRow(
-                packetSize = packetSize,
-                onPacketSizeChange = onPacketSizeChange,
-                enabled = !isRunning
-            )
-
             // Action button
             if (isRunning) {
                 ToolStopButton(
@@ -487,31 +475,6 @@ private fun PingTimeoutRow(timeoutMs: Int, onTimeoutChange: (Int) -> Unit, enabl
                 FilterChip(
                     selected = timeoutMs == ms,
                     onClick = { if (enabled) onTimeoutChange(ms) },
-                    label = { Text(label) },
-                    enabled = enabled
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun PingPacketSizeRow(packetSize: Int, onPacketSizeChange: (Int) -> Unit, enabled: Boolean) {
-    val options = listOf(32 to "32 B", 56 to "56 B", 128 to "128 B", 512 to "512 B")
-    Column {
-        Text(
-            text = stringResource(R.string.ping_packet_size_label),
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.horizontalScroll(rememberScrollState())
-        ) {
-            options.forEach { (size, label) ->
-                FilterChip(
-                    selected = packetSize == size,
-                    onClick = { if (enabled) onPacketSizeChange(size) },
                     label = { Text(label) },
                     enabled = enabled
                 )

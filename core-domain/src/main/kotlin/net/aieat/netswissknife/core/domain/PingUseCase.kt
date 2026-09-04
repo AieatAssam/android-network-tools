@@ -11,7 +11,7 @@ class PingUseCase(
     operator fun invoke(params: PingParams): Flow<PingFlowResult> {
         val trimmedHost = params.host.trim()
 
-        val errorMessage: String? = validatePingCommon(trimmedHost, params.timeoutMs, params.packetSize)
+        val errorMessage: String? = validatePingCommon(trimmedHost, params.timeoutMs)
             ?: if (params.count !in 1..100) "Count must be between 1 and 100" else null
 
         if (errorMessage != null) {
@@ -22,8 +22,7 @@ class PingUseCase(
             .ping(
                 host = trimmedHost,
                 count = params.count,
-                timeoutMs = params.timeoutMs,
-                packetSize = params.packetSize
+                timeoutMs = params.timeoutMs
             )
             .map { PingFlowResult.Packet(it) }
     }

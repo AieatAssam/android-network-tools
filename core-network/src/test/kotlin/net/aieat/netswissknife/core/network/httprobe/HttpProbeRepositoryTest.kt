@@ -1,6 +1,7 @@
 package net.aieat.netswissknife.core.network.httprobe
 
 import com.sun.net.httpserver.HttpServer
+import com.sun.net.httpserver.HttpExchange
 import kotlinx.coroutines.test.runTest
 import net.aieat.netswissknife.core.network.NetworkResult
 import org.junit.jupiter.api.AfterEach
@@ -12,6 +13,8 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import java.net.InetSocketAddress
+import java.nio.charset.Charset
+import java.util.concurrent.atomic.AtomicReference
 
 @DisplayName("HttpProbeRepositoryImpl – input validation")
 class HttpProbeRepositoryValidationTest {
@@ -359,12 +362,13 @@ class HttpMethodBodySupportTest {
 @DisplayName("HttpProbeRepositoryImpl – redirect handling")
 class HttpProbeRepositoryRedirectTest {
 
-    private var server: HttpServer? = null
+    private val servers = mutableListOf<HttpServer>()
     private val repo = HttpProbeRepositoryImpl()
 
     @AfterEach
     fun tearDown() {
-        server?.stop(0)
+        servers.forEach { it.stop(0) }
+        servers.clear()
     }
 
     private fun startServer(handler: (path: String) -> Triple<Int, String, String?>): String {
@@ -377,7 +381,28 @@ class HttpProbeRepositoryRedirectTest {
             exchange.responseBody.use { it.write(bytes) }
         }
         httpServer.start()
-        server = httpServer
+        servers += httpServer
+        return "http://127.0.0.1:${httpServer.address.port}"
+    }
+
+    private fun startRecordingServer(
+        handler: (HttpExchange) -> Triple<Int, String, String?>
+    ): String {
+        val httpServer = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        httpServer.createContext("/") { exchange ->
+            val (status, body, contentType) = handler(exchange)
+            contentType?.let { exchange.responseHeaders.add("Content-Type", it) }
+            val charset = contentType?.substringAfter("charset=", "")
+                ?.substringBefore(';')
+                ?.trim()
+                ?.let { runCatching { Charset.forName(it) }.getOrNull() }
+                ?: Charsets.UTF_8
+            val bytes = body.toByteArray(charset)
+            exchange.sendResponseHeaders(status, bytes.size.toLong())
+            exchange.responseBody.use { it.write(bytes) }
+        }
+        httpServer.start()
+        servers += httpServer
         return "http://127.0.0.1:${httpServer.address.port}"
     }
 
@@ -406,5 +431,97 @@ class HttpProbeRepositoryRedirectTest {
         assertTrue(result is NetworkResult.Success)
         assertEquals(200, (result as NetworkResult.Success).data.statusCode)
         assertTrue(result.data.redirectChain.isNotEmpty())
+    }
+
+    @Test
+    @DisplayName("probe does not forward credentials to another origin")
+    fun `probe strips sensitive headers across origins`() = runTest {
+        val receivedAuthorization = AtomicReference<String?>()
+        val receivedCookie = AtomicReference<String?>()
+        val targetUrl = startRecordingServer { exchange ->
+            receivedAuthorization.set(exchange.requestHeaders.getFirst("Authorization"))
+            receivedCookie.set(exchange.requestHeaders.getFirst("Cookie"))
+            Triple(200, "ok", null)
+        }
+        val sourceUrl = startRecordingServer { Triple(302, "", targetUrl) }
+
+        val result = repo.probe(
+            HttpProbeRequest(
+                url = sourceUrl,
+                headers = listOf("Authorization" to "Bearer secret", "Cookie" to "session=secret")
+            )
+        )
+
+        assertTrue(result is NetworkResult.Success)
+        assertNull(receivedAuthorization.get())
+        assertNull(receivedCookie.get())
+    }
+
+    @Test
+    @DisplayName("POST 302 follows browser-compatible method semantics")
+    fun `post 302 becomes get without body`() = runTest {
+        val receivedMethod = AtomicReference<String>()
+        val receivedBody = AtomicReference<String>()
+        lateinit var baseUrl: String
+        baseUrl = startRecordingServer { exchange ->
+            if (exchange.requestURI.path == "/target") {
+                receivedMethod.set(exchange.requestMethod)
+                receivedBody.set(exchange.requestBody.bufferedReader().use { it.readText() })
+                Triple(200, "ok", null)
+            } else {
+                Triple(302, "", "$baseUrl/target")
+            }
+        }
+
+        val result = repo.probe(
+            HttpProbeRequest(
+                url = baseUrl,
+                method = HttpMethod.POST,
+                body = "payload",
+                headers = listOf("Content-Type" to "text/plain")
+            )
+        )
+
+        assertTrue(result is NetworkResult.Success)
+        assertEquals("GET", receivedMethod.get())
+        assertEquals("", receivedBody.get())
+    }
+
+    @Test
+    @DisplayName("307 preserves method and request body")
+    fun `307 preserves post body`() = runTest {
+        val receivedMethod = AtomicReference<String>()
+        val receivedBody = AtomicReference<String>()
+        lateinit var baseUrl: String
+        baseUrl = startRecordingServer { exchange ->
+            if (exchange.requestURI.path == "/target") {
+                receivedMethod.set(exchange.requestMethod)
+                receivedBody.set(exchange.requestBody.bufferedReader().use { it.readText() })
+                Triple(200, "ok", null)
+            } else {
+                // A 307 redirect must preserve the entity and method.
+                exchange.responseHeaders.add("Location", "$baseUrl/target")
+                Triple(307, "", null)
+            }
+        }
+
+        val result = repo.probe(HttpProbeRequest(url = baseUrl, method = HttpMethod.POST, body = "payload"))
+
+        assertTrue(result is NetworkResult.Success)
+        assertEquals("POST", receivedMethod.get())
+        assertEquals("payload", receivedBody.get())
+    }
+
+    @Test
+    @DisplayName("response body uses declared charset and bounded memory")
+    fun `body is charset aware and bounded`() = runTest {
+        val fullBody = "café-éclair"
+        val url = startRecordingServer { Triple(200, fullBody, "text/plain; charset=ISO-8859-1") }
+
+        val result = repo.probe(HttpProbeRequest(url = url, maxResponseBodyBytes = 4L))
+
+        assertTrue(result is NetworkResult.Success)
+        assertEquals("café", (result as NetworkResult.Success).data.responseBody)
+        assertEquals(5L, result.data.responseBodyBytes)
     }
 }

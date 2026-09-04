@@ -35,21 +35,21 @@ class PingRepositoryImplTest {
         @Test
         fun `emits exactly count packets`() = runTest {
             val repo = PingRepositoryImpl(checker = successChecker())
-            val packets = repo.ping("8.8.8.8", count = 4, timeoutMs = 1000, packetSize = 56).toList()
+            val packets = repo.ping("8.8.8.8", count = 4, timeoutMs = 1000).toList()
             assertEquals(4, packets.size)
         }
 
         @Test
         fun `emits 1 packet when count is 1`() = runTest {
             val repo = PingRepositoryImpl(checker = successChecker())
-            val packets = repo.ping("8.8.8.8", count = 1, timeoutMs = 1000, packetSize = 56).toList()
+            val packets = repo.ping("8.8.8.8", count = 1, timeoutMs = 1000).toList()
             assertEquals(1, packets.size)
         }
 
         @Test
         fun `sequence numbers start at 1 and increment`() = runTest {
             val repo = PingRepositoryImpl(checker = successChecker())
-            val packets = repo.ping("8.8.8.8", count = 3, timeoutMs = 1000, packetSize = 56).toList()
+            val packets = repo.ping("8.8.8.8", count = 3, timeoutMs = 1000).toList()
             assertEquals(listOf(1, 2, 3), packets.map { it.sequence })
         }
     }
@@ -61,28 +61,28 @@ class PingRepositoryImplTest {
         @Test
         fun `successful ping sets status to SUCCESS`() = runTest {
             val repo = PingRepositoryImpl(checker = successChecker(rtMs = 12L))
-            val packets = repo.ping("8.8.8.8", count = 1, timeoutMs = 1000, packetSize = 56).toList()
+            val packets = repo.ping("8.8.8.8", count = 1, timeoutMs = 1000).toList()
             assertEquals(PingStatus.SUCCESS, packets[0].status)
         }
 
         @Test
         fun `successful ping captures rtTimeMs`() = runTest {
             val repo = PingRepositoryImpl(checker = successChecker(rtMs = 12L))
-            val packets = repo.ping("8.8.8.8", count = 1, timeoutMs = 1000, packetSize = 56).toList()
+            val packets = repo.ping("8.8.8.8", count = 1, timeoutMs = 1000).toList()
             assertEquals(12L, packets[0].rtTimeMs)
         }
 
         @Test
         fun `successful ping has null errorMessage`() = runTest {
             val repo = PingRepositoryImpl(checker = successChecker())
-            val packets = repo.ping("8.8.8.8", count = 1, timeoutMs = 1000, packetSize = 56).toList()
+            val packets = repo.ping("8.8.8.8", count = 1, timeoutMs = 1000).toList()
             assertNull(packets[0].errorMessage)
         }
 
         @Test
         fun `host address is set on each packet`() = runTest {
             val repo = PingRepositoryImpl(checker = successChecker())
-            val packets = repo.ping("example.com", count = 2, timeoutMs = 1000, packetSize = 56).toList()
+            val packets = repo.ping("example.com", count = 2, timeoutMs = 1000).toList()
             assertEquals("example.com", packets[0].host)
             assertEquals("example.com", packets[1].host)
         }
@@ -95,14 +95,14 @@ class PingRepositoryImplTest {
         @Test
         fun `timed-out ping sets status to TIMEOUT`() = runTest {
             val repo = PingRepositoryImpl(checker = timeoutChecker())
-            val packets = repo.ping("10.0.0.1", count = 1, timeoutMs = 100, packetSize = 56).toList()
+            val packets = repo.ping("10.0.0.1", count = 1, timeoutMs = 100).toList()
             assertEquals(PingStatus.TIMEOUT, packets[0].status)
         }
 
         @Test
         fun `timed-out ping has null rtTimeMs`() = runTest {
             val repo = PingRepositoryImpl(checker = timeoutChecker())
-            val packets = repo.ping("10.0.0.1", count = 1, timeoutMs = 100, packetSize = 56).toList()
+            val packets = repo.ping("10.0.0.1", count = 1, timeoutMs = 100).toList()
             assertNull(packets[0].rtTimeMs)
         }
     }
@@ -114,14 +114,14 @@ class PingRepositoryImplTest {
         @Test
         fun `checker error sets status to ERROR`() = runTest {
             val repo = PingRepositoryImpl(checker = errorChecker("unknown host: badhost"))
-            val packets = repo.ping("badhost", count = 1, timeoutMs = 1000, packetSize = 56).toList()
+            val packets = repo.ping("badhost", count = 1, timeoutMs = 1000).toList()
             assertEquals(PingStatus.ERROR, packets[0].status)
         }
 
         @Test
         fun `error message is propagated to packet`() = runTest {
             val repo = PingRepositoryImpl(checker = errorChecker("unknown host: badhost"))
-            val packets = repo.ping("badhost", count = 1, timeoutMs = 1000, packetSize = 56).toList()
+            val packets = repo.ping("badhost", count = 1, timeoutMs = 1000).toList()
             assertNotNull(packets[0].errorMessage)
             assertEquals("unknown host: badhost", packets[0].errorMessage)
         }
@@ -129,7 +129,7 @@ class PingRepositoryImplTest {
         @Test
         fun `error packet has null rtTimeMs`() = runTest {
             val repo = PingRepositoryImpl(checker = errorChecker())
-            val packets = repo.ping("badhost", count = 1, timeoutMs = 1000, packetSize = 56).toList()
+            val packets = repo.ping("badhost", count = 1, timeoutMs = 1000).toList()
             assertNull(packets[0].rtTimeMs)
         }
     }
@@ -147,7 +147,7 @@ class PingRepositoryImplTest {
                 else ReachabilityResult(false, 3000L)
             }
             val repo = PingRepositoryImpl(checker = alternating)
-            val packets = repo.ping("host", count = 4, timeoutMs = 1000, packetSize = 56).toList()
+            val packets = repo.ping("host", count = 4, timeoutMs = 1000).toList()
             assertEquals(4, packets.size)
             assertEquals(PingStatus.TIMEOUT, packets[0].status)
             assertEquals(PingStatus.SUCCESS, packets[1].status)
@@ -163,7 +163,7 @@ class PingRepositoryImplTest {
         @Test
         fun `emits packets until flow is cancelled`() = runTest {
             val repo = PingRepositoryImpl(checker = successChecker(), delayBetweenProbesMs = 0L)
-            val packets = repo.continuousPing("8.8.8.8", timeoutMs = 1000, packetSize = 56)
+            val packets = repo.continuousPing("8.8.8.8", timeoutMs = 1000)
                 .take(5)
                 .toList()
             assertEquals(5, packets.size)
@@ -172,7 +172,7 @@ class PingRepositoryImplTest {
         @Test
         fun `sequence numbers increment from 1`() = runTest {
             val repo = PingRepositoryImpl(checker = successChecker(), delayBetweenProbesMs = 0L)
-            val packets = repo.continuousPing("8.8.8.8", timeoutMs = 1000, packetSize = 56)
+            val packets = repo.continuousPing("8.8.8.8", timeoutMs = 1000)
                 .take(3)
                 .toList()
             assertEquals(listOf(1, 2, 3), packets.map { it.sequence })
@@ -181,7 +181,7 @@ class PingRepositoryImplTest {
         @Test
         fun `successful probes produce SUCCESS packets`() = runTest {
             val repo = PingRepositoryImpl(checker = successChecker(rtMs = 20L), delayBetweenProbesMs = 0L)
-            val packet = repo.continuousPing("8.8.8.8", timeoutMs = 1000, packetSize = 56)
+            val packet = repo.continuousPing("8.8.8.8", timeoutMs = 1000)
                 .take(1)
                 .toList()
                 .first()
@@ -192,7 +192,7 @@ class PingRepositoryImplTest {
         @Test
         fun `timeout probes produce TIMEOUT packets with null rtt`() = runTest {
             val repo = PingRepositoryImpl(checker = timeoutChecker(), delayBetweenProbesMs = 0L)
-            val packet = repo.continuousPing("10.0.0.1", timeoutMs = 100, packetSize = 56)
+            val packet = repo.continuousPing("10.0.0.1", timeoutMs = 100)
                 .take(1)
                 .toList()
                 .first()
@@ -203,7 +203,7 @@ class PingRepositoryImplTest {
         @Test
         fun `host is set on every packet`() = runTest {
             val repo = PingRepositoryImpl(checker = successChecker(), delayBetweenProbesMs = 0L)
-            val packets = repo.continuousPing("example.com", timeoutMs = 1000, packetSize = 56)
+            val packets = repo.continuousPing("example.com", timeoutMs = 1000)
                 .take(3)
                 .toList()
             assertTrue(packets.all { it.host == "example.com" })
