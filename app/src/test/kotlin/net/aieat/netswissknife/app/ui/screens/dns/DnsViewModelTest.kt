@@ -11,6 +11,10 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.job
+import kotlinx.coroutines.runBlocking
+import androidx.lifecycle.viewModelScope
 import net.aieat.netswissknife.app.data.RecentHostsRepository
 import net.aieat.netswissknife.app.util.SystemDnsAddressProvider
 import net.aieat.netswissknife.core.domain.DnsLookupUseCase
@@ -59,7 +63,11 @@ class DnsViewModelTest {
     }
 
     @AfterEach
-    fun tearDown() {
+    fun tearDown() = runBlocking {
+        // recentHosts uses stateIn(Eagerly), which owns a long-lived collector.
+        // Cancel it before replacing Dispatchers.Main so no prior test can
+        // retain a coroutine or contend with the next test's setup.
+        viewModel.viewModelScope.coroutineContext.job.cancelAndJoin()
         Dispatchers.resetMain()
     }
 

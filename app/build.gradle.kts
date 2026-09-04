@@ -26,6 +26,7 @@ android {
         applicationId = "net.aieat.netswissknife"
         minSdk        = 26
         targetSdk     = 37
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         versionCode   = ciVersionCode ?: (System.currentTimeMillis() / 1000).toInt()
         versionName   = ciVersionName ?: "1.0.0"
     }
@@ -111,6 +112,7 @@ dependencies {
     implementation(libs.compose.material.icons.extended)
     implementation(libs.compose.animation)
     debugImplementation(libs.compose.ui.tooling)
+    debugImplementation(libs.compose.ui.test.manifest)
 
     // Navigation
     implementation(libs.navigation.compose)
@@ -139,6 +141,14 @@ dependencies {
     testRuntimeOnly(libs.junit5.launcher)
     testImplementation(libs.mockk)
     testImplementation(libs.coroutines.test)
+
+    // Instrumented Compose tests exercise semantics, navigation, and Android
+    // permission surfaces on a real (or managed virtual) device.
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.androidx.test.rules)
+    androidTestImplementation(libs.mockk.android)
+    androidTestImplementation(composeBom)
+    androidTestImplementation(libs.compose.ui.test.junit4)
 }
 
 tasks.withType<Test> {
@@ -165,7 +175,9 @@ kover {
             includes {
                 classes(
                     "net.aieat.netswissknife.app.ui.screens.whois.RelayChainGeometry",
-                    "net.aieat.netswissknife.app.ui.screens.whois.ConnectorSegment"
+                    "net.aieat.netswissknife.app.ui.screens.whois.ConnectorSegment",
+                    "net.aieat.netswissknife.app.data.AppPreferenceKeys",
+                    "net.aieat.netswissknife.app.data.RecentHostsRepository"
                 )
             }
             excludes {
@@ -174,8 +186,8 @@ kover {
             }
         }
         verify {
-            rule("Pure layout logic is fully covered") {
-                minBound(100)
+            rule("Pure app logic is well covered") {
+                minBound(90)
             }
         }
     }

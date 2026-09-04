@@ -1,17 +1,19 @@
 package net.aieat.netswissknife.core.network.lan
 
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.launch
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.Socket
+import net.aieat.netswissknife.core.network.MonotonicClock
+import net.aieat.netswissknife.core.network.SystemMonotonicClock
+import net.aieat.netswissknife.core.network.elapsedMillisSince
 
 // ── Functional types injected for testability ─────────────────────────────────
 
@@ -31,7 +33,7 @@ private val QUICK_PORTS = listOf(21, 22, 23, 25, 53, 80, 110, 139, 143, 443, 445
 /**
  * Production [LanScanRepository] that:
  *  1. Generates all host IPs from the given CIDR subnet.
- *  2. Probes each IP for reachability using [hostChecker] (concurrent batches).
+ *  2. Probes each IP for reachability using [hostChecker] (bounded concurrent workers).
  *  3. Reads the ARP table via [arpTableReader] to resolve MAC addresses.
  *  4. Looks up the vendor name from [OuiDatabase].
  *  5. Performs a quick TCP port scan on every live host using [portChecker].
@@ -44,14 +46,15 @@ class LanScanRepositoryImpl(
     private val hostChecker: HostChecker = DEFAULT_HOST_CHECKER,
     private val arpTableReader: ArpTableReader = DEFAULT_ARP_READER,
     private val portChecker: PortChecker = DEFAULT_PORT_CHECKER,
+    private val clock: MonotonicClock = SystemMonotonicClock,
 ) : LanScanRepository {
 
     companion object {
         val DEFAULT_HOST_CHECKER: HostChecker = { ip, timeoutMs ->
             try {
                 val addr = InetAddress.getByName(ip)
-                val start = System.currentTimeMillis()
-                if (addr.isReachable(timeoutMs)) System.currentTimeMillis() - start else null
+                val start = System.nanoTime()
+                if (addr.isReachable(timeoutMs)) (System.nanoTime() - start).coerceAtLeast(0L) / 1_000_000L else null
             } catch (_: Exception) {
                 null
             }
@@ -80,11 +83,9 @@ class LanScanRepositoryImpl(
     }
 
     override fun scan(subnet: String, timeoutMs: Int, concurrency: Int): Flow<LanScanUpdate> = flow {
-        val startTime = System.currentTimeMillis()
+        val startTime = clock.nowNanos()
         val ips = SubnetUtils.parseSubnet(subnet)
         val totalCount = ips.size
-        val mutex = Mutex()
-        var scannedCount = 0
         val aliveHosts = mutableListOf<LanHost>()
 
         // Read the ARP table once upfront for MAC resolution
@@ -95,33 +96,51 @@ class LanScanRepositoryImpl(
 
         val effectiveConcurrency = concurrency.coerceIn(1, 500)
 
-        for (chunk in ips.chunked(effectiveConcurrency)) {
-            coroutineScope {
-                val deferreds = chunk.map { ip ->
-                    async(Dispatchers.IO) {
+        data class CompletedHost(val host: LanHost?)
+
+        // Feed a bounded work queue to a fixed worker set. Each worker sends
+        // only after the complete host enrichment finishes, so consuming the
+        // result channel exposes actual completion order. The bounded channel
+        // also prevents an unbounded /16 or /8 scan from retaining every
+        // result while a UI collector is busy rendering.
+        coroutineScope {
+            val pending = Channel<String>(capacity = effectiveConcurrency)
+            val completed = Channel<CompletedHost>(capacity = effectiveConcurrency)
+            val producer = launch {
+                try {
+                    for (ip in ips) pending.send(ip)
+                } finally {
+                    pending.close()
+                }
+            }
+            val workerCount = minOf(effectiveConcurrency, ips.size)
+            val workers = List(workerCount) {
+                launch(Dispatchers.IO) {
+                    for (ip in pending) {
                         val pingMs = hostChecker(ip, timeoutMs)
-                        val currentCount: Int
-                        mutex.withLock {
-                            scannedCount++
-                            currentCount = scannedCount
-                        }
-                        if (pingMs != null) {
-                            val host = buildHost(ip, pingMs, arpMap, gatewayIp, timeoutMs)
-                            Pair(host, currentCount)
-                        } else {
-                            Pair(null, currentCount)
-                        }
+                        completed.send(
+                            CompletedHost(
+                                pingMs?.let { buildHost(ip, it, arpMap, gatewayIp, timeoutMs) }
+                            )
+                        )
                     }
                 }
+            }
+            launch {
+                producer.join()
+                workers.joinAll()
+                completed.close()
+            }
 
-                for (deferred in deferreds) {
-                    val (host, count) = deferred.await()
-                    if (host != null) {
-                        mutex.withLock { aliveHosts.add(host) }
-                        emit(LanScanUpdate.HostFound(host, count, totalCount))
-                    } else {
-                        emit(LanScanUpdate.ScanProgress(count, totalCount))
-                    }
+            var scannedCount = 0
+            for (completedHost in completed) {
+                val host = completedHost.host
+                scannedCount++
+                if (host != null) {
+                    aliveHosts += host
+                    emit(LanScanUpdate.HostFound(host, scannedCount, totalCount))
+                } else {
+                    emit(LanScanUpdate.ScanProgress(scannedCount, totalCount))
                 }
             }
         }
@@ -130,7 +149,7 @@ class LanScanRepositoryImpl(
             subnet = subnet,
             totalScanned = totalCount,
             aliveHosts = aliveHosts.size,
-            scanDurationMs = System.currentTimeMillis() - startTime,
+            scanDurationMs = clock.elapsedMillisSince(startTime),
             hosts = aliveHosts.sortedBy { SubnetUtils.parseIpToLong(it.ip) },
         )
         emit(LanScanUpdate.ScanComplete(summary))

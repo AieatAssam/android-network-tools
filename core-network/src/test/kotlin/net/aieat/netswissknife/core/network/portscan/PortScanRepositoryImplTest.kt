@@ -166,6 +166,25 @@ class PortScanRepositoryImplTest {
     inner class ProgressTracking {
 
         @Test
+        fun `emits each port in completion order`() = runTest {
+            val checker: PortConnectChecker = { _, port ->
+                // Use real blocking work here because production socket probes
+                // run on Dispatchers.IO. The shorter probe must be observable
+                // before the first port supplied to scan().
+                Thread.sleep(if (port == 80) 120L else 10L)
+                PortConnectResult(PortStatus.OPEN, 1L, null)
+            }
+            val repo = PortScanRepositoryImpl(checker = checker)
+
+            val results = repo.scan("host", listOf(80, 443), 1000, concurrency = 2)
+                .filterIsInstance<PortScanUpdate.PortResult>()
+                .toList()
+
+            assertEquals(listOf(443, 80), results.map { it.result.port })
+            assertEquals(listOf(1, 2), results.map { it.scannedCount })
+        }
+
+        @Test
         fun `scannedCount increments per emission`() = runTest {
             val repo = PortScanRepositoryImpl(checker = openChecker())
             val ports = listOf(80, 443, 8080)

@@ -215,6 +215,24 @@ class LanScanRepositoryImplTest {
     inner class ProgressTracking {
 
         @Test
+        fun `emits hosts in completion order`() = runTest {
+            val checker: HostChecker = { ip, _ ->
+                // .1 is intentionally slower than .2. HostFound must follow
+                // completion order even though subnet enumeration is ordered.
+                Thread.sleep(if (ip == "192.168.1.1") 120L else 10L)
+                5L
+            }
+
+            val events = makeRepo(hostChecker = checker)
+                .scan(subnet24, 1000, concurrency = 2)
+                .filterIsInstance<LanScanUpdate.HostFound>()
+                .toList()
+
+            assertEquals(listOf("192.168.1.2", "192.168.1.1"), events.map { it.host.ip })
+            assertEquals(listOf(1, 2), events.map { it.scannedCount })
+        }
+
+        @Test
         fun `scannedCount in HostFound equals number of IPs scanned so far`() = runTest {
             val events = makeRepo(hostChecker = allAliveChecker)
                 .scan(subnet24, 1000, 10)

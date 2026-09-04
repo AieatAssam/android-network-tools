@@ -27,3 +27,17 @@ dependencies {
 tasks.withType<Test> {
     useJUnitPlatform()
 }
+
+// Domain rules are pure Kotlin and are inexpensive to execute in every CI
+// build. Keep a meaningful floor here so new validation/use-case branches do
+// not quietly land without tests, while leaving Android-only UI coverage to
+// instrumented tests in :app.
+kover {
+    reports {
+        verify {
+            rule("Domain logic minimum coverage") {
+                minBound(70)
+            }
+        }
+    }
+}

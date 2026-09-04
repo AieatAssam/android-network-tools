@@ -18,6 +18,8 @@ coreSplashscreen = "1.2.0"
 activityCompose = "1.13.0"
 lifecycleViewmodelCompose = "2.11.0"
 datastorePreferences = "1.2.1"
+androidxTestExtJunit = "1.2.1"
+androidxTestRules = "1.6.2"
 
 [libraries]
 # AndroidX Core
@@ -36,6 +38,8 @@ compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling
 compose-material3 = { group = "androidx.compose.material3", name = "material3" }
 compose-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
 compose-animation = { group = "androidx.compose.animation", name = "animation" }
+compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
+compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
 
 # Navigation
 navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigationCompose" }
@@ -57,6 +61,9 @@ dnsjava = { group = "dnsjava", name = "dnsjava", version.ref = "dnsjava" }
 snmp4j = { group = "org.snmp4j", name = "snmp4j", version.ref = "snmp4j" }
 icmpenguin = { group = "me.impa", name = "icmpenguin", version.ref = "icmpenguin" }
 datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastorePreferences" }
+androidx-test-ext-junit = { group = "androidx.test.ext", name = "junit", version.ref = "androidxTestExtJunit" }
+androidx-test-rules = { group = "androidx.test", name = "rules", version.ref = "androidxTestRules" }
+mockk-android = { group = "io.mockk", name = "mockk-android", version.ref = "mockk" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
