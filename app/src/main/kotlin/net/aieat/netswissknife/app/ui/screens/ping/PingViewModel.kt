@@ -322,11 +322,11 @@ class PingViewModel @Inject constructor(
         packets.forEach { p ->
             when (p.status) {
                 PingStatus.SUCCESS ->
-                    appendLine("${p.host}: icmp_seq=${p.sequence} ttl=64 time=${p.rtTimeMs} ms")
+                    appendLine("${p.host}: probe_seq=${p.sequence} time=${p.rtTimeMs} ms")
                 PingStatus.TIMEOUT ->
-                    appendLine("Request timeout for icmp_seq ${p.sequence}")
+                    appendLine("Request timeout for probe_seq ${p.sequence}")
                 PingStatus.ERROR ->
-                    appendLine("Error for icmp_seq ${p.sequence}: ${p.errorMessage}")
+                    appendLine("Error for probe_seq ${p.sequence}: ${p.errorMessage}")
             }
         }
         appendLine()

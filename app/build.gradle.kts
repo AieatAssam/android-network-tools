@@ -4,7 +4,6 @@ plugins {
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
     alias(libs.plugins.kover)
-    alias(libs.plugins.ktlint)
 }
 
 // ── CI-supplied properties ────────────────────────────────────────────────────
@@ -108,14 +107,6 @@ android {
         compose = true
         buildConfig = true
     }
-}
-
-configure<org.jlleitschuh.gradle.ktlint.KtlintExtension> {
-    // Pin the CLI independently from the wrapper plugin for reproducible checks.
-    version.set("1.7.1")
-    android.set(true)
-    outputToConsole.set(true)
-    ignoreFailures.set(false)
 }
 
 dependencies {

@@ -443,7 +443,10 @@ class HttpProbeRepositoryRedirectTest {
             receivedCookie.set(exchange.requestHeaders.getFirst("Cookie"))
             Triple(200, "ok", null)
         }
-        val sourceUrl = startRecordingServer { Triple(302, "", targetUrl) }
+        val sourceUrl = startRecordingServer { exchange ->
+            exchange.responseHeaders.add("Location", targetUrl)
+            Triple(302, "", null)
+        }
 
         val result = repo.probe(
             HttpProbeRequest(
@@ -469,7 +472,8 @@ class HttpProbeRepositoryRedirectTest {
                 receivedBody.set(exchange.requestBody.bufferedReader().use { it.readText() })
                 Triple(200, "ok", null)
             } else {
-                Triple(302, "", "$baseUrl/target")
+                exchange.responseHeaders.add("Location", "$baseUrl/target")
+                Triple(302, "", null)
             }
         }
 

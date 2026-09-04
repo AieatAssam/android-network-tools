@@ -50,7 +50,7 @@ android-network-tools/
 | Navigation | Navigation Compose 2.10.x | Bottom nav + animated transitions |
 | DI | Hilt 2.60.x | `@HiltViewModel`, `@AndroidEntryPoint` |
 | Async | Coroutines + Flow | `viewModelScope`, `StateFlow` |
-| Quality | Android Lint + KtLint | Required in CI; dependency updates are reported from the root build |
+| Quality | Android Lint + CodeQL | Required in CI; dependency updates are reported from the root build |
 | Testing | JUnit 5 + MockK | TDD (Red → Green → Refactor) |
 | Build | AGP 9.x, Gradle 9.x Kotlin DSL + Version Catalog | `gradle/libs.versions.toml` |
 | Min SDK | 26 (Android 8.0) | Target SDK 37 |

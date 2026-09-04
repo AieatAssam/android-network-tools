@@ -54,7 +54,7 @@ sealed class NavRoutes(
     companion object {
         /** All navigable tool screens (excluding Home). */
         val allTools = listOf(
-            ToolInfo("ping",       "Ping",          "Ping",  Icons.Default.NetworkCheck, "ICMP round-trip latency"),
+            ToolInfo("ping",       "Ping",          "Ping",  Icons.Default.NetworkCheck, "Reachability and round-trip latency"),
             ToolInfo("traceroute", "Traceroute",    "Trace", Icons.Default.Router,       "Network path hop analysis"),
             ToolInfo("ports",      "Port Scanner",  "Ports", Icons.Default.TravelExplore, "TCP port reachability"),
             ToolInfo("lan",        "LAN Scanner",   "LAN",   Icons.Default.Devices,       "Local device discovery"),

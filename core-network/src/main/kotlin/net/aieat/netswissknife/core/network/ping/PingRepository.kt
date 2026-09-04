@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.Flow
 interface PingRepository {
 
     /**
-     * Sends [count] ICMP-style probes to [host] and emits a [PingPacketResult]
+     * Sends [count] reachability probes to [host] and emits a [PingPacketResult]
      * for each one as it completes (success, timeout, or error).
      *
      * @param host       Hostname or IP address to ping

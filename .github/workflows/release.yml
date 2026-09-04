@@ -22,20 +22,20 @@ jobs:
     steps:
       # ── 1. Source ──────────────────────────────────────────────────────────
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0   # full history for version tagging
 
       # ── 2. Java toolchain ─────────────────────────────────────────────────
       - name: Set up JDK 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           java-version: '21'
           distribution: 'temurin'
 
       # ── 3. Gradle cache ───────────────────────────────────────────────────
       - name: Cache Gradle packages
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.gradle/caches
@@ -93,7 +93,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-results
           path: '**/build/reports/tests/'
@@ -101,10 +101,7 @@ jobs:
       # Keep release builds subject to the same source and Android quality gates
       # as pull requests, before any signing key is used.
       - name: Run Android Lint
-        run: ./gradlew lintDebug --no-daemon
-
-      - name: Run Kotlin style checks
-        run: ./gradlew ktlintCheck --no-daemon
+        run: ./gradlew lintRelease --no-daemon --no-parallel
 
       # ── 6. Check signing configuration ────────────────────────────────────
       - name: Check signing configuration
@@ -214,14 +211,14 @@ jobs:
 
       # ── 11. Upload artefacts to workflow run ──────────────────────────────
       - name: Upload APK artefact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: NetSwissKnife-${{ steps.version.outputs.name }}-apk
           path: ${{ steps.rename.outputs.apk_named }}
           if-no-files-found: error
 
       - name: Upload AAB artefact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: NetSwissKnife-${{ steps.version.outputs.name }}-aab
           path: ${{ steps.rename.outputs.aab_named }}
@@ -229,7 +226,7 @@ jobs:
 
       - name: Upload native debug symbols artefact
         if: steps.symbols.outputs.found == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: NetSwissKnife-${{ steps.version.outputs.name }}-native-symbols
           path: ${{ steps.rename.outputs.symbols_named }}

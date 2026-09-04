@@ -19,11 +19,6 @@ class HttpProbeRepositoryImpl : HttpProbeRepository {
     companion object {
         private const val MAX_REDIRECTS = 10
         private const val MAX_RESPONSE_BODY_BYTES = 10_485_760L
-        private val SENSITIVE_REDIRECT_HEADERS = setOf(
-            "authorization",
-            "cookie",
-            "proxy-authorization"
-        )
         private val BODY_HEADERS = setOf(
             "content-length",
             "content-type",
@@ -77,6 +72,7 @@ class HttpProbeRepositoryImpl : HttpProbeRepository {
         var currentUrl = startUrl
         var currentMethod = request.method
         var currentBody = request.body.takeIf { request.method.supportsBody }
+        var forwardCustomHeaders = true
         val startTimeNs = System.nanoTime()
 
         repeat(MAX_REDIRECTS + 1) { attempt ->
@@ -90,10 +86,9 @@ class HttpProbeRepositoryImpl : HttpProbeRepository {
                 // Credentials must not cross an origin boundary during a redirect.
                 // Entity headers are also invalid once redirect semantics change the
                 // request into a body-less method.
-                val sameOrigin = sameOrigin(startUrl, currentUrl)
                 request.headers.forEach { (key, value) ->
                     val normalizedKey = key.lowercase()
-                    if ((!sameOrigin && normalizedKey in SENSITIVE_REDIRECT_HEADERS) ||
+                    if (!forwardCustomHeaders ||
                         (!currentMethod.supportsBody && normalizedKey in BODY_HEADERS)
                     ) return@forEach
                     conn.setRequestProperty(key, value)
@@ -135,6 +130,9 @@ class HttpProbeRepositoryImpl : HttpProbeRepository {
                             )
                         }
                         redirectChain.add(currentUrl.toString())
+                        // Custom headers are user-controlled and may contain credentials
+                        // under arbitrary names. Never forward any of them across origins.
+                        if (!sameOrigin(currentUrl, nextUrl)) forwardCustomHeaders = false
                         val redirectedRequest = redirectRequest(currentMethod, currentBody, statusCode)
                         currentMethod = redirectedRequest.first
                         currentBody = redirectedRequest.second
@@ -152,13 +150,13 @@ class HttpProbeRepositoryImpl : HttpProbeRepository {
 
                 val isHttps = currentUrl.protocol.equals("https", ignoreCase = true)
                 val bodyStream = if (statusCode >= 400) conn.errorStream else conn.inputStream
-                val (responseBody, responseBodyBytes) = bodyStream?.use { stream ->
+                val bodyRead = bodyStream?.use { stream ->
                     readResponseBody(
                         stream = stream,
                         maxBytes = request.maxResponseBodyBytes,
                         charset = responseCharset(conn)
                     )
-                } ?: (null to 0L)
+                } ?: BodyRead(null, 0L, false)
 
                 val elapsed = (System.nanoTime() - startTimeNs) / 1_000_000L
                 val securityChecks = HttpSecurityAnalyzer.analyze(responseHeaders, isHttps)
@@ -170,8 +168,9 @@ class HttpProbeRepositoryImpl : HttpProbeRepository {
                         statusMessage = statusMessage,
                         responseTimeMs = elapsed,
                         responseHeaders = responseHeaders,
-                        responseBody = responseBody,
-                        responseBodyBytes = responseBodyBytes,
+                        responseBody = bodyRead.text,
+                        responseBodyBytes = bodyRead.reportedBytes,
+                        responseBodyTruncated = bodyRead.truncated,
                         finalUrl = currentUrl.toString(),
                         redirectChain = redirectChain.toList(),
                         securityChecks = securityChecks
@@ -189,12 +188,12 @@ class HttpProbeRepositoryImpl : HttpProbeRepository {
         stream: java.io.InputStream,
         maxBytes: Long,
         charset: Charset
-    ): Pair<String, Long> {
+    ): BodyRead {
         if (maxBytes == 0L) {
             // Read one byte only so callers can distinguish an empty body from a
             // body omitted because the configured safety bound was reached.
             val hasMore = stream.read() != -1
-            return "" to if (hasMore) 1L else 0L
+            return BodyRead("", if (hasMore) 1L else 0L, hasMore)
         }
 
         val output = ByteArrayOutputStream(maxBytes.toInt().coerceAtMost(8192))
@@ -212,15 +211,22 @@ class HttpProbeRepositoryImpl : HttpProbeRepository {
         // Probe one additional byte, then stop. This keeps memory and network
         // consumption bounded while preserving the existing "bytes > limit"
         // signal used by the UI to display truncation.
-        if (bytesRead == maxBytes && stream.read() != -1) bytesRead++
+        val truncated = bytesRead == maxBytes && stream.read() != -1
 
         val decoded = charset.newDecoder()
             .onMalformedInput(CodingErrorAction.REPLACE)
             .onUnmappableCharacter(CodingErrorAction.REPLACE)
             .decode(java.nio.ByteBuffer.wrap(output.toByteArray()))
             .toString()
-        return decoded to bytesRead
+        return BodyRead(decoded, bytesRead + if (truncated) 1 else 0, truncated)
     }
+
+    private data class BodyRead(
+        val text: String?,
+        /** Exact buffered size, or limit + 1 when a bounded read proves more data exists. */
+        val reportedBytes: Long,
+        val truncated: Boolean
+    )
 
     private fun responseCharset(connection: HttpURLConnection): Charset {
         val contentType = connection.headerFields.entries

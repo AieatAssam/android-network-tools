@@ -37,6 +37,7 @@ data class HttpProbeResult(
     val responseHeaders: Map<String, List<String>>,
     val responseBody: String?,
     val responseBodyBytes: Long,
+    val responseBodyTruncated: Boolean = false,
     val finalUrl: String,
     val redirectChain: List<String>,
     val securityChecks: List<SecurityHeaderCheck>

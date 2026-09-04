@@ -6,19 +6,22 @@ import androidx.compose.ui.test.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.navigation.compose.rememberNavController
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
+import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.navigation.AppNavHost
-import net.aieat.netswissknife.app.ui.screens.HomeScreen
 import net.aieat.netswissknife.app.ui.screens.DnsScreen
+import net.aieat.netswissknife.app.ui.screens.HomeScreen
 import net.aieat.netswissknife.app.ui.screens.dns.DnsUiState
 import net.aieat.netswissknife.app.ui.screens.dns.DnsViewModel
 import net.aieat.netswissknife.app.ui.theme.NetSwissKnifeTheme
 import net.aieat.netswissknife.core.network.dns.DnsRecordType
 import net.aieat.netswissknife.core.network.dns.DnsServer
-import androidx.navigation.compose.rememberNavController
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -31,9 +34,10 @@ import org.junit.runner.RunWith
  */
 @RunWith(AndroidJUnit4::class)
 class UiSmokeTest {
-
     @get:Rule
     val composeRule = createComposeRule()
+
+    private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
 
     @Test
     fun homeScreen_exposesToolCardsAndInvokesNavigation() {
@@ -47,7 +51,11 @@ class UiSmokeTest {
         // The grid intentionally animates in; advancing the test clock makes
         // this deterministic while still exercising the rendered semantics.
         composeRule.mainClock.advanceTimeBy(2_000L)
-        composeRule.onNodeWithText("Ping").assertIsDisplayed().assertHasClickAction().performClick()
+        composeRule
+            .onNodeWithText(context.getString(R.string.ping_screen_title))
+            .assertIsDisplayed()
+            .assertHasClickAction()
+            .performClick()
 
         assertEquals("ping", destination)
     }
@@ -61,8 +69,8 @@ class UiSmokeTest {
         }
 
         composeRule.mainClock.advanceTimeBy(2_000L)
-        composeRule.onNodeWithText("Net Swiss Knife").assertIsDisplayed()
-        composeRule.onNodeWithText("All Tools").assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.app_name)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.home_all_tools)).assertIsDisplayed()
     }
 
     @Test
@@ -74,22 +82,28 @@ class UiSmokeTest {
         }
 
         composeRule.mainClock.advanceTimeBy(1_000L)
-        composeRule.onNodeWithText("Querying DNS…").assertIsDisplayed()
-        composeRule.onNodeWithContentDescription("Loading").assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.dns_querying)).assertIsDisplayed()
+        composeRule.onNodeWithContentDescription(context.getString(R.string.a11y_loading)).assertIsDisplayed()
     }
 
     @Test
     fun dnsScreen_errorState_exposesMessageAndRetryAction() {
+        val viewModel = fakeDnsViewModel(DnsUiState.Error("NXDOMAIN"))
         composeRule.setContent {
             NetSwissKnifeTheme {
-                DnsScreen(viewModel = fakeDnsViewModel(DnsUiState.Error("NXDOMAIN")))
+                DnsScreen(viewModel = viewModel)
             }
         }
 
         composeRule.mainClock.advanceTimeBy(1_000L)
-        composeRule.onNodeWithText("Lookup failed").assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.dns_error_title)).assertIsDisplayed()
         composeRule.onNodeWithText("NXDOMAIN").assertIsDisplayed()
-        composeRule.onNodeWithText("Retry").assertHasClickAction().assertIsDisplayed()
+        composeRule
+            .onNodeWithText(context.getString(R.string.dns_retry))
+            .assertHasClickAction()
+            .assertIsDisplayed()
+            .performClick()
+        verify(exactly = 1) { viewModel.onRetry() }
     }
 
     private fun fakeDnsViewModel(state: DnsUiState): DnsViewModel {

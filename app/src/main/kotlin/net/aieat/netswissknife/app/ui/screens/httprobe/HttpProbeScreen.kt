@@ -914,7 +914,7 @@ private fun BodyTabContent(result: HttpProbeResult) {
             }
         }
 
-        if (result.responseBodyBytes > 512_000L) {
+        if (result.responseBodyTruncated) {
             Surface(
                 shape = MaterialTheme.shapes.small,
                 color = MaterialTheme.colorScheme.tertiaryContainer

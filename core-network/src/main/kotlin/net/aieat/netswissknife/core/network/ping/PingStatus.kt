@@ -1,6 +1,6 @@
 package net.aieat.netswissknife.core.network.ping
 
-/** The outcome of a single ICMP-style reachability probe. */
+/** The outcome of a single platform reachability probe. */
 enum class PingStatus {
     /** Host responded within the timeout window. */
     SUCCESS,
