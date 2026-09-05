@@ -103,6 +103,18 @@ jobs:
           disable-animations: true
           script: ./gradlew :app:connectedDebugAndroidTest --no-daemon --no-parallel
 
+      # Per-test failures live only in these reports; without them a red
+      # emulator job says "there were failing tests" and nothing else.
+      - name: Upload instrumentation test report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: instrumentation-test-report
+          path: |
+            app/build/reports/androidTests/connected/
+            app/build/outputs/androidTest-results/connected/
+          if-no-files-found: warn
+
   codeql:
     runs-on: ubuntu-latest
     permissions:
