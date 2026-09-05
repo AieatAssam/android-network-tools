@@ -1,9 +1,11 @@
 package net.aieat.netswissknife.app.ui
 
 import androidx.compose.ui.test.assertHasClickAction
+import androidx.compose.ui.test.assertAny
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.isDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.onNodeWithTag
@@ -100,9 +102,12 @@ class UiSmokeTest {
         composeRule.mainClock.advanceTimeBy(1_000L)
         scrollToStatePanel()
         composeRule.onNodeWithText(context.getString(R.string.dns_querying)).assertIsDisplayed()
+        // Two nodes carry the loading description while a lookup runs: the spinner
+        // inside the lookup button and the one in the result panel. Asserting that
+        // any is displayed keeps the a11y contract without pinning the count.
         composeRule
-            .onNodeWithContentDescription(context.getString(R.string.a11y_loading))
-            .assertIsDisplayed()
+            .onAllNodesWithContentDescription(context.getString(R.string.a11y_loading))
+            .assertAny(isDisplayed())
     }
 
     @Test
