@@ -9,19 +9,17 @@ import kotlinx.coroutines.flow.Flow
 interface PingRepository {
 
     /**
-     * Sends [count] ICMP-style probes to [host] and emits a [PingPacketResult]
+     * Sends [count] reachability probes to [host] and emits a [PingPacketResult]
      * for each one as it completes (success, timeout, or error).
      *
      * @param host       Hostname or IP address to ping
      * @param count      Number of probes to send (≥ 1)
      * @param timeoutMs  Per-probe timeout in milliseconds
-     * @param packetSize Payload size in bytes (informational, used in raw output)
      */
     fun ping(
         host: String,
         count: Int,
-        timeoutMs: Int,
-        packetSize: Int
+        timeoutMs: Int
     ): Flow<PingPacketResult>
 
     /**
@@ -30,11 +28,9 @@ interface PingRepository {
      *
      * @param host       Hostname or IP address to ping
      * @param timeoutMs  Per-probe timeout in milliseconds
-     * @param packetSize Payload size in bytes (informational)
      */
     fun continuousPing(
         host: String,
-        timeoutMs: Int,
-        packetSize: Int
+        timeoutMs: Int
     ): Flow<PingPacketResult>
 }

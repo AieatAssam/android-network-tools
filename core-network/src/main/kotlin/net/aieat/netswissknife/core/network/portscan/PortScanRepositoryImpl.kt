@@ -1,19 +1,21 @@
 package net.aieat.netswissknife.core.network.portscan
 
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.launch
 import java.net.ConnectException
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.net.SocketTimeoutException
+import net.aieat.netswissknife.core.network.MonotonicClock
+import net.aieat.netswissknife.core.network.SystemMonotonicClock
+import net.aieat.netswissknife.core.network.elapsedMillisSince
 
 /** Functional type for a single TCP port probe. Injected for testability. */
 typealias PortConnectChecker = (host: String, port: Int) -> PortConnectResult
@@ -28,7 +30,8 @@ data class PortConnectResult(
 /**
  * Production [PortScanRepository] that uses TCP socket connections to determine port status.
  *
- * Ports are tested in batches of [concurrency] simultaneously using coroutines.
+ * Up to [concurrency] ports are tested simultaneously using a bounded worker
+ * pool; each progress event is emitted as its probe completes.
  * For each open port, a brief banner read is attempted on well-known service ports.
  *
  * @param checker  Functional hook for the TCP probe. Pass null to use the real socket
@@ -36,19 +39,23 @@ data class PortConnectResult(
  */
 class PortScanRepositoryImpl(
     private val checker: PortConnectChecker? = null,
+    private val clock: MonotonicClock = SystemMonotonicClock,
 ) : PortScanRepository {
 
     companion object {
         /**
          * Returns a TCP checker that uses [timeoutMs] for the connection timeout.
          */
-        fun defaultChecker(timeoutMs: Int): PortConnectChecker = { host, port ->
-            val start = System.currentTimeMillis()
+        fun defaultChecker(
+            timeoutMs: Int,
+            clock: MonotonicClock = SystemMonotonicClock,
+        ): PortConnectChecker = { host, port ->
+            val start = clock.nowNanos()
             var socket: Socket? = null
             try {
                 socket = Socket()
                 socket.connect(InetSocketAddress(host, port), timeoutMs)
-                val responseTime = System.currentTimeMillis() - start
+                val responseTime = clock.elapsedMillisSince(start)
 
                 // Attempt banner grab for open port (short read)
                 val banner: String? = try {
@@ -61,11 +68,11 @@ class PortScanRepositoryImpl(
 
                 PortConnectResult(PortStatus.OPEN, responseTime, banner)
             } catch (e: ConnectException) {
-                PortConnectResult(PortStatus.CLOSED, System.currentTimeMillis() - start, null)
+                PortConnectResult(PortStatus.CLOSED, clock.elapsedMillisSince(start), null)
             } catch (e: SocketTimeoutException) {
-                PortConnectResult(PortStatus.FILTERED, System.currentTimeMillis() - start, null)
+                PortConnectResult(PortStatus.FILTERED, clock.elapsedMillisSince(start), null)
             } catch (_: Exception) {
-                PortConnectResult(PortStatus.FILTERED, System.currentTimeMillis() - start, null)
+                PortConnectResult(PortStatus.FILTERED, clock.elapsedMillisSince(start), null)
             } finally {
                 try { socket?.close() } catch (_: Exception) {}
             }
@@ -78,54 +85,68 @@ class PortScanRepositoryImpl(
         timeoutMs: Int,
         concurrency: Int
     ): Flow<PortScanUpdate> = flow {
-        val effectiveChecker = checker ?: defaultChecker(timeoutMs)
-        val startTime = System.currentTimeMillis()
+        val effectiveChecker = checker ?: defaultChecker(timeoutMs, clock)
+        val startTime = clock.nowNanos()
         val results = mutableListOf<PortScanResult>()
-        var scannedCount = 0
-        val mutex = Mutex()
 
         // Resolve host IP once for the summary
         val resolvedIp: String? = try {
             InetAddress.getByName(host).hostAddress
         } catch (_: Exception) { null }
 
-        val effectiveConcurrency = concurrency.coerceAtLeast(1).coerceAtMost(500)
-        val portChunks = ports.chunked(effectiveConcurrency)
+        val effectiveConcurrency = concurrency.coerceIn(1, 500)
 
-        for (chunk in portChunks) {
-            coroutineScope {
-                val deferreds = chunk.map { port ->
-                    async(Dispatchers.IO) {
+        // A bounded work queue keeps very large scans from launching one
+        // coroutine per port, while the bounded result queue provides
+        // backpressure if a collector is slower than the probes. Results are
+        // consumed in channel-send order, i.e. in completion order rather than
+        // the order in which ports were supplied.
+        coroutineScope {
+            val pending = Channel<Int>(capacity = effectiveConcurrency)
+            val completed = Channel<PortScanResult>(capacity = effectiveConcurrency)
+            val producer = launch {
+                try {
+                    for (port in ports) pending.send(port)
+                } finally {
+                    pending.close()
+                }
+            }
+            val workerCount = minOf(effectiveConcurrency, ports.size)
+            val workers = List(workerCount) {
+                launch(Dispatchers.IO) {
+                    for (port in pending) {
                         val connectResult = effectiveChecker(host, port)
                         val portInfo = WellKnownPorts.getInfo(port)
-                        PortScanResult(
-                            port = port,
-                            status = connectResult.status,
-                            serviceName = portInfo?.serviceName ?: WellKnownPorts.getServiceName(port),
-                            serviceDescription = portInfo?.description,
-                            banner = connectResult.banner,
-                            responseTimeMs = connectResult.responseTimeMs
+                        completed.send(
+                            PortScanResult(
+                                port = port,
+                                status = connectResult.status,
+                                serviceName = portInfo?.serviceName ?: WellKnownPorts.getServiceName(port),
+                                serviceDescription = portInfo?.description,
+                                banner = connectResult.banner,
+                                responseTimeMs = connectResult.responseTimeMs
+                            )
                         )
                     }
                 }
+            }
+            launch {
+                producer.join()
+                workers.joinAll()
+                completed.close()
+            }
 
-                // Collect results as they complete and emit updates
-                for (deferred in deferreds) {
-                    val portResult = deferred.await()
-                    val currentCount: Int
-                    mutex.withLock {
-                        results.add(portResult)
-                        scannedCount++
-                        currentCount = scannedCount
-                    }
-                    emit(
-                        PortScanUpdate.PortResult(
-                            result = portResult,
-                            scannedCount = currentCount,
-                            totalCount = ports.size
-                        )
+            var scannedCount = 0
+            for (portResult in completed) {
+                results += portResult
+                scannedCount++
+                emit(
+                    PortScanUpdate.PortResult(
+                        result = portResult,
+                        scannedCount = scannedCount,
+                        totalCount = ports.size
                     )
-                }
+                )
             }
         }
 
@@ -137,7 +158,7 @@ class PortScanRepositoryImpl(
             openPorts = results.count { it.status == PortStatus.OPEN },
             closedPorts = results.count { it.status == PortStatus.CLOSED },
             filteredPorts = results.count { it.status == PortStatus.FILTERED },
-            scanDurationMs = System.currentTimeMillis() - startTime,
+            scanDurationMs = clock.elapsedMillisSince(startTime),
             results = results.sortedBy { it.port }
         )
         emit(PortScanUpdate.Complete(summary))

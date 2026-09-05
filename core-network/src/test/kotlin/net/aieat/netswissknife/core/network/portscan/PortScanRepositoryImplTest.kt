@@ -2,6 +2,7 @@ package net.aieat.netswissknife.core.network.portscan
 
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.filterIsInstance
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -10,6 +11,8 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @DisplayName("PortScanRepositoryImpl")
@@ -164,6 +167,33 @@ class PortScanRepositoryImplTest {
     @Nested
     @DisplayName("progress tracking")
     inner class ProgressTracking {
+
+        @Test
+        fun `emits each port in completion order`() = runTest {
+            // Port 80 is supplied first but is held until port 443 has actually
+            // been emitted downstream. A latch rather than a sleep keeps this
+            // deterministic on a loaded CI runner: probes really do block, since
+            // production socket probes run on Dispatchers.IO.
+            val fastPortEmitted = CountDownLatch(1)
+            val checker: PortConnectChecker = { _, port ->
+                if (port == 80) {
+                    assertTrue(
+                        fastPortEmitted.await(10, TimeUnit.SECONDS),
+                        "port 443 was never emitted"
+                    )
+                }
+                PortConnectResult(PortStatus.OPEN, 1L, null)
+            }
+            val repo = PortScanRepositoryImpl(checker = checker)
+
+            val results = repo.scan("host", listOf(80, 443), 1000, concurrency = 2)
+                .filterIsInstance<PortScanUpdate.PortResult>()
+                .onEach { if (it.result.port == 443) fastPortEmitted.countDown() }
+                .toList()
+
+            assertEquals(listOf(443, 80), results.map { it.result.port })
+            assertEquals(listOf(1, 2), results.map { it.scannedCount })
+        }
 
         @Test
         fun `scannedCount increments per emission`() = runTest {

@@ -75,7 +75,6 @@
     <string name="ping_host_placeholder">e.g. google.com or 8.8.8.8</string>
     <string name="ping_count_label">Count</string>
     <string name="ping_timeout_label">Timeout (ms)</string>
-    <string name="ping_packet_size_label">Packet size (bytes)</string>
     <string name="ping_start_button">Start Ping</string>
     <string name="ping_stop_button">Stop</string>
     <string name="ping_retry">Retry</string>
@@ -533,7 +532,8 @@
     <string name="httprobe_no_headers">No headers</string>
     <string name="httprobe_response_body">Response Body</string>
     <string name="httprobe_copy_body">Copy</string>
-    <string name="httprobe_body_truncated">Showing first 512 KB of %1$s response</string>
+    <string name="httprobe_body_truncated">Showing first %1$s of the response body</string>
+    <string name="httprobe_response_size_at_least">≥ %1$s</string>
     <string name="httprobe_empty_body">Empty body (HEAD or no content)</string>
 
     <!-- DNS Record labels -->
@@ -725,9 +725,9 @@
     <!-- Ping help -->
     <string name="help_ping_title">Ping</string>
     <string name="help_ping_what_heading">What it does</string>
-    <string name="help_ping_what_body">Sends ICMP echo requests to a host and measures round-trip time (RTT). Useful for checking whether a host is reachable and how responsive it is.</string>
+    <string name="help_ping_what_body">Checks whether a host is reachable and measures round-trip time (RTT). Android attempts ICMP first and may fall back to TCP when ICMP is unavailable.</string>
     <string name="help_ping_params_heading">Key parameters</string>
-    <string name="help_ping_params_body">Count — number of ping packets to send.\nTimeout — how long to wait for each reply.\nPacket size — payload size in bytes.\nContinuous — pings indefinitely until you stop.</string>
+    <string name="help_ping_params_body">Count — number of ping packets to send.\nTimeout — how long to wait for each reply.\nContinuous — pings indefinitely until you stop.</string>
     <string name="help_ping_results_heading">Reading the results</string>
     <string name="help_ping_results_body">Min/Avg/Max shows the spread of RTT values. Jitter is the variation in RTT — high jitter indicates an unstable connection. Packet loss above 0%% suggests congestion or firewall filtering.</string>
 

@@ -9,10 +9,10 @@ class ContinuousPingUseCase(private val repository: PingRepository) {
 
     operator fun invoke(params: ContinuousPingParams): Flow<PingFlowResult> {
         val trimmedHost = params.host.trim()
-        val error = validatePingCommon(trimmedHost, params.timeoutMs, params.packetSize)
+        val error = validatePingCommon(trimmedHost, params.timeoutMs)
         if (error != null) return flow { emit(PingFlowResult.ValidationError(error)) }
         return repository
-            .continuousPing(host = trimmedHost, timeoutMs = params.timeoutMs, packetSize = params.packetSize)
+            .continuousPing(host = trimmedHost, timeoutMs = params.timeoutMs)
             .map { PingFlowResult.Packet(it) }
     }
 }

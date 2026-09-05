@@ -1,0 +1,19 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+indent_style = space
+indent_size = 4
+
+[*.{kt,kts}]
+ij_kotlin_code_style_defaults = KOTLIN_OFFICIAL
+ij_kotlin_name_count_to_use_star_import = 2147483647
+ij_kotlin_name_count_to_use_star_import_for_members = 2147483647
+# Existing Compose screens intentionally contain long UI declarations. Keep a
+# meaningful upper bound while avoiding formatter-only churn in this change.
+max_line_length = 240
+# Wildcard imports are already established throughout the Compose and test
+# sources; leave import organization to the IDE while KtLint checks formatting.
+ktlint_standard_no-wildcard-imports = disabled

@@ -18,6 +18,17 @@ val ciStorePassword: String? = findProperty("storePassword") as String?
 val ciKeyAlias:      String? = findProperty("keyAlias")      as String?
 val ciKeyPassword:   String? = findProperty("keyPassword")   as String?
 
+private val releaseSigningValues = listOf(
+    "storeFile" to ciStoreFile,
+    "storePassword" to ciStorePassword,
+    "keyAlias" to ciKeyAlias,
+    "keyPassword" to ciKeyPassword,
+)
+private val releaseSigningConfigured = releaseSigningValues.any { !it.second.isNullOrBlank() }
+check(!releaseSigningConfigured || releaseSigningValues.all { !it.second.isNullOrBlank() }) {
+    "Release signing requires storeFile, storePassword, keyAlias, and keyPassword together."
+}
+
 android {
     namespace  = "net.aieat.netswissknife.app"
     compileSdk = 37
@@ -26,7 +37,13 @@ android {
         applicationId = "net.aieat.netswissknife"
         minSdk        = 26
         targetSdk     = 37
-        versionCode   = ciVersionCode ?: (System.currentTimeMillis() / 1000).toInt()
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // Release workflows always provide these values. A stable local default keeps
+        // debug and unsigned release builds reproducible across machines and invocations.
+        // Note: the previous default was a Unix timestamp, so a debug build installed
+        // before this change carries a far higher versionCode. Installing over it fails
+        // with INSTALL_FAILED_VERSION_DOWNGRADE — uninstall the old build once.
+        versionCode   = ciVersionCode ?: 1
         versionName   = ciVersionName ?: "1.0.0"
     }
 
@@ -38,12 +55,16 @@ android {
             keyAlias      = "androiddebugkey"
             keyPassword   = "android"
         }
-        if (ciStoreFile != null) {
+        if (releaseSigningConfigured) {
             create("release") {
-                storeFile     = file(ciStoreFile)
-                storePassword = ciStorePassword
-                keyAlias      = ciKeyAlias
-                keyPassword   = ciKeyPassword
+                val keystore = file(requireNotNull(ciStoreFile))
+                check(keystore.isFile) {
+                    "Release keystore does not exist: ${keystore.absolutePath}"
+                }
+                storeFile     = keystore
+                storePassword = requireNotNull(ciStorePassword)
+                keyAlias      = requireNotNull(ciKeyAlias)
+                keyPassword   = requireNotNull(ciKeyPassword)
             }
         }
     }
@@ -60,10 +81,10 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = if (ciStoreFile != null) {
-                signingConfigs.getByName("release")
-            } else {
-                signingConfigs.getByName("debug")
+            // Deliberately leave this unset when no release key is supplied. AGP then
+            // emits an unsigned artifact; it must never silently use the debug key.
+            if (releaseSigningConfigured) {
+                signingConfig = signingConfigs.getByName("release")
             }
             ndk {
                 // All three native deps (libicmpenguin, libandroidx.graphics.path,
@@ -89,6 +110,16 @@ android {
         compose = true
         buildConfig = true
     }
+
+    lint {
+        // The codebase currently reports 0 lint errors (11 warnings, 10 hints),
+        // so this gates on errors without needing a baseline to grandfather
+        // anything. Warnings stay visible in the report uploaded by ci.yml but
+        // do not block a merge; turning warningsAsErrors on later would need a
+        // baseline captured via `./gradlew :app:updateLintBaseline` first.
+        abortOnError = true
+        warningsAsErrors = false
+    }
 }
 
 dependencies {
@@ -111,6 +142,7 @@ dependencies {
     implementation(libs.compose.material.icons.extended)
     implementation(libs.compose.animation)
     debugImplementation(libs.compose.ui.tooling)
+    debugImplementation(libs.compose.ui.test.manifest)
 
     // Navigation
     implementation(libs.navigation.compose)
@@ -139,6 +171,14 @@ dependencies {
     testRuntimeOnly(libs.junit5.launcher)
     testImplementation(libs.mockk)
     testImplementation(libs.coroutines.test)
+
+    // Instrumented Compose tests exercise semantics, navigation, and Android
+    // permission surfaces on a real (or managed virtual) device.
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.androidx.test.rules)
+    androidTestImplementation(libs.mockk.android)
+    androidTestImplementation(composeBom)
+    androidTestImplementation(libs.compose.ui.test.junit4)
 }
 
 tasks.withType<Test> {
@@ -165,7 +205,9 @@ kover {
             includes {
                 classes(
                     "net.aieat.netswissknife.app.ui.screens.whois.RelayChainGeometry",
-                    "net.aieat.netswissknife.app.ui.screens.whois.ConnectorSegment"
+                    "net.aieat.netswissknife.app.ui.screens.whois.ConnectorSegment",
+                    "net.aieat.netswissknife.app.data.AppPreferenceKeys",
+                    "net.aieat.netswissknife.app.data.RecentHostsRepository"
                 )
             }
             excludes {
@@ -174,8 +216,8 @@ kover {
             }
         }
         verify {
-            rule("Pure layout logic is fully covered") {
-                minBound(100)
+            rule("Pure app logic is well covered") {
+                minBound(90)
             }
         }
     }

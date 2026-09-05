@@ -1,6 +1,9 @@
 package net.aieat.netswissknife.core.network.speedtest
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
@@ -30,7 +33,8 @@ class SpeedTestRepositoryImpl(
     private val sampleIntervalMs: Long = DEFAULT_SAMPLE_INTERVAL_MS,
     private val latencyProbe: suspend (timeoutMs: Int) -> Long = DEFAULT_LATENCY_PROBE,
     private val downloadStream: ByteStreamFn = DEFAULT_DOWNLOAD,
-    private val uploadStream: ByteStreamFn = DEFAULT_UPLOAD
+    private val uploadStream: ByteStreamFn = DEFAULT_UPLOAD,
+    private val monotonicTimeNs: () -> Long = { System.nanoTime() }
 ) : SpeedTestRepository {
 
     companion object {
@@ -68,17 +72,20 @@ class SpeedTestRepositoryImpl(
         }
 
         val DEFAULT_DOWNLOAD: ByteStreamFn = { durationMs, onChunk ->
-            val start = System.currentTimeMillis()
+            val startNs = System.nanoTime()
+            fun elapsedMs(): Long = (System.nanoTime() - startNs) / 1_000_000L
             val buffer = ByteArray(CHUNK_SIZE)
-            while (System.currentTimeMillis() - start < durationMs) {
+            while (elapsedMs() < durationMs) {
+                currentCoroutineContext().ensureActive()
                 val conn = openConnection("$BASE_URL/__down?bytes=$DOWNLOAD_PAYLOAD_BYTES", "GET")
                 try {
                     conn.connect()
                     conn.inputStream.use { stream ->
-                        while (System.currentTimeMillis() - start < durationMs) {
+                        while (elapsedMs() < durationMs) {
+                            currentCoroutineContext().ensureActive()
                             val read = stream.read(buffer)
                             if (read == -1) break
-                            onChunk(read, System.currentTimeMillis() - start)
+                            onChunk(read, elapsedMs())
                         }
                     }
                 } finally {
@@ -88,9 +95,11 @@ class SpeedTestRepositoryImpl(
         }
 
         val DEFAULT_UPLOAD: ByteStreamFn = { durationMs, onChunk ->
-            val start = System.currentTimeMillis()
+            val startNs = System.nanoTime()
+            fun elapsedMs(): Long = (System.nanoTime() - startNs) / 1_000_000L
             val payload = ByteArray(CHUNK_SIZE).also { SecureRandom().nextBytes(it) }
-            while (System.currentTimeMillis() - start < durationMs) {
+            while (elapsedMs() < durationMs) {
+                currentCoroutineContext().ensureActive()
                 val conn = openConnection("$BASE_URL/__up", "POST").apply {
                     doOutput = true
                     setChunkedStreamingMode(CHUNK_SIZE)
@@ -100,11 +109,12 @@ class SpeedTestRepositoryImpl(
                     conn.connect()
                     conn.outputStream.use { out ->
                         var written = 0L
-                        while (written < UPLOAD_PAYLOAD_BYTES && System.currentTimeMillis() - start < durationMs) {
+                        while (written < UPLOAD_PAYLOAD_BYTES && elapsedMs() < durationMs) {
+                            currentCoroutineContext().ensureActive()
                             val toWrite = minOf(CHUNK_SIZE.toLong(), UPLOAD_PAYLOAD_BYTES - written).toInt()
                             out.write(payload, 0, toWrite)
                             written += toWrite
-                            onChunk(toWrite, System.currentTimeMillis() - start)
+                            onChunk(toWrite, elapsedMs())
                         }
                     }
                     conn.responseCode
@@ -121,6 +131,8 @@ class SpeedTestRepositoryImpl(
         for (seq in 1..latencyProbeCount) {
             val rtt = try {
                 latencyProbe(latencyTimeoutMs)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 emit(SpeedTestEvent.Failed(SpeedTestPhase.LATENCY, e.message ?: "Latency probe failed"))
                 return@flow
@@ -134,6 +146,8 @@ class SpeedTestRepositoryImpl(
         // ── Phase 2: download ────────────────────────────────────────────────
         val downloadResult = try {
             measureThroughput(downloadDurationMs, downloadStream) { emit(SpeedTestEvent.DownloadProgress(it)) }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             emit(SpeedTestEvent.Failed(SpeedTestPhase.DOWNLOAD, e.message ?: "Download test failed"))
             return@flow
@@ -143,6 +157,8 @@ class SpeedTestRepositoryImpl(
         // ── Phase 3: upload ──────────────────────────────────────────────────
         val uploadResult = try {
             measureThroughput(uploadDurationMs, uploadStream) { emit(SpeedTestEvent.UploadProgress(it)) }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             emit(SpeedTestEvent.Failed(SpeedTestPhase.UPLOAD, e.message ?: "Upload test failed"))
             return@flow
@@ -161,23 +177,47 @@ class SpeedTestRepositoryImpl(
         var totalBytes = 0L
         var intervalBytes = 0L
         var lastSampleElapsed = 0L
+        var lastCallbackElapsed = 0L
+        val measurementStartNs = monotonicTimeNs()
+        val effectiveSampleIntervalMs = sampleIntervalMs.coerceAtLeast(1L)
 
         streamFn(durationMs) { bytesTransferred, elapsedMs ->
+            currentCoroutineContext().ensureActive()
+            val safeElapsedMs = maxOf(lastCallbackElapsed, elapsedMs.coerceAtLeast(0L))
             totalBytes += bytesTransferred
             intervalBytes += bytesTransferred
-            val sinceLastSample = elapsedMs - lastSampleElapsed
-            if (sinceLastSample >= sampleIntervalMs) {
+            lastCallbackElapsed = safeElapsedMs
+            val sinceLastSample = safeElapsedMs - lastSampleElapsed
+            if (sinceLastSample >= effectiveSampleIntervalMs) {
                 val intervalSec = sinceLastSample / 1000.0
                 val instantMbps = if (intervalSec > 0) (intervalBytes * 8.0 / 1_000_000.0) / intervalSec else 0.0
-                val sample = ThroughputSample(elapsedMs, totalBytes, instantMbps)
+                val sample = ThroughputSample(safeElapsedMs, totalBytes, instantMbps)
                 samples.add(sample)
                 onSample(sample)
                 intervalBytes = 0L
-                lastSampleElapsed = elapsedMs
+                lastSampleElapsed = safeElapsedMs
             }
         }
 
-        val actualDurationMs = samples.lastOrNull()?.elapsedMs ?: 0L
+        val clockDurationMs = ((monotonicTimeNs() - measurementStartNs) / 1_000_000L).coerceAtLeast(0L)
+        val actualDurationMs = maxOf(lastCallbackElapsed, clockDurationMs)
+
+        // The final callback often arrives before the configured sample interval
+        // (or the stream ends between samples). Account for those bytes instead
+        // of silently excluding them from the reported peak and sample history.
+        val finalIntervalMs = actualDurationMs - lastSampleElapsed
+        if (intervalBytes > 0L) {
+            val intervalSec = finalIntervalMs / 1000.0
+            val instantMbps = if (intervalSec > 0.0) {
+                (intervalBytes * 8.0 / 1_000_000.0) / intervalSec
+            } else {
+                0.0
+            }
+            val finalSample = ThroughputSample(actualDurationMs, totalBytes, instantMbps)
+            samples.add(finalSample)
+            onSample(finalSample)
+        }
+
         return ThroughputResult.from(totalBytes, actualDurationMs, samples)
     }
 }

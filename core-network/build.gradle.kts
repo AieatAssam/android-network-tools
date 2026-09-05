@@ -28,3 +28,16 @@ dependencies {
 tasks.withType<Test> {
     useJUnitPlatform()
 }
+
+// Protocol parsers and repository orchestration are JVM-testable. Enforce a
+// module-level floor so coverage reports are actionable rather than merely
+// informational; Android framework adapters remain outside this module.
+kover {
+    reports {
+        verify {
+            rule("Network logic minimum coverage") {
+                minBound(70)
+            }
+        }
+    }
+}

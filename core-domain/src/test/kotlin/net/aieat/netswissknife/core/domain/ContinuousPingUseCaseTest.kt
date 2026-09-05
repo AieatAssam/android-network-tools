@@ -70,21 +70,9 @@ class ContinuousPingUseCaseTest {
         }
 
         @Test
-        fun `packetSize below 1 emits validation error`() = runTest {
-            val result = useCase(ContinuousPingParams(host = "8.8.8.8", packetSize = 0)).first()
-            assertTrue(result is PingFlowResult.ValidationError)
-        }
-
-        @Test
-        fun `packetSize above 65507 emits validation error`() = runTest {
-            val result = useCase(ContinuousPingParams(host = "8.8.8.8", packetSize = 65_508)).first()
-            assertTrue(result is PingFlowResult.ValidationError)
-        }
-
-        @Test
         fun `validation error does not call repository`() = runTest {
             useCase(ContinuousPingParams(host = "")).toList()
-            verify(exactly = 0) { repository.continuousPing(any(), any(), any()) }
+            verify(exactly = 0) { repository.continuousPing(any(), any()) }
         }
     }
 
@@ -94,35 +82,35 @@ class ContinuousPingUseCaseTest {
 
         @Test
         fun `valid host delegates to repository continuousPing`() = runTest {
-            every { repository.continuousPing(any(), any(), any()) } returns flowOf(samplePacket)
+            every { repository.continuousPing(any(), any()) } returns flowOf(samplePacket)
             useCase(ContinuousPingParams(host = "8.8.8.8")).toList()
-            verify(exactly = 1) { repository.continuousPing(any(), any(), any()) }
+            verify(exactly = 1) { repository.continuousPing(any(), any()) }
         }
 
         @Test
         fun `host is trimmed before passing to repository`() = runTest {
-            every { repository.continuousPing(any(), any(), any()) } returns flowOf(samplePacket)
+            every { repository.continuousPing(any(), any()) } returns flowOf(samplePacket)
             useCase(ContinuousPingParams(host = "  8.8.8.8  ")).toList()
-            verify { repository.continuousPing("8.8.8.8", any(), any()) }
+            verify { repository.continuousPing("8.8.8.8", any()) }
         }
 
         @Test
         fun `timeoutMs is forwarded to repository`() = runTest {
-            every { repository.continuousPing(any(), any(), any()) } returns flowOf(samplePacket)
+            every { repository.continuousPing(any(), any()) } returns flowOf(samplePacket)
             useCase(ContinuousPingParams(host = "8.8.8.8", timeoutMs = 5_000)).toList()
-            verify { repository.continuousPing(any(), 5_000, any()) }
+            verify { repository.continuousPing(any(), 5_000) }
         }
 
         @Test
         fun `emitted items are wrapped in Packet`() = runTest {
-            every { repository.continuousPing(any(), any(), any()) } returns flowOf(samplePacket)
+            every { repository.continuousPing(any(), any()) } returns flowOf(samplePacket)
             val results = useCase(ContinuousPingParams(host = "8.8.8.8")).toList()
             assertTrue(results.all { it is PingFlowResult.Packet })
         }
 
         @Test
         fun `flow cancellation stops collection`() = runTest {
-            every { repository.continuousPing(any(), any(), any()) } returns flow {
+            every { repository.continuousPing(any(), any()) } returns flow {
                 var i = 1
                 while (true) emit(samplePacket.copy(sequence = i++))
             }

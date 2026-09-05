@@ -36,7 +36,16 @@ data class HttpProbeResult(
     val responseTimeMs: Long,
     val responseHeaders: Map<String, List<String>>,
     val responseBody: String?,
+    /** Bytes actually buffered from the response. Never exceeds the request's cap. */
     val responseBodyBytes: Long,
+    /**
+     * Full body size as advertised by `Content-Length`, or null when the server
+     * did not declare one (chunked transfer, HTTP/2 without the header, …).
+     * This is the only trustworthy total once [responseBodyTruncated] is set,
+     * because a bounded read never observes the bytes past the cap.
+     */
+    val declaredBodyBytes: Long? = null,
+    val responseBodyTruncated: Boolean = false,
     val finalUrl: String,
     val redirectChain: List<String>,
     val securityChecks: List<SecurityHeaderCheck>

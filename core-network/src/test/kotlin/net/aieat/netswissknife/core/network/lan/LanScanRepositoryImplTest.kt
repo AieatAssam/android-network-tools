@@ -2,6 +2,7 @@ package net.aieat.netswissknife.core.network.lan
 
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -9,6 +10,8 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 @DisplayName("LanScanRepositoryImpl")
 class LanScanRepositoryImplTest {
@@ -213,6 +216,32 @@ class LanScanRepositoryImplTest {
     @Nested
     @DisplayName("progress tracking")
     inner class ProgressTracking {
+
+        @Test
+        fun `emits hosts in completion order`() = runTest {
+            // .1 is enumerated first but is held until .2 has actually been
+            // emitted. A latch rather than a sleep keeps this deterministic on a
+            // loaded CI runner, while still blocking the way a real probe does.
+            val fastHostEmitted = CountDownLatch(1)
+            val checker: HostChecker = { ip, _ ->
+                if (ip == "192.168.1.1") {
+                    assertTrue(
+                        fastHostEmitted.await(10, TimeUnit.SECONDS),
+                        "192.168.1.2 was never emitted"
+                    )
+                }
+                5L
+            }
+
+            val events = makeRepo(hostChecker = checker)
+                .scan(subnet24, 1000, concurrency = 2)
+                .filterIsInstance<LanScanUpdate.HostFound>()
+                .onEach { if (it.host.ip == "192.168.1.2") fastHostEmitted.countDown() }
+                .toList()
+
+            assertEquals(listOf("192.168.1.2", "192.168.1.1"), events.map { it.host.ip })
+            assertEquals(listOf(1, 2), events.map { it.scannedCount })
+        }
 
         @Test
         fun `scannedCount in HostFound equals number of IPs scanned so far`() = runTest {

@@ -1,10 +1,12 @@
 package net.aieat.netswissknife.core.network.httprobe
 
 import com.sun.net.httpserver.HttpServer
+import com.sun.net.httpserver.HttpExchange
 import kotlinx.coroutines.test.runTest
 import net.aieat.netswissknife.core.network.NetworkResult
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
@@ -12,6 +14,8 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import java.net.InetSocketAddress
+import java.nio.charset.Charset
+import java.util.concurrent.atomic.AtomicReference
 
 @DisplayName("HttpProbeRepositoryImpl – input validation")
 class HttpProbeRepositoryValidationTest {
@@ -359,12 +363,13 @@ class HttpMethodBodySupportTest {
 @DisplayName("HttpProbeRepositoryImpl – redirect handling")
 class HttpProbeRepositoryRedirectTest {
 
-    private var server: HttpServer? = null
+    private val servers = mutableListOf<HttpServer>()
     private val repo = HttpProbeRepositoryImpl()
 
     @AfterEach
     fun tearDown() {
-        server?.stop(0)
+        servers.forEach { it.stop(0) }
+        servers.clear()
     }
 
     private fun startServer(handler: (path: String) -> Triple<Int, String, String?>): String {
@@ -377,7 +382,28 @@ class HttpProbeRepositoryRedirectTest {
             exchange.responseBody.use { it.write(bytes) }
         }
         httpServer.start()
-        server = httpServer
+        servers += httpServer
+        return "http://127.0.0.1:${httpServer.address.port}"
+    }
+
+    private fun startRecordingServer(
+        handler: (HttpExchange) -> Triple<Int, String, String?>
+    ): String {
+        val httpServer = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        httpServer.createContext("/") { exchange ->
+            val (status, body, contentType) = handler(exchange)
+            contentType?.let { exchange.responseHeaders.add("Content-Type", it) }
+            val charset = contentType?.substringAfter("charset=", "")
+                ?.substringBefore(';')
+                ?.trim()
+                ?.let { runCatching { Charset.forName(it) }.getOrNull() }
+                ?: Charsets.UTF_8
+            val bytes = body.toByteArray(charset)
+            exchange.sendResponseHeaders(status, bytes.size.toLong())
+            exchange.responseBody.use { it.write(bytes) }
+        }
+        httpServer.start()
+        servers += httpServer
         return "http://127.0.0.1:${httpServer.address.port}"
     }
 
@@ -406,5 +432,131 @@ class HttpProbeRepositoryRedirectTest {
         assertTrue(result is NetworkResult.Success)
         assertEquals(200, (result as NetworkResult.Success).data.statusCode)
         assertTrue(result.data.redirectChain.isNotEmpty())
+    }
+
+    @Test
+    @DisplayName("probe does not forward credentials to another origin")
+    fun `probe strips sensitive headers across origins`() = runTest {
+        val receivedAuthorization = AtomicReference<String?>()
+        val receivedCookie = AtomicReference<String?>()
+        val targetUrl = startRecordingServer { exchange ->
+            receivedAuthorization.set(exchange.requestHeaders.getFirst("Authorization"))
+            receivedCookie.set(exchange.requestHeaders.getFirst("Cookie"))
+            Triple(200, "ok", null)
+        }
+        val sourceUrl = startRecordingServer { exchange ->
+            exchange.responseHeaders.add("Location", targetUrl)
+            Triple(302, "", null)
+        }
+
+        val result = repo.probe(
+            HttpProbeRequest(
+                url = sourceUrl,
+                headers = listOf("Authorization" to "Bearer secret", "Cookie" to "session=secret")
+            )
+        )
+
+        assertTrue(result is NetworkResult.Success)
+        assertNull(receivedAuthorization.get())
+        assertNull(receivedCookie.get())
+    }
+
+    @Test
+    @DisplayName("POST 302 follows browser-compatible method semantics")
+    fun `post 302 becomes get without body`() = runTest {
+        val receivedMethod = AtomicReference<String>()
+        val receivedBody = AtomicReference<String>()
+        lateinit var baseUrl: String
+        baseUrl = startRecordingServer { exchange ->
+            if (exchange.requestURI.path == "/target") {
+                receivedMethod.set(exchange.requestMethod)
+                receivedBody.set(exchange.requestBody.bufferedReader().use { it.readText() })
+                Triple(200, "ok", null)
+            } else {
+                exchange.responseHeaders.add("Location", "$baseUrl/target")
+                Triple(302, "", null)
+            }
+        }
+
+        val result = repo.probe(
+            HttpProbeRequest(
+                url = baseUrl,
+                method = HttpMethod.POST,
+                body = "payload",
+                headers = listOf("Content-Type" to "text/plain")
+            )
+        )
+
+        assertTrue(result is NetworkResult.Success)
+        assertEquals("GET", receivedMethod.get())
+        assertEquals("", receivedBody.get())
+    }
+
+    @Test
+    @DisplayName("307 preserves method and request body")
+    fun `307 preserves post body`() = runTest {
+        val receivedMethod = AtomicReference<String>()
+        val receivedBody = AtomicReference<String>()
+        lateinit var baseUrl: String
+        baseUrl = startRecordingServer { exchange ->
+            if (exchange.requestURI.path == "/target") {
+                receivedMethod.set(exchange.requestMethod)
+                receivedBody.set(exchange.requestBody.bufferedReader().use { it.readText() })
+                Triple(200, "ok", null)
+            } else {
+                // A 307 redirect must preserve the entity and method.
+                exchange.responseHeaders.add("Location", "$baseUrl/target")
+                Triple(307, "", null)
+            }
+        }
+
+        val result = repo.probe(HttpProbeRequest(url = baseUrl, method = HttpMethod.POST, body = "payload"))
+
+        assertTrue(result is NetworkResult.Success)
+        assertEquals("POST", receivedMethod.get())
+        assertEquals("payload", receivedBody.get())
+    }
+
+    @Test
+    @DisplayName("response body uses declared charset and bounded memory")
+    fun `body is charset aware and bounded`() = runTest {
+        val fullBody = "café-éclair"
+        val url = startRecordingServer { Triple(200, fullBody, "text/plain; charset=ISO-8859-1") }
+
+        val result = repo.probe(HttpProbeRequest(url = url, maxResponseBodyBytes = 4L))
+
+        assertTrue(result is NetworkResult.Success)
+        assertEquals("café", (result as NetworkResult.Success).data.responseBody)
+        // responseBodyBytes reports what was buffered, never a probe byte past
+        // the cap; the full size comes from Content-Length instead.
+        assertEquals(4L, result.data.responseBodyBytes)
+        assertTrue(result.data.responseBodyTruncated)
+        assertEquals(fullBody.toByteArray(Charsets.ISO_8859_1).size.toLong(), result.data.declaredBodyBytes)
+    }
+
+    @Test
+    @DisplayName("an untruncated body reports its exact size and no declared/actual mismatch")
+    fun `untruncated body reports exact size`() = runTest {
+        val url = startRecordingServer { Triple(200, "hello", "text/plain") }
+
+        val result = repo.probe(HttpProbeRequest(url = url))
+
+        assertTrue(result is NetworkResult.Success)
+        assertEquals(5L, (result as NetworkResult.Success).data.responseBodyBytes)
+        assertEquals(5L, result.data.declaredBodyBytes)
+        assertFalse(result.data.responseBodyTruncated)
+    }
+
+    @Test
+    @DisplayName("a zero-byte cap buffers nothing but still detects a non-empty body")
+    fun `zero cap buffers nothing and flags truncation`() = runTest {
+        val url = startRecordingServer { Triple(200, "hello", "text/plain") }
+
+        val result = repo.probe(HttpProbeRequest(url = url, maxResponseBodyBytes = 0L))
+
+        assertTrue(result is NetworkResult.Success)
+        assertEquals(0L, (result as NetworkResult.Success).data.responseBodyBytes)
+        assertTrue(result.data.responseBodyTruncated)
+        assertEquals(5L, result.data.declaredBodyBytes)
     }
 }

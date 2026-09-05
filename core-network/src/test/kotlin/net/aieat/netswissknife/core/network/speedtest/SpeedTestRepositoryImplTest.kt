@@ -1,6 +1,7 @@
 package net.aieat.netswissknife.core.network.speedtest
 
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -127,6 +128,44 @@ class SpeedTestRepositoryImplTest {
                 }
             }
             assertEquals(listOf(SpeedTestPhase.LATENCY, SpeedTestPhase.DOWNLOAD, SpeedTestPhase.UPLOAD), phaseOrder)
+        }
+
+        @Test
+        fun `accounts for final partial sample after the last interval`() = runTest {
+            val repo = repoWith(
+                latencyProbeCount = 1,
+                latencyRtts = listOf(10L),
+                downloadChunks = listOf(500_000 to 1_000L, 250_000 to 1_200L),
+                uploadChunks = emptyList()
+            )
+
+            val events = repo.runSpeedTest().toList()
+            val finished = events.filterIsInstance<SpeedTestEvent.DownloadFinished>().single()
+
+            assertEquals(750_000L, finished.result.bytesTransferred)
+            assertEquals(1_200L, finished.result.durationMs)
+            assertEquals(2, finished.result.samples.size)
+            assertEquals(750_000L, finished.result.samples.last().bytesTransferred)
+            assertTrue(finished.result.samples.last().instantMbps > 0.0)
+        }
+
+        @Test
+        fun `propagates cancellation instead of reporting a failed phase`() = runTest {
+            val cancellation = CancellationException("cancelled")
+            val repo = SpeedTestRepositoryImpl(
+                latencyProbeCount = 1,
+                latencyProbe = { throw cancellation },
+                downloadStream = fakeStream(emptyList()),
+                uploadStream = fakeStream(emptyList())
+            )
+
+            var thrown: CancellationException? = null
+            try {
+                repo.runSpeedTest().toList()
+            } catch (e: CancellationException) {
+                thrown = e
+            }
+            assertTrue(thrown != null)
         }
     }
 }
