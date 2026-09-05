@@ -112,11 +112,12 @@ android {
     }
 
     lint {
-        // Lint has never run against this codebase, so its first CI run would
-        // fail the build on pre-existing issues unrelated to any given change.
-        // Report instead of abort until a `lint-baseline.xml` is captured from
-        // a green run; then flip abortOnError back to true so new issues gate.
-        abortOnError = false
+        // The codebase currently reports 0 lint errors (11 warnings, 10 hints),
+        // so this gates on errors without needing a baseline to grandfather
+        // anything. Warnings stay visible in the report uploaded by ci.yml but
+        // do not block a merge; turning warningsAsErrors on later would need a
+        // baseline captured via `./gradlew :app:updateLintBaseline` first.
+        abortOnError = true
         warningsAsErrors = false
     }
 }

@@ -98,9 +98,9 @@ jobs:
           name: test-results
           path: '**/build/reports/tests/'
 
-      # Lint runs before any signing key is decoded. It is reporting-only for now
-      # (`lint { abortOnError = false }` in app/build.gradle.kts) until a baseline
-      # is captured, so read the report rather than trusting a green step.
+      # Lint gates the release before any signing key is decoded. It fails on
+      # lint errors; warnings are reported but do not block (see the lint block
+      # in app/build.gradle.kts).
       - name: Run Android Lint
         run: ./gradlew :app:lintRelease --no-daemon --no-parallel
 
