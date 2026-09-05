@@ -192,7 +192,7 @@ REFACTOR: Clean up → ./gradlew test (all pass)
 > gate and belongs in its own commit with a stated reason.
 
 > Run only one Gradle invocation at a time on memory-constrained hosts.
-> `gradle.properties` pins `org.gradle.jvmargs=-Xmx1024m`, `kotlin.daemon.jvmargs=-Xmx768m`,
+> `gradle.properties` pins `org.gradle.jvmargs=-Xmx1024m -XX:MaxMetaspaceSize=768m`, `kotlin.daemon.jvmargs=-Xmx768m`,
 > `org.gradle.parallel=false`, and `org.gradle.workers.max=1` for exactly this reason.
 > Concurrent builds share that heap and make test workers time out or get SIGKILLed
 > in ways that look like real test failures. If a run dies with no output, stop the
