@@ -84,6 +84,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import android.content.ClipData
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -117,6 +118,18 @@ import net.aieat.netswissknife.core.network.dns.DnsServer
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
+/**
+ * Handles for instrumentation tests. The result panel is the third item of a
+ * LazyColumn, so on a phone viewport it is not composed until scrolled to;
+ * tests need a stable handle on the list to reach it.
+ */
+object DnsScreenTestTags {
+    const val CONTENT_LIST = "dns_content_list"
+
+    /** Index of the idle/loading/error/success panel within [CONTENT_LIST]. */
+    const val STATE_PANEL_INDEX = 2
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DnsScreen(viewModel: DnsViewModel = hiltViewModel()) {
@@ -146,6 +159,7 @@ fun DnsScreen(viewModel: DnsViewModel = hiltViewModel()) {
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
+            .testTag(DnsScreenTestTags.CONTENT_LIST)
             .background(MaterialTheme.colorScheme.background)
             .alpha(screenAlpha),
         contentPadding = PaddingValues(16.dp),

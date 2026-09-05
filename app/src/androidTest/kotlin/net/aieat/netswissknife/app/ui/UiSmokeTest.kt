@@ -6,7 +6,8 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.navigation.compose.rememberNavController
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -17,6 +18,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.navigation.AppNavHost
 import net.aieat.netswissknife.app.ui.screens.DnsScreen
+import net.aieat.netswissknife.app.ui.screens.DnsScreenTestTags
 import net.aieat.netswissknife.app.ui.screens.HomeScreen
 import net.aieat.netswissknife.app.ui.screens.dns.DnsUiState
 import net.aieat.netswissknife.app.ui.screens.dns.DnsViewModel
@@ -96,13 +98,8 @@ class UiSmokeTest {
         }
 
         composeRule.mainClock.advanceTimeBy(1_000L)
-        // DnsScreen is a LazyColumn whose state panel is the third item, so on a
-        // phone viewport it is composed but below the fold. Scroll to it rather
-        // than asserting on a node the user would have to scroll to see.
-        composeRule
-            .onNodeWithText(context.getString(R.string.dns_querying))
-            .performScrollTo()
-            .assertIsDisplayed()
+        scrollToStatePanel()
+        composeRule.onNodeWithText(context.getString(R.string.dns_querying)).assertIsDisplayed()
         composeRule
             .onNodeWithContentDescription(context.getString(R.string.a11y_loading))
             .assertIsDisplayed()
@@ -118,20 +115,28 @@ class UiSmokeTest {
         }
 
         composeRule.mainClock.advanceTimeBy(1_000L)
-        // See the loading test: the error panel sits below the fold in the
-        // LazyColumn until scrolled into view.
-        composeRule
-            .onNodeWithText(context.getString(R.string.dns_error_title))
-            .performScrollTo()
-            .assertIsDisplayed()
+        scrollToStatePanel()
+        composeRule.onNodeWithText(context.getString(R.string.dns_error_title)).assertIsDisplayed()
         composeRule.onNodeWithText("NXDOMAIN").assertIsDisplayed()
         composeRule
             .onNodeWithText(context.getString(R.string.dns_retry))
-            .performScrollTo()
             .assertHasClickAction()
             .assertIsDisplayed()
             .performClick()
         verify(exactly = 1) { viewModel.onRetry() }
+    }
+
+    /**
+     * The idle/loading/error/success panel is the third item of DnsScreen's
+     * LazyColumn, so on a phone viewport it is not composed at all until the
+     * list scrolls to it. performScrollToIndex maps to LazyColumn's own
+     * scrollToItem, which is instant, so this stays deterministic under the
+     * paused test clock.
+     */
+    private fun scrollToStatePanel() {
+        composeRule
+            .onNodeWithTag(DnsScreenTestTags.CONTENT_LIST)
+            .performScrollToIndex(DnsScreenTestTags.STATE_PANEL_INDEX)
     }
 
     private fun fakeDnsViewModel(state: DnsUiState): DnsViewModel {
