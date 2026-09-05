@@ -188,13 +188,17 @@ fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
                         is DisplayState.Error   -> HttpProbeErrorContent(state.message) { viewModel.send() }
                         is DisplayState.Success -> {
                             val shareSubject = stringResource(R.string.share_subject_http, state.result.request.url)
+                            val shareSizeText = responseSizeText(
+                                state.result,
+                                stringResource(R.string.httprobe_response_size_at_least)
+                            )
                             HttpProbeSuccessContent(
                                 result = state.result,
                                 selectedTab = uiState.selectedTab,
                                 onTabSelected = viewModel::onTabSelected,
                                 onShare = {
                                     context.shareText(
-                                        text = buildHttpShareText(state.result),
+                                        text = buildHttpShareText(state.result, shareSizeText),
                                         subject = shareSubject
                                     )
                                 }
@@ -733,7 +737,10 @@ private fun OverviewTabContent(result: HttpProbeResult) {
     ) {
         LabeledValue(stringResource(R.string.httprobe_method_used), result.request.method.name)
         LabeledValue(stringResource(R.string.httprobe_final_url), result.finalUrl)
-        LabeledValue(stringResource(R.string.httprobe_response_size), formatBytes(result.responseBodyBytes))
+        LabeledValue(
+            stringResource(R.string.httprobe_response_size),
+            responseSizeText(result, stringResource(R.string.httprobe_response_size_at_least))
+        )
         LabeledValue(
             stringResource(R.string.httprobe_content_type),
             result.responseHeaders["Content-Type"]?.firstOrNull() ?: "—"
@@ -1140,11 +1147,29 @@ private fun methodColor(method: HttpMethod): Color = when (method) {
     HttpMethod.OPTIONS -> AccentBrown
 }
 
-private fun buildHttpShareText(result: HttpProbeResult): String = buildString {
+/**
+ * A bounded read never sees past the cap, so the buffered count is the true
+ * total only when nothing was truncated. Once it was, fall back to the server's
+ * Content-Length, and otherwise say "at least N" rather than presenting a
+ * buffered prefix as if it were the whole body.
+ */
+private fun responseSizeText(result: HttpProbeResult, atLeastFormat: String): String {
+    val declared = result.declaredBodyBytes
+    return when {
+        // A complete read counted every byte, so it is exact. Content-Length is
+        // not: HttpURLConnection gunzips transparently, so on a compressed
+        // response the header describes the wire size, not what was decoded.
+        !result.responseBodyTruncated -> formatBytes(result.responseBodyBytes)
+        declared != null -> formatBytes(declared)
+        else -> atLeastFormat.format(formatBytes(result.responseBodyBytes))
+    }
+}
+
+private fun buildHttpShareText(result: HttpProbeResult, sizeText: String): String = buildString {
     appendLine("HTTP – ${result.request.url}")
     appendLine("Status: ${result.statusCode} ${result.statusMessage}")
     appendLine("Time: ${result.responseTimeMs}ms")
-    appendLine("Size: ${formatBytes(result.responseBodyBytes)}")
+    appendLine("Size: $sizeText")
     if (result.redirectChain.isNotEmpty()) {
         appendLine()
         appendLine("Redirects:")

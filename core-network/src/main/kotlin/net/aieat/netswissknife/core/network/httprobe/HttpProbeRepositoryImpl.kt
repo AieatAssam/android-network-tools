@@ -157,6 +157,7 @@ class HttpProbeRepositoryImpl : HttpProbeRepository {
                         charset = responseCharset(conn)
                     )
                 } ?: BodyRead(null, 0L, false)
+                val declaredBodyBytes = declaredContentLength(responseHeaders)
 
                 val elapsed = (System.nanoTime() - startTimeNs) / 1_000_000L
                 val securityChecks = HttpSecurityAnalyzer.analyze(responseHeaders, isHttps)
@@ -169,7 +170,8 @@ class HttpProbeRepositoryImpl : HttpProbeRepository {
                         responseTimeMs = elapsed,
                         responseHeaders = responseHeaders,
                         responseBody = bodyRead.text,
-                        responseBodyBytes = bodyRead.reportedBytes,
+                        responseBodyBytes = bodyRead.bufferedBytes,
+                        declaredBodyBytes = declaredBodyBytes,
                         responseBodyTruncated = bodyRead.truncated,
                         finalUrl = currentUrl.toString(),
                         redirectChain = redirectChain.toList(),
@@ -191,9 +193,10 @@ class HttpProbeRepositoryImpl : HttpProbeRepository {
     ): BodyRead {
         if (maxBytes == 0L) {
             // Read one byte only so callers can distinguish an empty body from a
-            // body omitted because the configured safety bound was reached.
+            // body omitted because the configured safety bound was reached. The
+            // probe byte is deliberately not counted as buffered content.
             val hasMore = stream.read() != -1
-            return BodyRead("", if (hasMore) 1L else 0L, hasMore)
+            return BodyRead("", 0L, hasMore)
         }
 
         val output = ByteArrayOutputStream(maxBytes.toInt().coerceAtMost(8192))
@@ -209,8 +212,10 @@ class HttpProbeRepositoryImpl : HttpProbeRepository {
         }
 
         // Probe one additional byte, then stop. This keeps memory and network
-        // consumption bounded while preserving the existing "bytes > limit"
-        // signal used by the UI to display truncation.
+        // consumption bounded while still proving whether the body continues
+        // past the cap. The probe byte is not counted as buffered content: a
+        // bounded read cannot know the real total, so callers must fall back to
+        // Content-Length for that.
         val truncated = bytesRead == maxBytes && stream.read() != -1
 
         val decoded = charset.newDecoder()
@@ -218,15 +223,28 @@ class HttpProbeRepositoryImpl : HttpProbeRepository {
             .onUnmappableCharacter(CodingErrorAction.REPLACE)
             .decode(java.nio.ByteBuffer.wrap(output.toByteArray()))
             .toString()
-        return BodyRead(decoded, bytesRead + if (truncated) 1 else 0, truncated)
+        return BodyRead(decoded, bytesRead, truncated)
     }
 
     private data class BodyRead(
         val text: String?,
-        /** Exact buffered size, or limit + 1 when a bounded read proves more data exists. */
-        val reportedBytes: Long,
+        /** Bytes actually buffered. Never exceeds the caller's cap. */
+        val bufferedBytes: Long,
         val truncated: Boolean
     )
+
+    /**
+     * Parses `Content-Length` into the full body size. Absent, malformed, or
+     * multi-valued headers yield null rather than a guess, so the UI can say
+     * "at least N" instead of reporting the buffered prefix as the total.
+     */
+    private fun declaredContentLength(headers: Map<String, List<String>>): Long? = headers.entries
+        .firstOrNull { (key, _) -> key.equals("Content-Length", ignoreCase = true) }
+        ?.value
+        ?.singleOrNull()
+        ?.trim()
+        ?.toLongOrNull()
+        ?.takeIf { it >= 0L }
 
     private fun responseCharset(connection: HttpURLConnection): Charset {
         val contentType = connection.headerFields.entries

@@ -6,6 +6,7 @@ import kotlinx.coroutines.test.runTest
 import net.aieat.netswissknife.core.network.NetworkResult
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
@@ -526,6 +527,36 @@ class HttpProbeRepositoryRedirectTest {
 
         assertTrue(result is NetworkResult.Success)
         assertEquals("café", (result as NetworkResult.Success).data.responseBody)
-        assertEquals(5L, result.data.responseBodyBytes)
+        // responseBodyBytes reports what was buffered, never a probe byte past
+        // the cap; the full size comes from Content-Length instead.
+        assertEquals(4L, result.data.responseBodyBytes)
+        assertTrue(result.data.responseBodyTruncated)
+        assertEquals(fullBody.toByteArray(Charsets.ISO_8859_1).size.toLong(), result.data.declaredBodyBytes)
+    }
+
+    @Test
+    @DisplayName("an untruncated body reports its exact size and no declared/actual mismatch")
+    fun `untruncated body reports exact size`() = runTest {
+        val url = startRecordingServer { Triple(200, "hello", "text/plain") }
+
+        val result = repo.probe(HttpProbeRequest(url = url))
+
+        assertTrue(result is NetworkResult.Success)
+        assertEquals(5L, (result as NetworkResult.Success).data.responseBodyBytes)
+        assertEquals(5L, result.data.declaredBodyBytes)
+        assertFalse(result.data.responseBodyTruncated)
+    }
+
+    @Test
+    @DisplayName("a zero-byte cap buffers nothing but still detects a non-empty body")
+    fun `zero cap buffers nothing and flags truncation`() = runTest {
+        val url = startRecordingServer { Triple(200, "hello", "text/plain") }
+
+        val result = repo.probe(HttpProbeRequest(url = url, maxResponseBodyBytes = 0L))
+
+        assertTrue(result is NetworkResult.Success)
+        assertEquals(0L, (result as NetworkResult.Success).data.responseBodyBytes)
+        assertTrue(result.data.responseBodyTruncated)
+        assertEquals(5L, result.data.declaredBodyBytes)
     }
 }

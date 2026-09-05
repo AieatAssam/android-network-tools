@@ -98,10 +98,11 @@ jobs:
           name: test-results
           path: '**/build/reports/tests/'
 
-      # Keep release builds subject to the same source and Android quality gates
-      # as pull requests, before any signing key is used.
+      # Lint runs before any signing key is decoded. It is reporting-only for now
+      # (`lint { abortOnError = false }` in app/build.gradle.kts) until a baseline
+      # is captured, so read the report rather than trusting a green step.
       - name: Run Android Lint
-        run: ./gradlew lintRelease --no-daemon --no-parallel
+        run: ./gradlew :app:lintRelease --no-daemon --no-parallel
 
       # ── 6. Check signing configuration ────────────────────────────────────
       - name: Check signing configuration
@@ -302,3 +303,10 @@ jobs:
             Install the signed `.apk` directly, or use the signed `.aab` for Play Store upload.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── 13. Shred the decoded signing key ─────────────────────────────────
+      # Runs even when an earlier step failed, so a decoded keystore never
+      # survives a partial run.
+      - name: Remove decoded keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.keystore"

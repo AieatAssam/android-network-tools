@@ -40,6 +40,9 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Release workflows always provide these values. A stable local default keeps
         // debug and unsigned release builds reproducible across machines and invocations.
+        // Note: the previous default was a Unix timestamp, so a debug build installed
+        // before this change carries a far higher versionCode. Installing over it fails
+        // with INSTALL_FAILED_VERSION_DOWNGRADE — uninstall the old build once.
         versionCode   = ciVersionCode ?: 1
         versionName   = ciVersionName ?: "1.0.0"
     }
@@ -106,6 +109,15 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+
+    lint {
+        // Lint has never run against this codebase, so its first CI run would
+        // fail the build on pre-existing issues unrelated to any given change.
+        // Report instead of abort until a `lint-baseline.xml` is captured from
+        // a green run; then flip abortOnError back to true so new issues gate.
+        abortOnError = false
+        warningsAsErrors = false
     }
 }
 

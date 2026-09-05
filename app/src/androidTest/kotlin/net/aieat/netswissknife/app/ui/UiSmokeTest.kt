@@ -23,6 +23,7 @@ import net.aieat.netswissknife.app.ui.theme.NetSwissKnifeTheme
 import net.aieat.netswissknife.core.network.dns.DnsRecordType
 import net.aieat.netswissknife.core.network.dns.DnsServer
 import org.junit.Assert.assertEquals
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -38,6 +39,18 @@ class UiSmokeTest {
     val composeRule = createComposeRule()
 
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
+
+    /**
+     * The screens under test animate in and show indefinite progress indicators,
+     * both of which CLAUDE.md requires. With the default auto-advancing clock,
+     * `waitForIdle()` (which every `onNodeWith*` call performs) would never see
+     * an idle frame and the test would hang rather than fail. Driving the clock
+     * manually makes each assertion observe a specific, deterministic frame.
+     */
+    @Before
+    fun pauseAnimationClock() {
+        composeRule.mainClock.autoAdvance = false
+    }
 
     @Test
     fun homeScreen_exposesToolCardsAndInvokesNavigation() {

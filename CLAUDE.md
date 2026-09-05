@@ -179,14 +179,24 @@ REFACTOR: Clean up → ./gradlew test (all pass)
 ./gradlew clean
 
 # Coverage (Kover)
-./gradlew :app:koverVerify        # enforce 100% on pure, non-Compose app logic
+./gradlew :app:koverVerify        # enforce 90% on pure, non-Compose app logic
+./gradlew :core-network:koverVerify :core-domain:koverVerify   # enforce 70% each
 ./gradlew :app:koverHtmlReport    # scoped :app report
 ./gradlew :core-network:koverHtmlReport :core-domain:koverHtmlReport
 ```
 
+> Coverage floors are declared per module in each `build.gradle.kts`. The `:app`
+> rule only covers the classes listed in its Kover `includes` block — pure,
+> non-Compose logic — not the whole module. All three `koverVerify` tasks run in
+> `ci.yml`, so lowering a floor to make a build pass is a change to a quality
+> gate and belongs in its own commit with a stated reason.
+
 > Run only one Gradle invocation at a time on memory-constrained hosts.
-> Concurrent builds share `org.gradle.jvmargs=-Xmx1536m` and make test workers
-> time out or crash in ways that look like real test failures.
+> `gradle.properties` pins `org.gradle.jvmargs=-Xmx1024m`, `kotlin.daemon.jvmargs=-Xmx768m`,
+> `org.gradle.parallel=false`, and `org.gradle.workers.max=1` for exactly this reason.
+> Concurrent builds share that heap and make test workers time out or get SIGKILLed
+> in ways that look like real test failures. If a run dies with no output, stop the
+> daemons (`./gradlew --stop`) before retrying rather than assuming a code problem.
 
 ---
 
@@ -211,12 +221,16 @@ The release workflow uses GitHub Actions secrets for signing:
 
 Set these in **GitHub → Settings → Secrets and variables → Actions** before running the workflow.
 
+Signing is **mandatory** for a release run. The `Check signing configuration` step
+reads all four secrets into env vars and fails the job listing any that are missing,
+so a release can never be published unsigned or, worse, signed with the debug key.
+The decoded keystore lives only at `$RUNNER_TEMP/release.keystore` and is removed by
+a final `if: always()` step.
+
 > **Important – GitHub Actions limitation:** The `secrets` context is **not** available
-> inside `if:` expressions. The workflow works around this by running a detection step
-> (`signing`) that reads the secret into an env var and emits a `has_keystore` output;
-> all conditional steps then use `steps.signing.outputs.has_keystore == 'true'`.
-> Do **not** write `if: secrets.XYZ != ''` in this workflow — it will cause a parse
-> error and the entire workflow will fail to load.
+> inside `if:` expressions. Do **not** write `if: secrets.XYZ != ''` in this workflow —
+> it will cause a parse error and the entire workflow will fail to load. Test secret
+> presence inside a `run:` step via `env:` instead, as the signing check does.
 
 ---
 

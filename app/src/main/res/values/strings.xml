@@ -532,7 +532,8 @@
     <string name="httprobe_no_headers">No headers</string>
     <string name="httprobe_response_body">Response Body</string>
     <string name="httprobe_copy_body">Copy</string>
-    <string name="httprobe_body_truncated">Showing first 512 KB of %1$s response</string>
+    <string name="httprobe_body_truncated">Showing first %1$s of the response body</string>
+    <string name="httprobe_response_size_at_least">≥ %1$s</string>
     <string name="httprobe_empty_body">Empty body (HEAD or no content)</string>
 
     <!-- DNS Record labels -->
