@@ -6,6 +6,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.navigation.compose.rememberNavController
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -95,8 +96,16 @@ class UiSmokeTest {
         }
 
         composeRule.mainClock.advanceTimeBy(1_000L)
-        composeRule.onNodeWithText(context.getString(R.string.dns_querying)).assertIsDisplayed()
-        composeRule.onNodeWithContentDescription(context.getString(R.string.a11y_loading)).assertIsDisplayed()
+        // DnsScreen is a LazyColumn whose state panel is the third item, so on a
+        // phone viewport it is composed but below the fold. Scroll to it rather
+        // than asserting on a node the user would have to scroll to see.
+        composeRule
+            .onNodeWithText(context.getString(R.string.dns_querying))
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule
+            .onNodeWithContentDescription(context.getString(R.string.a11y_loading))
+            .assertIsDisplayed()
     }
 
     @Test
@@ -109,10 +118,16 @@ class UiSmokeTest {
         }
 
         composeRule.mainClock.advanceTimeBy(1_000L)
-        composeRule.onNodeWithText(context.getString(R.string.dns_error_title)).assertIsDisplayed()
+        // See the loading test: the error panel sits below the fold in the
+        // LazyColumn until scrolled into view.
+        composeRule
+            .onNodeWithText(context.getString(R.string.dns_error_title))
+            .performScrollTo()
+            .assertIsDisplayed()
         composeRule.onNodeWithText("NXDOMAIN").assertIsDisplayed()
         composeRule
             .onNodeWithText(context.getString(R.string.dns_retry))
+            .performScrollTo()
             .assertHasClickAction()
             .assertIsDisplayed()
             .performClick()
