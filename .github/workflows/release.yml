@@ -126,8 +126,22 @@ jobs:
       - name: Decode release keystore
         env:
           KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
         run: |
-          echo "$KEYSTORE_B64" | base64 --decode --strict > "$RUNNER_TEMP/release.keystore"
+          # GNU coreutils base64 has no --strict (that is a BSD/macOS flag), so
+          # strip whitespace ourselves and validate the decoded result instead.
+          printf '%s' "$KEYSTORE_B64" | tr -d '[:space:]' \
+            | base64 --decode > "$RUNNER_TEMP/release.keystore"
+          if [ ! -s "$RUNNER_TEMP/release.keystore" ]; then
+            echo "::error::Decoded keystore is empty; check RELEASE_KEYSTORE_BASE64."
+            exit 1
+          fi
+          # Sanity-check readability, but do not gate on it: the signing step
+          # right after this reports the real error, and a keytool quirk must
+          # not become a new way for the release to die at the decode step.
+          keytool -list -keystore "$RUNNER_TEMP/release.keystore" \
+            -storepass "$KEYSTORE_PASSWORD" >/dev/null 2>&1 \
+            || echo "::warning::keytool could not read the decoded keystore."
 
       # ── 8. Build release APK ──────────────────────────────────────────────
       - name: Build signed release APK
