@@ -1,5 +1,11 @@
 # Net Swiss Knife – Android Networking Utilities
 
+<a href="https://play.google.com/store/apps/details?id=net.aieat.netswissknife">
+  <img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png"
+       alt="Get it on Google Play"
+       height="80">
+</a>
+
 **Net Swiss Knife** is an Android "Swiss army knife" app for network diagnostics and utilities. It provides a collection of networking tools in a clean, modern Jetpack Compose + Material 3 UI.
 
 ---
