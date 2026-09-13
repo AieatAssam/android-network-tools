@@ -5,20 +5,15 @@ import net.aieat.netswissknife.app.BuildConfig
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.consumeWindowInsets
-import androidx.compose.foundation.layout.ime
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.union
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarDefaults
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.adaptive.currentWindowAdaptiveInfoV2
+import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
+import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffoldDefaults
+import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScope
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
@@ -27,12 +22,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import net.aieat.netswissknife.app.ui.components.AdaptiveContentBounds
 import net.aieat.netswissknife.app.ui.navigation.AppNavHost
 import net.aieat.netswissknife.app.ui.navigation.AppNavigationViewModel
 import net.aieat.netswissknife.app.ui.navigation.MoreToolsSheet
@@ -83,23 +78,29 @@ fun NetSwissKnifeApp(navController: NavHostController) {
     val onboardingViewModel: OnboardingViewModel = hiltViewModel()
     val shouldShowOnboarding by onboardingViewModel.shouldShowOnboarding.collectAsStateWithLifecycle()
 
-    Scaffold(
-        bottomBar = {
-            AppBottomNavigationBar(
-                navController  = navController,
-                pinnedRoutes   = pinnedRoutes,
-                onMoreClick    = { showMoreSheet = true }
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = navBackStackEntry?.destination?.route
+    val windowAdaptiveInfo = currentWindowAdaptiveInfoV2()
+    NavigationSuiteScaffold(
+        layoutType = NavigationSuiteScaffoldDefaults.calculateFromAdaptiveInfo(windowAdaptiveInfo),
+        navigationSuiteItems = {
+            appNavigationSuiteItems(
+                currentRoute  = currentRoute,
+                pinnedRoutes  = pinnedRoutes,
+                onNavigate    = { route ->
+                    navController.navigate(route) {
+                        popUpTo(navController.graph.startDestinationId) { saveState = true }
+                        launchSingleTop = true
+                        restoreState    = true
+                    }
+                },
+                onMoreClick   = { showMoreSheet = true }
             )
         }
-    ) { innerPadding ->
-        AppNavHost(
-            navController = navController,
-            // The bottom bar's window insets already include the IME, so
-            // innerPadding accounts for the keyboard — no imePadding() here.
-            modifier      = Modifier
-                .padding(innerPadding)
-                .consumeWindowInsets(innerPadding)
-        )
+    ) {
+        AdaptiveContentBounds {
+            AppNavHost(navController = navController)
+        }
     }
 
     if (showMoreSheet) {
@@ -136,63 +137,52 @@ fun NetSwissKnifeApp(navController: NavHostController) {
     }
 }
 
-@Composable
-private fun AppBottomNavigationBar(
-    navController: NavHostController,
+/**
+ * Populates the adaptive navigation suite (bottom bar on compact windows, rail
+ * on medium/expanded — the layout switch itself is handled by
+ * [NavigationSuiteScaffold] based on [currentWindowAdaptiveInfoV2]). Item content
+ * and selection logic is unchanged from the previous hand-built NavigationBar.
+ *
+ * [NavigationSuiteScope]'s builder block is a plain (non-@Composable) DSL, like
+ * `LazyListScope` — only the `icon`/`label` lambdas passed to [item] run in
+ * composition, so route-derived state is resolved by the caller beforehand.
+ */
+private fun NavigationSuiteScope.appNavigationSuiteItems(
+    currentRoute: String?,
     pinnedRoutes: List<String>,
+    onNavigate: (String) -> Unit,
     onMoreClick: () -> Unit
 ) {
-    val navBackStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = navBackStackEntry?.destination?.route
-
     val pinnedTools = pinnedRoutes.mapNotNull { route ->
         NavRoutes.allTools.find { it.route == route }
     }
 
-    // union() takes the larger inset per side, so the bar sits above the keyboard
-    // when it is open and above the navigation bar otherwise. Modifier.imePadding()
-    // would instead stack on top of the bar's own navigationBars inset and leave a
-    // navigation-bar-sized gap while the IME is showing.
-    NavigationBar(windowInsets = NavigationBarDefaults.windowInsets.union(WindowInsets.ime)) {
-        // Home is always first
-        NavigationBarItem(
-            selected = currentRoute == NavRoutes.Home.route,
-            onClick  = {
-                navController.navigate(NavRoutes.Home.route) {
-                    popUpTo(navController.graph.startDestinationId) { saveState = true }
-                    launchSingleTop = true
-                    restoreState    = true
-                }
-            },
-            icon  = { Icon(Icons.Default.Home, contentDescription = null) },
-            label = { Text(stringResource(R.string.nav_home)) }
-        )
+    // Home is always first
+    item(
+        selected = currentRoute == NavRoutes.Home.route,
+        onClick  = { onNavigate(NavRoutes.Home.route) },
+        icon  = { Icon(Icons.Default.Home, contentDescription = null) },
+        label = { Text(stringResource(R.string.nav_home)) }
+    )
 
-        // Pinned tools (dynamic, up to MAX_PINNED)
-        pinnedTools.forEach { tool ->
-            NavigationBarItem(
-                selected = currentRoute == tool.route,
-                onClick  = {
-                    navController.navigate(tool.route) {
-                        popUpTo(navController.graph.startDestinationId) { saveState = true }
-                        launchSingleTop = true
-                        restoreState    = true
-                    }
-                },
-                icon  = { Icon(tool.icon, contentDescription = null) },
-                label = { Text(tool.shortLabel) }
-            )
-        }
-
-        // "More" is always last — highlighted when the current screen is not Home and not a pinned tool
-        val isMoreSelected = currentRoute != null &&
-            currentRoute != NavRoutes.Home.route &&
-            pinnedTools.none { it.route == currentRoute }
-        NavigationBarItem(
-            selected = isMoreSelected,
-            onClick  = onMoreClick,
-            icon     = { Icon(Icons.Default.MoreHoriz, contentDescription = null) },
-            label    = { Text(stringResource(R.string.nav_more)) }
+    // Pinned tools (dynamic, up to MAX_PINNED)
+    pinnedTools.forEach { tool ->
+        item(
+            selected = currentRoute == tool.route,
+            onClick  = { onNavigate(tool.route) },
+            icon  = { Icon(tool.icon, contentDescription = null) },
+            label = { Text(tool.shortLabel) }
         )
     }
+
+    // "More" is always last — highlighted when the current screen is not Home and not a pinned tool
+    val isMoreSelected = currentRoute != null &&
+        currentRoute != NavRoutes.Home.route &&
+        pinnedTools.none { it.route == currentRoute }
+    item(
+        selected = isMoreSelected,
+        onClick  = onMoreClick,
+        icon     = { Icon(Icons.Default.MoreHoriz, contentDescription = null) },
+        label    = { Text(stringResource(R.string.nav_more)) }
+    )
 }
