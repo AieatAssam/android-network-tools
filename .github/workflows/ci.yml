@@ -73,7 +73,7 @@ jobs:
     # virtualization flakiness) with no output for hours since the step has no timeout
     # of its own. Bound the whole job so a hang fails fast instead of idling for the
     # default 6-hour job limit; the retry below then gives it a couple of clean attempts.
-    timeout-minutes: 40
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-java@v5
@@ -106,7 +106,7 @@ jobs:
           action: reactivecircus/android-emulator-runner@v2
           attempt_limit: 2
           attempt_delay: 5000
-          timeout_minutes: 15
+          time_out: 1200000
           with: |
             api-level: 35
             arch: x86_64
