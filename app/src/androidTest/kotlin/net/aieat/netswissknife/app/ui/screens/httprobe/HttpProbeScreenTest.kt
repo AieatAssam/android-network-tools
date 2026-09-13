@@ -4,6 +4,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.mockk.every
@@ -61,7 +62,11 @@ class HttpProbeScreenTest {
             .onNodeWithTag(HttpProbeScreenTestTags.CONTENT_LIST)
             .performScrollToIndex(HttpProbeScreenTestTags.RESULT_PANEL_INDEX)
 
-        composeRule.onNodeWithText("Cross-Origin-Opener-Policy").assertIsDisplayed()
-        composeRule.onNodeWithText("Cross-Origin-Embedder-Policy").assertIsDisplayed()
+        // The security checks render as a plain (non-lazy) Column inside this list item, so on
+        // shorter/lower-density screens the item's top can be in view while later checks are
+        // still clipped below the viewport. Scroll each target node individually rather than
+        // relying on the whole item fitting on screen.
+        composeRule.onNodeWithText("Cross-Origin-Opener-Policy").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Cross-Origin-Embedder-Policy").performScrollTo().assertIsDisplayed()
     }
 }
