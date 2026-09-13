@@ -114,13 +114,23 @@ jobs:
       # cancellation, hanging until the step timeout kills it. Our Compose tests
       # already drive their own test clock deterministically, so the system
       # animator scale this setting would have changed is irrelevant here.
+      #
+      # api-level 34 / google_apis — this pipeline was hanging at three different,
+      # inconsistent stages (boot, mid test-run, kill) on the api-level 35 x86_64
+      # "default" image, matching hung QEMU threads seen independently in a local
+      # emulator the same day — generic instability in the newer image, not a
+      # single fixable step. 34/google_apis is a longer-lived, more heavily used
+      # combination on GitHub-hosted runners. No test here depends on API 35+
+      # behavior (the Baklava/API-36+ permission branch in PortsScreenTest and
+      # PingScreenTest already takes its else-branch on 35 just as it does on 34).
       - name: Run Compose instrumentation tests
         id: instrumented_tests_1
         timeout-minutes: 14
         continue-on-error: true
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 35
+          api-level: 34
+          target: google_apis
           arch: x86_64
           disable-animations: false
           script: ./gradlew :app:connectedDebugAndroidTest --no-daemon --no-parallel
@@ -131,7 +141,8 @@ jobs:
         timeout-minutes: 14
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 35
+          api-level: 34
+          target: google_apis
           arch: x86_64
           disable-animations: false
           script: ./gradlew :app:connectedDebugAndroidTest --no-daemon --no-parallel
