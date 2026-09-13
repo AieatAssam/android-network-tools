@@ -105,6 +105,15 @@ jobs:
       # time_out caps the whole step across every retry, so one hung first attempt
       # burns the entire budget and no retry ever runs. Two independent steps, each
       # separately timed out, give a real "kill the hang, try once more" behavior.
+      #
+      # disable-animations: false — with it true, the action races a background
+      # post-boot adb settings script (screen_off_timeout, accelerometer_rotation,
+      # multidisplay) against emulator teardown. When the test run finishes quickly
+      # the script is still retrying those adb commands against an already-killed
+      # emulator ("adb: device 'emulator-5554' not found") in a loop with no
+      # cancellation, hanging until the step timeout kills it. Our Compose tests
+      # already drive their own test clock deterministically, so the system
+      # animator scale this setting would have changed is irrelevant here.
       - name: Run Compose instrumentation tests
         id: instrumented_tests_1
         timeout-minutes: 14
@@ -113,7 +122,7 @@ jobs:
         with:
           api-level: 35
           arch: x86_64
-          disable-animations: true
+          disable-animations: false
           script: ./gradlew :app:connectedDebugAndroidTest --no-daemon --no-parallel
 
       - name: Run Compose instrumentation tests (retry after hang/failure)
@@ -124,7 +133,7 @@ jobs:
         with:
           api-level: 35
           arch: x86_64
-          disable-animations: true
+          disable-animations: false
           script: ./gradlew :app:connectedDebugAndroidTest --no-daemon --no-parallel
 
       # Per-test failures live only in these reports; without them a red
