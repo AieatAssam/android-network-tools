@@ -141,22 +141,20 @@ fun WakeOnLanScreen(viewModel: WakeOnLanViewModel = hiltViewModel()) {
     if (showHelp) {
         ToolHelpSheet(
             title = stringResource(R.string.wol_screen_title),
+            conceptHeading = stringResource(R.string.help_wol_concept_heading),
+            conceptBody = stringResource(R.string.help_wol_concept_body),
             sections = listOf(
                 HelpSection(
-                    heading = stringResource(R.string.wol_help_what_heading),
-                    body = stringResource(R.string.wol_help_what_body)
+                    heading = stringResource(R.string.help_wol_mac_heading),
+                    body = stringResource(R.string.help_wol_mac_body)
                 ),
                 HelpSection(
-                    heading = stringResource(R.string.wol_help_mac_heading),
-                    body = stringResource(R.string.wol_help_mac_body)
+                    heading = stringResource(R.string.help_wol_requirements_heading),
+                    body = stringResource(R.string.help_wol_requirements_body)
                 ),
                 HelpSection(
-                    heading = stringResource(R.string.wol_help_requirements_heading),
-                    body = stringResource(R.string.wol_help_requirements_body)
-                ),
-                HelpSection(
-                    heading = stringResource(R.string.wol_help_broadcast_heading),
-                    body = stringResource(R.string.wol_help_broadcast_body)
+                    heading = stringResource(R.string.help_wol_broadcast_heading),
+                    body = stringResource(R.string.help_wol_broadcast_body)
                 ),
             ),
             onDismiss = { showHelp = false }

@@ -104,6 +104,7 @@ import net.aieat.netswissknife.app.ui.theme.StatusUnknown
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -226,10 +227,20 @@ fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
     if (showHelp) {
         ToolHelpSheet(
             title = stringResource(R.string.help_traceroute_title),
+            conceptHeading = stringResource(R.string.help_traceroute_concept_heading),
+            conceptBody = stringResource(R.string.help_traceroute_concept_body),
             sections = listOf(
                 HelpSection(stringResource(R.string.help_traceroute_what_heading), stringResource(R.string.help_traceroute_what_body)),
-                HelpSection(stringResource(R.string.help_traceroute_params_heading), stringResource(R.string.help_traceroute_params_body)),
-                HelpSection(stringResource(R.string.help_traceroute_results_heading), stringResource(R.string.help_traceroute_results_body))
+                HelpSection(
+                    heading = stringResource(R.string.help_traceroute_params_heading),
+                    body = "",
+                    bullets = stringArrayResource(R.array.help_traceroute_params_bullets).toList()
+                ),
+                HelpSection(
+                    heading = stringResource(R.string.help_traceroute_results_heading),
+                    body = "",
+                    bullets = stringArrayResource(R.array.help_traceroute_results_bullets).toList()
+                )
             ),
             onDismiss = { showHelp = false }
         )

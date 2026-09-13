@@ -17,7 +17,8 @@ sealed class TopologyUiState {
         val nodes: List<TopologyNode>,
         val links: List<TopologyLink>,
         val progressMessage: String,
-        val nodesDone: Int
+        val nodesDone: Int,
+        val selectedNodeIp: String? = null
     ) : TopologyUiState()
     data class Done(
         val graph: TopologyGraph,
@@ -79,17 +80,21 @@ class TopologyDiscoveryViewModel @Inject constructor(
         }
     }
 
+    /** Selection works both mid-scan and once discovery finishes, so users can inspect
+     *  nodes as they stream in instead of waiting for [TopologyUiState.Done]. */
     fun selectNode(ip: String) {
-        val current = _uiState.value
-        if (current is TopologyUiState.Done) {
-            _uiState.value = current.copy(selectedNodeIp = ip)
+        when (val current = _uiState.value) {
+            is TopologyUiState.Discovering -> _uiState.value = current.copy(selectedNodeIp = ip)
+            is TopologyUiState.Done -> _uiState.value = current.copy(selectedNodeIp = ip)
+            else -> Unit
         }
     }
 
     fun deselectNode() {
-        val current = _uiState.value
-        if (current is TopologyUiState.Done) {
-            _uiState.value = current.copy(selectedNodeIp = null)
+        when (val current = _uiState.value) {
+            is TopologyUiState.Discovering -> _uiState.value = current.copy(selectedNodeIp = null)
+            is TopologyUiState.Done -> _uiState.value = current.copy(selectedNodeIp = null)
+            else -> Unit
         }
     }
 

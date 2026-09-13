@@ -64,6 +64,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.background
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -168,10 +169,20 @@ fun TlsInspectorScreen(viewModel: TlsInspectorViewModel = hiltViewModel()) {
     if (showHelp) {
         ToolHelpSheet(
             title = stringResource(R.string.help_tls_title),
+            conceptHeading = stringResource(R.string.help_tls_concept_heading),
+            conceptBody = stringResource(R.string.help_tls_concept_body),
             sections = listOf(
                 HelpSection(stringResource(R.string.help_tls_what_heading), stringResource(R.string.help_tls_what_body)),
-                HelpSection(stringResource(R.string.help_tls_params_heading), stringResource(R.string.help_tls_params_body)),
-                HelpSection(stringResource(R.string.help_tls_results_heading), stringResource(R.string.help_tls_results_body))
+                HelpSection(
+                    heading = stringResource(R.string.help_tls_params_heading),
+                    body = "",
+                    bullets = stringArrayResource(R.array.help_tls_params_bullets).toList()
+                ),
+                HelpSection(
+                    heading = stringResource(R.string.help_tls_results_heading),
+                    body = "",
+                    bullets = stringArrayResource(R.array.help_tls_results_bullets).toList()
+                )
             ),
             onDismiss = { showHelp = false }
         )

@@ -247,6 +247,79 @@ class WifiScanViewModelTest {
     }
 
     @Nested
+    @DisplayName("order freezes while inspecting")
+    inner class OrderFreeze {
+
+        @Test
+        fun `selecting an AP freezes the list order across a live refresh`() = runTest(testDispatcher) {
+            val weak = stubAp(ssid = "Weak", bssid = "AA:BB:CC:DD:EE:01", rssi = -80)
+            val strong = stubAp(ssid = "Strong", bssid = "AA:BB:CC:DD:EE:02", rssi = -40)
+            coEvery { wifiScanUseCase() } returns stubResult(weak, strong)
+            viewModel.startScan()
+            runCurrent()
+
+            // Default sort is by signal: "Strong" leads.
+            var state = viewModel.uiState.value as WifiScanUiState.Success
+            assertEquals(listOf("Strong", "Weak"), state.filteredNetworks.map { it.displaySsid })
+
+            // Inspect "Weak" — this pins the current (Strong, Weak) order.
+            viewModel.selectAccessPoint(weak)
+
+            // A live refresh now makes "Weak" the stronger signal — normally this would
+            // flip the order, but it must stay pinned while something is selected.
+            val weakNowStrong = weak.copy(rssi = -30)
+            val strongNowWeak = strong.copy(rssi = -90)
+            coEvery { wifiScanUseCase() } returns stubResult(weakNowStrong, strongNowWeak)
+            viewModel.startScan(silent = true)
+            runCurrent()
+
+            state = viewModel.uiState.value as WifiScanUiState.Success
+            assertEquals(listOf("Strong", "Weak"), state.filteredNetworks.map { it.displaySsid })
+            viewModel.stopAutoRefresh()
+        }
+
+        @Test
+        fun `deselecting resumes live sort order`() = runTest(testDispatcher) {
+            val weak = stubAp(ssid = "Weak", bssid = "AA:BB:CC:DD:EE:01", rssi = -80)
+            val strong = stubAp(ssid = "Strong", bssid = "AA:BB:CC:DD:EE:02", rssi = -40)
+            coEvery { wifiScanUseCase() } returns stubResult(weak, strong)
+            viewModel.startScan()
+            runCurrent()
+            viewModel.selectAccessPoint(weak)
+
+            val weakNowStrong = weak.copy(rssi = -30)
+            val strongNowWeak = strong.copy(rssi = -90)
+            coEvery { wifiScanUseCase() } returns stubResult(weakNowStrong, strongNowWeak)
+            viewModel.startScan(silent = true)
+            runCurrent()
+
+            viewModel.selectAccessPoint(null)
+
+            val state = viewModel.uiState.value as WifiScanUiState.Success
+            assertEquals(listOf("Weak", "Strong"), state.filteredNetworks.map { it.displaySsid })
+            viewModel.stopAutoRefresh()
+        }
+
+        @Test
+        fun `selected AP dropping out of range surfaces a message and clears selection`() = runTest(testDispatcher) {
+            val ap = stubAp(ssid = "Gone", bssid = "AA:BB:CC:DD:EE:01")
+            coEvery { wifiScanUseCase() } returns stubResult(ap)
+            viewModel.startScan()
+            runCurrent()
+            viewModel.selectAccessPoint(ap)
+
+            coEvery { wifiScanUseCase() } returns stubResult() // ap no longer present
+            viewModel.startScan(silent = true)
+            runCurrent()
+
+            val state = viewModel.uiState.value as WifiScanUiState.Success
+            assertNull(state.selectedAp)
+            assertEquals("This network is no longer in range", viewModel.apDisappearedMessage.value)
+            viewModel.stopAutoRefresh()
+        }
+    }
+
+    @Nested
     @DisplayName("network expansion")
     inner class NetworkExpansion {
 
