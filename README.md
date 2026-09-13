@@ -101,7 +101,7 @@ Full HTTP/HTTPS request tester with security header analysis.
   - **Overview**: status code (color-coded 2xx/3xx/4xx/5xx), response time, final URL, redirect hops, body size, Content-Type
   - **Headers**: collapsible request and response header sections
   - **Body**: scrollable monospace response body with copy-to-clipboard; truncated at 512 KB with notice
-  - **Security**: per-header pass/warn/fail ratings for HSTS, CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy, and Server header information disclosure
+  - **Security**: per-header pass/warn/fail ratings for HSTS, CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy, Cross-Origin-Opener-Policy, Cross-Origin-Embedder-Policy, and Server header information disclosure
 
 ### mDNS Service Browser
 LAN service discovery via multicast DNS (RFC 6762 / DNS-SD RFC 6763).

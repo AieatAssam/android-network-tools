@@ -14,6 +14,8 @@ object HttpSecurityAnalyzer {
             checkXContentTypeOptions(normalized),
             checkReferrerPolicy(normalized),
             checkPermissionsPolicy(normalized),
+            checkCrossOriginOpenerPolicy(normalized),
+            checkCrossOriginEmbedderPolicy(normalized),
             checkServerHeader(normalized)
         )
     }
@@ -159,6 +161,52 @@ object HttpSecurityAnalyzer {
                 value = null,
                 rating = SecurityRating.WARN,
                 description = "No Permissions-Policy — browser features like camera/mic are unrestricted."
+            )
+        }
+    }
+
+    private fun checkCrossOriginOpenerPolicy(headers: Map<String, List<String>>): SecurityHeaderCheck {
+        val value = get(headers, "Cross-Origin-Opener-Policy")
+        return when {
+            value != null && value.lowercase() in setOf("same-origin", "same-origin-allow-popups") ->
+                SecurityHeaderCheck(
+                    headerName = "Cross-Origin-Opener-Policy",
+                    value = value,
+                    rating = SecurityRating.PASS,
+                    description = "COOP isolates the browsing context, mitigating cross-origin attacks like Spectre."
+                )
+            value != null ->
+                SecurityHeaderCheck(
+                    headerName = "Cross-Origin-Opener-Policy",
+                    value = value,
+                    rating = SecurityRating.WARN,
+                    description = "COOP is set to '$value', which does not isolate the browsing context."
+                )
+            else ->
+                SecurityHeaderCheck(
+                    headerName = "Cross-Origin-Opener-Policy",
+                    value = null,
+                    rating = SecurityRating.WARN,
+                    description = "No Cross-Origin-Opener-Policy — the page can be accessed by cross-origin windows."
+                )
+        }
+    }
+
+    private fun checkCrossOriginEmbedderPolicy(headers: Map<String, List<String>>): SecurityHeaderCheck {
+        val value = get(headers, "Cross-Origin-Embedder-Policy")
+        return if (value != null && value.lowercase() in setOf("require-corp", "credentialless")) {
+            SecurityHeaderCheck(
+                headerName = "Cross-Origin-Embedder-Policy",
+                value = value,
+                rating = SecurityRating.PASS,
+                description = "COEP prevents the document from loading cross-origin resources that don't grant it."
+            )
+        } else {
+            SecurityHeaderCheck(
+                headerName = "Cross-Origin-Embedder-Policy",
+                value = value,
+                rating = SecurityRating.INFO,
+                description = "No Cross-Origin-Embedder-Policy — only required for cross-origin isolation features (e.g. SharedArrayBuffer)."
             )
         }
     }
