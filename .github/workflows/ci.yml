@@ -109,8 +109,10 @@ jobs:
         with:
           project_id: net-swiss-knife
 
-      # One virtual device on the no-cost Spark-plan quota (10 virtual-device test
-      # runs/day) — enough for normal CI usage without needing the Blaze plan.
+      # One virtual device, well within Test Lab's daily quota for normal CI usage.
+      # --use-orchestrator runs each test in its own instrumentation instance so
+      # state from one test can't leak into the next; requires AndroidJUnitRunner
+      # 1.1+, already satisfied by androidx.test.ext:junit 1.3.0 (app/build.gradle.kts).
       - name: Run instrumented tests on Firebase Test Lab
         run: |
           gcloud firebase test android run \
@@ -118,6 +120,7 @@ jobs:
             --app app/build/outputs/apk/debug/app-debug.apk \
             --test app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk \
             --device model=MediumPhone.arm,version=34,locale=en,orientation=portrait \
+            --use-orchestrator \
             --timeout 15m \
             --no-record-video \
             --num-flaky-test-attempts=0
