@@ -121,23 +121,22 @@ jobs:
       # burns the entire budget and no retry ever runs. Two independent steps, each
       # separately timed out, give a real "kill the hang, try once more" behavior.
       #
-      # api-level 29 / google_apis / profile "Nexus 6" — every API-35 config hung
-      # today regardless of tuning, including the literal setup that worked cleanly
-      # this morning, pointing to platform-side trouble rather than our config. This
-      # matches a known-stable reactivecircus/android-emulator-runner recipe (older,
-      # lighter image; an explicit hardware profile instead of the action's default)
-      # from https://bugsee.com/blog/how-to-set-up-continuous-testing-for-android-app-development/ —
-      # worth trying as a materially different image/profile combination.
+      # api-level 35 x86_64 default — tried api-level 29/google_apis/"Nexus 6" (a
+      # documented reactivecircus/android-emulator-runner recipe) as a materially
+      # different image after every 35 config hung for hours; that run finally
+      # completed without hanging (platform trouble clearing) but surfaced a real
+      # incompatibility instead: NoClassDefFoundError on android.app.PictureInPicture-
+      # UiState, a class MockK's Android proxy reflects over on Activity lifecycle
+      # callbacks that doesn't exist until a later API level than 29. Back to 35, the
+      # config that ran cleanly this morning, now that hangs appear to have cleared.
       - name: Run Compose instrumentation tests
         id: instrumented_tests_1
         timeout-minutes: 14
         continue-on-error: true
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 29
-          target: google_apis
+          api-level: 35
           arch: x86_64
-          profile: Nexus 6
           disable-animations: true
           script: ./gradlew :app:connectedDebugAndroidTest --no-daemon --no-parallel
 
@@ -147,10 +146,8 @@ jobs:
         timeout-minutes: 14
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 29
-          target: google_apis
+          api-level: 35
           arch: x86_64
-          profile: Nexus 6
           disable-animations: true
           script: ./gradlew :app:connectedDebugAndroidTest --no-daemon --no-parallel
 
