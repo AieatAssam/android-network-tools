@@ -78,6 +78,9 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.ui.graphics.nativeCanvas
@@ -106,6 +109,7 @@ import net.aieat.netswissknife.app.ui.theme.SpectrumPalette
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.sp
@@ -141,6 +145,15 @@ fun WifiScanScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val autoRefresh by viewModel.autoRefresh.collectAsStateWithLifecycle()
     val expandedNetworks by viewModel.expandedNetworks.collectAsStateWithLifecycle()
+    val apDisappearedMessage by viewModel.apDisappearedMessage.collectAsStateWithLifecycle()
+
+    val snackbarHostState = remember { SnackbarHostState() }
+    LaunchedEffect(apDisappearedMessage) {
+        apDisappearedMessage?.let { message ->
+            snackbarHostState.showSnackbar(message)
+            viewModel.dismissApDisappearedMessage()
+        }
+    }
 
     val requiredPermissions = buildList {
         add(Manifest.permission.ACCESS_FINE_LOCATION)
@@ -177,10 +190,14 @@ fun WifiScanScreen(
     val isRefreshing = uiState is WifiScanUiState.Scanning
     val canRefresh = uiState is WifiScanUiState.Success || uiState is WifiScanUiState.Error
 
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        modifier = Modifier.fillMaxSize().alpha(screenAlpha)
+    ) { innerPadding ->
     PullToRefreshBox(
         isRefreshing = isRefreshing,
         onRefresh = { if (canRefresh) viewModel.startScan() },
-        modifier = Modifier.fillMaxSize().alpha(screenAlpha)
+        modifier = Modifier.fillMaxSize().padding(innerPadding)
     ) {
         AnimatedContent(
             targetState = uiState,
@@ -214,6 +231,7 @@ fun WifiScanScreen(
                 )
             }
         }
+    }
     }
 }
 
@@ -417,10 +435,20 @@ fun WifiScanScreen(
     if (showHelp) {
         ToolHelpSheet(
             title = stringResource(R.string.help_wifi_title),
+            conceptHeading = stringResource(R.string.help_wifi_concept_heading),
+            conceptBody = stringResource(R.string.help_wifi_concept_body),
             sections = listOf(
                 HelpSection(stringResource(R.string.help_wifi_what_heading), stringResource(R.string.help_wifi_what_body)),
-                HelpSection(stringResource(R.string.help_wifi_params_heading), stringResource(R.string.help_wifi_params_body)),
-                HelpSection(stringResource(R.string.help_wifi_results_heading), stringResource(R.string.help_wifi_results_body))
+                HelpSection(
+                    heading = stringResource(R.string.help_wifi_params_heading),
+                    body = "",
+                    bullets = stringArrayResource(R.array.help_wifi_params_bullets).toList()
+                ),
+                HelpSection(
+                    heading = stringResource(R.string.help_wifi_results_heading),
+                    body = "",
+                    bullets = stringArrayResource(R.array.help_wifi_results_bullets).toList()
+                )
             ),
             onDismiss = { showHelp = false }
         )

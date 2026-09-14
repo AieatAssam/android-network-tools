@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.*
 import androidx.compose.ui.input.pointer.*
 import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -65,10 +66,20 @@ fun TopologyDiscoveryScreen(
     if (showHelp) {
         net.aieat.netswissknife.app.ui.components.ToolHelpSheet(
             title = stringResource(R.string.help_topology_title),
+            conceptHeading = stringResource(R.string.help_topology_concept_heading),
+            conceptBody = stringResource(R.string.help_topology_concept_body),
             sections = listOf(
                 net.aieat.netswissknife.app.ui.components.HelpSection(stringResource(R.string.help_topology_what_heading), stringResource(R.string.help_topology_what_body)),
-                net.aieat.netswissknife.app.ui.components.HelpSection(stringResource(R.string.help_topology_params_heading), stringResource(R.string.help_topology_params_body)),
-                net.aieat.netswissknife.app.ui.components.HelpSection(stringResource(R.string.help_topology_results_heading), stringResource(R.string.help_topology_results_body))
+                net.aieat.netswissknife.app.ui.components.HelpSection(
+                    heading = stringResource(R.string.help_topology_params_heading),
+                    body = "",
+                    bullets = stringArrayResource(R.array.help_topology_params_bullets).toList()
+                ),
+                net.aieat.netswissknife.app.ui.components.HelpSection(
+                    heading = stringResource(R.string.help_topology_results_heading),
+                    body = "",
+                    bullets = stringArrayResource(R.array.help_topology_results_bullets).toList()
+                )
             ),
             onDismiss = { showHelp = false }
         )
@@ -102,6 +113,7 @@ private fun TopologyScreenContent(
     val isDiscovering = uiState is TopologyUiState.Discovering
 
     val selectedNode = when (uiState) {
+        is TopologyUiState.Discovering -> uiState.nodes.find { it.ip == uiState.selectedNodeIp }
         is TopologyUiState.Done -> uiState.graph.nodes.find { it.ip == uiState.selectedNodeIp }
         else -> null
     }
@@ -679,8 +691,23 @@ private fun TopologyCanvas(
     var graphOffset by remember { mutableStateOf(Offset.Zero) }
     var graphScale by remember { mutableFloatStateOf(1f) }
 
-    val nodePositions = remember(nodes) {
-        computeRadialLayout(nodes)
+    // Positions are assigned once per node and never recomputed for nodes already
+    // placed — otherwise every new arrival re-divides the ring by the current total
+    // node count and the whole graph visibly rotates/redistributes on each discovery
+    // event instead of just the new node appearing.
+    val nodePositions = remember { mutableStateMapOf<String, Offset>() }
+    LaunchedEffect(nodes) {
+        if (nodes.isEmpty()) return@LaunchedEffect
+        if (nodePositions.isEmpty()) {
+            nodePositions[nodes[0].ip] = Offset.Zero
+        }
+        nodes.drop(1).forEach { node ->
+            if (node.ip !in nodePositions) {
+                val slotIndex = nodePositions.size - 1
+                val ringSize = slotIndex + 1
+                nodePositions[node.ip] = ringPosition(slotIndex, ringSize)
+            }
+        }
     }
 
     val infiniteTransition = rememberInfiniteTransition(label = "nodes")
@@ -823,24 +850,15 @@ private fun TopologyCanvas(
     }
 }
 
-private fun computeRadialLayout(nodes: List<TopologyNode>): Map<String, Offset> {
-    if (nodes.isEmpty()) return emptyMap()
-    val result = mutableMapOf<String, Offset>()
-    if (nodes.size == 1) {
-        result[nodes[0].ip] = Offset.Zero
-        return result
-    }
-    result[nodes[0].ip] = Offset.Zero
-    val remaining = nodes.drop(1)
-    val ringRadius = 180f
-    remaining.forEachIndexed { index, node ->
-        val angle = (2 * PI * index / remaining.size).toFloat()
-        result[node.ip] = Offset(
-            x = ringRadius * cos(angle),
-            y = ringRadius * sin(angle)
-        )
-    }
-    return result
+/**
+ * Position for the [slotIndex]th node placed around a ring of [ringSize] nodes.
+ * Called only once per node, at the moment it's first discovered — the caller never
+ * recomputes a position for a node it has already placed, so earlier nodes keep their
+ * spot regardless of how many more arrive afterward.
+ */
+private fun ringPosition(slotIndex: Int, ringSize: Int, ringRadius: Float = 180f): Offset {
+    val angle = (2 * PI * slotIndex / ringSize).toFloat()
+    return Offset(x = ringRadius * cos(angle), y = ringRadius * sin(angle))
 }
 
 private fun nodeRadius(node: TopologyNode): Float {

@@ -69,21 +69,22 @@ jobs:
 
   instrumented-tests:
     runs-on: ubuntu-latest
+    # Runs on Firebase Test Lab instead of a GitHub-hosted emulator. The
+    # reactivecircus/android-emulator-runner + local KVM/nested-virtualization
+    # combination proved unreliable on GitHub-hosted runners (hangs at boot, mid-test,
+    # and at emulator teardown — the latter matching the open, unresolved
+    # ReactiveCircus/android-emulator-runner#385 — persisting across dozens of CI runs
+    # and multiple api-level/target/profile combinations). Test Lab runs the APKs on
+    # Google's own device infrastructure, sidestepping local emulator boot entirely.
+    # No Firebase SDK is added to the app for this — the project exists purely for
+    # Test Lab's CI access, nothing the app links against.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-java@v5
         with:
           java-version: '21'
           distribution: 'temurin'
-
-      # android-emulator-runner needs a writable /dev/kvm; GitHub-hosted Linux
-      # runners expose the device but not the permissions.
-      - name: Enable KVM group permissions
-        run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
-            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
 
       - name: Cache Gradle packages
         uses: actions/cache@v5
@@ -95,25 +96,31 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      - name: Run Compose instrumentation tests
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 35
-          arch: x86_64
-          disable-animations: true
-          script: ./gradlew :app:connectedDebugAndroidTest --no-daemon --no-parallel
+      - name: Build debug and androidTest APKs
+        run: ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --no-parallel
 
-      # Per-test failures live only in these reports; without them a red
-      # emulator job says "there were failing tests" and nothing else.
-      - name: Upload instrumentation test report
-        if: always()
-        uses: actions/upload-artifact@v7
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
         with:
-          name: instrumentation-test-report
-          path: |
-            app/build/reports/androidTests/connected/
-            app/build/outputs/androidTest-results/connected/
-          if-no-files-found: warn
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KEY }}
+
+      - name: Set up gcloud CLI
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: net-swiss-knife
+
+      # One virtual device on the no-cost Spark-plan quota (10 virtual-device test
+      # runs/day) — enough for normal CI usage without needing the Blaze plan.
+      - name: Run instrumented tests on Firebase Test Lab
+        run: |
+          gcloud firebase test android run \
+            --type instrumentation \
+            --app app/build/outputs/apk/debug/app-debug.apk \
+            --test app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk \
+            --device model=MediumPhone.arm,version=34,locale=en,orientation=portrait \
+            --timeout 15m \
+            --no-record-video \
+            --num-flaky-test-attempts=0
 
   codeql:
     runs-on: ubuntu-latest

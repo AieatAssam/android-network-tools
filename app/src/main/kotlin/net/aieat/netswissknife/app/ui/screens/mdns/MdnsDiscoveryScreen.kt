@@ -79,6 +79,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -166,10 +167,20 @@ fun MdnsDiscoveryScreen(viewModel: MdnsDiscoveryViewModel = hiltViewModel()) {
     if (showHelp) {
         ToolHelpSheet(
             title = stringResource(R.string.help_mdns_title),
+            conceptHeading = stringResource(R.string.help_mdns_concept_heading),
+            conceptBody = stringResource(R.string.help_mdns_concept_body),
             sections = listOf(
                 HelpSection(stringResource(R.string.help_mdns_what_heading), stringResource(R.string.help_mdns_what_body)),
-                HelpSection(stringResource(R.string.help_mdns_params_heading), stringResource(R.string.help_mdns_params_body)),
-                HelpSection(stringResource(R.string.help_mdns_results_heading), stringResource(R.string.help_mdns_results_body))
+                HelpSection(
+                    heading = stringResource(R.string.help_mdns_params_heading),
+                    body = "",
+                    bullets = stringArrayResource(R.array.help_mdns_params_bullets).toList()
+                ),
+                HelpSection(
+                    heading = stringResource(R.string.help_mdns_results_heading),
+                    body = "",
+                    bullets = stringArrayResource(R.array.help_mdns_results_bullets).toList()
+                )
             ),
             onDismiss = { showHelp = false }
         )

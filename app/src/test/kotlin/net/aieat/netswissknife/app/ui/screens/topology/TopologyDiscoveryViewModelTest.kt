@@ -138,9 +138,26 @@ class TopologyDiscoveryViewModelTest {
     inner class NodeSelection {
 
         @Test
-        fun `selectNode is a no-op outside Done state`() {
+        fun `selectNode is a no-op in Idle state`() {
             viewModel.selectNode("192.168.1.1")
             assertTrue(viewModel.uiState.value is TopologyUiState.Idle)
+        }
+
+        @Test
+        fun `selectNode and deselectNode work during Discovering state`() = runTest {
+            every { useCase.invoke(params) } returns flowOf(
+                TopologyDiscoveryEvent.NodeDiscovered(stubNode)
+            )
+            viewModel.startDiscovery(params)
+
+            viewModel.selectNode("192.168.1.1")
+            assertEquals(
+                "192.168.1.1",
+                (viewModel.uiState.value as TopologyUiState.Discovering).selectedNodeIp
+            )
+
+            viewModel.deselectNode()
+            assertNull((viewModel.uiState.value as TopologyUiState.Discovering).selectedNodeIp)
         }
 
         @Test

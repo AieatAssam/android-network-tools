@@ -99,6 +99,8 @@ import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -133,6 +135,13 @@ import net.aieat.netswissknife.core.network.ping.PingPacketResult
 import net.aieat.netswissknife.core.network.ping.PingResult
 import net.aieat.netswissknife.core.network.ping.PingStats
 import net.aieat.netswissknife.core.network.ping.PingStatus
+
+object PingScreenTestTags {
+    const val CONTENT_LIST = "ping_content_list"
+
+    /** Index of the idle/running/finished/error results panel within [CONTENT_LIST]. */
+    const val RESULTS_PANEL_INDEX = 2
+}
 
 @Composable
 fun PingScreen(
@@ -178,7 +187,7 @@ fun PingScreen(
     var showHelp by remember { mutableStateOf(false) }
 
     LazyColumn(
-        modifier = Modifier.fillMaxSize().alpha(screenAlpha),
+        modifier = Modifier.fillMaxSize().alpha(screenAlpha).testTag(PingScreenTestTags.CONTENT_LIST),
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -239,10 +248,20 @@ fun PingScreen(
     if (showHelp) {
         ToolHelpSheet(
             title = stringResource(R.string.help_ping_title),
+            conceptHeading = stringResource(R.string.help_ping_concept_heading),
+            conceptBody = stringResource(R.string.help_ping_concept_body),
             sections = listOf(
                 HelpSection(stringResource(R.string.help_ping_what_heading), stringResource(R.string.help_ping_what_body)),
-                HelpSection(stringResource(R.string.help_ping_params_heading), stringResource(R.string.help_ping_params_body)),
-                HelpSection(stringResource(R.string.help_ping_results_heading), stringResource(R.string.help_ping_results_body))
+                HelpSection(
+                    heading = stringResource(R.string.help_ping_params_heading),
+                    body = "",
+                    bullets = stringArrayResource(R.array.help_ping_params_bullets).toList()
+                ),
+                HelpSection(
+                    heading = stringResource(R.string.help_ping_results_heading),
+                    body = "",
+                    bullets = stringArrayResource(R.array.help_ping_results_bullets).toList()
+                )
             ),
             onDismiss = { showHelp = false }
         )
@@ -595,7 +614,8 @@ private fun PingRunningPanel(state: PingUiState.Running) {
 
         // Live packet list — bounded to last 50 in continuous mode
         if (state.packets.isNotEmpty()) {
-            val displayPackets = if (state.isContinuous) state.packets.takeLast(50) else state.packets
+            val displayLimit = 50
+            val displayPackets = if (state.isContinuous) state.packets.takeLast(displayLimit) else state.packets
             ElevatedCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
@@ -603,6 +623,13 @@ private fun PingRunningPanel(state: PingUiState.Running) {
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold
                     )
+                    if (state.isContinuous && state.pingsSent > displayLimit) {
+                        Text(
+                            text = stringResource(R.string.ping_showing_recent, displayLimit, state.pingsSent),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                     Spacer(modifier = Modifier.height(8.dp))
                     LazyColumn(modifier = Modifier.heightIn(max = 320.dp)) {
                         items(displayPackets, key = { it.sequence }) { packet -> PacketRow(packet) }
@@ -1193,10 +1220,20 @@ private fun RawOutputCard(
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+private fun csvField(value: String): String =
+    if (value.any { it == ',' || it == '"' || it == '\n' || it == '\r' }) {
+        "\"${value.replace("\"", "\"\"")}\""
+    } else {
+        value
+    }
+
 private fun buildCsvOutput(result: PingResult): String = buildString {
     appendLine("sequence,host,status,rtt_ms,error")
     result.packets.forEach { p ->
-        appendLine("${p.sequence},${p.host},${p.status},${p.rtTimeMs ?: ""},${p.errorMessage ?: ""}")
+        appendLine(
+            "${p.sequence},${csvField(p.host)},${p.status},${p.rtTimeMs ?: ""}," +
+                csvField(p.errorMessage ?: "")
+        )
     }
     appendLine()
     appendLine("# Stats")

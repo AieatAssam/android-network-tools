@@ -91,6 +91,7 @@ import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -323,10 +324,20 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
     if (showHelp) {
         ToolHelpSheet(
             title = stringResource(R.string.help_portscan_title),
+            conceptHeading = stringResource(R.string.help_portscan_concept_heading),
+            conceptBody = stringResource(R.string.help_portscan_concept_body),
             sections = listOf(
                 HelpSection(stringResource(R.string.help_portscan_what_heading), stringResource(R.string.help_portscan_what_body)),
-                HelpSection(stringResource(R.string.help_portscan_params_heading), stringResource(R.string.help_portscan_params_body)),
-                HelpSection(stringResource(R.string.help_portscan_results_heading), stringResource(R.string.help_portscan_results_body))
+                HelpSection(
+                    heading = stringResource(R.string.help_portscan_params_heading),
+                    body = "",
+                    bullets = stringArrayResource(R.array.help_portscan_params_bullets).toList()
+                ),
+                HelpSection(
+                    heading = stringResource(R.string.help_portscan_results_heading),
+                    body = "",
+                    bullets = stringArrayResource(R.array.help_portscan_results_bullets).toList()
+                )
             ),
             onDismiss = { showHelp = false }
         )
@@ -521,6 +532,25 @@ private fun PortScanInputCard(
                     steps = 29,
                     modifier = Modifier.fillMaxWidth()
                 )
+                AnimatedVisibility(visible = concurrency > 100) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.padding(top = 4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Warning,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            text = stringResource(R.string.ports_concurrency_high_warning),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
             }
 
             // Action buttons

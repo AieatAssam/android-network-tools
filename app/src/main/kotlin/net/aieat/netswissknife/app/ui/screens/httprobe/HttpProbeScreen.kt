@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -79,6 +80,7 @@ import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -121,6 +123,13 @@ import net.aieat.netswissknife.core.network.httprobe.SecurityRating
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
+object HttpProbeScreenTestTags {
+    const val CONTENT_LIST = "httprobe_content_list"
+
+    /** Index of the idle/loading/error/success result panel within [CONTENT_LIST]. */
+    const val RESULT_PANEL_INDEX = 2
+}
+
 @Composable
 fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -142,7 +151,7 @@ fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
         enter = fadeIn(AppMotion.enter(400)) + slideInVertically(AppMotion.enter(400)) { it / 4 }
     ) {
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().testTag(HttpProbeScreenTestTags.CONTENT_LIST),
             verticalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(
                 horizontal = 16.dp, vertical = 16.dp
@@ -213,10 +222,25 @@ fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
     if (showHelp) {
         ToolHelpSheet(
             title = stringResource(R.string.help_httprobe_title),
+            conceptHeading = stringResource(R.string.help_httprobe_concept_heading),
+            conceptBody = stringResource(R.string.help_httprobe_concept_body),
             sections = listOf(
                 HelpSection(stringResource(R.string.help_httprobe_what_heading), stringResource(R.string.help_httprobe_what_body)),
-                HelpSection(stringResource(R.string.help_httprobe_params_heading), stringResource(R.string.help_httprobe_params_body)),
-                HelpSection(stringResource(R.string.help_httprobe_results_heading), stringResource(R.string.help_httprobe_results_body))
+                HelpSection(
+                    heading = stringResource(R.string.help_httprobe_params_heading),
+                    body = "",
+                    bullets = stringArrayResource(R.array.help_httprobe_params_bullets).toList()
+                ),
+                HelpSection(
+                    heading = stringResource(R.string.help_httprobe_results_heading),
+                    body = "",
+                    bullets = stringArrayResource(R.array.help_httprobe_results_bullets).toList()
+                ),
+                HelpSection(
+                    heading = stringResource(R.string.help_httprobe_security_heading),
+                    body = "",
+                    bullets = stringArrayResource(R.array.help_httprobe_security_bullets).toList()
+                )
             ),
             onDismiss = { showHelp = false }
         )

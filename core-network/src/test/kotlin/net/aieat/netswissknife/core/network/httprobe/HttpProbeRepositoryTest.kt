@@ -175,8 +175,8 @@ class HttpSecurityAnalyzerTest {
     // ── Previously uncovered branches ────────────────────────────────────────
 
     @Test
-    @DisplayName("analyze reports the same seven checks in a stable order")
-    fun `analyze reports the seven checks in order`() {
+    @DisplayName("analyze reports the same nine checks in a stable order")
+    fun `analyze reports the nine checks in order`() {
         val checks = HttpSecurityAnalyzer.analyze(emptyMap(), isHttps = true)
         assertEquals(
             listOf(
@@ -186,10 +186,65 @@ class HttpSecurityAnalyzerTest {
                 "X-Content-Type-Options",
                 "Referrer-Policy",
                 "Permissions-Policy",
+                "Cross-Origin-Opener-Policy",
+                "Cross-Origin-Embedder-Policy",
                 "Server"
             ),
             checks.map { it.headerName }
         )
+    }
+
+    @Test
+    @DisplayName("COOP same-origin gets PASS")
+    fun `COOP same-origin gets PASS`() {
+        val headers = mapOf("Cross-Origin-Opener-Policy" to listOf("same-origin"))
+        val check = HttpSecurityAnalyzer.analyze(headers, isHttps = true)
+            .first { it.headerName == "Cross-Origin-Opener-Policy" }
+        assertEquals(SecurityRating.PASS, check.rating)
+    }
+
+    @Test
+    @DisplayName("COOP unsafe-none gets WARN")
+    fun `COOP unsafe-none gets WARN`() {
+        val headers = mapOf("Cross-Origin-Opener-Policy" to listOf("unsafe-none"))
+        val check = HttpSecurityAnalyzer.analyze(headers, isHttps = true)
+            .first { it.headerName == "Cross-Origin-Opener-Policy" }
+        assertEquals(SecurityRating.WARN, check.rating)
+    }
+
+    @Test
+    @DisplayName("COOP absent gets WARN")
+    fun `COOP absent gets WARN`() {
+        val check = HttpSecurityAnalyzer.analyze(emptyMap(), isHttps = true)
+            .first { it.headerName == "Cross-Origin-Opener-Policy" }
+        assertEquals(SecurityRating.WARN, check.rating)
+        assertNull(check.value)
+    }
+
+    @Test
+    @DisplayName("COEP require-corp gets PASS")
+    fun `COEP require-corp gets PASS`() {
+        val headers = mapOf("Cross-Origin-Embedder-Policy" to listOf("require-corp"))
+        val check = HttpSecurityAnalyzer.analyze(headers, isHttps = true)
+            .first { it.headerName == "Cross-Origin-Embedder-Policy" }
+        assertEquals(SecurityRating.PASS, check.rating)
+    }
+
+    @Test
+    @DisplayName("COEP credentialless gets PASS")
+    fun `COEP credentialless gets PASS`() {
+        val headers = mapOf("Cross-Origin-Embedder-Policy" to listOf("credentialless"))
+        val check = HttpSecurityAnalyzer.analyze(headers, isHttps = true)
+            .first { it.headerName == "Cross-Origin-Embedder-Policy" }
+        assertEquals(SecurityRating.PASS, check.rating)
+    }
+
+    @Test
+    @DisplayName("COEP absent gets INFO")
+    fun `COEP absent gets INFO`() {
+        val check = HttpSecurityAnalyzer.analyze(emptyMap(), isHttps = true)
+            .first { it.headerName == "Cross-Origin-Embedder-Policy" }
+        assertEquals(SecurityRating.INFO, check.rating)
     }
 
     @Test

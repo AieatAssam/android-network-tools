@@ -75,6 +75,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
@@ -174,10 +175,20 @@ fun SpeedTestScreen(viewModel: SpeedTestViewModel = hiltViewModel()) {
     if (showHelp) {
         ToolHelpSheet(
             title = stringResource(R.string.help_speedtest_title),
+            conceptHeading = stringResource(R.string.help_speedtest_concept_heading),
+            conceptBody = stringResource(R.string.help_speedtest_concept_body),
             sections = listOf(
                 HelpSection(stringResource(R.string.help_speedtest_what_heading), stringResource(R.string.help_speedtest_what_body)),
-                HelpSection(stringResource(R.string.help_speedtest_phases_heading), stringResource(R.string.help_speedtest_phases_body)),
-                HelpSection(stringResource(R.string.help_speedtest_results_heading), stringResource(R.string.help_speedtest_results_body))
+                HelpSection(
+                    heading = stringResource(R.string.help_speedtest_phases_heading),
+                    body = stringResource(R.string.help_speedtest_phases_body),
+                    bullets = stringArrayResource(R.array.help_speedtest_phases_bullets).toList()
+                ),
+                HelpSection(
+                    heading = stringResource(R.string.help_speedtest_results_heading),
+                    body = "",
+                    bullets = stringArrayResource(R.array.help_speedtest_results_bullets).toList()
+                )
             ),
             onDismiss = { showHelp = false }
         )

@@ -30,6 +30,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import net.aieat.netswissknife.app.R
@@ -148,7 +150,9 @@ fun HeroTitleText(
         maxLines = 1,
         softWrap = false,
         overflow = TextOverflow.Clip,
-        modifier = modifier.let { if (ready) it else it.alpha(0f) },
+        modifier = modifier
+            .semantics { heading() }
+            .let { if (ready) it else it.alpha(0f) },
         onTextLayout = { result ->
             if (result.didOverflowWidth) {
                 textStyle = textStyle.copy(fontSize = textStyle.fontSize * 0.92f)

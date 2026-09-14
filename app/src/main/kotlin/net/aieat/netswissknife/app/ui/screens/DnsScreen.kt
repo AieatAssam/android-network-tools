@@ -87,6 +87,8 @@ import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -221,10 +223,20 @@ fun DnsScreen(viewModel: DnsViewModel = hiltViewModel()) {
     if (showHelp) {
         ToolHelpSheet(
             title = stringResource(R.string.help_dns_title),
+            conceptHeading = stringResource(R.string.help_dns_concept_heading),
+            conceptBody = stringResource(R.string.help_dns_concept_body),
             sections = listOf(
                 HelpSection(stringResource(R.string.help_dns_what_heading), stringResource(R.string.help_dns_what_body)),
-                HelpSection(stringResource(R.string.help_dns_params_heading), stringResource(R.string.help_dns_params_body)),
-                HelpSection(stringResource(R.string.help_dns_results_heading), stringResource(R.string.help_dns_results_body))
+                HelpSection(
+                    heading = stringResource(R.string.help_dns_params_heading),
+                    body = "",
+                    bullets = stringArrayResource(R.array.help_dns_params_bullets).toList()
+                ),
+                HelpSection(
+                    heading = stringResource(R.string.help_dns_results_heading),
+                    body = "",
+                    bullets = stringArrayResource(R.array.help_dns_results_bullets).toList()
+                )
             ),
             onDismiss = { showHelp = false }
         )
@@ -486,6 +498,7 @@ private fun DnsServerSelector(
     onCustomAddressChange: (String) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
+    val keyboardController = LocalSoftwareKeyboardController.current
 
     // Text shown in the field: preset display name, or the typed custom address.
     val fieldValue = if (selectedServer is DnsServer.Custom) customServerAddress
@@ -561,6 +574,7 @@ private fun DnsServerSelector(
                     onClick = {
                         onServerChange(server)
                         expanded = false
+                        keyboardController?.hide()
                     },
                     contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
                 )

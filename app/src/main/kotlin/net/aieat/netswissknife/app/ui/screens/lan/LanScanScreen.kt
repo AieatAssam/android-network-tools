@@ -34,6 +34,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -85,7 +86,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 // collectAsState replaced by collectAsStateWithLifecycle below
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -101,6 +101,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -215,10 +216,20 @@ fun LanScreen(viewModel: LanScanViewModel = hiltViewModel()) {
     if (showHelp) {
         ToolHelpSheet(
             title = stringResource(R.string.help_lan_title),
+            conceptHeading = stringResource(R.string.help_lan_concept_heading),
+            conceptBody = stringResource(R.string.help_lan_concept_body),
             sections = listOf(
                 HelpSection(stringResource(R.string.help_lan_what_heading), stringResource(R.string.help_lan_what_body)),
-                HelpSection(stringResource(R.string.help_lan_params_heading), stringResource(R.string.help_lan_params_body)),
-                HelpSection(stringResource(R.string.help_lan_results_heading), stringResource(R.string.help_lan_results_body))
+                HelpSection(
+                    heading = stringResource(R.string.help_lan_params_heading),
+                    body = "",
+                    bullets = stringArrayResource(R.array.help_lan_params_bullets).toList()
+                ),
+                HelpSection(
+                    heading = stringResource(R.string.help_lan_results_heading),
+                    body = "",
+                    bullets = stringArrayResource(R.array.help_lan_results_bullets).toList()
+                )
             ),
             onDismiss = { showHelp = false }
         )
@@ -478,8 +489,9 @@ private fun LanScanningContent(state: LanScanUiState.Scanning) {
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.padding(horizontal = 4.dp),
             )
-            state.hosts.forEach { host ->
-                key(host.ip) {
+            val sortedHosts = remember(state.hosts) { state.hosts.sortedBy { ipSortKey(it.ip) } }
+            LazyColumn(modifier = Modifier.heightIn(max = 600.dp)) {
+                items(sortedHosts, key = { it.ip }) { host ->
                     var targetAlpha by remember { mutableStateOf(0f) }
                     LaunchedEffect(Unit) { targetAlpha = 1f }
                     val rowAlpha by animateFloatAsState(
@@ -530,6 +542,10 @@ private fun PulsingIndicator() {
 
 private enum class HostFilter { All, Gateway, HasPorts }
 
+/** Sort key for ascending numeric IPv4 order (dotted-decimal string sort puts .2 after .10). */
+private fun ipSortKey(ip: String): Long =
+    ip.split('.').fold(0L) { acc, part -> acc * 256L + (part.toLongOrNull() ?: 0L) }
+
 @Composable
 private fun HostFilterChips(activeFilter: HostFilter, onFilterChange: (HostFilter) -> Unit) {
     val labels = mapOf(
@@ -574,7 +590,7 @@ private fun LanFinishedContent(
                 host.hostname?.contains(searchQuery, ignoreCase = true) == true ||
                 host.vendor?.contains(searchQuery, ignoreCase = true) == true
             passesFilter && passesSearch
-        }
+        }.sortedBy { ipSortKey(it.ip) }
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -746,12 +762,17 @@ private fun LanFinishedContent(
                     }
                 }
             } else {
-                filteredHosts.forEach { host ->
-                    HostCard(
-                        host = host,
-                        expanded = host.ip == expandedHostIp,
-                        onClick = { onToggleExpand(host.ip) },
-                    )
+                LazyColumn(
+                    modifier = Modifier.heightIn(max = 600.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    items(filteredHosts, key = { it.ip }) { host ->
+                        HostCard(
+                            host = host,
+                            expanded = host.ip == expandedHostIp,
+                            onClick = { onToggleExpand(host.ip) },
+                        )
+                    }
                 }
             }
         }

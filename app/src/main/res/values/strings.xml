@@ -92,6 +92,7 @@
 
     <!-- Ping Results -->
     <string name="ping_result_header">Ping Results</string>
+    <string name="ping_showing_recent">Showing the most recent %1$d of %2$d pings</string>
     <string name="ping_stats_header">Statistics</string>
     <string name="ping_packets_sent">Sent</string>
     <string name="ping_packets_received">Received</string>
@@ -127,6 +128,7 @@
     </plurals>
     <string name="ports_timeout_label">Timeout (ms)</string>
     <string name="ports_concurrency_label">Concurrency</string>
+    <string name="ports_concurrency_high_warning">High concurrency may overwhelm devices on the local network</string>
     <string name="ports_scan_button">Scan Ports</string>
     <string name="ports_stop_button">Stop Scan</string>
     <string name="ports_clear_button">Clear</string>
@@ -706,6 +708,35 @@
     <string name="onboarding_subtitle">Your all-in-one Android networking toolkit</string>
     <string name="onboarding_get_started">Get Started</string>
     <string name="onboarding_dont_show_again">Skip</string>
+    <string name="onboarding_next">Next</string>
+    <string name="onboarding_back">Back</string>
+
+    <!-- Onboarding – Page 1: Welcome -->
+    <string name="onboarding_page1_title">Welcome to Net Swiss Knife</string>
+    <string name="onboarding_page1_body">Everything you need to diagnose, secure, and understand your network — all on your device. No accounts, no ads, and nothing leaves your phone unless a tool explicitly sends it somewhere, like a DNS or WHOIS query.</string>
+
+    <!-- Onboarding – Page 2: What you can do (framed by use case, not tool name) -->
+    <string name="onboarding_page2_title">Find the right tool for the job</string>
+    <string name="onboarding_usecase_diagnostics_q">Something\'s slow or won\'t connect?</string>
+    <string name="onboarding_usecase_diagnostics_a">Diagnostics — Ping, Traceroute, Port Scanner, LAN Scanner</string>
+    <string name="onboarding_usecase_wifi_q">Which Wi-Fi channel should I use?</string>
+    <string name="onboarding_usecase_wifi_a">Wi-Fi Analysis — scan networks and visualize the spectrum</string>
+    <string name="onboarding_usecase_security_q">Is this site or connection safe?</string>
+    <string name="onboarding_usecase_security_a">Security Tools — TLS certificates, HTTP headers, WHOIS records</string>
+    <string name="onboarding_usecase_speed_q">How fast is my connection, really?</string>
+    <string name="onboarding_usecase_speed_a">Speed Test — download, upload, and latency</string>
+    <string name="onboarding_usecase_dns_q">Need to look up or calculate addresses?</string>
+    <string name="onboarding_usecase_dns_a">DNS &amp; Subnet — resolve records, calculate subnets, browse mDNS</string>
+
+    <!-- Onboarding – Page 3: How the app is organized -->
+    <string name="onboarding_page3_title">Your tools, your way</string>
+    <string name="onboarding_page3_body">The Home tab lists every tool. The bottom bar keeps your 3 favorites one tap away — tap More to see everything else, and pin or unpin tools anytime your needs change.</string>
+
+    <!-- Onboarding – Page 4: Permissions & privacy -->
+    <string name="onboarding_page4_title">A couple of permissions, explained upfront</string>
+    <string name="onboarding_page4_permission1">Wi-Fi Scanner asks for Location because Android requires it to scan for nearby networks — your location is never sent anywhere.</string>
+    <string name="onboarding_page4_permission2">Some local-network tools may also ask for a Nearby Devices permission on newer Android versions, just to talk to devices on your own network.</string>
+    <string name="onboarding_page4_privacy">There\'s no analytics and no accounts — everything runs locally on your device.</string>
 
     <!-- Settings – Guide section -->
     <string name="settings_guide_section">Guide</string>
@@ -724,120 +755,271 @@
 
     <!-- Ping help -->
     <string name="help_ping_title">Ping</string>
+    <string name="help_ping_concept_heading">What is a "ping"?</string>
+    <string name="help_ping_concept_body">Every device on a network can be asked "are you there?" using a tiny message called an ICMP Echo Request — informally, a "ping." The target replies immediately if it\'s reachable. The time between sending the request and receiving the reply is the round-trip time (RTT), which tells you both whether a host is alive and how far away it is, network-wise.</string>
     <string name="help_ping_what_heading">What it does</string>
     <string name="help_ping_what_body">Checks whether a host is reachable and measures round-trip time (RTT). Android attempts ICMP first and may fall back to TCP when ICMP is unavailable.</string>
     <string name="help_ping_params_heading">Key parameters</string>
-    <string name="help_ping_params_body">Count — number of ping packets to send.\nTimeout — how long to wait for each reply.\nContinuous — pings indefinitely until you stop.</string>
     <string name="help_ping_results_heading">Reading the results</string>
-    <string name="help_ping_results_body">Min/Avg/Max shows the spread of RTT values. Jitter is the variation in RTT — high jitter indicates an unstable connection. Packet loss above 0%% suggests congestion or firewall filtering.</string>
+    <string-array name="help_ping_params_bullets">
+        <item>Count — number of ping packets to send.</item>
+        <item>Timeout — how long to wait for each reply before marking it lost.</item>
+        <item>Continuous — pings indefinitely until you stop it manually.</item>
+    </string-array>
+    <string-array name="help_ping_results_bullets">
+        <item>Min / Avg / Max — the fastest, typical, and slowest round-trip times seen.</item>
+        <item>Jitter — how much RTT varies between pings; high jitter means an unstable connection, even if the average looks fine.</item>
+        <item>Packet loss — the percentage of pings that got no reply; anything above 0%% suggests congestion or a firewall dropping packets.</item>
+    </string-array>
 
     <!-- Traceroute help -->
     <string name="help_traceroute_title">Traceroute</string>
+    <string name="help_traceroute_concept_heading">What is a traceroute?</string>
+    <string name="help_traceroute_concept_body">Every packet carries a small "hop counter" (TTL, or Time To Live) that starts at a number and drops by 1 at every router it passes through. When a router sees the counter hit 0, it discards the packet and sends back a "time exceeded" message — revealing itself. Traceroute exploits this: it sends packets with the counter set to 1, then 2, then 3 and so on, so each router along the path replies in turn, mapping the route your data takes, hop by hop.</string>
     <string name="help_traceroute_what_heading">What it does</string>
     <string name="help_traceroute_what_body">Discovers the path packets take from your device to a destination by incrementing the IP TTL and recording each router that responds.</string>
     <string name="help_traceroute_params_heading">Key parameters</string>
-    <string name="help_traceroute_params_body">Max hops — maximum number of routers to traverse.\nProbe protocol — ICMP is more likely to succeed; UDP mimics traditional traceroute.\nProbes per hop — how many probes to send per TTL value.</string>
     <string name="help_traceroute_results_heading">Reading the results</string>
-    <string name="help_traceroute_results_body">Each row is a router hop. \'*\' means the router did not respond. The Journey Intelligence section shows geographic data, RTT analysis, and ISP routing for public IPs.</string>
+    <string-array name="help_traceroute_params_bullets">
+        <item>Max hops — the highest hop count to try before giving up.</item>
+        <item>Probe protocol — ICMP is more likely to get a reply; UDP mimics the traditional traceroute tool.</item>
+        <item>Probes per hop — how many probes to send at each hop count, to average out inconsistent replies.</item>
+    </string-array>
+    <string-array name="help_traceroute_results_bullets">
+        <item>Each row is one router hop along the path.</item>
+        <item>\'*\' means that router didn\'t respond — common with routers configured to ignore these probes, not necessarily a problem.</item>
+        <item>Journey Intelligence — for public IPs, shows geographic location, RTT analysis, and which ISP owns that hop.</item>
+    </string-array>
 
     <!-- Port Scanner help -->
     <string name="help_portscan_title">Port Scanner</string>
+    <string name="help_portscan_concept_heading">What is a "port"?</string>
+    <string name="help_portscan_concept_body">An IP address gets your data to the right device — like a street address gets mail to the right building. A port number then gets it to the right service running on that device — like an apartment number inside the building. A web server usually listens on port 80 or 443, a mail server on 25, and so on; scanning a range of ports tells you which of these "apartments" have someone answering.</string>
     <string name="help_portscan_what_heading">What it does</string>
     <string name="help_portscan_what_body">Attempts TCP connections to a range of ports on a host to determine which are open, closed, or filtered. Useful for auditing what services are exposed.</string>
     <string name="help_portscan_params_heading">Key parameters</string>
-    <string name="help_portscan_params_body">Port range — use a preset (e.g. Common, Web, All) or enter a custom range.\nTimeout — per-port connection timeout.\nConcurrency — number of simultaneous connection attempts.</string>
     <string name="help_portscan_results_heading">Reading the results</string>
-    <string name="help_portscan_results_body">Open ports accepted the connection. Closed ports rejected it. Filtered ports gave no response within the timeout — typically blocked by a firewall. Banners show the service\'s self-identification string where available.</string>
+    <string-array name="help_portscan_params_bullets">
+        <item>Port range — use a preset (Common, Web, All) or enter a custom range.</item>
+        <item>Timeout — how long to wait for each port before giving up.</item>
+        <item>Concurrency — how many ports to check at the same time.</item>
+    </string-array>
+    <string-array name="help_portscan_results_bullets">
+        <item>Open — something answered; a service is listening on that port.</item>
+        <item>Closed — the port actively refused the connection; nothing is listening there.</item>
+        <item>Filtered — no response at all within the timeout, typically because a firewall is silently blocking it.</item>
+        <item>Banners — when available, the service\'s own self-identification text (e.g. server name/version).</item>
+    </string-array>
 
     <!-- LAN Scanner help -->
     <string name="help_lan_title">LAN Scanner</string>
+    <string name="help_lan_concept_heading">What is a subnet sweep?</string>
+    <string name="help_lan_concept_body">Devices on your home or office network share a private range of addresses, like 192.168.1.1 through 192.168.1.254. That range is written in CIDR notation as 192.168.1.0/24, where the "/24" says how many addresses are included. A LAN scan simply pings every address in that range to see which ones answer — that\'s how it finds every device currently on your network.</string>
     <string name="help_lan_what_heading">What it does</string>
     <string name="help_lan_what_body">Pings every address in a subnet to find live hosts, then attempts to resolve hostnames, read MAC addresses, and identify vendors.</string>
     <string name="help_lan_params_heading">Key parameters</string>
-    <string name="help_lan_params_body">Subnet (CIDR) — e.g. 192.168.1.0/24. Use \'Detect\' to auto-fill your current subnet.\nTimeout — per-host ping timeout.\nConcurrency — how many hosts to probe simultaneously.</string>
     <string name="help_lan_results_heading">Reading the results</string>
-    <string name="help_lan_results_body">Live hosts show their IP, hostname (if resolvable), MAC address, and vendor (from the MAC OUI). The gateway is marked separately. Tap a host for details including any detected open ports.</string>
+    <string-array name="help_lan_params_bullets">
+        <item>Subnet (CIDR) — e.g. 192.168.1.0/24; tap \'Detect\' to auto-fill your current subnet.</item>
+        <item>Timeout — how long to wait for each host to respond.</item>
+        <item>Concurrency — how many hosts to probe at the same time.</item>
+    </string-array>
+    <string-array name="help_lan_results_bullets">
+        <item>IP, hostname, MAC address, and vendor (identified from the MAC address\'s manufacturer prefix) for each live host.</item>
+        <item>The gateway (your router) is marked separately.</item>
+        <item>Tap a host for more detail, including any open ports detected on it.</item>
+    </string-array>
 
     <!-- DNS help -->
     <string name="help_dns_title">DNS Lookup</string>
+    <string name="help_dns_concept_heading">What is DNS?</string>
+    <string name="help_dns_concept_body">Every website has a numeric address (like 142.250.80.14) that computers use to find it, but people use names instead (like google.com). DNS is the internet\'s phone book: it translates the name you type into the number your device actually connects to. A record type just tells the phone book which kind of information you want back — an address, a mail server, ownership proof, and so on.</string>
     <string name="help_dns_what_heading">What it does</string>
     <string name="help_dns_what_body">Queries a DNS server for records associated with a domain or IP address. Supports A, AAAA, MX, TXT, CNAME, NS, SOA, PTR, SRV, and more.</string>
     <string name="help_dns_params_heading">Key parameters</string>
-    <string name="help_dns_params_body">Domain — the hostname or IP to query.\nRecord type — the DNS record type to request.\nDNS server — choose a preset (Google, Cloudflare, system) or enter a custom resolver IP.</string>
     <string name="help_dns_results_heading">Reading the results</string>
-    <string name="help_dns_results_body">Each record shows its type, value, and TTL (time-to-live in seconds). The raw response tab shows the full DNS wire-format response. Use PTR lookups to reverse-resolve an IP address to a hostname.</string>
+    <string-array name="help_dns_params_bullets">
+        <item>Domain — the hostname or IP to query.</item>
+        <item>Record type — A/AAAA return the IP address; MX returns the mail server that handles email for the domain; TXT holds arbitrary text, often used to prove domain ownership; CNAME is an alias pointing to another name; NS lists the servers authoritative for the domain; SOA holds zone administration info; PTR reverse-resolves an IP back to a hostname; SRV points to the host/port for a specific service.</item>
+        <item>DNS server — choose a preset (Google, Cloudflare, system) or enter a custom resolver IP.</item>
+    </string-array>
+    <string-array name="help_dns_results_bullets">
+        <item>TTL (time-to-live) is in seconds — it tells other resolvers and browsers how long they\'re allowed to cache this answer before asking again.</item>
+        <item>The raw response tab shows the full DNS wire-format response.</item>
+        <item>Use PTR lookups to reverse-resolve an IP address to a hostname.</item>
+    </string-array>
 
     <!-- Wi-Fi Scanner help -->
     <string name="help_wifi_title">Wi-Fi Scanner</string>
+    <string name="help_wifi_concept_heading">What is a Wi-Fi channel?</string>
+    <string name="help_wifi_concept_body">Wi-Fi radios talk over slices of radio frequency called channels, similar to how radio stations each get their own frequency so they don\'t talk over each other. Every network you see is a named group (SSID) that can be broadcast by one or more physical radios, each with its own hardware address (BSSID) — a mesh system or dual-band router shows up as one SSID but several BSSIDs. 2.4 GHz channels travel further through walls but there are only 3 that don\'t overlap, so they get crowded; 5 GHz and 6 GHz have far more non-overlapping channels and are faster, at the cost of shorter range.</string>
     <string name="help_wifi_what_heading">What it does</string>
     <string name="help_wifi_what_body">Scans nearby Wi-Fi access points, groups them by network (SSID), and displays channel utilisation on a spectrum chart. Requires Location permission on Android.</string>
-    <string name="help_wifi_params_heading">Controls</string>
-    <string name="help_wifi_params_body">Scan — perform a fresh scan.\nAuto-refresh — continuously re-scan.\nBand filter — show only 2.4 GHz, 5 GHz, or 6 GHz networks.\nSort — order by signal strength, channel, or SSID.</string>
+    <string name="help_wifi_params_heading">Key parameters</string>
     <string name="help_wifi_results_heading">Reading the results</string>
-    <string name="help_wifi_results_body">The spectrum chart shows AP signal curves by frequency. Overlapping curves mean channel congestion. The Best Channel callout recommends the least-congested 2.4 GHz channel. Tap a network to expand per-BSSID details; tap an AP row for full connection detail.</string>
+    <string-array name="help_wifi_params_bullets">
+        <item>Scan — perform a fresh scan.</item>
+        <item>Auto-refresh — continuously re-scan.</item>
+        <item>Band filter — show only 2.4 GHz, 5 GHz, or 6 GHz networks.</item>
+        <item>Sort — order by signal strength, channel, or SSID.</item>
+    </string-array>
+    <string-array name="help_wifi_results_bullets">
+        <item>The spectrum chart shows AP signal curves by frequency.</item>
+        <item>Overlapping curves mean channel congestion — multiple networks competing for the same slice of spectrum.</item>
+        <item>The Best Channel callout recommends the least-congested 2.4 GHz channel.</item>
+        <item>Tap a network to expand per-BSSID details; tap an AP row for full connection detail.</item>
+    </string-array>
 
     <!-- Topology help -->
     <string name="help_topology_title">Network Topology</string>
+    <string name="help_topology_concept_heading">What is network topology discovery?</string>
+    <string name="help_topology_concept_body">Switches and routers understand SNMP (Simple Network Management Protocol), a standard way for network gear to report its status and configuration — like each device having its own public status page a tool can read. This app asks one device "who are you connected to?", then asks each of those neighbours the same question, building a map hop by hop, the way you\'d trace a chain of introductions at a party. The result is a picture of how your switches and routers are physically wired together.</string>
     <string name="help_topology_what_heading">What it does</string>
     <string name="help_topology_what_body">Uses SNMP to query a seed switch or router and discover its neighbours, building an interactive topology graph of your network infrastructure.</string>
     <string name="help_topology_params_heading">Key parameters</string>
-    <string name="help_topology_params_body">Target IP — the IP of the first device to query.\nSNMP version — v1, v2c, or v3.\nCommunity string — required for v1/v2c (default is \'public\').\nMax hops — how many SNMP-reachable hops to traverse.</string>
-    <string name="help_topology_results_heading">Using the graph</string>
-    <string name="help_topology_results_body">Nodes represent discovered devices. Lines represent SNMP-discovered links. Pinch to zoom, drag to pan. Tap a node to view system information, interfaces, VLANs, and neighbours.</string>
+    <string name="help_topology_results_heading">Reading the results</string>
+    <string-array name="help_topology_params_bullets">
+        <item>Target IP — the IP of the first device to query, the starting point for the map.</item>
+        <item>SNMP version — v1, v2c, or v3; v3 adds authentication and encryption the older versions lack.</item>
+        <item>Community string — a shared password required for v1/v2c (default is \'public\', a notoriously insecure default many devices still ship with — change it if you can).</item>
+        <item>Max hops — how many device-to-device introductions to follow before stopping.</item>
+    </string-array>
+    <string-array name="help_topology_results_bullets">
+        <item>Nodes represent discovered devices; lines represent the SNMP-reported links between them.</item>
+        <item>Pinch to zoom, drag to pan around the graph.</item>
+        <item>Tap a node to view its system information, interfaces, VLANs, and neighbours.</item>
+        <item>Useful for mapping an office network, spotting unexpected devices, or documenting infrastructure before troubleshooting a connectivity issue.</item>
+    </string-array>
 
     <!-- TLS Inspector help -->
     <string name="help_tls_title">TLS Inspector</string>
+    <string name="help_tls_concept_heading">What is TLS, and why does the certificate chain matter?</string>
+    <string name="help_tls_concept_body">TLS (the "S" in HTTPS) scrambles traffic between your device and a server so anyone else on the network can\'t read it. But encryption alone doesn\'t prove who you\'re talking to — that\'s what certificates are for: a certificate is like an ID card proving "this server really is example.com," signed by a trusted authority. The chain (leaf → intermediate → root) is the paper trail of who vouched for whom, ending at a small set of root authorities your device already trusts by default.</string>
     <string name="help_tls_what_heading">What it does</string>
     <string name="help_tls_what_body">Opens a TLS connection to a host and retrieves the full certificate chain, including expired, self-signed, or untrusted certificates that a browser would normally hide.</string>
     <string name="help_tls_params_heading">Key parameters</string>
-    <string name="help_tls_params_body">Host — the domain name or IP to connect to.\nPort — the TLS port (default 443 for HTTPS; 8443, 993, 465 are common alternatives).</string>
     <string name="help_tls_results_heading">Reading the results</string>
-    <string name="help_tls_results_body">The connection card shows TLS version, cipher suite, and handshake time. Each certificate in the chain (leaf, intermediate, root) can be expanded to show subject, issuer, validity dates, SANs, and the SHA-256 fingerprint. Red badges indicate expired certificates.</string>
+    <string-array name="help_tls_params_bullets">
+        <item>Host — the domain name or IP to connect to.</item>
+        <item>Port — the TLS port (default 443 for HTTPS; 8443, 993, 465 are common alternatives).</item>
+    </string-array>
+    <string-array name="help_tls_results_bullets">
+        <item>The connection card shows the TLS version, cipher suite, and handshake time.</item>
+        <item>Each certificate in the chain (leaf, intermediate, root) expands to show subject, issuer, validity dates, SANs, and the SHA-256 fingerprint.</item>
+        <item>A red badge means expired — the site\'s ID card is out of date and your connection can\'t be fully verified, similar to a browser warning page.</item>
+    </string-array>
 
     <!-- WHOIS help -->
     <string name="help_whois_title">WHOIS Lookup</string>
+    <string name="help_whois_concept_heading">What is WHOIS?</string>
+    <string name="help_whois_concept_body">WHOIS is a public registry of who owns a domain name or block of IP addresses and since when — like checking a property deed. Every domain and IP range has an owner on record somewhere, and WHOIS servers let anyone look that record up.</string>
     <string name="help_whois_what_heading">What it does</string>
     <string name="help_whois_what_body">Queries WHOIS servers to retrieve registration information for a domain name, IP address, or Autonomous System Number (ASN).</string>
     <string name="help_whois_params_heading">What to enter</string>
-    <string name="help_whois_params_body">Domain — e.g. example.com\nIP address — e.g. 8.8.8.8\nASN — e.g. AS15169\n\nUse the quick-fill chips to insert an example of each type.</string>
     <string name="help_whois_results_heading">Reading the results</string>
-    <string name="help_whois_results_body">The result shows registrant, registration/expiry dates, name servers, and domain status codes. For IPs, it shows the network range, organisation, and country. The Raw section shows the unprocessed WHOIS server response.</string>
+    <string-array name="help_whois_params_bullets">
+        <item>Domain — e.g. example.com.</item>
+        <item>IP address — e.g. 8.8.8.8.</item>
+        <item>ASN — e.g. AS15169; an Autonomous System Number identifies a large network or organization (typically an ISP) that controls a block of addresses and announces routes for them — one level above individual IP ranges.</item>
+        <item>Use the quick-fill chips to insert an example of each type.</item>
+    </string-array>
+    <string-array name="help_whois_results_bullets">
+        <item>For domains: registrant, registration/expiry dates, name servers, and status codes — handy for checking if a domain is about to expire or investigating who\'s behind a site.</item>
+        <item>For IPs: the network range, owning organisation, and country — useful for finding the ISP or hosting provider behind an address.</item>
+        <item>The Raw section shows the unprocessed WHOIS server response.</item>
+    </string-array>
 
     <!-- HTTP Probe help -->
     <string name="help_httprobe_title">HTTP Probe</string>
+    <string name="help_httprobe_concept_heading">What happens when you "visit" a URL?</string>
+    <string name="help_httprobe_concept_body">When you request a URL, your device opens a connection to a server and sends a small text message describing what you want — the method, headers, maybe a body. The server replies with a status code, its own headers, and the content. This tool lets you send that request directly and inspect the entire exchange, including security-related response headers browsers check automatically but rarely show you.</string>
     <string name="help_httprobe_what_heading">What it does</string>
     <string name="help_httprobe_what_body">Sends an HTTP or HTTPS request to a URL and displays the full response including status, headers, body, redirect chain, and a security header analysis.</string>
     <string name="help_httprobe_params_heading">Key parameters</string>
-    <string name="help_httprobe_params_body">URL — the full address including https://\nMethod — GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS.\nCustom headers — add Authorization, Accept, Content-Type, etc.\nRequest body — JSON or other payload for POST/PUT.\nFollow redirects — automatically follow 3xx responses.</string>
     <string name="help_httprobe_results_heading">Reading the results</string>
-    <string name="help_httprobe_results_body">Overview shows status code, response time, and final URL after redirects. Headers tab lists all request and response headers. Body tab shows the response body. Security tab grades common security headers (HSTS, CSP, X-Frame-Options, etc.).</string>
+    <string name="help_httprobe_security_heading">Security header checks</string>
+    <string-array name="help_httprobe_params_bullets">
+        <item>URL — the full address including https://</item>
+        <item>Method — GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS.</item>
+        <item>Custom headers — add Authorization, Accept, Content-Type, etc.</item>
+        <item>Request body — JSON or other payload for POST/PUT.</item>
+        <item>Follow redirects — automatically follow 3xx responses.</item>
+    </string-array>
+    <string-array name="help_httprobe_results_bullets">
+        <item>Overview — status code, response time, and final URL after redirects.</item>
+        <item>Headers — every request and response header.</item>
+        <item>Body — the response body, with size and truncation shown if applicable.</item>
+        <item>Security — see below.</item>
+    </string-array>
+    <string-array name="help_httprobe_security_bullets">
+        <item>HSTS — forces browsers to always use the encrypted (https) version of this site.</item>
+        <item>CSP — restricts which scripts and resources a page may load, blocking many injection attacks.</item>
+        <item>X-Frame-Options — stops other sites from embedding this page in a hidden frame to trick users into clicking it (clickjacking).</item>
+        <item>X-Content-Type-Options — stops browsers from guessing a file\'s type in a way attackers can exploit.</item>
+        <item>Referrer-Policy — controls how much of the current URL leaks to sites you click through to.</item>
+        <item>Permissions-Policy — restricts which browser features (camera, mic, location) a page can use.</item>
+        <item>Cross-Origin-Opener-Policy — isolates this tab from being manipulated by a malicious page it opened or was opened by.</item>
+        <item>Cross-Origin-Embedder-Policy — requires cross-origin resources to explicitly opt in before this page can use them, closing another cross-tab attack path.</item>
+        <item>Server — whether the response reveals software/version info attackers could use to look up known vulnerabilities.</item>
+    </string-array>
 
     <!-- Subnet Calculator help -->
     <string name="help_subnet_title">Subnet Calculator</string>
+    <string name="help_subnet_concept_heading">What is a subnet?</string>
+    <string name="help_subnet_concept_body">An IP address has two parts: a network part shared by every device on that local network, and a host part unique to each device — like a street name shared by a block of houses and a house number unique to each one. The subnet mask (the "/24" in CIDR notation) says how many bits belong to each part, which determines how many devices fit and where one network\'s addresses end and the next begins. Splitting a large network into smaller subnets is how organizations keep traffic organized, secure, and easier to manage.</string>
     <string name="help_subnet_what_heading">What it does</string>
     <string name="help_subnet_what_body">Calculates network details from a CIDR notation or dot-decimal mask input, and can find the smallest subnet that covers a given IP range.</string>
     <string name="help_subnet_params_heading">Input modes</string>
-    <string name="help_subnet_params_body">CIDR/Mask mode — enter an address like 192.168.1.0/24 or 10.0.0.0/255.255.0.0.\nIP Range mode — enter the smallest and largest IPs you need; the tool finds the tightest enclosing subnet.</string>
     <string name="help_subnet_results_heading">Reading the results</string>
-    <string name="help_subnet_results_body">Results include network and broadcast addresses, first/last usable hosts, and usable host count. The Binary Breakdown shows exactly which bits are network vs host bits. The Notation Equivalents section shows CIDR, dot-decimal, wildcard, hex, and binary representations. Tap the \'i\' icons for field explanations.</string>
+    <string-array name="help_subnet_params_bullets">
+        <item>CIDR/Mask mode — enter an address like 192.168.1.0/24 or 10.0.0.0/255.255.0.0.</item>
+        <item>IP Range mode — enter the smallest and largest IPs you need; the tool finds the tightest enclosing subnet.</item>
+    </string-array>
+    <string-array name="help_subnet_results_bullets">
+        <item>Network and broadcast addresses, first/last usable hosts, and usable host count.</item>
+        <item>Binary Breakdown — shows exactly which bits are network vs host bits.</item>
+        <item>Notation Equivalents — CIDR, dot-decimal, wildcard, hex, and binary representations.</item>
+        <item>Tap the \'i\' icons for field-level explanations.</item>
+    </string-array>
 
     <!-- mDNS Browser help -->
     <string name="help_mdns_title">mDNS Browser</string>
+    <string name="help_mdns_concept_heading">What is mDNS?</string>
+    <string name="help_mdns_concept_body">Regular DNS relies on a central server to look up names. mDNS (also called Bonjour or Zeroconf) skips that: devices on your local network announce themselves by shouting their name and services to a special multicast address that every listening device on the network receives at once, and everyone else just listens for those announcements. That\'s how a printer or speaker can be found automatically without you ever typing its address.</string>
     <string name="help_mdns_what_heading">What it does</string>
     <string name="help_mdns_what_body">Listens for multicast DNS (mDNS / Bonjour / Zeroconf) announcements on your local network to discover services like printers, media servers, smart home devices, and developer tools.</string>
-    <string name="help_mdns_params_heading">Controls</string>
-    <string name="help_mdns_params_body">Scan — starts an 8-second discovery window. Run it multiple times to catch devices that announce infrequently.\nStop — end the current scan early.\nReset — clear all results.</string>
+    <string name="help_mdns_params_heading">Key parameters</string>
     <string name="help_mdns_results_heading">Reading the results</string>
-    <string name="help_mdns_results_body">Services are grouped by type (e.g. _http._tcp, _airplay._tcp). Tap a group to expand it and see individual service instances. Each instance shows its hostname, IP address, port, and any TXT record properties.</string>
+    <string-array name="help_mdns_params_bullets">
+        <item>Scan — starts an 8-second discovery window; run it multiple times to catch devices that announce infrequently.</item>
+        <item>Stop — end the current scan early.</item>
+        <item>Reset — clear all results.</item>
+    </string-array>
+    <string-array name="help_mdns_results_bullets">
+        <item>Services are grouped by type (e.g. _http._tcp, _airplay._tcp).</item>
+        <item>Tap a group to expand it and see individual service instances.</item>
+        <item>Each instance shows its hostname, IP address, port, and any TXT record properties.</item>
+    </string-array>
 
     <!-- Speed Test help -->
     <string name="help_speedtest_title">Speed Test</string>
+    <string name="help_speedtest_concept_heading">Latency vs. bandwidth — what\'s actually being measured?</string>
+    <string name="help_speedtest_concept_body">Latency is how long it takes a single small message to get a reply — it matters for anything interactive, like gaming or video calls. Bandwidth (or throughput) is how much data can flow per second once a connection gets going — it matters for downloads and streaming quality. Most home internet plans are asymmetric, provisioned for much faster downloads than uploads, since most everyday usage is downloading or streaming rather than sending large amounts of data out.</string>
     <string name="help_speedtest_what_heading">What it does</string>
     <string name="help_speedtest_what_body">Measures your connection\'s latency, download speed, and upload speed by exchanging data with Cloudflare\'s speed test service (speed.cloudflare.com).</string>
     <string name="help_speedtest_phases_heading">Test phases</string>
-    <string name="help_speedtest_phases_body">1. Latency — sends small requests to measure round-trip time and jitter.\n2. Download — downloads progressively larger payloads and records throughput.\n3. Upload — uploads data to measure upload speed.\n\nThe test runs each phase in sequence automatically.</string>
+    <string name="help_speedtest_phases_body">The test runs each phase in sequence automatically.</string>
     <string name="help_speedtest_results_heading">Reading the results</string>
-    <string name="help_speedtest_results_body">Average speed is the sustained throughput across the full phase. Peak speed is the highest burst observed. The throughput chart shows speed over time — a flat line suggests a bandwidth cap; a jagged line suggests network instability.</string>
+    <string-array name="help_speedtest_phases_bullets">
+        <item>Latency — sends small requests to measure round-trip time and jitter.</item>
+        <item>Download — downloads progressively larger payloads and records throughput.</item>
+        <item>Upload — uploads data to measure upload speed.</item>
+    </string-array>
+    <string-array name="help_speedtest_results_bullets">
+        <item>Average speed — the sustained throughput across the full phase.</item>
+        <item>Peak speed — the highest burst observed.</item>
+        <item>The throughput chart shows speed over time — a flat line suggests a bandwidth cap; a jagged line suggests network instability.</item>
+    </string-array>
 
     <!-- Speed Test -->
     <string name="speedtest_screen_title">Speed Test</string>
@@ -901,14 +1083,14 @@
     <string name="wol_send_again">Send again</string>
     <string name="wol_error_title">Failed to send</string>
     <string name="wol_retry_button">Retry</string>
-    <string name="wol_help_what_heading">What is Wake-on-LAN?</string>
-    <string name="wol_help_what_body">Wake-on-LAN (WOL) wakes a powered-down or sleeping computer by sending a special UDP "magic packet" containing its MAC address repeated 16 times. The network card listens for this pattern even while the machine sleeps.</string>
-    <string name="wol_help_mac_heading">Finding the MAC address</string>
-    <string name="wol_help_mac_body">Use the LAN Scanner tool to discover devices and their MAC addresses while they are awake, or check the device\'s network settings. Formats AA:BB:CC:DD:EE:FF, AA-BB-CC-DD-EE-FF, AABB.CCDD.EEFF and AABBCCDDEEFF are all accepted.</string>
-    <string name="wol_help_requirements_heading">Device requirements</string>
-    <string name="wol_help_requirements_body">Wake-on-LAN must be enabled in the target\'s BIOS/UEFI and operating system network adapter settings. Wired Ethernet is most reliable; Wi-Fi wake (WoWLAN) support varies by hardware.</string>
-    <string name="wol_help_broadcast_heading">Broadcast address and port</string>
-    <string name="wol_help_broadcast_body">The default 255.255.255.255 broadcasts to the whole local network. For a specific subnet use its directed broadcast address (e.g. 192.168.1.255). Port 9 is conventional; port 7 is a common alternative.</string>
+    <string name="help_wol_concept_heading">What is Wake-on-LAN?</string>
+    <string name="help_wol_concept_body">Wake-on-LAN (WOL) wakes a powered-down or sleeping computer by sending a special UDP "magic packet" containing its MAC address repeated 16 times. The network card listens for this pattern even while the machine sleeps.</string>
+    <string name="help_wol_mac_heading">Finding the MAC address</string>
+    <string name="help_wol_mac_body">Use the LAN Scanner tool to discover devices and their MAC addresses while they are awake, or check the device\'s network settings. Formats AA:BB:CC:DD:EE:FF, AA-BB-CC-DD-EE-FF, AABB.CCDD.EEFF and AABBCCDDEEFF are all accepted.</string>
+    <string name="help_wol_requirements_heading">Device requirements</string>
+    <string name="help_wol_requirements_body">Wake-on-LAN must be enabled in the target\'s BIOS/UEFI and operating system network adapter settings. Wired Ethernet is most reliable; Wi-Fi wake (WoWLAN) support varies by hardware.</string>
+    <string name="help_wol_broadcast_heading">Broadcast address and port</string>
+    <string name="help_wol_broadcast_body">The default 255.255.255.255 broadcasts to the whole local network. For a specific subnet use its directed broadcast address (e.g. 192.168.1.255). Port 9 is conventional; port 7 is a common alternative.</string>
 
     <!-- DNS custom server validation -->
     <string name="dns_custom_server_invalid">Enter a valid IPv4 or IPv6 address</string>
