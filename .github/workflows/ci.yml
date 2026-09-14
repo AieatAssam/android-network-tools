@@ -121,14 +121,15 @@ jobs:
       # burns the entire budget and no retry ever runs. Two independent steps, each
       # separately timed out, give a real "kill the hang, try once more" behavior.
       #
-      # api-level 33 (default) — 35 hung for the full 14-minute timeout on every
-      # attempt today, including going back to the literal config that worked this
-      # morning, while a completely different level (29, tried as a documented
-      # reactivecircus recipe) finished in minutes with no hang at all — pointing at
-      # something specific to the API-35 x86_64 image right now, not generic runner
-      # flakiness. 29 itself is incompatible (MockK's Android proxy needs
-      # android.app.PictureInPictureUiState, added after API 29). 33 is new enough
-      # for that and a heavily used, well-tested level on GitHub-hosted runners.
+      # api-level 33 / google_apis — 35 ("default" target) and then 33 ("default"
+      # target) both hung the full 14 minutes on every attempt today; only api-level
+      # 29 with target: google_apis (a documented recipe) completed cleanly, in
+      # minutes. The one config difference in the working run besides API level was
+      # an explicit google_apis target instead of the implicit "default" target both
+      # hanging attempts used — testing whether it's the "default"-target image
+      # specifically that's broken on GitHub's runners right now, independent of API
+      # level, by keeping 33 (new enough for MockK's PictureInPictureUiState need)
+      # but switching its target to google_apis to match the one config that worked.
       - name: Run Compose instrumentation tests
         id: instrumented_tests_1
         timeout-minutes: 14
@@ -136,6 +137,7 @@ jobs:
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 33
+          target: google_apis
           arch: x86_64
           disable-animations: true
           script: ./gradlew :app:connectedDebugAndroidTest --no-daemon --no-parallel
@@ -147,6 +149,7 @@ jobs:
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 33
+          target: google_apis
           arch: x86_64
           disable-animations: true
           script: ./gradlew :app:connectedDebugAndroidTest --no-daemon --no-parallel
