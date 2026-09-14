@@ -131,12 +131,26 @@ jobs:
         timeout-minutes: 8
         run: |
           nohup "$ANDROID_HOME/emulator/emulator" -avd ci_test -no-window \
-            -gpu swiftshader_indirect -no-snapshot -no-audio -no-boot-anim \
+            -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim \
             > "$RUNNER_TEMP/emulator.log" 2>&1 &
-          "$ANDROID_HOME/platform-tools/adb" wait-for-device
-          until [ "$("$ANDROID_HOME/platform-tools/adb" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; do
+          EMULATOR_PID=$!
+          echo "$EMULATOR_PID" > "$RUNNER_TEMP/emulator.pid"
+          # adb wait-for-device blocks forever if the emulator process died before
+          # binding its port, so check liveness on every poll instead of trusting it.
+          for i in $(seq 1 160); do
+            if ! kill -0 "$EMULATOR_PID" 2>/dev/null; then
+              echo "::error::emulator process exited before boot completed; log follows:"
+              cat "$RUNNER_TEMP/emulator.log"
+              exit 1
+            fi
+            if [ "$("$ANDROID_HOME/platform-tools/adb" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; then
+              exit 0
+            fi
             sleep 3
           done
+          echo "::error::emulator did not report boot_completed within the timeout; log follows:"
+          cat "$RUNNER_TEMP/emulator.log"
+          exit 1
 
       - name: Run Compose instrumentation tests
         timeout-minutes: 14
