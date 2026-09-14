@@ -121,21 +121,39 @@ jobs:
       # burns the entire budget and no retry ever runs. Two independent steps, each
       # separately timed out, give a real "kill the hang, try once more" behavior.
       #
-      # BISECTING (temporary, single attempt only to halve iteration time — both
-      # attempts always reproduce an identical hang, so the retry step is pure
-      # waste while narrowing this down): 35 (default) and 33 (default, then
-      # google_apis) all hung the full 14 minutes; only api-level 29 with
-      # target: google_apis + profile: Nexus 6 completed cleanly. Trying 30 with
-      # the full matching recipe to see if it's specifically the older/lighter
-      # class of image (not API 29 itself) that avoids today's issue.
+      # api-level 35 — bisected extensively: 35 and 33 (default and google_apis
+      # targets) all hung the full 14 minutes on every attempt, while 29 and 30
+      # (target: google_apis, profile: Nexus 6) both completed in minutes but hit a
+      # real, unrelated blocker — java.lang.NoClassDefFoundError on
+      # android.app.PictureInPictureUiState from MockK's Android inline-mock agent,
+      # matching the open, unresolved mockk/mockk#1554 ("Advice.isOverridden crashes
+      # non-mock toString() ... when a superclass overrides a newer-API method"),
+      # opened two days before this investigation and still unfixed. So API 33+
+      # hangs (platform/runner-side — this repo's very first CI run of the day, on
+      # this same config, completed cleanly in 6 minutes, and GitHub's own status
+      # page reported an Actions "degraded performance" incident that day) while API
+      # <33 hits an open upstream MockK bug unrelated to this codebase. Neither is
+      # fixable by further workflow tuning. Back to 35, the config that worked this
+      # morning, to run cleanly once the platform-side issue clears on its own.
       - name: Run Compose instrumentation tests
+        id: instrumented_tests_1
+        timeout-minutes: 14
+        continue-on-error: true
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          disable-animations: true
+          script: ./gradlew :app:connectedDebugAndroidTest --no-daemon --no-parallel
+
+      - name: Run Compose instrumentation tests (retry after hang/failure)
+        id: instrumented_tests_2
+        if: steps.instrumented_tests_1.outcome == 'failure'
         timeout-minutes: 14
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 30
-          target: google_apis
+          api-level: 35
           arch: x86_64
-          profile: Nexus 6
           disable-animations: true
           script: ./gradlew :app:connectedDebugAndroidTest --no-daemon --no-parallel
 
