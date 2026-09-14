@@ -121,36 +121,21 @@ jobs:
       # burns the entire budget and no retry ever runs. Two independent steps, each
       # separately timed out, give a real "kill the hang, try once more" behavior.
       #
-      # api-level 33 / google_apis — 35 ("default" target) and then 33 ("default"
-      # target) both hung the full 14 minutes on every attempt today; only api-level
-      # 29 with target: google_apis (a documented recipe) completed cleanly, in
-      # minutes. The one config difference in the working run besides API level was
-      # an explicit google_apis target instead of the implicit "default" target both
-      # hanging attempts used — testing whether it's the "default"-target image
-      # specifically that's broken on GitHub's runners right now, independent of API
-      # level, by keeping 33 (new enough for MockK's PictureInPictureUiState need)
-      # but switching its target to google_apis to match the one config that worked.
+      # BISECTING (temporary, single attempt only to halve iteration time — both
+      # attempts always reproduce an identical hang, so the retry step is pure
+      # waste while narrowing this down): 35 (default) and 33 (default, then
+      # google_apis) all hung the full 14 minutes; only api-level 29 with
+      # target: google_apis + profile: Nexus 6 completed cleanly. Trying 30 with
+      # the full matching recipe to see if it's specifically the older/lighter
+      # class of image (not API 29 itself) that avoids today's issue.
       - name: Run Compose instrumentation tests
-        id: instrumented_tests_1
-        timeout-minutes: 14
-        continue-on-error: true
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 33
-          target: google_apis
-          arch: x86_64
-          disable-animations: true
-          script: ./gradlew :app:connectedDebugAndroidTest --no-daemon --no-parallel
-
-      - name: Run Compose instrumentation tests (retry after hang/failure)
-        id: instrumented_tests_2
-        if: steps.instrumented_tests_1.outcome == 'failure'
         timeout-minutes: 14
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 33
+          api-level: 30
           target: google_apis
           arch: x86_64
+          profile: Nexus 6
           disable-animations: true
           script: ./gradlew :app:connectedDebugAndroidTest --no-daemon --no-parallel
 
