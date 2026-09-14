@@ -69,41 +69,22 @@ jobs:
 
   instrumented-tests:
     runs-on: ubuntu-latest
-    # The emulator occasionally hangs on boot (or mid-test-run) on GitHub-hosted runners
-    # (KVM/nested-virtualization flakiness) with no output for hours since the step has
-    # no timeout of its own. Bound the job so a hang fails fast instead of idling for the
-    # default 6-hour job limit.
-    #
-    # This job briefly replaced android-emulator-runner with a hand-rolled emulator
-    # lifecycle (sdkmanager/avdmanager/emulator/adb) after that action's kill/teardown
-    # logic hung on several consecutive runs, matching the open, unresolved
-    # ReactiveCircus/android-emulator-runner#385. That rewrite fixed the teardown hang
-    # (confirmed: boot ~40s, force-kill ~2s) but traded it for a different one —
-    # connectedDebugAndroidTest hung with zero output even after dismissing the
-    # keyguard, for a cause not fully identified. Meanwhile the very first run of the
-    # day, on the unmodified action, completed cleanly in 6 minutes with a real test
-    # failure — and GitHub's own status page reported an Actions "degraded
-    # performance" incident the same day. That points to transient platform
-    # degradation rather than a fundamentally broken setup, so reverted to the action
-    # and kept only the genuinely load-bearing fix: native per-step timeout-minutes
-    # (not a third-party retry wrapper — see the "Run Compose instrumentation tests"
-    # steps below for why) so a future hang fails in ~14 minutes instead of hours.
-    timeout-minutes: 30
+    # Runs on Firebase Test Lab instead of a GitHub-hosted emulator. The
+    # reactivecircus/android-emulator-runner + local KVM/nested-virtualization
+    # combination proved unreliable on GitHub-hosted runners (hangs at boot, mid-test,
+    # and at emulator teardown — the latter matching the open, unresolved
+    # ReactiveCircus/android-emulator-runner#385 — persisting across dozens of CI runs
+    # and multiple api-level/target/profile combinations). Test Lab runs the APKs on
+    # Google's own device infrastructure, sidestepping local emulator boot entirely.
+    # No Firebase SDK is added to the app for this — the project exists purely for
+    # Test Lab's CI access, nothing the app links against.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-java@v5
         with:
           java-version: '21'
           distribution: 'temurin'
-
-      # android-emulator-runner needs a writable /dev/kvm; GitHub-hosted Linux
-      # runners expose the device but not the permissions.
-      - name: Enable KVM group permissions
-        run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
-            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
 
       - name: Cache Gradle packages
         uses: actions/cache@v5
@@ -115,59 +96,31 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      # A single native GitHub Actions timeout-minutes per step (not a third-party
-      # wrapper) is what actually bounds a hung attempt: Wandalen/wretry.action's own
-      # time_out caps the whole step across every retry, so one hung first attempt
-      # burns the entire budget and no retry ever runs. Two independent steps, each
-      # separately timed out, give a real "kill the hang, try once more" behavior.
-      #
-      # api-level 35 — bisected extensively: 35 and 33 (default and google_apis
-      # targets) all hung the full 14 minutes on every attempt, while 29 and 30
-      # (target: google_apis, profile: Nexus 6) both completed in minutes but hit a
-      # real, unrelated blocker — java.lang.NoClassDefFoundError on
-      # android.app.PictureInPictureUiState from MockK's Android inline-mock agent,
-      # matching the open, unresolved mockk/mockk#1554 ("Advice.isOverridden crashes
-      # non-mock toString() ... when a superclass overrides a newer-API method"),
-      # opened two days before this investigation and still unfixed. So API 33+
-      # hangs (platform/runner-side — this repo's very first CI run of the day, on
-      # this same config, completed cleanly in 6 minutes, and GitHub's own status
-      # page reported an Actions "degraded performance" incident that day) while API
-      # <33 hits an open upstream MockK bug unrelated to this codebase. Neither is
-      # fixable by further workflow tuning. Back to 35, the config that worked this
-      # morning, to run cleanly once the platform-side issue clears on its own.
-      - name: Run Compose instrumentation tests
-        id: instrumented_tests_1
-        timeout-minutes: 14
-        continue-on-error: true
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 35
-          arch: x86_64
-          disable-animations: true
-          script: ./gradlew :app:connectedDebugAndroidTest --no-daemon --no-parallel
+      - name: Build debug and androidTest APKs
+        run: ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --no-parallel
 
-      - name: Run Compose instrumentation tests (retry after hang/failure)
-        id: instrumented_tests_2
-        if: steps.instrumented_tests_1.outcome == 'failure'
-        timeout-minutes: 14
-        uses: reactivecircus/android-emulator-runner@v2
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
         with:
-          api-level: 35
-          arch: x86_64
-          disable-animations: true
-          script: ./gradlew :app:connectedDebugAndroidTest --no-daemon --no-parallel
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KEY }}
 
-      # Per-test failures live only in these reports; without them a red
-      # emulator job says "there were failing tests" and nothing else.
-      - name: Upload instrumentation test report
-        if: always()
-        uses: actions/upload-artifact@v7
+      - name: Set up gcloud CLI
+        uses: google-github-actions/setup-gcloud@v2
         with:
-          name: instrumentation-test-report
-          path: |
-            app/build/reports/androidTests/connected/
-            app/build/outputs/androidTest-results/connected/
-          if-no-files-found: warn
+          project_id: net-swiss-knife
+
+      # One virtual device on the no-cost Spark-plan quota (10 virtual-device test
+      # runs/day) — enough for normal CI usage without needing the Blaze plan.
+      - name: Run instrumented tests on Firebase Test Lab
+        run: |
+          gcloud firebase test android run \
+            --type instrumentation \
+            --app app/build/outputs/apk/debug/app-debug.apk \
+            --test app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk \
+            --device model=MediumPhone.arm,version=34,locale=en,orientation=portrait \
+            --timeout 15m \
+            --no-record-video \
+            --num-flaky-test-attempts=0
 
   codeql:
     runs-on: ubuntu-latest
