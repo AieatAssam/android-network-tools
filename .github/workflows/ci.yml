@@ -121,21 +121,21 @@ jobs:
       # burns the entire budget and no retry ever runs. Two independent steps, each
       # separately timed out, give a real "kill the hang, try once more" behavior.
       #
-      # api-level 35 x86_64 default — tried api-level 29/google_apis/"Nexus 6" (a
-      # documented reactivecircus/android-emulator-runner recipe) as a materially
-      # different image after every 35 config hung for hours; that run finally
-      # completed without hanging (platform trouble clearing) but surfaced a real
-      # incompatibility instead: NoClassDefFoundError on android.app.PictureInPicture-
-      # UiState, a class MockK's Android proxy reflects over on Activity lifecycle
-      # callbacks that doesn't exist until a later API level than 29. Back to 35, the
-      # config that ran cleanly this morning, now that hangs appear to have cleared.
+      # api-level 33 (default) — 35 hung for the full 14-minute timeout on every
+      # attempt today, including going back to the literal config that worked this
+      # morning, while a completely different level (29, tried as a documented
+      # reactivecircus recipe) finished in minutes with no hang at all — pointing at
+      # something specific to the API-35 x86_64 image right now, not generic runner
+      # flakiness. 29 itself is incompatible (MockK's Android proxy needs
+      # android.app.PictureInPictureUiState, added after API 29). 33 is new enough
+      # for that and a heavily used, well-tested level on GitHub-hosted runners.
       - name: Run Compose instrumentation tests
         id: instrumented_tests_1
         timeout-minutes: 14
         continue-on-error: true
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 35
+          api-level: 33
           arch: x86_64
           disable-animations: true
           script: ./gradlew :app:connectedDebugAndroidTest --no-daemon --no-parallel
@@ -146,7 +146,7 @@ jobs:
         timeout-minutes: 14
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 35
+          api-level: 33
           arch: x86_64
           disable-animations: true
           script: ./gradlew :app:connectedDebugAndroidTest --no-daemon --no-parallel
