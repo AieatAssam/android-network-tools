@@ -70,16 +70,25 @@ jobs:
   instrumented-tests:
     runs-on: ubuntu-latest
     # The emulator occasionally hangs on boot (or mid-test-run) on GitHub-hosted runners
-    # (KVM/nested-virtualization flakiness, transient emulator rendering errors) with no
-    # output for hours since the step has no timeout of its own. Bound the job so a hang
-    # fails fast instead of idling for the default 6-hour job limit.
-    timeout-minutes: 35
-    # avdmanager and emulator can disagree on the default AVD directory (HOME vs XDG
-    # config locations depending on cmdline-tools version), which silently created the
-    # AVD in a place `emulator -avd ci_test` didn't look, failing with "Unknown AVD
-    # name" — pin it explicitly so both tools always agree.
-    env:
-      ANDROID_AVD_HOME: /home/runner/.android/avd
+    # (KVM/nested-virtualization flakiness) with no output for hours since the step has
+    # no timeout of its own. Bound the job so a hang fails fast instead of idling for the
+    # default 6-hour job limit.
+    #
+    # This job briefly replaced android-emulator-runner with a hand-rolled emulator
+    # lifecycle (sdkmanager/avdmanager/emulator/adb) after that action's kill/teardown
+    # logic hung on several consecutive runs, matching the open, unresolved
+    # ReactiveCircus/android-emulator-runner#385. That rewrite fixed the teardown hang
+    # (confirmed: boot ~40s, force-kill ~2s) but traded it for a different one —
+    # connectedDebugAndroidTest hung with zero output even after dismissing the
+    # keyguard, for a cause not fully identified. Meanwhile the very first run of the
+    # day, on the unmodified action, completed cleanly in 6 minutes with a real test
+    # failure — and GitHub's own status page reported an Actions "degraded
+    # performance" incident the same day. That points to transient platform
+    # degradation rather than a fundamentally broken setup, so reverted to the action
+    # and kept only the genuinely load-bearing fix: native per-step timeout-minutes
+    # (not a third-party retry wrapper — see the "Run Compose instrumentation tests"
+    # steps below for why) so a future hang fails in ~14 minutes instead of hours.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-java@v5
@@ -106,87 +115,32 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      # reactivecircus/android-emulator-runner's own kill/teardown logic hung
-      # indefinitely on this runner in every recent attempt — matches the open,
-      # unresolved ReactiveCircus/android-emulator-runner#385 ("hangs after
-      # killing emulator with stop: not implemented") — reproducing regardless
-      # of API level, image, disable-animations, or wrapper-level retries.
-      # Confirmed by repeated CI runs where the Gradle task itself finished
-      # ("BUILD SUCCESSFUL") but the wrapping step never returned. Managing the
-      # emulator's own lifecycle with plain SDK tools means teardown is a
-      # `pkill -9`, which cannot hang no matter what state the emulator is in.
-      - name: Cache Android emulator packages
-        uses: actions/cache@v5
-        with:
-          path: |
-            /usr/local/lib/android/sdk/emulator
-            /usr/local/lib/android/sdk/system-images
-          key: android-emulator-34-google_apis-x86_64
-
-      - name: Install emulator and system image
-        run: |
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "emulator" "system-images;android-34;google_apis;x86_64" > /dev/null
-
-      - name: Create AVD
-        run: |
-          mkdir -p "$ANDROID_AVD_HOME"
-          echo "no" | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd \
-            --force -n ci_test -k "system-images;android-34;google_apis;x86_64"
-          if [ ! -f "$ANDROID_AVD_HOME/ci_test.ini" ]; then
-            echo "::error::avdmanager did not create $ANDROID_AVD_HOME/ci_test.ini"
-            find / -maxdepth 6 -name 'ci_test.ini' 2>/dev/null
-            exit 1
-          fi
-
-      - name: Boot emulator
-        timeout-minutes: 8
-        run: |
-          nohup "$ANDROID_HOME/emulator/emulator" -avd ci_test -no-window \
-            -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim \
-            > "$RUNNER_TEMP/emulator.log" 2>&1 &
-          EMULATOR_PID=$!
-          echo "$EMULATOR_PID" > "$RUNNER_TEMP/emulator.pid"
-          # adb wait-for-device blocks forever if the emulator process died before
-          # binding its port, so check liveness on every poll instead of trusting it.
-          for i in $(seq 1 160); do
-            if ! kill -0 "$EMULATOR_PID" 2>/dev/null; then
-              echo "::error::emulator process exited before boot completed; log follows:"
-              cat "$RUNNER_TEMP/emulator.log"
-              exit 1
-            fi
-            if [ "$("$ANDROID_HOME/platform-tools/adb" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; then
-              exit 0
-            fi
-            sleep 3
-          done
-          echo "::error::emulator did not report boot_completed within the timeout; log follows:"
-          cat "$RUNNER_TEMP/emulator.log"
-          exit 1
-
-      # android-emulator-runner normally does this for us: a freshly booted headless
-      # AVD comes up at the keyguard, which blocks instrumentation tests from getting
-      # window focus. Without dismissing it, connectedDebugAndroidTest's install step
-      # completes but the actual test run hangs indefinitely with no output at all —
-      # exactly what happened before this step existed.
-      - name: Prepare device for instrumentation
-        run: |
-          "$ANDROID_HOME/platform-tools/adb" shell input keyevent 82
-          "$ANDROID_HOME/platform-tools/adb" shell wm dismiss-keyguard || true
-          "$ANDROID_HOME/platform-tools/adb" shell settings put global window_animation_scale 0
-          "$ANDROID_HOME/platform-tools/adb" shell settings put global transition_animation_scale 0
-          "$ANDROID_HOME/platform-tools/adb" shell settings put global animator_duration_scale 0
-
+      # A single native GitHub Actions timeout-minutes per step (not a third-party
+      # wrapper) is what actually bounds a hung attempt: Wandalen/wretry.action's own
+      # time_out caps the whole step across every retry, so one hung first attempt
+      # burns the entire budget and no retry ever runs. Two independent steps, each
+      # separately timed out, give a real "kill the hang, try once more" behavior.
       - name: Run Compose instrumentation tests
+        id: instrumented_tests_1
         timeout-minutes: 14
-        run: ./gradlew :app:connectedDebugAndroidTest --no-daemon --no-parallel
+        continue-on-error: true
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          disable-animations: true
+          script: ./gradlew :app:connectedDebugAndroidTest --no-daemon --no-parallel
 
-      - name: Force-stop emulator
-        if: always()
-        run: |
-          "$ANDROID_HOME/platform-tools/adb" -s emulator-5554 emu kill || true
-          sleep 2
-          pkill -9 -f "qemu-system" || true
+      - name: Run Compose instrumentation tests (retry after hang/failure)
+        id: instrumented_tests_2
+        if: steps.instrumented_tests_1.outcome == 'failure'
+        timeout-minutes: 14
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          disable-animations: true
+          script: ./gradlew :app:connectedDebugAndroidTest --no-daemon --no-parallel
 
       # Per-test failures live only in these reports; without them a red
       # emulator job says "there were failing tests" and nothing else.
