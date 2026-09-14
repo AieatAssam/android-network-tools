@@ -164,6 +164,19 @@ jobs:
           cat "$RUNNER_TEMP/emulator.log"
           exit 1
 
+      # android-emulator-runner normally does this for us: a freshly booted headless
+      # AVD comes up at the keyguard, which blocks instrumentation tests from getting
+      # window focus. Without dismissing it, connectedDebugAndroidTest's install step
+      # completes but the actual test run hangs indefinitely with no output at all —
+      # exactly what happened before this step existed.
+      - name: Prepare device for instrumentation
+        run: |
+          "$ANDROID_HOME/platform-tools/adb" shell input keyevent 82
+          "$ANDROID_HOME/platform-tools/adb" shell wm dismiss-keyguard || true
+          "$ANDROID_HOME/platform-tools/adb" shell settings put global window_animation_scale 0
+          "$ANDROID_HOME/platform-tools/adb" shell settings put global transition_animation_scale 0
+          "$ANDROID_HOME/platform-tools/adb" shell settings put global animator_duration_scale 0
+
       - name: Run Compose instrumentation tests
         timeout-minutes: 14
         run: ./gradlew :app:connectedDebugAndroidTest --no-daemon --no-parallel
