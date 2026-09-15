@@ -136,12 +136,12 @@ jobs:
       - name: Fetch raw Test Lab results for diagnostics
         if: always()
         run: |
-          BUCKET=$(gsutil ls | grep '^gs://test-lab-' | head -n1)
+          BUCKET="gs://test-lab-4xckf3z15h5yx-n76c7z1q1qifw"
           echo "Using bucket: $BUCKET"
-          gsutil ls -r "${BUCKET}run-${{ github.run_id }}/" || true
-          gsutil cat "${BUCKET}run-${{ github.run_id }}/**/instrumentation.results" 2>&1 | tail -300 || true
+          gsutil ls -r "${BUCKET}/run-${{ github.run_id }}/" || true
+          gsutil cat "${BUCKET}/run-${{ github.run_id }}/**/instrumentation.results" 2>&1 | tail -300 || true
           echo "--- logcat (TestRunner/INSTRUMENTATION_STATUS/AndroidRuntime/ANR) ---"
-          gsutil cat "${BUCKET}run-${{ github.run_id }}/**/logcat" 2>&1 | grep -iE "TestRunner|INSTRUMENTATION_STATUS|AndroidRuntime|ANR|FATAL" | tail -300 || true
+          gsutil cat "${BUCKET}/run-${{ github.run_id }}/**/logcat" 2>&1 | grep -iE "TestRunner|INSTRUMENTATION_STATUS|AndroidRuntime|ANR|FATAL" | tail -300 || true
 
       - name: Fail job if Test Lab run failed
         if: steps.test_lab.outcome == 'failure'
