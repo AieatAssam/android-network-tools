@@ -138,13 +138,6 @@ jobs:
             --num-flaky-test-attempts=0 \
             --results-dir=run-${{ github.run_id }}
 
-      # TEMPORARY diagnostic step: check what's still failing after the last batch.
-      - name: Fetch raw Test Lab results for diagnostics
-        if: always()
-        run: |
-          BUCKET="gs://test-lab-4xckf3z15h5yx-n76c7z1q1qifw"
-          gsutil cat "${BUCKET}/run-${{ github.run_id }}/**/instrumentation.results" 2>&1 | tail -600 || true
-
       - name: Fail job if Test Lab run failed
         if: steps.test_lab.outcome == 'failure'
         run: exit 1
