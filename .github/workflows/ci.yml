@@ -114,6 +114,8 @@ jobs:
       # state from one test can't leak into the next; requires AndroidJUnitRunner
       # 1.1+, already satisfied by androidx.test.ext:junit 1.3.0 (app/build.gradle.kts).
       - name: Run instrumented tests on Firebase Test Lab
+        id: test_lab
+        continue-on-error: true
         run: |
           gcloud firebase test android run \
             --type instrumentation \
@@ -123,7 +125,27 @@ jobs:
             --use-orchestrator \
             --timeout 15m \
             --no-record-video \
-            --num-flaky-test-attempts=0
+            --num-flaky-test-attempts=0 \
+            --results-dir=run-${{ github.run_id }}
+
+      # TEMPORARY diagnostic step: the run has twice timed out at the full 15-minute
+      # budget with no per-test detail in the CLI's summary table, and local emulator
+      # reproduction has been unreliable (unrelated sandbox instability). Dump the raw
+      # am-instrument output and logcat from the run's own results bucket so the exact
+      # test executing at the timeout is visible directly in this job's log.
+      - name: Fetch raw Test Lab results for diagnostics
+        if: always()
+        run: |
+          BUCKET=$(gsutil ls | grep '^gs://test-lab-' | head -n1)
+          echo "Using bucket: $BUCKET"
+          gsutil ls -r "${BUCKET}run-${{ github.run_id }}/" || true
+          gsutil cat "${BUCKET}run-${{ github.run_id }}/**/instrumentation.results" 2>&1 | tail -300 || true
+          echo "--- logcat (TestRunner/INSTRUMENTATION_STATUS/AndroidRuntime/ANR) ---"
+          gsutil cat "${BUCKET}run-${{ github.run_id }}/**/logcat" 2>&1 | grep -iE "TestRunner|INSTRUMENTATION_STATUS|AndroidRuntime|ANR|FATAL" | tail -300 || true
+
+      - name: Fail job if Test Lab run failed
+        if: steps.test_lab.outcome == 'failure'
+        run: exit 1
 
   codeql:
     runs-on: ubuntu-latest
