@@ -84,10 +84,14 @@ class TopologyDiscoveryScreenTest {
                 TopologyDiscoveryScreen(viewModel = fakeViewModel(flow = stateFlow))
             }
         }
+        // Node labels are positioned via absolute canvas offsets computed from screen
+        // size, which isn't reliably assertable across devices — assert via the
+        // scanning badge's node count instead, which is fixed at TopEnd and reflects
+        // the same accumulating `nodes` list.
         composeRule.mainClock.advanceTimeBy(500L)
-        composeRule.onNodeWithText("core-switch").assertIsDisplayed()
+        composeRule.onNodeWithText(scanningBadgeText(1)).assertIsDisplayed()
 
-        // A second node arrives; the first must still be present (accumulation, not reset).
+        // A second node arrives; the count must grow (accumulation, not reset).
         stateFlow.value = TopologyUiState.Discovering(
             nodes = listOf(fakeNode("10.0.0.1", "core-switch"), fakeNode("10.0.0.2", "edge-router")),
             links = emptyList(),
@@ -95,9 +99,11 @@ class TopologyDiscoveryScreenTest {
             nodesDone = 2
         )
         composeRule.mainClock.advanceTimeBy(500L)
-        composeRule.onNodeWithText("core-switch").assertIsDisplayed()
-        composeRule.onNodeWithText("edge-router").assertIsDisplayed()
+        composeRule.onNodeWithText(scanningBadgeText(2)).assertIsDisplayed()
     }
+
+    private fun scanningBadgeText(count: Int): String =
+        context.resources.getQuantityString(R.plurals.topology_scanning_badge, count, count)
 
     @Test
     fun communityPasswordToggle_switchesVisibilityIcon() {
@@ -152,7 +158,9 @@ class TopologyDiscoveryScreenTest {
             }
         }
 
-        composeRule.mainClock.advanceTimeBy(500L)
+        // ModalBottomSheet needs more than one short tick to complete its own expand
+        // animation before its content is composed/reachable.
+        composeRule.mainClock.advanceTimeBy(1_000L)
         composeRule
             .onNodeWithText(context.getString(R.string.topology_node_detail_system))
             .performScrollTo()

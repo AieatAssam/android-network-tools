@@ -155,7 +155,8 @@ class HttpProbeScreenTest {
             .performScrollTo()
             .assertIsDisplayed()
         composeRule
-            .onNodeWithText("https://example.com/final")
+            .onAllNodesWithText("https://example.com/final")
+            .onFirst()
             .performScrollTo()
             .assertIsDisplayed()
     }

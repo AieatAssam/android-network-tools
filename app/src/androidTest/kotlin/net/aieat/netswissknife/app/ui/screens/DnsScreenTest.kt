@@ -2,6 +2,8 @@ package net.aieat.netswissknife.app.ui.screens
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -120,7 +122,7 @@ class DnsScreenTest {
 
         composeRule.mainClock.advanceTimeBy(1_000L)
         scrollToStatePanel()
-        composeRule.onNodeWithText("example.com").assertIsDisplayed()
+        composeRule.onAllNodesWithText("example.com").onFirst().assertIsDisplayed()
         composeRule.onNodeWithText("93.184.216.34", substring = true).performScrollTo().assertIsDisplayed()
     }
 

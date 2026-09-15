@@ -103,15 +103,15 @@ class TracerouteScreenTest {
         }
 
         composeRule.mainClock.advanceTimeBy(2_000L)
-        composeRule.onNodeWithText("10.0.0.1").assertIsDisplayed()
+        composeRule.onNodeWithText("10.0.0.1").performScrollTo().assertIsDisplayed()
 
         stateFlow.value = TracerouteUiState.Running(
             host = "example.com",
             hops = listOf(fakeHop(1, "10.0.0.1"), fakeHop(2, "10.0.0.2"))
         )
         composeRule.mainClock.advanceTimeBy(500L)
-        composeRule.onNodeWithText("10.0.0.1").assertIsDisplayed()
-        composeRule.onNodeWithText("10.0.0.2").assertIsDisplayed()
+        composeRule.onNodeWithText("10.0.0.1").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("10.0.0.2").performScrollTo().assertIsDisplayed()
     }
 
     @Test

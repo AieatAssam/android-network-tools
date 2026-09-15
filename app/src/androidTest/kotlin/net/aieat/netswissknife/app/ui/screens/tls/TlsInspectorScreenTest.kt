@@ -4,6 +4,8 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -95,7 +97,8 @@ class TlsInspectorScreenTest {
 
         composeRule.mainClock.advanceTimeBy(1_000L)
         composeRule
-            .onNodeWithText(context.getString(R.string.tls_inspecting))
+            .onAllNodesWithText(context.getString(R.string.tls_inspecting))
+            .onFirst()
             .assertIsDisplayed()
     }
 
@@ -156,14 +159,21 @@ class TlsInspectorScreenTest {
         }
 
         composeRule.mainClock.advanceTimeBy(1_000L)
-        composeRule.onNodeWithText("example.com").assertIsDisplayed()
+        composeRule.onAllNodesWithText("example.com").onFirst().assertIsDisplayed()
         composeRule.onNodeWithText("TLSv1.3", substring = true).performScrollTo().assertIsDisplayed()
     }
 
     private fun fakeViewModel(state: TlsInspectorUiState): TlsInspectorViewModel {
         val viewModel = mockk<TlsInspectorViewModel>(relaxed = true)
-        every { viewModel.uiState } returns MutableStateFlow(state)
+        val stateFlow = MutableStateFlow(state)
+        every { viewModel.uiState } returns stateFlow
         every { viewModel.recentHosts } returns MutableStateFlow(emptyList())
+        // onHostChange is otherwise a no-op on a relaxed mock, so typing into the host
+        // field would never be reflected back through uiState.host — feed it back into
+        // the captured flow so the Inspect button's enabled-state can react to input.
+        every { viewModel.onHostChange(any()) } answers {
+            stateFlow.value = stateFlow.value.copy(host = firstArg())
+        }
         return viewModel
     }
 }

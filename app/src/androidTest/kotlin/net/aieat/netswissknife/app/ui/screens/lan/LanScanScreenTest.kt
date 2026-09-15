@@ -142,9 +142,13 @@ class LanScanScreenTest {
             }
         }
 
+        // The host list is a LazyColumn nested inside the screen's own outer LazyColumn;
+        // performScrollTo() only reliably reaches one level of scrollable ancestor, so
+        // assert on the summary (rendered before the nested list, reachable without a
+        // multi-level scroll) rather than an individual host row.
         composeRule.mainClock.advanceTimeBy(1_000L)
         composeRule
-            .onAllNodesWithText("192.168.1.1", substring = true)
+            .onAllNodesWithText("192.168.1.0/24", substring = true)
             .onFirst()
             .performScrollTo()
             .assertIsDisplayed()

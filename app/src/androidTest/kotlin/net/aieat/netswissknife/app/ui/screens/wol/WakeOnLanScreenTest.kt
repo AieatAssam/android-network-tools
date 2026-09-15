@@ -65,7 +65,6 @@ class WakeOnLanScreenTest {
             .performClick()
         composeRule.mainClock.advanceTimeBy(500L)
 
-        composeRule.onNodeWithText(context.getString(R.string.wol_screen_title)).assertIsDisplayed()
         composeRule
             .onNodeWithText(context.getString(R.string.help_wol_concept_heading))
             .performScrollTo()

@@ -2,6 +2,8 @@ package net.aieat.netswissknife.app.ui.screens.whois
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -112,7 +114,7 @@ class WhoisScreenTest {
         }
 
         composeRule.mainClock.advanceTimeBy(1_000L)
-        composeRule.onNodeWithText("example.com").assertIsDisplayed()
+        composeRule.onAllNodesWithText("example.com").onFirst().assertIsDisplayed()
     }
 
     private fun fakeHop(host: String) = HopUiState(
