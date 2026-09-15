@@ -73,6 +73,7 @@ class WifiScanScreenTest {
 
         composeRule
             .onNodeWithText(context.getString(R.string.help_wifi_concept_heading))
+            .performScrollTo()
             .assertIsDisplayed()
     }
 

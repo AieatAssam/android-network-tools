@@ -56,6 +56,7 @@ class TlsInspectorScreenTest {
 
         composeRule
             .onNodeWithText(context.getString(R.string.help_tls_concept_heading))
+            .performScrollTo()
             .assertIsDisplayed()
     }
 

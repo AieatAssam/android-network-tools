@@ -65,6 +65,7 @@ class TopologyDiscoveryScreenTest {
 
         composeRule
             .onNodeWithText(context.getString(R.string.help_topology_concept_heading))
+            .performScrollTo()
             .assertIsDisplayed()
     }
 

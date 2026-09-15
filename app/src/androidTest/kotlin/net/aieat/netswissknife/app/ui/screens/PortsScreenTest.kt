@@ -97,6 +97,7 @@ class PortsScreenTest {
 
         composeRule
             .onNodeWithText(context.getString(R.string.help_portscan_concept_heading))
+            .performScrollTo()
             .assertIsDisplayed()
     }
 

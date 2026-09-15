@@ -100,6 +100,7 @@ class PingScreenTest {
 
         composeRule
             .onNodeWithText(context.getString(R.string.help_ping_concept_heading))
+            .performScrollTo()
             .assertIsDisplayed()
     }
 

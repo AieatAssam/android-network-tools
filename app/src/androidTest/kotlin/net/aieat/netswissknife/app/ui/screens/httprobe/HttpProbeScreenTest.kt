@@ -58,6 +58,7 @@ class HttpProbeScreenTest {
 
         composeRule
             .onNodeWithText(context.getString(R.string.help_httprobe_concept_heading))
+            .performScrollTo()
             .assertIsDisplayed()
     }
 

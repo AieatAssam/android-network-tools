@@ -55,6 +55,7 @@ class WhoisScreenTest {
 
         composeRule
             .onNodeWithText(context.getString(R.string.help_whois_concept_heading))
+            .performScrollTo()
             .assertIsDisplayed()
     }
 

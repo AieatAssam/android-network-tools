@@ -69,6 +69,7 @@ class LanScanScreenTest {
 
         composeRule
             .onNodeWithText(context.getString(R.string.help_lan_concept_heading))
+            .performScrollTo()
             .assertIsDisplayed()
     }
 

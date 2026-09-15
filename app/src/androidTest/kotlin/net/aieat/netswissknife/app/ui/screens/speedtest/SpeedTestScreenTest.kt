@@ -56,6 +56,7 @@ class SpeedTestScreenTest {
 
         composeRule
             .onNodeWithText(context.getString(R.string.help_speedtest_concept_heading))
+            .performScrollTo()
             .assertIsDisplayed()
     }
 

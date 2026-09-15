@@ -7,6 +7,7 @@ import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import io.mockk.every
@@ -91,6 +92,7 @@ class SubnetCalculatorScreenTest {
 
         composeRule
             .onNodeWithText(context.getString(R.string.help_subnet_concept_heading))
+            .performScrollTo()
             .assertIsDisplayed()
     }
 

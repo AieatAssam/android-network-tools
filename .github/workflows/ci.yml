@@ -110,42 +110,30 @@ jobs:
           project_id: net-swiss-knife
 
       # One virtual device, well within Test Lab's daily quota for normal CI usage.
-      # --use-orchestrator runs each test in its own instrumentation instance so
-      # state from one test can't leak into the next; requires AndroidJUnitRunner
-      # 1.1+, already satisfied by androidx.test.ext:junit 1.3.0 (app/build.gradle.kts).
+      #
+      # No --use-orchestrator: diagnosed via a raw-results dump (gsutil cat on the run's
+      # own GCS logcat) that the orchestrator process itself was crashing mid-suite —
+      # `FATAL EXCEPTION: AndroidTestOrchestrator ... ClientNotConnected` in
+      # androidx.test.services.shellexecutor.ShellExecutorImpl, roughly 20 sequential
+      # per-test instrumentation processes in. Once that shell-executor connection drops,
+      # orchestrator can no longer relay the currently-running test's result, so it hangs
+      # until the outer --timeout kills the whole run — a real instrumentation.results log
+      # showed one test (`started:` with no matching `finished:`) sitting for 8+ minutes
+      # before the crash. This is orchestrator infrastructure flakiness on long sequential
+      # runs, not a bug in any test here. Running without it (single shared instrumentation
+      # process, the original androidx.test.runner.AndroidJUnitRunner behavior) avoids the
+      # crash entirely; per-test state isolation isn't load-bearing here since every test
+      # mocks its own ViewModel fresh rather than relying on shared static state.
       - name: Run instrumented tests on Firebase Test Lab
-        id: test_lab
-        continue-on-error: true
         run: |
           gcloud firebase test android run \
             --type instrumentation \
             --app app/build/outputs/apk/debug/app-debug.apk \
             --test app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk \
             --device model=MediumPhone.arm,version=34,locale=en,orientation=portrait \
-            --use-orchestrator \
             --timeout 15m \
             --no-record-video \
-            --num-flaky-test-attempts=0 \
-            --results-dir=run-${{ github.run_id }}
-
-      # TEMPORARY diagnostic step: the run has twice timed out at the full 15-minute
-      # budget with no per-test detail in the CLI's summary table, and local emulator
-      # reproduction has been unreliable (unrelated sandbox instability). Dump the raw
-      # am-instrument output and logcat from the run's own results bucket so the exact
-      # test executing at the timeout is visible directly in this job's log.
-      - name: Fetch raw Test Lab results for diagnostics
-        if: always()
-        run: |
-          BUCKET="gs://test-lab-4xckf3z15h5yx-n76c7z1q1qifw"
-          echo "Using bucket: $BUCKET"
-          gsutil ls -r "${BUCKET}/run-${{ github.run_id }}/" || true
-          gsutil cat "${BUCKET}/run-${{ github.run_id }}/**/instrumentation.results" 2>&1 | tail -300 || true
-          echo "--- logcat (TestRunner/INSTRUMENTATION_STATUS/AndroidRuntime/ANR) ---"
-          gsutil cat "${BUCKET}/run-${{ github.run_id }}/**/logcat" 2>&1 | grep -iE "TestRunner|INSTRUMENTATION_STATUS|AndroidRuntime|ANR|FATAL" | tail -300 || true
-
-      - name: Fail job if Test Lab run failed
-        if: steps.test_lab.outcome == 'failure'
-        run: exit 1
+            --num-flaky-test-attempts=0
 
   codeql:
     runs-on: ubuntu-latest

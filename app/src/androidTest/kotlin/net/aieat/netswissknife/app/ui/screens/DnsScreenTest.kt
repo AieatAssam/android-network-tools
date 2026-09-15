@@ -58,6 +58,7 @@ class DnsScreenTest {
 
         composeRule
             .onNodeWithText(context.getString(R.string.help_dns_concept_heading))
+            .performScrollTo()
             .assertIsDisplayed()
         composeRule
             .onNodeWithText(context.getString(R.string.help_dns_concept_body))
