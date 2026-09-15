@@ -151,7 +151,13 @@ class TracerouteScreenTest {
 
     @Test
     fun finishedState_displaysHopResults() {
-        val hops = listOf(fakeHop(1, "10.0.0.1"), fakeHop(2, "93.184.216.34"))
+        // resolvedIp must differ from every hop's IP: TraceStatsSummary renders resolvedIp
+        // and HopDetailList renders each hop's IP separately, so a shared value produces two
+        // nodes with identical text. onNodeWithText's single-match resolution doesn't fail
+        // fast on that ambiguity the way a plain assertIsDisplayed() does — chained through
+        // performScrollTo() it was observed to hang instead (reproduced independently both
+        // locally and on Firebase Test Lab, where it ran out the full 15-minute timeout).
+        val hops = listOf(fakeHop(1, "10.0.0.1"), fakeHop(2, "10.0.0.2"))
         val result = TracerouteResult(
             host = "example.com",
             resolvedIp = "93.184.216.34",
@@ -166,7 +172,7 @@ class TracerouteScreenTest {
         }
 
         composeRule.mainClock.advanceTimeBy(2_000L)
-        composeRule.onNodeWithText("93.184.216.34").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("10.0.0.2").performScrollTo().assertIsDisplayed()
     }
 
     private fun fakeHop(hopNumber: Int, ip: String) = HopResult(
