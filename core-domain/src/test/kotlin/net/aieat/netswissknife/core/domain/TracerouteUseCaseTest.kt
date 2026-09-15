@@ -157,6 +157,21 @@ class TracerouteUseCaseTest {
         }
 
         @Test
+        fun `geo lookup failure on one hop does not abort the rest of the trace`() = runTest {
+            every { tracerouteRepo.trace(any(), any(), any(), any(), any(), any()) } returns flowOf(hop1, hop2)
+            coEvery { geoRepo.lookup("192.168.1.1") } throws java.io.IOException("geo service unreachable")
+            coEvery { geoRepo.lookup("8.8.8.8") } returns geo
+
+            val results = useCase(TracerouteParams("google.com")).toList()
+
+            assertEquals(2, results.size)
+            val failedHop = (results[0] as TracerouteFlowResult.Hop).hop
+            assertEquals(null, failedHop.geoLocation)
+            val okHop = (results[1] as TracerouteFlowResult.Hop).hop
+            assertEquals(geo, okHop.geoLocation)
+        }
+
+        @Test
         fun `IPv4 address is accepted as valid host`() = runTest {
             every { tracerouteRepo.trace(any(), any(), any(), any(), any(), any()) } returns flowOf(hop1)
             coEvery { geoRepo.lookup(any()) } returns null

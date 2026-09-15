@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Legacy full-backup-content ruleset (Android <12 / API <31). Excludes the debug
+  log (network diagnostic output, verbose in debug builds) and the app_prefs
+  DataStore (recent host/scan history) from Auto Backup and adb backup, so a
+  device backup or restore-to-new-device flow doesn't carry this device's
+  network activity along with it.
+-->
+<full-backup-content>
+    <exclude domain="file" path="debug.log" />
+    <exclude domain="file" path="debug.log.bak" />
+    <exclude domain="file" path="datastore/app_prefs.preferences_pb" />
+</full-backup-content>

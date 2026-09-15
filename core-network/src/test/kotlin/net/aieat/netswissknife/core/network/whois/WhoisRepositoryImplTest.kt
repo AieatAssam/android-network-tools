@@ -36,6 +36,38 @@ class WhoisRepositoryImplTest {
     }
 }
 
+@DisplayName("WhoisRepositoryImpl – referral SSRF guard")
+class WhoisRepositoryReferralGuardTest {
+
+    private val repo = WhoisRepositoryImpl()
+
+    @Test
+    @DisplayName("loopback referral address is rejected")
+    fun `loopback referral address is rejected`() {
+        assertTrue(repo.isDisallowedReferralAddress(java.net.InetAddress.getByName("127.0.0.1")))
+    }
+
+    @Test
+    @DisplayName("private RFC1918 referral address is rejected")
+    fun `private RFC1918 referral address is rejected`() {
+        assertTrue(repo.isDisallowedReferralAddress(java.net.InetAddress.getByName("192.168.1.1")))
+        assertTrue(repo.isDisallowedReferralAddress(java.net.InetAddress.getByName("10.0.0.1")))
+        assertTrue(repo.isDisallowedReferralAddress(java.net.InetAddress.getByName("172.16.0.1")))
+    }
+
+    @Test
+    @DisplayName("link-local referral address is rejected")
+    fun `link-local referral address is rejected`() {
+        assertTrue(repo.isDisallowedReferralAddress(java.net.InetAddress.getByName("169.254.169.254")))
+    }
+
+    @Test
+    @DisplayName("public referral address is allowed")
+    fun `public referral address is allowed`() {
+        assertTrue(!repo.isDisallowedReferralAddress(java.net.InetAddress.getByName("8.8.8.8")))
+    }
+}
+
 @DisplayName("WhoisRepositoryImpl – subdomain normalisation")
 class WhoisRegistrableDomainTest {
 

@@ -4,17 +4,20 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
 import net.aieat.netswissknife.core.domain.WhoisLookupUseCase
+import net.aieat.netswissknife.core.domain.WhoisParams
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.whois.WhoisHop
 import net.aieat.netswissknife.core.network.whois.WhoisQueryType
@@ -124,6 +127,32 @@ class WhoisViewModelTest {
             viewModel.onQueryChange("  ")
             viewModel.lookup()
             assertFalse(viewModel.uiState.value.isLoading)
+        }
+
+        @Test
+        fun `a second lookup's result is not overwritten by a stale first lookup`() = runTest {
+            val firstResultReady = CompletableDeferred<Unit>()
+            coEvery { whoisLookupUseCase(WhoisParams(query = "first.com")) } coAnswers {
+                firstResultReady.await()
+                NetworkResult.Success(stubResult.copy(domainName = "first.com"))
+            }
+            coEvery { whoisLookupUseCase(WhoisParams(query = "second.com")) } returns
+                NetworkResult.Success(stubResult.copy(domainName = "second.com"))
+
+            viewModel.onQueryChange("first.com")
+            viewModel.lookup()
+
+            viewModel.onQueryChange("second.com")
+            viewModel.lookup()
+
+            assertEquals("second.com", viewModel.uiState.value.result?.domainName)
+
+            // The stale first lookup's use-case call finally resolves late — it must
+            // not be allowed to overwrite the second (newer) lookup's result.
+            firstResultReady.complete(Unit)
+            runCurrent()
+
+            assertEquals("second.com", viewModel.uiState.value.result?.domainName)
         }
     }
 

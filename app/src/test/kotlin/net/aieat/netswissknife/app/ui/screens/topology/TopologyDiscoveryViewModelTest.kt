@@ -4,9 +4,12 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import net.aieat.netswissknife.core.domain.TopologyDiscoveryUseCase
@@ -175,6 +178,37 @@ class TopologyDiscoveryViewModelTest {
             viewModel.deselectNode()
             assertNull((viewModel.uiState.value as TopologyUiState.Done).selectedNodeIp)
         }
+    }
+
+    @Test
+    fun `starting discovery again cancels the previous scan's collector`() = runTest {
+        val nodeA = stubNode.copy(ip = "192.168.1.10")
+        val nodeB = stubNode.copy(ip = "192.168.1.20")
+        val nodeC = stubNode.copy(ip = "192.168.1.30")
+
+        val firstChannel = Channel<TopologyDiscoveryEvent>(Channel.UNLIMITED)
+        val secondChannel = Channel<TopologyDiscoveryEvent>(Channel.UNLIMITED)
+        every { useCase.invoke(params) } returnsMany listOf(
+            firstChannel.receiveAsFlow(),
+            secondChannel.receiveAsFlow()
+        )
+
+        viewModel.startDiscovery(params)
+        firstChannel.trySend(TopologyDiscoveryEvent.NodeDiscovered(nodeA))
+        runCurrent()
+
+        viewModel.startDiscovery(params)
+        secondChannel.trySend(TopologyDiscoveryEvent.NodeDiscovered(nodeB))
+        runCurrent()
+
+        // The first scan's collector must be cancelled by the second startDiscovery
+        // call, so an event arriving late on its (stale) channel must not resurrect
+        // it and overwrite the second scan's state with the first scan's node list.
+        firstChannel.trySend(TopologyDiscoveryEvent.NodeDiscovered(nodeC))
+        runCurrent()
+
+        val finalNodes = (viewModel.uiState.value as TopologyUiState.Discovering).nodes
+        assertEquals(listOf(nodeB), finalNodes)
     }
 
     @Test

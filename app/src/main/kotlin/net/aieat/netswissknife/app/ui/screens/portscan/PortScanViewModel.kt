@@ -13,6 +13,7 @@ import net.aieat.netswissknife.core.domain.PortScanUseCase
 import net.aieat.netswissknife.core.network.portscan.PortScanResult
 import net.aieat.netswissknife.core.network.portscan.PortScanSummary
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -147,23 +148,29 @@ class PortScanViewModel @Inject constructor(
         )
 
         scanJob = viewModelScope.launch {
-            portScanUseCase(params).collect { result ->
-                when (result) {
-                    is PortScanFlowResult.ValidationError -> {
-                        _uiState.value = PortScanUiState.Error(result.message)
-                    }
-                    is PortScanFlowResult.PortScanned -> {
-                        liveResults.add(result.result)
-                        _uiState.value = PortScanUiState.Scanning(
-                            liveResults = liveResults.toList(),
-                            scannedCount = result.scannedCount,
-                            totalCount = result.totalCount
-                        )
-                    }
-                    is PortScanFlowResult.ScanComplete -> {
-                        _uiState.value = PortScanUiState.Finished(result.summary)
+            try {
+                portScanUseCase(params).collect { result ->
+                    when (result) {
+                        is PortScanFlowResult.ValidationError -> {
+                            _uiState.value = PortScanUiState.Error(result.message)
+                        }
+                        is PortScanFlowResult.PortScanned -> {
+                            liveResults.add(result.result)
+                            _uiState.value = PortScanUiState.Scanning(
+                                liveResults = liveResults.toList(),
+                                scannedCount = result.scannedCount,
+                                totalCount = result.totalCount
+                            )
+                        }
+                        is PortScanFlowResult.ScanComplete -> {
+                            _uiState.value = PortScanUiState.Finished(result.summary)
+                        }
                     }
                 }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _uiState.value = PortScanUiState.Error("Scan failed: ${e.message ?: "Unknown error"}")
             }
         }
     }

@@ -3,6 +3,7 @@ package net.aieat.netswissknife.app.ui.screens.topology
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -35,8 +36,16 @@ class TopologyDiscoveryViewModel @Inject constructor(
     private val _uiState = MutableStateFlow<TopologyUiState>(TopologyUiState.Idle)
     val uiState: StateFlow<TopologyUiState> = _uiState.asStateFlow()
 
+    private var discoveryJob: Job? = null
+
     fun startDiscovery(params: TopologyParams) {
-        viewModelScope.launch {
+        // Cancel any scan already in flight — without this, calling startDiscovery
+        // twice (double-tap, or a fresh scan started before the prior one finished)
+        // runs two collectors against the same _uiState concurrently, and the older
+        // job's own locally-accumulated node/link lists can overwrite the newer
+        // job's progress whenever it wakes up.
+        discoveryJob?.cancel()
+        discoveryJob = viewModelScope.launch {
             val nodes = mutableListOf<TopologyNode>()
             val links = mutableListOf<TopologyLink>()
             _uiState.value = TopologyUiState.Discovering(emptyList(), emptyList(), "Starting...", 0)
@@ -99,6 +108,8 @@ class TopologyDiscoveryViewModel @Inject constructor(
     }
 
     fun reset() {
+        discoveryJob?.cancel()
+        discoveryJob = null
         _uiState.value = TopologyUiState.Idle
     }
 }
