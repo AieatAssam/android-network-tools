@@ -125,8 +125,6 @@ jobs:
       # crash entirely; per-test state isolation isn't load-bearing here since every test
       # mocks its own ViewModel fresh rather than relying on shared static state.
       - name: Run instrumented tests on Firebase Test Lab
-        id: test_lab
-        continue-on-error: true
         run: |
           gcloud firebase test android run \
             --type instrumentation \
@@ -135,25 +133,7 @@ jobs:
             --device model=MediumPhone.arm,version=34,locale=en,orientation=portrait \
             --timeout 15m \
             --no-record-video \
-            --num-flaky-test-attempts=0 \
-            --results-dir=run-${{ github.run_id }}
-
-      # TEMPORARY diagnostic step: removing --use-orchestrator (which fixed a confirmed,
-      # separate orchestrator-crash bug) did not resolve the timeout — there is a second,
-      # independent hang somewhere in the suite. Dump the raw am-instrument output/logcat
-      # from the run's own results bucket so the exact test executing at the timeout is
-      # visible directly in this job's log.
-      - name: Fetch raw Test Lab results for diagnostics
-        if: always()
-        run: |
-          BUCKET="gs://test-lab-4xckf3z15h5yx-n76c7z1q1qifw"
-          gsutil cat "${BUCKET}/run-${{ github.run_id }}/**/instrumentation.results" 2>&1 | tail -100 || true
-          echo "--- logcat (TestRunner/AndroidRuntime/ANR/FATAL) ---"
-          gsutil cat "${BUCKET}/run-${{ github.run_id }}/**/logcat" 2>&1 | grep -iE "TestRunner|AndroidRuntime|ANR|FATAL" | tail -300 || true
-
-      - name: Fail job if Test Lab run failed
-        if: steps.test_lab.outcome == 'failure'
-        run: exit 1
+            --num-flaky-test-attempts=0
 
   codeql:
     runs-on: ubuntu-latest
