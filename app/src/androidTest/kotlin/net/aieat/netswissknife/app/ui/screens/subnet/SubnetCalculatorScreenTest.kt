@@ -4,11 +4,16 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
+import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.theme.NetSwissKnifeTheme
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.subnet.SubnetCalculatorRepositoryImpl
@@ -25,6 +30,8 @@ import org.junit.runner.RunWith
 class SubnetCalculatorScreenTest {
     @get:Rule
     val composeRule = createComposeRule()
+
+    private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
 
     @Before
     fun pauseAnimationClock() {
@@ -65,6 +72,72 @@ class SubnetCalculatorScreenTest {
 
         composeRule.mainClock.advanceTimeBy(1_000L)
         composeRule.onNodeWithText(message).assertIsDisplayed()
+    }
+
+    @Test
+    fun helpSheet_showsConceptHeading() {
+        val viewModel = fakeSubnetViewModel(SubnetCalculatorUiState())
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                SubnetCalculatorScreen(viewModel = viewModel)
+            }
+        }
+
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        composeRule
+            .onNodeWithContentDescription(context.getString(R.string.action_help))
+            .performClick()
+        composeRule.mainClock.advanceTimeBy(500L)
+
+        composeRule
+            .onNodeWithText(context.getString(R.string.help_subnet_concept_heading))
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun cidrMode_showsCidrInputNotRangeInputs() {
+        val viewModel = fakeSubnetViewModel(SubnetCalculatorUiState(isRangeMode = false))
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                SubnetCalculatorScreen(viewModel = viewModel)
+            }
+        }
+
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        composeRule.onNodeWithText(context.getString(R.string.subnet_input_label)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.subnet_min_ip_label)).assertDoesNotExist()
+    }
+
+    @Test
+    fun rangeMode_showsMinMaxInputsNotCidrInput() {
+        val viewModel = fakeSubnetViewModel(SubnetCalculatorUiState(isRangeMode = true))
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                SubnetCalculatorScreen(viewModel = viewModel)
+            }
+        }
+
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        composeRule.onNodeWithText(context.getString(R.string.subnet_min_ip_label)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.subnet_max_ip_label)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.subnet_input_label)).assertDoesNotExist()
+    }
+
+    @Test
+    fun modeToggle_clickingRangeSegment_callsToggleMode() {
+        val viewModel = fakeSubnetViewModel(SubnetCalculatorUiState(isRangeMode = false))
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                SubnetCalculatorScreen(viewModel = viewModel)
+            }
+        }
+
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        composeRule
+            .onNodeWithText(context.getString(R.string.subnet_mode_range))
+            .performClick()
+
+        verify(exactly = 1) { viewModel.toggleMode() }
     }
 
     private fun fakeSubnetViewModel(state: SubnetCalculatorUiState): SubnetCalculatorViewModel {
