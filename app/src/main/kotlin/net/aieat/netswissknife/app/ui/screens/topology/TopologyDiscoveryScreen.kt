@@ -877,7 +877,13 @@ private fun NodeDetailSheet(
     onDismiss: () -> Unit,
     onNavigateToNeighbour: (String) -> Unit
 ) {
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    // Skip the partially-expanded intermediate state: this sheet's content is a
+    // LazyColumn, so at partial expand its small viewport means sections below the
+    // header (e.g. "System") are never composed at all, not just clipped -- a plain
+    // scroll can't reveal them because the lazy list never laid them out to begin
+    // with. Same fix as ToolHelpSheet.kt.
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         LazyColumn(
             modifier = Modifier
                 .fillMaxWidth()

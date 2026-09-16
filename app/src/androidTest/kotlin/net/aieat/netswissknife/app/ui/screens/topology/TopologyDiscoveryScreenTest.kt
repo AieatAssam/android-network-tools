@@ -61,7 +61,17 @@ class TopologyDiscoveryScreenTest {
         composeRule
             .onNodeWithContentDescription(context.getString(R.string.action_help))
             .performClick()
-        composeRule.mainClock.advanceTimeBy(500L)
+        // ModalBottomSheet renders in its own semantics root (a separate popup
+        // window) that only gets created/attached once real frames are pumped --
+        // a paused clock's advanceTimeBy never triggers that. waitUntil polls a
+        // bounded condition instead of requiring full idle, so it stays safe even
+        // if the underlying screen has its own infinite (e.g. refresh-spin) animation.
+        composeRule.mainClock.autoAdvance = true
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodes(androidx.compose.ui.test.isRoot())
+                .fetchSemanticsNodes().size > 1
+        }
+        composeRule.mainClock.autoAdvance = false
 
         composeRule
             .onNodeWithText(context.getString(R.string.help_topology_concept_heading))
@@ -158,11 +168,23 @@ class TopologyDiscoveryScreenTest {
             }
         }
 
-        // ModalBottomSheet needs more than one short tick to complete its own expand
-        // animation before its content is composed/reachable.
-        composeRule.mainClock.advanceTimeBy(1_000L)
+        // ModalBottomSheet renders in its own semantics root (a separate popup
+        // window) that only gets created/attached once real frames are pumped --
+        // a paused clock's advanceTimeBy never triggers that. waitUntil polls a
+        // bounded condition instead of requiring full idle, so it stays safe even
+        // if the underlying screen has its own infinite (e.g. refresh-spin) animation.
+        composeRule.mainClock.autoAdvance = true
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodes(androidx.compose.ui.test.isRoot())
+                .fetchSemanticsNodes().size > 1
+        }
+        composeRule.mainClock.autoAdvance = false
+
+        // SectionCard renders its title uppercased (title.uppercase()) as a visual
+        // style choice -- match case-insensitively rather than the raw string
+        // resource value.
         composeRule
-            .onNodeWithText(context.getString(R.string.topology_node_detail_system))
+            .onNodeWithText(context.getString(R.string.topology_node_detail_system), ignoreCase = true)
             .performScrollTo()
             .assertIsDisplayed()
     }

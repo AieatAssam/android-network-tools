@@ -53,7 +53,17 @@ class WhoisScreenTest {
         composeRule
             .onNodeWithContentDescription(context.getString(R.string.action_help))
             .performClick()
-        composeRule.mainClock.advanceTimeBy(500L)
+        // ModalBottomSheet renders in its own semantics root (a separate popup
+        // window) that only gets created/attached once real frames are pumped --
+        // a paused clock's advanceTimeBy never triggers that. waitUntil polls a
+        // bounded condition instead of requiring full idle, so it stays safe even
+        // if the underlying screen has its own infinite (e.g. refresh-spin) animation.
+        composeRule.mainClock.autoAdvance = true
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodes(androidx.compose.ui.test.isRoot())
+                .fetchSemanticsNodes().size > 1
+        }
+        composeRule.mainClock.autoAdvance = false
 
         composeRule
             .onNodeWithText(context.getString(R.string.help_whois_concept_heading))
