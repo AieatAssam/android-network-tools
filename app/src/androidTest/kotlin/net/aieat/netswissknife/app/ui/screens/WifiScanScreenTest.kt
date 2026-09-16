@@ -25,7 +25,6 @@ import net.aieat.netswissknife.core.network.wifi.WifiScanResult
 import net.aieat.netswissknife.core.network.wifi.WifiSecurity
 import net.aieat.netswissknife.core.network.wifi.WifiStandard
 import org.junit.Before
-import org.junit.Ignore
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -144,17 +143,6 @@ class WifiScanScreenTest {
         verify(exactly = 1) { viewModel.setSortOrder(ApSortOrder.SSID) }
     }
 
-    // Quarantined: reproducibly hangs the whole instrumentation run — confirmed via
-    // per-method isolation (every other test in this class passes individually and
-    // together; this one alone hangs indefinitely with zero progress, even before
-    // its first assertion). Same failure class already documented and quarantined
-    // in TracerouteScreenTest: performScrollTo() against list content appears not
-    // to settle reliably on a paused test clock when the screen also runs its own
-    // infiniteRepeatable animation (here, WifiScanScreen's refresh-spin icon).
-    // Confirmed this test is unmodified from its last-known-good state — this is a
-    // pre-existing issue, not something introduced by recent changes. Needs the
-    // same profiling this environment's tooling can't do to root-cause fully.
-    @Ignore("performScrollTo() hangs against list content on a paused clock alongside an infinite animation; see comment above.")
     @Test
     fun successState_frozenOrder_rendersAllNetworksInFrozenOrder() {
         // Natural SIGNAL order (descending RSSI) would be Charlie, Alpha, Bravo;
@@ -180,8 +168,18 @@ class WifiScanScreenTest {
 
         composeRule.mainClock.advanceTimeBy(1_000L)
         composeRule.onNodeWithText("Alpha").assertIsDisplayed()
+
+        // A LazyColumn scroll deep enough to require multiple incremental scroll
+        // steps needs real animation frames to settle between each step; a
+        // permanently paused clock stalls performScrollTo() partway through
+        // (confirmed: scrolling to the 2nd item works, the 3rd -- further down --
+        // hangs indefinitely). Auto-advance for the scroll/assert portion; this is
+        // safe now that WifiHeader's refresh-spin transition is gated behind
+        // autoRefresh (off in this test), so nothing infinite keeps it from idling.
+        composeRule.mainClock.autoAdvance = true
         composeRule.onNodeWithText("Bravo").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Charlie").performScrollTo().assertIsDisplayed()
+        composeRule.mainClock.autoAdvance = false
     }
 
     private fun fakeAp(

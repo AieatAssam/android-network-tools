@@ -467,13 +467,23 @@ fun WifiScanScreen(
     val gradient = Brush.linearGradient(
         listOf(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.tertiaryContainer)
     )
-    val spinTransition = rememberInfiniteTransition(label = "refresh_spin")
-    val spinAngle by spinTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(tween(2000, easing = LinearEasing)),
-        label = "spin_angle"
-    )
+    // Only run the infinite spin transition while it's actually visible (autoRefresh
+    // on) -- rememberInfiniteTransition/animateFloat keeps recomposing every frame
+    // for as long as it's composed, regardless of whether the rotation it drives is
+    // ever applied, which wastes CPU/battery when idle and (as a side effect) means
+    // an instrumented test with autoRefresh off never sees the UI settle.
+    val spinAngle = if (autoRefresh) {
+        val spinTransition = rememberInfiniteTransition(label = "refresh_spin")
+        val angle by spinTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 360f,
+            animationSpec = infiniteRepeatable(tween(2000, easing = LinearEasing)),
+            label = "spin_angle"
+        )
+        angle
+    } else {
+        0f
+    }
     ElevatedCard(Modifier.fillMaxWidth()) {
         Box(Modifier.background(gradient)) {
             Column(Modifier.padding(20.dp).fillMaxWidth()) {
@@ -514,7 +524,7 @@ fun WifiScanScreen(
                         Icons.Default.Refresh,
                         contentDescription = stringResource(R.string.wifi_scan_button),
                         modifier = Modifier.graphicsLayer {
-                            rotationZ = if (autoRefresh) spinAngle else 0f
+                            rotationZ = spinAngle
                         }
                     )
                 }
