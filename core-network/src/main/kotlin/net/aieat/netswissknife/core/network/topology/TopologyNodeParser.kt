@@ -62,13 +62,16 @@ object TopologyNodeParser {
         if (cdpCapabilities.isNullOrBlank()) return emptySet()
         val caps = mutableSetOf<DeviceCapability>()
         val value = cdpCapabilities.toLongOrNull() ?: return emptySet()
-        if (value and 0x01L != 0L) caps.add(DeviceCapability.OTHER)    // repeater
+        // Bit layout per the CDP Capabilities TLV (RFC-less, Cisco-defined):
+        // 0x01 router, 0x02 transparent bridge, 0x04 source-route bridge, 0x08 switch,
+        // 0x10 host, 0x20 IGMP-capable device, 0x40 repeater.
+        if (value and 0x01L != 0L) caps.add(DeviceCapability.ROUTER)   // router
         if (value and 0x02L != 0L) caps.add(DeviceCapability.OTHER)    // transparent bridge
         if (value and 0x04L != 0L) caps.add(DeviceCapability.SWITCH)   // source route bridge
         if (value and 0x08L != 0L) caps.add(DeviceCapability.SWITCH)   // switch
-        if (value and 0x10L != 0L) caps.add(DeviceCapability.ROUTER)   // router
-        if (value and 0x20L != 0L) caps.add(DeviceCapability.PHONE)    // phone
-        if (value and 0x40L != 0L) caps.add(DeviceCapability.OTHER)    // DOCSIS cable device
+        if (value and 0x10L != 0L) caps.add(DeviceCapability.OTHER)    // host
+        if (value and 0x20L != 0L) caps.add(DeviceCapability.OTHER)    // IGMP-capable
+        if (value and 0x40L != 0L) caps.add(DeviceCapability.OTHER)    // repeater
         if (value and 0x80L != 0L) caps.add(DeviceCapability.AP)       // station only
         return caps.ifEmpty { setOf(DeviceCapability.OTHER) }
     }

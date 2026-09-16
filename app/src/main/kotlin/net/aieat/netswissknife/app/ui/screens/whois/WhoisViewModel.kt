@@ -54,6 +54,7 @@ class WhoisViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private var progressJob: Job? = null
+    private var resultJob: Job? = null
 
     fun onQueryChange(value: String) {
         _uiState.update { it.copy(query = value) }
@@ -83,6 +84,12 @@ class WhoisViewModel @Inject constructor(
             recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_WHOIS_HOSTS, query)
         }
         progressJob?.cancel()
+        // A prior lookup's own result coroutine must also be cancelled here — otherwise
+        // a rapid re-submit (edit query, hit lookup again before the first WHOIS
+        // referral chain finishes) leaves two independent result coroutines racing to
+        // write _uiState, and whichever finishes last (not necessarily the newer query)
+        // wins.
+        resultJob?.cancel()
         _uiState.update { it.copy(isLoading = true, hopStates = emptyList(), result = null, error = null) }
 
         // Subscribe to hop progress to animate each server node in real time
@@ -104,7 +111,7 @@ class WhoisViewModel @Inject constructor(
             }
         }
 
-        viewModelScope.launch {
+        resultJob = viewModelScope.launch {
             // Yield so the progress-collection coroutine above can reach collect() first
             kotlinx.coroutines.yield()
             val result = whoisLookupUseCase(WhoisParams(query = query))

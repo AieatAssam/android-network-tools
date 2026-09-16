@@ -6,7 +6,6 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.withContext
 import net.aieat.netswissknife.core.network.NetworkResult
-import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.Socket
 
@@ -154,15 +153,53 @@ class WhoisRepositoryImpl : WhoisRepository {
         return buildIpResult(query, queryType, hops, overallStart)
     }
 
+    /**
+     * True for a loopback, private (RFC 1918), link-local, multicast, or wildcard
+     * address. A malicious or compromised WHOIS server can hand back an arbitrary
+     * `refer:`/registrar-server host in its response text (see [WhoisResponseParser]);
+     * without this check that referral is followed blindly, letting a remote WHOIS
+     * server redirect this app's own socket connection to the device's loopback
+     * interface or an internal LAN host.
+     */
+    internal fun isDisallowedReferralAddress(address: java.net.InetAddress): Boolean =
+        address.isLoopbackAddress ||
+            address.isLinkLocalAddress ||
+            address.isSiteLocalAddress ||
+            address.isAnyLocalAddress ||
+            address.isMulticastAddress
+
     private fun queryServer(host: String, query: String, timeoutMs: Int): Pair<Long, String> {
         val start = System.currentTimeMillis()
+        val resolved = java.net.InetAddress.getByName(host)
+        if (isDisallowedReferralAddress(resolved)) {
+            throw java.io.IOException("Refused to connect to non-public WHOIS referral address: $host")
+        }
         val socket = Socket()
         try {
-            socket.connect(java.net.InetSocketAddress(host, WHOIS_PORT), timeoutMs)
+            socket.connect(java.net.InetSocketAddress(resolved, WHOIS_PORT), timeoutMs)
             socket.soTimeout = timeoutMs
             socket.getOutputStream().write("$query\r\n".toByteArray(Charsets.UTF_8))
-            val response = BufferedReader(InputStreamReader(socket.getInputStream(), Charsets.UTF_8))
-                .use { it.readText() }
+            // A malicious or misbehaving WHOIS server could otherwise stream data
+            // indefinitely (soTimeout only bounds idle time between reads, not total
+            // bytes) and exhaust device memory; no real WHOIS response is anywhere
+            // near this size.
+            val response = InputStreamReader(socket.getInputStream(), Charsets.UTF_8)
+                .buffered()
+                .use { reader ->
+                    val buffer = CharArray(READ_CHUNK_SIZE)
+                    val sb = StringBuilder()
+                    var totalRead = 0
+                    while (true) {
+                        val read = reader.read(buffer)
+                        if (read == -1) break
+                        totalRead += read
+                        if (totalRead > MAX_RESPONSE_BYTES) {
+                            throw java.io.IOException("WHOIS response exceeded ${MAX_RESPONSE_BYTES} bytes")
+                        }
+                        sb.append(buffer, 0, read)
+                    }
+                    sb.toString()
+                }
             return Pair(System.currentTimeMillis() - start, response)
         } finally {
             try { socket.close() } catch (_: Exception) {}
@@ -268,6 +305,8 @@ class WhoisRepositoryImpl : WhoisRepository {
         private const val WHOIS_PORT = 43
         private const val IANA_SERVER = "whois.iana.org"
         private const val ARIN_SERVER = "whois.arin.net"
+        private const val READ_CHUNK_SIZE = 8192
+        internal const val MAX_RESPONSE_BYTES = 1_048_576
 
         private val COMPOUND_TLDS = setOf(
             "co.uk", "org.uk", "me.uk", "net.uk", "ltd.uk", "plc.uk",

@@ -50,8 +50,18 @@ class TracerouteUseCase(
                 packetSize    = params.packetSize
             ).collect { hop ->
                 val hopIp = hop.ip
+                // Geolocation is decorative enrichment, not the payload: a hop must
+                // still be emitted (with no location) if the geo-IP lookup for it
+                // fails, rather than letting that exception abort the whole trace
+                // and discard every hop already streamed.
                 val enriched = if (hopIp != null) {
-                    val geo = geoIpRepository.lookup(hopIp)
+                    val geo = try {
+                        geoIpRepository.lookup(hopIp)
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        null
+                    }
                     hop.copy(geoLocation = geo)
                 } else hop
                 emit(TracerouteFlowResult.Hop(enriched))

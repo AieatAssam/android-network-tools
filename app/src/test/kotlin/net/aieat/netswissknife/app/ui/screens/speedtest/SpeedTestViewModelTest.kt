@@ -67,6 +67,16 @@ class SpeedTestViewModelTest {
     inner class StartTest {
 
         @Test
+        fun `an exception during the test flow surfaces as Error instead of crashing`() = runTest {
+            every { useCase() } returns kotlinx.coroutines.flow.flow {
+                throw java.io.IOException("connection reset")
+            }
+            viewModel.startTest()
+            val state = viewModel.uiState.value
+            assertTrue(state is SpeedTestUiState.Error)
+        }
+
+        @Test
         fun `Running state tracks latency progress`() = runTest {
             every { useCase() } returns flowOf(
                 SpeedTestEvent.LatencyProgress(latencySample, total = 5)

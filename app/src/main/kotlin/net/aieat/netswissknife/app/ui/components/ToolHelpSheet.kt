@@ -52,7 +52,11 @@ fun ToolHelpSheet(
     conceptHeading: String? = null,
     conceptBody: String? = null
 ) {
-    val sheetState = rememberModalBottomSheetState()
+    // Skip the partially-expanded intermediate state: with it, the sheet can open tall
+    // enough to cover only the concept callout, leaving the rest of the content (and on
+    // short/dense viewports, even the concept heading itself) below the fold with no
+    // visual cue to scroll or drag the sheet further open.
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(
