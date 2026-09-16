@@ -4,7 +4,12 @@ import android.Manifest
 import android.os.Build
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.rule.GrantPermissionRule
@@ -76,13 +81,89 @@ class PortsScreenTest {
             .assertDoesNotExist()
     }
 
-    private fun fakePortScanViewModel(concurrency: Int): PortScanViewModel {
+    @Test
+    fun helpSheet_showsConceptHeading() {
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                PortsScreen(viewModel = fakePortScanViewModel())
+            }
+        }
+
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        composeRule
+            .onNodeWithContentDescription(context.getString(R.string.action_help))
+            .performClick()
+        // ModalBottomSheet renders in its own semantics root (a separate popup
+        // window) that only gets created/attached once real frames are pumped --
+        // a paused clock's advanceTimeBy never triggers that. waitUntil polls a
+        // bounded condition instead of requiring full idle, so it stays safe even
+        // if the underlying screen has its own infinite (e.g. refresh-spin) animation.
+        composeRule.mainClock.autoAdvance = true
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodes(androidx.compose.ui.test.isRoot())
+                .fetchSemanticsNodes().size > 1
+        }
+        composeRule.mainClock.autoAdvance = false
+
+        composeRule
+            .onNodeWithText(context.getString(R.string.help_portscan_concept_heading))
+            .performScrollTo()
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun scanningState_showsProgressCard() {
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                PortsScreen(
+                    viewModel = fakePortScanViewModel(
+                        state = PortScanUiState.Scanning(liveResults = emptyList(), scannedCount = 5, totalCount = 20)
+                    )
+                )
+            }
+        }
+
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        composeRule
+            .onNodeWithText(context.getString(R.string.ports_scanning_title))
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun customPresetInvalidPortRange_showsRangeError() {
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                PortsScreen(
+                    viewModel = fakePortScanViewModel(
+                        selectedPreset = PortScanPreset.CUSTOM,
+                        startPort = "99999",
+                        endPort = "1024"
+                    )
+                )
+            }
+        }
+
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        composeRule
+            .onAllNodesWithText(context.getString(R.string.ports_range_error))
+            .onFirst()
+            .performScrollTo()
+            .assertIsDisplayed()
+    }
+
+    private fun fakePortScanViewModel(
+        concurrency: Int = 50,
+        state: PortScanUiState = PortScanUiState.Idle,
+        selectedPreset: PortScanPreset = PortScanPreset.COMMON,
+        startPort: String = "1",
+        endPort: String = "1024"
+    ): PortScanViewModel {
         val viewModel = mockk<PortScanViewModel>(relaxed = true)
-        every { viewModel.uiState } returns MutableStateFlow(PortScanUiState.Idle)
+        every { viewModel.uiState } returns MutableStateFlow(state)
         every { viewModel.host } returns MutableStateFlow("")
-        every { viewModel.selectedPreset } returns MutableStateFlow(PortScanPreset.COMMON)
-        every { viewModel.startPort } returns MutableStateFlow("1")
-        every { viewModel.endPort } returns MutableStateFlow("1024")
+        every { viewModel.selectedPreset } returns MutableStateFlow(selectedPreset)
+        every { viewModel.startPort } returns MutableStateFlow(startPort)
+        every { viewModel.endPort } returns MutableStateFlow(endPort)
         every { viewModel.timeoutMs } returns MutableStateFlow(1000)
         every { viewModel.concurrency } returns MutableStateFlow(concurrency)
         every { viewModel.recentHosts } returns MutableStateFlow(emptyList())

@@ -53,4 +53,17 @@ class TopologyNodeParserTest {
         val speed = TopologyNodeParser.ifHighSpeedToSpeedBps(10000)
         assertEquals(10_000_000_000L, speed)
     }
+
+    @Test
+    fun `CDP capability bit 0x01 (router) maps to ROUTER`() {
+        val caps = TopologyNodeParser.parseCapabilities("1")
+        assertTrue(caps.contains(DeviceCapability.ROUTER), "Expected ROUTER in $caps")
+        assertTrue(!caps.contains(DeviceCapability.OTHER), "Router bit must not also report OTHER: $caps")
+    }
+
+    @Test
+    fun `CDP capability bit 0x10 (host) does not map to ROUTER`() {
+        val caps = TopologyNodeParser.parseCapabilities("16")
+        assertTrue(!caps.contains(DeviceCapability.ROUTER), "Host bit must not be reported as ROUTER: $caps")
+    }
 }

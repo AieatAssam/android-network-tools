@@ -3,6 +3,7 @@ package net.aieat.netswissknife.app.ui.screens.speedtest
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -58,45 +59,51 @@ class SpeedTestViewModel @Inject constructor(
         }
 
         testJob = viewModelScope.launch {
-            speedTestUseCase().collect { event ->
-                when (event) {
-                    is SpeedTestEvent.LatencyProgress -> {
-                        latencySamples.add(event.sample)
-                        emit(current.copy(
-                            phase = SpeedTestPhase.LATENCY,
-                            latencyStats = LatencyStats.compute(latencySamples)
-                        ))
-                    }
-                    is SpeedTestEvent.LatencyFinished -> {
-                        emit(current.copy(phase = SpeedTestPhase.DOWNLOAD, latencyStats = event.stats))
-                    }
-                    is SpeedTestEvent.DownloadProgress -> {
-                        downloadSamples.add(event.sample)
-                        emit(current.copy(downloadSamples = downloadSamples.toList()))
-                    }
-                    is SpeedTestEvent.DownloadFinished -> {
-                        emit(current.copy(phase = SpeedTestPhase.UPLOAD, downloadResult = event.result))
-                    }
-                    is SpeedTestEvent.UploadProgress -> {
-                        uploadSamples.add(event.sample)
-                        emit(current.copy(uploadSamples = uploadSamples.toList()))
-                    }
-                    is SpeedTestEvent.UploadFinished -> {
-                        val download = checkNotNull(current.downloadResult) {
-                            "UploadFinished received before DownloadFinished"
+            try {
+                speedTestUseCase().collect { event ->
+                    when (event) {
+                        is SpeedTestEvent.LatencyProgress -> {
+                            latencySamples.add(event.sample)
+                            emit(current.copy(
+                                phase = SpeedTestPhase.LATENCY,
+                                latencyStats = LatencyStats.compute(latencySamples)
+                            ))
                         }
-                        _uiState.value = SpeedTestUiState.Finished(
-                            SpeedTestResult(
-                                latency = current.latencyStats,
-                                download = download,
-                                upload = event.result
+                        is SpeedTestEvent.LatencyFinished -> {
+                            emit(current.copy(phase = SpeedTestPhase.DOWNLOAD, latencyStats = event.stats))
+                        }
+                        is SpeedTestEvent.DownloadProgress -> {
+                            downloadSamples.add(event.sample)
+                            emit(current.copy(downloadSamples = downloadSamples.toList()))
+                        }
+                        is SpeedTestEvent.DownloadFinished -> {
+                            emit(current.copy(phase = SpeedTestPhase.UPLOAD, downloadResult = event.result))
+                        }
+                        is SpeedTestEvent.UploadProgress -> {
+                            uploadSamples.add(event.sample)
+                            emit(current.copy(uploadSamples = uploadSamples.toList()))
+                        }
+                        is SpeedTestEvent.UploadFinished -> {
+                            val download = checkNotNull(current.downloadResult) {
+                                "UploadFinished received before DownloadFinished"
+                            }
+                            _uiState.value = SpeedTestUiState.Finished(
+                                SpeedTestResult(
+                                    latency = current.latencyStats,
+                                    download = download,
+                                    upload = event.result
+                                )
                             )
-                        )
-                    }
-                    is SpeedTestEvent.Failed -> {
-                        _uiState.value = SpeedTestUiState.Error(event.phase, event.message)
+                        }
+                        is SpeedTestEvent.Failed -> {
+                            _uiState.value = SpeedTestUiState.Error(event.phase, event.message)
+                        }
                     }
                 }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _uiState.value = SpeedTestUiState.Error(current.phase, e.message ?: "Unknown error")
             }
         }
     }

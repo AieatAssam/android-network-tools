@@ -113,6 +113,17 @@ class PortScanViewModelTest {
         }
 
         @Test
+        fun `an exception during the scan flow surfaces as Error instead of crashing`() = runTest {
+            every { portScanUseCase(any()) } returns kotlinx.coroutines.flow.flow {
+                throw java.net.SocketException("network unreachable")
+            }
+            viewModel.onHostChange("example.com")
+            viewModel.startScan()
+            val state = viewModel.uiState.value
+            assertTrue(state is PortScanUiState.Error)
+        }
+
+        @Test
         fun `accumulates port results during scan`() = runTest {
             every { portScanUseCase(any()) } returns flowOf(
                 PortScanFlowResult.PortScanned(stubResult, scannedCount = 1, totalCount = 1),

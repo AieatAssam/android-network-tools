@@ -2,14 +2,21 @@ package net.aieat.netswissknife.app.ui.screens.httprobe
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
+import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.theme.NetSwissKnifeTheme
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeRequest
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeResult
@@ -28,9 +35,147 @@ class HttpProbeScreenTest {
     @get:Rule
     val composeRule = createComposeRule()
 
+    private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
+
     @Before
     fun pauseAnimationClock() {
         composeRule.mainClock.autoAdvance = false
+    }
+
+    @Test
+    fun helpSheet_showsConceptHeading() {
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                HttpProbeScreen(viewModel = fakeViewModel(HttpProbeUiState()))
+            }
+        }
+
+        composeRule.mainClock.advanceTimeBy(2_000L)
+        composeRule
+            .onNodeWithContentDescription(context.getString(R.string.action_help))
+            .performClick()
+        // ModalBottomSheet renders in its own semantics root (a separate popup
+        // window) that only gets created/attached once real frames are pumped --
+        // a paused clock's advanceTimeBy never triggers that. waitUntil polls a
+        // bounded condition instead of requiring full idle, so it stays safe even
+        // if the underlying screen has its own infinite (e.g. refresh-spin) animation.
+        composeRule.mainClock.autoAdvance = true
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodes(androidx.compose.ui.test.isRoot())
+                .fetchSemanticsNodes().size > 1
+        }
+        composeRule.mainClock.autoAdvance = false
+
+        composeRule
+            .onNodeWithText(context.getString(R.string.help_httprobe_concept_heading))
+            .performScrollTo()
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun loadingState_showsSendingIndicator() {
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                HttpProbeScreen(viewModel = fakeViewModel(HttpProbeUiState(url = "https://example.com", isLoading = true)))
+            }
+        }
+
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        composeRule
+            .onNodeWithTag(HttpProbeScreenTestTags.CONTENT_LIST)
+            .performScrollToIndex(HttpProbeScreenTestTags.RESULT_PANEL_INDEX)
+        composeRule
+            .onAllNodesWithText(context.getString(R.string.httprobe_sending))
+            .onFirst()
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun invalidUrl_showsValidationError() {
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                HttpProbeScreen(viewModel = fakeViewModel(HttpProbeUiState(url = "not-a-url.com")))
+            }
+        }
+
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        composeRule
+            .onNodeWithText(context.getString(R.string.error_invalid_url))
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun tabClick_notifiesViewModelOfSelection() {
+        val result = HttpProbeResult(
+            request = HttpProbeRequest(url = "https://example.com"),
+            statusCode = 200,
+            statusMessage = "OK",
+            responseTimeMs = 42,
+            responseHeaders = emptyMap(),
+            responseBody = "",
+            responseBodyBytes = 0,
+            finalUrl = "https://example.com",
+            redirectChain = emptyList(),
+            securityChecks = emptyList()
+        )
+        val viewModel = fakeViewModel(HttpProbeUiState(result = result, selectedTab = 0))
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                HttpProbeScreen(viewModel = viewModel)
+            }
+        }
+
+        composeRule.mainClock.advanceTimeBy(2_000L)
+        composeRule
+            .onNodeWithTag(HttpProbeScreenTestTags.CONTENT_LIST)
+            .performScrollToIndex(HttpProbeScreenTestTags.RESULT_PANEL_INDEX)
+        composeRule
+            .onNodeWithText(context.getString(R.string.httprobe_tab_headers))
+            .performClick()
+
+        verify(exactly = 1) { viewModel.onTabSelected(1) }
+    }
+
+    @Test
+    fun overviewTab_showsMethodAndFinalUrl() {
+        val result = HttpProbeResult(
+            request = HttpProbeRequest(url = "https://example.com"),
+            statusCode = 200,
+            statusMessage = "OK",
+            responseTimeMs = 42,
+            responseHeaders = emptyMap(),
+            responseBody = "",
+            responseBodyBytes = 0,
+            finalUrl = "https://example.com/final",
+            redirectChain = emptyList(),
+            securityChecks = emptyList()
+        )
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                HttpProbeScreen(viewModel = fakeViewModel(HttpProbeUiState(result = result, selectedTab = 0)))
+            }
+        }
+
+        composeRule.mainClock.advanceTimeBy(2_000L)
+        composeRule
+            .onNodeWithTag(HttpProbeScreenTestTags.CONTENT_LIST)
+            .performScrollToIndex(HttpProbeScreenTestTags.RESULT_PANEL_INDEX)
+        composeRule
+            .onNodeWithText(context.getString(R.string.httprobe_method_used))
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule
+            .onAllNodesWithText("https://example.com/final")
+            .onFirst()
+            .performScrollTo()
+            .assertIsDisplayed()
+    }
+
+    private fun fakeViewModel(state: HttpProbeUiState): HttpProbeViewModel {
+        val viewModel = mockk<HttpProbeViewModel>(relaxed = true)
+        every { viewModel.uiState } returns MutableStateFlow(state)
+        every { viewModel.recentHosts } returns MutableStateFlow(emptyList())
+        return viewModel
     }
 
     @Test

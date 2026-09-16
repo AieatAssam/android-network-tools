@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 12+ (API 31+) backup/transfer ruleset — same exclusions as
+  backup_rules.xml, expressed via the current cloud-backup and device-transfer
+  schema.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="file" path="debug.log" />
+        <exclude domain="file" path="debug.log.bak" />
+        <exclude domain="file" path="datastore/app_prefs.preferences_pb" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="file" path="debug.log" />
+        <exclude domain="file" path="debug.log.bak" />
+        <exclude domain="file" path="datastore/app_prefs.preferences_pb" />
+    </device-transfer>
+</data-extraction-rules>
