@@ -1,0 +1,617 @@
+<!doctype html>
+<html lang="en" data-resolution="landscape">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <title>Net Swiss Knife — Brag</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: #0f1512;
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      #root {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #0f1512;
+      }
+
+      .clip {
+        position: absolute;
+        inset: 0;
+      }
+
+      /* ---------- shared phone-card frame ---------- */
+      .phone {
+        width: 396px;
+        height: 880px;
+        flex-shrink: 0;
+        border-radius: 34px;
+        overflow: hidden;
+        box-shadow:
+          0 60px 120px rgba(0, 0, 0, 0.55),
+          0 20px 40px rgba(0, 0, 0, 0.35),
+          0 0 0 2px rgba(179, 240, 216, 0.18);
+        background: #0f1512;
+      }
+      .phone img {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+      .phone-shine {
+        position: absolute;
+        inset: 0;
+        border-radius: 34px;
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+        pointer-events: none;
+      }
+
+      /* ---------- scene 1: hook ---------- */
+      #scene-hook {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: radial-gradient(ellipse at 50% 40%, #16261f 0%, #0f1512 70%);
+      }
+      .hook-badge {
+        width: 160px;
+        height: 160px;
+        border-radius: 50%;
+        background: linear-gradient(145deg, #1b8a5e, #123c2b);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 0 0 10px rgba(179, 240, 216, 0.08), 0 30px 60px rgba(0, 0, 0, 0.5);
+        margin-bottom: 48px;
+      }
+      .hook-badge svg {
+        width: 84px;
+        height: 84px;
+      }
+      .hook-line1,
+      .hook-line2 {
+        font-size: 108px;
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        color: #dde4df;
+        text-align: center;
+      }
+      .hook-line2 {
+        color: #b3f0d8;
+      }
+
+      /* ---------- scene 2: reveal (home grid) ---------- */
+      #scene-reveal {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 140px;
+        background: linear-gradient(135deg, #0f1512 0%, #16261f 100%);
+      }
+      .reveal-copy {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        width: 560px;
+        min-width: 0;
+        flex-shrink: 0;
+      }
+      .reveal-eyebrow {
+        font-size: 30px;
+        font-weight: 600;
+        color: #6fd3a8;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+      .reveal-title {
+        font-size: 62px;
+        font-weight: 800;
+        color: #f5fbf7;
+        letter-spacing: -0.02em;
+        line-height: 1.1;
+      }
+      .reveal-sub {
+        font-size: 34px;
+        color: #a9c4b8;
+        font-weight: 500;
+        line-height: 1.35;
+      }
+
+      /* ---------- scene 3: tool montage ---------- */
+      #scene-montage {
+        background: linear-gradient(135deg, #0f1512 0%, #16261f 100%);
+      }
+      .montage-item {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 120px;
+        opacity: 0;
+      }
+      .montage-item .phone {
+        width: 356px;
+        height: 792px;
+      }
+      .montage-label {
+        font-size: 46px;
+        font-weight: 800;
+        color: #f5fbf7;
+        letter-spacing: -0.015em;
+        line-height: 1.15;
+        max-width: 480px;
+      }
+
+      /* ---------- highlight scenes (shared) ---------- */
+      .hi-scene {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 130px;
+        background: linear-gradient(135deg, #0f1512 0%, #142420 100%);
+      }
+      .hi-copy {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        width: 620px;
+        min-width: 0;
+        flex-shrink: 0;
+      }
+      .hi-eyebrow {
+        font-size: 28px;
+        font-weight: 700;
+        color: #6fd3a8;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      .hi-title {
+        font-size: 52px;
+        font-weight: 800;
+        color: #f5fbf7;
+        letter-spacing: -0.015em;
+        line-height: 1.12;
+      }
+
+      /* ---------- scene 5: split shot (ping live -> chart) ---------- */
+      #scene-hi3 .phone-b {
+        opacity: 0;
+      }
+
+      /* ---------- scene 6: outro ---------- */
+      #scene-outro {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: radial-gradient(ellipse at 50% 45%, #16261f 0%, #0f1512 70%);
+      }
+      .outro-word {
+        font-size: 92px;
+        font-weight: 800;
+        color: #f5fbf7;
+        letter-spacing: -0.02em;
+        margin-bottom: 26px;
+      }
+      .outro-word span {
+        color: #b3f0d8;
+      }
+      .outro-tag {
+        font-size: 36px;
+        font-weight: 600;
+        color: #a9c4b8;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="24.62"
+      data-width="1920"
+      data-height="1080"
+    >
+      <!-- ============ SCENE 1 — HOOK — 0.00 .. 2.52 ============ -->
+      <section id="scene-hook" class="clip" data-start="0" data-duration="2.52" data-track-index="0">
+        <div class="hook-badge" id="hook-badge">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="12" cy="5" r="2.4" fill="#f5fbf7" />
+            <circle cx="5" cy="14" r="2.1" fill="#f5fbf7" />
+            <circle cx="19" cy="14" r="2.1" fill="#f5fbf7" />
+            <circle cx="8" cy="20" r="1.7" fill="#f5fbf7" />
+            <circle cx="16" cy="20" r="1.7" fill="#f5fbf7" />
+            <circle cx="12" cy="12" r="2.6" fill="#f5fbf7" />
+            <line x1="12" y1="7.4" x2="12" y2="9.4" stroke="#f5fbf7" stroke-width="1.4" />
+            <line x1="7" y1="14" x2="9.6" y2="12.8" stroke="#f5fbf7" stroke-width="1.4" />
+            <line x1="17" y1="14" x2="14.4" y2="12.8" stroke="#f5fbf7" stroke-width="1.4" />
+            <line x1="9.4" y1="19" x2="10.6" y2="14.6" stroke="#f5fbf7" stroke-width="1.4" />
+            <line x1="14.6" y1="19" x2="13.4" y2="14.6" stroke="#f5fbf7" stroke-width="1.4" />
+          </svg>
+        </div>
+        <div class="hook-line1" id="hook-line1">14 tools.</div>
+        <div class="hook-line2" id="hook-line2">One app.</div>
+      </section>
+
+      <!-- ============ SCENE 2 — REVEAL — 2.52 .. 6.52 ============ -->
+      <section id="scene-reveal" class="clip" data-start="2.52" data-duration="4.0" data-track-index="0">
+        <div class="phone" id="reveal-phone">
+          <img src="assets/screenshots/home_grid.png" alt="" />
+          <div class="phone-shine"></div>
+        </div>
+        <div class="reveal-copy">
+          <div class="reveal-eyebrow" id="reveal-eyebrow">Net Swiss Knife</div>
+          <div class="reveal-title" id="reveal-title">Every network tool, one app.</div>
+          <div class="reveal-sub" id="reveal-sub">Your all-in-one Android networking toolkit.</div>
+        </div>
+      </section>
+
+      <!-- ============ SCENE 3 — TOOL MONTAGE — 6.52 .. 10.12 (6 items, 0.6s each) ============ -->
+      <section id="scene-montage" class="clip" data-start="6.52" data-duration="3.6" data-track-index="0">
+        <div class="montage-item" id="mi-1">
+          <div class="phone"><img src="assets/screenshots/traceroute.png" alt="" /></div>
+          <div class="montage-label">Traceroute — every hop, mapped.</div>
+        </div>
+        <div class="montage-item" id="mi-2">
+          <div class="phone"><img src="assets/screenshots/port_scanner.png" alt="" /></div>
+          <div class="montage-label">Port Scanner — up to 500 ports at once.</div>
+        </div>
+        <div class="montage-item" id="mi-3">
+          <div class="phone"><img src="assets/screenshots/dns_lookup.png" alt="" /></div>
+          <div class="montage-label">DNS Lookup — 10 record types.</div>
+        </div>
+        <div class="montage-item" id="mi-4">
+          <div class="phone"><img src="assets/screenshots/TLS_Inspector.png" alt="" /></div>
+          <div class="montage-label">TLS Inspector — full certificate chain.</div>
+        </div>
+        <div class="montage-item" id="mi-5">
+          <div class="phone"><img src="assets/screenshots/mdns_browser.png" alt="" /></div>
+          <div class="montage-label">mDNS Browser — printers, casts, and more.</div>
+        </div>
+        <div class="montage-item" id="mi-6">
+          <div class="phone"><img src="assets/screenshots/WHOIS.png" alt="" /></div>
+          <div class="montage-label">WHOIS Lookup — domain, IP, and ASN.</div>
+        </div>
+      </section>
+
+      <!-- ============ SCENE 4 — HIGHLIGHT 1 (Wi-Fi) — 10.12 .. 14.12 ============ -->
+      <section id="scene-hi1" class="hi-scene clip" data-start="10.12" data-duration="4.0" data-track-index="0">
+        <div class="hi-copy">
+          <div class="hi-eyebrow" id="hi1-eyebrow">Wi-Fi Scanner</div>
+          <div class="hi-title" id="hi1-title">Live spectrum analysis, per channel.</div>
+        </div>
+        <div class="phone" id="hi1-phone">
+          <img src="assets/screenshots/wifi_spectrum.png" alt="" />
+          <div class="phone-shine"></div>
+        </div>
+      </section>
+
+      <!-- ============ SCENE 5 — HIGHLIGHT 2 (Subnet) — 14.12 .. 18.12 ============ -->
+      <section id="scene-hi2" class="hi-scene clip" data-start="14.12" data-duration="4.0" data-track-index="0">
+        <div class="hi-copy">
+          <div class="hi-eyebrow" id="hi2-eyebrow">Subnet Calculator</div>
+          <div class="hi-title" id="hi2-title">Binary breakdown, decoded instantly.</div>
+        </div>
+        <div class="phone" id="hi2-phone">
+          <img src="assets/screenshots/subnet_binary.png" alt="" />
+          <div class="phone-shine"></div>
+        </div>
+      </section>
+
+      <!-- ============ SCENE 6 — HIGHLIGHT 3 (Ping) — 18.12 .. 22.12 ============ -->
+      <section id="scene-hi3" class="hi-scene clip" data-start="18.12" data-duration="4.0" data-track-index="0">
+        <div class="hi-copy">
+          <div class="hi-eyebrow" id="hi3-eyebrow">Ping</div>
+          <div class="hi-title" id="hi3-title">Real diagnostics. Real numbers.</div>
+        </div>
+        <div style="position: relative; width: 396px; height: 880px">
+          <div class="phone phone-a" id="hi3-phone-a" style="position: absolute; inset: 0">
+            <img src="assets/screenshots/ping_live.png" alt="" />
+            <div class="phone-shine"></div>
+          </div>
+          <div class="phone phone-b" id="hi3-phone-b" style="position: absolute; inset: 0">
+            <img src="assets/screenshots/ping_chart.png" alt="" />
+            <div class="phone-shine"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ SCENE 7 — OUTRO — 22.12 .. 24.62 ============ -->
+      <section id="scene-outro" class="clip" data-start="22.12" data-duration="2.5" data-track-index="0">
+        <div class="outro-word" id="outro-word">Net <span>Swiss Knife</span></div>
+        <div class="outro-tag" id="outro-tag">No accounts. No ads. Just tools.</div>
+      </section>
+
+      <!-- ============ AUDIO ============ -->
+      <audio
+        id="bgm"
+        src="assets/music/happy-beats-business-moves-vol-1-by-ende-dot-app.mp3"
+        data-start="0"
+        data-duration="24.62"
+        data-track-index="10"
+        data-volume="1"
+      ></audio>
+
+      <audio
+        id="sfx-hook"
+        src="assets/sfx/impact/impactSoft_medium_000.ogg"
+        data-start="0.18"
+        data-duration="0.12"
+        data-track-index="11"
+        data-volume="0.75"
+      ></audio>
+
+      <audio
+        id="sfx-reveal-phone"
+        src="assets/sfx/interface/drop_001.ogg"
+        data-start="2.72"
+        data-duration="0.11"
+        data-track-index="12"
+        data-volume="0.7"
+      ></audio>
+      <audio
+        id="sfx-reveal-title"
+        src="assets/sfx/interface/click_002.ogg"
+        data-start="3.12"
+        data-duration="0.05"
+        data-track-index="13"
+        data-volume="0.6"
+      ></audio>
+
+      <audio id="sfx-mi-1" src="assets/sfx/interface/drop_001.ogg" data-start="6.52" data-duration="0.11" data-track-index="14" data-volume="0.55"></audio>
+      <audio id="sfx-mi-2" src="assets/sfx/interface/drop_001.ogg" data-start="7.12" data-duration="0.11" data-track-index="15" data-volume="0.55"></audio>
+      <audio id="sfx-mi-3" src="assets/sfx/interface/drop_001.ogg" data-start="7.72" data-duration="0.11" data-track-index="16" data-volume="0.55"></audio>
+      <audio id="sfx-mi-4" src="assets/sfx/interface/drop_001.ogg" data-start="8.32" data-duration="0.11" data-track-index="17" data-volume="0.55"></audio>
+      <audio id="sfx-mi-5" src="assets/sfx/interface/drop_001.ogg" data-start="8.92" data-duration="0.11" data-track-index="18" data-volume="0.55"></audio>
+      <audio id="sfx-mi-6" src="assets/sfx/interface/drop_001.ogg" data-start="9.52" data-duration="0.11" data-track-index="19" data-volume="0.55"></audio>
+
+      <audio
+        id="sfx-hi1"
+        src="assets/sfx/interface/drop_002.ogg"
+        data-start="10.32"
+        data-duration="0.19"
+        data-track-index="20"
+        data-volume="0.7"
+      ></audio>
+
+      <audio
+        id="sfx-hi2"
+        src="assets/sfx/interface/drop_002.ogg"
+        data-start="14.32"
+        data-duration="0.19"
+        data-track-index="21"
+        data-volume="0.7"
+      ></audio>
+      <audio
+        id="sfx-hi2-ripple"
+        src="assets/sfx/interface/select_008.ogg"
+        data-start="15.2"
+        data-duration="0.1"
+        data-track-index="22"
+        data-volume="0.55"
+      ></audio>
+
+      <audio
+        id="sfx-hi3"
+        src="assets/sfx/interface/drop_001.ogg"
+        data-start="18.32"
+        data-duration="0.11"
+        data-track-index="23"
+        data-volume="0.7"
+      ></audio>
+      <audio
+        id="sfx-hi3-wipe"
+        src="assets/sfx/interface/click_002.ogg"
+        data-start="20.5"
+        data-duration="0.05"
+        data-track-index="24"
+        data-volume="0.6"
+      ></audio>
+
+      <!-- outro logo hit — beat-locked: 22.12s -->
+      <audio
+        id="sfx-outro"
+        src="assets/sfx/impact/impactBell_heavy_000.ogg"
+        data-start="22.12"
+        data-duration="1.48"
+        data-track-index="25"
+        data-volume="0.8"
+      ></audio>
+    </div>
+
+    <script>
+      const tl = gsap.timeline({ paused: true });
+
+      // bg music: hold at the authored bed level, fade to silence in the last half second
+      tl.fromTo("#bgm", { volume: 0.33 }, { volume: 0.33, duration: 23.62 }, 0);
+      tl.to("#bgm", { volume: 0, duration: 0.5 }, 24.12);
+
+      // ---------- Scene 1: hook (0 .. 2.52) ----------
+      // beat-locked: badge hit at 0.18s (icon-snap SFX above matches)
+      tl.fromTo(
+        "#hook-badge",
+        { scale: 0.4, opacity: 0 },
+        { scale: 1, opacity: 1, duration: 0.42, ease: "back.out(2.4)" },
+        0.18,
+      );
+      tl.fromTo(
+        "#hook-line1",
+        { y: 28, opacity: 0 },
+        { y: 0, opacity: 1, duration: 0.34, ease: "power3.out" },
+        0.75,
+      );
+      tl.fromTo(
+        "#hook-line2",
+        { y: 28, opacity: 0 },
+        { y: 0, opacity: 1, duration: 0.34, ease: "power3.out" },
+        1.15,
+      );
+      tl.to(["#hook-badge", "#hook-line1", "#hook-line2"], { opacity: 0, duration: 0.28 }, 2.24);
+
+      // ---------- Scene 2: reveal (2.52 .. 6.52) ----------
+      const s2 = 2.52;
+      tl.fromTo(
+        "#reveal-phone",
+        { y: 60, opacity: 0, scale: 0.94 },
+        { y: 0, opacity: 1, scale: 1, duration: 0.55, ease: "power3.out" },
+        s2 + 0.14,
+      );
+      tl.fromTo(
+        "#reveal-eyebrow",
+        { y: 18, opacity: 0 },
+        { y: 0, opacity: 1, duration: 0.3, ease: "power2.out" },
+        s2 + 0.42,
+      );
+      tl.fromTo(
+        "#reveal-title",
+        { y: 22, opacity: 0 },
+        { y: 0, opacity: 1, duration: 0.36, ease: "power2.out" },
+        s2 + 0.55,
+      );
+      tl.fromTo(
+        "#reveal-sub",
+        { y: 18, opacity: 0 },
+        { y: 0, opacity: 1, duration: 0.3, ease: "power2.out" },
+        s2 + 0.72,
+      );
+      tl.to(
+        ["#reveal-phone", "#reveal-eyebrow", "#reveal-title", "#reveal-sub"],
+        { opacity: 0, duration: 0.24 },
+        s2 + 3.76,
+      );
+
+      // ---------- Scene 3: tool montage (6.52 .. 10.12) — 6 items, 0.6s each ----------
+      const montageItems = [
+        ["#mi-1", 6.52],
+        ["#mi-2", 7.12],
+        ["#mi-3", 7.72],
+        ["#mi-4", 8.32],
+        ["#mi-5", 8.92],
+        ["#mi-6", 9.52],
+      ];
+      montageItems.forEach(([sel, start]) => {
+        tl.fromTo(sel, { opacity: 0, scale: 0.96 }, { opacity: 1, scale: 1, duration: 0.16, ease: "power2.out" }, start + 0.01);
+        tl.to(sel, { opacity: 0, duration: 0.14, ease: "power2.in" }, start + 0.46);
+      });
+
+      // ---------- Scene 4: highlight 1 — Wi-Fi (10.12 .. 14.12) ----------
+      const s3 = 10.12;
+      tl.fromTo(
+        "#hi1-phone",
+        { x: 70, opacity: 0, scale: 0.95 },
+        { x: 0, opacity: 1, scale: 1, duration: 0.55, ease: "power3.out" },
+        s3 + 0.14,
+      );
+      tl.fromTo(
+        "#hi1-eyebrow",
+        { x: -24, opacity: 0 },
+        { x: 0, opacity: 1, duration: 0.3, ease: "power2.out" },
+        s3 + 0.34,
+      );
+      tl.fromTo(
+        "#hi1-title",
+        { x: -24, opacity: 0 },
+        { x: 0, opacity: 1, duration: 0.36, ease: "power2.out" },
+        s3 + 0.48,
+      );
+      // slow push-in on the chart for the rest of the hold
+      tl.to("#hi1-phone", { scale: 1.05, duration: 3.0, ease: "none" }, s3 + 0.8);
+      tl.to(
+        ["#hi1-phone", "#hi1-eyebrow", "#hi1-title"],
+        { opacity: 0, duration: 0.24 },
+        s3 + 3.76,
+      );
+
+      // ---------- Scene 5: highlight 2 — Subnet binary (14.12 .. 18.12) ----------
+      const s4 = 14.12;
+      tl.fromTo(
+        "#hi2-phone",
+        { x: 70, opacity: 0, scale: 0.95 },
+        { x: 0, opacity: 1, scale: 1, duration: 0.55, ease: "power3.out" },
+        s4 + 0.14,
+      );
+      tl.fromTo(
+        "#hi2-eyebrow",
+        { x: -24, opacity: 0 },
+        { x: 0, opacity: 1, duration: 0.3, ease: "power2.out" },
+        s4 + 0.34,
+      );
+      tl.fromTo(
+        "#hi2-title",
+        { x: -24, opacity: 0 },
+        { x: 0, opacity: 1, duration: 0.36, ease: "power2.out" },
+        s4 + 0.48,
+      );
+      // bit-grid "ripple" beat — a quick double-pulse on the card, synced to sfx-hi2-ripple
+      tl.to("#hi2-phone", { scale: 1.02, duration: 0.16, ease: "power1.inOut" }, s4 + 1.08);
+      tl.to("#hi2-phone", { scale: 1.0, duration: 0.22, ease: "power1.inOut" }, s4 + 1.24);
+      tl.to(
+        ["#hi2-phone", "#hi2-eyebrow", "#hi2-title"],
+        { opacity: 0, duration: 0.24 },
+        s4 + 3.76,
+      );
+
+      // ---------- Scene 6: highlight 3 — Ping (18.12 .. 22.12) ----------
+      const s5 = 18.12;
+      tl.fromTo(
+        "#hi3-phone-a",
+        { x: 70, opacity: 0, scale: 0.95 },
+        { x: 0, opacity: 1, scale: 1, duration: 0.55, ease: "power3.out" },
+        s5 + 0.14,
+      );
+      tl.fromTo(
+        "#hi3-eyebrow",
+        { x: -24, opacity: 0 },
+        { x: 0, opacity: 1, duration: 0.3, ease: "power2.out" },
+        s5 + 0.34,
+      );
+      tl.fromTo(
+        "#hi3-title",
+        { x: -24, opacity: 0 },
+        { x: 0, opacity: 1, duration: 0.36, ease: "power2.out" },
+        s5 + 0.48,
+      );
+      // whip-wipe from the live progress shot to the finished chart, synced to sfx-hi3-wipe
+      tl.set("#hi3-phone-b", { opacity: 0, x: 40 }, s5 + 2.38);
+      tl.to("#hi3-phone-a", { opacity: 0, x: -40, duration: 0.22, ease: "power2.in" }, s5 + 2.38);
+      tl.to("#hi3-phone-b", { opacity: 1, x: 0, duration: 0.3, ease: "power2.out" }, s5 + 2.48);
+      tl.to(
+        ["#hi3-phone-a", "#hi3-phone-b", "#hi3-eyebrow", "#hi3-title"],
+        { opacity: 0, duration: 0.24 },
+        s5 + 3.76,
+      );
+
+      // ---------- Scene 7: outro (22.12 .. 24.62) ----------
+      const s6 = 22.12;
+      tl.fromTo(
+        "#outro-word",
+        { scale: 0.86, opacity: 0 },
+        { scale: 1, opacity: 1, duration: 0.42, ease: "back.out(1.8)" },
+        s6 + 0.06,
+      );
+      tl.fromTo(
+        "#outro-tag",
+        { y: 16, opacity: 0 },
+        { y: 0, opacity: 1, duration: 0.34, ease: "power2.out" },
+        s6 + 0.5,
+      );
+
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>

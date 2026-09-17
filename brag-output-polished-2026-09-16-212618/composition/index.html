@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="en" data-resolution="landscape">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <title>Net Swiss Knife — Brag (Polished)</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: #0f1512;
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      #root {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #0f1512;
+      }
+      .clip {
+        position: absolute;
+        inset: 0;
+      }
+
+      .phone {
+        width: 372px;
+        height: 828px;
+        flex-shrink: 0;
+        border-radius: 32px;
+        overflow: hidden;
+        box-shadow:
+          0 50px 100px rgba(0, 0, 0, 0.5),
+          0 0 0 1px rgba(179, 240, 216, 0.14);
+        background: #0f1512;
+      }
+      .phone img {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+
+      /* ---------- hook ---------- */
+      #scene-hook {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: #0f1512;
+      }
+      .hook-icon {
+        width: 108px;
+        height: 108px;
+        border-radius: 50%;
+        background: #16261f;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 44px;
+        box-shadow: 0 0 0 1px rgba(179, 240, 216, 0.16);
+      }
+      .hook-icon svg {
+        width: 56px;
+        height: 56px;
+      }
+      .hook-word {
+        font-size: 84px;
+        font-weight: 500;
+        letter-spacing: 0.02em;
+        color: #f5fbf7;
+      }
+      .hook-word b {
+        font-weight: 700;
+        color: #b3f0d8;
+      }
+      .hook-tag {
+        margin-top: 22px;
+        font-size: 28px;
+        font-weight: 400;
+        letter-spacing: 0.04em;
+        color: #7fae98;
+      }
+
+      /* ---------- tool sequence ---------- */
+      #scene-sequence {
+        background: #0f1512;
+      }
+      .seq-item {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 100px;
+        opacity: 0;
+      }
+      .seq-caption {
+        font-size: 34px;
+        font-weight: 400;
+        letter-spacing: 0.02em;
+        color: #dde4df;
+        max-width: 460px;
+        line-height: 1.4;
+      }
+      .seq-caption b {
+        font-weight: 600;
+        color: #b3f0d8;
+      }
+
+      /* ---------- highlight scenes ---------- */
+      .hi-scene {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 110px;
+        background: #0f1512;
+      }
+      .hi-caption {
+        font-size: 40px;
+        font-weight: 400;
+        letter-spacing: 0.02em;
+        color: #dde4df;
+        max-width: 480px;
+        line-height: 1.4;
+      }
+      .hi-caption b {
+        font-weight: 600;
+        color: #b3f0d8;
+      }
+
+      /* ---------- outro ---------- */
+      #scene-outro {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: #0f1512;
+      }
+      .outro-word {
+        font-size: 78px;
+        font-weight: 500;
+        letter-spacing: 0.02em;
+        color: #f5fbf7;
+        margin-bottom: 20px;
+      }
+      .outro-word b {
+        font-weight: 700;
+        color: #b3f0d8;
+      }
+      .outro-tag {
+        font-size: 28px;
+        font-weight: 400;
+        letter-spacing: 0.04em;
+        color: #7fae98;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="24.5"
+      data-width="1920"
+      data-height="1080"
+    >
+      <!-- ============ SCENE 1 — HOOK — 0.00 .. 4.00 ============ -->
+      <section id="scene-hook" class="clip" data-start="0" data-duration="4.0" data-track-index="0">
+        <div class="hook-icon" id="hook-icon">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="12" cy="5" r="1.6" fill="#b3f0d8" />
+            <circle cx="5" cy="14" r="1.4" fill="#b3f0d8" />
+            <circle cx="19" cy="14" r="1.4" fill="#b3f0d8" />
+            <circle cx="8" cy="20" r="1.15" fill="#b3f0d8" />
+            <circle cx="16" cy="20" r="1.15" fill="#b3f0d8" />
+            <circle cx="12" cy="12" r="1.8" fill="#b3f0d8" />
+            <line x1="12" y1="7" x2="12" y2="9.6" stroke="#b3f0d8" stroke-width="1" />
+            <line x1="7" y1="14" x2="9.8" y2="12.8" stroke="#b3f0d8" stroke-width="1" />
+            <line x1="17" y1="14" x2="14.2" y2="12.8" stroke="#b3f0d8" stroke-width="1" />
+            <line x1="9.4" y1="19" x2="10.6" y2="14.6" stroke="#b3f0d8" stroke-width="1" />
+            <line x1="14.6" y1="19" x2="13.4" y2="14.6" stroke="#b3f0d8" stroke-width="1" />
+          </svg>
+        </div>
+        <div class="hook-word" id="hook-word">Net <b>Swiss Knife</b></div>
+        <div class="hook-tag" id="hook-tag">Your all-in-one Android networking toolkit</div>
+      </section>
+
+      <!-- ============ SCENE 2 — TOOL SEQUENCE — 4.00 .. 11.70 (7 items, ~1.1s each, slow crossfade) ============ -->
+      <section id="scene-sequence" class="clip" data-start="4.0" data-duration="7.7" data-track-index="0">
+        <div class="seq-item" id="si-1">
+          <div class="phone"><img src="assets/screenshots/traceroute.png" alt="" /></div>
+          <div class="seq-caption"><b>Traceroute.</b><br />Every hop, mapped.</div>
+        </div>
+        <div class="seq-item" id="si-2">
+          <div class="phone"><img src="assets/screenshots/port_scanner.png" alt="" /></div>
+          <div class="seq-caption"><b>Port Scanner.</b><br />Up to 500 ports at once.</div>
+        </div>
+        <div class="seq-item" id="si-3">
+          <div class="phone"><img src="assets/screenshots/dns_lookup.png" alt="" /></div>
+          <div class="seq-caption"><b>DNS Lookup.</b><br />Ten record types.</div>
+        </div>
+        <div class="seq-item" id="si-4">
+          <div class="phone"><img src="assets/screenshots/wifi_spectrum.png" alt="" /></div>
+          <div class="seq-caption"><b>Wi-Fi Scanner.</b><br />Live spectrum analysis.</div>
+        </div>
+        <div class="seq-item" id="si-5">
+          <div class="phone"><img src="assets/screenshots/TLS_Inspector.png" alt="" /></div>
+          <div class="seq-caption"><b>TLS Inspector.</b><br />The full certificate chain.</div>
+        </div>
+        <div class="seq-item" id="si-6">
+          <div class="phone"><img src="assets/screenshots/mdns_browser.png" alt="" /></div>
+          <div class="seq-caption"><b>mDNS Browser.</b><br />Printers, casts, and more.</div>
+        </div>
+        <div class="seq-item" id="si-7">
+          <div class="phone"><img src="assets/screenshots/WHOIS.png" alt="" /></div>
+          <div class="seq-caption"><b>WHOIS Lookup.</b><br />Domain, IP, and ASN.</div>
+        </div>
+      </section>
+
+      <!-- ============ SCENE 3 — HIGHLIGHT: SUBNET — 11.70 .. 16.20 ============ -->
+      <section id="scene-hi1" class="hi-scene clip" data-start="11.7" data-duration="4.5" data-track-index="0">
+        <div class="phone" id="hi1-phone">
+          <img src="assets/screenshots/subnet_binary.png" alt="" />
+        </div>
+        <div class="hi-caption" id="hi1-caption"><b>Binary, decoded.</b><br />The full subnet breakdown, instantly.</div>
+      </section>
+
+      <!-- ============ SCENE 4 — HIGHLIGHT: PING — 16.20 .. 20.50 ============ -->
+      <section id="scene-hi2" class="hi-scene clip" data-start="16.2" data-duration="4.3" data-track-index="0">
+        <div class="phone" id="hi2-phone">
+          <img src="assets/screenshots/ping_chart.png" alt="" />
+        </div>
+        <div class="hi-caption" id="hi2-caption"><b>Real diagnostics,</b><br />quietly delivered.</div>
+      </section>
+
+      <!-- ============ SCENE 5 — OUTRO — 20.50 .. 24.50 ============ -->
+      <section id="scene-outro" class="clip" data-start="20.5" data-duration="4.0" data-track-index="0">
+        <div class="outro-word" id="outro-word">Net <b>Swiss Knife</b></div>
+        <div class="outro-tag" id="outro-tag">No accounts. No ads. Just tools.</div>
+      </section>
+
+      <!-- ============ AUDIO ============ -->
+      <audio
+        id="bgm"
+        src="assets/music/happy-beats-business-moves-vol-12-by-ende-dot-app.mp3"
+        data-start="0"
+        data-duration="24.5"
+        data-track-index="10"
+        data-volume="1"
+      ></audio>
+      <audio
+        id="sfx-hook"
+        src="assets/sfx/interface/bong_001.ogg"
+        data-start="0.3"
+        data-duration="0.12"
+        data-track-index="11"
+        data-volume="0.4"
+      ></audio>
+      <audio
+        id="sfx-outro"
+        src="assets/sfx/impact/impactSoft_medium_000.ogg"
+        data-start="20.5"
+        data-duration="0.12"
+        data-track-index="12"
+        data-volume="0.35"
+      ></audio>
+    </div>
+
+    <script>
+      const tl = gsap.timeline({ paused: true });
+
+      // steady bed, gentle fade in and out
+      tl.fromTo("#bgm", { volume: 0 }, { volume: 0.28, duration: 1.2 }, 0);
+      tl.to("#bgm", { volume: 0, duration: 1.0 }, 23.5);
+
+      // ---------- Scene 1: hook (0 .. 4.0) ----------
+      tl.fromTo("#hook-icon", { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.7, ease: "power2.out" }, 0.15);
+      tl.fromTo("#hook-word", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.7, ease: "power2.out" }, 0.5);
+      tl.fromTo("#hook-tag", { opacity: 0 }, { opacity: 1, duration: 0.6, ease: "power2.out" }, 1.3);
+      tl.to(["#hook-icon", "#hook-word", "#hook-tag"], { opacity: 0, duration: 0.6 }, 3.4);
+
+      // ---------- Scene 2: tool sequence (4.0 .. 11.7) — slow crossfades ----------
+      const seqItems = [
+        ["#si-1", 4.0],
+        ["#si-2", 5.1],
+        ["#si-3", 6.2],
+        ["#si-4", 7.3],
+        ["#si-5", 8.4],
+        ["#si-6", 9.5],
+        ["#si-7", 10.6],
+      ];
+      seqItems.forEach(([sel, start], i) => {
+        tl.fromTo(sel, { opacity: 0 }, { opacity: 1, duration: 0.65, ease: "sine.inOut" }, start);
+        const isLast = i === seqItems.length - 1;
+        const fadeOutAt = isLast ? 11.35 : start + 1.1 - 0.65;
+        tl.to(sel, { opacity: 0, duration: 0.65, ease: "sine.inOut" }, fadeOutAt);
+      });
+
+      // ---------- Scene 3: highlight — Subnet (11.7 .. 16.2) ----------
+      const s3 = 11.7;
+      tl.fromTo("#hi1-phone", { opacity: 0, scale: 0.97 }, { opacity: 1, scale: 1, duration: 0.75, ease: "sine.out" }, s3 + 0.1);
+      tl.fromTo("#hi1-caption", { opacity: 0 }, { opacity: 1, duration: 0.65, ease: "sine.out" }, s3 + 0.5);
+      tl.to("#hi1-phone", { scale: 1.03, duration: 3.6, ease: "none" }, s3 + 0.85);
+      tl.to(["#hi1-phone", "#hi1-caption"], { opacity: 0, duration: 0.6 }, s3 + 3.9);
+
+      // ---------- Scene 4: highlight — Ping (16.2 .. 20.5) ----------
+      const s4 = 16.2;
+      tl.fromTo("#hi2-phone", { opacity: 0, scale: 0.97 }, { opacity: 1, scale: 1, duration: 0.75, ease: "sine.out" }, s4 + 0.1);
+      tl.fromTo("#hi2-caption", { opacity: 0 }, { opacity: 1, duration: 0.65, ease: "sine.out" }, s4 + 0.5);
+      tl.to("#hi2-phone", { scale: 1.03, duration: 3.4, ease: "none" }, s4 + 0.85);
+      tl.to(["#hi2-phone", "#hi2-caption"], { opacity: 0, duration: 0.6 }, s4 + 3.7);
+
+      // ---------- Scene 5: outro (20.5 .. 24.5) ----------
+      const s5 = 20.5;
+      tl.fromTo("#outro-word", { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.8, ease: "sine.out" }, s5 + 0.15);
+      tl.fromTo("#outro-tag", { opacity: 0 }, { opacity: 1, duration: 0.7, ease: "sine.out" }, s5 + 0.9);
+
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>

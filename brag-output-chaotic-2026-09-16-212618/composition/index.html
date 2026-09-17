@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="en" data-resolution="landscape">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <title>Net Swiss Knife — Brag (Chaotic)</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: #060907;
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      #root {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #060907;
+      }
+      .clip {
+        position: absolute;
+        inset: 0;
+      }
+
+      .flash {
+        position: absolute;
+        inset: 0;
+        background: #f5fbf7;
+        opacity: 0;
+        pointer-events: none;
+        z-index: 50;
+      }
+
+      /* ---------- shared phone-card frame ---------- */
+      .phone {
+        width: 402px;
+        height: 894px;
+        flex-shrink: 0;
+        border-radius: 30px;
+        overflow: hidden;
+        box-shadow:
+          0 70px 140px rgba(0, 0, 0, 0.65),
+          0 0 0 3px rgba(179, 240, 216, 0.28);
+        background: #060907;
+      }
+      .phone img {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+
+      /* ---------- hook scenes ---------- */
+      .hook-scene {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #060907;
+      }
+      .hook-word {
+        font-size: 130px;
+        font-weight: 900;
+        letter-spacing: -0.02em;
+        color: #f5fbf7;
+        text-align: center;
+        text-transform: uppercase;
+        transform: rotate(-2deg);
+        line-height: 1.02;
+      }
+      #scene-hook-b .hook-word {
+        color: #b3f0d8;
+        transform: rotate(1.5deg);
+      }
+
+      /* ---------- reveal ---------- */
+      #scene-reveal {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 120px;
+        background: #060907;
+      }
+      .stamp {
+        position: absolute;
+        font-size: 92px;
+        font-weight: 900;
+        text-transform: uppercase;
+        color: #f5fbf7;
+        letter-spacing: -0.01em;
+        line-height: 1.05;
+        transform: rotate(-3deg);
+        text-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
+      }
+      #reveal-stamp {
+        top: 90px;
+        left: 100px;
+        max-width: 620px;
+      }
+      #reveal-stamp span {
+        color: #b3f0d8;
+      }
+
+      /* ---------- montage ---------- */
+      #scene-montage {
+        background: #060907;
+      }
+      .montage-item {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 90px;
+        opacity: 0;
+      }
+      .montage-item .phone {
+        width: 372px;
+        height: 828px;
+      }
+      .montage-label {
+        font-size: 78px;
+        font-weight: 900;
+        text-transform: uppercase;
+        color: #f5fbf7;
+        letter-spacing: -0.01em;
+        transform: rotate(-2deg);
+        max-width: 560px;
+        line-height: 1.05;
+      }
+
+      /* ---------- highlight scenes (subnet / ping) ---------- */
+      .hi-scene {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 110px;
+        background: #060907;
+      }
+      .hi-stamp {
+        font-size: 82px;
+        font-weight: 900;
+        text-transform: uppercase;
+        color: #f5fbf7;
+        letter-spacing: -0.01em;
+        max-width: 620px;
+        line-height: 1.06;
+        transform: rotate(-2deg);
+      }
+      .hi-stamp span {
+        color: #b3f0d8;
+      }
+
+      /* ---------- outro ---------- */
+      #scene-outro {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: #060907;
+      }
+      .outro-word {
+        font-size: 118px;
+        font-weight: 900;
+        color: #f5fbf7;
+        letter-spacing: -0.02em;
+        text-transform: uppercase;
+        margin-bottom: 22px;
+        transform: rotate(-1.5deg);
+      }
+      .outro-word span {
+        color: #b3f0d8;
+      }
+      .outro-tag {
+        font-size: 38px;
+        font-weight: 700;
+        color: #7fae98;
+        text-transform: uppercase;
+        letter-spacing: 0.02em;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="18.55"
+      data-width="1920"
+      data-height="1080"
+    >
+      <!-- ============ SCENE 1 — HOOK A — 0.00 .. 1.37 (beat-grid: 0.00, 1.37) ============ -->
+      <section id="scene-hook-a" class="hook-scene clip" data-start="0" data-duration="1.37" data-track-index="0">
+        <div class="hook-word" id="hook-a-word">Networks<br />are chaos.</div>
+      </section>
+
+      <!-- ============ SCENE 2 — HOOK B — 1.37 .. 2.46 (beat-grid: 1.37, 2.46) ============ -->
+      <section id="scene-hook-b" class="hook-scene clip" data-start="1.37" data-duration="1.09" data-track-index="0">
+        <div class="hook-word" id="hook-b-word">We brought<br />a knife.</div>
+      </section>
+
+      <!-- ============ SCENE 3 — REVEAL — 2.46 .. 6.28 (beat-grid: 2.46, 6.28) ============ -->
+      <section id="scene-reveal" class="clip" data-start="2.46" data-duration="3.82" data-track-index="0">
+        <div class="phone" id="reveal-phone">
+          <img src="assets/screenshots/home_grid.png" alt="" />
+        </div>
+        <div class="stamp" id="reveal-stamp">14 TOOLS.<br /><span>ONE APP.</span></div>
+      </section>
+
+      <!-- ============ SCENE 4 — MONTAGE — 6.28 .. 9.83, 7 items on the beat grid
+           (6.28, 6.82, 7.35, 7.79, 8.22, 8.73, 9.29) ============ -->
+      <section id="scene-montage" class="clip" data-start="6.28" data-duration="3.55" data-track-index="0">
+        <div class="montage-item" id="mi-1">
+          <div class="phone"><img src="assets/screenshots/traceroute.png" alt="" /></div>
+          <div class="montage-label">TRACEROUTE.<br />HOP BY HOP.</div>
+        </div>
+        <div class="montage-item" id="mi-2">
+          <div class="phone"><img src="assets/screenshots/port_scanner.png" alt="" /></div>
+          <div class="montage-label">500 PORTS.<br />AT ONCE.</div>
+        </div>
+        <div class="montage-item" id="mi-3">
+          <div class="phone"><img src="assets/screenshots/dns_lookup.png" alt="" /></div>
+          <div class="montage-label">10 RECORD<br />TYPES.</div>
+        </div>
+        <div class="montage-item" id="mi-4">
+          <div class="phone"><img src="assets/screenshots/wifi_spectrum.png" alt="" /></div>
+          <div class="montage-label">LIVE<br />SPECTRUM.</div>
+        </div>
+        <div class="montage-item" id="mi-5">
+          <div class="phone"><img src="assets/screenshots/TLS_Inspector.png" alt="" /></div>
+          <div class="montage-label">FULL CERT<br />CHAIN.</div>
+        </div>
+        <div class="montage-item" id="mi-6">
+          <div class="phone"><img src="assets/screenshots/mdns_browser.png" alt="" /></div>
+          <div class="montage-label">PRINTERS.<br />CASTS. MORE.</div>
+        </div>
+        <div class="montage-item" id="mi-7">
+          <div class="phone"><img src="assets/screenshots/WHOIS.png" alt="" /></div>
+          <div class="montage-label">WHOIS,<br />TRACED.</div>
+        </div>
+      </section>
+
+      <!-- ============ SCENE 5 — HIGHLIGHT SUBNET — 9.83 .. 12.56 ============ -->
+      <section id="scene-hi1" class="hi-scene clip" data-start="9.83" data-duration="2.73" data-track-index="0">
+        <div class="phone" id="hi1-phone">
+          <img src="assets/screenshots/subnet_binary.png" alt="" />
+        </div>
+        <div class="hi-stamp" id="hi1-stamp">BINARY.<br /><span>DECODED INSTANTLY.</span></div>
+      </section>
+
+      <!-- ============ SCENE 6 — HIGHLIGHT PING — 12.56 .. 15.82 (beat-locked end: 15.82, strong cue) ============ -->
+      <section id="scene-hi2" class="hi-scene clip" data-start="12.56" data-duration="3.26" data-track-index="0">
+        <div style="position: relative; width: 402px; height: 894px">
+          <div class="phone" id="hi2-phone-a" style="position: absolute; inset: 0">
+            <img src="assets/screenshots/ping_live.png" alt="" />
+          </div>
+          <div class="phone" id="hi2-phone-b" style="position: absolute; inset: 0; opacity: 0">
+            <img src="assets/screenshots/ping_chart.png" alt="" />
+          </div>
+        </div>
+        <div class="hi-stamp" id="hi2-stamp"><span>0% PACKET LOSS.</span></div>
+      </section>
+
+      <!-- ============ SCENE 7 — OUTRO — 15.82 .. 18.55 (beat-locked: 15.82s start, 18.55s cut,
+           both strong cues) ============ -->
+      <section id="scene-outro" class="clip" data-start="15.82" data-duration="2.73" data-track-index="0">
+        <div class="outro-word" id="outro-word">Net <span>Swiss Knife</span></div>
+        <div class="outro-tag" id="outro-tag">No accounts. No ads. No mercy.</div>
+      </section>
+
+      <!-- ============ FLASH CUTS (chaotic transitions) ============ -->
+      <div class="flash clip" id="flash-1" data-start="1.31" data-duration="0.16" data-track-index="1"></div>
+      <div class="flash clip" id="flash-2" data-start="2.40" data-duration="0.16" data-track-index="1"></div>
+      <div class="flash clip" id="flash-3" data-start="6.22" data-duration="0.14" data-track-index="1"></div>
+      <div class="flash clip" id="flash-4" data-start="15.76" data-duration="0.16" data-track-index="1"></div>
+
+      <!-- ============ AUDIO ============ -->
+      <audio
+        id="bgm"
+        src="assets/music/happy-beats-business-moves-vol-10-by-ende-dot-app.mp3"
+        data-start="0"
+        data-duration="18.55"
+        data-track-index="10"
+        data-volume="1"
+      ></audio>
+
+      <audio id="sfx-hook-a" src="assets/sfx/impact/impactPunch_heavy_000.ogg" data-start="0" data-duration="0.6" data-track-index="11" data-volume="0.85"></audio>
+      <audio id="sfx-hook-b" src="assets/sfx/interface/glitch_002.ogg" data-start="1.37" data-duration="0.03" data-track-index="12" data-volume="0.75"></audio>
+      <audio id="sfx-reveal" src="assets/sfx/impact/impactPunch_heavy_002.ogg" data-start="2.46" data-duration="0.5" data-track-index="13" data-volume="0.85"></audio>
+
+      <audio id="sfx-mi-1" src="assets/sfx/interface/click_002.ogg" data-start="6.28" data-duration="0.01" data-track-index="14" data-volume="0.65"></audio>
+      <audio id="sfx-mi-2" src="assets/sfx/interface/click_002.ogg" data-start="6.82" data-duration="0.01" data-track-index="15" data-volume="0.65"></audio>
+      <audio id="sfx-mi-3" src="assets/sfx/interface/click_002.ogg" data-start="7.35" data-duration="0.01" data-track-index="16" data-volume="0.65"></audio>
+      <audio id="sfx-mi-4" src="assets/sfx/casino/dice-throw-1.ogg" data-start="7.79" data-duration="0.5" data-track-index="17" data-volume="0.55"></audio>
+      <audio id="sfx-mi-5" src="assets/sfx/interface/click_002.ogg" data-start="8.22" data-duration="0.01" data-track-index="18" data-volume="0.65"></audio>
+      <audio id="sfx-mi-6" src="assets/sfx/interface/click_002.ogg" data-start="8.73" data-duration="0.01" data-track-index="19" data-volume="0.65"></audio>
+      <audio id="sfx-mi-7" src="assets/sfx/interface/glitch_004.ogg" data-start="9.29" data-duration="0.02" data-track-index="20" data-volume="0.7"></audio>
+
+      <audio id="sfx-hi1" src="assets/sfx/impact/impactPunch_heavy_000.ogg" data-start="9.83" data-duration="0.6" data-track-index="21" data-volume="0.8"></audio>
+      <audio id="sfx-hi2" src="assets/sfx/impact/impactPunch_heavy_002.ogg" data-start="12.56" data-duration="0.46" data-track-index="22" data-volume="0.8"></audio>
+      <audio id="sfx-hi2-wipe" src="assets/sfx/interface/glitch_002.ogg" data-start="14.4" data-duration="0.03" data-track-index="23" data-volume="0.7"></audio>
+
+      <!-- outro slam — beat-locked: 15.82s (strong cue) -->
+      <audio id="sfx-outro" src="assets/sfx/impact/impactMetal_heavy_000.ogg" data-start="15.82" data-duration="0.17" data-track-index="24" data-volume="0.9"></audio>
+    </div>
+
+    <script>
+      const tl = gsap.timeline({ paused: true });
+
+      tl.fromTo("#bgm", { volume: 1 }, { volume: 1, duration: 18 }, 0);
+      tl.to("#bgm", { volume: 0, duration: 0.55 }, 18 );
+
+      // ---------- flash cuts ----------
+      function flash(id, t) {
+        tl.set(id, { opacity: 0.9 }, t);
+        tl.to(id, { opacity: 0, duration: 0.14, ease: "power2.out" }, t + 0.01);
+      }
+      flash("#flash-1", 1.31);
+      flash("#flash-2", 2.40);
+      flash("#flash-3", 6.22);
+      flash("#flash-4", 15.76);
+
+      // ---------- Scene 1: HOOK A (0 .. 1.37) — beat-locked: 0.00s ----------
+      tl.fromTo("#hook-a-word", { scale: 1.35, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.22, ease: "power4.out" }, 0.02);
+      tl.to("#hook-a-word", { opacity: 0, duration: 0.12 }, 1.24);
+
+      // ---------- Scene 2: HOOK B (1.37 .. 2.46) — beat-locked: 1.37s ----------
+      tl.fromTo("#hook-b-word", { scale: 1.35, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.2, ease: "power4.out" }, 1.39);
+      tl.to("#hook-b-word", { opacity: 0, duration: 0.12 }, 2.33);
+
+      // ---------- Scene 3: REVEAL (2.46 .. 6.28) — beat-locked: 2.46s ----------
+      const s3 = 2.46;
+      tl.fromTo("#reveal-phone", { scale: 1.22, opacity: 0, rotation: -3 }, { scale: 1, opacity: 1, rotation: 0, duration: 0.32, ease: "power4.out" }, s3 + 0.02);
+      tl.fromTo("#reveal-stamp", { scale: 1.4, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.24, ease: "back.out(2.2)" }, s3 + 0.18);
+      tl.to(["#reveal-phone", "#reveal-stamp"], { opacity: 0, duration: 0.16 }, s3 + 3.62);
+
+      // ---------- Scene 4: MONTAGE (6.28 .. 9.83) — 7 items, each beat-locked ----------
+      // beat-grid: mi-1@6.28, mi-2@6.82, mi-3@7.35, mi-4@7.79, mi-5@8.22, mi-6@8.73, mi-7@9.29
+      const montageBeats = [
+        ["#mi-1", 6.28, 0.52],
+        ["#mi-2", 6.82, 0.51],
+        ["#mi-3", 7.35, 0.42],
+        ["#mi-4", 7.79, 0.41],
+        ["#mi-5", 8.22, 0.49],
+        ["#mi-6", 8.73, 0.54],
+        ["#mi-7", 9.29, 0.54],
+      ];
+      montageBeats.forEach(([sel, start, dur]) => {
+        tl.fromTo(sel, { opacity: 0, scale: 1.18 }, { opacity: 1, scale: 1, duration: Math.min(0.14, dur * 0.3), ease: "power3.out" }, start + 0.01);
+        tl.to(sel, { opacity: 0, duration: 0.1, ease: "power2.in" }, start + dur - 0.08);
+      });
+
+      // ---------- Scene 5: HIGHLIGHT SUBNET (9.83 .. 12.56) — beat-locked: 9.83s ----------
+      const s5 = 9.83;
+      tl.fromTo("#hi1-phone", { scale: 1.2, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.28, ease: "power4.out" }, s5 + 0.02);
+      tl.fromTo("#hi1-stamp", { x: 40, opacity: 0 }, { x: 0, opacity: 1, duration: 0.24, ease: "power3.out" }, s5 + 0.16);
+      tl.to(["#hi1-phone", "#hi1-stamp"], { opacity: 0, duration: 0.16 }, s5 + 2.53);
+
+      // ---------- Scene 6: HIGHLIGHT PING (12.56 .. 15.82) — beat-locked end: 15.82s (strong cue) ----------
+      const s6 = 12.56;
+      tl.fromTo("#hi2-phone-a", { scale: 1.2, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.28, ease: "power4.out" }, s6 + 0.02);
+      tl.fromTo("#hi2-stamp", { x: 40, opacity: 0 }, { x: 0, opacity: 1, duration: 0.24, ease: "power3.out" }, s6 + 0.16);
+      // hard-cut swap live -> chart, synced to sfx-hi2-wipe at 14.4
+      tl.set("#hi2-phone-b", { opacity: 0 }, s6 + 1.84);
+      tl.set("#hi2-phone-a", { opacity: 0 }, s6 + 1.84);
+      tl.set("#hi2-phone-b", { opacity: 1 }, s6 + 1.84);
+      tl.to(["#hi2-phone-b", "#hi2-stamp"], { opacity: 0, duration: 0.14 }, s6 + 3.1);
+
+      // ---------- Scene 7: OUTRO (15.82 .. 18.55) — beat-locked: 15.82s + 18.55s (strong cues) ----------
+      const s7 = 15.82;
+      tl.fromTo("#outro-word", { scale: 1.4, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.26, ease: "back.out(2)" }, s7 + 0.02);
+      tl.fromTo("#outro-tag", { opacity: 0 }, { opacity: 1, duration: 0.22 }, s7 + 0.4);
+
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>

@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en" data-resolution="landscape">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <title>Net Swiss Knife — Brag (Cinematic)</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: #070b09;
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      #root {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #070b09;
+      }
+      .clip {
+        position: absolute;
+        inset: 0;
+      }
+
+      .phone {
+        width: 386px;
+        height: 858px;
+        flex-shrink: 0;
+        border-radius: 32px;
+        overflow: hidden;
+        box-shadow:
+          0 80px 160px rgba(0, 0, 0, 0.7),
+          0 0 0 1px rgba(179, 240, 216, 0.16);
+        background: #070b09;
+      }
+      .phone img {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+
+      /* ---------- hook / statement scenes ---------- */
+      .statement-scene {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: radial-gradient(ellipse at 50% 45%, #10201a 0%, #070b09 75%);
+      }
+      .statement {
+        font-size: 82px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        color: #f5fbf7;
+        text-align: center;
+        max-width: 1400px;
+        line-height: 1.2;
+      }
+      .statement b {
+        color: #b3f0d8;
+        font-weight: 700;
+      }
+
+      /* ---------- reveal ---------- */
+      #scene-reveal {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 130px;
+        background: radial-gradient(ellipse at 50% 45%, #10201a 0%, #070b09 75%);
+      }
+      .reveal-line {
+        font-size: 66px;
+        font-weight: 600;
+        color: #f5fbf7;
+        max-width: 560px;
+        line-height: 1.25;
+      }
+      .reveal-line b {
+        color: #b3f0d8;
+      }
+
+      /* ---------- capabilities ---------- */
+      #scene-capabilities {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: radial-gradient(ellipse at 50% 45%, #10201a 0%, #070b09 75%);
+        gap: 140px;
+      }
+      .cap-item {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 140px;
+        opacity: 0;
+      }
+      .cap-item .phone {
+        width: 340px;
+        height: 756px;
+      }
+      .cap-line {
+        font-size: 64px;
+        font-weight: 600;
+        color: #f5fbf7;
+        max-width: 620px;
+        line-height: 1.25;
+      }
+
+      /* ---------- highlight scenes ---------- */
+      .hi-scene {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 120px;
+        background: radial-gradient(ellipse at 50% 45%, #10201a 0%, #070b09 75%);
+      }
+      .hi-line {
+        font-size: 62px;
+        font-weight: 600;
+        color: #f5fbf7;
+        max-width: 560px;
+        line-height: 1.25;
+      }
+
+      /* ---------- outro ---------- */
+      #scene-outro {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: radial-gradient(ellipse at 50% 45%, #14281f 0%, #070b09 75%);
+      }
+      .outro-word {
+        font-size: 128px;
+        font-weight: 800;
+        letter-spacing: -0.01em;
+        color: #f5fbf7;
+        text-transform: uppercase;
+        margin-bottom: 26px;
+      }
+      .outro-word b {
+        color: #b3f0d8;
+      }
+      .outro-tag {
+        font-size: 34px;
+        font-weight: 500;
+        color: #7fae98;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="25.0"
+      data-width="1920"
+      data-height="1080"
+    >
+      <!-- ============ SCENE 1 — HOOK — 0.00 .. 4.00 ============ -->
+      <section id="scene-hook" class="statement-scene clip" data-start="0" data-duration="4.0" data-track-index="0">
+        <div class="statement" id="hook-statement">In every network,<br />there are <b>things unseen.</b></div>
+      </section>
+
+      <!-- ============ SCENE 2 — REVEAL — 4.00 .. 8.00 ============ -->
+      <section id="scene-reveal" class="clip" data-start="4.0" data-duration="4.0" data-track-index="0">
+        <div class="phone" id="reveal-phone">
+          <img src="assets/screenshots/home_grid.png" alt="" />
+        </div>
+        <div class="reveal-line" id="reveal-line">One app<br /><b>finds them all.</b></div>
+      </section>
+
+      <!-- ============ SCENE 3 — CAPABILITIES — 8.00 .. 13.00 (5 items, ~1.0s each) ============ -->
+      <section id="scene-capabilities" class="clip" data-start="8.0" data-duration="5.0" data-track-index="0">
+        <div class="cap-item" id="cap-1">
+          <div class="phone"><img src="assets/screenshots/traceroute.png" alt="" /></div>
+          <div class="cap-line">Every hop,<br />traced.</div>
+        </div>
+        <div class="cap-item" id="cap-2">
+          <div class="phone"><img src="assets/screenshots/port_scanner.png" alt="" /></div>
+          <div class="cap-line">Every port,<br />probed.</div>
+        </div>
+        <div class="cap-item" id="cap-3">
+          <div class="phone"><img src="assets/screenshots/TLS_Inspector.png" alt="" /></div>
+          <div class="cap-line">Every certificate,<br />verified.</div>
+        </div>
+        <div class="cap-item" id="cap-4">
+          <div class="phone"><img src="assets/screenshots/dns_lookup.png" alt="" /></div>
+          <div class="cap-line">Every record,<br />resolved.</div>
+        </div>
+        <div class="cap-item" id="cap-5">
+          <div class="phone"><img src="assets/screenshots/WHOIS.png" alt="" /></div>
+          <div class="cap-line">Every domain,<br />uncovered.</div>
+        </div>
+      </section>
+
+      <!-- ============ SCENE 4 — HIGHLIGHT: SUBNET — 13.00 .. 17.50 ============ -->
+      <section id="scene-hi1" class="hi-scene clip" data-start="13.0" data-duration="4.5" data-track-index="0">
+        <div class="phone" id="hi1-phone">
+          <img src="assets/screenshots/subnet_binary.png" alt="" />
+        </div>
+        <div class="hi-line" id="hi1-line">Binary,<br />decoded in an instant.</div>
+      </section>
+
+      <!-- ============ SCENE 5 — HIGHLIGHT: PING — 17.50 .. 21.50 ============ -->
+      <section id="scene-hi2" class="hi-scene clip" data-start="17.5" data-duration="4.0" data-track-index="0">
+        <div class="phone" id="hi2-phone">
+          <img src="assets/screenshots/ping_chart.png" alt="" />
+        </div>
+        <div class="hi-line" id="hi2-line">Real numbers.<br />Real time.</div>
+      </section>
+
+      <!-- ============ SCENE 6 — OUTRO — 21.50 .. 25.00 ============ -->
+      <section id="scene-outro" class="clip" data-start="21.5" data-duration="3.5" data-track-index="0">
+        <div class="outro-word" id="outro-word">Net <b>Swiss Knife</b></div>
+        <div class="outro-tag" id="outro-tag">The network was never invisible. You just needed the right blade.</div>
+      </section>
+
+      <!-- ============ AUDIO ============ -->
+      <audio
+        id="bgm"
+        src="assets/music/happy-beats-business-moves-vol-12-by-ende-dot-app.mp3"
+        data-start="0"
+        data-duration="25.0"
+        data-track-index="10"
+        data-volume="1"
+      ></audio>
+      <audio
+        id="sfx-reveal"
+        src="assets/sfx/impact/impactBell_heavy_000.ogg"
+        data-start="4.1"
+        data-duration="1.5"
+        data-track-index="11"
+        data-volume="0.65"
+      ></audio>
+      <audio
+        id="sfx-outro"
+        src="assets/sfx/impact/impactBell_heavy_003.ogg"
+        data-start="21.6"
+        data-duration="0.65"
+        data-track-index="12"
+        data-volume="0.75"
+      ></audio>
+    </div>
+
+    <script>
+      const tl = gsap.timeline({ paused: true });
+
+      // music swell: low under the hook, building through capabilities, peaking at the outro
+      tl.fromTo("#bgm", { volume: 0.16 }, { volume: 0.16, duration: 4.0 }, 0);
+      tl.to("#bgm", { volume: 0.28, duration: 4.0, ease: "sine.inOut" }, 4.0);
+      tl.to("#bgm", { volume: 0.34, duration: 9.5, ease: "sine.inOut" }, 8.0);
+      tl.to("#bgm", { volume: 0.42, duration: 4.0, ease: "sine.inOut" }, 17.5);
+      tl.to("#bgm", { volume: 0, duration: 0.9 }, 24.1);
+
+      // ---------- Scene 1: hook (0 .. 4.0) ----------
+      tl.fromTo("#hook-statement", { opacity: 0, scale: 0.95 }, { opacity: 1, scale: 1, duration: 1.0, ease: "power2.out" }, 0.15);
+      tl.to("#hook-statement", { opacity: 0, scale: 1.02, duration: 0.6, ease: "power2.in" }, 3.5);
+
+      // ---------- Scene 2: reveal (4.0 .. 8.0) — hero moment, synced to sfx-reveal ----------
+      const s2 = 4.0;
+      tl.fromTo("#reveal-phone", { opacity: 0, scale: 0.93 }, { opacity: 1, scale: 1, duration: 1.0, ease: "power2.out" }, s2 + 0.1);
+      tl.fromTo("#reveal-line", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.9, ease: "power2.out" }, s2 + 0.5);
+      tl.to("#reveal-phone", { scale: 1.04, duration: 3.0, ease: "none" }, s2 + 1.1);
+      tl.to(["#reveal-phone", "#reveal-line"], { opacity: 0, duration: 0.5 }, s2 + 3.6);
+
+      // ---------- Scene 3: capabilities (8.0 .. 13.0) — 5 items, ~1.0s each, dramatic crossfade+scale ----------
+      const capItems = [
+        ["#cap-1", 8.0],
+        ["#cap-2", 9.0],
+        ["#cap-3", 10.0],
+        ["#cap-4", 11.0],
+        ["#cap-5", 12.0],
+      ];
+      capItems.forEach(([sel, start], i) => {
+        tl.fromTo(sel, { opacity: 0, scale: 0.95 }, { opacity: 1, scale: 1, duration: 0.55, ease: "power2.out" }, start);
+        const isLast = i === capItems.length - 1;
+        const fadeOutAt = isLast ? 12.6 : start + 1.0 - 0.5;
+        tl.to(sel, { opacity: 0, scale: 1.02, duration: 0.5, ease: "power2.in" }, fadeOutAt);
+      });
+
+      // ---------- Scene 4: highlight — Subnet (13.0 .. 17.5) ----------
+      const s4 = 13.0;
+      tl.fromTo("#hi1-phone", { opacity: 0, scale: 0.94 }, { opacity: 1, scale: 1, duration: 0.9, ease: "power2.out" }, s4 + 0.1);
+      tl.fromTo("#hi1-line", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.8, ease: "power2.out" }, s4 + 0.5);
+      tl.to("#hi1-phone", { scale: 1.04, duration: 3.4, ease: "none" }, s4 + 1.0);
+      tl.to(["#hi1-phone", "#hi1-line"], { opacity: 0, duration: 0.5 }, s4 + 3.9);
+
+      // ---------- Scene 5: highlight — Ping (17.5 .. 21.5) ----------
+      const s5 = 17.5;
+      tl.fromTo("#hi2-phone", { opacity: 0, scale: 0.94 }, { opacity: 1, scale: 1, duration: 0.9, ease: "power2.out" }, s5 + 0.1);
+      tl.fromTo("#hi2-line", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.8, ease: "power2.out" }, s5 + 0.5);
+      tl.to("#hi2-phone", { scale: 1.04, duration: 2.9, ease: "none" }, s5 + 1.0);
+      tl.to(["#hi2-phone", "#hi2-line"], { opacity: 0, duration: 0.5 }, s5 + 3.4);
+
+      // ---------- Scene 6: outro (21.5 .. 25.0) — slam, synced to sfx-outro ----------
+      const s6 = 21.5;
+      tl.fromTo("#outro-word", { opacity: 0, scale: 0.9 }, { opacity: 1, scale: 1, duration: 0.7, ease: "back.out(1.6)" }, s6 + 0.1);
+      tl.fromTo("#outro-tag", { opacity: 0 }, { opacity: 1, duration: 0.7, ease: "power2.out" }, s6 + 0.7);
+
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>
