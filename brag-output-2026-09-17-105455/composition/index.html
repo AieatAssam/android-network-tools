@@ -1,0 +1,527 @@
+<!doctype html>
+<html lang="en" data-resolution="landscape">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <title>Net Swiss Knife — Brag (Stacking Montage)</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: #0a0f1e;
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      #root {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #0a0f1e;
+      }
+      .clip {
+        position: absolute;
+        inset: 0;
+      }
+
+      .phone {
+        width: 300px;
+        height: 668px;
+        flex-shrink: 0;
+        border-radius: 28px;
+        overflow: hidden;
+        box-shadow:
+          0 40px 90px rgba(0, 0, 0, 0.55),
+          0 0 0 1px rgba(147, 197, 253, 0.14);
+        background: #0a0f1e;
+      }
+      .phone img {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+      .phone-lg {
+        width: 372px;
+        height: 828px;
+      }
+
+      /* ---------- hook (0.00 - 3.20) ---------- */
+      #scene-hook {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: radial-gradient(ellipse at 50% 40%, #101c34 0%, #0a0f1e 70%);
+      }
+      .hook-mark {
+        width: 104px;
+        height: 104px;
+        border-radius: 26px;
+        background: linear-gradient(135deg, #2563eb 0%, #22d3ee 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 40px;
+        box-shadow: 0 20px 50px rgba(37, 99, 235, 0.35);
+      }
+      .hook-mark svg {
+        width: 54px;
+        height: 54px;
+      }
+      .hook-word {
+        font-size: 80px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        color: #f5f8ff;
+        text-align: center;
+      }
+      .hook-word b {
+        color: #7dd3fc;
+        font-weight: 700;
+      }
+
+      /* ---------- reveal (3.20 - 6.60) ---------- */
+      #scene-reveal {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 40px;
+        background: #0a0f1e;
+      }
+      .reveal-caption {
+        font-size: 40px;
+        font-weight: 500;
+        letter-spacing: 0.01em;
+        color: #dbeafe;
+        text-align: center;
+      }
+      .reveal-caption b {
+        color: #7dd3fc;
+        font-weight: 700;
+      }
+
+      /* ---------- montage (6.60 - 16.60) ---------- */
+      #scene-montage {
+        background: linear-gradient(135deg, #0a0f1e 0%, #0e1830 100%);
+      }
+      .montage-heading {
+        position: absolute;
+        top: 84px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 32px;
+        font-weight: 500;
+        letter-spacing: 0.03em;
+        color: #93a5c9;
+        text-transform: uppercase;
+      }
+      .montage-counter {
+        position: absolute;
+        top: 78px;
+        right: 96px;
+        width: 220px;
+        height: 50px;
+      }
+      .counter-item {
+        position: absolute;
+        inset: 0;
+        text-align: right;
+        font-size: 40px;
+        font-weight: 700;
+        color: #f5f8ff;
+        font-variant-numeric: tabular-nums;
+        opacity: 0;
+      }
+      .counter-item span {
+        color: #7dd3fc;
+      }
+      .montage-final {
+        position: absolute;
+        top: 68px;
+        right: 96px;
+        font-size: 44px;
+        font-weight: 700;
+        color: #7dd3fc;
+        opacity: 0;
+      }
+      .montage-stack {
+        position: absolute;
+        left: 300px;
+        top: 50%;
+      }
+      .stack-card {
+        position: absolute;
+        top: -334px;
+        left: -150px;
+        width: 300px;
+        height: 668px;
+        border-radius: 26px;
+        overflow: hidden;
+        box-shadow:
+          0 30px 70px rgba(0, 0, 0, 0.5),
+          0 0 0 1px rgba(147, 197, 253, 0.14);
+        opacity: 0;
+      }
+      .stack-card img {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+      .montage-rail {
+        position: absolute;
+        top: 156px;
+        right: 96px;
+        width: 620px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .rail-chip {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 12px 22px;
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(147, 197, 253, 0.14);
+        opacity: 0;
+      }
+      .rail-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #2563eb, #22d3ee);
+        flex-shrink: 0;
+      }
+      .rail-label {
+        font-size: 25px;
+        font-weight: 600;
+        color: #eef4ff;
+        letter-spacing: 0.005em;
+      }
+
+      /* ---------- privacy card (16.60 - 20.60) ---------- */
+      #scene-privacy {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: radial-gradient(ellipse at 50% 50%, #101c34 0%, #0a0f1e 75%);
+      }
+      .privacy-card {
+        width: 1120px;
+        border-radius: 32px;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(147, 197, 253, 0.16);
+        padding: 64px 96px;
+        display: flex;
+        flex-direction: column;
+        gap: 26px;
+        opacity: 0;
+      }
+      .privacy-row {
+        display: flex;
+        align-items: center;
+        gap: 26px;
+        opacity: 0;
+      }
+      .privacy-check {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        background: rgba(251, 191, 36, 0.14);
+        border: 1px solid rgba(251, 191, 36, 0.4);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+      }
+      .privacy-check svg {
+        width: 24px;
+        height: 24px;
+      }
+      .privacy-text {
+        font-size: 46px;
+        font-weight: 500;
+        letter-spacing: 0.005em;
+        color: #f5f8ff;
+      }
+      .privacy-text b {
+        font-weight: 700;
+        color: #fbbf24;
+      }
+
+      /* ---------- outro (20.60 - 23.00) ---------- */
+      #scene-outro {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: #0a0f1e;
+      }
+      .outro-word {
+        font-size: 88px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        color: #f5f8ff;
+        opacity: 0;
+      }
+      .outro-word b {
+        color: #7dd3fc;
+        font-weight: 700;
+      }
+      .outro-tag {
+        margin-top: 22px;
+        font-size: 34px;
+        font-weight: 500;
+        letter-spacing: 0.02em;
+        color: #93a5c9;
+        opacity: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="23.0" data-width="1920" data-height="1080">
+      <!-- ============ SCENE 1 — HOOK — 0.00 .. 3.20 ============ -->
+      <section id="scene-hook" class="clip" data-start="0" data-duration="3.2" data-track-index="0">
+        <div class="hook-mark" id="hook-mark">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path
+              d="M12 2 3 6v6c0 5 3.6 8.7 9 10 5.4-1.3 9-5 9-10V6l-9-4Z"
+              stroke="#f5f8ff"
+              stroke-width="1.6"
+              stroke-linejoin="round"
+            />
+            <path d="M8.5 12.2 11 14.7l4.5-5.4" stroke="#f5f8ff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </div>
+        <div class="hook-word" id="hook-word">One app. <b>Every</b> network question.</div>
+      </section>
+
+      <!-- ============ SCENE 2 — STACK REVEAL — 3.20 .. 6.60 ============ -->
+      <section id="scene-reveal" class="clip" data-start="3.2" data-duration="3.4" data-track-index="0">
+        <div class="phone phone-lg" id="reveal-phone">
+          <img src="assets/screenshots/home_grid.png" alt="Home tool grid" />
+        </div>
+        <div class="reveal-caption" id="reveal-caption"><b>14 tools,</b> one clean app.</div>
+      </section>
+
+      <!-- ============ SCENE 3 — FEATURE STACK MONTAGE — 6.60 .. 16.60 ============ -->
+      <section id="scene-montage" class="clip" data-start="6.6" data-duration="10.0" data-track-index="0">
+        <div class="montage-heading">Built-in tools</div>
+        <div class="montage-counter" id="montage-counter">
+          <div class="counter-item" id="counter-1">1<span> / 14</span></div>
+          <div class="counter-item" id="counter-2">2<span> / 14</span></div>
+          <div class="counter-item" id="counter-3">3<span> / 14</span></div>
+          <div class="counter-item" id="counter-4">4<span> / 14</span></div>
+          <div class="counter-item" id="counter-5">5<span> / 14</span></div>
+          <div class="counter-item" id="counter-6">6<span> / 14</span></div>
+          <div class="counter-item" id="counter-7">7<span> / 14</span></div>
+          <div class="counter-item" id="counter-8">8<span> / 14</span></div>
+          <div class="counter-item" id="counter-9">9<span> / 14</span></div>
+          <div class="counter-item" id="counter-10">10<span> / 14</span></div>
+          <div class="counter-item" id="counter-11">11<span> / 14</span></div>
+          <div class="counter-item" id="counter-12">12<span> / 14</span></div>
+          <div class="counter-item" id="counter-13">13<span> / 14</span></div>
+        </div>
+        <div class="montage-final" id="montage-final">14 tools.</div>
+        <div class="montage-stack" id="montage-stack">
+          <div class="stack-card" id="card-1"><img src="assets/screenshots/ping_chart.png" alt="Ping" /></div>
+          <div class="stack-card" id="card-2"><img src="assets/screenshots/traceroute.png" alt="Traceroute" /></div>
+          <div class="stack-card" id="card-3"><img src="assets/screenshots/port_scanner.png" alt="Port Scanner" /></div>
+          <div class="stack-card" id="card-4"><img src="assets/screenshots/dns_lookup.png" alt="DNS Lookup" /></div>
+          <div class="stack-card" id="card-5"><img src="assets/screenshots/wifi_spectrum.png" alt="Wi-Fi Scanner" /></div>
+          <div class="stack-card" id="card-6"><img src="assets/screenshots/topology_config.png" alt="Network Topology" /></div>
+          <div class="stack-card" id="card-7"><img src="assets/screenshots/TLS_Inspector.png" alt="TLS Inspector" /></div>
+          <div class="stack-card" id="card-8"><img src="assets/screenshots/WHOIS.png" alt="WHOIS Lookup" /></div>
+          <div class="stack-card" id="card-9"><img src="assets/screenshots/HTTP_Probe.png" alt="HTTP Probe" /></div>
+          <div class="stack-card" id="card-10"><img src="assets/screenshots/subnet_result.png" alt="Subnet Calculator" /></div>
+          <div class="stack-card" id="card-11"><img src="assets/screenshots/mdns_browser.png" alt="mDNS Browser" /></div>
+          <div class="stack-card" id="card-12"><img src="assets/screenshots/SpeedTest.png" alt="Speed Test" /></div>
+          <div class="stack-card" id="card-13"><img src="assets/screenshots/WakeOnLAN.png" alt="Wake-on-LAN" /></div>
+        </div>
+        <div class="montage-rail" id="montage-rail">
+          <div class="rail-chip" id="chip-1"><span class="rail-dot"></span><span class="rail-label">Ping</span></div>
+          <div class="rail-chip" id="chip-2"><span class="rail-dot"></span><span class="rail-label">Traceroute</span></div>
+          <div class="rail-chip" id="chip-3"><span class="rail-dot"></span><span class="rail-label">Port Scanner</span></div>
+          <div class="rail-chip" id="chip-4"><span class="rail-dot"></span><span class="rail-label">DNS Lookup</span></div>
+          <div class="rail-chip" id="chip-5"><span class="rail-dot"></span><span class="rail-label">Wi-Fi Scanner</span></div>
+          <div class="rail-chip" id="chip-6"><span class="rail-dot"></span><span class="rail-label">Network Topology</span></div>
+          <div class="rail-chip" id="chip-7"><span class="rail-dot"></span><span class="rail-label">TLS Inspector</span></div>
+          <div class="rail-chip" id="chip-8"><span class="rail-dot"></span><span class="rail-label">WHOIS Lookup</span></div>
+          <div class="rail-chip" id="chip-9"><span class="rail-dot"></span><span class="rail-label">HTTP Probe</span></div>
+          <div class="rail-chip" id="chip-10"><span class="rail-dot"></span><span class="rail-label">Subnet Calculator</span></div>
+          <div class="rail-chip" id="chip-11"><span class="rail-dot"></span><span class="rail-label">mDNS Browser</span></div>
+          <div class="rail-chip" id="chip-12"><span class="rail-dot"></span><span class="rail-label">Speed Test</span></div>
+          <div class="rail-chip" id="chip-13"><span class="rail-dot"></span><span class="rail-label">Wake-on-LAN</span></div>
+        </div>
+      </section>
+
+      <!-- ============ SCENE 4 — PRIVACY / FREE / OPEN SOURCE — 16.60 .. 20.60 ============ -->
+      <section id="scene-privacy" class="clip" data-start="16.6" data-duration="4.0" data-track-index="0">
+        <div class="privacy-card" id="privacy-card">
+          <div class="privacy-row" id="privacy-row-1">
+            <span class="privacy-check">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M5 12.5 10 17l9-10" stroke="#fbbf24" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+            </span>
+            <span class="privacy-text">No ads.</span>
+          </div>
+          <div class="privacy-row" id="privacy-row-2">
+            <span class="privacy-check">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M5 12.5 10 17l9-10" stroke="#fbbf24" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+            </span>
+            <span class="privacy-text">No tracking.</span>
+          </div>
+          <div class="privacy-row" id="privacy-row-3">
+            <span class="privacy-check">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M5 12.5 10 17l9-10" stroke="#fbbf24" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+            </span>
+            <span class="privacy-text"><b>100% free</b> — MIT-licensed, open source.</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ SCENE 5 — OUTRO — 20.60 .. 23.00 ============ -->
+      <section id="scene-outro" class="clip" data-start="20.6" data-duration="2.4" data-track-index="0">
+        <div class="outro-word" id="outro-word">Net <b>Swiss Knife</b></div>
+        <div class="outro-tag" id="outro-tag">Free. Private. Open source.</div>
+      </section>
+
+      <!-- ============ AUDIO ============ -->
+      <audio
+        id="bgm"
+        src="assets/music/happy-beats-business-moves-vol-12-by-ende-dot-app.mp3"
+        data-start="0"
+        data-duration="23.0"
+        data-track-index="10"
+        data-volume="1"
+      ></audio>
+      <audio
+        id="sfx-hook"
+        src="assets/sfx/interface/bong_001.ogg"
+        data-start="0.3"
+        data-duration="0.12"
+        data-track-index="11"
+        data-volume="0.4"
+      ></audio>
+      <audio
+        id="sfx-privacy"
+        src="assets/sfx/impact/impactSoft_medium_000.ogg"
+        data-start="16.6"
+        data-duration="0.12"
+        data-track-index="12"
+        data-volume="0.35"
+      ></audio>
+      <audio
+        id="sfx-slide-1"
+        src="assets/sfx/casino/card-slide-1.ogg"
+        data-start="6.8"
+        data-duration="0.6"
+        data-track-index="13"
+        data-volume="0.22"
+      ></audio>
+      <audio
+        id="sfx-slide-2"
+        src="assets/sfx/casino/card-slide-3.ogg"
+        data-start="10.88"
+        data-duration="0.6"
+        data-track-index="14"
+        data-volume="0.22"
+      ></audio>
+      <audio
+        id="sfx-slide-3"
+        src="assets/sfx/casino/card-slide-1.ogg"
+        data-start="14.96"
+        data-duration="0.6"
+        data-track-index="15"
+        data-volume="0.22"
+      ></audio>
+    </div>
+
+    <script>
+      const tl = gsap.timeline({ paused: true });
+
+      /* ---------- hook ---------- */
+      tl.fromTo("#hook-mark", { opacity: 0, scale: 0.85, y: 14 }, { opacity: 1, scale: 1, y: 0, duration: 0.6, ease: "power2.out" }, 0.15);
+      tl.fromTo("#hook-word", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.6, ease: "power2.out" }, 0.35);
+      tl.to("#hook-mark", { opacity: 0, duration: 0.4, ease: "sine.inOut" }, 2.75);
+      tl.to("#hook-word", { opacity: 0, duration: 0.4, ease: "sine.inOut" }, 2.75);
+
+      /* ---------- reveal ---------- */
+      tl.fromTo("#reveal-phone", { opacity: 0, y: 26 }, { opacity: 1, y: 0, duration: 0.7, ease: "sine.out" }, 3.2);
+      tl.fromTo("#reveal-caption", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.6, ease: "sine.out" }, 3.55);
+      tl.to("#reveal-phone", { opacity: 0, duration: 0.45, ease: "sine.inOut" }, 6.15);
+      tl.to("#reveal-caption", { opacity: 0, duration: 0.45, ease: "sine.inOut" }, 6.15);
+
+      /* ---------- montage: stacking cards + rail chips flying in from right ---------- */
+      const montageItems = [
+        ["#card-1", "#chip-1", 6.8, 0],
+        ["#card-2", "#chip-2", 7.48, 1],
+        ["#card-3", "#chip-3", 8.16, 2],
+        ["#card-4", "#chip-4", 8.84, 3],
+        ["#card-5", "#chip-5", 9.52, 4],
+        ["#card-6", "#chip-6", 10.2, 5],
+        ["#card-7", "#chip-7", 10.88, 6],
+        ["#card-8", "#chip-8", 11.56, 7],
+        ["#card-9", "#chip-9", 12.24, 8],
+        ["#card-10", "#chip-10", 12.92, 9],
+        ["#card-11", "#chip-11", 13.6, 10],
+        ["#card-12", "#chip-12", 14.28, 11],
+        ["#card-13", "#chip-13", 14.96, 12],
+      ];
+
+      montageItems.forEach(([cardSel, chipSel, start, idx]) => {
+        const dx = idx * 15;
+        const dy = idx * 10;
+        const rot = idx % 2 === 0 ? -1.4 : 1.4;
+        tl.fromTo(
+          cardSel,
+          { opacity: 0, x: dx - 40, y: dy + 24, rotate: rot, scale: 0.96 },
+          { opacity: 1, x: dx, y: dy, rotate: rot, scale: 1, duration: 0.4, ease: "power2.out" },
+          start
+        );
+        tl.fromTo(chipSel, { opacity: 0, x: 90 }, { opacity: 1, x: 0, duration: 0.36, ease: "power2.out" }, start + 0.06);
+
+        const counterSel = `#counter-${idx + 1}`;
+        const nextStart = idx + 1 < montageItems.length ? montageItems[idx + 1][2] : 15.6;
+        tl.set(counterSel, { opacity: 1 }, start);
+        tl.set(counterSel, { opacity: 0 }, nextStart);
+      });
+
+      tl.fromTo("#montage-final", { opacity: 0, scale: 0.9 }, { opacity: 1, scale: 1, duration: 0.4, ease: "power2.out" }, 15.6);
+
+      tl.to("#montage-stack", { opacity: 0, duration: 0.4, ease: "sine.inOut" }, 16.15);
+      tl.to("#montage-rail", { opacity: 0, duration: 0.4, ease: "sine.inOut" }, 16.15);
+      tl.to("#montage-final", { opacity: 0, duration: 0.4, ease: "sine.inOut" }, 16.15);
+      tl.to(".montage-heading", { opacity: 0, duration: 0.4, ease: "sine.inOut" }, 16.15);
+
+      /* ---------- privacy card ---------- */
+      tl.fromTo("#privacy-card", { opacity: 0, scale: 0.97 }, { opacity: 1, scale: 1, duration: 0.6, ease: "sine.out" }, 16.7);
+      tl.fromTo("#privacy-row-1", { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.45, ease: "sine.out" }, 17.1);
+      tl.fromTo("#privacy-row-2", { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.45, ease: "sine.out" }, 17.55);
+      tl.fromTo("#privacy-row-3", { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.45, ease: "sine.out" }, 18.0);
+      tl.to("#privacy-card", { opacity: 0, duration: 0.4, ease: "sine.inOut" }, 20.2);
+
+      /* ---------- outro ---------- */
+      tl.fromTo("#outro-word", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.6, ease: "sine.out" }, 20.75);
+      tl.fromTo("#outro-tag", { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.5, ease: "sine.out" }, 21.15);
+
+      /* ---------- bgm volume automation ---------- */
+      tl.fromTo("#bgm", { volume: 0.26 }, { volume: 0.26, duration: 6.6 }, 0);
+      tl.to("#bgm", { volume: 0.32, duration: 2.0, ease: "sine.inOut" }, 6.6);
+      tl.to("#bgm", { volume: 0.26, duration: 2.0, ease: "sine.inOut" }, 16.6);
+      tl.to("#bgm", { volume: 0, duration: 0.7 }, 22.3);
+
+      window.__timelines = window.__timelines || {};
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>
