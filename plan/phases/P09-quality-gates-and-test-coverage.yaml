@@ -96,7 +96,8 @@ design:
          ./gradlew :app:assembleRelease --no-daemon --no-parallel   (unsigned)
          apkanalyzer dex packages app/build/outputs/apk/release/app-release-unsigned.apk > /tmp/pkgs.txt
          grep -E 'org.snmp4j.security.(USM|AuthSHA|PrivAES128)\\b' /tmp/pkgs.txt (>=3) ; grep 'me.impa.icmpenguin' /tmp/pkgs.txt
-         unzip -l app-release-unsigned.apk | grep -E 'oui/oui-prefixes.tsv|lib/arm64-v8a/libicmpenguin.so'
+         unzip -l app-release-unsigned.apk | grep -E 'lib/arm64-v8a/libicmpenguin.so'   # add 'oui/oui-prefixes.tsv' and 'psl/public_suffix_list.dat' once P01 / P10 have landed
+         NOTE: the apkanalyzer class grep only proves classes exist after R8; it does not prove SNMP4J's reflective property loading works – the manual v3 discovery on a release build (P02 qa_validation) remains the functional check.
          upload mapping file as artifact (app/build/outputs/mapping/release/mapping.txt) for symbolication.
     4. Test Lab gating: instrumented-tests job `if: github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'run-instrumented')`; `concurrency: { group: testlab-${{ github.ref }}, cancel-in-progress: true }`; README CI section documents the label.
     5. Secrets: release.yml steps 8/9 add `env: ORG_GRADLE_PROJECT_storeFile: ${{ runner.temp }}/release.keystore; ORG_GRADLE_PROJECT_storePassword: …; ORG_GRADLE_PROJECT_keyAlias: …; ORG_GRADLE_PROJECT_keyPassword: …` and remove the four -P args (keep -PversionName/-PversionCode). app/build.gradle.kts unchanged (findProperty reads env-provided project properties).

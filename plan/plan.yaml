@@ -102,8 +102,8 @@ phases:
     priority: high
     status: todo
     depends_on: []
-    findings: [F007]
-    summary: "WifiManager.startScan() is never called; the 10-second auto-refresh re-reads the OS cache. Add scan triggering with SCAN_RESULTS_AVAILABLE receiver, throttle awareness and a user-configurable interval."
+    findings: [F007, F039]
+    summary: "WifiManager.startScan() is never called; the 10-second auto-refresh re-reads the OS cache. Add scan triggering with SCAN_RESULTS_AVAILABLE receiver, throttle awareness and a user-configurable interval. Resolve the neverForLocation/FINE_LOCATION contradiction."
 
   - id: P04
     file: plan/phases/P04-ping-dns-accuracy.yaml
@@ -460,6 +460,12 @@ findings:
     title: "Untested non-Compose app classes"
     evidence: "No tests for AppLogger, FormatUtils, ShareUtils, SystemDnsAddressProvider, CrashHandler, MdnsRepositoryImpl (packet state machine lives in :app and is untestable on JVM), WifiScanRepositoryImpl mapping helpers, IcmpEnginTracerouteRepositoryImpl mapping."
     phase: P09
+  - id: F039
+    severity: medium
+    area: wifi
+    title: "Manifest asserts NEARBY_WIFI_DEVICES neverForLocation while the app still requests ACCESS_FINE_LOCATION on Android 13+"
+    evidence: "AndroidManifest.xml declares NEARBY_WIFI_DEVICES with android:usesPermissionFlags=\"neverForLocation\"; WifiScanScreen.kt:158-163 always adds ACCESS_FINE_LOCATION to the runtime request (all API levels). PRIVACY_POLICY.md says location is only needed on Android 6-12. Google Play policy treats the neverForLocation assertion as a promise not to derive location; requesting fine location alongside it on 13+ is contradictory and may be flagged in review. Note: WifiManager.getScanResults() itself still requires location on 13+ unless the neverForLocation exemption applies (unverified – see P03 A3)."
+    phase: P03
   - id: F040
     severity: low
     area: lan
@@ -470,3 +476,5 @@ findings:
 changelog:
   - date: "2026-09-18"
     note: "Plan created from full codebase analysis (all modules, CI, docs, lint report)."
+  - date: "2026-09-18"
+    note: "Adversarial self-review: verified SNMP4J 3.13.1 / dnsjava 3.6.5 / icmpenguin rc.4 APIs via javap. Corrected P05 A3 (no DefaultUdpTransportMapping.getSocket(); use protected socket/ensureSocket() subclass), P04 icmpenguin ProbeResult subtypes (Success has elapsedUsec/ttl; Timeout/HostUnreachable/NetUnreachable/ConnectionRefused/NetError/Unknown), P01 OUI CSV generation (naive awk breaks on quoted commas), P10 Java-9 SSLParameters API on Android < 29 (NoSuchMethodError, not UnsupportedOperationException) and TLSv1/1.1 being disabled on modern Conscrypt, P13 XXE feature portability, P12 adb backup deprecation. Added F039 (neverForLocation vs FINE_LOCATION request) to P03."

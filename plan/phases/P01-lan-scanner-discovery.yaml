@@ -24,10 +24,12 @@ context:
          file. Result: MAC and vendor are null for every host on every device newer than
          Android 9.
       2. Presence detection: DEFAULT_HOST_CHECKER is InetAddress.isReachable() only. Android's
-         libcore implementation tries an ICMP echo via an unprivileged IPPROTO_ICMP datagram
-         socket, then falls back to TCP port 7. Hosts that drop ICMP (Windows with default
-         firewall profile, many IoT devices, some Android phones on battery saver) are reported
-         absent even though they answer TCP.
+         libcore implementation attempts an ICMP echo (unprivileged IPPROTO_ICMP datagram socket,
+         permitted by Android's ping_group_range) and falls back to a TCP connect to port 7
+         (verify on-device: `strace`-free check is to compare isReachable() against the
+         icmpenguin engine for a known ICMP-only host). Hosts that drop ICMP (Windows with
+         default firewall profile, many IoT devices, some Android phones on battery saver) are
+         reported absent even though they answer TCP.
       3. Gateway: `gatewayIp = ips.firstOrNull()` (lowest host IP). Any router at .254 or an
          arbitrary address is flagged wrong and the actual gateway is not flagged.
       4. OuiDatabase.kt has 91 prefixes; entry "3C:5A:B4" -> "Google" is filed under "// Apple".
@@ -255,7 +257,7 @@ tasks:
       green:
         steps:
           - "NetBiosNameProbe(transport: UdpExchange = DatagramSocket-based default): UdpExchange is `fun interface UdpExchange { fun exchange(ip: String, port: Int, payload: ByteArray, timeoutMs: Int): ByteArray? }` so tests inject bytes."
-          - "MdnsReverseNameProbe(transport: UdpExchange): sends to 224.0.0.251:5353 the PTR question built with dnsjava (Message.newQuery + set QU bit by OR-ing 0x8000 into the class field: Record.newRecord(name, Type.PTR, DClass.IN or 0x8000)). Reads one datagram; parses with Message(bytes)."
+          - "MdnsReverseNameProbe(transport: UdpExchange): sends to 224.0.0.251:5353 the PTR question built with dnsjava (Message.newQuery + set QU bit by OR-ing 0x8000 into the class field: Record.newRecord(name, Type.PTR, DClass.IN or 0x8000) – verify dnsjava does not reject class values > 0xFFFF/validate DClass; if it does, patch the two class bytes in the wire output instead). Reads one datagram; parses with Message(bytes). P05-T4 later adds the same `unicastResponse` option to MdnsPacketParser.buildMdnsQuery – reuse it here once available instead of duplicating."
           - "ReverseDnsNameProbe: InetAddress.getByName(ip).canonicalHostName != ip."
         run: "./gradlew :core-network:test --no-daemon"
         expect: "PASS"
@@ -333,7 +335,7 @@ tasks:
       green:
         steps:
           - "LinkInfoMapper (pure Kotlin object in :app, no android imports, unit-tested) + LinkInfoProvider (@Singleton, uses ConnectivityManager.activeNetwork/getLinkProperties/getNetworkCapabilities; returns LinkInfo?)."
-          - "IcmpenguinIcmpProbe: Pinger(host=ip, ttl=64, timeout=timeoutMs, maxPingCount=1, interval=0, probeSize=Pinger.DEFAULT_PROBE_SIZE, pattern=ByteArray(0)?, sourceIp=null).ping().first(); map success -> rtt ms (verify field names via javap: expect a Success subtype with `timeUsec` like trace.Response.Success). Wrap in try/catch -> null."
+          - "IcmpenguinIcmpProbe: Pinger(host=ip, ttl=64, timeout=timeoutMs, maxPingCount=1, interval=0, probeSize=Pinger.DEFAULT_PROBE_SIZE, pattern=<check javap for a default; pass an empty/zero pattern>, sourceIp=null).ping().first(); `ProbeResult.Success.elapsedUsec / 1000` -> rtt ms; any other subtype (Timeout, HostUnreachable, NetUnreachable, ConnectionRefused, NetError, Unknown – verified via javap, see P04 `icmpenguin_api_verified`) -> null. Wrap in try/catch -> null."
           - "LanModule: provide LinkInfoProvider; provide LanScanRepository = LanScanRepositoryImpl(icmpProbe = IcmpenguinIcmpProbe())."
           - "Add LinkInfoMapper to app Kover includes (P09 formalises the wider list)."
         run: "./gradlew :app:testDebugUnitTest :app:assembleDebug --no-daemon"
@@ -359,7 +361,7 @@ tasks:
         expect: "RED"
       green:
         steps:
-          - "tools/oui/update_oui.sh: curl -fsSL https://standards-oui.ieee.org/oui/oui.csv | awk -F',' 'NR>1 {gsub(/\"/,\"\",$3); print $2\"\\t\"$3}' > core-network/src/main/resources/oui/oui-prefixes.tsv  (columns: Registry,Assignment,Organization Name,Organization Address). Commit the generated TSV (size ~1.2 MB; acceptable; alternatively trim to top-N vendors if APK size matters – decide, document)."
+          - "tools/oui/update_oui.py (Python 3, stdlib csv – NOT awk: organisation names contain quoted commas such as \"Google, Inc.\"): download https://standards-oui.ieee.org/oui/oui.csv, parse with csv.DictReader (columns Registry, Assignment, Organization Name, Organization Address), write `<Assignment 6 hex>\\t<Organization Name>` lines sorted by prefix to core-network/src/main/resources/oui/oui-prefixes.tsv. Also merge MA-M (mam.csv) and MA-S (oui36.csv) registries if easy (longer prefixes: 28/36 bits – lookup tries 36-bit, then 28-bit, then 24-bit). Commit the generated TSV (~1.2 MB uncompressed; stored compressed in the APK; alternatively trim to organisations with >= 2 assignments if APK size matters – decide, document)."
           - "OuiDatabase: lazy-load TSV from classloader resource into HashMap<String,String> keyed by 6 hex chars; normalise input (strip separators, uppercase, take 6); keep the hand-curated overrides map for friendly names (e.g. 'Apple, Inc.' -> 'Apple')."
           - "Add `isLocallyAdministered` and `size`."
         run: "./gradlew :core-network:test --no-daemon"

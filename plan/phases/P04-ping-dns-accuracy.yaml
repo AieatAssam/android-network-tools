@@ -56,8 +56,16 @@ context:
       public final Flow<ProbeResult> ping()
       public final Object ping(Function1<ProbeResult,Unit>, Continuation)
     $ javap -cp /tmp/icmp/classes.jar -p me.impa.icmpenguin.ProbeResult   -> interface { getSequence(), getRemote(), getProbeSize(), getOverhead() }
-    NOTE: the concrete ProbeResult subtypes (Success/Timeout/Unreachable/…) were NOT enumerated yet – first task of T3 is:
-      unzip -l /tmp/icmp/classes.jar | grep -i 'ProbeResult\|ping/' ; javap -p each '…$Xxx' class.
+    Concrete subtypes (verified 2026-09-18 via unzip -l + javap):
+      ProbeResult$Success(sequence: Int, remote: String, probeSize: Int, overhead: Int, elapsedUsec: Int, ttl: Int, data: ByteArray)
+      ProbeResult$Timeout, ProbeResult$HostUnreachable, ProbeResult$NetUnreachable, ProbeResult$ConnectionRefused,
+      ProbeResult$NetError, ProbeResult$Unknown   (each carries sequence/remote/probeSize/overhead; run javap -p on each before coding to capture extra fields such as an error message)
+    Mapping used by IcmpenguinPingEngine:
+      Success           -> PingStatus.SUCCESS, rtTimeMs = elapsedUsec / 1000 (keep sub-ms precision: add rtTimeMicros to PingPacketResult), replyTtl = ttl, bytes = probeSize, fromIp = remote
+      Timeout           -> TIMEOUT
+      HostUnreachable / NetUnreachable / ConnectionRefused -> UNREACHABLE (errorMessage = subtype name)
+      NetError / Unknown -> ERROR
+    Note: `remote` on non-Success results may be the router that generated the ICMP error, not the target – display it as `fromIp` when present.
 
 goals:
   - "Ping uses a real ICMP echo engine with size/TTL/interval when available; falls back to the reachability engine transparently (and says so)."
@@ -243,7 +251,7 @@ tasks:
     status: todo
     depends_on: [P04-T2]
     steps_before_tdd:
-      - "Enumerate ProbeResult subtypes: unzip -l /tmp/icmp/classes.jar | grep -E 'ProbeResult|ping/' ; javap -p -cp /tmp/icmp/classes.jar 'me.impa.icmpenguin.ProbeResult$<Name>' for each. Record the exact names/fields in this file under `icmpenguin_api_verified` before coding."
+      - "Subtypes are recorded under `icmpenguin_api_verified`; re-run `javap -p` on each `ProbeResult$<Name>` class to capture any extra fields (e.g. an error message on NetError) and update the mapping table if they differ."
     tdd:
       red:
         test_file: app/src/test/kotlin/net/aieat/netswissknife/app/ping/IcmpenguinResultMapperTest.kt

@@ -67,8 +67,8 @@ assumptions:
     statement: "ConnectivityManager.getAllNetworks() + getNetworkCapabilities: a network with TRANSPORT_WIFI and without TRANSPORT_VPN is the LAN network; NET_CAPABILITY_NOT_VPN true."
     verify_with: "Log capabilities on a device with VPN on."
   - id: A3
-    statement: "SNMP4J DefaultUdpTransportMapping(UdpAddress) accepts a local bind address; alternatively DefaultUdpTransportMapping.getSocket() exposes the DatagramSocket for Network.bindSocket() before listen()."
-    verify_with: "javap -p org.snmp4j.transport.DefaultUdpTransportMapping | grep -i socket"
+    statement: "SNMP4J 3.13.1 DefaultUdpTransportMapping has NO public getSocket() (verified via javap 2026-09-18). It does expose `protected DatagramSocket socket` and `protected synchronized DatagramSocket ensureSocket()`. Binding therefore requires a subclass in core-network: `class BoundUdpTransportMapping(address: UdpAddress, private val bind: (DatagramSocket) -> Unit) : DefaultUdpTransportMapping(address) { override fun ensureSocket(): DatagramSocket = super.ensureSocket().also(bind) }` – the binder lambda calls Network.bindSocket(socket) in :app. Binding a local address alone (UdpAddress(localAddr, 0)) is NOT sufficient under a VPN because Android routes per-UID, not per-source-address."
+    verify_with: "javap -p -cp <snmp4j jar> org.snmp4j.transport.DefaultUdpTransportMapping | grep -E 'socket;|ensureSocket' ; device test with VPN on: SNMP GET to the router succeeds only with the bound subclass."
   - id: A4
     statement: "ContextCompat/ConnectivityManager NetworkCallback with NetworkRequest for INTERNET and VPN detection works from API 26."
     verify_with: "Compile + device log."
@@ -172,7 +172,7 @@ tasks:
       green:
         steps:
           - "Add `binder` params + socket factories; resolve host to IP before deciding shouldBind (PortScan already resolves for summary – reuse; LanScan has IPs)."
-          - "Snmp4jClientImpl: `DefaultUdpTransportMapping(UdpAddress(binder.localAddress() ?: InetAddress.getByName(\"0.0.0.0\"), 0))` when binder.shouldBind(target.ip); also try binder.bind(transport.socket) if accessible (A3)."
+          - "Snmp4jClientImpl: when binder.shouldBind(target.ip) use `BoundUdpTransportMapping(UdpAddress(\"0.0.0.0/0\"), binder::bind)` (subclass overriding ensureSocket(), see A3); otherwise plain DefaultUdpTransportMapping(). Unit test: a fake binder records that bind() was called with the transport's socket before listen() completes."
         run: "./gradlew :core-network:test --no-daemon"
         expect: "PASS"
       refactor: ["Single `BoundSockets` helper: `fun NetworkBinder.newTcpSocket(dest: String): Socket`, `newUdpSocket(dest)`."]

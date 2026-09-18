@@ -141,7 +141,7 @@ tasks:
           - "SettingsViewModelTest: preferLocalNetwork default true; setter persists"
         expect: "RED"
       green: { steps: ["Implement; update DataStoreModule to provide both stores with qualifiers (@SettingsStore/@RecentsStore); RecentHostsRepository uses recents store; backup XML updated."], expect: "PASS" }
-    acceptance_criteria: ["adb backup/restore (or `bmgr` on emulator) retains theme/pins, drops recents – documented test steps in PR."]
+    acceptance_criteria: ["Backup/restore verified with the backup manager on an emulator (`adb shell bmgr enable true`, `adb shell bmgr backupnow net.aieat.netswissknife.debug`, wipe app data, `adb shell bmgr restore <token> net.aieat.netswissknife.debug`) retains theme/pins and drops recents – `adb backup` is deprecated/no-op on modern Android and must not be used. Document the steps in the PR."]
 
   - id: P12-T5
     title: "Settings: per-tool defaults + export/import"

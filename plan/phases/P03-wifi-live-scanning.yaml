@@ -63,9 +63,10 @@ assumptions:
     statement: "ScanResult.timestamp is microseconds since boot; age = SystemClock.elapsedRealtime()*1000 - timestamp."
     verify_with: "Android docs; assert age is < 5 min on a fresh scan in the spike."
   - id: A3
-    statement: "With NEARBY_WIFI_DEVICES (neverForLocation) on API 33+, getScanResults returns results only when ACCESS_FINE_LOCATION is ALSO granted (Android still gates scan results on location)."
-    verify_with: "On API 33+ device: deny location, grant nearby devices -> check results size."
-    if_false: "Keep requesting both (current behaviour) but relax the rationale text."
+    statement: "With NEARBY_WIFI_DEVICES (neverForLocation) on API 33+, getScanResults returns results only when ACCESS_FINE_LOCATION is ALSO granted (Android still gates scan results on location). This determines how F039 is resolved (see P03-T7)."
+    verify_with: "On API 33+ device: deny location, grant nearby devices -> check results size; also read the current WifiManager.getScanResults() javadoc for the exact permission rule."
+    if_false: "Stop requesting ACCESS_FINE_LOCATION on 33+ (manifest assertion becomes truthful); keep it only for API 26-32."
+    if_true: "Remove android:usesPermissionFlags=\"neverForLocation\" from the manifest (the app does need location to read scan results) and update PRIVACY_POLICY.md accordingly; keep requesting both permissions."
   - id: A4
     statement: "LocationManager.isLocationEnabled (API 28+) / Settings.Secure.LOCATION_MODE (26-27) tells whether Location Services are on."
     verify_with: "LocationManagerCompat.isLocationEnabled(locationManager) from androidx.core."
@@ -246,10 +247,21 @@ tasks:
       green: { steps: ["Add flow + setter; SettingsScreen dropdown row under Defaults."], run: "./gradlew :app:testDebugUnitTest --no-daemon", expect: "PASS" }
     acceptance_criteria: ["Both surfaces (Wi-Fi screen picker and Settings) reflect the same DataStore value."]
 
+  - id: P03-T7
+    title: "Resolve F039: neverForLocation assertion vs ACCESS_FINE_LOCATION request"
+    status: todo
+    depends_on: []
+    steps:
+      - "Run the A3 verification on an API 33+ device first; record the outcome in this file."
+      - "If location is NOT needed on 33+: WifiScanScreen.requiredPermissions = if (SDK >= 33) [NEARBY_WIFI_DEVICES] else [ACCESS_FINE_LOCATION]; add `android:maxSdkVersion=\"32\"` to the two location <uses-permission> entries in AndroidManifest.xml; keep neverForLocation."
+      - "If location IS needed on 33+: remove usesPermissionFlags=neverForLocation; keep requesting both; fix PRIVACY_POLICY.md permission table (location needed on all versions for Wi-Fi scanning) and the onboarding permissions page copy."
+      - "Either way: WifiScanScreenTest asserts the permission set requested per SDK (extract `requiredWifiPermissions(sdkInt)` as a pure function with a unit test)."
+    acceptance_criteria: ["Manifest, runtime request, privacy policy and onboarding copy agree; Play pre-launch report shows no permission-declaration warning."]
+
   - id: P03-T6
     title: "README/help sync"
     status: todo
-    depends_on: [P03-T4]
+    depends_on: [P03-T4, P03-T7]
     steps:
       - "README Wi-Fi Scanner: replace 'Auto-refresh every 10 seconds' with 'Triggers a platform scan on refresh; auto-refresh interval configurable (15/30/60 s, default 30 s); Android throttles scans to 4 per 2 minutes – the screen shows result age and when a request was throttled; Location Services must be on'."
       - "Help sheet: add 'Why results say throttled' and 'Location Services requirement' bullets."

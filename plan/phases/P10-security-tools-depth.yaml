@@ -61,12 +61,15 @@ dependency_decision:
 
 assumptions:
   - id: A1
-    statement: "On Android 8+ Conscrypt SSLSocket supports SSLParameters.setApplicationProtocols via reflection or public API (API 29+ public; earlier via Conscrypt static helpers). SSLSocket.enabledProtocols can restrict to a single protocol to probe support."
-    verify_with: "Device spike: for p in [TLSv1.2, TLSv1.3]: socket.enabledProtocols = arrayOf(p); startHandshake(); catch SSLHandshakeException -> unsupported."
-    if_false: "Protocol probe stays optional/hidden."
+    statement: "ALPN: `SSLParameters.setApplicationProtocols` is a Java 9 API. core-network compiles against JDK 21 so the call compiles, but on Android < 29 the method does not exist at runtime and the call throws java.lang.NoSuchMethodError (an Error, not an Exception) – catch Throwable/LinkageError around it or gate via reflection (`SSLParameters::class.java.getMethod(\"setApplicationProtocols\", …)`), and read the negotiated value with `SSLSocket.getApplicationProtocol()` guarded the same way. Protocol probe: SSLSocket.enabledProtocols can restrict to a single protocol; on Android 10+ Conscrypt has TLSv1/TLSv1.1 disabled by default and setting them may throw IllegalArgumentException or fail the handshake – both mean 'unsupported by this device', which must be reported as 'not testable from this device' rather than 'server does not support'."
+    verify_with: "Device spike on an API 26-28 device (or emulator) and an API 34 device: ALPN call path + for p in [TLSv1, TLSv1.1, TLSv1.2, TLSv1.3]: socket.enabledProtocols = arrayOf(p); startHandshake(); classify exceptions."
+    if_false: "Protocol probe stays optional/hidden; ALPN shown only on API 29+."
   - id: A2
     statement: "OkHttp EventListener callbacks (dnsStart/dnsEnd, connectStart/secureConnectStart/secureConnectEnd/connectEnd, responseHeadersStart, responseBodyEnd) allow computing dns/connect/tls/ttfb/transfer durations."
-    verify_with: "OkHttp docs; unit test with MockWebServer (okhttp3 mockwebserver test dependency)."
+    verify_with: "OkHttp docs; unit test with MockWebServer. NOTE: for OkHttp 5.x the test artifact is `com.squareup.okhttp3:mockwebserver3` (package mockwebserver3), for 4.x it is `com.squareup.okhttp3:mockwebserver`. Pin whichever OkHttp line is chosen and record it in libs.versions.toml."
+  - id: A5
+    statement: "P07 introduced ErrorCode.HTTP_INSECURE_DOWNGRADE for the current abort-on-downgrade behaviour. This phase changes the downgrade into a followed-with-warning flag (`insecureDowngrade`), so that error code becomes unused in the success path – keep it only for the case where the user has disabled downgrade following (add a request option `allowInsecureDowngrade: Boolean = true`)."
+    verify_with: "Grep usages after implementation; no dead enum entries without a comment."
   - id: A3
     statement: "RDAP bootstrap: https://data.iana.org/rdap/dns.json maps TLDs to RDAP base URLs; https://rdap.org/ acts as a redirector for domains/IPs/ASNs (302 to the authoritative server)."
     verify_with: "curl -sI https://rdap.org/domain/example.com | head"

@@ -71,7 +71,7 @@ tools:
       unit: ["SsdpMessageBuilderTest (golden string)", "SsdpResponseParserTest (HTTP/1.1 200 OK responses + NOTIFY, folded headers, missing CRLF tolerance)", "UpnpDescriptionParserTest (fixtures: Fritz!Box, Sonos, Samsung TV, minimal)", "IgdSoapTest (request golden + response parse)", "SameSubnetGuardTest", "SsdpRepositoryImplTest (fake transport: two responses same USN -> one device; description fetch failure keeps device; window timing virtual)", "SsdpViewModelTest"]
       instrumented: ["SsdpScreenTest ≥ 4 cases"]
     privacy: "Local-network-only traffic; LOCATION fetches restricted to the local subnet."
-    security_note: "Never follow LOCATION redirects; cap XML size; disable external entities in DocumentBuilderFactory (XXE): setFeature('http://apache.org/xml/features/disallow-doctype-decl', true)."
+    security_note: "Never follow LOCATION redirects; cap XML size; harden DocumentBuilderFactory against XXE portably: setExpandEntityReferences(false), setXIncludeAware(false), and try each of setFeature('http://apache.org/xml/features/disallow-doctype-decl', true), setFeature('http://xml.org/sax/features/external-general-entities', false), setFeature('http://xml.org/sax/features/external-parameter-entities', false) inside try/catch(ParserConfigurationException) – Android's built-in parser (not Xerces) rejects unknown feature names. Add a unit test feeding a DOCTYPE with an external entity and asserting it is rejected or ignored on the JVM; the on-device behaviour must be checked manually once."
 
   # ---------------------------------------------------------------------------
   - id: P13-NTP

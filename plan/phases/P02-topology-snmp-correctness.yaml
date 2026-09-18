@@ -111,9 +111,13 @@ design:
     4. R8: app/proguard-rules.pro gains
          -keep class org.snmp4j.** { *; }
          -dontwarn org.snmp4j.**
+         -dontwarn org.apache.logging.log4j.**          # optional SNMP4J log adapters referenced but not shipped
+         -dontwarn org.slf4j.**
          -keep class me.impa.icmpenguin.** { *; }      # JNI-registered natives + callbacks
          -keepclasseswithmembernames class * { native <methods>; }
-       plus a verification command in qa_validation.
+       plus a verification command in qa_validation. Before adding blanket -dontwarn lines, run
+       `./gradlew :app:assembleRelease` once and copy the exact missing-class warnings R8 prints so
+       the rules stay minimal and documented.
     5. Extra v3 protocols: V3AuthProtocol += SHA256, SHA512; V3PrivProtocol += AES192, AES256;
        mapping in UsmUserSpecFactory; UI dropdown strings.
 

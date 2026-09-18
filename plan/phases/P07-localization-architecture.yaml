@@ -102,7 +102,7 @@ design:
       NavRoutes: ToolInfo(labelRes, shortLabelRes, descriptionRes) – all consumers use stringResource.
       Literal sweep: strings for every site listed in `evidence`.
       Plurals: ping_showing_recent (quantity = total), wol_success_detail (quantity = packets), wifi_best_channel_body -> tools:ignore="PluralsCandidate" (channel number is not a quantity).
-      Guard test: app/src/test/.../i18n/NoHardcodedUiStringsTest.kt scans app/src/main/kotlin for regexes `Text\(\s*"`, `text\s*=\s*"[A-Za-z]`, `label\s*=\s*\{\s*Text\("`, `contentDescription\s*=\s*"[A-Za-z]` and fails listing offenders (allowlist: tests, previews annotated @Preview via a marker comment `// i18n-ok`).
+      Guard test: app/src/test/.../i18n/NoHardcodedUiStringsTest.kt scans the module sources (working directory of :app unit tests is the module dir, so resolve `File("src/main/kotlin")` and fall back to `File("app/src/main/kotlin")`; fail loudly if neither exists rather than silently passing) for regexes `Text\(\s*"`, `text\s*=\s*"[A-Za-z]`, `label\s*=\s*\{\s*Text\("`, `contentDescription\s*=\s*"[A-Za-z]` and fails listing offenders (allowlist: tests, previews annotated @Preview via a marker comment `// i18n-ok`).
       Locale config: res/xml/locales_config.xml (en, de) + manifest android:localeConfig; Settings row "App language" -> on API 33+ opens Settings.ACTION_APP_LOCALE_SETTINGS; hidden below 33.
       Pseudo-locales: app/build.gradle.kts `buildTypes.debug { isPseudoLocalesEnabled = true }`.
       Translation: res/values-de/strings.xml complete (every non-translatable="false"? – all keys; mark brand/tech tokens translatable="false" in values/strings.xml: 'Cloudflare', 'speed.cloudflare.com', URLs, 'ICMP', 'UDP', 'SNMP' where standalone).

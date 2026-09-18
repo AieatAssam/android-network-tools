@@ -80,7 +80,7 @@ design:
     6. Hero title: maxLines = if (LocalDensity.current.fontScale >= 1.3f) 2 else 1.
     7. Reduced motion: `LocalReducedMotion` CompositionLocal provided in MainActivity from animator scale; AppMotion.enter()/exit() return tween(0) when true.
     8. IME: every OutlinedTextField that is the last field before the primary button gets keyboardOptions(imeAction = Go/Done) + keyboardActions running the primary action when enabled.
-    9. Contrast test: app/src/test/.../theme/ContrastTest.kt computes WCAG contrast (pure math, no Android) for (onPrimaryContainer over primaryContainer), (onSurface over surface), (onSecondaryContainer over secondaryContainer) in both LightColorScheme/DarkColorScheme colour constants from Color.kt; assert >= 4.5.
+    9. Contrast test: app/src/test/.../theme/ContrastTest.kt computes WCAG contrast (pure math, no Android) for (onPrimaryContainer over primaryContainer), (onSurface over surface), (onSecondaryContainer over secondaryContainer) in both LightColorScheme/DarkColorScheme colour constants from Color.kt; assert >= 4.5. Read the ARGB values via `Color.toArgb()` only if compose ui-graphics works in the JVM unit test classpath (it usually does for Color); otherwise keep the raw 0xAARRGGBB literals in a `ThemeArgb` object that Color.kt derives from, and test that object. Hero titles render over a Brush gradient, so also test the text colour against BOTH gradient end colours.
 
   files_to_create:
     - app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/ToolStateAnnouncer.kt
