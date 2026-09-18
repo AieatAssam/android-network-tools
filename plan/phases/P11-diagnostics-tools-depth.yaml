@@ -1,0 +1,173 @@
+# =============================================================================
+# P11 – Diagnostics depth: Speed Test, Traceroute, Port Scanner
+# =============================================================================
+# Audience: AI coding agent. Self-contained. Read plan/plan.yaml `agent_execution_rules` first.
+phase:
+  id: P11
+  title: "Speed Test (keep-alive/TCP latency, server-timing correction, multi-stream, loaded latency capture, server metadata) · Traceroute (per-probe RTT stats, async rDNS/GeoIP enrichment events, provider chain + reserved ranges + IPv6, country flags) · Port Scanner (banner truncation flag, protocol-aware probes, TLS subject)"
+  priority: medium
+  status: todo
+  estimated_effort: "L (4-6 agent sessions; three PR series)"
+  depends_on: [P04, P05]     # ping engine/ICMP + binder; OkHttp from P10 is reused if available (else add here)
+  enables: [P14]
+  findings: [F026, F027]
+  target_modules: [":core-network", ":core-domain", ":app"]
+
+context:
+  problem: |
+    Speed Test
+      - Each latency probe opens a NEW HTTPS connection to speed.cloudflare.com then disconnect()s
+        -> measured value = DNS + TCP + TLS + HTTP round trip (typically 2-4x the true RTT).
+      - Download/upload run ONE stream at a time; modern links (>200 Mbps) are underestimated
+        because a single TCP flow rarely saturates them. Cloudflare's own test uses parallel flows.
+      - No loaded latency (latency under load), which is the metric users actually feel.
+      - No server metadata (colo/PoP) although /meta and /cdn-cgi/trace are public.
+    Traceroute
+      - IcmpEnginTracerouteRepositoryImpl keeps only the first successful probe's RTT even with
+        probesPerHop up to 5; no min/avg/max per hop.
+      - Reverse DNS runs inline in map{} per hop (blocking up to seconds); GeoIP lookups run
+        sequentially in TracerouteUseCase -> hops appear slowly.
+      - GeoIpRepositoryImpl: single unauthenticated ipinfo.io provider, regex JSON parsing, private
+        range check misses CGNAT 100.64/10, 192.0.0/24, 192.0.2/24, 198.18/15, 198.51.100/24,
+        203.0.113/24, 224/4; IPv6 hops never geolocated; COUNTRY_NAMES map hand-maintained (50).
+    Port Scanner
+      - Banner buffer 256 bytes, no truncation indicator; no protocol-aware probe (HTTP/TLS ports
+        yield nothing because servers wait for a request); no TLS subject for 443/8443/993/…
+  evidence:
+    - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/speedtest/SpeedTestRepositoryImpl.kt", lines: "369-433" }
+    - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/traceroute/IcmpEnginTracerouteRepositoryImpl.kt", lines: "1885-1903" }
+    - { file: "core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/TracerouteUseCase.kt", lines: "611-637" }
+    - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/traceroute/GeoIpRepositoryImpl.kt" }
+    - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/portscan/PortScanRepositoryImpl.kt", lines: "47-70" }
+
+goals:
+  - "Speed test latency ≈ true RTT (keep-alive HTTP RTT minus Server-Timing, plus TCP connect RTT); parallel streams (default 4 down / 2 up, configurable); loaded-latency samples captured; server colo shown."
+  - "Traceroute hops carry all probe RTTs + stats; enrichment (rDNS, GeoIP) is asynchronous and concurrent with bounded parallelism; provider chain with proper reserved-range handling and IPv6; flags via country code."
+  - "Port scanner banners: truncation flag, larger bounded buffer, protocol-aware greeting for HTTP/SMTP/FTP/SSH/POP/IMAP, optional TLS peek for known TLS ports."
+
+non_goals:
+  - "Bufferbloat GRADE and dedicated tool (P14) – this phase produces the data."
+  - "Map rendering of hops."
+  - "UDP port scanning."
+
+assumptions:
+  - id: A1
+    statement: "Cloudflare speed endpoints: GET /__down?bytes=N, POST /__up, GET /meta (JSON with colo, clientIp, asn, country) or GET /cdn-cgi/trace (text key=value incl. colo=); responses include `Server-Timing: cfRequestDuration;dur=<ms>`."
+    verify_with: "curl -sI 'https://speed.cloudflare.com/__down?bytes=0' | grep -i server-timing ; curl -s https://speed.cloudflare.com/meta"
+    if_false: "Drop server-timing correction; keep keep-alive RTT."
+  - id: A2
+    statement: "icmpenguin trace.HopStatus.probes exposes per-probe Response (Success(timeUsec)/Timeout/…) so per-probe RTTs are available."
+    verify_with: "javap -p me.impa.icmpenguin.trace.HopStatus me.impa.icmpenguin.trace.Response (and nested classes) from the AAR."
+  - id: A3
+    statement: "icmpenguin SimpleTracer accepts an IPv6 host and uses ICMPv6."
+    verify_with: "Device spike: SimpleTracer(host='2606:4700:4700::1111', …).trace().collect{}."
+    if_false: "Validate IPv6 hosts as unsupported for traceroute with a typed error (TRACEROUTE_IPV6_UNSUPPORTED)."
+  - id: A4
+    statement: "GeoIP providers usable without keys: ipinfo.io/{ip}/json (rate-limited), ipwho.is/{ip} (HTTPS JSON), ipapi.co/{ip}/json/ (HTTPS). Terms permit non-commercial/low-volume app use; document in PRIVACY_POLICY."
+    verify_with: "curl each once; check response schema; record in fixtures."
+
+constraints:
+  - "Speed test attribution to Cloudflare stays (Settings attribution, README)."
+  - "Speed test must remain cancellable within 500 ms (ensureActive in loops)."
+  - "Traceroute streaming UX: hop rows must not reorder; enrichment updates rows in place."
+  - "Kover floors; typed errors (P07)."
+
+design:
+  speedtest: |
+    core-network/speedtest:
+      interface TransferEngine { suspend fun connectRtt(host, port): Long?; suspend fun httpRtt(url): HttpRtt(totalMs, serverMs?); fun download(url, streams, durationMs): Flow<ChunkEvent>; fun upload(url, streams, durationMs): Flow<ChunkEvent> }
+      class OkHttpTransferEngine(client with connection pool, HTTP/2 allowed) – parallel streams via coroutines (Dispatchers.IO), each stream loops requests until duration; ChunkEvent(streamIndex, bytes, elapsedMs).
+      SpeedTestConfig(latencyProbes=10, downloadStreams=4, uploadStreams=2, phaseDurationMs=10_000, sampleIntervalMs=200, loadedLatencyIntervalMs=250)
+      SpeedTestEvent += ServerInfo(colo, clientIp, asn, country), LoadedLatencySample(phase, rttMs), LoadedLatencyFinished(phase, stats)
+      LatencyStats gains `connectRttMs: Long?` (TCP connect) and samples are keep-alive HTTP RTTs minus server-timing (never below 0).
+      SpeedTestResult += serverInfo, loadedLatencyDown: LatencyStats, loadedLatencyUp: LatencyStats, config
+      Repository orchestrates: meta -> connectRtt -> warm-up 2 requests (discarded) -> latency -> download (with concurrent loaded-latency probes on a separate pooled connection) -> upload (same).
+    UI: server chip "Cloudflare LHR · AS12345"; latency card shows 'idle' vs 'connect'; after download/upload, 'latency under load' rows with delta; streams setting in advanced (1-8 / 1-4) persisted (SPEEDTEST_DOWN_STREAMS/UP_STREAMS keys); share text includes new fields.
+  traceroute: |
+    HopResult += probes: List<Long?> (ms or null per probe), rttMinMs/rttAvgMs/rttMaxMs (computed), enrichment stage flags.
+    TracerouteFlowResult += HopEnriched(hopNumber, hostname?, geo?) ; ViewModel merges by hopNumber.
+    Repository (app) emits hops immediately (no rDNS inline); TracerouteUseCase runs enrichment in a channelFlow with Semaphore(4): rDNS via HostResolver.reverse(ip, timeoutMs=1500) (core interface; default InetAddress) and GeoIp lookups concurrently; emits HopEnriched as they finish.
+    GeoIp: GeoIpProvider interface { name; suspend fun lookup(ip): HopGeoLocation? } ; providers [IpinfoProvider, IpwhoIsProvider, IpapiCoProvider] with kotlinx-serialization models; GeoIpRepositoryImpl(providers, cache LRU 512, breaker: after 3 consecutive failures skip provider for 60 s) ; ReservedRanges (pure): IPv4 list per RFC 6890 + IPv6 (::1, fe80::/10, fc00::/7, ::ffff:0:0/96 mapped -> check v4, 2001:db8::/32) ; countryName via java.util.Locale("", code).getDisplayCountry(Locale.ENGLISH) (JVM; drop the hand map) ; flagEmoji(code) pure (regional indicator symbols).
+    UI: hop row shows min/avg/max (labelSmall) when probesPerHop > 1, per-probe dots (success/timeout), shimmer placeholder for hostname/geo until enriched; flag emoji before country; 'Geo path' summary card listing countries in order.
+  portscan: |
+    PortConnectResult += bannerTruncated: Boolean, tlsSubject: String?, probeKind: ProbeKind (PASSIVE/HTTP/SMTP/…)
+    ServiceProbes (pure registry): port -> greeting bytes (80/8080/8000: 'HEAD / HTTP/1.0\r\nHost: <host>\r\n\r\n'; 25/587: read then 'EHLO netswissknife'; 21/22/110/143: passive read; 443/8443/993/995/465/636: TLS peek) ; buffer 1024, read until timeout 300 ms or buffer full; truncated = read == 1024.
+    Option `aggressiveProbes: Boolean` (default true for OPEN ports only – one extra exchange per open port) in PortScanParams; UI toggle in advanced; TLS peek uses TlsInspector HandshakeEngine (P10) with 2 s timeout; shows subject CN in the row.
+
+  files_to_create:
+    - core-network/.../speedtest/{TransferEngine,OkHttpTransferEngine,SpeedTestConfig,ServerInfo}.kt + tests (MockWebServer)
+    - core-network/.../traceroute/{GeoIpProvider,IpinfoProvider,IpwhoIsProvider,IpapiCoProvider,ReservedRanges,CountryFlags,GeoIpCache}.kt + tests + fixtures
+    - core-network/.../portscan/{ServiceProbes,BannerRead}.kt + tests
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/HostResolver.kt (reverse added if P04 created it)
+  files_to_modify:
+    - speedtest models/repo/usecase/VM/screen; traceroute models/repo(app)/usecase/VM/screen; portscan models/repo/usecase/VM/screen; strings.xml (+de); README.md; PRIVACY_POLICY.md (GeoIP providers, Cloudflare /meta)
+
+tasks:
+  - id: P11-T1
+    title: "Speed test engine + config + loaded latency + server info"
+    status: todo
+    tdd:
+      red:
+        tests:
+          - "SpeedTestRepositoryImplTest (existing) migrated to a FakeTransferEngine: latency samples = httpRtt.total - server (floored at 0); connectRtt propagated"
+          - "download with streams=4 aggregates bytes from all streams; throughput samples every 200 ms; peak/avg computed from aggregate"
+          - "loaded latency probes emitted during DOWNLOAD/UPLOAD at 250 ms cadence (virtual time) and LoadedLatencyFinished stats per phase"
+          - "ServerInfo emitted first; failure of /meta does not fail the test (ServerInfo omitted)"
+          - "cancellation mid-download stops all streams (engine fake records cancellation)"
+          - "OkHttpTransferEngineTest (MockWebServer): parallel requests count == streams; Server-Timing parsed; 'cfRequestDuration;dur=12.5' -> 12.5"
+          - "SpeedTestViewModelTest: new states; settings streams persisted; share text includes loaded latency"
+        expect: "RED"
+      green: { steps: ["Implement per design; keep event names backward compatible where possible."], expect: "PASS" }
+    acceptance_criteria: ["On a >300 Mbps link the reported download is within 20% of Cloudflare's web test; idle latency within 1.5x of `ping speed.cloudflare.com` RTT."]
+
+  - id: P11-T2
+    title: "Traceroute: per-probe RTTs, async enrichment, provider chain, reserved ranges, IPv6, flags"
+    status: todo
+    tdd:
+      red:
+        tests:
+          - "TracerouteHopMapperTest (app, pure mirror): probes [1500us, timeout, 2500us] -> probes [1, null, 2], min 1 avg 1.5 max 2"
+          - "TracerouteUseCaseTest: hops emitted before enrichment; HopEnriched arrives with hostname and geo; enrichment failure never drops a hop; parallelism bounded (fake resolver counts concurrent calls <= 4)"
+          - "ReservedRangesTest: 100.64.0.1 reserved; 192.0.2.5 reserved; 8.8.8.8 public; fe80::1 reserved; 2001:4860:4860::8888 public; ::ffff:10.0.0.1 reserved"
+          - "GeoIpRepositoryImplTest: provider 1 fails -> provider 2 used; 3 consecutive failures open the breaker for 60 s (virtual clock); cache hit avoids network"
+          - "Provider parsers: fixtures for each provider -> HopGeoLocation; CountryFlags('GB') == '🇬🇧'; countryName('DE') == 'Germany'"
+          - "TracerouteViewModelTest: HopEnriched merges into Running/Finished hop lists without reordering"
+          - "TracerouteScreenTest: min/avg/max text visible when probesPerHop=3; flag emoji present"
+        expect: "RED"
+      green: { steps: ["Implement; IPv6 per A3."], expect: "PASS" }
+    acceptance_criteria: ["Trace to 1.1.1.1 with 3 probes: all rows show stats; hostnames/geo fill in within ~2 s after each hop instead of gating it."]
+
+  - id: P11-T3
+    title: "Port scanner: banner v2 + service probes + TLS peek"
+    status: todo
+    tdd:
+      red:
+        tests:
+          - "ServiceProbesTest: greeting for 80 contains 'HEAD / HTTP/1.0' and Host header; 25 has passive-then-EHLO; 443 -> TLS_PEEK kind"
+          - "BannerReadTest: 1024 bytes read -> truncated=true; 100 bytes -> false; sanitizer applied"
+          - "PortScanRepositoryImplTest: aggressiveProbes=false -> passive only; OPEN 443 with fake handshake engine -> tlsSubject 'CN=example'"
+          - "PortsScreenTest: truncated banner shows '…' indicator; TLS subject row"
+        expect: "RED"
+      green: { steps: ["Implement; keep BannerSanitizer."], expect: "PASS" }
+    acceptance_criteria: ["Scanning a web server shows 'HTTP/1.0 200 OK …' banner; 443 shows subject."]
+
+  - id: P11-T4
+    title: "Docs sync"
+    status: todo
+    depends_on: [P11-T1, P11-T2, P11-T3]
+    steps: ["README Speed Test/Traceroute/Port Scanner sections; PRIVACY_POLICY external services (GeoIP providers list + what is sent; Cloudflare /meta); Settings attributions add providers."]
+
+qa_validation:
+  automated: ["./gradlew test --no-daemon", "koverVerify x3", "lintDebug", "release-smoke"]
+  manual_device: ["Speed test on Wi-Fi and cellular; cancel mid-phase; airplane mode error typed.", "Traceroute to 8.8.8.8, 2606:4700:4700::1111 (if A3), a CGNAT-only mobile network (hops 100.64.x show 'reserved' not geolocated).", "Port scan 443/80 of a public site with aggressive probes on/off."]
+  regression: ["Existing screen tests green; CSV/share outputs still parse."]
+
+docs_updates: [README.md, PRIVACY_POLICY.md, strings.xml (+de)]
+
+risks:
+  - risk: "Parallel streams stress low-end devices/heat."
+    mitigation: "Default 4/2; cap at 8/4; single-stream option remains."
+  - risk: "GeoIP provider terms change."
+    mitigation: "Provider chain + settings toggle to disable geolocation entirely (add key TRACEROUTE_GEOIP_ENABLED, default on)."
+
+definition_of_done: ["F026, F027 closed; global DoD."]

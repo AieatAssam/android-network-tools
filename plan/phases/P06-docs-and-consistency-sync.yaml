@@ -1,0 +1,164 @@
+# =============================================================================
+# P06 – Documentation & consistency sync, dead code, default mismatches
+# =============================================================================
+# Audience: AI coding agent. Self-contained. Read plan/plan.yaml `agent_execution_rules` first.
+phase:
+  id: P06
+  title: "Docs & consistency: README/CLAUDE.md/PRIVACY_POLICY/store/tool_instructions truthfulness; remove dead code; align defaults and recents behaviour"
+  priority: high
+  status: todo
+  estimated_effort: "S (1-2 agent sessions)"
+  depends_on: []
+  enables: [P07]
+  findings: [F016, F018, F019, F023]
+  target_modules: [":app", ":core-network", "docs"]
+
+context:
+  problem: |
+    CLAUDE.md declares README.md the source of truth and its sync MANDATORY, yet the public docs
+    contradict the code in several places, the privacy policy predates 8 of the 14 tools, the
+    Play listing claims a feature that does not exist, and the agent instructions file points at
+    the wrong package path. Several small code inconsistencies (dead file, duplicated constants,
+    default mismatches, recents-before-validation) are cheap to fix alongside.
+  evidence_and_exact_fixes:
+    - id: F016a
+      file: README.md
+      where: "## Features > ### DNS Lookup, bullet 'Resolver options'"
+      current: "system default, Google (8.8.8.8), Cloudflare (1.1.1.1), or custom server"
+      fix: "system default, Google (8.8.8.8), Cloudflare (1.1.1.1), OpenDNS (208.67.222.222), Quad9 (9.9.9.9), or a custom server"
+      source_of_truth: "core-network/.../dns/DnsServer.kt presets list"
+    - id: F016b
+      file: README.md
+      where: "## How to Build and Test > ### Coverage (Kover)"
+      current: "`./gradlew :app:koverVerify        # enforce 100% on pure, non-Compose app logic`"
+      fix: "enforce 90% on the classes listed in app/build.gradle.kts kover.includes (pure, non-Compose logic)"
+      source_of_truth: "app/build.gradle.kts minBound(90); CLAUDE.md already says 90"
+    - id: F016c
+      file: CLAUDE.md
+      where: "## Module Layout tree + ## CI / CD Pipelines table + ## Development Workflow"
+      current: "lists .github/workflows/claude_add_tool.yml (Claude-driven tool addition via workflow_dispatch)"
+      fix: "Remove the entry (file does not exist: `ls .github/workflows` -> ci.yml, release.yml only) OR create the workflow. Decision: remove; keep claude/tool_instructions.md as the manual guide."
+    - id: F016d
+      file: CLAUDE.md + README.md
+      where: "CI/CD table row release.yml: 'Push tag v*.*.*'; README '### Release (release.yml) Triggered by a v*.*.* tag push'"
+      current: "three-component semver"
+      fix: "Document the actual trigger: tags matching v[0-9]+.[0-9]+.[0-9]+.[0-9]+ (YYYY.MM.DD.N) or manual dispatch (auto-generates YYYY.MM.DD.N); versionCode = YYYYMMDD*100+N"
+      source_of_truth: ".github/workflows/release.yml on.push.tags + step 'Auto-generate version name'"
+    - id: F016e
+      file: README.md
+      where: "### Ping bullet 'Recent hosts saved per-session and offered as quick-select chips'"
+      fix: "Recent hosts (last 5 per tool) are persisted on-device and offered as quick-select chips; clear them from Settings"
+      source_of_truth: "app/.../data/RecentHostsRepository.kt (DataStore, MAX_RECENTS=5)"
+    - id: F016f
+      file: PRIVACY_POLICY.md
+      where: "Overview, External Services, Data the App Generates"
+      current: "6 tools; only ipinfo geolocation named as external; 'Debug Logs screen' presented as available"
+      fix: |
+        Rewrite to cover all 14 tools and every external endpoint:
+          - Traceroute: ipinfo.io (public hop IPs), as today.
+          - Speed Test: speed.cloudflare.com/__down and /__up (Cloudflare receives your IP and test traffic; attribution).
+          - WHOIS: whois.iana.org, whois.arin.net, TLD registries and registrars (the queried domain/IP is sent to them).
+          - DNS Lookup: chosen resolver (system, Google, Cloudflare, OpenDNS, Quad9, custom) receives the queried name.
+          - HTTP Probe / TLS Inspector: the user-entered host receives the request/handshake.
+          - LAN Scanner / mDNS / WOL / Topology: local-network-only traffic (ICMP/TCP probes, multicast DNS, NetBIOS name queries once P01 lands, UDP broadcast, SNMP to devices the user names).
+          - Debug log: written only in debug builds; the Debug Logs screen is not present in Play builds.
+          - Persistence: DataStore holds settings, pinned tools, recent hosts (per tool, last 5); excluded from cloud backup (F023 note).
+        Update 'Effective date'.
+    - id: F016g
+      file: store/play-description.txt
+      where: "PING — … Configurable count, timeout and packet size."
+      fix: "If P04 (packet size) is NOT yet done: change to 'Configurable count and timeout' and mention continuous mode. If P04 IS done: keep and add TTL/interval. Also DNS line: list all six resolver options."
+    - id: F016h
+      file: claude/tool_instructions.md
+      where: "all 'com/example/netswissknife' paths; '## Tools Added So Far' table"
+      fix: |
+        Replace paths with net/aieat/netswissknife; add the 'core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain' path; mark all 14 tools 'Implemented' with routes from NavRoutes.kt
+        (ping, traceroute, ports, lan, dns, wifi_scan, topology, tls, whois, httprobe, subnet, mdns, speedtest, wol);
+        add the mandatory items the guide omits today: Hilt module per tool (di/<Tool>Module.kt), strings.xml + help sheet strings (help_<tool>_*), instrumented screen test under app/src/androidTest/.../screens/<tool>/, Kover includes for pure logic, README Features subsection, 'More' sheet section membership (MoreToolsSheet.TOOL_SECTIONS) and Home grid (NavRoutes.allTools).
+    - id: F018a
+      file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/ToolPlaceholderContent.kt
+      fix: "Delete (0 references: `grep -rn ToolPlaceholderContent app/src` returns only the file). Remove its strings if any are unused (`./gradlew :app:lintDebug` UnusedResources will list)."
+    - id: F018b
+      file: app/.../ui/navigation/NavRoutes.kt & AppNavigationViewModel.kt
+      fix: "Keep ONE source: NavRoutes.defaultPinnedRoutes; AppNavigationViewModel.DEFAULT_PINNED_ROUTES = NavRoutes.defaultPinnedRoutes (test AppNavigationViewModelTest asserts equality)."
+    - id: F018c
+      file: core-network/src/test/kotlin/net/aieat/netswissknife/core/network/traceroute/TracerouteRepositoryImplTest.kt
+      fix: "It tests GeoIpRepositoryImpl private-range logic and GeoIpRepositoryImplTest.kt already exists: merge the 5 cases into GeoIpRepositoryImplTest (dedupe) and delete the misnamed file."
+    - id: F019a
+      file: app/.../ui/screens/portscan/PortScanViewModel.kt
+      current: "_concurrency initial 100; init sets prefs[DEFAULT_CONCURRENCY] ?: 50"
+      fix: "Single constant PortScanDefaults.CONCURRENCY = 50 used for both; test 'initial concurrency equals default when no pref'."
+    - id: F019b
+      file: app/.../ui/screens/mdns/{MdnsDiscoveryScreen,MdnsDiscoveryViewModel}.kt, core-domain MdnsDiscoveryUseCase
+      current: "8_000L literal twice in screen; 5_000L default in VM and use case"
+      fix: "Add `MdnsDiscoveryViewModel.DEFAULT_SCAN_DURATION_MS = 8_000L`; use case default 8_000L; screen calls viewModel.startScan() without args; README says 8-second window (keep)."
+    - id: F019c
+      files: "DnsViewModel.performLookup, PortScanViewModel.startScan, TracerouteViewModel.startTrace, TlsInspectorViewModel.inspect, WhoisViewModel.lookup"
+      current: "recentHostsRepository.addRecent(...) before validation/first result"
+      fix: "Save recents only on the first successful/streamed result (pattern already used by PingViewModel/LanScanViewModel). For request/response tools (DNS, TLS, WHOIS) save on NetworkResult.Success; for streams (Ports, Traceroute) on first PortScanned/Hop. Update the corresponding ViewModel tests ('invalid input does not add a recent')."
+    - id: F023
+      file: app/src/main/res/xml/{backup_rules,data_extraction_rules}.xml
+      decision_here: "Document only. Splitting DataStore into settings vs recents files (so settings can be backed up) needs a migration; scheduled in P12-T5. Add a one-line note to README Settings paragraph and PRIVACY_POLICY: 'settings and recent hosts are not included in Android backups'."
+
+tasks:
+  - id: P06-T1
+    title: "README.md fixes (F016a, F016b, F016e) + Settings/backup note"
+    status: todo
+    steps: ["Apply exact edits above.", "Re-read every Features subsection against the corresponding ViewModel/UseCase constants (counts, ranges, defaults) and fix any other drift found; list them in the PR."]
+    validation: ["`grep -n '100%' README.md` -> no coverage claim; `grep -n 'OpenDNS' README.md` -> present"]
+  - id: P06-T2
+    title: "CLAUDE.md fixes (F016c, F016d)"
+    status: todo
+    steps: ["Remove claude_add_tool.yml references (tree + table).", "Fix release trigger text in CLAUDE.md and README.", "Add to Build Commands: unsigned release + apkanalyzer check (from P02-T5) once P02 lands; otherwise skip."]
+  - id: P06-T3
+    title: "PRIVACY_POLICY.md rewrite (F016f)"
+    status: todo
+    steps: ["Rewrite per fix text; keep the permissions table; add sections per tool group; bump effective date to the merge date.", "Cross-check with AndroidManifest.xml permissions and all external hostnames: `grep -rn 'https\\?://\\|whois\\.\\|\\.cloudflare\\.com\\|ipinfo' core-network/src/main app/src/main --include=*.kt`."]
+    validation: ["Every hostname found by the grep is mentioned in the policy."]
+  - id: P06-T4
+    title: "store/play-description.txt (F016g)"
+    status: todo
+    steps: ["Apply conditional fix depending on P04 status; keep <= 4000 chars (Play limit) – check with `wc -c`."]
+  - id: P06-T5
+    title: "claude/tool_instructions.md (F016h)"
+    status: todo
+    steps: ["Apply fix; also update template code to current conventions (collectAsStateWithLifecycle, ToolHeroHeader, ToolHelpSheet, RecentHostsRow, hapticAction, AppShapes tokens) by copying a short reference to WakeOnLanScreen.kt as the canonical modern example."]
+  - id: P06-T6
+    title: "Code hygiene (F018a-c)"
+    status: todo
+    tdd:
+      red:
+        tests:
+          - "AppNavigationViewModelTest: DEFAULT_PINNED_ROUTES == NavRoutes.defaultPinnedRoutes"
+          - "GeoIpRepositoryImplTest gains the 5 private-range cases (if not already present) before deleting TracerouteRepositoryImplTest.kt"
+        run: "./gradlew :app:testDebugUnitTest :core-network:test --no-daemon"
+      green:
+        steps: ["Delete ToolPlaceholderContent.kt; dedupe constants; delete misnamed test; run lint for unused resources and remove the placeholder strings it flags."]
+        run: "./gradlew :app:lintDebug :app:assembleDebug --no-daemon"
+        expect: "PASS, 0 errors"
+  - id: P06-T7
+    title: "Defaults & recents alignment (F019a-c)"
+    status: todo
+    tdd:
+      red:
+        tests:
+          - "PortScanViewModelTest: initial concurrency == 50 and matches pref default"
+          - "MdnsDiscoveryViewModelTest: startScan() default duration 8_000"
+          - "DnsViewModelTest/PortScanViewModelTest/TracerouteViewModelTest/TlsInspectorViewModelTest/WhoisViewModelTest: 'invalid input does not persist a recent host' + 'first success persists recent host'"
+        run: "./gradlew :app:testDebugUnitTest --no-daemon"
+        expect: "RED"
+      green: { steps: ["Apply fixes."], run: "./gradlew :app:testDebugUnitTest --no-daemon", expect: "PASS" }
+    acceptance_criteria: ["All five ViewModels use the same recents rule; documented in claude/tool_instructions.md."]
+
+qa_validation:
+  automated: ["./gradlew test --no-daemon", "./gradlew :app:lintDebug --no-daemon --no-parallel", "./gradlew :app:assembleDebug --no-daemon"]
+  manual: ["Read README top-to-bottom once against the app on a device: every bullet must be observable."]
+
+docs_updates: [README.md, CLAUDE.md, PRIVACY_POLICY.md, store/play-description.txt, claude/tool_instructions.md]
+
+risks:
+  - risk: "Privacy policy URL is referenced from the Play listing; wording changes need re-review by the owner."
+    mitigation: "Keep structure; mark the PR 'needs owner review'."
+
+definition_of_done:
+  - "F016, F018, F019 closed; F023 documented (implementation in P12)."

@@ -1,0 +1,282 @@
+# =============================================================================
+# P05 – Local-network socket binding (VPN-safe), connectivity awareness,
+#       Android 16 Local Network Protections readiness, mDNS bind fallback
+# =============================================================================
+# Audience: AI coding agent. Self-contained. Read plan/plan.yaml `agent_execution_rules` first.
+phase:
+  id: P05
+  title: "NetworkBinder abstraction + Wi-Fi/Ethernet binding for all LAN sockets, connectivity status banner, LNP error mapping, mDNS port-bind fallback"
+  priority: high
+  status: todo
+  estimated_effort: "M (2-4 agent sessions)"
+  depends_on: []          # best after P01 (probes) but can run first; P01 must then adopt the binder
+  enables: [P11, P12, P13]
+  findings: [F012, F013]
+  target_modules: [":core-network", ":app"]
+
+context:
+  problem: |
+    Every socket the app opens uses the process default network. On Android the default network
+    is the VPN when one is active (extremely common: corporate VPNs, ad-blockers, WireGuard),
+    and can be cellular when the OS scores it higher. Consequences today:
+      - LAN Scanner: probes leave through the VPN tunnel; nothing on the LAN answers.
+      - mDNS Browser: MulticastSocket bound to 0.0.0.0:5353 with no NetworkInterface; joinGroup
+        picks the default interface; queries never reach the Wi-Fi segment.
+      - Wake-on-LAN: DatagramSocket() broadcast goes via the default route.
+      - Network Topology: DefaultUdpTransportMapping() unbound.
+      - Port Scanner / TLS / HTTP against LAN hosts: routed via VPN (fails unless split-tunnel).
+    Nothing detects "no connectivity" or "VPN active" either, so the user sees generic timeouts.
+    Android 16 (API 36) Local Network Protections will additionally gate LAN sockets behind
+    NEARBY_WIFI_DEVICES; LocalNetworkPermission.kt already requests it on some screens, but a
+    SecurityException from a socket is not mapped to a clear error anywhere.
+    mDNS also binds port 5353 with reuseAddress and no fallback; on OEMs where the system mdnsd
+    holds the port without SO_REUSEPORT, bind() throws and discovery fails outright.
+  evidence:
+    - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/mdns/MdnsRepositoryImpl.kt", lines: "1435-1443", note: "MulticastSocket(null); bind(InetSocketAddress(5353)); joinGroup(group) – no interface" }
+    - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/wol/WakeOnLanRepositoryImpl.kt", lines: "789-793", note: "DatagramSocket() unbound" }
+    - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/topology/Snmp4jClientImpl.kt", lines: "18, 36", note: "DefaultUdpTransportMapping() unbound" }
+    - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/LanScanRepositoryImpl.kt", lines: "48-55, 62-72", note: "isReachable / Socket() unbound" }
+    - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/portscan/PortScanRepositoryImpl.kt", lines: "47-70", note: "Socket() unbound" }
+    - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/LocalNetworkPermission.kt", note: "requests NEARBY_WIFI_DEVICES on API 36+; no error mapping" }
+    - { file: "AndroidManifest.xml", note: "ACCESS_NETWORK_STATE declared; unused for status" }
+  desired_behaviour: |
+    A `NetworkBinder` in core-network with a no-op JVM default; the :app implementation resolves the
+    best local network (Wi-Fi > Ethernet, never VPN), binds sockets whose destination is a
+    non-public address, exposes the interface/local address for multicast and SNMP transports,
+    and a `ConnectivityObserver` publishes {hasInternet, hasLocalNetwork, vpnActive, transport}.
+    LAN tool screens show a compact status banner when relevant. SecurityException from LAN
+    sockets maps to a typed "local network permission" error with a rationale + retry.
+
+goals:
+  - "All LAN-destined sockets bound to the local (non-VPN) network when one exists."
+  - "mDNS joins the group on the Wi-Fi interface and falls back to an ephemeral port with QU queries when 5353 is unavailable."
+  - "Connectivity/VPN state visible to the user on LAN tools and Ping/Speed test (no-internet)."
+  - "Deterministic unit tests via fake binder; on-device validation matrix (VPN on/off)."
+
+non_goals:
+  - "Split-tunnel configuration UI."
+  - "IPv6 mDNS group (P12)."
+  - "Retry/backoff policies for internet tools (P11 scope for speed test/geoip)."
+
+assumptions:
+  - id: A1
+    statement: "Network.bindSocket(Socket) / bindSocket(DatagramSocket) (API 23+) works for sockets that are not yet connected/bound; for MulticastSocket the interface must be set via setNetworkInterface(NetworkInterface.getByName(linkProperties.interfaceName)) and joinGroup(SocketAddress, NetworkInterface)."
+    verify_with: "Spike on device with a VPN app active (e.g. a WireGuard config or Android 'always-on' test VPN via `adb shell` is not possible – use a real VPN app): bound DatagramSocket to Wi-Fi network sends WOL that a laptop receives (tcpdump)."
+    if_false: "Use ConnectivityManager.bindProcessToNetwork temporarily around LAN operations (process-wide; document the trade-off)."
+  - id: A2
+    statement: "ConnectivityManager.getAllNetworks() + getNetworkCapabilities: a network with TRANSPORT_WIFI and without TRANSPORT_VPN is the LAN network; NET_CAPABILITY_NOT_VPN true."
+    verify_with: "Log capabilities on a device with VPN on."
+  - id: A3
+    statement: "SNMP4J DefaultUdpTransportMapping(UdpAddress) accepts a local bind address; alternatively DefaultUdpTransportMapping.getSocket() exposes the DatagramSocket for Network.bindSocket() before listen()."
+    verify_with: "javap -p org.snmp4j.transport.DefaultUdpTransportMapping | grep -i socket"
+  - id: A4
+    statement: "ContextCompat/ConnectivityManager NetworkCallback with NetworkRequest for INTERNET and VPN detection works from API 26."
+    verify_with: "Compile + device log."
+
+constraints:
+  - ":core-network stays Android-free: NetworkBinder is an interface with java.net types only."
+  - "Do not change public flows/events of repositories except to add typed error causes."
+  - "Every repository must keep working with NoOpNetworkBinder (JVM tests)."
+  - "Bind only for local destinations to avoid breaking VPN-only reachability of internal corporate hosts (site-local ranges routed through VPN): rule = destination isSiteLocal/isLinkLocal AND the local network's own subnet contains it; otherwise default network. Provide a user override 'Force local network for LAN tools' (Settings, default on) – implement the toggle in P12 if time is short; here implement the subnet-contains rule."
+
+design:
+  overview: |
+    core-network/net (new package `net.aieat.netswissknife.core.network.net`):
+      interface NetworkBinder {
+        val isAvailable: Boolean
+        fun localSubnet(): String?                 // CIDR of the bound local network or null
+        fun shouldBind(destinationIp: String): Boolean
+        fun bind(socket: java.net.Socket)
+        fun bind(socket: java.net.DatagramSocket)  // also MulticastSocket
+        fun localInterface(): java.net.NetworkInterface?
+        fun localAddress(): java.net.InetAddress?
+      }
+      object NoOpNetworkBinder : NetworkBinder (isAvailable=false, shouldBind=false, binds no-op)
+      class LocalDestinationPolicy(subnetCidr) { fun isLocal(ip): Boolean }  // pure, tested (uses SubnetUtils.contains from P01 or its own)
+
+      Repositories gain a `binder: NetworkBinder = NoOpNetworkBinder` constructor param:
+        LanScanRepositoryImpl (SocketTcpPresenceProbe/UdpExchange/port checker receive it),
+        PortScanRepositoryImpl.defaultChecker(timeout, clock, binder, host),
+        WakeOnLanRepositoryImpl, Snmp4jClientImpl (via TopologyParams? no – via factory ctor),
+        MdnsRepositoryImpl (app) uses binder.localInterface().
+      Typed error: `class LocalNetworkPermissionDeniedException(cause: SecurityException)` thrown/mapped by
+        repositories when a SecurityException occurs on a LAN socket -> ViewModels map to a UiState error with
+        a string resource + 'Grant' action calling rememberLocalNetworkPermissionRequester().
+
+    :app/platform
+      class AndroidNetworkBinder @Inject (ConnectivityManager) : NetworkBinder – picks the best local network
+        (WIFI, then ETHERNET; must have NET_CAPABILITY_NOT_VPN); caches LinkProperties; shouldBind = policy.isLocal(ip).
+      class ConnectivityObserver @Inject (ConnectivityManager): val status: StateFlow<NetworkStatus>
+        data class NetworkStatus(hasInternet: Boolean, hasLocalNetwork: Boolean, vpnActive: Boolean, transport: Transport)
+      NetworkStatusBanner(composable): shows "No internet connection" (Ping/DNS/HTTP/TLS/WHOIS/Speed), "No Wi-Fi/Ethernet – LAN tools need a local network" (LAN/mDNS/WOL/Topology), "VPN active – LAN traffic is sent over Wi-Fi directly" (info).
+      DI: NetworkModule provides NetworkBinder + ConnectivityObserver; existing modules pass the binder.
+      mDNS: MulticastSocket: try bind 5353 -> on BindException/SocketException bind ephemeral port and set the
+        QU bit on all queries (unicast responses come back to our port); setNetworkInterface(binder.localInterface());
+        joinGroup(InetSocketAddress(group, 5353), iface).
+
+  files_to_create:
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/net/NetworkBinder.kt
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/net/LocalDestinationPolicy.kt
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/net/LocalNetworkPermissionDeniedException.kt
+    - core-network/src/test/kotlin/net/aieat/netswissknife/core/network/net/LocalDestinationPolicyTest.kt
+    - core-network/src/test/kotlin/net/aieat/netswissknife/core/network/net/FakeNetworkBinder.kt   # test util (records bound sockets)
+    - app/src/main/kotlin/net/aieat/netswissknife/app/platform/AndroidNetworkBinder.kt
+    - app/src/main/kotlin/net/aieat/netswissknife/app/platform/ConnectivityObserver.kt
+    - app/src/main/kotlin/net/aieat/netswissknife/app/di/NetworkModule.kt
+    - app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/NetworkStatusBanner.kt
+    - app/src/test/kotlin/net/aieat/netswissknife/app/platform/NetworkSelectionTest.kt   # pure selection logic over capability snapshots
+  files_to_modify:
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/LanScanRepositoryImpl.kt (+ probes from P01)
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/portscan/PortScanRepositoryImpl.kt
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/wol/WakeOnLanRepositoryImpl.kt
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/topology/Snmp4jClientImpl.kt (+ SnmpClientFactory from P02)
+    - core-network/src/test/kotlin/.../{LanScanRepositoryImplTest,PortScanRepositoryImplTest,WakeOnLanRepositoryImplTest}.kt
+    - app/src/main/kotlin/net/aieat/netswissknife/app/mdns/MdnsRepositoryImpl.kt
+    - app/src/main/kotlin/net/aieat/netswissknife/app/di/{LanModule,PortScanModule,WakeOnLanModule,TopologyModule,MdnsModule}.kt
+    - app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/{lan/LanScanScreen,mdns/MdnsDiscoveryScreen,wol/WakeOnLanScreen,topology/TopologyDiscoveryScreen,PingScreen,speedtest/SpeedTestScreen}.kt (banner)
+    - app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/*/*ViewModel.kt (map LocalNetworkPermissionDeniedException)
+    - app/src/main/res/values/strings.xml
+    - README.md, PRIVACY_POLICY.md (permission rationale for NEARBY_WIFI_DEVICES on Android 16)
+
+tasks:
+  - id: P05-T1
+    title: "core: NetworkBinder, NoOp, LocalDestinationPolicy, FakeNetworkBinder"
+    status: todo
+    tdd:
+      red:
+        test_file: core-network/src/test/kotlin/net/aieat/netswissknife/core/network/net/LocalDestinationPolicyTest.kt
+        tests:
+          - "policy('192.168.1.0/24').isLocal('192.168.1.7') true; ('192.168.2.7') false; ('8.8.8.8') false"
+          - "policy(null).isLocal(any site-local) true (no subnet known: bind for all RFC1918/link-local)"
+          - "IPv6 link-local fe80:: -> true; global v6 -> false"
+          - "hostname input (non-IP) -> false (caller must resolve first)"
+        run: "./gradlew :core-network:test --tests '*LocalDestinationPolicyTest' --no-daemon"
+        expect: "RED"
+      green: { steps: ["Implement; NoOpNetworkBinder; FakeNetworkBinder in test sources recording bound sockets and configurable shouldBind."], run: "./gradlew :core-network:test --no-daemon", expect: "PASS" }
+    acceptance_criteria: ["No Android imports; policy 100% covered."]
+
+  - id: P05-T2
+    title: "core repositories accept and use the binder"
+    status: todo
+    depends_on: [P05-T1]
+    tdd:
+      red:
+        tests:
+          - "PortScanRepositoryImplTest: with FakeNetworkBinder(shouldBind=true) each socket created by the default checker is passed to binder.bind before connect (inject a socket factory: `socketFactory: () -> Socket`)"
+          - "PortScanRepositoryImplTest: shouldBind=false -> binder.bind never called"
+          - "WakeOnLanRepositoryImplTest: DatagramSocket passed to binder.bind before send (inject datagram socket factory)"
+          - "LanScanRepositoryImplTest: TCP presence/port checker sockets bound when policy says local"
+          - "SecurityException from socket factory -> repositories surface LocalNetworkPermissionDeniedException (PortScan: PortScanUpdate.Complete? no – throw so the flow errors; WOL: NetworkResult.Error with cause LocalNetworkPermissionDeniedException)"
+        run: "./gradlew :core-network:test --no-daemon"
+        expect: "RED"
+      green:
+        steps:
+          - "Add `binder` params + socket factories; resolve host to IP before deciding shouldBind (PortScan already resolves for summary – reuse; LanScan has IPs)."
+          - "Snmp4jClientImpl: `DefaultUdpTransportMapping(UdpAddress(binder.localAddress() ?: InetAddress.getByName(\"0.0.0.0\"), 0))` when binder.shouldBind(target.ip); also try binder.bind(transport.socket) if accessible (A3)."
+        run: "./gradlew :core-network:test --no-daemon"
+        expect: "PASS"
+      refactor: ["Single `BoundSockets` helper: `fun NetworkBinder.newTcpSocket(dest: String): Socket`, `newUdpSocket(dest)`."]
+    acceptance_criteria: ["All core repos compile with NoOp default; tests prove bind ordering."]
+
+  - id: P05-T3
+    title: "app: AndroidNetworkBinder + ConnectivityObserver + DI"
+    status: todo
+    depends_on: [P05-T2]
+    tdd:
+      red:
+        test_file: app/src/test/kotlin/net/aieat/netswissknife/app/platform/NetworkSelectionTest.kt
+        tests:
+          - "selectLocal([wifi(notVpn), vpn, cell]) -> wifi"
+          - "selectLocal([ethernet, cell]) -> ethernet"
+          - "selectLocal([vpn only]) -> null"
+          - "status([vpn(internet), wifi]) -> hasInternet true, vpnActive true, hasLocalNetwork true, transport WIFI"
+          - "(pure functions over a `CapabilitySnapshot(transports: Set<Transport>, hasInternet: Boolean, notVpn: Boolean)`)"
+        run: "./gradlew :app:testDebugUnitTest --tests '*NetworkSelectionTest' --no-daemon"
+        expect: "RED"
+      green:
+        steps:
+          - "NetworkSelection (pure) + AndroidNetworkBinder (maps ConnectivityManager -> snapshots; caches chosen Network + LinkProperties; refreshes via NetworkCallback)."
+          - "ConnectivityObserver: callbackFlow(registerDefaultNetworkCallback + registerNetworkCallback(VPN request)) -> StateFlow(NetworkStatus)."
+          - "NetworkModule @Provides @Singleton both; wire into Lan/PortScan/WakeOnLan/Topology/Mdns modules."
+          - "Add NetworkSelection to app Kover includes."
+        run: "./gradlew :app:testDebugUnitTest :app:assembleDebug --no-daemon"
+        expect: "PASS"
+    acceptance_criteria: ["Selection logic 100% covered; lint clean."]
+
+  - id: P05-T4
+    title: "mDNS: interface binding + ephemeral-port fallback with QU queries"
+    status: todo
+    depends_on: [P05-T3]
+    tdd:
+      red:
+        test_file: core-network/src/test/kotlin/net/aieat/netswissknife/core/network/mdns/MdnsPacketParserTest.kt
+        tests:
+          - "buildMdnsQuery(name, type, unicastResponse=true) sets the top bit of QCLASS (0x8001) – assert on wire bytes"
+          - "buildMdnsQuery default keeps QCLASS 0x0001"
+        run: "./gradlew :core-network:test --tests '*MdnsPacketParserTest' --no-daemon"
+        expect: "RED"
+      green:
+        steps:
+          - "MdnsPacketParser.buildMdnsQuery gains `unicastResponse: Boolean = false`."
+          - "MdnsRepositoryImpl: create socket via binder; try bind 5353 (reuseAddress) catch SocketException -> bind(0), useUnicastResponses=true; setNetworkInterface(iface) when non-null; joinGroup(InetSocketAddress(MDNS_GROUP, 5353), iface); send queries with QU when fallback active."
+          - "Extract the packet-processing loop state (PartialService bookkeeping) into core-network `MdnsDiscoverySession` (pure) so it becomes unit-testable (also serves F038)."
+        run: "./gradlew :core-network:test :app:assembleDebug --no-daemon"
+        expect: "PASS"
+      refactor: []
+    acceptance_criteria: ["MdnsDiscoverySession has tests for: meta-query PTR -> type registered; instance PTR -> SRV/TXT queries requested; SRV+A -> service emitted once; end-of-scan sweep emits partials with hostname."]
+
+  - id: P05-T5
+    title: "UI: NetworkStatusBanner + LNP error mapping on LAN tools"
+    status: todo
+    depends_on: [P05-T3]
+    tdd:
+      red:
+        tests:
+          - "LanScanViewModelTest: use case throws LocalNetworkPermissionDeniedException -> Error state with kind PermissionDenied (typed enum on the state, string resolved in UI)"
+          - "WakeOnLanViewModelTest / MdnsDiscoveryViewModelTest / TopologyDiscoveryViewModelTest: same mapping"
+          - "Instrumented (LanScanScreenTest): banner text visible when status.hasLocalNetwork=false (fake ConnectivityObserver via Hilt test module or constructor param on the screen)"
+        run: "./gradlew :app:testDebugUnitTest --no-daemon"
+        expect: "RED"
+      green:
+        steps:
+          - "ViewModels expose `networkStatus` (from observer) and typed error kinds."
+          - "NetworkStatusBanner composable: ElevatedCard, AnimatedVisibility, icon + text, tokens secondaryContainer/errorContainer; strings network_banner_no_internet, network_banner_no_local, network_banner_vpn_info, network_error_local_permission + action 'Grant'."
+          - "Place banner under ToolHeroHeader on LAN, mDNS, WOL, Topology (local), Ping/DNS/HTTP/TLS/WHOIS/Speed (internet)."
+        run: "./gradlew :app:testDebugUnitTest :app:assembleDebug --no-daemon"
+        expect: "PASS"
+    acceptance_criteria: ["Banner respects CLAUDE.md UI rules; no literals."]
+
+  - id: P05-T6
+    title: "Docs"
+    status: todo
+    depends_on: [P05-T5]
+    steps:
+      - "README: new subsection 'Networking behaviour' (LAN tools bind to Wi-Fi/Ethernet even with a VPN; status banners; Android 16 local network permission)."
+      - "PRIVACY_POLICY.md permissions table: NEARBY_WIFI_DEVICES also used for local network access on Android 16+."
+
+qa_validation:
+  automated:
+    - "./gradlew test --no-daemon; koverVerify x3; lintDebug"
+  manual_device:
+    - "VPN OFF: LAN scan, mDNS, WOL, topology, LAN port scan behave as before."
+    - "VPN ON (full tunnel): LAN scan finds hosts; mDNS lists services; WOL packet received by laptop tcpdump on the Wi-Fi segment; banner shows VPN info."
+    - "Wi-Fi off, cellular on: LAN tools show 'no local network' banner; ping/DNS work."
+    - "Airplane mode: internet tools show 'no internet' banner; no crashes."
+    - "OEM device where 5353 bind fails (or simulate by forcing the fallback path with a debug flag): discovery still returns services."
+    - "Android 16 emulator with `adb shell am compat enable RESTRICT_LOCAL_NETWORK net.aieat.netswissknife.debug`: denied permission -> typed error card with Grant action."
+  regression:
+    - "All existing instrumented suites green."
+
+docs_updates: [README.md, PRIVACY_POLICY.md, strings.xml]
+
+risks:
+  - risk: "Binding to Wi-Fi bypasses a VPN the user relies on for a LAN they access remotely (site-local via VPN)."
+    mitigation: "Subnet-contains rule + (P12) settings toggle 'Prefer local network for LAN tools'."
+  - risk: "Some OEMs report VPN with NET_CAPABILITY_NOT_VPN set incorrectly."
+    mitigation: "Prefer TRANSPORT_WIFI/ETHERNET presence over NOT_VPN capability."
+
+rollback: |
+  NetworkModule can provide NoOpNetworkBinder; all repos revert to default-network behaviour.
+
+definition_of_done:
+  - "F012 closed; F013 (bind fallback + interface) closed; IPv6 group tracked in P12."

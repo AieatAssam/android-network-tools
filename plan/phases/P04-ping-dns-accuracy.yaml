@@ -1,0 +1,393 @@
+# =============================================================================
+# P04 – Ping & DNS accuracy: real ICMP engine (size/TTL/interval), resolve-once,
+#       honest status semantics; DNS record typing, RCODE/flags/sections, honest
+#       resolver labelling, Private-DNS awareness; IDN/FQDN host normalisation
+# =============================================================================
+# Audience: AI coding agent. Self-contained. Read plan/plan.yaml `agent_execution_rules` first.
+phase:
+  id: P04
+  title: "Ping & DNS accuracy"
+  priority: high
+  status: todo
+  estimated_effort: "L (3-5 agent sessions)"
+  depends_on: []
+  enables: [P11, P14]
+  findings: [F008, F009, F010, F011, F025, F037]
+  target_modules: [":core-network", ":core-domain", ":app"]
+
+context:
+  problem: |
+    PING
+      - PingRepositoryImpl.DEFAULT_CHECKER starts its timer, then calls InetAddress.getByName(host)
+        for EVERY probe inside the timed region. RTT of probe 1 includes a DNS round trip; every
+        probe pays a resolver call; a hostname can resolve to different IPs during a session.
+      - Payload size and TTL cannot be set. README says this is a platform limitation; the store
+        listing claims "configurable … packet size". icmpenguin (already a dependency) exposes
+        me.impa.icmpenguin.ping.Pinger(host, ttl, timeout, maxPingCount, interval, probeSize,
+        pattern, sourceIp) with `fun ping(): Flow<ProbeResult>` (verified by javap on the AAR).
+      - Status semantics: isReachable()==false without exception is reported as TIMEOUT even when
+        the call returned immediately (ICMP unreachable / TCP-7 RST).
+    DNS
+      - DnsRepositoryImpl labels every ANSWER record with the requested type. Querying A for a
+        CNAME name yields CNAME rows shown as "A".
+      - DnsServer.System silently falls back to Cloudflare 1.1.1.1 when LinkProperties has no
+        servers or ExtendedResolver throws; the result still says "System DNS"; the raw view
+        prints ";; SERVER: (see selected server above)".
+      - Response code (NXDOMAIN/SERVFAIL/REFUSED), header flags (AA/AD/TC/RA) and AUTHORITY /
+        ADDITIONAL sections are not surfaced; an NXDOMAIN and an empty NOERROR look identical.
+      - Android Private DNS (DoT) status is invisible; plain UDP/53 to the listed resolver may fail.
+    HOST VALIDATION
+      - HostValidator.hostnameRegex is ASCII-only; IDN hosts (bücher.de) and FQDNs with a
+        trailing dot (example.com.) are rejected by Ping/Traceroute/Ports/TLS validators.
+  evidence:
+    - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/ping/PingRepositoryImpl.kt", lines: "31-49, 78-93", note: "DEFAULT_CHECKER timing incl. getByName; status mapping" }
+    - { file: "core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/PingParams.kt", note: "host,count,timeoutMs only" }
+    - { file: "README.md", section: "Ping", note: "'Payload size is intentionally not configurable…'" }
+    - { file: "store/play-description.txt", note: "'Configurable count, timeout and packet size'" }
+    - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/dns/DnsRepositoryImpl.kt", lines: "104-110", note: "type = recordType for every record" }
+    - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/dns/DnsRepositoryImpl.kt", lines: "151-163, 199-206", note: "silent Cloudflare fallback; raw header" }
+    - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/util/SystemDnsAddressProvider.kt", note: "returns List<String> only; no privateDns info" }
+    - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/HostValidator.kt", note: "ASCII regex; no IDN" }
+  icmpenguin_api_verified: |
+    $ unzip -o -q ~/.gradle/caches/modules-2/files-2.1/me.impa/icmpenguin/1.0.0-rc.4/*/icmpenguin-1.0.0-rc.4.aar classes.jar -d /tmp/icmp
+    $ javap -cp /tmp/icmp/classes.jar -p me.impa.icmpenguin.ping.Pinger
+      public Pinger(String host, int ttl, int timeout, int maxPingCount, int interval, int probeSize, byte[] pattern, String sourceIp)
+      public static final int DEFAULT_TIMEOUT, DEFAULT_PROBE_SIZE, INFINITE, DEFAULT_INTERVAL, DEFAULT_PING_COUNT, DEFAULT_TTL
+      public final Flow<ProbeResult> ping()
+      public final Object ping(Function1<ProbeResult,Unit>, Continuation)
+    $ javap -cp /tmp/icmp/classes.jar -p me.impa.icmpenguin.ProbeResult   -> interface { getSequence(), getRemote(), getProbeSize(), getOverhead() }
+    NOTE: the concrete ProbeResult subtypes (Success/Timeout/Unreachable/…) were NOT enumerated yet – first task of T3 is:
+      unzip -l /tmp/icmp/classes.jar | grep -i 'ProbeResult\|ping/' ; javap -p each '…$Xxx' class.
+
+goals:
+  - "Ping uses a real ICMP echo engine with size/TTL/interval when available; falls back to the reachability engine transparently (and says so)."
+  - "Hostname resolved once per session; RTT measures only the probe."
+  - "Statuses: SUCCESS / TIMEOUT / UNREACHABLE / ERROR with correct mapping in both engines."
+  - "DNS rows carry their real RR type; RCODE, flags, authority/additional exposed; server actually used is reported; no silent fallback."
+  - "HostValidator accepts IDN and trailing-dot FQDN by normalising (IDN.toASCII, strip dot) and exposes `normalize()` used by all validators."
+
+non_goals:
+  - "DoH/DoT lookups (P14 tool)."
+  - "DNSSEC validation (P14 candidate) – but the AD flag is surfaced here."
+  - "IPv6 ping via ICMPv6: include only if icmpenguin supports it (check ProbeResult/Pinger for v6); otherwise document."
+
+assumptions:
+  - id: A1
+    statement: "icmpenguin.Pinger works on API 26+ without root (uses IPPROTO_ICMP datagram sockets; Android allows via net.ipv4.ping_group_range) – the same mechanism the existing traceroute relies on."
+    verify_with: "Spike in the debug app: Pinger('1.1.1.1', 64, 1000, 3, 1000, 56, ByteArray(0), null).ping().collect { log it } on a device."
+    if_false: "Keep reachability engine as default; icmpenguin engine opt-in."
+  - id: A2
+    statement: "Pinger.ping() emits one ProbeResult per probe including timeouts (not only successes) so sequence numbers stay dense."
+    verify_with: "Same spike against a blackholed IP (e.g. 10.255.255.1) – expect timeout-type results."
+    if_false: "Synthesise TIMEOUT results for missing sequences in the engine adapter."
+  - id: A3
+    statement: "dnsjava Message exposes header.rcode, header.getFlag(Flags.AA/AD/TC/RA), getSection(Section.AUTHORITY/ADDITIONAL), and Type.string(int)."
+    verify_with: "Compile."
+  - id: A4
+    statement: "LinkProperties.isPrivateDnsActive and privateDnsServerName exist on API 28+."
+    verify_with: "Android docs; guard with SDK_INT >= 28."
+
+constraints:
+  - ":core-network stays Android/JNI-free -> the icmpenguin adapter lives in :app behind a core interface."
+  - "PingUseCase/ContinuousPingUseCase validation ranges: keep count 1..100, timeout 100..30_000; add payload 0..1472, ttl 1..255, interval 100..10_000."
+  - "PingScreen has an RTT chart and CSV export (PingSessionLogger) – CSV columns must stay backward compatible (append columns only)."
+  - "DnsScreen groups/copies records; adapt to nullable typed enum carefully (compile errors will guide)."
+  - "Kover floors; README sync; strings.xml."
+
+design:
+  overview: |
+    PING (core-network/ping)
+      enum class PingStatus { SUCCESS, TIMEOUT, UNREACHABLE, ERROR }
+      enum class PingEngineKind { ICMP, REACHABILITY }
+      data class PingPacketResult(sequence, host, rtTimeMs, status, errorMessage = null,
+                                  replyTtl: Int? = null, bytes: Int? = null, fromIp: String? = null)
+      data class PingRequest(host, resolvedIp: String?, count: Int /* 0 = infinite */, timeoutMs, intervalMs = 1000, payloadBytes = 56, ttl = 64)
+      interface PingEngine { val kind: PingEngineKind; val isAvailable: Boolean; fun ping(request: PingRequest): Flow<PingPacketResult> }
+      class ReachabilityPingEngine(checker: (ip: String, timeoutMs: Int) -> ReachabilityResult, delay: Long) : PingEngine
+          - timing wraps ONLY isReachable; status: exception -> ERROR; reachable -> SUCCESS;
+            !reachable && elapsed >= timeoutMs*0.9 -> TIMEOUT else UNREACHABLE
+      class PingRepositoryImpl(engines: List<PingEngine>, resolver: HostResolver = InetAddressHostResolver)
+          - ping(host, …): resolve once (resolver.resolve(host) -> ip or throw UnknownHost -> single ERROR packet) then
+            first engine with isAvailable; if the engine's flow throws before the first packet, fall through to the next engine.
+          - PingRepository interface: ping(request: PingRequest): Flow<PingPacketResult>; continuousPing == count 0.
+      data class PingResult(..., val engine: PingEngineKind, val resolvedIp: String?)
+    :app
+      class IcmpenguinPingEngine : PingEngine (kind ICMP): Pinger(host = request.resolvedIp ?: host, ttl, timeoutMs, count or Pinger.INFINITE, intervalMs, payloadBytes, ByteArray(0), null).ping()
+          .map { toPacket(it) } ; isAvailable = true on Android (a failed socket creation propagates as flow error -> fallback).
+      PingModule: PingRepositoryImpl(engines = listOf(IcmpenguinPingEngine(), ReachabilityPingEngine()))
+    core-domain
+      PingParams += payloadBytes (56), ttl (64), intervalMs (1000); ContinuousPingParams same; validatePingCommon extended.
+      PingSessionLogger: header "seq,timestamp_ms,latency_ms,status,ttl,bytes" (append-only change).
+    UI (PingScreen/ViewModel)
+      Advanced options card (AnimatedVisibility): payload size slider (0-1472, default 56), TTL slider (1-255), interval slider (0.2-5 s).
+      Stats/raw output shows engine: "ICMP echo" vs "Reachability (ICMP/TCP fallback)"; status colours: UNREACHABLE uses tertiary/error tokens; StatusColors.kt update.
+
+    DNS (core-network/dns)
+      DnsRecord(type: DnsRecordType?, rrTypeName: String, name, value, ttl, rawLine, section: DnsSection = ANSWER)
+      enum DnsSection { ANSWER, AUTHORITY, ADDITIONAL }
+      DnsRecordType.fromDnsTypeInt(int): DnsRecordType?
+      DnsResult(domain, recordType, server, records /*answer*/, authority: List<DnsRecord>, additional: List<DnsRecord>,
+                rcode: String /*"NOERROR"*/, flags: Set<String> /*"AA","AD","TC","RA","RD"*/, serverUsed: String /*ip[:port]*/,
+                queryTimeMs, rawResponse)
+      DnsServer.System(serverAddresses, privateDnsActive: Boolean = false, privateDnsHost: String? = null)
+      buildSystemResolver: if serverAddresses empty -> return NetworkResult.Error(DnsError.NoSystemResolver) – no fallback.
+        (P07 will type the error; here use message "No system DNS server reported by Android (Private DNS or no network). Choose a resolver." and let the UI offer a 'Use Cloudflare' action.)
+      rawResponse header: ";; SERVER: <serverUsed>", ";; RCODE: …", ";; FLAGS: …".
+    :app
+      SystemDnsAddressProvider.getInfo(): SystemDnsInfo(addresses, privateDnsActive, privateDnsHost) (API 28+ fields).
+      DnsScreen: RCODE badge (NOERROR green/ NXDOMAIN warning / SERVFAIL error via StatusColors), flags chips, collapsible Authority/Additional sections, "Server used: 192.168.1.1" line, Private DNS notice card when active, error state action "Use Cloudflare".
+
+    HOST VALIDATION
+      HostValidator.normalize(input): String? — trim, strip one trailing '.', IDN.toASCII(…, IDN.ALLOW_UNASSIGNED) inside try; returns null if invalid.
+      isValidHostname(host) = normalize(host) != null && (ip checks || hostnameRegex.matches(normalized)).
+      Use normalize() output as the value passed to repositories in Ping/Traceroute/PortScan/Tls use cases (they currently pass trimmed raw).
+
+  files_to_create:
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/ping/PingEngine.kt
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/ping/PingRequest.kt
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/ping/ReachabilityPingEngine.kt
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/HostResolver.kt          # fun interface + InetAddressHostResolver
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/dns/DnsSection.kt
+    - core-network/src/test/kotlin/net/aieat/netswissknife/core/network/ping/ReachabilityPingEngineTest.kt
+    - core-network/src/test/kotlin/net/aieat/netswissknife/core/network/ping/PingRepositoryEngineFallbackTest.kt
+    - core-network/src/test/kotlin/net/aieat/netswissknife/core/network/dns/DnsMessageMapperTest.kt   # builds dnsjava Messages in-memory (no network)
+    - app/src/main/kotlin/net/aieat/netswissknife/app/ping/IcmpenguinPingEngine.kt
+    - app/src/test/kotlin/net/aieat/netswissknife/app/ping/IcmpenguinResultMapperTest.kt          # pure mapping from a small sealed mirror (no JNI)
+  files_to_modify:
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/ping/PingRepository.kt
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/ping/PingRepositoryImpl.kt
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/ping/PingPacketResult.kt
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/ping/PingStatus.kt
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/ping/PingResult.kt
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/ping/PingStats.kt          # lossPercent counts UNREACHABLE as lost
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/HostValidator.kt
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/dns/DnsRecord.kt
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/dns/DnsRecordType.kt
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/dns/DnsResult.kt
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/dns/DnsServer.kt
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/dns/DnsRepositoryImpl.kt
+    - core-network/src/test/kotlin/net/aieat/netswissknife/core/network/ping/*.kt
+    - core-network/src/test/kotlin/net/aieat/netswissknife/core/network/dns/*.kt
+    - core-network/src/test/kotlin/net/aieat/netswissknife/core/network/HostValidatorTest.kt
+    - core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/{PingParams,ContinuousPingParams,PingValidation,PingUseCase,ContinuousPingUseCase,PingSessionLogger,TracerouteUseCase,PortScanUseCase,TlsInspectorUseCase}.kt
+    - core-domain/src/test/kotlin/net/aieat/netswissknife/core/domain/{PingUseCaseTest,ContinuousPingUseCaseTest,PingSessionLoggerTest}.kt
+    - app/src/main/kotlin/net/aieat/netswissknife/app/di/PingModule.kt
+    - app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/ping/PingViewModel.kt
+    - app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/PingScreen.kt
+    - app/src/main/kotlin/net/aieat/netswissknife/app/ui/theme/StatusColors.kt
+    - app/src/main/kotlin/net/aieat/netswissknife/app/util/SystemDnsAddressProvider.kt
+    - app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/dns/DnsViewModel.kt
+    - app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/DnsScreen.kt
+    - app/src/main/res/values/strings.xml
+    - app/src/test/kotlin/net/aieat/netswissknife/app/ui/screens/ping/PingViewModelTest.kt
+    - app/src/test/kotlin/net/aieat/netswissknife/app/ui/screens/dns/DnsViewModelTest.kt
+    - app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/screens/PingScreenTest.kt
+    - app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/screens/DnsScreenTest.kt
+    - README.md, store/play-description.txt
+
+tasks:
+  - id: P04-T1
+    title: "HostValidator.normalize + IDN/FQDN acceptance"
+    status: todo
+    tdd:
+      red:
+        test_file: core-network/src/test/kotlin/net/aieat/netswissknife/core/network/HostValidatorTest.kt
+        tests:
+          - "normalize('bücher.de') == 'xn--bcher-kva.de' and isValidHostname('bücher.de') true"
+          - "normalize('example.com.') == 'example.com'; isValidHostname true"
+          - "normalize('  Example.COM ') == 'example.com' (lowercased)"
+          - "normalize('ex ample.com') == null; normalize('') == null; normalize('a..b') == null"
+          - "IP literals pass through unchanged (IPv4, bracketed IPv6, zone id)"
+        run: "./gradlew :core-network:test --tests '*HostValidatorTest' --no-daemon"
+        expect: "RED"
+      green: { steps: ["Implement normalize() with java.net.IDN (pure JVM, allowed)."], run: "./gradlew :core-network:test --no-daemon", expect: "PASS" }
+      refactor: ["Use normalize() in PingValidation, TracerouteUseCase, PortScanUseCase, TlsInspectorUseCase and pass the normalised host downstream (tests in core-domain: 'passes punycode host to repository')."]
+    acceptance_criteria: ["All validators accept IDN/FQDN; repositories receive ASCII hosts."]
+
+  - id: P04-T2
+    title: "Ping engine abstraction + fixed reachability engine + resolve-once repository"
+    status: todo
+    depends_on: [P04-T1]
+    tdd:
+      red:
+        test_file: core-network/src/test/kotlin/net/aieat/netswissknife/core/network/ping/ReachabilityPingEngineTest.kt
+        tests:
+          - "checker returns reachable=true rt=12 -> SUCCESS 12 ms"
+          - "checker returns reachable=false rt>=0.9*timeout -> TIMEOUT"
+          - "checker returns reachable=false rt<0.9*timeout -> UNREACHABLE"
+          - "checker throws -> ERROR with message"
+          - "count=3 emits seq 1..3 with intervalMs delays (runTest + virtual time)"
+          - "count=0 is infinite: take(5) yields seq 1..5"
+        also_test_file: core-network/src/test/kotlin/net/aieat/netswissknife/core/network/ping/PingRepositoryEngineFallbackTest.kt
+        also_tests:
+          - "resolver called exactly once for a 5-probe session; engine receives resolvedIp"
+          - "resolver throws UnknownHostException -> single ERROR packet then completes; engine never called"
+          - "first engine isAvailable=false -> second engine used"
+          - "first engine flow throws before first emission -> second engine used and PingResult.engine reports it (repository exposes engineUsed via a callback or as first Flow element `PingSessionStarted(engine)` – choose: emit PingFlow events? Keep PingPacketResult flow; expose `lastEngineUsed: StateFlow<PingEngineKind?>` on repository – simplest for UI; test it)"
+          - "first engine throws after emitting 1 packet -> propagate ERROR packet, no fallback (avoid duplicate sequences)"
+        run: "./gradlew :core-network:test --tests '*ReachabilityPingEngineTest' --tests '*PingRepositoryEngineFallbackTest' --no-daemon"
+        expect: "RED"
+      green:
+        steps:
+          - "Add PingStatus.UNREACHABLE; PingEngineKind; PingRequest; PingEngine; HostResolver."
+          - "ReachabilityPingEngine from the old DEFAULT_CHECKER minus getByName; delay between probes = request.intervalMs."
+          - "PingRepositoryImpl(engines, resolver); PingRepository.ping(request)/continuousPing(request); keep old methods as deprecated adapters for one release."
+          - "PingStats.compute: received = SUCCESS only (already via rtTimeMs); loss counts TIMEOUT+UNREACHABLE+ERROR (unchanged semantics)."
+        run: "./gradlew :core-network:test --no-daemon"
+        expect: "PASS (update PingRepositoryImplTest for the new constructor)"
+      refactor: ["Delete PingRepositoryImpl.DEFAULT_CHECKER after migrating tests."]
+    acceptance_criteria: ["Timing region contains only the probe call (assert with a fake clock in the engine test: inject MonotonicClock)."]
+
+  - id: P04-T3
+    title: "icmpenguin ICMP engine in :app + DI + fallback wiring"
+    status: todo
+    depends_on: [P04-T2]
+    steps_before_tdd:
+      - "Enumerate ProbeResult subtypes: unzip -l /tmp/icmp/classes.jar | grep -E 'ProbeResult|ping/' ; javap -p -cp /tmp/icmp/classes.jar 'me.impa.icmpenguin.ProbeResult$<Name>' for each. Record the exact names/fields in this file under `icmpenguin_api_verified` before coding."
+    tdd:
+      red:
+        test_file: app/src/test/kotlin/net/aieat/netswissknife/app/ping/IcmpenguinResultMapperTest.kt
+        tests:
+          - "mapper maps a Success-like result (sequence, remote, timeUsec) to PingPacketResult SUCCESS with rtTimeMs = timeUsec/1000, fromIp = remote"
+          - "Timeout-like -> TIMEOUT; Unreachable-like (ICMP type 3) -> UNREACHABLE; TTL-exceeded -> UNREACHABLE with errorMessage 'TTL exceeded'"
+          - "mapper is a pure function over an internal sealed mirror `IcmpProbe` so it is JVM-testable; the JNI adapter converts icmpenguin types to the mirror in one small `toMirror()` function (not unit-tested, exercised on device)"
+        run: "./gradlew :app:testDebugUnitTest --tests '*IcmpenguinResultMapperTest' --no-daemon"
+        expect: "RED"
+      green:
+        steps:
+          - "IcmpenguinPingEngine(kind=ICMP): build Pinger per request; ping().map(toMirror).map(mapper::toPacket).flowOn(IO)."
+          - "PingModule: engines = listOf(IcmpenguinPingEngine(), ReachabilityPingEngine())."
+        run: "./gradlew :app:testDebugUnitTest :app:assembleDebug --no-daemon"
+        expect: "PASS"
+      refactor: []
+    acceptance_criteria: ["On device: ping 1.1.1.1 shows RTT ~ equal to `adb shell ping -c 3 1.1.1.1`; raw output shows engine ICMP."]
+
+  - id: P04-T4
+    title: "Domain params (payload/ttl/interval) + CSV columns + ViewModel/Screen advanced options"
+    status: todo
+    depends_on: [P04-T3]
+    tdd:
+      red:
+        test_file: core-domain/src/test/kotlin/net/aieat/netswissknife/core/domain/PingUseCaseTest.kt
+        tests:
+          - "payloadBytes 1473 -> ValidationError 'Payload size must be between 0 and 1472 bytes'"
+          - "ttl 0 / 256 -> ValidationError"
+          - "intervalMs 50 -> ValidationError (min 100)"
+          - "valid params forwarded into PingRequest (capture)"
+        also_test_file: core-domain/src/test/kotlin/net/aieat/netswissknife/core/domain/PingSessionLoggerTest.kt
+        also_tests: ["header has 6 columns; rows append ttl and bytes (empty when null); existing quoting rules intact"]
+        also_test_file_2: app/src/test/kotlin/net/aieat/netswissknife/app/ui/screens/ping/PingViewModelTest.kt
+        also_tests_2:
+          - "onPayloadSizeChange coerces 0..1472; onTtlChange 1..255; onIntervalChange 100..10_000"
+          - "Finished result carries engine kind from repository (fake repository exposes lastEngineUsed)"
+          - "UNREACHABLE packets are counted as loss in stats (PingStats)"
+        run: "./gradlew :core-domain:test :app:testDebugUnitTest --tests '*Ping*' --no-daemon"
+        expect: "RED"
+      green:
+        steps:
+          - "Params/validation/logger changes; ViewModel state flows; PingScreen 'Advanced' card with three sliders (strings ping_payload_label, ping_ttl_label, ping_interval_label + value formats) below the existing count/timeout controls; StatusColors: UNREACHABLE -> warning colour token."
+          - "Raw output line for UNREACHABLE: 'Destination unreachable for probe_seq N'; header 'PING host (ip): 56 data bytes, ttl 64, engine ICMP'."
+        run: "./gradlew test :app:assembleDebug --no-daemon"
+        expect: "PASS"
+      refactor: ["PingScreen.kt is 1244 lines – move the advanced card to ui/screens/ping/PingAdvancedOptions.kt."]
+    acceptance_criteria: ["PingScreenTest: advanced card toggles and sliders exist (add 2 instrumented tests)."]
+
+  - id: P04-T5
+    title: "DNS: real RR types, sections, RCODE/flags, serverUsed, no silent fallback"
+    status: todo
+    depends_on: []
+    tdd:
+      red:
+        test_file: core-network/src/test/kotlin/net/aieat/netswissknife/core/network/dns/DnsMessageMapperTest.kt
+        tests:
+          - "A query with ANSWER [CNAME www->host, A host 93.184.216.34] maps to records [CNAME(rrTypeName 'CNAME'), A] preserving order"
+          - "AUTHORITY SOA on NXDOMAIN maps into authority list; rcode == 'NXDOMAIN'; records empty"
+          - "flags: header with AA+RD+RA -> setOf('AA','RD','RA'); AD present when set"
+          - "unknown type 65 (HTTPS) -> type null, rrTypeName 'HTTPS', value = rdataToString()"
+          - "serverUsed == '8.8.8.8:53' for Google preset; '192.168.1.1:53' for System with that address"
+        also_test_file: core-network/src/test/kotlin/net/aieat/netswissknife/core/network/dns/DnsRepositoryImplTest.kt
+        also_tests:
+          - "System with empty addresses -> NetworkResult.Error (no network call; inject a resolver factory spy to assert no SimpleResolver created)"
+          - "System with addresses uses ExtendedResolver over exactly those addresses"
+        run: "./gradlew :core-network:test --tests '*Dns*' --no-daemon"
+        expect: "RED"
+      green:
+        steps:
+          - "Extract `DnsMessageMapper.toResult(query, requestedType, server, response: Message, serverUsed, queryTimeMs)` (pure; testable with dnsjava Message built in tests)."
+          - "Introduce `ResolverFactory` fun interface in DnsRepositoryImpl for testability (default builds SimpleResolver/ExtendedResolver)."
+          - "Remove Cloudflare fallback; return Error for empty system list (message per design; P07 types it)."
+          - "Raw header: SERVER / RCODE / FLAGS lines."
+        run: "./gradlew :core-network:test --no-daemon"
+        expect: "PASS"
+      refactor: ["DnsRecordType.fromDnsTypeInt via entries.find; keep fromDisplayName."]
+    acceptance_criteria: ["Old DnsRepositoryImplTest adapted; mapper >= 90% covered."]
+
+  - id: P04-T6
+    title: "DNS app layer: SystemDnsInfo, Private DNS notice, RCODE/flags/sections UI, 'Use Cloudflare' action"
+    status: todo
+    depends_on: [P04-T5]
+    tdd:
+      red:
+        test_file: app/src/test/kotlin/net/aieat/netswissknife/app/ui/screens/dns/DnsViewModelTest.kt
+        tests:
+          - "performLookup with System passes SystemDnsInfo addresses + privateDns fields into DnsServer.System"
+          - "Error state from empty system list exposes canFallbackToCloudflare=true; onUseCloudflare() switches server and re-runs"
+          - "recent host is added only after a Success/Error result, not before validation (align with F019)"
+        also_test_file: app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/screens/DnsScreenTest.kt
+        also_tests:
+          - "Success renders RCODE badge text 'NXDOMAIN' when rcode is NXDOMAIN and shows authority section header"
+          - "CNAME row shows label 'CNAME' inside an A query result"
+          - "Private DNS notice card visible when server is System(privateDnsActive=true)"
+        run: "./gradlew :app:testDebugUnitTest --tests '*DnsViewModelTest' --no-daemon"
+        expect: "RED"
+      green:
+        steps:
+          - "SystemDnsAddressProvider.getInfo() (keep getAddresses() delegating)."
+          - "DnsViewModel state additions; DnsScreen: badge (StatusColors), flags row (labelSmall chips), collapsible sections (reuse existing expandable card pattern), server-used line, notice card, error action button."
+          - "DnsScreen currently uses record.type for grouping/icons – switch to rrTypeName."
+        run: "./gradlew :app:testDebugUnitTest :app:assembleDebug --no-daemon"
+        expect: "PASS"
+      refactor: ["DnsScreen.kt is 1298 lines – move result sections to ui/screens/dns/DnsResultSections.kt."]
+    acceptance_criteria: ["No literal strings added; RCODE colours via StatusColors tokens."]
+
+  - id: P04-T7
+    title: "Docs/store sync"
+    status: todo
+    depends_on: [P04-T4, P04-T6]
+    steps:
+      - "README Ping: remove the 'intentionally not configurable' paragraph; document payload/TTL/interval ranges, engines and fallback, UNREACHABLE status, CSV columns."
+      - "README DNS: list ALL resolvers (System, Google, Cloudflare, OpenDNS, Quad9, Custom); RCODE/flags/sections; no silent fallback; Private DNS notice; IDN support."
+      - "store/play-description.txt: Ping line now truthful; DNS line lists resolvers."
+      - "Help sheets: ping_help_* and dns_help_* additions."
+
+qa_validation:
+  automated:
+    - "./gradlew test --no-daemon"
+    - "./gradlew :app:koverVerify :core-domain:koverVerify :core-network:koverVerify --no-daemon"
+    - "./gradlew :app:lintDebug --no-daemon --no-parallel"
+    - "grep -rn 'import android' core-network/src core-domain/src -> empty"
+  manual_device:
+    - "ping google.com 10 probes: first RTT not inflated (compare probe 1 vs 2..10); raw header shows resolved IP once."
+    - "ping with payload 1400 / TTL 1 -> TTL exceeded/UNREACHABLE from the gateway (proves TTL works)."
+    - "Airplane mode -> ERROR packets with clear message, no crash."
+    - "DNS: nonexistent.example -> NXDOMAIN badge + authority SOA; www.github.com A -> CNAME row + A rows."
+    - "Enable Private DNS (dns.google) -> notice card; lookup still works or shows the honest error with 'Use Cloudflare'."
+    - "Ping 'bücher.de' accepted."
+  regression:
+    - "Continuous ping rolling window, CSV share, keep-screen-on unchanged."
+    - "PingScreenTest/DnsScreenTest suites green."
+
+docs_updates: [README.md, store/play-description.txt, strings.xml help_ping_*/help_dns_*]
+
+risks:
+  - risk: "icmpenguin Pinger blocks a thread or leaks the socket on cancellation."
+    mitigation: "Wrap in flowOn(IO) + onCompletion; verify with a cancellation test on device (start continuous, stop, check no thread growth via `adb shell ps -T`)."
+  - risk: "Removing the Cloudflare fallback makes System DNS fail on some devices."
+    mitigation: "Explicit error with one-tap fallback; telemetry-free, so ask for a device report in the PR."
+
+rollback: |
+  PingModule can drop IcmpenguinPingEngine (reachability only); DnsRepositoryImpl fallback can be
+  restored by a one-line change but must then set server = DnsServer.Cloudflare in the result.
+
+definition_of_done:
+  - "F008, F009, F010, F011, F025, F037 closed; global DoD."

@@ -1,0 +1,308 @@
+# =============================================================================
+# P02 – Network Topology: SNMPv3 works, LLDP/CDP neighbour parsing fixed, R8 keep rules
+# =============================================================================
+# Audience: AI coding agent. Self-contained. Read plan/plan.yaml `agent_execution_rules` first.
+phase:
+  id: P02
+  title: "Network Topology: SNMPv3 USM registration, index-based LLDP mgmt-address parsing, hex CDP addresses, session reuse, R8 rules"
+  priority: critical
+  status: todo
+  estimated_effort: "M (2-4 agent sessions)"
+  depends_on: []
+  enables: [P09]
+  findings: [F001, F002, F003, F014]
+  target_modules: [":core-network", ":app"]
+
+context:
+  problem: |
+    The Network Topology tool (route `topology`) advertises "SNMP v1/v2c/v3 discovery walking LLDP
+    and CDP neighbours" (store/play-description.txt, README). Three defects make it non-functional
+    against real equipment:
+      1. SNMPv3: Snmp4jClientImpl.buildTarget() creates a UserTarget with securityName and
+         securityLevel but never (a) registers default security protocols, (b) installs a USM
+         security model, or (c) adds a UsmUser carrying v3AuthPassword / v3PrivPassword. SNMP4J
+         therefore cannot authenticate or encrypt; every v3 request fails (typically "unknown
+         user name" / "unsupported security level" reports or timeouts). TopologyParams'
+         v3AuthPassword/v3PrivPassword fields are dead.
+      2. LLDP: queryLldpNeighbours() reads the VALUE of lldpRemManAddrIfId
+         (1.0.8802.1.1.2.1.4.2.1.4) expecting a dotted IP. Per IEEE 802.1AB LLDP-MIB the
+         management address is encoded in the row INDEX of lldpRemManAddrTable:
+           lldpRemManAddrEntry INDEX { lldpRemTimeMark, lldpRemLocalPortNum, lldpRemIndex,
+                                       lldpRemManAddrSubtype, lldpRemManAddr }
+         so a row OID looks like 1.0.8802.1.1.2.1.4.2.1.4.<timeMark>.<localPort>.<remIndex>.1.4.192.168.1.2
+         with VALUE = an Integer32 interface id. The current unit-test fixture
+         (TopologyDiscoveryRepositoryTest.kt:66-71) returns "192.168.1.2" as the VALUE, which no
+         real agent does; the test passes while the feature is broken.
+      3. CDP: cdpCacheAddress (…9.9.23.1.2.1.1.4) is a 4-byte OctetString; SNMP4J's
+         OctetString.toString() renders non-printable bytes as "c0:a8:01:01". parseCdpAddress()
+         only accepts dotted-quad and returns null, so CDP neighbours are dropped.
+      4. Each get()/walk() opens a new UDP transport + Snmp instance (Snmp4jClientImpl) – slow and
+         wasteful for the 8+ walks per node.
+      5. No R8 keep rules exist for SNMP4J (which loads SecurityProtocols/transport classes by
+         name from properties) – the minified Play build has never been exercised for SNMP.
+  evidence:
+    - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/topology/Snmp4jClientImpl.kt", lines: "16-58", note: "new DefaultUdpTransportMapping + Snmp per call" }
+    - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/topology/Snmp4jClientImpl.kt", lines: "82-105", note: "V3 UserTarget without USM/UsmUser; passwords unused" }
+    - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/topology/TopologyDiscoveryRepositoryImpl.kt", lines: "282-342", note: "LLDP parsing; mgmt addr from value of column 4" }
+    - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/topology/TopologyDiscoveryRepositoryImpl.kt", lines: "343-392", note: "CDP parsing; parseCdpAddress dotted-only" }
+    - { file: "core-network/src/test/kotlin/net/aieat/netswissknife/core/network/topology/TopologyDiscoveryRepositoryTest.kt", lines: "53-80", note: "unrealistic LLDP fixture" }
+    - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/topology/TopologyModels.kt", lines: "413-431", note: "V3AuthProtocol {MD5,SHA,NONE}, V3PrivProtocol {DES,AES128,NONE}" }
+    - { file: "app/proguard-rules.pro", note: "no snmp4j / icmpenguin rules" }
+  desired_behaviour: |
+    - v3 authNoPriv and authPriv discovery succeeds against a device configured with MD5/SHA/SHA-256 auth and DES/AES-128/192/256 priv.
+    - LLDP neighbours with an IPv4 management address are followed; CDP neighbours with hex or dotted addresses are followed.
+    - One SNMP session (transport) per discover() run; closed on completion/cancellation.
+    - Release (R8) build keeps SNMP4J working; verified by a scripted check.
+
+goals:
+  - "SNMPv3 auth/priv functional (unit-tested via an in-process SNMP4J responder on loopback)."
+  - "LLDP/CDP neighbour extraction matches the MIB encodings, with fixtures captured from real snmpwalk output."
+  - "Session reuse; cancellation-safe; progress events unchanged for the UI."
+  - "R8 keep rules + a documented verification command."
+  - "Extend v3 protocol choices to SHA-256/SHA-512 and AES-192/256 (cheap with SNMP4J 3.x)."
+
+non_goals:
+  - "Topology export (GraphML/DOT) – later."
+  - "SNMP walks of bridge forwarding tables (BRIDGE-MIB) to attach non-SNMP hosts – candidate for P15."
+  - "Binding the UDP transport to the Wi-Fi network – P05 adds a `NetworkBinder` hook; leave a TODO(P05) at the transport creation site."
+
+assumptions:
+  - id: A1
+    statement: "SNMP4J 3.13.1 API: SecurityProtocols.getInstance().addDefaultProtocols(); USM(SecurityProtocols, OctetString localEngineId, int engineBoots); SecurityModels.getInstance().addSecurityModel(usm); snmp.getUSM().addUser(UsmUser(securityName, authProtocolOID, authPassphrase, privProtocolOID, privPassphrase)); auth OIDs AuthMD5.ID, AuthSHA.ID, AuthHMAC192SHA256.ID, AuthHMAC384SHA512.ID; priv OIDs PrivDES.ID, PrivAES128.ID, PrivAES192.ID, PrivAES256.ID."
+    verify_with: "javap -cp ~/.gradle/caches/modules-2/files-2.1/org.snmp4j/snmp4j/3.13.1/*/snmp4j-3.13.1.jar org.snmp4j.security.USM org.snmp4j.security.UsmUser org.snmp4j.security.AuthHMAC192SHA256"
+    if_false: "Adjust class names; the pattern (addDefaultProtocols + USM + addUser) is stable across 2.x/3.x."
+  - id: A2
+    statement: "SNMP4J can act as a command responder in-process (Snmp.addCommandResponder) on a loopback UDP port, allowing a JVM unit test of v2c and v3 GET without external agents."
+    verify_with: "Prototype test: Snmp(DefaultUdpTransportMapping(UdpAddress('127.0.0.1/0'))).addCommandResponder { event -> build RESPONSE PDU via event.pdu / event.messageProcessingModel }. For v3 the responder Snmp needs the same USM user and the requester needs the responder's engine ID via discovery (automatic)."
+    if_false: "Keep unit tests at the UsmUserSpec level and add a manual device check against a real switch or `snmpsimd` (documented in qa_validation)."
+  - id: A3
+    statement: "OctetString.toString() in SNMP4J returns ASCII if all bytes are printable else colon-separated hex; ifPhysAddress and cdpCacheAddress arrive as 'aa:bb:cc:dd:ee:ff' / 'c0:a8:01:01'."
+    verify_with: "Unit test: OctetString(byteArrayOf(0xc0.toByte(),0xa8.toByte(),1,1)).toString() == 'c0:a8:01:01'"
+    if_false: "Add SnmpClient.walkBytes() returning raw bytes for those columns."
+  - id: A4
+    statement: "The LLDP-MIB index layout for lldpRemManAddrTable is timeMark.localPortNum.remIndex.addrSubtype.addrLen.addrOctets… (addrSubtype 1 = IPv4, 2 = IPv6)."
+    verify_with: "Cross-check with a captured `snmpwalk -v2c -c public <switch> 1.0.8802.1.1.2.1.4.2` (record it as a test fixture file under core-network/src/test/resources/snmp/lldp-rem-man-addr.txt)."
+    if_false: "Adjust the index parser; keep the fixture-driven test."
+
+constraints:
+  - ":core-network stays Android-free (SNMP4J is pure Java – fine)."
+  - "SnmpClient interface is mocked by TopologyDiscoveryRepositoryTest with MockK; changing it requires updating those tests in the same commit."
+  - "TopologyParams is constructed by TopologyDiscoveryScreen – adding enum values must update the UI dropdowns (strings.xml) in the same change."
+  - "Do not log community strings or passwords (AppLogger is debug-only but still)."
+  - "Coverage floor :core-network 70%."
+
+design:
+  overview: |
+    1. `SnmpClient` becomes session-oriented:
+         interface SnmpClient : AutoCloseable { suspend fun get(...); suspend fun walk(...); override fun close() }
+         fun interface SnmpClientFactory { fun create(params: TopologyParams): SnmpClient }
+       TopologyDiscoveryRepositoryImpl(factory: SnmpClientFactory) opens one client per discover()
+       in a `use {}` block inside the flow builder; every loop iteration calls
+       currentCoroutineContext().ensureActive().
+    2. Snmp4jClientImpl(params): builds ONE Snmp + DefaultUdpTransportMapping in init, listen();
+       for V3 installs USM + UsmUser built by pure `UsmUserSpecFactory.from(params)` (testable).
+       Companion `ensureSecurityProtocols()` (idempotent, synchronized) calls addDefaultProtocols().
+    3. Parsing moved to a pure object `TopologyMibParser` (new file) with functions:
+         parseLldpRemTable(walk: Map<String,String>): List<LldpRemEntry>   // sysName(col 9), portId(col 7), portDesc(col 8), chassisId(col 5)
+         parseLldpManAddrTable(walk): Map<String /*localPort.remIndex*/, String /*ipv4*/>  // from OID index
+         parseCdpCache(walk): List<CdpEntry>     // address (col 4, hex or dotted), deviceId(6), port(7), platform(8), caps(9)
+         hexOctetsToIpv4("c0:a8:01:01") -> "192.168.1.1"; also accepts dotted; returns null otherwise
+       Repository composes results as before.
+    4. R8: app/proguard-rules.pro gains
+         -keep class org.snmp4j.** { *; }
+         -dontwarn org.snmp4j.**
+         -keep class me.impa.icmpenguin.** { *; }      # JNI-registered natives + callbacks
+         -keepclasseswithmembernames class * { native <methods>; }
+       plus a verification command in qa_validation.
+    5. Extra v3 protocols: V3AuthProtocol += SHA256, SHA512; V3PrivProtocol += AES192, AES256;
+       mapping in UsmUserSpecFactory; UI dropdown strings.
+
+  files_to_create:
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/topology/TopologyMibParser.kt
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/topology/UsmUserSpecFactory.kt
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/topology/SnmpClientFactory.kt
+    - core-network/src/test/kotlin/net/aieat/netswissknife/core/network/topology/TopologyMibParserTest.kt
+    - core-network/src/test/kotlin/net/aieat/netswissknife/core/network/topology/UsmUserSpecFactoryTest.kt
+    - core-network/src/test/kotlin/net/aieat/netswissknife/core/network/topology/Snmp4jClientImplLoopbackTest.kt   # in-process responder (A2)
+    - core-network/src/test/resources/snmp/lldp-rem-table.txt        # captured walk lines "oid = value"
+    - core-network/src/test/resources/snmp/lldp-rem-man-addr.txt
+    - core-network/src/test/resources/snmp/cdp-cache.txt
+  files_to_modify:
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/topology/SnmpClient.kt
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/topology/Snmp4jClientImpl.kt
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/topology/TopologyDiscoveryRepositoryImpl.kt
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/topology/TopologyModels.kt
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/topology/TopologyNodeParser.kt   # reuse hex helpers
+    - core-network/src/test/kotlin/net/aieat/netswissknife/core/network/topology/TopologyDiscoveryRepositoryTest.kt
+    - core-network/src/test/kotlin/net/aieat/netswissknife/core/network/topology/TopologyNodeParserTest.kt
+    - app/src/main/kotlin/net/aieat/netswissknife/app/di/TopologyModule.kt
+    - app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/topology/TopologyDiscoveryScreen.kt   # dropdown entries for new protocols
+    - app/src/main/res/values/strings.xml
+    - app/proguard-rules.pro
+    - README.md
+
+tasks:
+  - id: P02-T1
+    title: "Pure MIB parser with realistic fixtures (LLDP rem table, LLDP mgmt-addr index, CDP hex addresses)"
+    status: todo
+    depends_on: []
+    tdd:
+      red:
+        test_file: core-network/src/test/kotlin/net/aieat/netswissknife/core/network/topology/TopologyMibParserTest.kt
+        tests:
+          - "hexOctetsToIpv4('c0:a8:01:01') == '192.168.1.1'"
+          - "hexOctetsToIpv4('192.168.1.1') == '192.168.1.1' (pass-through)"
+          - "hexOctetsToIpv4('aa:bb') == null; hexOctetsToIpv4('C0:A8:01:01') (uppercase) == '192.168.1.1'"
+          - "parseLldpManAddrTable: OID '1.0.8802.1.1.2.1.4.2.1.4.0.1.1.1.4.192.168.1.2' value '1' -> key '1.1' -> '192.168.1.2'"
+          - "parseLldpManAddrTable ignores IPv6 rows (subtype 2, len 16) but records them in a separate ipv6 map"
+          - "parseLldpManAddrTable tolerates column 3 and 5 rows (same index) without duplicates"
+          - "parseLldpRemTable groups columns by localPort.remIndex and exposes sysName/portId/chassisId"
+          - "parseCdpCache maps col 4 hex 'c0:a8:01:03' to '192.168.1.3', col 6 deviceId, col 7 port, col 8 platform, col 9 caps"
+          - "parseCdpCache skips entries with addressType (col 3) != 1 (non-IP)"
+          - "fixture-driven: loads src/test/resources/snmp/*.txt (lines 'oid = value') and asserts neighbour sets"
+        run: "./gradlew :core-network:test --tests '*TopologyMibParserTest' --no-daemon"
+        expect: "RED"
+      green:
+        steps:
+          - "Implement TopologyMibParser as described; parse index with `oid.removePrefix(prefix).split('.')`."
+          - "Fixture loader helper in test: `object SnmpFixtures { fun load(name): Map<String,String> }`."
+        run: "./gradlew :core-network:test --no-daemon"
+        expect: "PASS"
+      refactor: ["Move `parseCdpAddress` & LLDP parsing out of the repository; repository delegates."]
+    acceptance_criteria: ["Fixtures reflect real encodings (comment the source device/OS in each fixture header)."]
+
+  - id: P02-T2
+    title: "Repository uses the parser; fixture in TopologyDiscoveryRepositoryTest corrected"
+    status: todo
+    depends_on: [P02-T1]
+    tdd:
+      red:
+        test_file: core-network/src/test/kotlin/net/aieat/netswissknife/core/network/topology/TopologyDiscoveryRepositoryTest.kt
+        tests:
+          - "REPLACE fixture at lines 61-71 with index-encoded mgmt-address rows (value = '1'); assert 2 LinkDiscovered + 2 neighbour nodes queried (walk called with target ip 192.168.1.2 / .3)"
+          - "CDP neighbour with hex address is queued and NodeDiscovered emitted for it"
+          - "neighbour present in both LLDP and CDP is visited once (visited set) and produces two links (protocol LLDP and CDP)"
+          - "maxHops respected: with maxHops=1, hop-2 neighbours are linked but not queried (walk never called for them)"
+          - "cancellation: cancelling the collector mid-discovery closes the client (factory returns a spy; verify close() called)"
+        run: "./gradlew :core-network:test --tests '*TopologyDiscoveryRepositoryTest' --no-daemon"
+        expect: "RED"
+      green:
+        steps:
+          - "Introduce SnmpClientFactory; repository constructor `(factory: SnmpClientFactory = SnmpClientFactory { Snmp4jClientImpl(it) })`; keep a secondary constructor accepting an SnmpClient for tests: `constructor(client: SnmpClient) : this(SnmpClientFactory { client })`."
+          - "discover(): `factory.create(params).use { client -> … }` and ensureActive() per queue iteration."
+        run: "./gradlew :core-network:test --no-daemon"
+        expect: "PASS"
+      refactor: ["Delete parseCdpAddress and inline LLDP loops from the repository."]
+    acceptance_criteria: ["TopologyDiscoveryRepositoryTest no longer contains a dotted IP as a mgmt-address VALUE."]
+
+  - id: P02-T3
+    title: "SNMPv3: UsmUserSpecFactory (pure) + Snmp4jClientImpl session with USM registration + new protocols"
+    status: todo
+    depends_on: [P02-T2]
+    tdd:
+      red:
+        test_file: core-network/src/test/kotlin/net/aieat/netswissknife/core/network/topology/UsmUserSpecFactoryTest.kt
+        tests:
+          - "V3 + MD5/DES -> authOid == AuthMD5.ID, privOid == PrivDES.ID, level AUTH_PRIV"
+          - "V3 + SHA/NONE -> level AUTH_NOPRIV, privOid null"
+          - "V3 + NONE/NONE -> NOAUTH_NOPRIV, both null, passphrases ignored"
+          - "V3 + SHA256/AES256 -> AuthHMAC192SHA256.ID / PrivAES256.ID"
+          - "priv set while auth NONE -> IllegalArgumentException (SNMP forbids priv without auth); TopologyParamsValidator must also reject this (add validator test)"
+          - "blank auth passphrase with auth protocol set -> validation error (validator test)"
+        also_test_file: core-network/src/test/kotlin/net/aieat/netswissknife/core/network/topology/Snmp4jClientImplLoopbackTest.kt
+        also_tests:
+          - "v2c GET sysDescr against in-process responder returns the responder's value"
+          - "v3 authPriv (SHA/AES128) GET succeeds when responder has the same user; fails (null/timeout) with a wrong passphrase"
+          - "walk over a 3-row subtree returns 3 entries keyed by full OID"
+          - "close() stops the transport (second get after close throws or returns null – assert deterministic behaviour)"
+        run: "./gradlew :core-network:test --tests '*UsmUserSpecFactoryTest' --tests '*Snmp4jClientImplLoopbackTest' --no-daemon"
+        expect: "RED"
+      green:
+        steps:
+          - "TopologyModels: V3AuthProtocol { NONE, MD5, SHA, SHA256, SHA512 }, V3PrivProtocol { NONE, DES, AES128, AES192, AES256 } (keep existing names)."
+          - "UsmUserSpecFactory.from(params): UsmUserSpec(securityName, authOid, authPass, privOid, privPass, securityLevel)."
+          - "Snmp4jClientImpl(params): init { ensureSecurityProtocols(); transport.listen(); if V3 { val usm = USM(SecurityProtocols.getInstance(), OctetString(MPv3.createLocalEngineID()), 0); SecurityModels.getInstance().addSecurityModel(usm); snmp.usm.addUser(spec.toUsmUser()) } }. Note: SecurityModels is a global singleton – adding the same USM repeatedly is harmless but guard with a companion flag; per-instance users are added to snmp.usm."
+          - "Target built once; get()/walk() reuse it. Timeout/retries from params."
+          - "TopologyParamsValidator: reject priv-without-auth and missing passphrases; TopologyParamsValidatorTest updated."
+        run: "./gradlew :core-network:test --no-daemon"
+        expect: "PASS (loopback tests may be @Tag('integration') and still run by default; keep them < 2 s)"
+      refactor: ["Remove unused imports (org.snmp4j.security.* wildcard) in favour of explicit ones."]
+    acceptance_criteria: ["v3 authPriv loopback test green; validator covers new combos."]
+
+  - id: P02-T4
+    title: "UI: new protocol options, recent seeds, progress unchanged"
+    status: todo
+    depends_on: [P02-T3]
+    tdd:
+      red:
+        test_file: app/src/test/kotlin/net/aieat/netswissknife/app/ui/screens/topology/TopologyDiscoveryViewModelTest.kt
+        tests:
+          - "startDiscovery adds seed IP to recents (RECENT_TOPOLOGY_SEEDS) only after first NodeDiscovered"
+          - "existing state tests remain green"
+        also_test_file: app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/screens/topology/TopologyDiscoveryScreenTest.kt
+        also_tests:
+          - "v3 dropdowns list SHA-256/SHA-512 and AES-192/AES-256 (test tags)"
+          - "selecting priv without auth shows inline validation text"
+        run: "./gradlew :app:testDebugUnitTest --tests '*TopologyDiscoveryViewModelTest' --no-daemon"
+        expect: "RED"
+      green:
+        steps:
+          - "AppPreferenceKeys.RECENT_TOPOLOGY_SEEDS + include in ALL_RECENT_HOST_KEYS (+ AppPreferenceKeysTest)."
+          - "ViewModel injects RecentHostsRepository; exposes recentSeeds; screen shows RecentHostsRow (already a shared component)."
+          - "Screen dropdowns use `V3AuthProtocol.entries` with string resources per entry (topology_auth_sha256 …) – do NOT display `.name`."
+        run: "./gradlew :app:testDebugUnitTest :app:assembleDebug --no-daemon"
+        expect: "PASS"
+      refactor: []
+    acceptance_criteria: ["No new literals in TopologyDiscoveryScreen (P07 removes the existing ones)."]
+
+  - id: P02-T5
+    title: "R8 keep rules + release verification script"
+    status: todo
+    depends_on: [P02-T3]
+    steps:
+      - "Add rules to app/proguard-rules.pro (see design §4) with a comment linking to this phase."
+      - "Build unsigned release: ./gradlew :app:assembleRelease --no-daemon (no -PstoreFile => unsigned APK at app/build/outputs/apk/release/)."
+      - "Verify classes survived: `$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer dex packages app/build/outputs/apk/release/app-release-unsigned.apk | grep -E 'org.snmp4j.security.(AuthSHA|PrivAES128|USM)\\b'` -> 3 hits. Record the command in README 'How to Build' (release section) and in P09 CI job."
+      - "Optional: `-printusage app/build/r8-usage.txt` temporarily to confirm no snmp4j security class is removed."
+    acceptance_criteria: ["apkanalyzer shows the classes; CI (P09) will automate."]
+
+  - id: P02-T6
+    title: "Docs"
+    status: todo
+    depends_on: [P02-T4, P02-T5]
+    steps:
+      - "README Network Topology: list supported v3 protocols (MD5, SHA-1, SHA-256, SHA-512 / DES, AES-128/192/256), note single-session behaviour, mention neighbour addresses are taken from LLDP management-address index and CDP cache address."
+      - "Help sheet strings for v3 requirements (auth required for priv)."
+
+qa_validation:
+  automated:
+    - "./gradlew :core-network:test --no-daemon   (incl. loopback v3 test)"
+    - "./gradlew :app:testDebugUnitTest :app:assembleDebug --no-daemon"
+    - "./gradlew :core-network:koverVerify --no-daemon"
+    - "./gradlew :app:lintDebug --no-daemon --no-parallel"
+    - "./gradlew :app:assembleRelease --no-daemon && apkanalyzer check from P02-T5"
+  manual_device:
+    - "Against a real LLDP-capable switch (or `snmpsimd` with a recorded .snmprec): v2c discovery expands to >= 2 nodes; v3 SHA/AES128 works; wrong passphrase shows 'SNMP not reachable' for the seed."
+    - "Cisco with CDP: neighbours appear with CDP links."
+    - "Release build (install unsigned via `adb install` requires signing – use debug-signed release: temporarily sign with debug keystore locally: -PstoreFile=app/debug.keystore -PstorePassword=android -PkeyAlias=androiddebugkey -PkeyPassword=android) – run one v3 discovery."
+  regression:
+    - "TopologyDiscoveryScreenTest suite green on Test Lab."
+    - "Graph layout stability behaviour (positions cached) unchanged."
+
+docs_updates: [README.md, strings.xml help_topology_*]
+
+risks:
+  - risk: "SecurityModels/SecurityProtocols are process-wide singletons in SNMP4J; concurrent discoveries with different users share one USM."
+    mitigation: "Users are added per Snmp instance (snmp.getUSM()); ensure each client gets its own USM instance passed to SecurityModels only once (guard), and remove the user in close()."
+  - risk: "Loopback responder test flakiness on CI (port allocation)."
+    mitigation: "Bind to 127.0.0.1:0 and read the assigned port; 5 s timeout; retries 0."
+  - risk: "Keep-all rule for org.snmp4j inflates APK (~1.5 MB dex)."
+    mitigation: "Acceptable; refine later with -printusage-driven narrower rules."
+
+rollback: |
+  Revert TopologyModule to `TopologyDiscoveryRepositoryImpl(Snmp4jClientImpl())` equivalent via the
+  secondary constructor; keep proguard rules (harmless).
+
+definition_of_done:
+  - "F001, F002, F003 closed; F014 closed for SNMP (CI automation tracked in P09)."
+  - "Global DoD from plan.yaml."

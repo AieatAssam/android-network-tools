@@ -1,0 +1,472 @@
+# =============================================================================
+# Net Swiss Knife – Comprehensive Improvement Plan (MASTER INDEX)
+# =============================================================================
+# Purpose : Single tracking file for the whole improvement programme.
+#           Each phase has its own detailed YAML under plan/phases/ written for
+#           AI coding agents (not humans). This file is the index + status board
+#           + the complete findings ledger, so it is usable on its own.
+# Author  : Claude Fable 5.1 (full codebase analysis session, 2026-09-18)
+# Baseline: git main @ 518c814 ("test: expand instrumented coverage to all 14 tools (#104)")
+# =============================================================================
+
+meta:
+  schema_version: 1
+  generated_on: "2026-09-18"
+  baseline_commit: "518c814"
+  repo: "AieatAssam/android-network-tools (Net Swiss Knife, applicationId net.aieat.netswissknife)"
+  toolchain_at_baseline:
+    kotlin: "2.4.10"
+    agp: "9.4.0"
+    gradle: "9.7.1"
+    compose_bom: "2026.08.00"
+    hilt: "2.60.1"
+    min_sdk: 26
+    target_sdk: 37
+    jdk: 21
+  codebase_metrics_at_baseline:
+    kotlin_loc_total: 42088
+    tools_implemented: 14
+    unit_tests_core_network: 501
+    unit_tests_core_domain: 164
+    unit_tests_app: 216
+    instrumented_tests_app: 79
+    largest_compose_files_loc: { TracerouteScreen: 1394, DnsScreen: 1298, LanScanScreen: 1298, PingScreen: 1244, HttpProbeScreen: 1214, TopologyDiscoveryScreen: 1168 }
+    string_resources_lines: 1108
+    translations_present: 0   # only res/values/ exists
+  status_vocabulary: [todo, in_progress, blocked, done, dropped]
+  severity_vocabulary: [critical, high, medium, low]
+
+how_to_use:
+  - "Work phases top-to-bottom; the order IS the priority (critical first)."
+  - "Open plan/phases/<id>-*.yaml for the phase you are executing. It is self-contained."
+  - "Update `status` fields here AND in the phase file as tasks progress. Keep `changelog` below appended."
+  - "Every phase uses RED -> GREEN -> REFACTOR. Never write production code before a failing test exists for it (pure-Kotlin modules). Compose-only work is validated by instrumented tests + manual device checks."
+  - "Run only ONE Gradle invocation at a time on this host (gradle.properties pins 1 worker / 1 GB heap). If a run dies silently: ./gradlew --stop, then retry."
+  - "Before starting a phase, re-verify each `assumptions[].verify_with` line; the codebase may have moved since 2026-09-18."
+  - "Each phase ends with README.md sync (CLAUDE.md 'README Sync Policy – MANDATORY') and a PR-sized commit series using conventional-commit prefixes."
+
+agent_execution_rules:
+  branch_naming: "plan/<phase-id>-<slug>  (e.g. plan/P01-lan-discovery)"
+  commit_prefixes: { feat: "new capability", fix: "bug fix", test: "tests only", refactor: "no behaviour change", docs: "docs only", chore: "build/CI" }
+  commit_footer: "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+  gradle_commands:
+    all_tests: "./gradlew test --no-daemon"
+    core_network_tests: "./gradlew :core-network:test --no-daemon"
+    core_domain_tests: "./gradlew :core-domain:test --no-daemon"
+    app_unit_tests: "./gradlew :app:testDebugUnitTest --no-daemon"
+    single_test_class: "./gradlew :core-network:test --tests 'net.aieat.netswissknife.core.network.lan.LanScanRepositoryImplTest' --no-daemon"
+    lint: "./gradlew :app:lintDebug --no-daemon --no-parallel"
+    coverage_gates: "./gradlew :app:koverVerify :core-domain:koverVerify :core-network:koverVerify --no-daemon"
+    debug_apk: "./gradlew :app:assembleDebug --no-daemon"
+    release_apk_unsigned: "./gradlew :app:assembleRelease --no-daemon   # unsigned when no -PstoreFile"
+    instrumented_apks: "./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon"
+  invariants_that_must_never_break:
+    - ":core-network and :core-domain contain zero Android SDK imports (grep -rn 'import android' core-network core-domain must be empty)."
+    - "ViewModels: @HiltViewModel + @Inject constructor; state exposed as StateFlow<UiState>."
+    - "Routes only in NavRoutes.kt; every composable{} in AppNavHost has enter/exit/popEnter/popExit transitions."
+    - "All user-visible strings in res/values/strings.xml (no literals in composables)."
+    - "Colours via MaterialTheme.colorScheme.* only."
+    - "Kover floors: :app 90 (scoped includes), :core-network 70, :core-domain 70. Lowering a floor is its own commit with a stated reason."
+    - "Lint: 0 errors (abortOnError=true)."
+  definition_of_done_global:
+    - "./gradlew test passes; ./gradlew :app:assembleDebug passes; ./gradlew :app:lintDebug has 0 errors."
+    - "All three koverVerify tasks pass."
+    - "README.md Features + Available Tools updated to actual behaviour."
+    - "Phase file `status: done`, every task `status: done` or `dropped` with reason."
+
+# -----------------------------------------------------------------------------
+# PHASES (priority order = execution order)
+# -----------------------------------------------------------------------------
+phases:
+  - id: P01
+    file: plan/phases/P01-lan-scanner-discovery.yaml
+    title: "LAN Scanner: correct host discovery, MAC/vendor enrichment, real gateway detection"
+    priority: critical
+    status: todo
+    depends_on: []
+    findings: [F004, F005, F006, F040]
+    summary: "ARP table is read before probing (and is unreadable on API 29+), discovery is ICMP-only, gateway is 'lowest IP'. Rewrite discovery as multi-probe (ICMP + TCP + NetBIOS/mDNS name) with post-probe enrichment and a platform-provided gateway/subnet source."
+
+  - id: P02
+    file: plan/phases/P02-topology-snmp-correctness.yaml
+    title: "Network Topology: SNMPv3 actually works, LLDP/CDP neighbour parsing fixed, R8 keep rules"
+    priority: critical
+    status: todo
+    depends_on: []
+    findings: [F001, F002, F003, F014]
+    summary: "SNMPv3 credentials are never registered with SNMP4J's USM; LLDP reads the wrong column for neighbour IPs; CDP rejects hex-encoded addresses. Feature is advertised in the store listing and does not work on real hardware."
+
+  - id: P03
+    file: plan/phases/P03-wifi-live-scanning.yaml
+    title: "Wi-Fi Scanner: trigger real scans, honour throttling, configurable refresh, richer connection info"
+    priority: high
+    status: todo
+    depends_on: []
+    findings: [F007]
+    summary: "WifiManager.startScan() is never called; the 10-second auto-refresh re-reads the OS cache. Add scan triggering with SCAN_RESULTS_AVAILABLE receiver, throttle awareness and a user-configurable interval."
+
+  - id: P04
+    file: plan/phases/P04-ping-dns-accuracy.yaml
+    title: "Ping & DNS: accurate RTT (ICMP via icmpenguin, resolve-once), packet size/TTL, honest resolver labelling, correct record typing, IDN"
+    priority: high
+    status: todo
+    depends_on: []
+    findings: [F008, F009, F010, F011, F025, F037]
+    summary: "Ping times include DNS resolution on every probe and cannot set size/TTL although icmpenguin.Pinger supports both; DNS mislabels CNAME answers and silently swaps System DNS for Cloudflare."
+
+  - id: P05
+    file: plan/phases/P05-local-network-binding-resilience.yaml
+    title: "Local-network socket binding (VPN-safe), connectivity awareness, Android 16 LNP readiness"
+    priority: high
+    status: todo
+    depends_on: []
+    findings: [F012, F013]
+    summary: "No socket is ever bound to the Wi-Fi Network; with a VPN active every LAN tool (LAN scan, mDNS, WOL, SNMP, LAN port scans) uses the wrong interface. Introduce a NetworkBinder abstraction in core-network, implemented with ConnectivityManager in :app."
+
+  - id: P06
+    file: plan/phases/P06-docs-and-consistency-sync.yaml
+    title: "Documentation & consistency sync (README, CLAUDE.md, privacy policy, store listing, tool_instructions), dead code, default mismatches"
+    priority: high
+    status: todo
+    depends_on: []
+    findings: [F016, F018, F019, F023]
+    summary: "Cheap, mandated by CLAUDE.md README policy. Removes contradictions users and agents will trip over (resolver list, kover %, tag format, missing workflow, privacy policy covering 6 of 14 tools, stale tool_instructions)."
+
+  - id: P07
+    file: plan/phases/P07-localization-architecture.yaml
+    title: "Localization architecture: typed errors instead of English strings from core layers; zero literals in UI; first translation"
+    priority: medium
+    status: todo
+    depends_on: [P06]
+    findings: [F017]
+    summary: "Every core error/validation message is an English literal rendered verbatim; several composables and ViewModels carry literals; no translation exists. Introduce sealed error types + string mapping in :app, then add one full translation as proof."
+
+  - id: P08
+    file: plan/phases/P08-accessibility-ui-polish.yaml
+    title: "Accessibility & UI polish: 48dp targets, live regions, RTL-safe chart text, slider labels, narrow-width layouts, per-app language"
+    priority: medium
+    status: todo
+    depends_on: [P07]
+    findings: [F024, F030]
+    summary: "Concrete a11y defects (4 sub-48dp buttons, no live regions, nativeCanvas text in Wi-Fi charts) plus small UX gaps identified by the 2026-09-12 audit and re-verified."
+
+  - id: P09
+    file: plan/phases/P09-quality-gates-and-test-coverage.yaml
+    title: "Quality gates: meaningful :app coverage, ktlint/detekt, release-build smoke, CI quota, secrets hygiene, dependency bumps, untested classes"
+    priority: medium
+    status: todo
+    depends_on: []
+    findings: [F014, F020, F021, F022, F034, F035, F038]
+    summary: "The :app Kover gate measures only 4 classes; no style gate; no R8 release build ever compiled in CI; Firebase job burns the 10/day quota on every push; secrets passed as CLI args."
+
+  - id: P10
+    file: plan/phases/P10-security-tools-depth.yaml
+    title: "Security tools depth: TLS (hostname verification, validity windows, protocol/ALPN, PEM export), HTTP Probe (timing breakdown, redirect codes, cURL export, deeper header grading), WHOIS (RDAP, monotonic timing)"
+    priority: medium
+    status: todo
+    depends_on: [P07]
+    findings: [F015, F028, F029]
+    summary: "Feature depth for the three 'Security' tools, ordered by user value. Includes fixing HTTPS→HTTP redirect being an error and CSP/HSTS 'PASS for any value'."
+
+  - id: P11
+    file: plan/phases/P11-diagnostics-tools-depth.yaml
+    title: "Diagnostics depth: Speed Test (keep-alive latency, multi-stream, loaded latency), Traceroute (per-probe stats, async rDNS, GeoIP provider fallback, IPv6), Port Scanner (banner truncation, UDP presets)"
+    priority: medium
+    status: todo
+    depends_on: [P04, P05]
+    findings: [F026, F027]
+    summary: "Accuracy work: reported speed-test latency is ~3x true RTT; single-stream throughput underestimates fast links; traceroute discards probe RTTs and geolocates through one unauthenticated provider."
+
+  - id: P12
+    file: plan/phases/P12-lan-utilities-and-settings-depth.yaml
+    title: "LAN utilities & settings depth: mDNS (IPv6 group, filters, TXT parsing), WOL (saved devices, directed broadcast, SecureOn), Subnet (CGNAT/reserved ranges), Settings (privacy statement, per-tool defaults, export/import, backup rules)"
+    priority: low
+    status: todo
+    depends_on: [P05, P07]
+    findings: [F013, F030, F031, F032, F033, F023]
+    summary: "Quality-of-life depth for the LAN-side tools and the settings surface."
+
+  - id: P13
+    file: plan/phases/P13-new-tools-wave-1.yaml
+    title: "New tools wave 1: Network Info dashboard, SSDP/UPnP discovery, NTP clock offset"
+    priority: low
+    status: todo
+    depends_on: [P05, P07]
+    findings: [F036]
+    summary: "Highest-value missing tools with no new dependencies. Network Info is table-stakes for the category and currently absent."
+
+  - id: P14
+    file: plan/phases/P14-new-tools-wave-2.yaml
+    title: "New tools wave 2: DoH/DoT resolver tester, IPv6 subnet calculator, Bufferbloat (loaded-latency) grade"
+    priority: low
+    status: todo
+    depends_on: [P04, P11, P13]
+    findings: []
+    summary: "Tools that extend existing engines (dnsjava already supports DoH; subnet engine gains an IPv6 mode; speed-test engine gains a loaded-latency phase)."
+
+  - id: P15
+    file: plan/phases/P15-new-tools-wave-3.yaml
+    title: "New tools wave 3: Bandwidth monitor, Certificate Transparency lookup, BGP looking glass, public IP / reverse lookup"
+    priority: low
+    status: todo
+    depends_on: [P13]
+    findings: []
+    summary: "External-API-backed and platform-stats tools; each self-contained and optional."
+
+# -----------------------------------------------------------------------------
+# FINDINGS LEDGER (verified against source on 2026-09-18; file:line refer to baseline commit)
+# -----------------------------------------------------------------------------
+findings:
+  - id: F001
+    severity: critical
+    area: topology
+    title: "SNMPv3 credentials are never applied"
+    evidence: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/topology/Snmp4jClientImpl.kt:82-93 builds UserTarget(securityName, securityLevel) but never calls SecurityProtocols.getInstance().addDefaultProtocols(), never registers a USM (SecurityModels.addSecurityModel) and never snmp.usm.addUser(UsmUser(...)) with v3AuthPassword/v3PrivPassword. TopologyParams.v3AuthPassword/v3PrivPassword are unused anywhere in :core-network."
+    impact: "Every SNMPv3 discovery fails (no such user / unsupported security level) while the UI collects credentials and the store listing advertises 'SNMP v1/v2c/v3'."
+    phase: P02
+  - id: F002
+    severity: critical
+    area: topology
+    title: "LLDP neighbour management address parsed from the wrong place"
+    evidence: "TopologyDiscoveryRepositoryImpl.kt:306-322 treats the VALUE of column 4 of lldpRemManAddrTable (1.0.8802.1.1.2.1.4.2.1.4 = lldpRemManAddrIfId, an Integer32) as the neighbour IP. Per IEEE 802.1AB-2005 MIB the address is part of the row INDEX (…timeMark.localPort.remIndex.addrSubtype.addrLen.addrOctets…). Test fixture TopologyDiscoveryRepositoryTest.kt:66-71 returns a dotted IP as the value, which no real agent does."
+    impact: "Neighbour IPs are never extracted on real devices -> BFS never expands beyond the seed; topology tool shows one node."
+    phase: P02
+  - id: F003
+    severity: high
+    area: topology
+    title: "CDP neighbour address in hex-octet form is discarded"
+    evidence: "TopologyDiscoveryRepositoryImpl.kt:388-392 parseCdpAddress only accepts dotted-quad; SNMP4J renders a 4-byte OctetString cdpCacheAddress as 'c0:a8:01:01' (non-printable bytes -> hex with ':' separators)."
+    impact: "CDP neighbours are never followed on Cisco gear."
+    phase: P02
+  - id: F004
+    severity: critical
+    area: lan
+    title: "MAC/vendor enrichment effectively dead"
+    evidence: "LanScanRepositoryImpl.kt:77 reads the ARP table ONCE before any probe is sent, so entries created by the probes themselves are never seen; DEFAULT_ARP_READER (line 56-61) reads /proc/net/arp which Android 10+ (API 29) blocks for apps (returns empty/EACCES). OuiDatabase has 91 entries."
+    impact: "On every supported device newer than Android 9 the MAC and vendor columns are always empty; README/store advertise both."
+    phase: P01
+  - id: F005
+    severity: high
+    area: lan
+    title: "Host discovery is ICMP-only"
+    evidence: "LanScanRepositoryImpl.kt:48-55 DEFAULT_HOST_CHECKER = InetAddress.isReachable (ICMP echo, then TCP/7 fallback). No TCP-connect presence probes, no NetBIOS/mDNS name queries."
+    impact: "Hosts that drop ICMP (Windows default firewall profile, many IoT devices, some phones) are reported absent."
+    phase: P01
+  - id: F006
+    severity: medium
+    area: lan
+    title: "Gateway = lowest host IP heuristic"
+    evidence: "LanScanRepositoryImpl.kt:83 gatewayIp = ips.firstOrNull(). The actual default route is available via ConnectivityManager.getLinkProperties(activeNetwork).routes in :app."
+    impact: "Wrong gateway flag on any network whose router is not .1."
+    phase: P01
+  - id: F007
+    severity: high
+    area: wifi
+    title: "Wi-Fi scan never triggered"
+    evidence: "app/src/main/kotlin/net/aieat/netswissknife/app/wifi/WifiScanRepositoryImpl.kt: scan() only reads wifiManager.scanResults; there is no call to startScan() and no SCAN_RESULTS_AVAILABLE_ACTION receiver. WifiScanViewModel AUTO_REFRESH_INTERVAL_MS = 10_000 re-reads the same cache."
+    impact: "Results are as old as the last OS-initiated scan (often 30-60 s or more, minutes when screen-off); 'auto-refresh every 10 s' is cosmetic."
+    phase: P03
+  - id: F008
+    severity: high
+    area: ping
+    title: "Ping RTT includes DNS resolution, resolves on every probe"
+    evidence: "core-network/.../ping/PingRepositoryImpl.kt:32-36 DEFAULT_CHECKER starts the timer, then calls InetAddress.getByName(host) inside the timed region for every probe."
+    impact: "First-probe RTT inflated by the DNS round trip; every probe pays a resolver call; hostname->IP can change mid-session."
+    phase: P04
+  - id: F009
+    severity: high
+    area: ping
+    title: "Ping lacks packet size / TTL although the dependency supports it"
+    evidence: "icmpenguin 1.0.0-rc.4 (already a dependency for traceroute) ships me.impa.icmpenguin.ping.Pinger(host, ttl, timeout, maxPingCount, interval, probeSize, pattern, sourceIp) returning Flow<ProbeResult> (verified via javap on the AAR in ~/.gradle/caches). README says 'Payload size is intentionally not configurable because Android's supported reachability API does not expose an ICMP payload-size control'; store/play-description.txt claims 'Configurable count, timeout and packet size'."
+    impact: "Feature gap + contradictory public docs."
+    phase: P04
+  - id: F010
+    severity: medium
+    area: dns
+    title: "All answer records labelled with the requested type"
+    evidence: "DnsRepositoryImpl.kt:104-110 maps every ANSWER record to DnsRecord(type = recordType, …) regardless of rec.getType(); an A query for a CNAME name returns CNAME rows displayed as 'A'."
+    impact: "Misleading result rows; CNAME chains invisible."
+    phase: P04
+  - id: F011
+    severity: medium
+    area: dns
+    title: "'System DNS' silently becomes Cloudflare"
+    evidence: "DnsRepositoryImpl.kt:151-163 buildSystemResolver falls back to 1.1.1.1 when serverAddresses is empty or ExtendedResolver throws; DnsResult.server stays DnsServer.System; raw view prints ';; SERVER: (see selected server above)'."
+    impact: "User believes they tested their own resolver; diagnosis of local DNS problems is wrong."
+    phase: P04
+  - id: F012
+    severity: high
+    area: platform
+    title: "LAN sockets never bound to the Wi-Fi Network"
+    evidence: "MdnsRepositoryImpl.kt (MulticastSocket bound to 0.0.0.0:5353, no setNetworkInterface / Network.bindSocket), WakeOnLanRepositoryImpl.kt:789 DatagramSocket(), Snmp4jClientImpl DefaultUdpTransportMapping(), LanScanRepositoryImpl/PortScanRepositoryImpl plain Socket(). No use of ConnectivityManager.bindProcessToNetwork or Network.bindSocket anywhere."
+    impact: "With a VPN active (very common), or on dual-connectivity devices, LAN scan, mDNS, WOL, SNMP and LAN port scans go through the wrong interface and silently fail/timeout."
+    phase: P05
+  - id: F013
+    severity: medium
+    area: mdns
+    title: "mDNS IPv4-only, fixed port bind"
+    evidence: "MdnsRepositoryImpl.kt:1422-1443 joins only 224.0.0.251; never ff02::fb; binds 5353 with reuseAddress and no fallback if the bind fails (OEM mdnsd conflicts)."
+    impact: "IPv6-only advertisers missed; discovery fails outright on devices where 5353 cannot be shared."
+    phase: P05
+  - id: F014
+    severity: high
+    area: build
+    title: "No R8 keep rules for SNMP4J / icmpenguin, and no release build in CI"
+    evidence: "app/proguard-rules.pro contains only dnsjava -dontwarn lines; SNMP4J resolves security protocols and transports reflectively (SecurityProtocols.properties / SNMP4JSettings). ci.yml builds assembleDebug only; the first minified build happens in release.yml after tagging."
+    impact: "Risk that SNMPv3 (after P02) or other reflective paths break only in the Play build."
+    phase: P02
+  - id: F015
+    severity: medium
+    area: tls
+    title: "Hostname verification never performed; TrustAll manager unsuppressed"
+    evidence: "TlsInspectorRepositoryImpl.kt:146-158 handshakes with TrustAllManager (intentional, to capture bad chains) and separately checks chain trust (checkTrust), but never runs a HostnameVerifier / SAN match; lint reports TrustAllX509TrustManager on core-network.jar."
+    impact: "A valid chain for the wrong host reports 'trusted'; lint noise."
+    phase: P10
+  - id: F016
+    severity: medium
+    area: docs
+    title: "Public docs contradict the code in 8 places"
+    evidence: "(a) README DNS section lists system/Google/Cloudflare/custom; DnsServer.kt also has OpenDns and Quad9. (b) README 'koverVerify … enforce 100%' vs build.gradle.kts minBound(90) and CLAUDE.md '90%'. (c) CLAUDE.md module layout lists .github/workflows/claude_add_tool.yml which does not exist. (d) CLAUDE.md/README say tag 'v*.*.*' but release.yml matches 'v[0-9]+.[0-9]+.[0-9]+.[0-9]+'. (e) README Ping: 'Recent hosts saved per-session' but RecentHostsRepository persists to DataStore. (f) PRIVACY_POLICY.md lists 6 tools, no Cloudflare speed test, WHOIS/RDAP servers, SNMP or ipinfo naming; says 'Debug Logs screen' exists but it is DEBUG-only. (g) store/play-description.txt claims Ping 'packet size' is configurable. (h) claude/tool_instructions.md uses com/example/netswissknife paths, marks Ping/Traceroute/Ports/LAN/DNS as 'Placeholder', omits 7 tools."
+    phase: P06
+  - id: F017
+    severity: medium
+    area: i18n
+    title: "App is untranslatable"
+    evidence: "Only res/values/ exists. Literals in composables: TopologyDiscoveryScreen.kt:195,584,620,844,949; ToolHelpSheet.kt:77 'How to use'; DnsScreen.kt:812,1024. Literals in ViewModels: WifiScanViewModel 'This network is no longer in range', TopologyDiscoveryViewModel 'Starting...', ApSortOrder(label). NavRoutes.ToolInfo labels/descriptions are Kotlin strings. Every NetworkResult.Error / ValidationError message in core-domain and core-network is an English literal rendered verbatim by the UI (e.g. 'Timeout must be between 100 ms and 30 000 ms'). Core enums carry English displayName/description (DnsRecordType, DnsServer, WifiSecurity, WifiStandard, WifiChannelInfo.congestionLabel, PortScanPreset.label, SecurityHeaderCheck.description)."
+    phase: P07
+  - id: F018
+    severity: low
+    area: code-quality
+    title: "Dead / duplicated code"
+    evidence: "app/.../ui/screens/ToolPlaceholderContent.kt (210 lines, contains literal 'Coming Soon') is referenced by nothing. NavRoutes.defaultPinnedRoutes duplicates AppNavigationViewModel.DEFAULT_PINNED_ROUTES. core-network TracerouteRepositoryImplTest.kt tests GeoIpRepositoryImpl (misnamed)."
+    phase: P06
+  - id: F019
+    severity: low
+    area: consistency
+    title: "Inconsistent defaults and recents behaviour"
+    evidence: "PortScanViewModel: _concurrency initial 100 but init reads pref default 50. mDNS timeout: MdnsDiscoveryUseCase/ViewModel default 5_000, MdnsDiscoveryScreen.kt:115,132 pass 8_000L (README says 8 s). Recents saved BEFORE validation in Dns/PortScan/Traceroute/Tls/Whois ViewModels but only after first result in Ping/LanScan."
+    phase: P06
+  - id: F020
+    severity: medium
+    area: quality
+    title: ":app coverage gate is nearly empty"
+    evidence: "app/build.gradle.kts kover includes exactly 4 classes (RelayChainGeometry, ConnectorSegment, AppPreferenceKeys, RecentHostsRepository); all ViewModels (216 tests) and util classes are outside the gate."
+    phase: P09
+  - id: F021
+    severity: medium
+    area: ci
+    title: "Firebase Test Lab job on every push/PR vs 10 runs/day Spark quota"
+    evidence: ".github/workflows/ci.yml instrumented-tests job has no path/branch/label gating."
+    phase: P09
+  - id: F022
+    severity: low
+    area: ci
+    title: "Signing secrets passed as Gradle -P CLI arguments"
+    evidence: "release.yml steps 8-9 pass -PstorePassword=… -PkeyPassword=… on the command line (process listing / verbose failure output exposure). Gradle supports ORG_GRADLE_PROJECT_<name> env vars."
+    phase: P09
+  - id: F023
+    severity: low
+    area: platform
+    title: "All settings excluded from backup"
+    evidence: "res/xml/backup_rules.xml and data_extraction_rules.xml exclude datastore/app_prefs.preferences_pb entirely (comment says intent is recent hosts only) -> theme, dynamic colour, pinned tools, defaults and onboarding flag are lost on restore/transfer."
+    phase: P12
+  - id: F024
+    severity: medium
+    area: a11y
+    title: "Concrete accessibility defects"
+    evidence: "HttpProbeScreen.kt:387,394,876 IconButton size 32.dp and :1050 size 28.dp (< 48dp). grep liveRegion -> 0 hits. WifiScanScreen.kt has 6 nativeCanvas.drawText call sites (not RTL/font-scale aware). PortsScreen RangeSlider has no thumb labels. SubnetCalculatorScreen BinaryBitsRow uses weight(1f) with no horizontal scroll fallback."
+    phase: P08
+  - id: F025
+    severity: low
+    area: validation
+    title: "HostValidator rejects IDN and trailing-dot FQDNs"
+    evidence: "core-network/.../HostValidator.kt hostnameRegex is ASCII-only; no java.net.IDN.toASCII normalisation; 'example.com.' fails."
+    phase: P04
+  - id: F026
+    severity: medium
+    area: speedtest
+    title: "Latency inflated, single-stream throughput"
+    evidence: "SpeedTestRepositoryImpl.kt:369-382 each latency probe opens a new HTTPS connection then disconnect()s (defeats keep-alive) -> measured value = DNS+TCP+TLS+HTTP, roughly 3x RTT. DEFAULT_DOWNLOAD/UPLOAD use one connection at a time; Cloudflare's own test uses parallel streams. No loaded-latency measurement."
+    phase: P11
+  - id: F027
+    severity: medium
+    area: traceroute
+    title: "Traceroute drops probe data, slow rDNS, GeoIP gaps"
+    evidence: "IcmpEnginTracerouteRepositoryImpl.kt:1887-1891 keeps only the first Response.Success RTT; resolveHostname runs inline in map{} on every hop (blocking rDNS up to seconds/hop); GeoIpRepositoryImpl.isPrivateOrReserved omits 100.64.0.0/10, 192.0.0.0/24, 198.18.0.0/15; IPv6 hops always treated as reserved; single unauthenticated ipinfo.io provider; hand-rolled regex JSON parsing."
+    phase: P11
+  - id: F028
+    severity: medium
+    area: httprobe
+    title: "HTTP probe behavioural gaps"
+    evidence: "HttpProbeRepositoryImpl.kt:126-133 HTTPS->HTTP redirect returns NetworkResult.Error (probe aborts) instead of reporting a downgrade; redirectChain is List<String> (no status codes per hop); HttpSecurityAnalyzer rates CSP and HSTS PASS for any non-blank value (no max-age, no unsafe-inline check); HttpURLConnection => no HTTP/2, no DNS/connect/TLS/TTFB timing split; no cURL export."
+    phase: P10
+  - id: F029
+    severity: low
+    area: whois
+    title: "WHOIS timing/coverage gaps"
+    evidence: "WhoisRepositoryImpl uses System.currentTimeMillis for durations (MonotonicClock exists in core-network); no RDAP; TLD_FALLBACK has 11 entries; extractRegistrableDomain uses a 30-entry compound-TLD list instead of the public suffix list."
+    phase: P10
+  - id: F030
+    severity: low
+    area: mdns
+    title: "mDNS UI gaps"
+    evidence: "MdnsDiscoveryScreen.kt:115,132 literal 8_000L twice; no service-type FilterChips; TXT records shown raw."
+    phase: P12
+  - id: F031
+    severity: low
+    area: wol
+    title: "WOL usability gaps"
+    evidence: "No saved devices/recent MACs; broadcast defaults to 255.255.255.255 with no derivation of the directed broadcast from the current subnet; no SecureOn password; WakeOnLanUseCase accepts port 0."
+    phase: P12
+  - id: F032
+    severity: low
+    area: subnet
+    title: "Subnet calculator scope gaps"
+    evidence: "SubnetCalculatorRepositoryImpl.isPrivate covers 10/8,172.16/12,192.168/16,127/8,169.254/16 only; no CGNAT 100.64/10, 192.0.0/24, 192.0.2/24, 198.18/15, 224/4 multicast flags; IPv4 only."
+    phase: P12
+  - id: F033
+    severity: low
+    area: settings
+    title: "Settings surface gaps"
+    evidence: "SettingsScreen has no persistent privacy statement (only onboarding page 4); per-tool defaults limited to ping count/timeout/concurrency; no export/import."
+    phase: P12
+  - id: F034
+    severity: low
+    area: lint
+    title: "Open lint warnings and available updates"
+    evidence: "app/build/reports/lint-results-debug.txt: UnusedAttribute (enableOnBackInvokedCallback), ModifierParameter x2 (ToolHeroHeader.kt:54, TracerouteScreen.kt:980), PluralsCandidate x3 (strings.xml:95,296,1081), GradleDependency/NewerVersionAvailable: compose-bom 2026.09.00, navigation-compose 2.10.1, kotlin 2.4.20, junit 6.1.3, TrustAllX509TrustManager x2."
+    phase: P09
+  - id: F035
+    severity: low
+    area: quality
+    title: "No formatter/static-analysis gate"
+    evidence: ".editorconfig already carries ktlint settings (max_line_length=240, no-wildcard-imports disabled) but no ktlint/detekt plugin or CI step exists."
+    phase: P09
+  - id: F036
+    severity: medium
+    area: product
+    title: "No 'Network Info' tool"
+    evidence: "No screen shows the device's own interface addresses, gateway, DNS servers, DHCP lease, link type, or public IP; every tool asks the user to type what the app could show."
+    phase: P13
+  - id: F037
+    severity: low
+    area: ping
+    title: "Ping status semantics"
+    evidence: "PingRepositoryImpl.buildPacket maps reachable=false without exception to TIMEOUT even when isReachable returned immediately (TCP/7 refused)."
+    phase: P04
+  - id: F038
+    severity: low
+    area: quality
+    title: "Untested non-Compose app classes"
+    evidence: "No tests for AppLogger, FormatUtils, ShareUtils, SystemDnsAddressProvider, CrashHandler, MdnsRepositoryImpl (packet state machine lives in :app and is untestable on JVM), WifiScanRepositoryImpl mapping helpers, IcmpEnginTracerouteRepositoryImpl mapping."
+    phase: P09
+  - id: F040
+    severity: low
+    area: lan
+    title: "OuiDatabase tiny and mislabelled entry"
+    evidence: "91 OUI prefixes; '3C:5A:B4' -> 'Google' sits under the '// Apple' comment (it is Google/Nest)."
+    phase: P01
+
+changelog:
+  - date: "2026-09-18"
+    note: "Plan created from full codebase analysis (all modules, CI, docs, lint report)."

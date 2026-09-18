@@ -1,0 +1,286 @@
+# =============================================================================
+# P03 – Wi-Fi Scanner: trigger real scans, throttle awareness, configurable refresh,
+#       location-services state, richer connection info, enterprise security detection
+# =============================================================================
+# Audience: AI coding agent. Self-contained. Read plan/plan.yaml `agent_execution_rules` first.
+phase:
+  id: P03
+  title: "Wi-Fi Scanner: live scanning with WifiManager.startScan + receiver, throttle/age reporting, configurable interval, LocationDisabled state, LinkProperties-based connection info, EAP/WPA3-Enterprise"
+  priority: high
+  status: todo
+  estimated_effort: "M (2-3 agent sessions)"
+  depends_on: []            # soft: P01-T6 LinkInfoProvider (create a minimal one here if P01 not done)
+  enables: [P08]
+  findings: [F007]
+  target_modules: [":core-network", ":app"]
+
+context:
+  problem: |
+    WifiScanRepositoryImpl.scan() only reads `wifiManager.scanResults` (the OS cache). It never
+    calls `WifiManager.startScan()` and never listens for `SCAN_RESULTS_AVAILABLE_ACTION`. The
+    ViewModel's 10-second auto-refresh therefore re-reads identical data until the OS happens to
+    scan on its own (typically every 30-60 s while the screen is on, far less often otherwise).
+    Users see stale RSSI/channel data and networks that have already disappeared, while the UI
+    implies live measurement (spectrum chart, "auto-refresh every 10 seconds" in README).
+    Secondary gaps:
+      - On API 26+ scan results are empty when Location Services are OFF even with permission;
+        the app shows an empty list with no explanation.
+      - Connection info uses deprecated WifiInfo.ipAddress (IPv4 int) and ignores IPv6/gateway/DNS.
+      - WifiSecurity.fromCapabilities ignores EAP (WPA2/WPA3-Enterprise) and SUITE_B_192.
+      - AUTO_REFRESH_INTERVAL_MS is a private constant; Android throttles foreground apps to
+        4 scans per 2 minutes (startScan returns false when throttled).
+  evidence:
+    - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/wifi/WifiScanRepositoryImpl.kt", lines: "1645-1660", note: "scan() reads cache only" }
+    - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/wifi/WifiScanViewModel.kt", lines: "1980-2006", note: "auto refresh 10 s" }
+    - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/wifi/WifiSecurity.kt", note: "no EAP/enterprise mapping" }
+    - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/wifi/WifiScanRepository.kt", note: "scan(): WifiScanResult, no freshness info" }
+    - { file: "README.md", section: "Wi-Fi Scanner", note: "'Auto-refresh every 10 seconds'" }
+  desired_behaviour: |
+    scan(trigger = true): request a scan; await SCAN_RESULTS_AVAILABLE (<= 8 s) or timeout; read
+    results; report freshness (age of newest ScanResult.timestamp vs SystemClock.elapsedRealtime)
+    and whether the request was throttled. UI shows a subtle "Results from Ns ago · scan throttled"
+    label, a LocationDisabled state with a button to system settings, and a refresh interval
+    picker (15 s / 30 s / 60 s / off; default 30 s to fit the throttle budget).
+
+goals:
+  - "Every manual refresh and auto-refresh triggers a real scan when the platform allows it."
+  - "Freshness/throttle state is explicit in the model and UI."
+  - "Location-services-off is a first-class UI state."
+  - "Connected-network card shows IPv4 + IPv6 addresses, gateway, DNS (from LinkProperties)."
+  - "Enterprise security types detected and labelled."
+
+non_goals:
+  - "Channel-overlap visualisation for 5/6 GHz (P08 or later)."
+  - "Replacing nativeCanvas text in charts (P08)."
+  - "Background scanning / notifications."
+
+assumptions:
+  - id: A1
+    statement: "WifiManager.startScan() (deprecated since API 28) still initiates a scan on API 26-37 for foreground apps within throttle limits and returns false when throttled; results arrive via SCAN_RESULTS_AVAILABLE_ACTION broadcast with EXTRA_RESULTS_UPDATED."
+    verify_with: "Instrumented spike on a device: log startScan() return and time-to-broadcast for 5 consecutive calls 5 s apart (expect true,true,true,true,false pattern within 2 min)."
+    if_false: "Fall back to cache reads but still surface age; document."
+  - id: A2
+    statement: "ScanResult.timestamp is microseconds since boot; age = SystemClock.elapsedRealtime()*1000 - timestamp."
+    verify_with: "Android docs; assert age is < 5 min on a fresh scan in the spike."
+  - id: A3
+    statement: "With NEARBY_WIFI_DEVICES (neverForLocation) on API 33+, getScanResults returns results only when ACCESS_FINE_LOCATION is ALSO granted (Android still gates scan results on location)."
+    verify_with: "On API 33+ device: deny location, grant nearby devices -> check results size."
+    if_false: "Keep requesting both (current behaviour) but relax the rationale text."
+  - id: A4
+    statement: "LocationManager.isLocationEnabled (API 28+) / Settings.Secure.LOCATION_MODE (26-27) tells whether Location Services are on."
+    verify_with: "LocationManagerCompat.isLocationEnabled(locationManager) from androidx.core."
+
+constraints:
+  - ":core-network models only; platform code in :app (WifiScanRepositoryImpl)."
+  - "WifiScanUseCase signature: keep `invoke()`; add `invoke(trigger: Boolean)` overload."
+  - "Existing WifiScanViewModelTest (378 lines) and WifiScanScreenTest (6 tests) must stay green or be adapted intentionally."
+  - "Permission handling stays in the screen (existing pattern)."
+  - "All new UI strings in strings.xml; colours via colorScheme."
+
+design:
+  overview: |
+    core-network/wifi:
+      data class WifiScanResult(..., val isFresh: Boolean = true, val scanAgeMs: Long? = null,
+                                val throttled: Boolean = false, val locationEnabled: Boolean = true)
+      data class WifiConnectionInfo(..., val ipv6Addresses: List<String> = emptyList(),
+                                    val gateway: String? = null, val dnsServers: List<String> = emptyList())
+      enum WifiSecurity += WPA2_ENTERPRISE("WPA2-Enterprise"), WPA3_ENTERPRISE("WPA3-Enterprise"),
+                           WPA3_ENTERPRISE_192("WPA3-Enterprise 192-bit"); fromCapabilities order:
+                           SUITE_B_192 -> WPA3_ENTERPRISE_192; "SAE" && "EAP" -> WPA3_ENTERPRISE (rare) ; "EAP" && "WPA2"/"RSN" -> WPA2_ENTERPRISE; existing rules after.
+      interface WifiScanRepository { val isSupported; suspend fun scan(trigger: Boolean = true): WifiScanResult; val isLocationEnabled: Boolean }
+
+    app/wifi/WifiScanRepositoryImpl:
+      scan(trigger):
+        if (!isLocationEnabled) return cached with locationEnabled=false
+        val throttled = if (trigger) !requestScanAndAwait(timeoutMs = 8_000) else false
+        read scanResults; compute age from max timestamp; isFresh = age <= 15_000
+      requestScanAndAwait: suspendCancellableCoroutine { register BroadcastReceiver(IntentFilter(SCAN_RESULTS_AVAILABLE_ACTION)) via ContextCompat.registerReceiver(RECEIVER_NOT_EXPORTED); val ok = wifiManager.startScan(); if (!ok) { unregister; resume(false) } ; withTimeoutOrNull(timeout) }.
+      connection info via ConnectivityManager.getLinkProperties(activeNetwork): linkAddresses (IPv4/IPv6), routes default gateway, dnsServers.
+      Extract pure mapping to core-network `WifiScanMapper`-like helpers where possible (already WifiChannelHelper) – keep Android mapping thin.
+
+    ViewModel:
+      refreshIntervalMs: StateFlow<Long?> from DataStore key WIFI_REFRESH_INTERVAL_MS (default 30_000; null = off)
+      startScan(silent) -> useCase(trigger = true); auto-refresh loop uses the interval; Success state carries result.isFresh/throttled/scanAgeMs
+      new UiState.LocationDisabled
+    Screen:
+      - Freshness chip under the hero (labelSmall, onSurfaceVariant): "Updated 3 s ago" / "Scan throttled by Android · showing results from 42 s ago"
+      - LocationDisabled card: title/body/Button -> Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
+      - Interval picker in the sort/filter row (SegmentedButton or dropdown): Off/15s/30s/60s
+      - Connected card: IPv6 list (monospace, copyable), gateway, DNS
+    Settings: expose the same interval under Defaults (SettingsViewModel + SettingsScreen slider/dropdown) – optional (T6).
+
+  files_to_create:
+    - core-network/src/test/kotlin/net/aieat/netswissknife/core/network/wifi/WifiSecurityTest.kt
+    - core-network/src/test/kotlin/net/aieat/netswissknife/core/network/wifi/WifiScanResultFreshnessTest.kt
+    - app/src/main/kotlin/net/aieat/netswissknife/app/wifi/ScanRequestAwaiter.kt      # receiver + startScan + timeout (Android)
+    - app/src/test/kotlin/net/aieat/netswissknife/app/wifi/ScanFreshnessTest.kt        # pure age/isFresh math extracted to a Kotlin object
+  files_to_modify:
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/wifi/WifiScanResult.kt
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/wifi/WifiConnectionInfo.kt
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/wifi/WifiSecurity.kt
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/wifi/WifiScanRepository.kt
+    - core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/WifiScanUseCase.kt
+    - core-domain/src/test/kotlin/net/aieat/netswissknife/core/domain/WifiScanUseCaseTest.kt
+    - app/src/main/kotlin/net/aieat/netswissknife/app/wifi/WifiScanRepositoryImpl.kt
+    - app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/wifi/WifiScanViewModel.kt
+    - app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/WifiScanScreen.kt
+    - app/src/main/kotlin/net/aieat/netswissknife/app/data/AppPreferencesDataStore.kt
+    - app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/settings/SettingsViewModel.kt
+    - app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/settings/SettingsScreen.kt
+    - app/src/main/res/values/strings.xml
+    - app/src/test/kotlin/net/aieat/netswissknife/app/ui/screens/wifi/WifiScanViewModelTest.kt
+    - app/src/test/kotlin/net/aieat/netswissknife/app/data/AppPreferenceKeysTest.kt
+    - app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/screens/WifiScanScreenTest.kt
+    - README.md
+
+tasks:
+  - id: P03-T1
+    title: "Models: freshness fields, enterprise security, connection extras (core-network)"
+    status: todo
+    tdd:
+      red:
+        test_file: core-network/src/test/kotlin/net/aieat/netswissknife/core/network/wifi/WifiSecurityTest.kt
+        tests:
+          - "'[WPA2-EAP-CCMP][RSN-EAP-CCMP][ESS]' -> WPA2_ENTERPRISE"
+          - "'[RSN-EAP_SUITE_B_192-GCMP-256][ESS]' -> WPA3_ENTERPRISE_192"
+          - "'[RSN-SAE-CCMP][ESS]' -> WPA3 (unchanged)"
+          - "'[WPA-PSK-CCMP][WPA2-PSK-CCMP][ESS]' -> WPA_WPA2 (unchanged)"
+          - "'[ESS]' -> OPEN; '[RSN-OWE-CCMP][ESS]' -> OWE"
+          - "isEnterprise property true only for the three enterprise values"
+        also_test_file: core-network/src/test/kotlin/net/aieat/netswissknife/core/network/wifi/WifiScanResultFreshnessTest.kt
+        also_tests:
+          - "WifiScanResult default isFresh=true, throttled=false, locationEnabled=true keeps existing constructors compiling (existing tests untouched)"
+          - "ScanFreshness.compute(newestTimestampUs, nowElapsedMs) -> ageMs; isFresh iff age <= 15_000 (pure function placed in core-network WifiScanFreshness.kt)"
+        run: "./gradlew :core-network:test --tests '*WifiSecurityTest' --tests '*WifiScanResultFreshnessTest' --no-daemon"
+        expect: "RED"
+      green:
+        steps: ["Add enum values + isEnterprise; extend data classes with defaulted fields; add WifiScanFreshness object."]
+        run: "./gradlew :core-network:test --no-daemon"
+        expect: "PASS"
+      refactor: ["Ensure WifiNetworkGrouper still groups by (ssid, security) – enterprise values are distinct groups; update WifiNetworkGrouperTest if a case exists."]
+    acceptance_criteria: ["All wifi tests green; no signature breaks for :app."]
+
+  - id: P03-T2
+    title: "Repository: trigger scan + await broadcast, throttle detection, location state, LinkProperties connection info"
+    status: todo
+    depends_on: [P03-T1]
+    tdd:
+      red:
+        test_file: app/src/test/kotlin/net/aieat/netswissknife/app/wifi/ScanFreshnessTest.kt
+        tests:
+          - "ScanRequestOutcome mapping: startScan false -> throttled=true, no wait (pure decision function `decideOutcome(startScanReturned: Boolean, broadcastArrived: Boolean)`)"
+          - "connection info mapper: LinkAddress list ['192.168.1.5/24', 'fe80::1/64', '2001:db8::5/64'] -> ipv4 '192.168.1.5', ipv6 ['fe80::1','2001:db8::5'] (pure function over strings)"
+        run: "./gradlew :app:testDebugUnitTest --tests '*ScanFreshnessTest' --no-daemon"
+        expect: "RED"
+      green:
+        steps:
+          - "ScanRequestAwaiter(context, wifiManager): suspend fun requestAndAwait(timeoutMs): Boolean – register receiver (ContextCompat.registerReceiver, RECEIVER_NOT_EXPORTED), startScan(), suspendCancellableCoroutine + withTimeoutOrNull, always unregister in finally."
+          - "WifiScanRepositoryImpl.scan(trigger): isLocationEnabled via LocationManagerCompat; if false -> return cached with locationEnabled=false (do not request); else throttled = trigger && !awaiter.requestAndAwait(8_000); read results; freshness via WifiScanFreshness."
+          - "Connection info: replace wi.ipAddress with LinkProperties (activeNetwork) mapping; keep WifiInfo for rssi/linkSpeed/standard."
+          - "Mark deprecated startScan usage with @Suppress(\"DEPRECATION\") and a comment referencing this phase + platform throttle numbers."
+        run: "./gradlew :app:testDebugUnitTest :app:assembleDebug --no-daemon"
+        expect: "PASS"
+      refactor: ["Keep WifiScanRepositoryImpl < 300 lines: move mapping helpers to WifiScanMappers.kt (pure, unit-tested)."]
+    acceptance_criteria: ["Debug APK builds; lint 0 errors (MissingPermission suppressed only where already suppressed)."]
+
+  - id: P03-T3
+    title: "Use case + ViewModel: trigger flag, interval setting, LocationDisabled state, freshness in Success"
+    status: todo
+    depends_on: [P03-T2]
+    tdd:
+      red:
+        test_file: app/src/test/kotlin/net/aieat/netswissknife/app/ui/screens/wifi/WifiScanViewModelTest.kt
+        tests:
+          - "result.locationEnabled=false -> state LocationDisabled (even if isWifiEnabled)"
+          - "result.throttled=true -> Success with throttled flag and previous selections preserved"
+          - "auto-refresh uses interval from DataStore (30_000 default); interval null stops the loop (advanceTimeBy 120_000 -> useCase invoked 0 extra times)"
+          - "setRefreshInterval persists to DataStore key WIFI_REFRESH_INTERVAL_MS"
+          - "manual refresh calls useCase(trigger=true); auto refresh calls useCase(trigger=true) too (both real scans)"
+          - "onRetry from LocationDisabled re-invokes scan"
+        also_test_file: core-domain/src/test/kotlin/net/aieat/netswissknife/core/domain/WifiScanUseCaseTest.kt
+        also_tests: ["invoke(trigger=false) forwards false; invoke() forwards true"]
+        run: "./gradlew :app:testDebugUnitTest --tests '*WifiScanViewModelTest' --no-daemon"
+        expect: "RED"
+      green:
+        steps:
+          - "AppPreferenceKeys.WIFI_REFRESH_INTERVAL_MS (Long) + AppPreferenceKeysTest entry."
+          - "ViewModel: inject DataStore; refreshInterval StateFlow; auto-refresh loop reads latest; add LocationDisabled state; Success.freshness fields."
+        run: "./gradlew :app:testDebugUnitTest --no-daemon"
+        expect: "PASS"
+      refactor: ["Replace remaining literal 'This network is no longer in range' with a resource id event (ApDisappearedEvent) so the screen resolves the string (P07 alignment)."]
+    acceptance_criteria: ["ViewModel tests green; no Android imports in ViewModel beyond DataStore/ViewModel."]
+
+  - id: P03-T4
+    title: "Screen: freshness label, throttled hint, LocationDisabled card, interval picker, IPv6/gateway/DNS rows"
+    status: todo
+    depends_on: [P03-T3]
+    tdd:
+      red:
+        test_file: app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/screens/WifiScanScreenTest.kt
+        tests:
+          - "LocationDisabled state renders wifi_location_disabled_title and a button with wifi_open_location_settings"
+          - "Success(throttled=true, scanAgeMs=42_000) shows text containing wifi_results_age (42 s) and wifi_scan_throttled"
+          - "interval picker exposes options Off/15/30/60 and calls viewModel.setRefreshInterval (mock verify)"
+          - "connected card shows IPv6 and gateway rows when provided"
+        run: "./gradlew :app:assembleDebugAndroidTest --no-daemon (execute on device/Test Lab)"
+        expect: "RED"
+      green:
+        steps:
+          - "Implement with existing composables (EmptyStateCard-like pattern used for NoPermission); AssistChip for freshness; SingleChoiceSegmentedButtonRow for interval."
+          - "Strings: wifi_results_age (plural), wifi_scan_throttled, wifi_location_disabled_title/body, wifi_open_location_settings, wifi_refresh_interval_*, wifi_detail_ipv6, wifi_detail_gateway, wifi_detail_dns."
+        run: "device/Test Lab run"
+        expect: "PASS"
+      refactor: ["Keep WifiScanScreen.kt from growing: place new composables in ui/screens/wifi/WifiScanStatusComponents.kt."]
+    acceptance_criteria: ["CLAUDE.md UI checklist satisfied for new pieces (cards, animations on state change via existing AnimatedContent)."]
+
+  - id: P03-T5
+    title: "Settings: Wi-Fi refresh interval under Defaults"
+    status: todo
+    depends_on: [P03-T3]
+    tdd:
+      red:
+        test_file: app/src/test/kotlin/net/aieat/netswissknife/app/ui/screens/settings/SettingsViewModelTest.kt
+        tests: ["wifiRefreshInterval default 30_000; setWifiRefreshInterval(null) stores -1 sentinel or removes key (choose remove) and flow emits null"]
+        run: "./gradlew :app:testDebugUnitTest --tests '*SettingsViewModelTest' --no-daemon"
+        expect: "RED"
+      green: { steps: ["Add flow + setter; SettingsScreen dropdown row under Defaults."], run: "./gradlew :app:testDebugUnitTest --no-daemon", expect: "PASS" }
+    acceptance_criteria: ["Both surfaces (Wi-Fi screen picker and Settings) reflect the same DataStore value."]
+
+  - id: P03-T6
+    title: "README/help sync"
+    status: todo
+    depends_on: [P03-T4]
+    steps:
+      - "README Wi-Fi Scanner: replace 'Auto-refresh every 10 seconds' with 'Triggers a platform scan on refresh; auto-refresh interval configurable (15/30/60 s, default 30 s); Android throttles scans to 4 per 2 minutes – the screen shows result age and when a request was throttled; Location Services must be on'."
+      - "Help sheet: add 'Why results say throttled' and 'Location Services requirement' bullets."
+      - "PRIVACY_POLICY.md permissions table: keep; add note on Location Services toggle requirement."
+
+qa_validation:
+  automated:
+    - "./gradlew :core-network:test :core-domain:test :app:testDebugUnitTest --no-daemon"
+    - "./gradlew :app:koverVerify :core-network:koverVerify --no-daemon"
+    - "./gradlew :app:lintDebug --no-daemon --no-parallel"
+    - "Instrumented: WifiScanScreenTest (batch with other phases to respect Test Lab quota)."
+  manual_device:
+    - "Toggle Location off -> LocationDisabled card; button opens system settings; back -> retry works."
+    - "Tap refresh 5x quickly -> 5th shows throttled label; age increases while throttled."
+    - "Walk away from an AP: RSSI changes within one interval (previously stale for a minute+)."
+    - "Enterprise SSID (eduroam-like) labelled WPA2-Enterprise."
+    - "IPv6-enabled network shows GUA + link-local addresses in the connected card."
+  regression:
+    - "Order-freeze while inspecting still works; band tabs; spectrum chart; detail sheet."
+
+docs_updates: [README.md, PRIVACY_POLICY.md, strings.xml help_wifi_*]
+
+risks:
+  - risk: "Some OEMs never deliver EXTRA_RESULTS_UPDATED=true; awaiting the broadcast could always time out."
+    mitigation: "Treat any SCAN_RESULTS_AVAILABLE broadcast as completion; 8 s timeout then read cache; surface age."
+  - risk: "Frequent scans drain battery."
+    mitigation: "Default 30 s; stop auto-refresh when the screen leaves RESUMED (already lifecycle-aware via collectAsStateWithLifecycle? verify: the loop lives in viewModelScope – add lifecycle observer in the screen calling viewModel.pauseAutoRefresh()/resumeAutoRefresh())."
+
+rollback: |
+  scan(trigger=false) path is identical to today's behaviour; flip the default in WifiScanUseCase
+  to restore cache-only reads.
+
+definition_of_done:
+  - "F007 closed; README updated; global DoD."

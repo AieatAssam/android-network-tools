@@ -1,0 +1,125 @@
+# =============================================================================
+# P13 – New tools wave 1: Network Info dashboard · SSDP/UPnP discovery · NTP clock offset
+# =============================================================================
+# Audience: AI coding agent. Self-contained. Read plan/plan.yaml `agent_execution_rules` first.
+phase:
+  id: P13
+  title: "New tools wave 1 (no new third-party dependencies)"
+  priority: low
+  status: todo
+  estimated_effort: "L (each tool ≈ 1-2 agent sessions)"
+  depends_on: [P05, P07]      # NetworkBinder + typed errors; P01's LinkInfoProvider and UdpExchange are reused
+  enables: [P14, P15]
+  findings: [F036]
+  target_modules: [":core-network", ":core-domain", ":app"]
+
+new_tool_checklist:   # applies to EVERY tool below (from CLAUDE.md + claude/tool_instructions.md, corrected by P06)
+  - "core-network: package net.aieat.netswissknife.core.network.<pkg>: models, <Tool>Repository interface, <Tool>RepositoryImpl (JVM-only, injectable transports), tests FIRST (RED)."
+  - "core-domain: <Tool>UseCase + <Tool>Params (+ FlowResult if streaming) with validation returning ErrorInfo codes (P07); tests."
+  - "app: di/<Tool>Module.kt (@Provides @Singleton), ui/screens/<pkg>/<Tool>ViewModel.kt (@HiltViewModel, StateFlow<UiState>, RecentHostsRepository if it has a host input), ui/screens/<pkg>/<Tool>Screen.kt (ToolHeroHeader, ToolHelpSheet, ToolStateAnnouncer (P08), NetworkStatusBanner (P05), AnimatedContent states, ElevatedCard results, OutlinedTextField with icon+clear, error card + retry, all strings in strings.xml + values-de)."
+  - "Navigation: NavRoutes object + ToolInfo entry (labelRes/shortLabelRes/descriptionRes/icon), AppNavHost composable with transitions, MoreToolsSheet.TOOL_SECTIONS membership, Home grid picks it up from NavRoutes.allTools automatically."
+  - "Tests: ViewModel unit tests (app/src/test), instrumented <Tool>ScreenTest with ≥ 4 cases (idle, loading, success, error) using a mocked ViewModel like existing screen tests; Kover includes for pure app logic."
+  - "Docs: README Features subsection + Available Tools row 'Implemented'; PRIVACY_POLICY entry if any traffic leaves the LAN; store/play-description.txt tool paragraph (update the '14 tools' count!); claude/tool_instructions.md 'Tools Added So Far' row; help sheet strings help_<tool>_*."
+  - "Definition of done per tool: ./gradlew test && :app:assembleDebug && :app:lintDebug 0 errors && koverVerify x3."
+
+tools:
+  # ---------------------------------------------------------------------------
+  - id: P13-NETINFO
+    name: "Network Info"
+    route: "netinfo"
+    package: "netinfo"
+    icon: "Icons.Default.Info (or Icons.Outlined.Hub)"
+    more_section: "Wi-Fi & LAN"
+    why: "Table-stakes for the category and absent: users must type addresses the app could show. Also the natural home for gateway/DNS/public-IP facts other tools reuse (P01 LinkInfoProvider)."
+    behaviour: |
+      Live dashboard of the active network and all interfaces:
+        Active network card: transport (Wi-Fi/Cellular/Ethernet/VPN), interface name, IPv4 addresses (with prefix), IPv6 addresses (GUA/ULA/link-local labelled), default gateway(s), DNS servers, Private DNS (on/off + hostname), MTU (API 29+), metered/captive-portal/validated flags, estimated bandwidth (NetworkCapabilities link*BandwidthKbps), VPN active.
+        Wi-Fi card (when Wi-Fi): SSID, BSSID, RSSI, link speed tx/rx, frequency/channel, standard (reuse WifiScanRepositoryImpl.buildConnectionInfo via WifiScanUseCase), DHCP server + lease (WifiManager.dhcpInfo, deprecated but functional; guarded).
+        Interfaces card: every NetworkInterface (name, up, multicast, MTU, addresses, hardware address when exposed – shows 'hidden by Android' on API 30+).
+        Public IP card: hidden by default; button 'Reveal public IP' performs ONE request to https://api.ipify.org?format=json (IPv4) and https://api64.ipify.org?format=json (IPv6) – privacy-explicit; results cached for the session; shows reverse DNS + reserved/CGNAT hint.
+        Actions: copy any row; share summary; 'Use in Ping/DNS/LAN' hand-offs where meaningful; auto-refresh on ConnectivityObserver changes.
+    core_network:
+      models: "NetworkInfoSnapshot(active: ActiveNetworkInfo?, interfaces: List<InterfaceInfo>, publicIp: PublicIpInfo? = null, capturedAt) ; ActiveNetworkInfo(transport, interfaceName, ipv4: List<AddrWithPrefix>, ipv6: List<AddrWithPrefix>, gateways, dnsServers, privateDnsActive, privateDnsHost, mtu?, metered, captive, validated, downKbps?, upKbps?, vpnActive) ; InterfaceInfo(name, isUp, supportsMulticast, mtu, hardwareAddress?, addresses) ; PublicIpInfo(ipv4?, ipv6?, reverseName?)"
+      pure_logic: "InterfaceEnumerator (java.net.NetworkInterface -> List<InterfaceInfo>, testable with an injected supplier) ; Ipv6Classifier(addr): GUA/ULA/LINK_LOCAL/LOOPBACK/UNSPECIFIED/MULTICAST/IPV4_MAPPED/TEREDO/6TO4/DOCUMENTATION ; PublicIpClient(HttpEngine or OkHttp) parsing {\"ip\":\"…\"}"
+      repository: "interface NetworkInfoRepository { fun observe(): Flow<NetworkInfoSnapshot>; suspend fun fetchPublicIp(): PublicIpInfo }"
+    app: "NetworkInfoRepositoryImpl(ConnectivityManager, WifiManager, ConnectivityObserver, InterfaceEnumerator, PublicIpClient) – maps LinkProperties/NetworkCapabilities; VM: NetworkInfoUiState(snapshot, isRefreshing, publicIpState: Idle/Loading/Result/Error); Screen: cards above; copy via ClipboardManager pattern used in DnsScreen."
+    tests:
+      unit: ["Ipv6ClassifierTest (one per class)", "InterfaceEnumeratorTest (fake supplier)", "PublicIpClientTest (MockWebServer or fake engine)", "NetworkInfoMapperTest (pure LinkProperties-like inputs -> ActiveNetworkInfo)", "NetworkInfoViewModelTest (refresh on observer emission; public IP explicit only)"]
+      instrumented: ["NetworkInfoScreenTest: idle/snapshot/no-network/public-ip-hidden-until-tap"]
+    privacy: "ipify.org contacted only on explicit tap; document in PRIVACY_POLICY + Settings attributions."
+    readme: "Features subsection + table row."
+
+  # ---------------------------------------------------------------------------
+  - id: P13-SSDP
+    name: "UPnP / SSDP Discovery"
+    route: "ssdp"
+    package: "ssdp"
+    icon: "Icons.Default.Devices (distinct from LAN: use Icons.Default.Sensors)"
+    more_section: "Wi-Fi & LAN"
+    why: "Pairs with mDNS: routers, TVs, consoles, NAS, media servers announce over SSDP, many without mDNS. Also enables an offline public-IP discovery via the IGD WANIPConnection service."
+    behaviour: |
+      Sends M-SEARCH (ST: ssdp:all, MX: 2, MAN: \"ssdp:discover\") to 239.255.255.250:1900 (and ff02::c for IPv6) on the local interface (NetworkBinder), listens for unicast responses for a configurable window (default 5 s, re-sends at 0 s and 2 s), also listens to NOTIFY alive multicasts during the window.
+      Groups responses by USN root (uuid) into devices; fetches each LOCATION URL (bounded 64 KB, 3 s timeout, same-LAN only – reject LOCATION hosts outside the local subnet) and parses the device description XML (friendlyName, manufacturer, modelName, modelNumber, deviceType, presentationURL, serviceList types).
+      Device card: friendly name, manufacturer/model, IP, device type chips (MediaRenderer, InternetGatewayDevice, Basic…), services list (expand), actions: 'Open' presentationURL, 'Ping', 'Copy'.
+      IGD extra: when a WANIPConnection/WANPPPConnection service exists, 'Query external IP' button sends the SOAP GetExternalIPAddress action to the control URL and shows the WAN IP (no internet service involved).
+    core_network:
+      models: "SsdpResponse(headers, fromIp, isNotify) ; UpnpDevice(usn, location, fromIp, st: Set<String>, server?, description: UpnpDescription?) ; UpnpDescription(friendlyName, manufacturer, modelName, modelNumber, deviceType, presentationUrl, services: List<UpnpService(type, controlUrl, scpdUrl)>) ; SsdpUpdate { DeviceFound, DeviceUpdated, Complete }"
+      pure_logic: "SsdpMessageBuilder.msearch(st, mx) bytes ; SsdpResponseParser.parse(bytes) -> headers map (case-insensitive, CRLF) ; UpnpDescriptionParser (javax.xml DocumentBuilder, namespace-agnostic) ; IgdSoap.getExternalIpRequest(controlUrl, serviceType) + parseResponse ; SameSubnetGuard(locationHost, localCidr)"
+      repository: "interface SsdpRepository { fun discover(params): Flow<SsdpUpdate> ; suspend fun queryExternalIp(device): NetworkResult<String> } ; impl uses UdpExchange-like multicast transport (injectable) + HttpEngine"
+    app: "Module, VM (grouping, expansion, external IP state), Screen (LazyColumn of device cards; filter chip by deviceType; stop button; empty state)."
+    tests:
+      unit: ["SsdpMessageBuilderTest (golden string)", "SsdpResponseParserTest (HTTP/1.1 200 OK responses + NOTIFY, folded headers, missing CRLF tolerance)", "UpnpDescriptionParserTest (fixtures: Fritz!Box, Sonos, Samsung TV, minimal)", "IgdSoapTest (request golden + response parse)", "SameSubnetGuardTest", "SsdpRepositoryImplTest (fake transport: two responses same USN -> one device; description fetch failure keeps device; window timing virtual)", "SsdpViewModelTest"]
+      instrumented: ["SsdpScreenTest ≥ 4 cases"]
+    privacy: "Local-network-only traffic; LOCATION fetches restricted to the local subnet."
+    security_note: "Never follow LOCATION redirects; cap XML size; disable external entities in DocumentBuilderFactory (XXE): setFeature('http://apache.org/xml/features/disallow-doctype-decl', true)."
+
+  # ---------------------------------------------------------------------------
+  - id: P13-NTP
+    name: "NTP Clock Offset"
+    route: "ntp"
+    package: "ntp"
+    icon: "Icons.Default.Schedule"
+    more_section: "Utilities"
+    why: "Cheap, pure-Kotlin, genuinely useful (TOTP failures, TLS 'not yet valid' errors, log correlation). No dependency."
+    behaviour: |
+      SNTP (RFC 4330) query to a chosen server (pool.ntp.org, time.google.com, time.cloudflare.com, time.apple.com, time.windows.com, custom hostname/IP) with N samples (1-10, default 4, 250 ms apart): shows offset (device clock − NTP) as ±ms/s, round-trip delay, stratum, reference id (decoded for stratum 1, IP for others), root delay/dispersion, leap indicator, server time vs device time, per-sample list and median. Verdict card: 'Clock accurate (|offset| < 100 ms)', 'Clock drift' (warn), 'Clock wrong' (error > 5 s) with a hint to enable automatic time. Multi-server compare mode (all presets in parallel, table).
+    core_network:
+      models: "NtpSample(offsetMs: Double, delayMs: Double, stratum, referenceId: String, leap: Int, rootDelayMs, rootDispersionMs, serverTimeMs, t1..t4) ; NtpResult(server, samples, medianOffsetMs, minDelayMs, verdict)"
+      pure_logic: "SntpPacket.build(transmitTimestampNs) 48 bytes (LI=0, VN=4, Mode=3) ; SntpPacket.parse(bytes, t4) -> sample using RFC 4330 formulas: offset = ((T2-T1)+(T3-T4))/2, delay = (T4-T1)-(T3-T2) ; NtpTimestamp <-> epoch ms (1900 epoch, fraction 2^32) ; ReferenceIdDecoder ; Verdict thresholds"
+      repository: "interface NtpRepository { suspend fun query(server, samples, timeoutMs): NetworkResult<NtpResult> } ; impl over UdpExchange (P01) bound via NetworkBinder only if server IP is local (else default network)"
+    app: "Module, VM (server preset chips + custom field, samples slider, compare mode), Screen (hero, input card, verdict card with big offset number, samples table, compare table)."
+    tests:
+      unit: ["SntpPacketTest (golden 48-byte request; parse a captured response fixture → known offset)", "NtpTimestampTest (round-trip; 2036 rollover edge)", "ReferenceIdDecoderTest ('GPS ', 'PPS ', ip form)", "NtpRepositoryImplTest (fake UDP: timeout -> NO_RESPONSE code; N samples -> median)", "NtpViewModelTest"]
+      instrumented: ["NtpScreenTest ≥ 4 cases"]
+    privacy: "Queries the selected NTP server (document presets)."
+
+tasks:
+  - id: P13-T1
+    title: "Network Info tool end-to-end"
+    status: todo
+    steps: ["Follow new_tool_checklist for P13-NETINFO; RED tests first for pure logic; land core+domain PR, then app PR."]
+    acceptance_criteria: ["Dashboard matches `adb shell ip addr`/`ip route`/`getprop net.dns1` on device; public IP hidden until tapped."]
+  - id: P13-T2
+    title: "SSDP/UPnP tool end-to-end"
+    status: todo
+    steps: ["Checklist for P13-SSDP; fixtures from real devices captured via `curl <LOCATION>` on the LAN (anonymise serials)."]
+    acceptance_criteria: ["Router shows as InternetGatewayDevice; external IP query returns the WAN IP."]
+  - id: P13-T3
+    title: "NTP tool end-to-end"
+    status: todo
+    steps: ["Checklist for P13-NTP."]
+    acceptance_criteria: ["Offset within ±50 ms of `adb shell date` vs time.google.com on a synced device; wrong-clock device shows error verdict."]
+  - id: P13-T4
+    title: "Docs + counts"
+    status: todo
+    steps: ["README (3 subsections + rows), store description ('17 tools'), PRIVACY_POLICY (ipify, NTP servers, SSDP local), tool_instructions table, onboarding page mentioning tool count if any."]
+
+qa_validation:
+  automated: ["./gradlew test --no-daemon", "koverVerify x3", "lintDebug", "release-smoke", "i18n guard test (P07) green"]
+  manual_device: ["Each tool on Wi-Fi, cellular, VPN (banner), airplane (typed errors)."]
+
+risks:
+  - risk: "Three new screens increase APK/dex and translation load."
+    mitigation: "Reuse shared components; values-de strings added in the same PR (P07 rule)."
+
+definition_of_done: ["F036 closed; three tools shipped with README/store/privacy updates; global DoD."]

@@ -1,0 +1,452 @@
+# =============================================================================
+# P01 – LAN Scanner: correct host discovery, MAC/vendor enrichment, real gateway
+# =============================================================================
+# Audience: AI coding agent. Self-contained. Read plan/plan.yaml `agent_execution_rules` first.
+phase:
+  id: P01
+  title: "LAN Scanner: multi-probe discovery, post-probe enrichment, platform gateway/subnet source"
+  priority: critical
+  status: todo
+  estimated_effort: "L (3-5 agent sessions)"
+  depends_on: []
+  enables: [P05, P12, P13]
+  findings: [F004, F005, F006, F040]
+  target_modules: [":core-network", ":core-domain", ":app"]
+
+context:
+  problem: |
+    The LAN Scanner (route `lan`) is the most-used discovery tool and three of its advertised
+    columns are wrong or empty on modern devices:
+      1. MAC address + vendor: the ARP table is read ONCE before probing starts
+         (LanScanRepositoryImpl.scan -> parseArpTable(arpTableReader()) at line 77), so any
+         entry the probes themselves create is never observed. Worse, the default reader
+         opens /proc/net/arp, which Android 10+ (API 29) forbids for apps: it returns an empty
+         file. Result: MAC and vendor are null for every host on every device newer than
+         Android 9.
+      2. Presence detection: DEFAULT_HOST_CHECKER is InetAddress.isReachable() only. Android's
+         libcore implementation tries an ICMP echo via an unprivileged IPPROTO_ICMP datagram
+         socket, then falls back to TCP port 7. Hosts that drop ICMP (Windows with default
+         firewall profile, many IoT devices, some Android phones on battery saver) are reported
+         absent even though they answer TCP.
+      3. Gateway: `gatewayIp = ips.firstOrNull()` (lowest host IP). Any router at .254 or an
+         arbitrary address is flagged wrong and the actual gateway is not flagged.
+      4. OuiDatabase.kt has 91 prefixes; entry "3C:5A:B4" -> "Google" is filed under "// Apple".
+  evidence:
+    - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/LanScanRepositoryImpl.kt", lines: "48-66", note: "DEFAULT_HOST_CHECKER (isReachable), DEFAULT_ARP_READER (/proc/net/arp), DEFAULT_PORT_CHECKER" }
+    - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/LanScanRepositoryImpl.kt", lines: "75-83", note: "ARP read before probing; gateway = ips.firstOrNull()" }
+    - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/LanScanRepositoryImpl.kt", lines: "150-167", note: "buildHost: mac from stale arpMap, rDNS, QUICK_PORTS scan" }
+    - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/OuiDatabase.kt", note: "91 entries; mislabelled 3C:5A:B4" }
+    - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/SubnetUtils.kt", lines: "getCurrentSubnet", note: "NetworkInterface-based subnet detection; no gateway" }
+    - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanViewModel.kt", note: "refreshSubnet() uses SubnetUtils.getCurrentSubnet(); no gateway/DNS from ConnectivityManager" }
+    - { file: "README.md", section: "LAN Scanner", note: "advertises MAC address, OUI vendor, gateway flag" }
+  current_behaviour: |
+    scan(subnet) -> parse CIDR -> read ARP once -> N workers: isReachable(ip) -> if alive:
+    mac=arpMap[ip], vendor=OUI(mac), hostname=rDNS, openPorts=QUICK_PORTS TCP connect -> emit.
+  desired_behaviour: |
+    scan(subnet, gatewayIp?) -> parse CIDR -> N workers per IP:
+      presence = ICMP echo (fast path) OR TCP probe on a small port set where a RST
+      ("Connection refused") also proves presence, OR NetBIOS/mDNS name reply.
+      if present: enrich = { hostname: rDNS -> mDNS reverse PTR -> NetBIOS name (first non-null) ,
+                             openPorts: QUICK_PORTS , mac: MacResolver (post-probe, best effort) ,
+                             vendor: OUI(mac) , discoveredVia: Set<DiscoveryMethod> ,
+                             isGateway: ip == gatewayIp (from platform) }.
+    After all workers finish, run one final MacResolver pass for hosts still lacking a MAC
+    (the probes have populated the kernel neighbour cache by then), patch them, and emit
+    ScanComplete with the enriched list. The UI explains when MAC is unavailable (API 29+).
+
+goals:
+  - "Hosts that answer TCP but drop ICMP are discovered."
+  - "MAC/vendor populated wherever the platform allows (API < 29); UI states the limitation elsewhere instead of showing blanks."
+  - "Gateway flag derived from the real default route."
+  - "Every discovered host carries the method(s) that found it (transparency + testability)."
+  - "OUI database extended (>= 1 000 prefixes) from the IEEE registry via a generated Kotlin/resource file with a documented refresh script."
+  - "No regression in scan time for a /24 with default concurrency (target: <= 1.3x current wall time on the same network)."
+
+non_goals:
+  - "IPv6 LAN discovery (NDP) – separate future tool (see plan.yaml P15 candidates)."
+  - "Binding sockets to the Wi-Fi network under VPN – P05 (this phase must expose seams P05 can use)."
+  - "Port-scan quick action UI polish beyond navigation hand-off (P12)."
+
+assumptions:
+  - id: A1
+    statement: "Android 10+ apps cannot read /proc/net/arp; no non-root alternative exists for arbitrary hosts."
+    verify_with: "On an API 29+ device/emulator: `adb shell run-as net.aieat.netswissknife.debug cat /proc/net/arp` (or add a temporary log of DEFAULT_ARP_READER().length). Expect empty/permission denied."
+    if_false: "Keep the ARP path as primary; still move it after probing."
+  - id: A2
+    statement: "A TCP connect that fails with java.net.ConnectException ('Connection refused', i.e. RST) proves the host is up; a SocketTimeoutException / NoRouteToHost does not."
+    verify_with: "Unit test with a local ServerSocket closed port on 127.0.0.1 -> ConnectException; document behaviour."
+    if_false: "n/a (TCP semantics)."
+  - id: A3
+    statement: "icmpenguin's Pinger (me.impa.icmpenguin.ping.Pinger) can be used from :app for ICMP echo with sub-second timeouts; core-network stays JNI-free by depending on an interface."
+    verify_with: "javap -cp <aar classes.jar> me.impa.icmpenguin.ping.Pinger (see P04 for the extracted signature). Confirm ProbeResult subtypes with: unzip -l classes.jar | grep ProbeResult; javap -p each."
+    if_false: "Fall back to InetAddress.isReachable for the ICMP path (keep as default in core)."
+  - id: A4
+    statement: "ConnectivityManager.getLinkProperties(activeNetwork).routes contains a RouteInfo with isDefaultRoute() whose gateway is the LAN gateway; LinkAddress with prefixLength gives the subnet."
+    verify_with: "Log LinkProperties in LanScanViewModel.refreshSubnet on a device: routes, linkAddresses, dnsServers."
+    if_false: "Fallback to SubnetUtils.getCurrentSubnet() and lowest-IP heuristic, but label the flag 'probable gateway'."
+  - id: A5
+    statement: "NetBIOS NBSTAT (UDP 137, name '*') and mDNS reverse PTR (multicast query for N.N.N.N.in-addr.arpa) are answered by a meaningful share of LAN hosts and are cheap (<= 300 ms)."
+    verify_with: "Prototype in a unit-test-free spike against a home LAN; compare hostname coverage vs rDNS only."
+    if_false: "Keep the probes behind a `nameProbes` flag defaulting to on; they never gate presence alone unless they answered."
+
+constraints:
+  - ":core-network must stay free of Android imports; every platform capability enters through an interface with a JVM default."
+  - "Existing public API used by :app must keep compiling: LanScanRepository.scan(subnet, timeoutMs, concurrency) may gain an overload/params object but old call sites must be migrated in the same commit."
+  - "LanScanUseCase validation rules unchanged (CIDR /16–/30, timeout 100–10 000, concurrency 1–500)."
+  - "Bounded channels/backpressure pattern of the current implementation must be preserved (see comments in scan())."
+  - "Coverage floor :core-network 70% – new code needs tests (fakes for every prober)."
+  - "UI rules from CLAUDE.md apply to any new composable (cards, animations, strings.xml, colorScheme tokens)."
+  - "Memory-constrained Gradle host: one Gradle invocation at a time."
+
+design:
+  overview: |
+    Introduce a small strategy layer in core-network/lan:
+
+      fun interface IcmpProbe          { suspend fun echo(ip: String, timeoutMs: Int): Long? }          // rtt or null
+      fun interface TcpPresenceProbe   { suspend fun probe(ip: String, ports: List<Int>, timeoutMs: Int): TcpPresence } // OPEN(port)/REFUSED/NONE
+      fun interface NameProbe          { suspend fun resolveName(ip: String, timeoutMs: Int): String? } // NetBIOS / mDNS / rDNS
+      fun interface MacResolver        { suspend fun resolve(ip: String): String? }                     // ARP file default
+      enum class DiscoveryMethod { ICMP, TCP_OPEN, TCP_REFUSED, NETBIOS, MDNS, RDNS }
+
+    LanScanRepositoryImpl(
+        icmpProbe: IcmpProbe = ReachabilityIcmpProbe(),          // isReachable-based JVM default
+        tcpProbe: TcpPresenceProbe = SocketTcpPresenceProbe(),   // java.net.Socket default
+        nameProbes: List<NameProbe> = listOf(ReverseDnsNameProbe(), NetBiosNameProbe(), MdnsReverseNameProbe()),
+        macResolver: MacResolver = ArpFileMacResolver(),
+        portChecker: PortChecker = DEFAULT_PORT_CHECKER,          // unchanged
+        clock: MonotonicClock = SystemMonotonicClock,
+    )
+
+    scan(params: LanScanRequest) where
+      data class LanScanRequest(subnet: String, timeoutMs: Int, concurrency: Int, gatewayIp: String? = null,
+                                presencePorts: List<Int> = DEFAULT_PRESENCE_PORTS, enableNameProbes: Boolean = true)
+    Keep the old 3-arg scan() as a default-forwarding overload for one release, marked @Deprecated.
+
+    Presence algorithm per IP (inside a worker, all with the per-host timeout budget):
+      1. rtt = icmpProbe.echo(ip, timeoutMs)            -> if non-null: alive, methods += ICMP
+      2. if not alive: tcp = tcpProbe.probe(ip, presencePorts, min(timeoutMs, 400))
+           OPEN -> alive, methods += TCP_OPEN ; REFUSED -> alive, methods += TCP_REFUSED
+      3. if not alive and enableNameProbes: name = NetBiosNameProbe/MdnsReverseNameProbe (only these two,
+           rDNS does not prove presence) -> non-null => alive, methods += NETBIOS/MDNS
+      4. if alive: enrich (hostname via nameProbes in order until non-null; open ports; mac; vendor).
+    DEFAULT_PRESENCE_PORTS = [80, 443, 22, 445, 139, 135, 8080, 62078, 7000, 5000]  (web, ssh, smb, rpc, alt-web, iOS lockdown, AirPlay, UPnP)
+
+    LanHost gains: discoveredVia: Set<DiscoveryMethod> = emptySet(), macSource: MacSource? (ARP|NONE)
+    LanScanSummary gains: macResolutionSupported: Boolean (false when MacResolver reports unsupported).
+
+    :app additions
+      - app/.../platform/LinkInfoProvider.kt (@Singleton, ConnectivityManager): data class LinkInfo(cidr, gatewayIp, dnsServers, interfaceName, isWifi, isVpnActive)
+      - app/.../lan/IcmpenguinIcmpProbe.kt implementing IcmpProbe via me.impa.icmpenguin.ping.Pinger(count=1, timeout=timeoutMs)
+      - LanModule provides LanScanRepositoryImpl(icmpProbe = IcmpenguinIcmpProbe(), macResolver = ArpFileMacResolver()) and LinkInfoProvider.
+      - LanScanViewModel: refreshSubnet() uses LinkInfoProvider first, SubnetUtils fallback; passes gatewayIp into LanScanRequest; exposes macResolutionSupported for the UI hint.
+      - LanScanScreen: host row shows discovery-method chips (assist chips, labelSmall), MAC row shows "Not available on Android 10+" when summary.macResolutionSupported == false (string resource), gateway badge unchanged.
+      - Quick action "Scan ports" on expanded host -> navigate to NavRoutes.Ports with a `host` argument (route "ports?host={host}", optional arg) and PortScanViewModel reads SavedStateHandle["host"] to prefill.
+
+  files_to_create:
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/DiscoveryProbes.kt        # interfaces + enums + DEFAULT_PRESENCE_PORTS
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/ReachabilityIcmpProbe.kt
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/SocketTcpPresenceProbe.kt
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/NetBiosNameProbe.kt     # UDP 137 NBSTAT '*' query, RFC 1002 §4.2.18
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/MdnsReverseNameProbe.kt # multicast PTR for in-addr.arpa via dnsjava Message
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/ReverseDnsNameProbe.kt
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/ArpFileMacResolver.kt   # moved from DEFAULT_ARP_READER + parseArpTable, reports `supported`
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/LanScanRequest.kt
+    - core-network/src/main/resources/oui/oui-prefixes.tsv   # generated: "3C5AB4\tGoogle, Inc." one per line (see T7 script)
+    - core-network/src/test/kotlin/net/aieat/netswissknife/core/network/lan/NetBiosNameProbeTest.kt
+    - core-network/src/test/kotlin/net/aieat/netswissknife/core/network/lan/MdnsReverseNameProbeTest.kt
+    - core-network/src/test/kotlin/net/aieat/netswissknife/core/network/lan/SocketTcpPresenceProbeTest.kt
+    - core-network/src/test/kotlin/net/aieat/netswissknife/core/network/lan/ArpFileMacResolverTest.kt
+    - app/src/main/kotlin/net/aieat/netswissknife/app/platform/LinkInfoProvider.kt
+    - app/src/main/kotlin/net/aieat/netswissknife/app/lan/IcmpenguinIcmpProbe.kt
+    - app/src/test/kotlin/net/aieat/netswissknife/app/platform/LinkInfoProviderTest.kt   # pure mapping helpers only (RouteInfo parsing extracted to a pure function)
+    - tools/oui/update_oui.sh   # downloads https://standards-oui.ieee.org/oui/oui.csv and regenerates the TSV (documented, not run in CI)
+  files_to_modify:
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/LanScanRepositoryImpl.kt
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/LanScanRepository.kt
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/LanHost.kt
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/LanScanSummary.kt
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/OuiDatabase.kt   # load TSV resource lazily; keep lookup(mac) signature
+    - core-network/src/test/kotlin/net/aieat/netswissknife/core/network/lan/LanScanRepositoryImplTest.kt
+    - core-network/src/test/kotlin/net/aieat/netswissknife/core/network/lan/OuiDatabaseTest.kt
+    - core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/LanScanParams.kt          # + gatewayIp: String? = null, enableNameProbes
+    - core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/LanScanUseCase.kt
+    - core-domain/src/test/kotlin/net/aieat/netswissknife/core/domain/LanScanUseCaseTest.kt
+    - app/src/main/kotlin/net/aieat/netswissknife/app/di/LanModule.kt
+    - app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanViewModel.kt
+    - app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanScreen.kt
+    - app/src/main/kotlin/net/aieat/netswissknife/app/ui/navigation/NavRoutes.kt                 # Ports route with optional host arg
+    - app/src/main/kotlin/net/aieat/netswissknife/app/ui/navigation/AppNavigation.kt
+    - app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/portscan/PortScanViewModel.kt   # SavedStateHandle prefill
+    - app/src/main/res/values/strings.xml
+    - app/src/test/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanViewModelTest.kt
+    - app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanScreenTest.kt
+    - README.md
+
+tasks:
+  - id: P01-T1
+    title: "Extract probe interfaces + ArpFileMacResolver (no behaviour change yet)"
+    status: todo
+    depends_on: []
+    tdd:
+      red:
+        test_file: core-network/src/test/kotlin/net/aieat/netswissknife/core/network/lan/ArpFileMacResolverTest.kt
+        tests:
+          - "parses /proc/net/arp sample with header and returns uppercase MAC for known ip"
+          - "returns null for 00:00:00:00:00:00 (incomplete entry)"
+          - "supported is false when reader returns empty string or throws"
+          - "resolve returns null for ip not in table"
+        run: "./gradlew :core-network:test --tests '*ArpFileMacResolverTest' --no-daemon"
+        expect: "compilation failure (class missing) = RED"
+      green:
+        steps:
+          - "Create DiscoveryProbes.kt with IcmpProbe, TcpPresenceProbe (+ sealed TcpPresence { Open(port), Refused, None }), NameProbe, MacResolver (with `val supported: Boolean`), DiscoveryMethod, DEFAULT_PRESENCE_PORTS."
+          - "Create ArpFileMacResolver(reader: () -> String = { File(\"/proc/net/arp\").readText() }) moving parseArpTable from LanScanRepositoryImpl; `supported` = reader() non-blank at first call (lazy, cached)."
+          - "Keep LanScanRepositoryImpl compiling by delegating arpTableReader -> ArpFileMacResolver internally."
+        run: "./gradlew :core-network:test --no-daemon"
+        expect: "PASS incl. existing LanScanRepositoryImplTest"
+      refactor:
+        - "Remove ArpTableReader typealias once no test references it (update LanScanRepositoryImplTest constructor usage)."
+    acceptance_criteria:
+      - "LanScanRepositoryImplTest still green."
+      - "New resolver has >= 4 tests."
+
+  - id: P01-T2
+    title: "TCP presence probe with RST-as-alive semantics"
+    status: todo
+    depends_on: [P01-T1]
+    tdd:
+      red:
+        test_file: core-network/src/test/kotlin/net/aieat/netswissknife/core/network/lan/SocketTcpPresenceProbeTest.kt
+        tests:
+          - "open port on 127.0.0.1 (ServerSocket(0)) returns TcpPresence.Open(port)"
+          - "closed port on 127.0.0.1 (bind ServerSocket then close, reuse its port) returns TcpPresence.Refused"
+          - "probe stops at first Open (does not try remaining ports) – verify via injected connector lambda call count"
+          - "all timeouts -> TcpPresence.None within timeoutMs * ports.size upper bound (use injected connector that throws SocketTimeoutException)"
+        run: "./gradlew :core-network:test --tests '*SocketTcpPresenceProbeTest' --no-daemon"
+        expect: "RED"
+      green:
+        steps:
+          - "SocketTcpPresenceProbe(connector: (ip, port, timeoutMs) -> TcpConnectOutcome = real Socket connect). Map ConnectException -> Refused, success -> Open, SocketTimeoutException/NoRouteToHostException/other IOException -> None."
+          - "Probe ports sequentially with per-port timeout = min(timeoutMs, 400); return early on Open or Refused."
+        run: "./gradlew :core-network:test --no-daemon"
+        expect: "PASS"
+      refactor: ["Share the Socket-connect lambda with PortScanRepositoryImpl.defaultChecker if trivially possible; otherwise leave (avoid cross-package coupling)."]
+    acceptance_criteria: ["4 tests green; no Android imports."]
+
+  - id: P01-T3
+    title: "NetBIOS NBSTAT and mDNS reverse-PTR name probes (pure Kotlin, injectable transport)"
+    status: todo
+    depends_on: [P01-T1]
+    tdd:
+      red:
+        test_file: core-network/src/test/kotlin/net/aieat/netswissknife/core/network/lan/NetBiosNameProbeTest.kt
+        tests:
+          - "buildNbstatQuery encodes name '*' as 32-byte first-level encoding 'CKAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' with QTYPE 0x0021, QCLASS 0x0001 (golden byte array)"
+          - "parseNbstatResponse extracts first unique workstation name (suffix 0x00, flags group bit clear) trimmed of padding"
+          - "parseNbstatResponse returns null on truncated packet"
+          - "resolveName returns null when transport times out"
+        also_test_file: core-network/src/test/kotlin/net/aieat/netswissknife/core/network/lan/MdnsReverseNameProbeTest.kt
+        also_tests:
+          - "builds PTR query for 4.3.2.1.in-addr.arpa. with QU (unicast-response) bit set"
+          - "parses PTR answer 'myhost.local.' -> 'myhost.local'"
+          - "ignores answers for other owner names"
+        run: "./gradlew :core-network:test --tests '*NameProbeTest' --no-daemon"
+        expect: "RED"
+      green:
+        steps:
+          - "NetBiosNameProbe(transport: UdpExchange = DatagramSocket-based default): UdpExchange is `fun interface UdpExchange { fun exchange(ip: String, port: Int, payload: ByteArray, timeoutMs: Int): ByteArray? }` so tests inject bytes."
+          - "MdnsReverseNameProbe(transport: UdpExchange): sends to 224.0.0.251:5353 the PTR question built with dnsjava (Message.newQuery + set QU bit by OR-ing 0x8000 into the class field: Record.newRecord(name, Type.PTR, DClass.IN or 0x8000)). Reads one datagram; parses with Message(bytes)."
+          - "ReverseDnsNameProbe: InetAddress.getByName(ip).canonicalHostName != ip."
+        run: "./gradlew :core-network:test --no-daemon"
+        expect: "PASS"
+      refactor: ["UdpExchange default impl lives in one file (UdpExchange.kt) and is reused by P13 SSDP/NTP tools."]
+    acceptance_criteria: ["Golden-byte tests for both encoders; parser tests for both decoders."]
+
+  - id: P01-T4
+    title: "Rewrite LanScanRepositoryImpl.scan around LanScanRequest + probe pipeline + post-scan MAC pass"
+    status: todo
+    depends_on: [P01-T1, P01-T2, P01-T3]
+    tdd:
+      red:
+        test_file: core-network/src/test/kotlin/net/aieat/netswissknife/core/network/lan/LanScanRepositoryImplTest.kt
+        tests:
+          - "host answering ICMP only is emitted with discoveredVia == {ICMP}"
+          - "host with ICMP null but TCP Refused is emitted with discoveredVia == {TCP_REFUSED}"
+          - "host with ICMP null, TCP None, NetBIOS name 'PC-1' is emitted with hostname 'PC-1' and discoveredVia == {NETBIOS}"
+          - "host with nothing answering is not emitted (ScanProgress only)"
+          - "MAC is resolved AFTER presence probes: fake MacResolver returns null on first call for ip and 'AA:BB:CC:DD:EE:FF' on second call; final ScanComplete summary contains the MAC (post-scan pass) and vendor from OuiDatabase"
+          - "gateway flag set only for request.gatewayIp; lowest IP NOT flagged when gatewayIp differs"
+          - "gatewayIp null -> no host flagged as gateway"
+          - "summary.macResolutionSupported mirrors MacResolver.supported"
+          - "hostname precedence: rDNS result wins over NetBIOS when both non-null (order of nameProbes list)"
+          - "enableNameProbes=false skips NetBIOS/mDNS even when host not alive (probe call count == 0)"
+          - "events remain ordered: N progress/host events then exactly one ScanComplete; scannedCount reaches totalCount"
+        run: "./gradlew :core-network:test --tests '*LanScanRepositoryImplTest' --no-daemon"
+        expect: "RED (constructor/API mismatch)"
+      green:
+        steps:
+          - "Add LanScanRequest; new scan(request) in interface; keep scan(subnet,timeoutMs,concurrency) = scan(LanScanRequest(subnet,timeoutMs,concurrency)) @Deprecated."
+          - "Worker body: presence -> enrich as in design. MAC: try macResolver.resolve(ip) in worker; if null keep host with mac=null."
+          - "After coroutineScope completes: if macResolver.supported, for hosts with mac == null call resolve(ip) once more (single pass, sequential, bounded by hosts.size) and patch; build summary with patched hosts sorted by IP."
+          - "Emit LanScanUpdate.HostFound as before (mac may be null there; UI will refresh from ScanComplete)."
+        run: "./gradlew :core-network:test --no-daemon"
+        expect: "PASS"
+      refactor:
+        - "Split worker body into `discoverPresence(ip)` and `enrich(ip, presence)` private suspend functions for readability."
+        - "Ensure the per-host budget: total per-IP time <= icmp timeout + tcp (ports * 400ms) + name probes (2 * 300ms). Document in KDoc."
+    acceptance_criteria:
+      - "All new tests green; old tests adapted (not deleted) where semantics changed."
+      - "Kover :core-network >= 70%."
+
+  - id: P01-T5
+    title: "Domain: LanScanParams gains gatewayIp/enableNameProbes; use case forwards them"
+    status: todo
+    depends_on: [P01-T4]
+    tdd:
+      red:
+        test_file: core-domain/src/test/kotlin/net/aieat/netswissknife/core/domain/LanScanUseCaseTest.kt
+        tests:
+          - "forwards gatewayIp into LanScanRequest (verify with MockK capture on repository.scan(any<LanScanRequest>()))"
+          - "gatewayIp outside the subnet is passed as null (use case sanitises; SubnetUtils.contains(cidr, ip) helper)"
+        run: "./gradlew :core-domain:test --tests '*LanScanUseCaseTest' --no-daemon"
+        expect: "RED"
+      green:
+        steps: ["Add fields; add SubnetUtils.contains(cidr: String, ip: String): Boolean with tests in SubnetUtilsTest; forward."]
+        run: "./gradlew :core-domain:test :core-network:test --no-daemon"
+        expect: "PASS"
+      refactor: []
+    acceptance_criteria: ["Validation messages unchanged (P07 will type them)."]
+
+  - id: P01-T6
+    title: "App: LinkInfoProvider (gateway/subnet/DNS from ConnectivityManager) + icmpenguin IcmpProbe + DI"
+    status: todo
+    depends_on: [P01-T5]
+    tdd:
+      red:
+        test_file: app/src/test/kotlin/net/aieat/netswissknife/app/platform/LinkInfoProviderTest.kt
+        tests:
+          - "toCidr(LinkAddress-like pair '192.168.1.37', 24) == '192.168.1.0/24' (pure helper LinkInfoMapper.cidrOf(address:String, prefix:Int))"
+          - "defaultGateway picks the route whose destination is 0.0.0.0/0 and whose gateway is IPv4 (pure helper over a list of (dest, gateway) strings)"
+          - "prefix outside 16..30 is coerced like SubnetUtils.getCurrentSubnet"
+        run: "./gradlew :app:testDebugUnitTest --tests '*LinkInfoProviderTest' --no-daemon"
+        expect: "RED"
+      green:
+        steps:
+          - "LinkInfoMapper (pure Kotlin object in :app, no android imports, unit-tested) + LinkInfoProvider (@Singleton, uses ConnectivityManager.activeNetwork/getLinkProperties/getNetworkCapabilities; returns LinkInfo?)."
+          - "IcmpenguinIcmpProbe: Pinger(host=ip, ttl=64, timeout=timeoutMs, maxPingCount=1, interval=0, probeSize=Pinger.DEFAULT_PROBE_SIZE, pattern=ByteArray(0)?, sourceIp=null).ping().first(); map success -> rtt ms (verify field names via javap: expect a Success subtype with `timeUsec` like trace.Response.Success). Wrap in try/catch -> null."
+          - "LanModule: provide LinkInfoProvider; provide LanScanRepository = LanScanRepositoryImpl(icmpProbe = IcmpenguinIcmpProbe())."
+          - "Add LinkInfoMapper to app Kover includes (P09 formalises the wider list)."
+        run: "./gradlew :app:testDebugUnitTest :app:assembleDebug --no-daemon"
+        expect: "PASS"
+      refactor: []
+    acceptance_criteria: ["Debug APK builds; LinkInfoMapper 100% covered."]
+
+  - id: P01-T7
+    title: "OUI database from IEEE registry (generated resource) + fix mislabelled entry"
+    status: todo
+    depends_on: []
+    tdd:
+      red:
+        test_file: core-network/src/test/kotlin/net/aieat/netswissknife/core/network/lan/OuiDatabaseTest.kt
+        tests:
+          - "lookup('3C:5A:B4:00:00:01') contains 'Google'"
+          - "lookup('B8:27:EB:…') contains 'Raspberry Pi'"
+          - "lookup('DC:A6:32:…') contains 'Raspberry Pi'"
+          - "lookup handles lowercase and hyphen-separated input"
+          - "lookup returns null for locally-administered MAC (second-least-significant bit of first octet set, e.g. 02:xx / 06:xx / 0A:xx / 0E:xx) – return null and expose OuiDatabase.isLocallyAdministered(mac)"
+          - "database size >= 1000 entries (OuiDatabase.size)"
+        run: "./gradlew :core-network:test --tests '*OuiDatabaseTest' --no-daemon"
+        expect: "RED"
+      green:
+        steps:
+          - "tools/oui/update_oui.sh: curl -fsSL https://standards-oui.ieee.org/oui/oui.csv | awk -F',' 'NR>1 {gsub(/\"/,\"\",$3); print $2\"\\t\"$3}' > core-network/src/main/resources/oui/oui-prefixes.tsv  (columns: Registry,Assignment,Organization Name,Organization Address). Commit the generated TSV (size ~1.2 MB; acceptable; alternatively trim to top-N vendors if APK size matters – decide, document)."
+          - "OuiDatabase: lazy-load TSV from classloader resource into HashMap<String,String> keyed by 6 hex chars; normalise input (strip separators, uppercase, take 6); keep the hand-curated overrides map for friendly names (e.g. 'Apple, Inc.' -> 'Apple')."
+          - "Add `isLocallyAdministered` and `size`."
+        run: "./gradlew :core-network:test --no-daemon"
+        expect: "PASS"
+      refactor: ["Move the old inline map entries into overrides only where the IEEE name is unfriendly."]
+    acceptance_criteria: ["Resource loads in < 100 ms on JVM test (assert with a soft timing test or skip); APK size delta documented in the PR."]
+    notes: "R8: resources are not shrunk by class shrinking; verify the TSV is present in the release APK (unzip -l app-release.apk | grep oui)."
+
+  - id: P01-T8
+    title: "ViewModel + Screen: gateway from LinkInfoProvider, discovery chips, MAC-unavailable hint, 'Scan ports' hand-off"
+    status: todo
+    depends_on: [P01-T6]
+    tdd:
+      red:
+        test_file: app/src/test/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanViewModelTest.kt
+        tests:
+          - "refreshSubnet prefers LinkInfoProvider.cidr over SubnetUtils and stores gatewayIp"
+          - "startScan passes gatewayIp into LanScanParams (capture)"
+          - "Finished state exposes macResolutionSupported from summary"
+          - "onScanPorts(host) emits navigation event NavigateToPorts(host) (SharedFlow/Channel)"
+        also_test_file: app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanScreenTest.kt
+        also_tests:
+          - "host row shows discovery chips text for {ICMP, TCP_REFUSED} (test tags lan_chip_ICMP etc.)"
+          - "when macResolutionSupported=false, expanded host shows the 'MAC unavailable' string"
+          - "tapping 'Scan ports' in expanded host invokes onScanPorts callback"
+        run: "./gradlew :app:testDebugUnitTest --tests '*LanScanViewModelTest' --no-daemon"
+        expect: "RED"
+      green:
+        steps:
+          - "ViewModel: inject LinkInfoProvider; keep SubnetUtils fallback; hold gatewayIp; navigation via Channel<LanNavEvent> collected in the screen with LaunchedEffect."
+          - "Screen: chips in host card (AssistChip, labelSmall, colorScheme.secondaryContainer), MAC hint row (bodySmall, onSurfaceVariant, string lan_mac_unavailable_api29), 'Scan ports' TextButton (string lan_action_scan_ports) in expanded card."
+          - "NavRoutes.Ports.route = 'ports?host={host}' with navArgument nullable default null; AppNavHost composable(route, arguments); NavRoutes.Ports.createRoute(host) helper; PortScanViewModel reads SavedStateHandle.get<String>(\"host\") in init and pre-fills _host when blank."
+          - "Bottom-nav/More navigation must still navigate to base route 'ports' (nav-compose treats optional query args as absent) – verify by UiSmokeTest."
+        run: "./gradlew :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon"
+        expect: "PASS; instrumented run locally or via Test Lab (mind the 10/day quota – batch with other phases)"
+      refactor: ["Extract HostRow discovery chips into a private composable with a preview."]
+    acceptance_criteria:
+      - "All strings in strings.xml; chips use colorScheme tokens."
+      - "Manual: on a real LAN, a Windows host with ICMP blocked appears via TCP_REFUSED/OPEN."
+
+  - id: P01-T9
+    title: "README + help sheet sync"
+    status: todo
+    depends_on: [P01-T8]
+    steps:
+      - "README LAN Scanner section: describe multi-method discovery, name probes, MAC availability (API < 29 only), gateway from active network, 'Scan ports' hand-off, OUI registry size + refresh script."
+      - "Help sheet (strings help_lan_*): explain why MAC may be unavailable and what the discovery chips mean."
+      - "PRIVACY_POLICY.md: mention NetBIOS/mDNS local multicast queries (local-only, nothing leaves the LAN)."
+    acceptance_criteria: ["README Available Tools row unchanged (Implemented); Features text matches behaviour exactly."]
+
+qa_validation:
+  automated:
+    - "./gradlew :core-network:test :core-domain:test :app:testDebugUnitTest --no-daemon"
+    - "./gradlew :core-network:koverVerify :core-domain:koverVerify :app:koverVerify --no-daemon"
+    - "./gradlew :app:lintDebug --no-daemon --no-parallel   # 0 errors"
+    - "./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon"
+    - "grep -rn 'import android' core-network/src core-domain/src  # must be empty"
+  manual_device:
+    - "API 28 emulator (see memory: AVD api28 recipe) – MAC column populated for gateway after scan; discovery chips visible."
+    - "API 34+ device – MAC hint text shown; hosts discovered via TCP_REFUSED exist (a Windows PC with ping blocked)."
+    - "Gateway flag matches `adb shell ip route | grep default`."
+    - "Scan /24 wall-time before vs after (record both in PR description)."
+    - "VPN active: note failures (expected until P05) – do not 'fix' here."
+  regression:
+    - "Pull-to-refresh, search, filters, expand/collapse on LAN screen still work (LanScanScreenTest)."
+    - "Port scanner reached from bottom nav still starts with empty host."
+
+docs_updates:
+  - README.md (LAN Scanner features; Available Tools unchanged)
+  - PRIVACY_POLICY.md (local multicast/NetBIOS queries)
+  - claude/tool_instructions.md not affected
+
+risks:
+  - risk: "Name probes add up to ~600 ms per silent IP; /16 scans get slower."
+    mitigation: "Only run name probes for IPs that failed ICMP+TCP; cap per-IP budget; keep concurrency default 50; add `enableNameProbes` toggle in advanced options (default on for /24 and smaller, off for larger than /22)."
+  - risk: "IEEE TSV increases APK by ~1 MB."
+    mitigation: "Ship gzip (resources are stored compressed in APK already); or prune to organisations with >= 2 assignments; document decision."
+  - risk: "icmpenguin Pinger API differs from javap assumption."
+    mitigation: "T6 starts by dumping the class signatures; fall back to ReachabilityIcmpProbe if needed."
+  - risk: "Sending NetBIOS/mDNS packets may trigger Android 16 Local Network Protections prompt."
+    mitigation: "rememberLocalNetworkPermissionRequester() already exists; call it on LAN screen entry (verify it is called)."
+
+rollback: |
+  All new behaviour sits behind constructor parameters with JVM defaults; reverting LanModule to
+  `LanScanRepositoryImpl()` restores the old pipeline minus the ARP-ordering fix. The old 3-arg
+  scan() stays as a deprecated overload for one release.
+
+definition_of_done:
+  - "All tasks done; findings F004, F005, F006, F040 marked resolved in plan/plan.yaml changelog."
+  - "Global DoD from plan.yaml satisfied."
