@@ -96,6 +96,15 @@ phases:
     findings: [F001, F002, F003, F014]
     summary: "SNMPv3 credentials are never registered with SNMP4J's USM; LLDP reads the wrong column for neighbour IPs; CDP rejects hex-encoded addresses. Feature is advertised in the store listing and does not work on real hardware."
 
+  - id: P02.5
+    file: plan/phases/P02.5-dependency-security-remediation.yaml
+    title: "Dependency security remediation: close authenticated Dependabot alerts"
+    priority: critical
+    status: todo
+    depends_on: [P02]
+    findings: [F041]
+    summary: "GitHub reports nine open Maven alerts from settings.gradle.kts, including one critical and three high-severity issues. Trace the settings/build-plugin graph, upgrade direct and owning dependencies, align patched transitives, and verify no vulnerable package remains in shipped runtime configurations."
+
   - id: P03
     file: plan/phases/P03-wifi-live-scanning.yaml
     title: "Wi-Fi Scanner: trigger real scans, honour throttling, configurable refresh, richer connection info"
@@ -472,6 +481,13 @@ findings:
     title: "OuiDatabase tiny and mislabelled entry"
     evidence: "91 OUI prefixes; '3C:5A:B4' -> 'Google' sits under the '// Apple' comment (it is Google/Nest)."
     phase: P01
+  - id: F041
+    severity: critical
+    area: dependencies
+    title: "Nine open Dependabot Maven alerts in the settings dependency graph"
+    evidence: "Authenticated `gh api repos/AieatAssam/android-network-tools/dependabot/alerts --paginate` on 2026-09-19 reports one critical, three high, and five medium alerts. The direct alert is org.jetbrains.kotlin:kotlin-gradle-plugin; the other eight are transitive bcprov/bcpkix, jose4j, jdom2, commons-lang3, and httpclient packages, all attributed to settings.gradle.kts."
+    impact: "Build/plugin tooling or any affected shipped configuration may retain known vulnerabilities until the owning dependency graph is upgraded or a scoped, documented exception is approved."
+    phase: P02.5
 
 changelog:
   - date: "2026-09-18"
@@ -484,3 +500,5 @@ changelog:
     note: "P02 complete: SNMPv3 USM credentials and extended protocols are registered per discovery session, LLDP management addresses are decoded from row indexes, CDP hex addresses are accepted, topology seeds are persisted, and R8/CI keep-class verification is documented. Core/app focused tests, unsigned release assembly, and apkanalyzer verification pass."
   - date: "2026-09-19"
     note: "P02 authPriv claim re-verified: restored the strict loopback GET, fixed the responder to localize its SHA/AES user, explicitly registered SNMP4J USM protocols (addDefaultProtocols is disabled by default), and added cached authoritative-engine discovery before v3 GET/WALK. Strict loopback, core-network, and repository-wide JVM tests pass."
+  - date: "2026-09-19"
+    note: "Added P02.5 after authenticated Dependabot review: nine open Maven alerts (one critical, three high, five medium), with exact CVE/GHSA IDs, dependency provenance, upgrade constraints, and verification gates recorded for remediation."
