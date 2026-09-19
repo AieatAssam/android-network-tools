@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
+import net.aieat.netswissknife.app.platform.LinkInfoProvider
 import net.aieat.netswissknife.app.util.AppLogger
 import net.aieat.netswissknife.core.domain.LanScanFlowResult
 import net.aieat.netswissknife.core.domain.LanScanParams
@@ -16,6 +17,7 @@ import net.aieat.netswissknife.core.network.lan.SubnetUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -24,6 +26,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
@@ -48,11 +51,16 @@ sealed interface LanScanUiState {
     data class Error(val message: String) : LanScanUiState
 }
 
+sealed interface LanNavEvent {
+    data class NavigateToPorts(val host: String) : LanNavEvent
+}
+
 @HiltViewModel
 class LanScanViewModel @Inject constructor(
     private val lanScanUseCase: LanScanUseCase,
     private val dataStore: DataStore<Preferences>,
-    private val recentHostsRepository: RecentHostsRepository
+    private val recentHostsRepository: RecentHostsRepository,
+    private val linkInfoProvider: LinkInfoProvider? = null,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<LanScanUiState>(LanScanUiState.Idle)
@@ -71,6 +79,12 @@ class LanScanViewModel @Inject constructor(
 
     private val _isSubnetLoading = MutableStateFlow(false)
     val isSubnetLoading: StateFlow<Boolean> = _isSubnetLoading.asStateFlow()
+
+    private val _gatewayIp = MutableStateFlow<String?>(null)
+    val gatewayIp: StateFlow<String?> = _gatewayIp.asStateFlow()
+
+    private val navigationEventsChannel = Channel<LanNavEvent>(Channel.BUFFERED)
+    val navigationEvents = navigationEventsChannel.receiveAsFlow()
 
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
@@ -111,7 +125,9 @@ class LanScanViewModel @Inject constructor(
                 // the main thread (which can trigger StrictMode violations on some devices).
                 val detected = withContext(Dispatchers.IO) {
                     AppLogger.d(TAG, "refreshSubnet: starting subnet detection")
-                    SubnetUtils.getCurrentSubnet().also { result ->
+                    val linkInfo = linkInfoProvider?.getLinkInfo()
+                    _gatewayIp.value = linkInfo?.gatewayIp
+                    (linkInfo?.cidr ?: SubnetUtils.getCurrentSubnet()).also { result ->
                         AppLogger.i(TAG, "refreshSubnet: detected subnet = $result")
                     }
                 }
@@ -152,6 +168,7 @@ class LanScanViewModel @Inject constructor(
             subnet = _subnet.value,
             timeoutMs = _timeoutMs.value,
             concurrency = _concurrency.value,
+            gatewayIp = _gatewayIp.value,
         )
 
         _uiState.value = LanScanUiState.Scanning(
@@ -242,5 +259,9 @@ class LanScanViewModel @Inject constructor(
         _uiState.value = current.copy(
             expandedHostIp = if (current.expandedHostIp == ip) null else ip
         )
+    }
+
+    fun onScanPorts(host: String) {
+        navigationEventsChannel.trySend(LanNavEvent.NavigateToPorts(host))
     }
 }

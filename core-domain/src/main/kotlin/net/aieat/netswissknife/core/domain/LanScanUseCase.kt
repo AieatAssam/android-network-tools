@@ -1,6 +1,7 @@
 package net.aieat.netswissknife.core.domain
 
 import net.aieat.netswissknife.core.network.lan.LanScanRepository
+import net.aieat.netswissknife.core.network.lan.LanScanRequest
 import net.aieat.netswissknife.core.network.lan.LanScanUpdate
 import net.aieat.netswissknife.core.network.lan.SubnetUtils
 import kotlinx.coroutines.flow.Flow
@@ -38,7 +39,19 @@ class LanScanUseCase(private val repository: LanScanRepository) {
 
         // ── Delegate to repository and map results ──────────────────────────
 
-        return repository.scan(subnet, params.timeoutMs, params.concurrency)
+        val gatewayIp = params.gatewayIp
+            ?.trim()
+            ?.takeIf { SubnetUtils.contains(subnet, it) }
+
+        return repository.scan(
+            LanScanRequest(
+                subnet = subnet,
+                timeoutMs = params.timeoutMs,
+                concurrency = params.concurrency,
+                gatewayIp = gatewayIp,
+                enableNameProbes = params.enableNameProbes,
+            ),
+        )
             .map { update ->
                 when (update) {
                     is LanScanUpdate.HostFound ->

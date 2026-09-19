@@ -5,6 +5,8 @@ import kotlinx.coroutines.flow.Flow
 /** Contract for discovering live hosts on a local network segment. */
 interface LanScanRepository {
 
+    fun scan(request: LanScanRequest): Flow<LanScanUpdate>
+
     /**
      * Scans [subnet] (CIDR notation) for live hosts.
      *
@@ -13,5 +15,7 @@ interface LanScanRepository {
      * @param concurrency Maximum number of concurrent host probes.
      * @return A [Flow] of [LanScanUpdate] events, always ending with [LanScanUpdate.ScanComplete].
      */
-    fun scan(subnet: String, timeoutMs: Int, concurrency: Int): Flow<LanScanUpdate>
+    @Deprecated("Use scan(LanScanRequest) so the real gateway can be supplied")
+    fun scan(subnet: String, timeoutMs: Int, concurrency: Int): Flow<LanScanUpdate> =
+        scan(LanScanRequest(subnet, timeoutMs, concurrency))
 }

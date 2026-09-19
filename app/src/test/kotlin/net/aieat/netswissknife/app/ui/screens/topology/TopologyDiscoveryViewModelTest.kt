@@ -1,5 +1,6 @@
 package net.aieat.netswissknife.app.ui.screens.topology
 
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -12,6 +13,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import net.aieat.netswissknife.app.data.RecentHostsRepository
 import net.aieat.netswissknife.core.domain.TopologyDiscoveryUseCase
 import net.aieat.netswissknife.core.network.topology.TopologyDiscoveryEvent
 import net.aieat.netswissknife.core.network.topology.TopologyGraph
@@ -35,6 +37,7 @@ class TopologyDiscoveryViewModelTest {
     private val testDispatcher = UnconfinedTestDispatcher()
 
     private lateinit var useCase: TopologyDiscoveryUseCase
+    private lateinit var recentHostsRepository: RecentHostsRepository
     private lateinit var viewModel: TopologyDiscoveryViewModel
 
     private val params = TopologyParams(targetIp = "192.168.1.1")
@@ -67,7 +70,9 @@ class TopologyDiscoveryViewModelTest {
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
         useCase = mockk()
-        viewModel = TopologyDiscoveryViewModel(useCase)
+        recentHostsRepository = mockk(relaxed = true)
+        every { recentHostsRepository.getRecents(any()) } returns flowOf(emptyList())
+        viewModel = TopologyDiscoveryViewModel(useCase, recentHostsRepository)
     }
 
     @AfterEach
@@ -104,6 +109,23 @@ class TopologyDiscoveryViewModelTest {
             assertEquals(listOf(stubLink), state.links)
             assertEquals("probing", state.progressMessage)
             assertEquals(1, state.nodesDone)
+        }
+
+        @Test
+        fun `saves the seed only after the first node is discovered`() = runTest {
+            every { useCase.invoke(params) } returns flowOf(
+                TopologyDiscoveryEvent.Progress("probing", 0),
+                TopologyDiscoveryEvent.NodeDiscovered(stubNode)
+            )
+
+            viewModel.startDiscovery(params)
+
+            coVerify(exactly = 1) {
+                recentHostsRepository.addRecent(
+                    net.aieat.netswissknife.app.data.AppPreferenceKeys.RECENT_TOPOLOGY_SEEDS,
+                    "192.168.1.1"
+                )
+            }
         }
 
         @Test

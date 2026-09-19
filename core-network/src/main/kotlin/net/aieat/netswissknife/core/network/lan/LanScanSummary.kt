@@ -15,4 +15,5 @@ data class LanScanSummary(
     val aliveHosts: Int,
     val scanDurationMs: Long,
     val hosts: List<LanHost>,
+    val macResolutionSupported: Boolean = true,
 )

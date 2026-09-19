@@ -3,7 +3,7 @@ package net.aieat.netswissknife.core.network.topology
 /**
  * Abstraction over SNMP4J to allow testability without real network I/O.
  */
-interface SnmpClient {
+interface SnmpClient : AutoCloseable {
     /**
      * Perform an SNMP GET for a single OID.
      * @param target contains ip, port, community/v3 params
@@ -17,6 +17,8 @@ interface SnmpClient {
      * @return map of full OID string → string value
      */
     suspend fun walk(target: SnmpTarget, oidPrefix: String): Map<String, String>
+
+    override fun close()
 }
 
 data class SnmpTarget(

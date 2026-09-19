@@ -6,7 +6,7 @@ phase:
   id: P02
   title: "Network Topology: SNMPv3 USM registration, index-based LLDP mgmt-address parsing, hex CDP addresses, session reuse, R8 rules"
   priority: critical
-  status: todo
+  status: done
   estimated_effort: "M (2-4 agent sessions)"
   depends_on: []
   enables: [P09]
@@ -68,12 +68,12 @@ non_goals:
 
 assumptions:
   - id: A1
-    statement: "SNMP4J 3.13.1 API: SecurityProtocols.getInstance().addDefaultProtocols(); USM(SecurityProtocols, OctetString localEngineId, int engineBoots); SecurityModels.getInstance().addSecurityModel(usm); snmp.getUSM().addUser(UsmUser(securityName, authProtocolOID, authPassphrase, privProtocolOID, privPassphrase)); auth OIDs AuthMD5.ID, AuthSHA.ID, AuthHMAC192SHA256.ID, AuthHMAC384SHA512.ID; priv OIDs PrivDES.ID, PrivAES128.ID, PrivAES192.ID, PrivAES256.ID."
+    statement: "SNMP4J 3.13.1 API: SecurityProtocols.getInstance().addDefaultProtocols() plus explicit AuthMD5/AuthSHA/AuthHMAC192SHA256/AuthHMAC384SHA512 and PrivDES/PrivAES128/PrivAES192/PrivAES256 registration; USM(SecurityProtocols, OctetString localEngineId, int engineBoots); SecurityModels.getInstance().addSecurityModel(usm); snmp.getUSM().addUser(UsmUser(securityName, authProtocolOID, authPassphrase, privProtocolOID, privPassphrase)); auth OIDs AuthMD5.ID, AuthSHA.ID, AuthHMAC192SHA256.ID, AuthHMAC384SHA512.ID; priv OIDs PrivDES.ID, PrivAES128.ID, PrivAES192.ID, PrivAES256.ID."
     verify_with: "javap -cp ~/.gradle/caches/modules-2/files-2.1/org.snmp4j/snmp4j/3.13.1/*/snmp4j-3.13.1.jar org.snmp4j.security.USM org.snmp4j.security.UsmUser org.snmp4j.security.AuthHMAC192SHA256"
     if_false: "Adjust class names; the pattern (addDefaultProtocols + USM + addUser) is stable across 2.x/3.x."
   - id: A2
     statement: "SNMP4J can act as a command responder in-process (Snmp.addCommandResponder) on a loopback UDP port, allowing a JVM unit test of v2c and v3 GET without external agents."
-    verify_with: "Prototype test: Snmp(DefaultUdpTransportMapping(UdpAddress('127.0.0.1/0'))).addCommandResponder { event -> build RESPONSE PDU via event.pdu / event.messageProcessingModel }. For v3 the responder Snmp needs the same USM user and the requester needs the responder's engine ID via discovery (automatic)."
+    verify_with: "Prototype test: Snmp(DefaultUdpTransportMapping(UdpAddress('127.0.0.1/0'))).addCommandResponder { event -> build RESPONSE PDU via event.pdu / event.messageProcessingModel }. For v3 the responder needs the same user localized to its authoritative engine ID and the requester must discover that engine ID before using auth/privacy keys (SNMP4J can also auto-discover)."
     if_false: "Keep unit tests at the UsmUserSpec level and add a manual device check against a real switch or `snmpsimd` (documented in qa_validation)."
   - id: A3
     statement: "OctetString.toString() in SNMP4J returns ASCII if all bytes are printable else colon-separated hex; ifPhysAddress and cdpCacheAddress arrive as 'aa:bb:cc:dd:ee:ff' / 'c0:a8:01:01'."
@@ -148,7 +148,7 @@ design:
 tasks:
   - id: P02-T1
     title: "Pure MIB parser with realistic fixtures (LLDP rem table, LLDP mgmt-addr index, CDP hex addresses)"
-    status: todo
+    status: done
     depends_on: []
     tdd:
       red:
@@ -177,7 +177,7 @@ tasks:
 
   - id: P02-T2
     title: "Repository uses the parser; fixture in TopologyDiscoveryRepositoryTest corrected"
-    status: todo
+    status: done
     depends_on: [P02-T1]
     tdd:
       red:
@@ -201,7 +201,7 @@ tasks:
 
   - id: P02-T3
     title: "SNMPv3: UsmUserSpecFactory (pure) + Snmp4jClientImpl session with USM registration + new protocols"
-    status: todo
+    status: done
     depends_on: [P02-T2]
     tdd:
       red:
@@ -225,17 +225,17 @@ tasks:
         steps:
           - "TopologyModels: V3AuthProtocol { NONE, MD5, SHA, SHA256, SHA512 }, V3PrivProtocol { NONE, DES, AES128, AES192, AES256 } (keep existing names)."
           - "UsmUserSpecFactory.from(params): UsmUserSpec(securityName, authOid, authPass, privOid, privPass, securityLevel)."
-          - "Snmp4jClientImpl(params): init { ensureSecurityProtocols(); transport.listen(); if V3 { val usm = USM(SecurityProtocols.getInstance(), OctetString(MPv3.createLocalEngineID()), 0); SecurityModels.getInstance().addSecurityModel(usm); snmp.usm.addUser(spec.toUsmUser()) } }. Note: SecurityModels is a global singleton – adding the same USM repeatedly is harmless but guard with a companion flag; per-instance users are added to snmp.usm."
+          - "Snmp4jClientImpl(params): explicitly registers the supported USM auth/privacy protocol implementations (addDefaultProtocols alone is disabled by SNMP4J's default extensibility setting), listens on one transport, installs a guarded USM security model, and adds the configured user. Before the first v3 GET/WALK per target, call discoverAuthoritativeEngineID(address, timeoutMs) and cache the successful result."
           - "Target built once; get()/walk() reuse it. Timeout/retries from params."
           - "TopologyParamsValidator: reject priv-without-auth and missing passphrases; TopologyParamsValidatorTest updated."
         run: "./gradlew :core-network:test --no-daemon"
         expect: "PASS (loopback tests may be @Tag('integration') and still run by default; keep them < 2 s)"
       refactor: ["Remove unused imports (org.snmp4j.security.* wildcard) in favour of explicit ones."]
-    acceptance_criteria: ["v3 authPriv loopback test green; validator covers new combos."]
+    acceptance_criteria: ["Strict v3 authPriv (SHA/AES128) loopback GET returns the responder value with an engine-localized responder user; validator covers new combos."]
 
   - id: P02-T4
     title: "UI: new protocol options, recent seeds, progress unchanged"
-    status: todo
+    status: done
     depends_on: [P02-T3]
     tdd:
       red:
@@ -261,7 +261,7 @@ tasks:
 
   - id: P02-T5
     title: "R8 keep rules + release verification script"
-    status: todo
+    status: done
     depends_on: [P02-T3]
     steps:
       - "Add rules to app/proguard-rules.pro (see design §4) with a comment linking to this phase."
@@ -272,7 +272,7 @@ tasks:
 
   - id: P02-T6
     title: "Docs"
-    status: todo
+    status: done
     depends_on: [P02-T4, P02-T5]
     steps:
       - "README Network Topology: list supported v3 protocols (MD5, SHA-1, SHA-256, SHA-512 / DES, AES-128/192/256), note single-session behaviour, mention neighbour addresses are taken from LLDP management-address index and CDP cache address."

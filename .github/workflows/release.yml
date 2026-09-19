@@ -155,6 +155,14 @@ jobs:
             -PkeyPassword="${{ secrets.RELEASE_KEY_PASSWORD }}" \
             --no-daemon
 
+      # P02: fail the release if R8 removes SNMP4J's reflectively-loaded USM
+      # and protocol implementations.
+      - name: Verify SNMP4J classes survived R8
+        run: |
+          APK=$(find app/build/outputs/apk/release -name '*.apk' | head -1)
+          apkanalyzer dex packages "$APK" \
+            | grep -E 'org\.snmp4j\.security\.(AuthSHA|PrivAES128|USM)\b'
+
       # ── 9. Build release AAB ──────────────────────────────────────────────
       - name: Build signed release AAB
         run: |

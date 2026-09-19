@@ -63,12 +63,13 @@ class TopologyDiscoveryRepositoryTest {
             "1.0.8802.1.1.2.1.4.1.1.7.0.1.1" to "GigabitEthernet0/1",
             "1.0.8802.1.1.2.1.4.1.1.9.0.1.1" to "switch2",
             "1.0.8802.1.1.2.1.4.1.1.10.0.1.1" to "Cisco IOS neighbour",
-            "1.0.8802.1.1.2.1.4.2.1.4.0.1.1.4.192.168.1.2" to "192.168.1.2",
+            // LLDP management address is encoded in the OID; the value is ifId.
+            "1.0.8802.1.1.2.1.4.2.1.4.0.1.1.1.4.192.168.1.2" to "1",
             "1.0.8802.1.1.2.1.4.1.1.5.0.2.1" to "neighbour2-chassis",
             "1.0.8802.1.1.2.1.4.1.1.7.0.2.1" to "GigabitEthernet0/2",
             "1.0.8802.1.1.2.1.4.1.1.9.0.2.1" to "switch3",
             "1.0.8802.1.1.2.1.4.1.1.10.0.2.1" to "Cisco IOS neighbour2",
-            "1.0.8802.1.1.2.1.4.2.1.4.0.2.1.4.192.168.1.3" to "192.168.1.3"
+            "1.0.8802.1.1.2.1.4.2.1.4.0.2.1.1.4.192.168.1.3" to "1"
         )
         // Return empty for all walks by default, LLDP data for the specific prefix
         coEvery { snmpClient.walk(any(), any()) } returns emptyMap()
@@ -114,5 +115,41 @@ class TopologyDiscoveryRepositoryTest {
         val nodeEvents = events.filterIsInstance<TopologyDiscoveryEvent.NodeDiscovered>()
         // Should only have seed node
         assertEquals(1, nodeEvents.size)
+    }
+
+    @Test
+    fun `client is closed after discovery completes`() = runTest {
+        coEvery { snmpClient.get(any(), any()) } returns null
+        coEvery { snmpClient.walk(any(), any()) } returns emptyMap()
+
+        repository.discover(defaultParams).toList()
+
+        verify(exactly = 1) { snmpClient.close() }
+    }
+
+    @Test
+    fun `CDP hex address is linked and queued`() = runTest {
+        coEvery { snmpClient.get(any(), "1.3.6.1.2.1.1.1.0") } returns "Cisco IOS switch"
+        coEvery { snmpClient.get(any(), "1.3.6.1.2.1.1.5.0") } returns "seed-switch"
+        coEvery { snmpClient.get(any(), "1.3.6.1.2.1.1.6.0") } returns null
+        coEvery { snmpClient.get(any(), "1.3.6.1.2.1.1.3.0") } returns "100"
+        coEvery { snmpClient.walk(any(), any()) } returns emptyMap()
+        coEvery { snmpClient.walk(any(), "1.3.6.1.4.1.9.9.23.1.2.1") } returns mapOf(
+            "1.3.6.1.4.1.9.9.23.1.2.1.1.3.1.1" to "1",
+            "1.3.6.1.4.1.9.9.23.1.2.1.1.4.1.1" to "c0:a8:01:03",
+            "1.3.6.1.4.1.9.9.23.1.2.1.1.6.1.1" to "edge-switch",
+            "1.3.6.1.4.1.9.9.23.1.2.1.1.7.1.1" to "Gi1/0/3"
+        )
+        coEvery {
+            snmpClient.walk(match { it.ip == "192.168.1.3" }, "1.3.6.1.4.1.9.9.23.1.2.1")
+        } returns emptyMap()
+
+        val events = repository.discover(defaultParams.copy(maxHops = 1)).toList()
+        val links = events.filterIsInstance<TopologyDiscoveryEvent.LinkDiscovered>().map { it.link }
+
+        assertEquals(1, links.size)
+        assertEquals("192.168.1.3", links.single().toIp)
+        assertEquals(LinkProtocol.CDP, links.single().protocol)
+        assertTrue(events.filterIsInstance<TopologyDiscoveryEvent.NodeDiscovered>().any { it.node.ip == "192.168.1.3" })
     }
 }

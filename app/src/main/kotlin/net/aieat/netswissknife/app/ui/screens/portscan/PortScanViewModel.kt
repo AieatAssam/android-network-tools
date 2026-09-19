@@ -4,6 +4,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.SavedStateHandle
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
 import net.aieat.netswissknife.core.domain.PortScanFlowResult
@@ -41,7 +42,8 @@ sealed interface PortScanUiState {
 class PortScanViewModel @Inject constructor(
     private val portScanUseCase: PortScanUseCase,
     private val dataStore: DataStore<Preferences>,
-    private val recentHostsRepository: RecentHostsRepository
+    private val recentHostsRepository: RecentHostsRepository,
+    private val savedStateHandle: SavedStateHandle = SavedStateHandle(),
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<PortScanUiState>(PortScanUiState.Idle)
@@ -74,6 +76,9 @@ class PortScanViewModel @Inject constructor(
     private var scanJob: Job? = null
 
     init {
+        savedStateHandle.get<String>("host")
+            ?.takeIf { it.isNotBlank() }
+            ?.let { _host.value = it }
         viewModelScope.launch {
             val prefs = dataStore.data.first()
             _timeoutMs.value = prefs[AppPreferenceKeys.DEFAULT_TIMEOUT_MS] ?: 2_000

@@ -220,6 +220,14 @@
     <string name="lan_detail_vendor">Vendor</string>
     <string name="lan_detail_ping">Ping</string>
     <string name="lan_detail_role">Role</string>
+    <string name="lan_mac_unavailable_api29">Not available on Android 10+ (ARP is restricted)</string>
+    <string name="lan_action_scan_ports">Scan ports</string>
+    <string name="lan_discovery_icmp">ICMP</string>
+    <string name="lan_discovery_tcp_open">TCP open</string>
+    <string name="lan_discovery_tcp_refused">TCP refused</string>
+    <string name="lan_discovery_netbios">NetBIOS</string>
+    <string name="lan_discovery_mdns">mDNS</string>
+    <string name="lan_discovery_rdns">rDNS</string>
     <string name="lan_role_gateway">Gateway / Router</string>
     <string name="lan_role_device">Network device</string>
     <string name="lan_open_ports_title">Open Ports (%1$d)</string>
@@ -380,9 +388,20 @@
     <string name="topology_community_label">Community String</string>
     <string name="topology_v3_username_label">Username</string>
     <string name="topology_v3_auth_proto_label">Auth Protocol</string>
+    <string name="topology_v3_auth_none">None</string>
+    <string name="topology_v3_auth_md5">MD5</string>
+    <string name="topology_v3_auth_sha1">SHA-1</string>
+    <string name="topology_v3_auth_sha256">SHA-256</string>
+    <string name="topology_v3_auth_sha512">SHA-512</string>
     <string name="topology_v3_auth_password_label">Auth Password</string>
     <string name="topology_v3_priv_proto_label">Priv Protocol</string>
+    <string name="topology_v3_priv_none">None</string>
+    <string name="topology_v3_priv_des">DES</string>
+    <string name="topology_v3_priv_aes128">AES-128</string>
+    <string name="topology_v3_priv_aes192">AES-192</string>
+    <string name="topology_v3_priv_aes256">AES-256</string>
     <string name="topology_v3_priv_password_label">Priv Password</string>
+    <string name="topology_v3_priv_requires_auth">Privacy requires an authentication protocol.</string>
     <string name="topology_max_hops_label">Max Hops: %1$d</string>
     <string name="topology_discover_button">Discover Topology</string>
     <string name="topology_cancel_button">Cancel / Reset</string>
@@ -814,9 +833,9 @@
     <!-- LAN Scanner help -->
     <string name="help_lan_title">LAN Scanner</string>
     <string name="help_lan_concept_heading">What is a subnet sweep?</string>
-    <string name="help_lan_concept_body">Devices on your home or office network share a private range of addresses, like 192.168.1.1 through 192.168.1.254. That range is written in CIDR notation as 192.168.1.0/24, where the "/24" says how many addresses are included. A LAN scan simply pings every address in that range to see which ones answer — that\'s how it finds every device currently on your network.</string>
+    <string name="help_lan_concept_body">Devices on your home or office network share a private range of addresses, like 192.168.1.1 through 192.168.1.254. That range is written in CIDR notation as 192.168.1.0/24, where the "/24" says how many addresses are included. The scanner uses ICMP, TCP, and optional local name probes to find devices that answer even when ordinary ping is blocked.</string>
     <string name="help_lan_what_heading">What it does</string>
-    <string name="help_lan_what_body">Pings every address in a subnet to find live hosts, then attempts to resolve hostnames, read MAC addresses, and identify vendors.</string>
+    <string name="help_lan_what_body">Checks every address in a subnet with ICMP and TCP, then uses NetBIOS or mDNS names as additional presence evidence. Responsive hosts are enriched with hostnames, open ports, and a best-effort ARP MAC/vendor lookup.</string>
     <string name="help_lan_params_heading">Key parameters</string>
     <string name="help_lan_results_heading">Reading the results</string>
     <string-array name="help_lan_params_bullets">
@@ -825,9 +844,9 @@
         <item>Concurrency — how many hosts to probe at the same time.</item>
     </string-array>
     <string-array name="help_lan_results_bullets">
-        <item>IP, hostname, MAC address, and vendor (identified from the MAC address\'s manufacturer prefix) for each live host.</item>
-        <item>The gateway (your router) is marked separately.</item>
-        <item>Tap a host for more detail, including any open ports detected on it.</item>
+        <item>Discovery chips explain whether ICMP, TCP, NetBIOS, mDNS, or reverse DNS contributed to the result.</item>
+        <item>MAC addresses may be unavailable on Android 10 and later because apps cannot read the ARP cache.</item>
+        <item>The gateway comes from the active network default route. Tap a host for details or Scan ports.</item>
     </string-array>
 
     <!-- DNS help -->
@@ -882,6 +901,7 @@
         <item>Target IP — the IP of the first device to query, the starting point for the map.</item>
         <item>SNMP version — v1, v2c, or v3; v3 adds authentication and encryption the older versions lack.</item>
         <item>Community string — a shared password required for v1/v2c (default is \'public\', a notoriously insecure default many devices still ship with — change it if you can).</item>
+        <item>SNMP v3 privacy requires authentication first; auth and privacy passwords are kept in memory for the scan and are never logged.</item>
         <item>Max hops — how many device-to-device introductions to follow before stopping.</item>
     </string-array>
     <string-array name="help_topology_results_bullets">

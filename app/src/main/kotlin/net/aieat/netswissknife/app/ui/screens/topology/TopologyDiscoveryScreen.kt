@@ -34,6 +34,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HeroTitleText
+import net.aieat.netswissknife.app.ui.components.RecentHostsRow
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.ui.theme.AppShapes
 import net.aieat.netswissknife.core.network.topology.*
@@ -44,6 +45,7 @@ fun TopologyDiscoveryScreen(
     viewModel: TopologyDiscoveryViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val recentSeeds by viewModel.recentSeeds.collectAsStateWithLifecycle()
 
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
@@ -55,7 +57,10 @@ fun TopologyDiscoveryScreen(
     ) {
         TopologyScreenContent(
             uiState = uiState,
+            recentSeeds = recentSeeds,
             onStartDiscovery = { params -> viewModel.startDiscovery(params) },
+            onRemoveRecentSeed = { seed -> viewModel.removeRecentSeed(seed) },
+            onClearRecentSeeds = { viewModel.clearRecentSeeds() },
             onSelectNode = { ip -> viewModel.selectNode(ip) },
             onDeselectNode = { viewModel.deselectNode() },
             onReset = { viewModel.reset() },
@@ -90,7 +95,10 @@ fun TopologyDiscoveryScreen(
 @Composable
 private fun TopologyScreenContent(
     uiState: TopologyUiState,
+    recentSeeds: List<String>,
     onStartDiscovery: (TopologyParams) -> Unit,
+    onRemoveRecentSeed: (String) -> Unit,
+    onClearRecentSeeds: () -> Unit,
     onSelectNode: (String) -> Unit,
     onDeselectNode: () -> Unit,
     onReset: () -> Unit,
@@ -221,6 +229,14 @@ private fun TopologyScreenContent(
                                 }
                             )
 
+                            RecentHostsRow(
+                                recentHosts = recentSeeds,
+                                onHostSelected = { targetIp = it },
+                                onRemoveHost = onRemoveRecentSeed,
+                                onClearAll = onClearRecentSeeds,
+                                modifier = Modifier.padding(top = 8.dp)
+                            )
+
                             Spacer(modifier = Modifier.height(12.dp))
 
                             Text(
@@ -282,9 +298,10 @@ private fun TopologyScreenContent(
 
                                     V3ProtocolDropdown(
                                         label = stringResource(R.string.topology_v3_auth_proto_label),
-                                        options = V3AuthProtocol.entries.map { it.name },
-                                        selected = v3AuthProto.name,
-                                        onSelect = { v3AuthProto = V3AuthProtocol.valueOf(it) }
+                                        options = V3AuthProtocol.entries,
+                                        selected = v3AuthProto,
+                                        labelFor = { stringResource(v3AuthProtocolLabel(it)) },
+                                        onSelect = { v3AuthProto = it }
                                     )
                                     Spacer(modifier = Modifier.height(8.dp))
 
@@ -313,10 +330,21 @@ private fun TopologyScreenContent(
 
                                     V3ProtocolDropdown(
                                         label = stringResource(R.string.topology_v3_priv_proto_label),
-                                        options = V3PrivProtocol.entries.map { it.name },
-                                        selected = v3PrivProto.name,
-                                        onSelect = { v3PrivProto = V3PrivProtocol.valueOf(it) }
+                                        options = V3PrivProtocol.entries,
+                                        selected = v3PrivProto,
+                                        labelFor = { stringResource(v3PrivProtocolLabel(it)) },
+                                        onSelect = { v3PrivProto = it }
                                     )
+                                    AnimatedVisibility(
+                                        visible = v3PrivProto != V3PrivProtocol.NONE && v3AuthProto == V3AuthProtocol.NONE
+                                    ) {
+                                        Text(
+                                            text = stringResource(R.string.topology_v3_priv_requires_auth),
+                                            color = MaterialTheme.colorScheme.error,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            modifier = Modifier.padding(top = 4.dp)
+                                        )
+                                    }
                                     Spacer(modifier = Modifier.height(8.dp))
 
                                     AnimatedVisibility(visible = v3PrivProto != V3PrivProtocol.NONE) {
@@ -379,7 +407,8 @@ private fun TopologyScreenContent(
                                     configExpanded = false
                                 },
                                 modifier = Modifier.fillMaxWidth(),
-                                enabled = !isDiscovering && targetIp.isNotBlank()
+                                enabled = !isDiscovering && targetIp.isNotBlank() &&
+                                    !(v3PrivProto != V3PrivProtocol.NONE && v3AuthProto == V3AuthProtocol.NONE)
                             ) {
                                 if (isDiscovering) {
                                     CircularProgressIndicator(
@@ -493,11 +522,12 @@ private fun TopologyScreenContent(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun V3ProtocolDropdown(
+private fun <T> V3ProtocolDropdown(
     label: String,
-    options: List<String>,
-    selected: String,
-    onSelect: (String) -> Unit
+    options: List<T>,
+    selected: T,
+    labelFor: @Composable (T) -> String,
+    onSelect: (T) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
     ExposedDropdownMenuBox(
@@ -505,7 +535,7 @@ private fun V3ProtocolDropdown(
         onExpandedChange = { expanded = !expanded }
     ) {
         OutlinedTextField(
-            value = selected,
+            value = labelFor(selected),
             onValueChange = {},
             readOnly = true,
             label = { Text(label) },
@@ -520,7 +550,7 @@ private fun V3ProtocolDropdown(
         ) {
             options.forEach { option ->
                 DropdownMenuItem(
-                    text = { Text(option) },
+                    text = { Text(labelFor(option)) },
                     onClick = {
                         onSelect(option)
                         expanded = false
@@ -529,6 +559,22 @@ private fun V3ProtocolDropdown(
             }
         }
     }
+}
+
+private fun v3AuthProtocolLabel(protocol: V3AuthProtocol): Int = when (protocol) {
+    V3AuthProtocol.NONE -> R.string.topology_v3_auth_none
+    V3AuthProtocol.MD5 -> R.string.topology_v3_auth_md5
+    V3AuthProtocol.SHA -> R.string.topology_v3_auth_sha1
+    V3AuthProtocol.SHA256 -> R.string.topology_v3_auth_sha256
+    V3AuthProtocol.SHA512 -> R.string.topology_v3_auth_sha512
+}
+
+private fun v3PrivProtocolLabel(protocol: V3PrivProtocol): Int = when (protocol) {
+    V3PrivProtocol.NONE -> R.string.topology_v3_priv_none
+    V3PrivProtocol.DES -> R.string.topology_v3_priv_des
+    V3PrivProtocol.AES128 -> R.string.topology_v3_priv_aes128
+    V3PrivProtocol.AES192 -> R.string.topology_v3_priv_aes192
+    V3PrivProtocol.AES256 -> R.string.topology_v3_priv_aes256
 }
 
 @Composable

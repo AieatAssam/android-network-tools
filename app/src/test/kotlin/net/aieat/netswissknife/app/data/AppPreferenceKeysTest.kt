@@ -24,6 +24,7 @@ class AppPreferenceKeysTest {
     @Test fun `RECENT_TLS_HOSTS key name`()        = assertKey("recent_tls_hosts",         AppPreferenceKeys.RECENT_TLS_HOSTS)
     @Test fun `RECENT_WHOIS_HOSTS key name`()      = assertKey("recent_whois_hosts",       AppPreferenceKeys.RECENT_WHOIS_HOSTS)
     @Test fun `RECENT_HTTP_HOSTS key name`()       = assertKey("recent_http_hosts",        AppPreferenceKeys.RECENT_HTTP_HOSTS)
+    @Test fun `RECENT_TOPOLOGY_SEEDS key name`()  = assertKey("recent_topology_seeds",    AppPreferenceKeys.RECENT_TOPOLOGY_SEEDS)
     @Test fun `RECENT_LAN_SUBNETS key name`()      = assertKey("recent_lan_subnets",       AppPreferenceKeys.RECENT_LAN_SUBNETS)
     @Test fun `ONBOARDING_COMPLETED key name`()    = assertKey("onboarding_completed",     AppPreferenceKeys.ONBOARDING_COMPLETED)
 

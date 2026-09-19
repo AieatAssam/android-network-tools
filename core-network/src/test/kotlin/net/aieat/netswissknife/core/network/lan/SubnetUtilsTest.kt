@@ -112,6 +112,12 @@ class SubnetUtilsTest {
         }
     }
 
+    @Test
+    fun `contains checks gateway membership`() {
+        assertTrue(SubnetUtils.contains("192.168.1.0/24", "192.168.1.254"))
+        assertFalse(SubnetUtils.contains("192.168.1.0/24", "192.168.2.1"))
+    }
+
     @Nested
     @DisplayName("parseIpToLong")
     inner class ParseIpToLong {

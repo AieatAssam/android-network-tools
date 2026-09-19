@@ -58,6 +58,20 @@ object SubnetUtils {
         }
     }
 
+    /** Returns whether [ip] belongs to the IPv4 network represented by [cidr]. */
+    fun contains(cidr: String, ip: String): Boolean {
+        return try {
+            val parts = cidr.trim().split("/")
+            if (parts.size != 2) return false
+            val prefix = parts[1].toIntOrNull() ?: return false
+            if (prefix !in 0..32) return false
+            val mask = maskForPrefix(prefix)
+            (parseIpToLong(parts[0]) and mask) == (parseIpToLong(ip) and mask)
+        } catch (_: Exception) {
+            false
+        }
+    }
+
     /**
      * Parses [cidr] (e.g. "192.168.1.0/24") and returns all **host** IPs in the subnet
      * (excludes network address and broadcast address).

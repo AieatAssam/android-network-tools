@@ -32,6 +32,17 @@ object TopologyParamsValidator {
                 if (params.v3Username.isNullOrBlank()) {
                     errors.add("Username must not be blank for SNMP v3")
                 }
+                if (params.v3PrivProtocol != V3PrivProtocol.NONE &&
+                    params.v3AuthProtocol == V3AuthProtocol.NONE
+                ) {
+                    errors.add("SNMP v3 privacy requires an authentication protocol")
+                }
+                if (params.v3AuthProtocol != V3AuthProtocol.NONE && params.v3AuthPassword.isNullOrBlank()) {
+                    errors.add("Authentication password must not be blank when authentication is enabled")
+                }
+                if (params.v3PrivProtocol != V3PrivProtocol.NONE && params.v3PrivPassword.isNullOrBlank()) {
+                    errors.add("Privacy password must not be blank when privacy is enabled")
+                }
             }
         }
 

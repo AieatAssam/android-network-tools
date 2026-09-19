@@ -1,6 +1,9 @@
 package net.aieat.netswissknife.app.di
 
+import net.aieat.netswissknife.app.lan.IcmpenguinIcmpProbe
 import net.aieat.netswissknife.core.domain.LanScanUseCase
+import net.aieat.netswissknife.core.network.lan.ArpFileMacResolver
+import net.aieat.netswissknife.core.network.lan.IcmpProbe
 import net.aieat.netswissknife.core.network.lan.LanScanRepository
 import net.aieat.netswissknife.core.network.lan.LanScanRepositoryImpl
 import dagger.Module
@@ -15,7 +18,15 @@ object LanModule {
 
     @Provides
     @Singleton
-    fun provideLanScanRepository(): LanScanRepository = LanScanRepositoryImpl()
+    fun provideIcmpProbe(): IcmpProbe = IcmpenguinIcmpProbe()
+
+    @Provides
+    @Singleton
+    fun provideLanScanRepository(icmpProbe: IcmpProbe): LanScanRepository =
+        LanScanRepositoryImpl(
+            icmpProbe = icmpProbe,
+            macResolver = ArpFileMacResolver(),
+        )
 
     @Provides
     @Singleton

@@ -228,6 +228,7 @@ class TopologyDiscoveryScreenTest {
     ): TopologyDiscoveryViewModel {
         val viewModel = mockk<TopologyDiscoveryViewModel>(relaxed = true)
         every { viewModel.uiState } returns (flow ?: MutableStateFlow(state ?: TopologyUiState.Idle))
+        every { viewModel.recentSeeds } returns MutableStateFlow(emptyList())
         return viewModel
     }
 }

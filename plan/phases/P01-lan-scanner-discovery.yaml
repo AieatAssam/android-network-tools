@@ -6,7 +6,7 @@ phase:
   id: P01
   title: "LAN Scanner: multi-probe discovery, post-probe enrichment, platform gateway/subnet source"
   priority: critical
-  status: todo
+  status: done
   estimated_effort: "L (3-5 agent sessions)"
   depends_on: []
   enables: [P05, P12, P13]
@@ -161,7 +161,7 @@ design:
     - app/src/main/kotlin/net/aieat/netswissknife/app/platform/LinkInfoProvider.kt
     - app/src/main/kotlin/net/aieat/netswissknife/app/lan/IcmpenguinIcmpProbe.kt
     - app/src/test/kotlin/net/aieat/netswissknife/app/platform/LinkInfoProviderTest.kt   # pure mapping helpers only (RouteInfo parsing extracted to a pure function)
-    - tools/oui/update_oui.sh   # downloads https://standards-oui.ieee.org/oui/oui.csv and regenerates the TSV (documented, not run in CI)
+    - tools/oui/update_oui.py   # downloads the IEEE registries and regenerates the TSV (documented, not run in CI)
   files_to_modify:
     - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/LanScanRepositoryImpl.kt
     - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/LanScanRepository.kt
@@ -187,7 +187,7 @@ design:
 tasks:
   - id: P01-T1
     title: "Extract probe interfaces + ArpFileMacResolver (no behaviour change yet)"
-    status: todo
+    status: done
     depends_on: []
     tdd:
       red:
@@ -214,7 +214,7 @@ tasks:
 
   - id: P01-T2
     title: "TCP presence probe with RST-as-alive semantics"
-    status: todo
+    status: done
     depends_on: [P01-T1]
     tdd:
       red:
@@ -237,7 +237,7 @@ tasks:
 
   - id: P01-T3
     title: "NetBIOS NBSTAT and mDNS reverse-PTR name probes (pure Kotlin, injectable transport)"
-    status: todo
+    status: done
     depends_on: [P01-T1]
     tdd:
       red:
@@ -266,7 +266,7 @@ tasks:
 
   - id: P01-T4
     title: "Rewrite LanScanRepositoryImpl.scan around LanScanRequest + probe pipeline + post-scan MAC pass"
-    status: todo
+    status: done
     depends_on: [P01-T1, P01-T2, P01-T3]
     tdd:
       red:
@@ -302,7 +302,7 @@ tasks:
 
   - id: P01-T5
     title: "Domain: LanScanParams gains gatewayIp/enableNameProbes; use case forwards them"
-    status: todo
+    status: done
     depends_on: [P01-T4]
     tdd:
       red:
@@ -321,7 +321,7 @@ tasks:
 
   - id: P01-T6
     title: "App: LinkInfoProvider (gateway/subnet/DNS from ConnectivityManager) + icmpenguin IcmpProbe + DI"
-    status: todo
+    status: done
     depends_on: [P01-T5]
     tdd:
       red:
@@ -345,7 +345,7 @@ tasks:
 
   - id: P01-T7
     title: "OUI database from IEEE registry (generated resource) + fix mislabelled entry"
-    status: todo
+    status: done
     depends_on: []
     tdd:
       red:
@@ -372,7 +372,7 @@ tasks:
 
   - id: P01-T8
     title: "ViewModel + Screen: gateway from LinkInfoProvider, discovery chips, MAC-unavailable hint, 'Scan ports' hand-off"
-    status: todo
+    status: done
     depends_on: [P01-T6]
     tdd:
       red:
@@ -404,7 +404,7 @@ tasks:
 
   - id: P01-T9
     title: "README + help sheet sync"
-    status: todo
+    status: done
     depends_on: [P01-T8]
     steps:
       - "README LAN Scanner section: describe multi-method discovery, name probes, MAC availability (API < 29 only), gateway from active network, 'Scan ports' hand-off, OUI registry size + refresh script."

@@ -1,0 +1,10 @@
+# Captured-shape LLDP-MIB rows from a Cisco-like switch.
+# Values mirror snmpwalk output; the management address is in a separate fixture.
+1.0.8802.1.1.2.1.4.1.1.5.0.1.1 = chassis-2
+1.0.8802.1.1.2.1.4.1.1.7.0.1.1 = Gi1/0/1
+1.0.8802.1.1.2.1.4.1.1.8.0.1.1 = Uplink to switch-2
+1.0.8802.1.1.2.1.4.1.1.9.0.1.1 = switch-2
+1.0.8802.1.1.2.1.4.1.1.5.0.2.1 = chassis-3
+1.0.8802.1.1.2.1.4.1.1.7.0.2.1 = Gi1/0/2
+1.0.8802.1.1.2.1.4.1.1.8.0.2.1 = Uplink to switch-3
+1.0.8802.1.1.2.1.4.1.1.9.0.2.1 = switch-3

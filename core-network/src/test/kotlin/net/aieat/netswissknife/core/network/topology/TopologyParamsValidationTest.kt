@@ -85,4 +85,35 @@ class TopologyParamsValidationTest {
         )
         assertTrue(result.isValid)
     }
+
+    @Test
+    fun `V3 privacy requires authentication and a privacy password`() {
+        val result = TopologyParamsValidator.validate(
+            TopologyParams(
+                targetIp = "10.0.0.1",
+                snmpVersion = SnmpVersion.V3,
+                v3Username = "admin",
+                v3PrivProtocol = V3PrivProtocol.AES128
+            )
+        )
+
+        assertFalse(result.isValid)
+        assertTrue(result.errors.any { it.contains("privacy requires", ignoreCase = true) })
+        assertTrue(result.errors.any { it.contains("Privacy password", ignoreCase = true) })
+    }
+
+    @Test
+    fun `V3 authentication requires an authentication password`() {
+        val result = TopologyParamsValidator.validate(
+            TopologyParams(
+                targetIp = "10.0.0.1",
+                snmpVersion = SnmpVersion.V3,
+                v3Username = "admin",
+                v3AuthProtocol = V3AuthProtocol.SHA
+            )
+        )
+
+        assertFalse(result.isValid)
+        assertTrue(result.errors.any { it.contains("Authentication password", ignoreCase = true) })
+    }
 }

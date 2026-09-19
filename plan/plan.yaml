@@ -82,7 +82,7 @@ phases:
     file: plan/phases/P01-lan-scanner-discovery.yaml
     title: "LAN Scanner: correct host discovery, MAC/vendor enrichment, real gateway detection"
     priority: critical
-    status: todo
+    status: done
     depends_on: []
     findings: [F004, F005, F006, F040]
     summary: "ARP table is read before probing (and is unreadable on API 29+), discovery is ICMP-only, gateway is 'lowest IP'. Rewrite discovery as multi-probe (ICMP + TCP + NetBIOS/mDNS name) with post-probe enrichment and a platform-provided gateway/subnet source."
@@ -91,7 +91,7 @@ phases:
     file: plan/phases/P02-topology-snmp-correctness.yaml
     title: "Network Topology: SNMPv3 actually works, LLDP/CDP neighbour parsing fixed, R8 keep rules"
     priority: critical
-    status: todo
+    status: done
     depends_on: []
     findings: [F001, F002, F003, F014]
     summary: "SNMPv3 credentials are never registered with SNMP4J's USM; LLDP reads the wrong column for neighbour IPs; CDP rejects hex-encoded addresses. Feature is advertised in the store listing and does not work on real hardware."
@@ -478,3 +478,9 @@ changelog:
     note: "Plan created from full codebase analysis (all modules, CI, docs, lint report)."
   - date: "2026-09-18"
     note: "Adversarial self-review: verified SNMP4J 3.13.1 / dnsjava 3.6.5 / icmpenguin rc.4 APIs via javap. Corrected P05 A3 (no DefaultUdpTransportMapping.getSocket(); use protected socket/ensureSocket() subclass), P04 icmpenguin ProbeResult subtypes (Success has elapsedUsec/ttl; Timeout/HostUnreachable/NetUnreachable/ConnectionRefused/NetError/Unknown), P01 OUI CSV generation (naive awk breaks on quoted commas), P10 Java-9 SSLParameters API on Android < 29 (NoSuchMethodError, not UnsupportedOperationException) and TLSv1/1.1 being disabled on modern Conscrypt, P13 XXE feature portability, P12 adb backup deprecation. Added F039 (neverForLocation vs FINE_LOCATION request) to P03."
+  - date: "2026-09-18"
+    note: "P01 complete: LAN discovery now uses ICMP/TCP reset/open/NetBIOS/mDNS strategies, resolves MACs after probing, derives gateway/subnet from ConnectivityManager, ships the IEEE OUI registry, adds port-scan hand-off, and closes F004/F005/F006/F040. Full unit tests, Kover gates, lint, and debug/instrumented APK assembly pass."
+  - date: "2026-09-18"
+    note: "P02 complete: SNMPv3 USM credentials and extended protocols are registered per discovery session, LLDP management addresses are decoded from row indexes, CDP hex addresses are accepted, topology seeds are persisted, and R8/CI keep-class verification is documented. Core/app focused tests, unsigned release assembly, and apkanalyzer verification pass."
+  - date: "2026-09-19"
+    note: "P02 authPriv claim re-verified: restored the strict loopback GET, fixed the responder to localize its SHA/AES user, explicitly registered SNMP4J USM protocols (addDefaultProtocols is disabled by default), and added cached authoritative-engine discovery before v3 GET/WALK. Strict loopback, core-network, and repository-wide JVM tests pass."
