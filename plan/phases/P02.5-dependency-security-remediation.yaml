@@ -1,0 +1,154 @@
+# =============================================================================
+# P02.5 – Dependency security remediation
+# =============================================================================
+# This phase follows P02 because the dependency scan was performed after the
+# P01/P02 implementation landed. It is deliberately separate from topology
+# behavior so dependency upgrades can be reviewed and reverted independently.
+phase:
+  id: P02.5
+  title: "Dependency security remediation: close authenticated Dependabot alerts"
+  priority: critical
+  status: in_progress
+  estimated_effort: "S-M (1-2 agent sessions)"
+  depends_on: [P02]
+  enables: [P09]
+  findings: [F041]
+  target_modules: [":settings", ":app", ":core-network", ":core-domain"]
+
+context:
+  problem: |
+    GitHub Dependabot reports nine open Maven alerts from settings.gradle.kts. The
+    authenticated `gh api repos/AieatAssam/android-network-tools/dependabot/alerts`
+    response identifies Kotlin Gradle Plugin as direct and the other packages as
+    transitive. The manifest path is settings.gradle.kts, so the first task is to
+    identify the settings plugin/build-tool dependency path and whether any affected
+    artifacts enter the shipped APK. Do not add runtime dependencies merely to make
+    Dependabot stop reporting a build-only dependency.
+  alerts:
+    - { number: 8, severity: critical, package: "org.bouncycastle:bcprov-jdk18on", cve: "CVE-2026-8763", ghsa: "GHSA-9pwp-9qqc-pr26", vulnerable: "< 1.85", patched: "1.85", relationship: transitive }
+    - { number: 9, severity: high, package: "org.bouncycastle:bcprov-jdk18on", cve: "CVE-2026-13506", ghsa: "GHSA-qp49-qgx5-5m26", vulnerable: "< 1.85", patched: "1.85", relationship: transitive }
+    - { number: 4, severity: high, package: "org.bitbucket.b_c:jose4j", cve: "CVE-2024-29371", ghsa: "GHSA-3677-xxcr-wjqv", vulnerable: "< 0.9.6", patched: "0.9.6", relationship: transitive }
+    - { number: 3, severity: high, package: "org.jdom:jdom2", cve: "CVE-2021-33813", ghsa: "GHSA-2363-cqg2-863c", vulnerable: "< 2.0.6.1", patched: "2.0.6.1", relationship: transitive }
+    - { number: 7, severity: medium, package: "org.jetbrains.kotlin:kotlin-gradle-plugin", cve: "CVE-2026-53914", ghsa: "GHSA-r937-wjx7-w2jp", vulnerable: "< 2.4.20-Beta1", patched: "2.4.20-Beta1", relationship: direct }
+    - { number: 6, severity: medium, package: "org.bouncycastle:bcprov-jdk18on", cve: "CVE-2026-0636", ghsa: "GHSA-c3fc-8qff-9hwx", vulnerable: ">= 1.74, < 1.84", patched: "1.84", relationship: transitive }
+    - { number: 5, severity: medium, package: "org.bouncycastle:bcpkix-jdk18on", cve: "CVE-2026-5588", ghsa: "GHSA-wg6q-6289-32hp", vulnerable: ">= 1.49, < 1.84", patched: "1.84", relationship: transitive }
+    - { number: 2, severity: medium, package: "org.apache.commons:commons-lang3", cve: "CVE-2025-48924", ghsa: "GHSA-j288-q9x7-2f5v", vulnerable: ">= 3.0, < 3.18.0", patched: "3.18.0", relationship: transitive }
+    - { number: 1, severity: medium, package: "org.apache.httpcomponents:httpclient", cve: "CVE-2020-13956", ghsa: "GHSA-7r82-7xv7-xcpj", vulnerable: "< 4.5.13", patched: "4.5.13", relationship: transitive }
+
+desired_behaviour: |
+  All nine alerts are either remediated in the resolved dependency graph or have a
+  documented, time-bounded exception backed by a concrete upstream issue. The
+  critical/high alerts must be resolved first. The app's runtime graph must not gain
+  unnecessary libraries solely for build-time alert suppression.
+
+implementation_status: |
+  The first remediation pass is complete locally. Kotlin Gradle Plugin 2.4.20,
+  AGP 9.4.1, and KSP 2.3.12 are now selected. The root buildscript pins the
+  patched build-only versions of Bouncy Castle 1.85, jose4j 0.9.6, JDOM 2.0.6.1,
+  Commons Lang 3.18.0, and HttpClient 4.5.14; these constraints upgrade AGP's
+  transitive classpath without adding the packages to the Android runtime graph.
+  The releaseRuntimeClasspath report contains none of the affected packages.
+  Dependabot was queried after the changes, but GitHub still reports the original
+  nine alerts open, so final closure remains pending the next dependency rescan.
+
+assumptions:
+  - id: A1
+    statement: "The open alert list and dependency provenance can be read with the authenticated GitHub CLI."
+    verify_with: "gh api repos/AieatAssam/android-network-tools/dependabot/alerts --paginate"
+    if_false: "Record the unavailable scan and use the repository's Dependabot UI export before changing versions."
+  - id: A2
+    statement: "The settings-scoped Ben Manes versions plugin or another settings/build plugin is the source of the transitive vulnerable packages."
+    verify_with: "./gradlew buildEnvironment plus dependencyInsight/dependencies for the settings/plugin graph; inspect Gradle cache metadata only as supporting evidence."
+    if_false: "Trace each alert to its actual app/core dependency and assign the fix to that module."
+  - id: A3
+    statement: "A stable Kotlin release at or above the patched level is available before upgrading the direct Kotlin plugin."
+    verify_with: "Maven Central/plugin portal metadata and a clean Gradle configuration."
+    if_false: "Do not move production builds to a beta solely for Dependabot; use the narrowest supported mitigation and document the exception."
+
+constraints:
+  - "Keep the current Kotlin/AGP/Gradle compatibility matrix green; do not upgrade multiple build-tool families without a compatibility check."
+  - "Prefer upgrading the parent settings/build plugin or applying scoped dependency constraints over adding duplicate direct runtime dependencies."
+  - "Align bcprov and bcpkix to one supported Bouncy Castle line (target 1.85 if compatible), and verify SNMP4J/TLS behavior."
+  - "No alert dismissal without a written reason, affected graph scope, owner, and review/expiry date."
+
+design:
+  dependency_resolution:
+    - "Capture current dependencyInsight/buildEnvironment output for every alert before edits."
+    - "Upgrade direct Kotlin/plugin versions to a stable patched release when available."
+    - "For settings-only transitives, upgrade the owning plugin first; use a narrowly scoped resolution constraint only when the plugin cannot yet move."
+    - "Use patched versions at minimum: bcprov 1.85, bcpkix 1.84 or the aligned 1.85 line, jose4j 0.9.6, jdom2 2.0.6.1, commons-lang3 3.18.0, and httpclient 4.5.13. Confirm compatibility before pinning."
+  verification:
+    - "Run dependencyInsight again and confirm no vulnerable version remains in the relevant configuration."
+    - "Run JVM tests, Kover gates, lint, debug/release builds, and the existing SNMP4J APK class check."
+    - "Re-query Dependabot after GitHub rescans; record any remaining alert as accepted risk only if it is not actionable upstream."
+
+files_to_modify:
+  - gradle/libs.versions.toml
+  - settings.gradle.kts
+  - build.gradle.kts
+  - app/build.gradle.kts
+  - core-network/build.gradle.kts
+  - core-domain/build.gradle.kts
+  - plan/plan.yaml
+
+tasks:
+  - id: P02.5-T1
+    title: "Trace all nine alerts to resolved configurations and shipped artifacts"
+    status: done
+    steps:
+      - "Record alert JSON, dependencyInsight output, settings plugin build environment, and app/runtime dependency graphs."
+      - "Classify each package as settings/build-only, test-only, or shipped runtime."
+      - "Confirmed the eight transitive alerts originate in the AGP/build-tool classpath; Kotlin Gradle Plugin is the direct build dependency."
+    acceptance_criteria: ["Every alert has an owning dependency path and a runtime/build scope classification."]
+
+  - id: P02.5-T2
+    title: "Upgrade direct build dependencies and owning plugins"
+    status: done
+    depends_on: [P02.5-T1]
+    steps:
+      - "Move Kotlin Gradle Plugin to a stable release that includes the fix, if available and compatible with AGP/KSP/Compose."
+      - "Upgrade the settings/build plugin responsible for vulnerable transitives before adding constraints."
+      - "Upgraded the stable Kotlin/Compose plugin line to 2.4.20, AGP to 9.4.1, and KSP to 2.3.12; the settings plugin has no patched parent release needed for the affected AGP transitives."
+    acceptance_criteria: ["Direct Kotlin alert is closed without introducing an unsupported beta-only build requirement."]
+
+  - id: P02.5-T3
+    title: "Constrain or replace remaining vulnerable transitives"
+    status: done
+    depends_on: [P02.5-T1, P02.5-T2]
+    steps:
+      - "Align Bouncy Castle modules to a patched compatible line."
+      - "Remediate jose4j, JDOM, Commons Lang, and Apache HttpClient through their owning plugin/dependency path."
+      - "Use explicit Gradle constraints only where the parent upgrade cannot resolve the alert cleanly; document why."
+      - "Applied buildscript classpath pins for all affected transitive artifacts and verified the patched versions resolve without entering releaseRuntimeClasspath."
+    acceptance_criteria: ["No vulnerable package version remains in any shipped runtime graph; build-only exceptions are explicitly documented."]
+
+  - id: P02.5-T4
+    title: "Regression and security verification"
+    status: in_progress
+    depends_on: [P02.5-T3]
+    run:
+      - "./gradlew test --no-daemon"
+      - "./gradlew :app:koverVerify :core-domain:koverVerify :core-network:koverVerify --no-daemon"
+      - "./gradlew :app:lintDebug --no-daemon --no-parallel"
+      - "./gradlew :app:assembleDebug :app:assembleRelease --no-daemon"
+      - "gh api repos/AieatAssam/android-network-tools/dependabot/alerts --paginate"
+      - "Completed repository tests, all three Kover verification tasks, debug lint, release assembly, buildEnvironment resolution, and releaseRuntimeClasspath inspection; the GitHub alert rescan is still pending."
+    acceptance_criteria: ["All quality gates pass and Dependabot reports no unresolved actionable alert introduced by this phase."]
+
+qa_validation:
+  - "Keep the pre-upgrade and post-upgrade dependency graphs as review artifacts."
+  - "Confirm SNMP4J authPriv loopback, LAN discovery, TLS, HTTP probe, DNS, and mDNS tests remain green."
+  - "Inspect release APK dependencies for accidental inclusion of settings/build-only libraries."
+
+risks:
+  - risk: "Kotlin's patched version is reported as a beta."
+    mitigation: "Prefer the first stable release containing the fix; do not downgrade build stability for a scanner recommendation."
+  - risk: "Forcing transitive versions can break a settings plugin or alter build behavior."
+    mitigation: "Upgrade the owning plugin first and validate with a clean Gradle configuration and full build."
+  - risk: "Bouncy Castle alignment may affect TLS or cryptographic consumers."
+    mitigation: "Run the security-tool tests and release build; keep bcprov/bcpkix on one compatible line."
+
+definition_of_done:
+  - "Critical and high Dependabot alerts are closed or have a documented, approved exception."
+  - "All nine alerts have a recorded disposition."
+  - "Repository-wide tests, coverage gates, lint, debug build, and release build pass."

@@ -8,64 +8,62 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
-import java.net.InetAddress
-import java.net.InetSocketAddress
-import java.net.Socket
 import net.aieat.netswissknife.core.network.MonotonicClock
 import net.aieat.netswissknife.core.network.SystemMonotonicClock
 import net.aieat.netswissknife.core.network.elapsedMillisSince
+import java.net.InetAddress
+import java.net.InetSocketAddress
+import java.net.Socket
 
-// ── Functional types injected for testability ─────────────────────────────────
-
-/** Probes [ip] for reachability. Returns response time ms if alive, null otherwise. */
-typealias HostChecker = (ip: String, timeoutMs: Int) -> Long?
-
-/** Returns the raw content of the ARP cache (e.g. from /proc/net/arp). */
-typealias ArpTableReader = () -> String
-
-/** Returns true if [port] on [ip] is open (TCP connect succeeded). */
-typealias PortChecker = (ip: String, port: Int, timeoutMs: Int) -> Boolean
-
-// ── Common ports to quick-scan on every discovered host ────────────────────────
-
-private val QUICK_PORTS = listOf(21, 22, 23, 25, 53, 80, 110, 139, 143, 443, 445, 3306, 3389, 5900, 8080, 8443)
+private val QUICK_PORTS = listOf(
+    21, 22, 23, 25, 53, 80, 110, 139, 143, 443, 445, 3306, 3389, 5900, 8080, 8443,
+)
 
 /**
- * Production [LanScanRepository] that:
- *  1. Generates all host IPs from the given CIDR subnet.
- *  2. Probes each IP for reachability using [hostChecker] (bounded concurrent workers).
- *  3. Reads the ARP table via [arpTableReader] to resolve MAC addresses.
- *  4. Looks up the vendor name from [OuiDatabase].
- *  5. Performs a quick TCP port scan on every live host using [portChecker].
- *  6. Attempts reverse DNS for the hostname.
+ * Multi-probe LAN discovery repository.
  *
- * All three lambdas default to real-world implementations and can be
- * replaced with fakes in tests.
+ * Each host gets one ICMP attempt, a sequential TCP presence probe, and optional
+ * NetBIOS/mDNS presence probes. Name/MAC/port enrichment runs only after presence is
+ * established. The final ARP pass is intentionally after all workers complete so the
+ * probes can populate the kernel neighbour cache first.
  */
 class LanScanRepositoryImpl(
-    private val hostChecker: HostChecker = DEFAULT_HOST_CHECKER,
+    /** Legacy seam retained for existing callers; when set it is the sole presence probe. */
+    private val hostChecker: HostChecker? = null,
     private val arpTableReader: ArpTableReader = DEFAULT_ARP_READER,
     private val portChecker: PortChecker = DEFAULT_PORT_CHECKER,
     private val clock: MonotonicClock = SystemMonotonicClock,
+    private val icmpProbe: IcmpProbe = ReachabilityIcmpProbe(),
+    private val tcpProbe: TcpPresenceProbe = SocketTcpPresenceProbe(),
+    private val nameProbes: List<NameProbe> = listOf(
+        ReverseDnsNameProbe(),
+        NetBiosNameProbe(),
+        MdnsReverseNameProbe(),
+    ),
+    macResolver: MacResolver? = null,
 ) : LanScanRepository {
+
+    private val effectiveMacResolver: MacResolver = macResolver ?: ArpFileMacResolver(arpTableReader)
+    private val effectiveIcmpProbe: IcmpProbe = hostChecker?.let { checker ->
+        IcmpProbe { ip, timeoutMs -> checker(ip, timeoutMs) }
+    } ?: icmpProbe
 
     companion object {
         val DEFAULT_HOST_CHECKER: HostChecker = { ip, timeoutMs ->
             try {
-                val addr = InetAddress.getByName(ip)
                 val start = System.nanoTime()
-                if (addr.isReachable(timeoutMs)) (System.nanoTime() - start).coerceAtLeast(0L) / 1_000_000L else null
+                if (InetAddress.getByName(ip).isReachable(timeoutMs)) {
+                    ((System.nanoTime() - start).coerceAtLeast(0L) / 1_000_000L).coerceAtLeast(1L)
+                } else {
+                    null
+                }
             } catch (_: Exception) {
                 null
             }
         }
 
         val DEFAULT_ARP_READER: ArpTableReader = {
-            try {
-                java.io.File("/proc/net/arp").readText()
-            } catch (_: Exception) {
-                ""
-            }
+            runCatching { java.io.File("/proc/net/arp").readText() }.getOrDefault("")
         }
 
         val DEFAULT_PORT_CHECKER: PortChecker = { ip, port, timeoutMs ->
@@ -77,32 +75,20 @@ class LanScanRepositoryImpl(
             } catch (_: Exception) {
                 false
             } finally {
-                try { socket?.close() } catch (_: Exception) {}
+                runCatching { socket?.close() }
             }
         }
     }
 
-    override fun scan(subnet: String, timeoutMs: Int, concurrency: Int): Flow<LanScanUpdate> = flow {
+    override fun scan(request: LanScanRequest): Flow<LanScanUpdate> = flow {
         val startTime = clock.nowNanos()
-        val ips = SubnetUtils.parseSubnet(subnet)
+        val ips = SubnetUtils.parseSubnet(request.subnet)
         val totalCount = ips.size
         val aliveHosts = mutableListOf<LanHost>()
-
-        // Read the ARP table once upfront for MAC resolution
-        val arpMap = parseArpTable(arpTableReader())
-
-        // Detect gateway: the lowest host IP is typically the router
-        val gatewayIp = ips.firstOrNull()
-
-        val effectiveConcurrency = concurrency.coerceIn(1, 500)
+        val effectiveConcurrency = request.concurrency.coerceIn(1, 500)
 
         data class CompletedHost(val host: LanHost?)
 
-        // Feed a bounded work queue to a fixed worker set. Each worker sends
-        // only after the complete host enrichment finishes, so consuming the
-        // result channel exposes actual completion order. The bounded channel
-        // also prevents an unbounded /16 or /8 scan from retaining every
-        // result while a UI collector is busy rendering.
         coroutineScope {
             val pending = Channel<String>(capacity = effectiveConcurrency)
             val completed = Channel<CompletedHost>(capacity = effectiveConcurrency)
@@ -113,16 +99,11 @@ class LanScanRepositoryImpl(
                     pending.close()
                 }
             }
-            val workerCount = minOf(effectiveConcurrency, ips.size)
-            val workers = List(workerCount) {
+            val workers = List(minOf(effectiveConcurrency, ips.size)) {
                 launch(Dispatchers.IO) {
                     for (ip in pending) {
-                        val pingMs = hostChecker(ip, timeoutMs)
-                        completed.send(
-                            CompletedHost(
-                                pingMs?.let { buildHost(ip, it, arpMap, gatewayIp, timeoutMs) }
-                            )
-                        )
+                        val host = discoverHost(ip, request)
+                        completed.send(CompletedHost(host))
                     }
                 }
             }
@@ -134,78 +115,128 @@ class LanScanRepositoryImpl(
 
             var scannedCount = 0
             for (completedHost in completed) {
-                val host = completedHost.host
                 scannedCount++
-                if (host != null) {
-                    aliveHosts += host
-                    emit(LanScanUpdate.HostFound(host, scannedCount, totalCount))
-                } else {
-                    emit(LanScanUpdate.ScanProgress(scannedCount, totalCount))
+                completedHost.host?.let {
+                    aliveHosts += it
+                    emit(LanScanUpdate.HostFound(it, scannedCount, totalCount))
+                } ?: emit(LanScanUpdate.ScanProgress(scannedCount, totalCount))
+            }
+        }
+
+        // A second read is useful on API levels where the first read happened before ARP
+        // resolution. The injected resolver makes this behavior deterministic in tests.
+        if (effectiveMacResolver.supported) {
+            for (index in aliveHosts.indices) {
+                val host = aliveHosts[index]
+                if (host.macAddress == null) {
+                    val mac = effectiveMacResolver.resolve(host.ip)
+                    if (mac != null) {
+                        aliveHosts[index] = host.copy(
+                            macAddress = mac,
+                            vendor = OuiDatabase.lookup(mac),
+                            macSource = MacSource.ARP,
+                        )
+                    }
                 }
             }
         }
 
-        val summary = LanScanSummary(
-            subnet = subnet,
-            totalScanned = totalCount,
-            aliveHosts = aliveHosts.size,
-            scanDurationMs = clock.elapsedMillisSince(startTime),
-            hosts = aliveHosts.sortedBy { SubnetUtils.parseIpToLong(it.ip) },
+        val hosts = aliveHosts.sortedBy { SubnetUtils.parseIpToLong(it.ip) }
+        emit(
+            LanScanUpdate.ScanComplete(
+                LanScanSummary(
+                    subnet = request.subnet,
+                    totalScanned = totalCount,
+                    aliveHosts = hosts.size,
+                    scanDurationMs = clock.elapsedMillisSince(startTime),
+                    hosts = hosts,
+                    macResolutionSupported = effectiveMacResolver.supported,
+                ),
+            ),
         )
-        emit(LanScanUpdate.ScanComplete(summary))
     }.flowOn(Dispatchers.IO)
 
-    // ── Private helpers ───────────────────────────────────────────────────────
+    private data class Presence(
+        val methods: MutableSet<DiscoveryMethod>,
+        val pingMs: Long,
+        val presenceName: String? = null,
+    )
 
-    private fun buildHost(
-        ip: String,
-        pingMs: Long,
-        arpMap: Map<String, String>,
-        gatewayIp: String?,
-        timeoutMs: Int,
-    ): LanHost {
-        val macAddress = arpMap[ip]
-        val vendor = macAddress?.let { OuiDatabase.lookup(it) }
-        val hostname = resolveHostname(ip)
-        val openPorts = QUICK_PORTS.filter { port -> portChecker(ip, port, timeoutMs) }
+    private suspend fun discoverHost(ip: String, request: LanScanRequest): LanHost? {
+        val presence = discoverPresence(ip, request) ?: return null
+        return enrich(ip, presence, request)
+    }
+
+    private suspend fun discoverPresence(ip: String, request: LanScanRequest): Presence? {
+        val methods = linkedSetOf<DiscoveryMethod>()
+        val icmpRtt = effectiveIcmpProbe.echo(ip, request.timeoutMs)
+        if (icmpRtt != null) {
+            methods += DiscoveryMethod.ICMP
+            return Presence(methods, icmpRtt)
+        }
+
+        // Old callers supplied a synchronous checker and expect its exact behavior. New
+        // callers use the strategy pipeline below.
+        if (hostChecker != null) return null
+
+        when (val tcp = tcpProbe.probe(ip, request.presencePorts, request.timeoutMs)) {
+            is TcpPresence.Open -> {
+                methods += DiscoveryMethod.TCP_OPEN
+                return Presence(methods, 0L)
+            }
+            is TcpPresence.Refused -> {
+                methods += DiscoveryMethod.TCP_REFUSED
+                return Presence(methods, 0L)
+            }
+            TcpPresence.None -> Unit
+        }
+
+        if (request.enableNameProbes) {
+            for (probe in nameProbes.filterNot { it is ReverseDnsNameProbe }) {
+                val name = runCatching { probe.resolveName(ip, request.timeoutMs) }.getOrNull()
+                if (!name.isNullOrBlank()) {
+                    val method = when (probe) {
+                        is NetBiosNameProbe -> DiscoveryMethod.NETBIOS
+                        is MdnsReverseNameProbe -> DiscoveryMethod.MDNS
+                        else -> null
+                    } ?: continue
+                    methods += method
+                    return Presence(methods, 0L, name)
+                }
+            }
+        }
+        return null
+    }
+
+    private suspend fun enrich(ip: String, presence: Presence, request: LanScanRequest): LanHost {
+        var hostname: String? = if (hostChecker != null) {
+            runCatching {
+                InetAddress.getByName(ip).canonicalHostName.takeUnless { it == ip }
+            }.getOrNull()
+        } else {
+            var resolved: String? = null
+            for (probe in nameProbes) {
+                resolved = runCatching { probe.resolveName(ip, request.timeoutMs) }.getOrNull()
+                if (!resolved.isNullOrBlank()) {
+                    if (probe is ReverseDnsNameProbe) presence.methods += DiscoveryMethod.RDNS
+                    break
+                }
+            }
+            resolved
+        }
+        hostname = hostname?.takeIf { it.isNotBlank() } ?: presence.presenceName
+
+        val mac = runCatching { effectiveMacResolver.resolve(ip) }.getOrNull()
         return LanHost(
             ip = ip,
             hostname = hostname,
-            macAddress = macAddress,
-            vendor = vendor,
-            openPorts = openPorts,
-            pingTimeMs = pingMs,
-            isGateway = ip == gatewayIp,
+            macAddress = mac,
+            vendor = mac?.let(OuiDatabase::lookup),
+            openPorts = QUICK_PORTS.filter { port -> portChecker(ip, port, request.timeoutMs) },
+            pingTimeMs = presence.pingMs,
+            isGateway = ip == request.gatewayIp,
+            discoveredVia = presence.methods.toSet(),
+            macSource = if (mac == null) MacSource.NONE else MacSource.ARP,
         )
-    }
-
-    private fun resolveHostname(ip: String): String? = try {
-        val name = InetAddress.getByName(ip).canonicalHostName
-        if (name == ip) null else name
-    } catch (_: Exception) {
-        null
-    }
-
-    /**
-     * Parses the Linux /proc/net/arp format:
-     * ```
-     * IP address       HW type Flags HW address            Mask     Device
-     * 192.168.1.1      0x1     0x2   aa:bb:cc:dd:ee:ff     *        wlan0
-     * ```
-     */
-    private fun parseArpTable(content: String): Map<String, String> {
-        val result = mutableMapOf<String, String>()
-        val lines = content.lines().drop(1) // skip header
-        for (line in lines) {
-            val parts = line.trim().split(Regex("\\s+"))
-            if (parts.size >= 4) {
-                val ip = parts[0]
-                val mac = parts[3]
-                if (mac.contains(":") && mac != "00:00:00:00:00:00") {
-                    result[ip] = mac.uppercase()
-                }
-            }
-        }
-        return result
     }
 }

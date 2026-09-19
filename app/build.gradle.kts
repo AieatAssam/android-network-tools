@@ -208,7 +208,8 @@ kover {
                     "net.aieat.netswissknife.app.ui.screens.whois.RelayChainGeometry",
                     "net.aieat.netswissknife.app.ui.screens.whois.ConnectorSegment",
                     "net.aieat.netswissknife.app.data.AppPreferenceKeys",
-                    "net.aieat.netswissknife.app.data.RecentHostsRepository"
+                    "net.aieat.netswissknife.app.data.RecentHostsRepository",
+                    "net.aieat.netswissknife.app.platform.LinkInfoMapper"
                 )
             }
             excludes {

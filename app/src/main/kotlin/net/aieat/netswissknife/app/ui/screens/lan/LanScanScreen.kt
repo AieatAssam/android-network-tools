@@ -63,6 +63,8 @@ import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -79,6 +81,7 @@ import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -99,6 +102,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringArrayResource
@@ -122,14 +126,27 @@ import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
 import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.core.network.lan.LanHost
 import net.aieat.netswissknife.core.network.lan.LanScanSummary
+import net.aieat.netswissknife.core.network.lan.DiscoveryMethod
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LanScreen(viewModel: LanScanViewModel = hiltViewModel()) {
+fun LanScreen(
+    viewModel: LanScanViewModel = hiltViewModel(),
+    onNavigate: (String) -> Unit = {},
+) {
     val requestLocalNetworkPermission = rememberLocalNetworkPermissionRequester()
     LaunchedEffect(Unit) { requestLocalNetworkPermission() }
+    LaunchedEffect(viewModel) {
+        viewModel.navigationEvents.collect { event ->
+            when (event) {
+                is LanNavEvent.NavigateToPorts -> onNavigate(
+                    net.aieat.netswissknife.app.ui.navigation.NavRoutes.Ports.createRoute(event.host),
+                )
+            }
+        }
+    }
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val subnet by viewModel.subnet.collectAsStateWithLifecycle()
@@ -199,6 +216,7 @@ fun LanScreen(viewModel: LanScanViewModel = hiltViewModel()) {
                         searchQuery = searchQuery,
                         onSearchQueryChange = viewModel::onSearchQueryChange,
                         onToggleExpand = viewModel::onToggleHostExpanded,
+                        onScanPorts = viewModel::onScanPorts,
                         onClear = viewModel::onClear,
                         onRescan = viewModel::startScan,
                     )
@@ -500,7 +518,13 @@ private fun LanScanningContent(state: LanScanUiState.Scanning) {
                         label = "host_alpha"
                     )
                     Box(Modifier.alpha(rowAlpha)) {
-                        HostCard(host = host, expanded = false, onClick = {})
+                        HostCard(
+                            host = host,
+                            expanded = false,
+                            onClick = {},
+                            macResolutionSupported = true,
+                            onScanPorts = {},
+                        )
                     }
                 }
             }
@@ -571,6 +595,7 @@ private fun LanFinishedContent(
     searchQuery: String,
     onSearchQueryChange: (String) -> Unit,
     onToggleExpand: (String) -> Unit,
+    onScanPorts: (String) -> Unit,
     onClear: () -> Unit,
     onRescan: () -> Unit,
 ) {
@@ -771,6 +796,8 @@ private fun LanFinishedContent(
                             host = host,
                             expanded = host.ip == expandedHostIp,
                             onClick = { onToggleExpand(host.ip) },
+                            macResolutionSupported = summary.macResolutionSupported,
+                            onScanPorts = onScanPorts,
                         )
                     }
                 }
@@ -950,6 +977,8 @@ private fun HostCard(
     host: LanHost,
     expanded: Boolean,
     onClick: () -> Unit,
+    macResolutionSupported: Boolean,
+    onScanPorts: (String) -> Unit,
 ) {
     val containerColor by animateColorAsState(
         targetValue = if (expanded)
@@ -1080,21 +1109,67 @@ private fun HostCard(
                     }
                 }
 
+                DiscoveryMethodChips(host.discoveredVia)
+
                 // Expanded details
                 AnimatedVisibility(
                     visible = expanded,
                     enter = expandVertically(AppMotion.enter(250)) + fadeIn(AppMotion.enter(250)),
                     exit = shrinkVertically(AppMotion.exit(200)) + fadeOut(AppMotion.exit(200)),
                 ) {
-                    HostDetailPanel(host)
+                    HostDetailPanel(
+                        host = host,
+                        macResolutionSupported = macResolutionSupported,
+                        onScanPorts = onScanPorts,
+                    )
                 }
             }
         }
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun HostDetailPanel(host: LanHost) {
+private fun DiscoveryMethodChips(methods: Set<DiscoveryMethod>) {
+    if (methods.isEmpty()) return
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        methods.sortedBy { it.ordinal }.forEach { method ->
+            AssistChip(
+                onClick = {},
+                label = {
+                    Text(
+                        text = stringResource(method.labelRes()),
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                },
+                modifier = Modifier.testTag("lan_chip_${method.name}"),
+                colors = AssistChipDefaults.assistChipColors(
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    labelColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                ),
+            )
+        }
+    }
+}
+
+private fun DiscoveryMethod.labelRes(): Int = when (this) {
+    DiscoveryMethod.ICMP -> R.string.lan_discovery_icmp
+    DiscoveryMethod.TCP_OPEN -> R.string.lan_discovery_tcp_open
+    DiscoveryMethod.TCP_REFUSED -> R.string.lan_discovery_tcp_refused
+    DiscoveryMethod.NETBIOS -> R.string.lan_discovery_netbios
+    DiscoveryMethod.MDNS -> R.string.lan_discovery_mdns
+    DiscoveryMethod.RDNS -> R.string.lan_discovery_rdns
+}
+
+@Composable
+private fun HostDetailPanel(
+    host: LanHost,
+    macResolutionSupported: Boolean,
+    onScanPorts: (String) -> Unit,
+) {
     Column(
         modifier = Modifier.padding(top = 8.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -1111,9 +1186,14 @@ private fun HostDetailPanel(host: LanHost) {
         host.hostname?.let {
             DetailRow(label = stringResource(R.string.lan_detail_hostname), value = it)
         }
-        host.macAddress?.let {
-            DetailRow(label = stringResource(R.string.lan_detail_mac), value = it)
-        }
+        host.macAddress?.let { macAddress ->
+            DetailRow(label = stringResource(R.string.lan_detail_mac), value = macAddress)
+        } ?: if (!macResolutionSupported) {
+            DetailRow(
+                label = stringResource(R.string.lan_detail_mac),
+                value = stringResource(R.string.lan_mac_unavailable_api29),
+            )
+        } else Unit
         host.vendor?.let {
             DetailRow(label = stringResource(R.string.lan_detail_vendor), value = it)
         }
@@ -1148,6 +1228,10 @@ private fun HostDetailPanel(host: LanHost) {
                 label = stringResource(R.string.lan_open_ports_title, 0),
                 value = stringResource(R.string.lan_no_open_ports),
             )
+        }
+
+        TextButton(onClick = { onScanPorts(host.ip) }) {
+            Text(stringResource(R.string.lan_action_scan_ports))
         }
     }
 }

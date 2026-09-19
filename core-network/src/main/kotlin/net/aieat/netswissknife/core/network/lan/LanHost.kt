@@ -9,7 +9,7 @@ package net.aieat.netswissknife.core.network.lan
  * @param vendor      OUI vendor name derived from [macAddress], or null.
  * @param openPorts   List of TCP ports that responded during quick scan.
  * @param pingTimeMs  Round-trip time in milliseconds for the reachability probe.
- * @param isGateway   True if this host is likely the default gateway (lowest host IP).
+ * @param isGateway   True if this host is the active network's default gateway.
  */
 data class LanHost(
     val ip: String,
@@ -19,4 +19,6 @@ data class LanHost(
     val openPorts: List<Int>,
     val pingTimeMs: Long,
     val isGateway: Boolean = false,
+    val discoveredVia: Set<DiscoveryMethod> = emptySet(),
+    val macSource: MacSource = if (macAddress == null) MacSource.NONE else MacSource.ARP,
 )

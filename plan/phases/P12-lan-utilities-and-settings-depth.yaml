@@ -1,0 +1,174 @@
+# =============================================================================
+# P12 – LAN utilities & settings depth: mDNS, Wake-on-LAN, Subnet Calculator, Settings
+# =============================================================================
+# Audience: AI coding agent. Self-contained. Read plan/plan.yaml `agent_execution_rules` first.
+phase:
+  id: P12
+  title: "mDNS (IPv6 group, service-type filters, friendly names, TXT semantics, actions) · WOL (saved devices, subnet broadcast, SecureOn, wake verification) · Subnet (address scope classification) · Settings (privacy statement, per-tool defaults, export/import, split DataStore + backup rules, local-network preference)"
+  priority: low
+  status: todo
+  estimated_effort: "L (4-6 agent sessions; four independent PR series)"
+  depends_on: [P05, P07]
+  enables: []
+  findings: [F013, F030, F031, F032, F033, F023]
+  target_modules: [":core-network", ":core-domain", ":app"]
+
+context:
+  problem: |
+    mDNS: IPv4 group only (ff02::fb never joined); no service-type filter; TXT records raw; service
+      types shown as '_hap._tcp' with no human name; no actions (open web UI, ping host).
+    WOL: no saved devices; broadcast defaults to 255.255.255.255 (dropped by some routers/APs) with
+      no derivation of the subnet-directed broadcast; no SecureOn password; port 0 accepted; no way
+      to know whether the machine woke.
+    Subnet: isPrivate covers 5 ranges; no CGNAT/documentation/benchmark/multicast/reserved scopes.
+    Settings: no persistent privacy statement; per-tool defaults limited to ping count/timeout/
+      concurrency; no export/import; entire DataStore excluded from backups (F023) so theme, pins,
+      defaults and onboarding are lost on device transfer.
+  evidence:
+    - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/mdns/MdnsRepositoryImpl.kt", note: "224.0.0.251 only" }
+    - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/mdns/MdnsDiscoveryScreen.kt", note: "no FilterChip; raw TXT" }
+    - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/wol/*.kt" }
+    - { file: "core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/WakeOnLanUseCase.kt", note: "port !in 0..65_535" }
+    - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/subnet/SubnetCalculatorRepositoryImpl.kt", lines: "isPrivate" }
+    - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/settings/SettingsScreen.kt", note: "sections: theme, defaults, data, guide, attributions, licenses, about" }
+    - { file: "app/src/main/res/xml/backup_rules.xml", note: "excludes datastore/app_prefs.preferences_pb" }
+
+goals:
+  - "mDNS discovers IPv6-only advertisers; users can filter by type, read friendly names/attributes, and act on services."
+  - "WOL is a one-tap experience for saved machines with a sensible broadcast default and optional wake verification."
+  - "Subnet calculator classifies every IPv4 scope per RFC 6890."
+  - "Settings: privacy statement, per-tool defaults, export/import, backups of settings (not recents), local-network preference toggle (P05)."
+
+non_goals:
+  - "IPv6 subnet calculator (P14)."
+  - "Scheduled/recurring wake (needs WorkManager + exact alarms; defer)."
+
+assumptions:
+  - id: A1
+    statement: "MulticastSocket can join ff02::fb on the Wi-Fi interface (joinGroup(InetSocketAddress('ff02::fb', 5353), iface)); IPv6 mDNS responses arrive on the same socket bound to '::' (dual-stack) – if not, use a second socket."
+    verify_with: "Device spike with an Apple device on the LAN (they answer over v6)."
+  - id: A2
+    statement: "DataStore Preferences supports multiple stores per app (distinct names) and reading the old file for a one-time migration."
+    verify_with: "androidx.datastore docs; existing RecentHostsRepositoryTest shows a JVM test pattern with PreferenceDataStoreFactory."
+  - id: A3
+    statement: "SAF intents (ACTION_CREATE_DOCUMENT / ACTION_OPEN_DOCUMENT with application/json) work without storage permissions on API 26+."
+
+constraints:
+  - "P05 NetworkBinder used for all new sockets."
+  - "P07 typed errors; strings.xml (+de)."
+  - "Migration must be idempotent and never lose existing values; tested on JVM with temp files."
+
+design:
+  mdns: |
+    core-network/mdns: ServiceTypeCatalog (pure map: '_http._tcp' -> key 'web', '_https._tcp', '_ssh._tcp', '_sftp-ssh._tcp', '_smb._tcp', '_afpovertcp._tcp', '_ipp._tcp', '_ipps._tcp', '_printer._tcp', '_airplay._tcp', '_raop._tcp', '_googlecast._tcp', '_spotify-connect._tcp', '_hap._tcp', '_homekit._tcp', '_matter._tcp', '_matterc._udp', '_companion-link._tcp', '_device-info._tcp', '_workstation._tcp', '_nfs._tcp', '_ftp._tcp', '_rdp._tcp', '_vnc._tcp', '_adb._tcp', '_androidtvremote2._tcp', '_hue._tcp', '_sonos._tcp', '_esphomelib._tcp', '_home-assistant._tcp', '_mqtt._tcp', '_coap._udp', '_services._dns-sd._udp') -> UI maps key to string + icon.
+      TxtSemantics (pure): knownKeys per type family: model/md/ty/product/fn/ver/vs/txtvers/path/u/p/ci/sf/pv -> friendly attribute list; unknown keys kept raw.
+      MdnsDiscoverySession (from P05-T4) handles both v4 and v6 packets identically.
+    app: second join (ff02::fb) on the same or a second socket per A1; filter chips row (FilterChip per discovered type, 'All'); service card shows friendly type name + icon, attributes; actions: 'Open' for web types (http(s)://host:port/path via Intent VIEW), 'Ping' (navigate Ping with host prefilled – NavRoutes.Ping gains optional host arg like Ports in P01), 'Copy address'.
+  wol: |
+    core-network/wol: WolMagicPacket.build(mac, secureOnPassword: ByteArray? = null) -> 102 or 108 bytes; parsePassword('AA:BB:CC:DD:EE:FF' or 12 hex) ; SubnetBroadcast.of(cidr) pure ('192.168.1.0/24' -> '192.168.1.255').
+    core-domain: WakeOnLanParams += secureOnPassword: String? ; port 1..65535 (0 rejected: MAC/port codes) ; WakeVerifyUseCase(pingRepository) : Flow<VerifyEvent> pinging targetIp every 2 s up to 60 s until SUCCESS.
+    app: SavedDevicesRepository (DataStore 'app_settings' key WOL_DEVICES as JSON via kotlinx-serialization: [{name, mac, broadcast, port, secureOn?, targetIp?}]) ; UI: 'Saved devices' ElevatedCard list with add/edit/delete (ModalBottomSheet form), 'Wake' button per device, broadcast chips: 'Global 255.255.255.255' / 'Subnet <x.y.z.255>' (from LinkInfoProvider), 'Verify wake' switch (needs targetIp) with progress + result; recents removed in favour of saved devices.
+  subnet: |
+    enum AddressScope { PRIVATE (RFC1918), LOOPBACK, LINK_LOCAL, CGNAT (100.64/10), THIS_NETWORK (0/8), DOCUMENTATION (192.0.2/24,198.51.100/24,203.0.113/24), BENCHMARK (198.18/15), IETF_PROTOCOL (192.0.0/24), MULTICAST (224/4), RESERVED (240/4), BROADCAST (255.255.255.255/32), PUBLIC }
+    SubnetInfo += scope: AddressScope (isPrivate kept = scope == PRIVATE || LOOPBACK || LINK_LOCAL for compatibility) ; UI badge label via strings subnet_scope_<name>.
+  settings: |
+    Split DataStore: 'app_settings' (theme, dynamic colour, defaults, pinned routes, onboarding flag, wifi interval, speedtest streams, wol devices, geoip enabled, prefer local network) and 'app_recents' (RECENT_* keys). Migration: on first app start after upgrade, if 'app_prefs' file exists copy keys to the two new stores then rename old file to .migrated (never delete before both writes succeed). backup_rules/data_extraction_rules: exclude only datastore/app_recents.preferences_pb and debug logs.
+    Privacy card: Settings > 'Privacy' section: statement text (settings_privacy_body: no analytics/accounts; local processing; list of external endpoints by tool) + 'Read full policy' link (PRIVACY_POLICY URL in repo) + 'Clear recent hosts' moved here.
+    Per-tool defaults section: Traceroute (max hops, timeout, probes, protocol), Port scan (preset, timeout, concurrency), DNS (record type, resolver), mDNS (duration), Speed test (streams), LAN (name probes on/off), Ping (count, timeout, payload, ttl, interval). ViewModels read them in init (existing pattern with DataStore first()).
+    Export/import: SettingsExporter (pure: Preferences -> JSON map; JSON -> validated key/value pairs, unknown keys ignored, ranges coerced) ; Settings buttons launch SAF; recents never exported.
+    Local network preference: key PREFER_LOCAL_NETWORK (default true) consumed by AndroidNetworkBinder (P05).
+
+  files_to_create:
+    - core-network/.../mdns/{ServiceTypeCatalog,TxtSemantics}.kt + tests
+    - core-network/.../wol/SubnetBroadcast.kt + test ; core-domain WakeVerifyUseCase + test
+    - core-network/.../subnet/AddressScope.kt + tests
+    - app/.../data/{SettingsDataStore,RecentsDataStore,PreferencesMigration,SavedDevicesRepository,SettingsExporter}.kt + tests
+    - app/.../ui/screens/wol/SavedDevicesSection.kt, WolDeviceEditorSheet.kt
+    - app/.../ui/screens/mdns/MdnsFilterRow.kt
+  files_to_modify:
+    - MdnsRepositoryImpl.kt, MdnsDiscoveryViewModel/Screen, WakeOnLan* (core/domain/app), SubnetCalculator* (core/app), Settings* (app), AppPreferencesDataStore.kt, DataStoreModule.kt, backup_rules.xml, data_extraction_rules.xml, NavRoutes.kt (Ping host arg), strings.xml (+de), README.md, PRIVACY_POLICY.md
+
+tasks:
+  - id: P12-T1
+    title: "mDNS: IPv6 group + catalog + TXT semantics + filters + actions"
+    status: todo
+    tdd:
+      red:
+        tests:
+          - "ServiceTypeCatalogTest: '_airplay._tcp' -> key airplay; unknown -> null; catalog size >= 30"
+          - "TxtSemanticsTest: {'md':'Apple TV','ci':'2'} for _airplay -> attributes [Model=Apple TV]; unknown keys preserved"
+          - "MdnsDiscoverySessionTest: AAAA-only host -> service emitted with ipv6 address"
+          - "MdnsDiscoveryViewModelTest: filter by type restricts servicesByType; 'All' resets"
+          - "MdnsDiscoveryScreenTest: filter chips rendered per discovered type; 'Open' action visible for _http; friendly name shown"
+        expect: "RED"
+      green: { steps: ["Implement; join ff02::fb via binder iface (A1)."], expect: "PASS" }
+    acceptance_criteria: ["Apple/Google devices show friendly attributes; IPv6 addresses listed."]
+
+  - id: P12-T2
+    title: "WOL: SecureOn, subnet broadcast, saved devices, wake verification, port validation"
+    status: todo
+    tdd:
+      red:
+        tests:
+          - "WolMagicPacketTest: with password -> 108 bytes, last 6 = password; invalid password length -> IllegalArgumentException"
+          - "SubnetBroadcastTest: '10.0.0.0/8' -> '10.255.255.255'; '/30' -> x.x.x.3; invalid -> null"
+          - "WakeOnLanUseCaseTest: port 0 -> PORT_OUT_OF_RANGE; secureOn forwarded"
+          - "WakeVerifyUseCaseTest: fake ping SUCCESS on 3rd probe -> Woke(afterMs); never -> Timeout after 60 s virtual"
+          - "SavedDevicesRepositoryTest (JVM DataStore temp file): add/update/delete/list order; JSON round-trip"
+          - "WakeOnLanViewModelTest: wake from saved device fills params; verify flow states"
+          - "WakeOnLanScreenTest: saved devices list, editor sheet, broadcast chips, verify switch"
+        expect: "RED"
+      green: { steps: ["Implement."], expect: "PASS" }
+    acceptance_criteria: ["Manual: wake a real PC with subnet broadcast; verify reports Woke."]
+
+  - id: P12-T3
+    title: "Subnet: AddressScope classification"
+    status: todo
+    tdd:
+      red:
+        tests: ["AddressScopeTest: one case per range boundary (first/last address) + PUBLIC samples", "SubnetCalculatorRepositoryTest: scope populated; isPrivate compatibility", "SubnetCalculatorScreenTest: badge text for CGNAT input 100.64.0.0/10"]
+        expect: "RED"
+      green: { steps: ["Implement."], expect: "PASS" }
+
+  - id: P12-T4
+    title: "Settings: split DataStore + migration + backup rules + privacy section + local-network toggle"
+    status: todo
+    tdd:
+      red:
+        tests:
+          - "PreferencesMigrationTest: old store with theme/pins/recents -> settings store has theme/pins, recents store has recents; second run no-op; partial failure keeps old file"
+          - "AppPreferenceKeysTest: keys split lists; no key in both"
+          - "SettingsViewModelTest: preferLocalNetwork default true; setter persists"
+        expect: "RED"
+      green: { steps: ["Implement; update DataStoreModule to provide both stores with qualifiers (@SettingsStore/@RecentsStore); RecentHostsRepository uses recents store; backup XML updated."], expect: "PASS" }
+    acceptance_criteria: ["Backup/restore verified with the backup manager on an emulator (`adb shell bmgr enable true`, `adb shell bmgr backupnow net.aieat.netswissknife.debug`, wipe app data, `adb shell bmgr restore <token> net.aieat.netswissknife.debug`) retains theme/pins and drops recents – `adb backup` is deprecated/no-op on modern Android and must not be used. Document the steps in the PR."]
+
+  - id: P12-T5
+    title: "Settings: per-tool defaults + export/import"
+    status: todo
+    depends_on: [P12-T4]
+    tdd:
+      red:
+        tests:
+          - "SettingsExporterTest: export contains only settings keys; import ignores unknown keys, coerces ranges (ping count 500 -> 100), rejects malformed JSON with typed error"
+          - "ViewModel tests per tool: init reads new default keys (traceroute max hops etc.)"
+          - "SettingsScreenTest: sections visible; export/import buttons"
+        expect: "RED"
+      green: { steps: ["Implement; SAF launchers in SettingsScreen via rememberLauncherForActivityResult(CreateDocument('application/json')) / OpenDocument."], expect: "PASS" }
+
+  - id: P12-T6
+    title: "Docs"
+    status: todo
+    steps: ["README mDNS/WOL/Subnet/Settings sections; PRIVACY_POLICY: backups now include settings but not recents; help sheets."]
+
+qa_validation:
+  automated: ["./gradlew test --no-daemon", "koverVerify x3", "lintDebug", "release-smoke"]
+  manual_device: ["Upgrade path: install baseline APK, set theme/pins/recents, install new build -> values preserved.", "mDNS with IPv6-only advertiser; filters.", "WOL saved device wake + verify.", "Export settings, wipe app data, import -> restored."]
+
+docs_updates: [README.md, PRIVACY_POLICY.md, strings.xml (+de)]
+
+risks:
+  - risk: "DataStore migration bugs lose user settings."
+    mitigation: "Never delete the old file (rename to .migrated); tests cover partial failure; add a debug-only 'Re-run migration' action."
+
+definition_of_done: ["F013 (IPv6), F023, F030, F031, F032, F033 closed; global DoD."]

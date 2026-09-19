@@ -40,9 +40,12 @@ TCP port reachability scanning with service identification.
 ### LAN Scanner
 Local network device discovery across IPv4 subnets.
 - CIDR subnet scanning (/16–/30) with automatic current-subnet detection
-- Per-host details: IP, reverse-DNS hostname, MAC address, OUI vendor name, open ports, RTT, gateway flag
-- Concurrent host probes (1–500) with real-time progress streaming and final summary
+- Multi-method presence detection: ICMP, TCP open/reset, NetBIOS NBSTAT, and mDNS reverse lookup; each host shows the method(s) that found it
+- Per-host details: IP, hostname, MAC address, OUI vendor name, open ports, RTT when ICMP answers, and gateway flag from the active default route
+- MAC resolution is best-effort: Android 10+ restricts the ARP source, so the UI explains when a MAC cannot be read
+- Concurrent host probes (1–500) with real-time progress streaming, post-probe ARP enrichment, and final summary
 - Search results by IP, hostname, or vendor; filter by gateway or hosts with open ports
+- Expanded hosts include a direct **Scan ports** hand-off; the OUI registry contains 50,000+ prefixes and can be refreshed with `python3 tools/oui/update_oui.py`
 
 ### DNS Lookup
 Full DNS record resolution with multiple resolver options.
@@ -78,7 +81,10 @@ SNMP-based network topology discovery via BFS traversal.
 - Interface enumeration with speed, MAC address, and operational status (UP/DOWN)
 - VLAN discovery via Cisco VTP MIB and IEEE 802.1Q standard MIB
 - Interactive force-layout canvas with pan/zoom gestures and node detail bottom sheet
-- Configurable max hops (1–10), timeout, and SNMP v3 auth/priv protocols (MD5/SHA, DES/AES128)
+- Recent seed IPs are saved locally for quick reuse
+- Configurable max hops (1–10), timeout, and SNMP v3 auth/priv protocols (MD5, SHA-1/256/512; DES, AES-128/192/256)
+- Reuses one SNMP4J session per discovery and closes it on completion or cancellation
+- LLDP neighbour addresses are decoded from the LLDP management-address index; CDP accepts dotted and hex-octet cache addresses
 
 ### WHOIS Lookup
 Domain and IP registration lookup via three-hop WHOIS referral chain.
@@ -219,10 +225,18 @@ Android module (Jetpack Compose, Material 3, Hilt). Contains:
 ./gradlew :app:assembleDebug
 ```
 
-### Build release APK / AAB (requires signing secrets)
+### Build release APK / AAB
 ```bash
-./gradlew :app:assembleRelease
+./gradlew :app:assembleRelease --no-daemon   # unsigned APK for local R8 verification
 ./gradlew :app:bundleRelease
+```
+
+The release APK is unsigned unless signing properties are supplied. After an
+unsigned release build, verify that R8 retained the SNMP4J security classes:
+
+```bash
+apkanalyzer dex packages app/build/outputs/apk/release/app-release-unsigned.apk \
+  | grep -E 'org\.snmp4j\.security\.(AuthSHA|PrivAES128|USM)\b'
 ```
 
 ### Coverage (Kover)

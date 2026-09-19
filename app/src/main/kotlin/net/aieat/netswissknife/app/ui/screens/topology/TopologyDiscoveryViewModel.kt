@@ -5,9 +5,13 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import net.aieat.netswissknife.app.data.AppPreferenceKeys
+import net.aieat.netswissknife.app.data.RecentHostsRepository
 import net.aieat.netswissknife.core.domain.TopologyDiscoveryUseCase
 import net.aieat.netswissknife.core.network.topology.*
 import javax.inject.Inject
@@ -30,11 +34,16 @@ sealed class TopologyUiState {
 
 @HiltViewModel
 class TopologyDiscoveryViewModel @Inject constructor(
-    private val useCase: TopologyDiscoveryUseCase
+    private val useCase: TopologyDiscoveryUseCase,
+    private val recentHostsRepository: RecentHostsRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<TopologyUiState>(TopologyUiState.Idle)
     val uiState: StateFlow<TopologyUiState> = _uiState.asStateFlow()
+
+    val recentSeeds: StateFlow<List<String>> = recentHostsRepository
+        .getRecents(AppPreferenceKeys.RECENT_TOPOLOGY_SEEDS)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private var discoveryJob: Job? = null
 
@@ -48,11 +57,16 @@ class TopologyDiscoveryViewModel @Inject constructor(
         discoveryJob = viewModelScope.launch {
             val nodes = mutableListOf<TopologyNode>()
             val links = mutableListOf<TopologyLink>()
+            var savedSeed = false
             _uiState.value = TopologyUiState.Discovering(emptyList(), emptyList(), "Starting...", 0)
 
             useCase.invoke(params).collect { event ->
                 when (event) {
                     is TopologyDiscoveryEvent.NodeDiscovered -> {
+                        if (!savedSeed) {
+                            savedSeed = true
+                            recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_TOPOLOGY_SEEDS, params.targetIp)
+                        }
                         nodes.add(event.node)
                         val current = _uiState.value
                         if (current is TopologyUiState.Discovering) {
@@ -86,6 +100,18 @@ class TopologyDiscoveryViewModel @Inject constructor(
                     }
                 }
             }
+        }
+    }
+
+    fun removeRecentSeed(seed: String) {
+        viewModelScope.launch {
+            recentHostsRepository.removeRecent(AppPreferenceKeys.RECENT_TOPOLOGY_SEEDS, seed)
+        }
+    }
+
+    fun clearRecentSeeds() {
+        viewModelScope.launch {
+            recentHostsRepository.clearAll(AppPreferenceKeys.RECENT_TOPOLOGY_SEEDS)
         }
     }
 

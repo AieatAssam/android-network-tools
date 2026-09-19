@@ -12,6 +12,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import net.aieat.netswissknife.app.ui.screens.DnsScreen
@@ -97,8 +99,19 @@ fun AppNavHost(navController: NavHostController, modifier: Modifier = Modifier) 
 
         composable(NavRoutes.Ping.route)       { PingScreen() }
         composable(NavRoutes.Traceroute.route) { TracerouteScreen() }
-        composable(NavRoutes.Ports.route)      { PortsScreen() }
-        composable(NavRoutes.Lan.route)        { LanScreen() }
+        composable(
+            route = NavRoutes.Ports.route,
+            arguments = listOf(
+                navArgument("host") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+            ),
+        ) { PortsScreen() }
+        composable(NavRoutes.Lan.route)        {
+            LanScreen(onNavigate = { route -> navController.navigate(route) })
+        }
         composable(NavRoutes.Dns.route)        { DnsScreen() }
         composable(NavRoutes.WifiScan.route)   { WifiScanScreen() }
         if (net.aieat.netswissknife.app.BuildConfig.DEBUG) {

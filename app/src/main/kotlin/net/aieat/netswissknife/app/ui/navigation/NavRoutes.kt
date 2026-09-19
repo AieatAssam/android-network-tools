@@ -1,5 +1,6 @@
 package net.aieat.netswissknife.app.ui.navigation
 
+import android.net.Uri
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.BugReport
@@ -36,7 +37,14 @@ sealed class NavRoutes(
     object Home : NavRoutes("home", "Home", Icons.Default.Home)
     object Ping : NavRoutes("ping", "Ping", Icons.Default.NetworkCheck)
     object Traceroute : NavRoutes("traceroute", "Traceroute", Icons.Default.Router)
-    object Ports : NavRoutes("ports", "Port Scanner", Icons.Default.TravelExplore)
+    object Ports : NavRoutes("ports?host={host}", "Port Scanner", Icons.Default.TravelExplore) {
+        const val baseRoute = "ports"
+
+        fun createRoute(host: String?): String = host
+            ?.takeIf { it.isNotBlank() }
+            ?.let { "$baseRoute?host=${Uri.encode(it)}" }
+            ?: baseRoute
+    }
     object Lan : NavRoutes("lan", "LAN Scanner", Icons.Default.Devices)
     object Dns : NavRoutes("dns", "DNS Lookup", Icons.Default.Language)
     object DebugLogs : NavRoutes("debug_logs", "Debug Logs", Icons.Default.BugReport)

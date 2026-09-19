@@ -1,8 +1,8 @@
 package net.aieat.netswissknife.core.network.topology
 
 enum class SnmpVersion { V1, V2C, V3 }
-enum class V3AuthProtocol { MD5, SHA, NONE }
-enum class V3PrivProtocol { DES, AES128, NONE }
+enum class V3AuthProtocol { NONE, MD5, SHA, SHA256, SHA512 }
+enum class V3PrivProtocol { NONE, DES, AES128, AES192, AES256 }
 enum class DeviceCapability { ROUTER, SWITCH, AP, PHONE, OTHER }
 enum class InterfaceStatus { UP, DOWN, UNKNOWN }
 enum class LinkProtocol { LLDP, CDP }

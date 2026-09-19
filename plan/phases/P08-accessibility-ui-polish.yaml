@@ -1,0 +1,195 @@
+# =============================================================================
+# P08 – Accessibility & UI polish
+# =============================================================================
+# Audience: AI coding agent. Self-contained. Read plan/plan.yaml `agent_execution_rules` first.
+phase:
+  id: P08
+  title: "Accessibility & UI polish: 48dp targets, live regions, RTL/font-scale-safe chart text, chart descriptions, slider labels, narrow-width layouts, reduced-motion, IME actions, contrast test"
+  priority: medium
+  status: todo
+  estimated_effort: "M (2-4 agent sessions)"
+  depends_on: [P07]
+  enables: []
+  findings: [F024, F030]
+  target_modules: [":app"]
+
+context:
+  problem: |
+    Verified defects (2026-09-18):
+      - HttpProbeScreen.kt:387, :394, :876 IconButton size 32.dp; :1050 size 28.dp (< 48dp minimum).
+      - `grep -rn liveRegion app/src/main` -> 0: loading/success/error transitions are not announced.
+      - WifiScanScreen.kt has 6 `nativeCanvas.drawText` sites (spectrum + gauge) – bypass Compose text
+        layout (no font-scale, no RTL mirroring awareness); PingScreen uses TextMeasurer correctly.
+      - PortsScreen RangeSlider has no thumb labels (values only visible in a separate label).
+      - SubnetCalculatorScreen BinaryBitsRow: 32 cells with weight(1f), no min size/scroll -> unreadable < 360dp.
+      - Charts (Ping RTT, Wi-Fi spectrum, Speed gauge/throughput, Whois relay chain) have no
+        contentDescription summarising data for screen readers.
+      - Animations ignore the system "Remove animations"/animator duration scale.
+      - IME actions: not every single-line input triggers its primary action on keyboard Done/Go
+        (audit needed).
+      - Hero titles use displaySmall + maxLines=1 + ellipsis; at font scale >= 1.5 long titles
+        ('Network Topology') truncate.
+      - Colour contrast of hero text over gradients unverified.
+  evidence:
+    - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/httprobe/HttpProbeScreen.kt", lines: "387,394,876,1050" }
+    - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/WifiScanScreen.kt", grep: "nativeCanvas.drawText (6)" }
+    - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/PortsScreen.kt", grep: "RangeSlider(" }
+    - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/subnet/SubnetCalculatorScreen.kt", grep: "BinaryBitsRow" }
+    - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/theme/Motion.kt", note: "AppMotion tokens; no reduced-motion handling" }
+    - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/ToolHeroHeader.kt", note: "HeroTitleText maxLines=1" }
+
+goals:
+  - "All interactive elements >= 48dp touch target (audit script + fixes)."
+  - "State transitions announced via live regions through one shared composable."
+  - "Wi-Fi chart text via TextMeasurer; all charts expose a data summary contentDescription."
+  - "RangeSlider thumb labels; binary grid readable at 320dp; hero title wraps to 2 lines at large font scales."
+  - "Reduced-motion support (durations -> 0 when animator scale is 0)."
+  - "IME actions consistent across tools."
+  - "Automated contrast check for static colour schemes."
+
+non_goals:
+  - "Material 3 Expressive migration (blocked upstream per audit)."
+  - "Redesign of any screen."
+
+assumptions:
+  - id: A1
+    statement: "M3 1.4 RangeSlider supports `startThumb`/`endThumb` slots (or `Label` via SliderDefaults) to render value labels."
+    verify_with: "Check androidx.compose.material3 RangeSlider signature in the resolved BOM (2026.08.00 -> material3 1.4.x)."
+    if_false: "Render labels as Text positioned via BoxWithConstraints using state.activeRangeStart/End fractions."
+  - id: A2
+    statement: "Settings.Global.ANIMATOR_DURATION_SCALE == 0f indicates 'Remove animations' (a11y setting) and Compose does not honour it automatically."
+    verify_with: "Read via Settings.Global.getFloat(contentResolver, ANIMATOR_DURATION_SCALE, 1f) in MainActivity; log."
+
+constraints:
+  - "CLAUDE.md UI rules remain (animated entries etc.) – reduced motion sets durations to 0, does not remove the code paths."
+  - "String changes go through strings.xml (P07 guard test)."
+  - "Instrumented tests must remain deterministic (avoid timing-dependent assertions)."
+
+design:
+  overview: |
+    1. Touch targets: replace explicit `.size(32.dp/28.dp)` on IconButtons with `Modifier.minimumInteractiveComponentSize()`
+       (icon stays 20dp inside). Audit script (run in T1): grep -rnE 'IconButton\\([^)]*size\\((1[0-9]|2[0-9]|3[0-9]|4[0-7])\\.dp' app/src/main.
+    2. Live regions: `@Composable fun ToolStateAnnouncer(phase: ToolPhase, summary: String)` renders an invisible (0dp, but semantically present)
+       Text with `semantics { liveRegion = LiveRegionMode.Polite; contentDescription = summary }` and re-emits when phase changes. Each tool screen
+       supplies: Loading -> "<tool> running", Success -> "<tool> finished: <n results/summary>", Error -> "Error: <text>". Strings a11y_state_running/finished/error.
+    3. Wi-Fi charts: refactor drawText sites to `rememberTextMeasurer()` + `drawText(textLayoutResult, topLeft)`; mirror X positions under LocalLayoutDirection Rtl
+       only for labels (chart axes stay LTR – document).
+    4. Chart descriptions: PingRttChart -> "RTT chart: N samples, min/avg/max"; WifiSpectrum -> "Spectrum: N networks on band X, strongest SSID at RSSI";
+       Speed gauge -> "Current speed X Mbps"; WhoisRelayChain -> "Relay chain: server1 done, server2 querying…"; via `Modifier.semantics(mergeDescendants=true){ contentDescription = … }`.
+    5. RangeSlider labels; Binary grid: BoxWithConstraints -> if maxWidth < 32*11dp use horizontalScroll with fixed 11dp cells.
+    6. Hero title: maxLines = if (LocalDensity.current.fontScale >= 1.3f) 2 else 1.
+    7. Reduced motion: `LocalReducedMotion` CompositionLocal provided in MainActivity from animator scale; AppMotion.enter()/exit() return tween(0) when true.
+    8. IME: every OutlinedTextField that is the last field before the primary button gets keyboardOptions(imeAction = Go/Done) + keyboardActions running the primary action when enabled.
+    9. Contrast test: app/src/test/.../theme/ContrastTest.kt computes WCAG contrast (pure math, no Android) for (onPrimaryContainer over primaryContainer), (onSurface over surface), (onSecondaryContainer over secondaryContainer) in both LightColorScheme/DarkColorScheme colour constants from Color.kt; assert >= 4.5. Read the ARGB values via `Color.toArgb()` only if compose ui-graphics works in the JVM unit test classpath (it usually does for Color); otherwise keep the raw 0xAARRGGBB literals in a `ThemeArgb` object that Color.kt derives from, and test that object. Hero titles render over a Brush gradient, so also test the text colour against BOTH gradient end colours.
+
+  files_to_create:
+    - app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/ToolStateAnnouncer.kt
+    - app/src/main/kotlin/net/aieat/netswissknife/app/ui/theme/ReducedMotion.kt
+    - app/src/test/kotlin/net/aieat/netswissknife/app/ui/theme/ContrastTest.kt
+    - app/src/test/kotlin/net/aieat/netswissknife/app/ui/a11y/TouchTargetAuditTest.kt   # source scan like the i18n guard
+    - app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/a11y/LiveRegionTest.kt
+  files_to_modify:
+    - app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/httprobe/HttpProbeScreen.kt
+    - app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/WifiScanScreen.kt
+    - app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/PortsScreen.kt
+    - app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/subnet/SubnetCalculatorScreen.kt
+    - app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/PingScreen.kt (chart description)
+    - app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/speedtest/SpeedTestScreen.kt (gauge description)
+    - app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/whois/WhoisScreen.kt (relay chain description)
+    - all 14 tool screens (ToolStateAnnouncer + IME actions)
+    - app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/ToolHeroHeader.kt
+    - app/src/main/kotlin/net/aieat/netswissknife/app/ui/theme/Motion.kt, MainActivity.kt
+    - app/src/main/res/values/strings.xml (+ values-de)
+    - README.md (Accessibility paragraph)
+
+tasks:
+  - id: P08-T1
+    title: "Touch-target audit test + HttpProbe fixes"
+    status: todo
+    tdd:
+      red:
+        test_file: app/src/test/kotlin/net/aieat/netswissknife/app/ui/a11y/TouchTargetAuditTest.kt
+        tests: ["scans app/src/main/kotlin for IconButton/Icon-clickable modifiers with .size(<48.dp) and fails listing HttpProbeScreen lines 387/394/876/1050"]
+        run: "./gradlew :app:testDebugUnitTest --tests '*TouchTargetAuditTest' --no-daemon"
+        expect: "RED"
+      green: { steps: ["Replace with minimumInteractiveComponentSize(); adjust row heights if layout shifts."], run: "same + :app:assembleDebug", expect: "PASS" }
+    acceptance_criteria: ["Audit test green; HttpProbeScreenTest green on device."]
+
+  - id: P08-T2
+    title: "ToolStateAnnouncer (live region) in all tool screens"
+    status: todo
+    depends_on: [P07]
+    tdd:
+      red:
+        test_file: app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/a11y/LiveRegionTest.kt
+        tests:
+          - "PingScreen with fake VM state Running -> node with LiveRegion Polite exists and text contains a11y_state_running"
+          - "DnsScreen Success(3 records) -> live region text contains '3'"
+          - "Error state -> live region text starts with error prefix"
+        run: "device/Test Lab"
+        expect: "RED"
+      green: { steps: ["Implement announcer; wire into each screen's AnimatedContent target block (one call per screen)."], run: "device/Test Lab", expect: "PASS" }
+    acceptance_criteria: ["14 screens call ToolStateAnnouncer; unit test `AnnouncerCoverageTest` scans screens for the call (source scan)."]
+
+  - id: P08-T3
+    title: "Wi-Fi chart text via TextMeasurer + chart contentDescriptions"
+    status: todo
+    tdd:
+      red:
+        tests:
+          - "WifiScanScreenTest: spectrum node has contentDescription containing wifi_spectrum_a11y prefix"
+          - "PingScreenTest: chart node contentDescription contains 'min'/'max' labels"
+          - "Unit: source scan test asserts `nativeCanvas.drawText` count == 0 in app/src/main"
+        run: "./gradlew :app:testDebugUnitTest --no-daemon (scan) + device"
+        expect: "RED"
+      green: { steps: ["Refactor 6 sites; add semantics."], run: "…", expect: "PASS" }
+    acceptance_criteria: ["Charts render identically at fontScale 1.0 (screenshot compare manually); labels scale at 1.5."]
+
+  - id: P08-T4
+    title: "RangeSlider labels, binary grid narrow layout, hero 2-line at large font scale"
+    status: todo
+    tdd:
+      red:
+        tests:
+          - "PortsScreenTest: custom range shows thumb labels '20' and '80' when range set (tags ports_range_start_label/end_label)"
+          - "SubnetCalculatorScreenTest at 320dp width (use `composeTestRule.setContent { CompositionLocalProvider(LocalDensity …) }` or a fixed-size Box): binary rows scroll horizontally (node has ScrollAxisRange)"
+          - "ToolHeroHeader with fontScale 2.0 shows 2-line title (maxLines semantics via test tag + line count assertion using onNodeWithTag().fetchSemanticsNode() text layout – or verify no ellipsis by asserting full text present)"
+        expect: "RED"
+      green: { steps: ["Implement per design."], expect: "PASS" }
+
+  - id: P08-T5
+    title: "Reduced motion + IME actions"
+    status: todo
+    tdd:
+      red:
+        tests:
+          - "Unit: AppMotion.enter(reduced=true).durationMillis == 0"
+          - "Instrumented: PingScreen host field ImeAction.Go performs start (fake VM verify startPing called) on `performImeAction()`"
+          - "Source scan: every OutlinedTextField in tool screens declares keyboardOptions (list exemptions in the test)"
+        expect: "RED"
+      green: { steps: ["ReducedMotion CompositionLocal; AppMotion signature takes LocalReducedMotion via a composable accessor; IME wiring per screen."], expect: "PASS" }
+
+  - id: P08-T6
+    title: "Contrast test + README a11y paragraph"
+    status: todo
+    tdd:
+      red: { test_file: app/src/test/kotlin/net/aieat/netswissknife/app/ui/theme/ContrastTest.kt, tests: ["pairs listed in design >= 4.5 for light and dark"], expect: "RED or PASS (if PASS, keep as regression guard)" }
+      green: { steps: ["Adjust Color.kt values if a pair fails (document old/new)."] }
+    steps: ["README: Accessibility section (touch targets, live regions, chart summaries, reduced motion, font scale, per-app language)."]
+
+qa_validation:
+  automated: ["./gradlew :app:testDebugUnitTest --no-daemon", "instrumented suites (LiveRegionTest, screen tests)", "./gradlew :app:lintDebug --no-daemon --no-parallel"]
+  manual_device:
+    - "TalkBack: run Ping – hear 'Ping running' then 'Ping finished: …'."
+    - "Font scale 200%: hero titles wrap; charts labels legible; no overlapping."
+    - "Display size largest + 320dp emulator: subnet binary grid scrolls."
+    - "Developer options 'Animator duration scale off': screens appear instantly without broken states."
+    - "RTL (ar-XB pseudo-locale): navigation, chips, cards mirrored; charts LTR."
+
+docs_updates: [README.md, strings.xml]
+
+risks:
+  - risk: "Live region spam on streaming tools (ping emits per packet)."
+    mitigation: "Announce phase changes only, throttle summaries to every 5 s for streams."
+
+definition_of_done: ["F024 closed; F030 literal part done in P06; global DoD."]

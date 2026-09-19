@@ -1,0 +1,114 @@
+# =============================================================================
+# P14 – New tools wave 2: Secure DNS (DoH/DoT/DNSSEC) tester · IPv6 mode for Subnet Calculator · Bufferbloat grade
+# =============================================================================
+# Audience: AI coding agent. Self-contained. Read plan/plan.yaml `agent_execution_rules` first.
+phase:
+  id: P14
+  title: "New tools wave 2 (extend existing engines)"
+  priority: low
+  status: todo
+  estimated_effort: "L (each ≈ 1-2 agent sessions)"
+  depends_on: [P04, P11, P13]   # DNS mapper/typed errors; speed-test loaded-latency data; checklist from P13
+  enables: []
+  findings: []
+  target_modules: [":core-network", ":core-domain", ":app"]
+
+new_tool_checklist: "Identical to plan/phases/P13-new-tools-wave-1.yaml `new_tool_checklist` – apply to every tool below."
+
+tools:
+  # ---------------------------------------------------------------------------
+  - id: P14-SECUREDNS
+    name: "Secure DNS Tester"
+    route: "securedns"
+    package: "securedns"
+    icon: "Icons.Default.Shield"
+    more_section: "Security"
+    why: "Encrypted DNS is the most common 'is my DNS private?' question; the DNS tool only speaks UDP/53. dnsjava 3.6 already ships DohResolver; DoT is a 2-byte-length-prefixed DNS message over TLS."
+    behaviour: |
+      For a set of resolvers (Cloudflare 1.1.1.1 / one.one.one.one, Google 8.8.8.8 / dns.google, Quad9 9.9.9.9 / dns.quad9.net, AdGuard 94.140.14.14 / dns.adguard-dns.com, Mullvad, custom host+port+DoH URL) run for a query name (default example.com, A):
+        - Plain UDP/53 (+ TCP/53 fallback) latency & result
+        - DoT (853): TLS handshake (SNI = hostname), latency, TLS version, cert CN, ALPN 'dot'
+        - DoH (POST application/dns-message to https://<host>/dns-query; GET variant optional): latency, HTTP protocol, status
+        - DNSSEC: send with EDNS DO bit; report AD flag and presence of RRSIG in answer; test a known-bad name (dnssec-failed.org) -> expect SERVFAIL when validating
+        - Detect device Private DNS setting (LinkProperties.privateDnsServerName) and show 'Your device uses DoT to <host>' with a one-tap test of that server.
+      Results table: resolver × transport with latency chips (StatusColors: ok/warn/error), details sheet per cell (raw message, TLS info), 'Fastest' badge, share summary. Runs all in parallel with bounded concurrency (4).
+    core_network:
+      models: "SecureDnsTransport { UDP, TCP, DOT, DOH } ; SecureDnsProbe(resolver, transport, latencyMs?, rcode?, answers, adFlag, hasRrsig, tls: TlsSummary?, httpProtocol?, error: ErrorInfo?) ; SecureDnsResolver(id, displayKey, ip, hostname, dohUrl?, dotPort=853) ; SecureDnsReport(query, probes, fastest)"
+      pure_logic: "DnsWire.buildQuery(name, type, doBit) via dnsjava (EDNS OPT with DO flag: Message.addRecord(OPTRecord(4096, 0, 0, ExtendedFlags.DO), Section.ADDITIONAL)) ; DotFramer.frame(bytes)/unframe(stream) ; DnssecInspector(message) -> (ad, hasRrsig) ; FastestSelector"
+      repository: "interface SecureDnsRepository { fun test(params): Flow<SecureDnsProbe> } ; impl: UDP/TCP via dnsjava SimpleResolver (setTCP), DoT via SSLSocket engine (reuse P10 HandshakeEngine for TLS summary), DoH via dnsjava DohResolver or OkHttp POST (prefer OkHttp for HTTP/2 + timing) – all transports injectable for tests"
+    app: "Module, VM (resolver multi-select chips, query field, transport toggles, DNSSEC toggle), Screen (matrix card, per-cell tap -> ModalBottomSheet details, device Private DNS card), strings + de."
+    tests:
+      unit: ["DnsWireTest (DO bit set in OPT)", "DotFramerTest (length prefix, partial reads)", "DnssecInspectorTest (fixtures with/without RRSIG/AD)", "SecureDnsRepositoryImplTest (fake transports: one transport fails -> probe error typed; parallel bounded)", "FastestSelectorTest", "SecureDnsViewModelTest"]
+      instrumented: ["SecureDnsScreenTest ≥ 4 cases"]
+    privacy: "Queries sent to selected public resolvers; document list."
+
+  # ---------------------------------------------------------------------------
+  - id: P14-IPV6SUBNET
+    name: "Subnet Calculator – IPv6 mode"
+    route: "subnet"   # existing route; new mode toggle (CIDR / Range / IPv6)
+    package: "subnet"
+    why: "IPv6-only carriers are common; the calculator is IPv4-only (F032 scope)."
+    behaviour: |
+      Input `2001:db8:abcd:12::/64` (or bare address => /128): shows compressed + fully expanded address, prefix, network address, first/last address, total addresses (BigInteger, human form e.g. 2^64 = 18.4 quintillion), number of /64s (for prefixes < 64), address type (GUA, ULA, link-local, loopback, unspecified, multicast (+scope), IPv4-mapped, 6to4 (2002::/16), Teredo (2001::/32), documentation (2001:db8::/32), benchmarking, discard-only), reverse ip6.arpa name, EUI-64 detection (ff:fe in interface id -> derived MAC), hextet binary grid (8 rows × 16 bits, network bits vs host bits colour-coded like the IPv4 grid), quick example chips (/32, /48, /56, /64, /128).
+      Mode toggle in the existing Subnet screen (SingleChoiceSegmentedButtonRow: CIDR / Range / IPv6).
+    core_network:
+      models: "Ipv6SubnetInfo(input, compressed, expanded, prefix, network, first, last, totalAddresses: BigInteger, subnet64Count: BigInteger?, type: Ipv6AddressType, multicastScope?, reverseName, eui64Mac?, hextetsBinary: List<String>, inputIsAligned)"
+      pure_logic: "Ipv6Address.parse(text) -> 128-bit (BigInteger or two Longs) handling :: compression, IPv4-mapped tail, zone id rejection; format compressed per RFC 5952 (longest zero run, lowercase); classify(); reverseName(); Eui64.detect()"
+      repository: "SubnetCalculatorRepository += fun calculateIpv6(input): NetworkResult<Ipv6SubnetInfo>"
+    app: "SubnetCalculatorViewModel mode enum; screen sections reuse BinaryBreakdown/Notation cards with IPv6 variants; copy actions."
+    tests:
+      unit: ["Ipv6AddressTest (parse/format matrix incl. '::', '::1', '2001:db8::', '::ffff:192.0.2.1', invalid '1:2:3:4:5:6:7:8:9', '2001:db8::1%wlan0' rejected)", "Ipv6SubnetTest (/64, /48, /127, /128 boundaries; totals; subnet64Count)", "Ipv6ClassifierTest (each type + multicast scopes)", "ReverseNameTest", "Eui64Test", "SubnetCalculatorViewModelTest mode switching"]
+      instrumented: ["SubnetCalculatorScreenTest: IPv6 mode renders expanded address and grid"]
+    readme: "Update Subnet Calculator subsection; table row unchanged."
+
+  # ---------------------------------------------------------------------------
+  - id: P14-BUFFERBLOAT
+    name: "Bufferbloat Test"
+    route: "bufferbloat"
+    package: "bufferbloat"
+    icon: "Icons.Default.Waves"
+    more_section: "Utilities"
+    why: "Latency under load is the metric behind 'my internet feels slow on video calls'; P11 already captures loaded-latency samples in the speed engine."
+    behaviour: |
+      Three phases (idle 8 s → download load 12 s → upload load 12 s) using the P11 speed engine (4/2 streams, Cloudflare backend, attribution) while probing latency every 200 ms via the ICMP engine to the configured probe target (default 1.1.1.1; fallback HTTP keep-alive RTT if ICMP unavailable).
+      Result: idle median, download-loaded median, upload-loaded median, increases (ms), grade per Waveform methodology (A+ <5 ms, A <30, B <60, C <200, D <400, F ≥400 – worst of down/up increase), jitter, packet loss during load, timeline chart (latency vs time with shaded load phases), plain-language explanation and mitigation tips (SQM/fq_codel, router QoS), share summary.
+    core_network:
+      models: "BufferbloatPhase { IDLE, DOWNLOAD, UPLOAD } ; BufferbloatSample(phase, elapsedMs, rttMs?) ; BufferbloatResult(idle: LatencyStats, down: LatencyStats, up: LatencyStats, downIncreaseMs, upIncreaseMs, grade: BufferbloatGrade, lossPercentUnderLoad, samples) ; events streaming like SpeedTestEvent"
+      pure_logic: "BufferbloatGrader.grade(idleMedian, downMedian, upMedian) ; Median/percentile utils ; PhaseScheduler"
+      repository: "interface BufferbloatRepository { fun run(config): Flow<BufferbloatEvent> } ; impl composes PingEngine (P04) + TransferEngine (P11)"
+    app: "Module, VM, Screen (phase stepper reused from SpeedTest, grade hero with colour by grade via StatusColors, timeline chart with TextMeasurer labels + contentDescription, tips card), settings for probe target/durations (advanced)."
+    tests:
+      unit: ["BufferbloatGraderTest (boundaries for every grade)", "PhaseSchedulerTest (virtual time)", "BufferbloatRepositoryImplTest (fake engines: samples attributed to correct phase; loss computed; cancellation)", "BufferbloatViewModelTest"]
+      instrumented: ["BufferbloatScreenTest ≥ 4 cases"]
+    privacy: "Same endpoints as Speed Test + ICMP to probe target."
+
+tasks:
+  - id: P14-T1
+    title: "Secure DNS Tester end-to-end"
+    status: todo
+    steps: ["Checklist; core PR then app PR; DoH via OkHttp (P10 dependency) or dnsjava DohResolver – decide by measuring both in a spike; record decision here."]
+    acceptance_criteria: ["Matrix for 4 presets completes < 10 s on Wi-Fi; dnssec-failed.org shows SERVFAIL on validating resolvers; Private DNS card reflects device setting."]
+  - id: P14-T2
+    title: "IPv6 subnet mode"
+    status: todo
+    steps: ["Checklist (existing route); README update."]
+    acceptance_criteria: ["Outputs match `sipcalc`/`ipv6calc` for 10 sample inputs listed in the test."]
+  - id: P14-T3
+    title: "Bufferbloat tool"
+    status: todo
+    steps: ["Checklist; reuse SpeedTest components; add Settings attribution note."]
+    acceptance_criteria: ["Grade on a known-bloated connection (no SQM) ≤ C and ≥ A on a fq_codel router – record in PR."]
+  - id: P14-T4
+    title: "Docs + counts"
+    status: todo
+    steps: ["README (2 new subsections + IPv6 paragraph), store ('19 tools'), PRIVACY_POLICY, tool_instructions table."]
+
+qa_validation:
+  automated: ["./gradlew test --no-daemon", "koverVerify x3", "lintDebug", "release-smoke", "i18n guard"]
+  manual_device: ["Each tool on Wi-Fi/cellular; cancellation; airplane mode typed errors."]
+
+risks:
+  - risk: "DoT/DoH resolvers change endpoints."
+    mitigation: "Presets in a single Kotlin table with tests; custom entry supported."
+
+definition_of_done: ["Three deliverables shipped; global DoD."]

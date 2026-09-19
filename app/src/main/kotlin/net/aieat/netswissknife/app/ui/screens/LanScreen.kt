@@ -8,6 +8,6 @@ import net.aieat.netswissknife.app.ui.screens.lan.LanScreen as LanScanScreen
  * Delegates to the full [LanScanScreen] implementation.
  */
 @Composable
-fun LanScreen() {
-    LanScanScreen()
+fun LanScreen(onNavigate: (String) -> Unit = {}) {
+    LanScanScreen(onNavigate = onNavigate)
 }

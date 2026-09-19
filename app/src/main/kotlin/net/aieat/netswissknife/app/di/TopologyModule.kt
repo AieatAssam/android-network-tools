@@ -5,7 +5,6 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import net.aieat.netswissknife.core.domain.TopologyDiscoveryUseCase
-import net.aieat.netswissknife.core.network.topology.Snmp4jClientImpl
 import net.aieat.netswissknife.core.network.topology.TopologyDiscoveryRepository
 import net.aieat.netswissknife.core.network.topology.TopologyDiscoveryRepositoryImpl
 import javax.inject.Singleton
@@ -17,7 +16,7 @@ object TopologyModule {
     @Provides
     @Singleton
     fun provideTopologyDiscoveryRepository(): TopologyDiscoveryRepository =
-        TopologyDiscoveryRepositoryImpl(Snmp4jClientImpl())
+        TopologyDiscoveryRepositoryImpl()
 
     @Provides
     @Singleton

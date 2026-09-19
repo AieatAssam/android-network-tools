@@ -1,0 +1,254 @@
+# =============================================================================
+# P07 – Localization architecture: typed errors from core layers, zero literals in
+#       UI/ViewModels, plurals, per-app language, pseudo-locales, first translation
+# =============================================================================
+# Audience: AI coding agent. Self-contained. Read plan/plan.yaml `agent_execution_rules` first.
+phase:
+  id: P07
+  title: "Localization architecture + first translation"
+  priority: medium
+  status: todo
+  estimated_effort: "L (4-6 agent sessions; mechanical but wide)"
+  depends_on: [P06]
+  enables: [P08, P10, P12, P13]
+  findings: [F017]
+  target_modules: [":core-network", ":core-domain", ":app"]
+
+context:
+  problem: |
+    The app cannot be translated:
+      1. Core layers return human-readable English inside NetworkResult.Error(message) and
+         *FlowResult.ValidationError(message); ViewModels copy the string into UiState.Error and
+         composables render it verbatim. ~60 distinct English sentences live below :app.
+      2. Core enums expose English UI text (DnsRecordType.displayName/description, DnsServer
+         displayName/description, WifiSecurity/WifiStandard displayName, WifiChannelInfo
+         congestionLabel, PortScanPreset.label, SecurityHeaderCheck.description,
+         TopologyNodeParser.timeticksToHuman, TopologyDiscoveryEvent.Progress.message).
+      3. Composables/ViewModels with literals: TopologyDiscoveryScreen.kt:195,584,620,844,949;
+         ToolHelpSheet.kt:77 ("How to use"); DnsScreen.kt:812 ("via …"), :1024 ("TTL …");
+         WifiScanViewModel ("This network is no longer in range"); TopologyDiscoveryViewModel
+         ("Starting..."); ApSortOrder(label); NavRoutes.ToolInfo label/shortLabel/description and
+         NavRoutes.label (used by bottom bar, More sheet, Home grid, help titles).
+      4. Three PluralsCandidate lint warnings (strings.xml:95, 296, 1081).
+      5. No localeConfig / per-app language support; no pseudo-locale testing.
+  evidence:
+    - { grep: "grep -rn 'NetworkResult.Error(\\\"' core-network/src/main core-domain/src/main | wc -l", note: "count of literal error sites (record actual number when starting)" }
+    - { grep: "grep -rn 'ValidationError(\\\"' core-domain/src/main | wc -l" }
+    - { grep: "grep -rnE 'text\\s*=\\s*\\\"[A-Za-z]' app/src/main/kotlin | grep -v stringResource" }
+    - { file: "app/src/main/res/", note: "only values/ exists" }
+  desired_behaviour: |
+    Core returns typed error codes with arguments; :app maps codes to string resources; enums are
+    mapped to resources in :app; no literal user-facing text outside strings.xml; strings carry
+    plurals where quantities appear; the app declares supported locales and ships at least one
+    complete translation; pseudo-locales are enabled in debug builds for layout testing.
+
+goals:
+  - "Typed error model end-to-end with a safe fallback (untyped exception messages still shown)."
+  - "0 user-visible literals in :app Kotlin (enforced by a unit test that scans sources for `Text(\"` / `text = \"` patterns outside allowed files)."
+  - "Per-app language (Android 13+) via localeConfig; AppCompat not required (Compose app: use `android:localeConfig` + LocaleManager; on < 33 fall back to system locale)."
+  - "One full translation (choose `de` unless the owner specifies) + pseudo-locales en-XA/ar-XB in debug."
+
+non_goals:
+  - "Translating help-sheet long-form copy perfectly – machine-drafted is acceptable, flagged for review."
+  - "RTL layout fixes discovered by ar-XB beyond trivial ones (log them into P08)."
+
+assumptions:
+  - id: A1
+    statement: "Adding a parameter with a default to NetworkResult.Error keeps all existing call sites compiling."
+    verify_with: "Compile after the change."
+  - id: A2
+    statement: "Compose `stringResource(id, *args)` + `pluralStringResource` cover all formatting needs; no ICU MessageFormat required."
+  - id: A3
+    statement: "AGP 9.4 supports `androidResources { generateLocaleConfig = true }` producing locale config from resource folders."
+    verify_with: "Try it; if unavailable, hand-write res/xml/locales_config.xml and reference android:localeConfig in the manifest."
+
+constraints:
+  - "core modules stay Android-free: error codes are plain enums/sealed classes with no resource ids."
+  - "Keep `message` on NetworkResult.Error (used in logs/tests) – mark it 'developer message' in KDoc."
+  - "Each ViewModel change must keep its existing tests green or adapt them intentionally (216 tests)."
+  - "Do not rename existing string keys (instrumented tests reference many)."
+
+design:
+  overview: |
+    core-network:
+      enum class ErrorCode {
+        // validation
+        HOST_BLANK, HOST_INVALID, TIMEOUT_OUT_OF_RANGE, COUNT_OUT_OF_RANGE, PORT_OUT_OF_RANGE, PORT_RANGE_INVERTED,
+        PORT_RANGE_TOO_LARGE, CONCURRENCY_OUT_OF_RANGE, SUBNET_BLANK, SUBNET_INVALID, URL_BLANK, URL_MALFORMED,
+        URL_SCHEME_UNSUPPORTED, MAC_BLANK, MAC_INVALID, BROADCAST_BLANK, QUERY_BLANK, DOMAIN_TOO_LONG,
+        CUSTOM_DNS_BLANK, MAX_HOPS_OUT_OF_RANGE, PROBES_OUT_OF_RANGE, PACKET_SIZE_OUT_OF_RANGE, PAYLOAD_OUT_OF_RANGE,
+        TTL_OUT_OF_RANGE, INTERVAL_OUT_OF_RANGE, SNMP_COMMUNITY_BLANK, SNMP_V3_USER_BLANK, SNMP_V3_PRIV_WITHOUT_AUTH,
+        // runtime
+        DNS_NO_SYSTEM_RESOLVER, DNS_LOOKUP_FAILED, WHOIS_IANA_FAILED, WHOIS_RESPONSE_TOO_LARGE, WHOIS_REFERRAL_REFUSED,
+        HTTP_TOO_MANY_REDIRECTS, HTTP_REDIRECT_MALFORMED, HTTP_REDIRECT_UNSUPPORTED_SCHEME, HTTP_INSECURE_DOWNGRADE,
+        HTTP_NETWORK_ERROR, TLS_HANDSHAKE_FAILED, WOL_SEND_FAILED, LOCAL_NETWORK_PERMISSION_DENIED, NO_RESPONSE,
+        NETWORK_IO, UNKNOWN
+      }
+      data class ErrorInfo(val code: ErrorCode, val args: List<Any> = emptyList(), val developerMessage: String)
+      sealed class NetworkResult { data class Error(val message: String, val cause: Throwable? = null, val info: ErrorInfo? = null) }
+        + factory `NetworkResult.error(code, vararg args, cause = null, message = code.defaultMessage(args))` where defaultMessage is a
+          developer-facing English template kept in core (for logs/tests only).
+    core-domain:
+      Every *FlowResult.ValidationError(message) -> ValidationError(info: ErrorInfo) (keep `message` as a computed property = info.developerMessage).
+      validatePingCommon & friends return ErrorInfo?.
+    :app
+      sealed interface UiText { data class Res(@StringRes val id: Int, val args: List<Any>) ; data class Plural(id, quantity, args) ; data class Plain(val text: String) }
+      @Composable fun UiText.asString(): String
+      object ErrorTextMapper { fun map(info: ErrorInfo?, fallback: String): UiText }  // ErrorCode -> R.string.err_<code>
+      UiState.Error(message: String) -> UiState.Error(text: UiText)  in all 14 ViewModels (+ Settings/Onboarding untouched).
+      Enum mapping: `fun DnsRecordType.labelRes(): Int`, `descriptionRes()`, `DnsServer.labelRes()/descriptionRes()`, `WifiSecurity.labelRes()`, `WifiStandard.labelRes()`,
+        `WifiChannelInfo.congestionLabelRes()`, `PortScanPreset.labelRes()`, `SecurityHeaderCheck` -> map by headerName+rating to R.string.httprobe_sec_<header>_<rating> (analyzer keeps a `descriptionKey: String` instead of English),
+        Topology Progress(ip, nodesDone) -> stringResource(R.string.topology_progress_querying, ip); uptime formatting in UI from raw timeticks (TopologyNode.uptimeTicks: Long?).
+      NavRoutes: ToolInfo(labelRes, shortLabelRes, descriptionRes) – all consumers use stringResource.
+      Literal sweep: strings for every site listed in `evidence`.
+      Plurals: ping_showing_recent (quantity = total), wol_success_detail (quantity = packets), wifi_best_channel_body -> tools:ignore="PluralsCandidate" (channel number is not a quantity).
+      Guard test: app/src/test/.../i18n/NoHardcodedUiStringsTest.kt scans the module sources (working directory of :app unit tests is the module dir, so resolve `File("src/main/kotlin")` and fall back to `File("app/src/main/kotlin")`; fail loudly if neither exists rather than silently passing) for regexes `Text\(\s*"`, `text\s*=\s*"[A-Za-z]`, `label\s*=\s*\{\s*Text\("`, `contentDescription\s*=\s*"[A-Za-z]` and fails listing offenders (allowlist: tests, previews annotated @Preview via a marker comment `// i18n-ok`).
+      Locale config: res/xml/locales_config.xml (en, de) + manifest android:localeConfig; Settings row "App language" -> on API 33+ opens Settings.ACTION_APP_LOCALE_SETTINGS; hidden below 33.
+      Pseudo-locales: app/build.gradle.kts `buildTypes.debug { isPseudoLocalesEnabled = true }`.
+      Translation: res/values-de/strings.xml complete (every non-translatable="false"? – all keys; mark brand/tech tokens translatable="false" in values/strings.xml: 'Cloudflare', 'speed.cloudflare.com', URLs, 'ICMP', 'UDP', 'SNMP' where standalone).
+      Lint: MissingTranslation remains a warning; add `lint { warning += "MissingTranslation" }` explicitly; CI report shows drift.
+
+  files_to_create:
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/ErrorCode.kt
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/ErrorInfo.kt
+    - core-network/src/test/kotlin/net/aieat/netswissknife/core/network/ErrorInfoTest.kt
+    - app/src/main/kotlin/net/aieat/netswissknife/app/ui/i18n/UiText.kt
+    - app/src/main/kotlin/net/aieat/netswissknife/app/ui/i18n/ErrorTextMapper.kt
+    - app/src/main/kotlin/net/aieat/netswissknife/app/ui/i18n/EnumLabels.kt
+    - app/src/test/kotlin/net/aieat/netswissknife/app/ui/i18n/ErrorTextMapperTest.kt
+    - app/src/test/kotlin/net/aieat/netswissknife/app/ui/i18n/NoHardcodedUiStringsTest.kt
+    - app/src/main/res/xml/locales_config.xml
+    - app/src/main/res/values-de/strings.xml
+  files_to_modify:
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/NetworkResult.kt
+    - every core-network *RepositoryImpl.kt that builds NetworkResult.Error (dns, whois, httprobe, tls, wol, subnet, speedtest Failed(message))
+    - core-domain use cases + *FlowResult.kt + PingValidation.kt + TopologyParamsValidator (ValidationResult.errors: List<ErrorInfo>)
+    - all core-domain/core-network tests asserting on message text -> assert on code
+    - app ViewModels (14) + screens + NavRoutes.kt + MoreToolsSheet.kt + HomeScreen.kt + ToolHelpSheet.kt + MainActivity.kt + strings.xml + AndroidManifest.xml + app/build.gradle.kts
+    - "README.md (Localization section), CLAUDE.md (architecture invariant: core layers return ErrorInfo codes, never user-facing text)"
+
+tasks:
+  - id: P07-T1
+    title: "core-network: ErrorCode/ErrorInfo + NetworkResult.Error.info + factory; migrate core-network error sites"
+    status: todo
+    tdd:
+      red:
+        test_file: core-network/src/test/kotlin/net/aieat/netswissknife/core/network/ErrorInfoTest.kt
+        tests:
+          - "NetworkResult.error(ErrorCode.TIMEOUT_OUT_OF_RANGE, 100, 30000).info.args == [100, 30000] and message contains '100' and '30000'"
+          - "existing NetworkResult.Error('x') still constructs with info == null (back-compat)"
+          - "DnsRepositoryImplTest: empty system list -> info.code == DNS_NO_SYSTEM_RESOLVER"
+          - "WhoisRepositoryImplTest: timeout 100 -> TIMEOUT_OUT_OF_RANGE; HttpProbeRepositoryTest: scheme ftp -> URL_SCHEME_UNSUPPORTED; TlsInspectorRepositoryImplTest: blank host -> HOST_BLANK; WakeOnLanRepositoryImplTest: bad mac -> MAC_INVALID; SubnetCalculatorRepositoryTest: invalid -> SUBNET_INVALID with developer message preserved"
+        run: "./gradlew :core-network:test --no-daemon"
+        expect: "RED"
+      green: { steps: ["Implement; replace each literal with the factory; keep messages as developer text."], run: "./gradlew :core-network:test --no-daemon", expect: "PASS" }
+      refactor: ["SpeedTestEvent.Failed(phase, message) -> Failed(phase, info: ErrorInfo) with message property for compatibility."]
+    acceptance_criteria: ["`grep -rn 'NetworkResult.Error(\"' core-network/src/main` returns 0."]
+
+  - id: P07-T2
+    title: "core-domain: ValidationError carries ErrorInfo; validators return codes"
+    status: todo
+    depends_on: [P07-T1]
+    tdd:
+      red:
+        tests:
+          - "PingUseCaseTest: blank host -> ValidationError.info.code HOST_BLANK; count 0 -> COUNT_OUT_OF_RANGE args [1,100]"
+          - "PortScanUseCaseTest: range > 10_000 -> PORT_RANGE_TOO_LARGE args [10000, actual]"
+          - "LanScanUseCaseTest: bad CIDR -> SUBNET_INVALID"
+          - "TracerouteUseCaseTest, TlsInspectorUseCaseTest, HttpProbeUseCaseTest, WhoisLookupUseCaseTest, WakeOnLanUseCaseTest, DnsLookupUseCaseTest, TopologyDiscoveryUseCaseTest (Error event carries List<ErrorInfo> joined for message)"
+        run: "./gradlew :core-domain:test --no-daemon"
+        expect: "RED"
+      green: { steps: ["Migrate all use cases; keep `message` computed properties."], run: "./gradlew :core-domain:test --no-daemon", expect: "PASS" }
+    acceptance_criteria: ["`grep -rn 'ValidationError(\"' core-domain/src/main` returns 0."]
+
+  - id: P07-T3
+    title: "app: UiText + ErrorTextMapper + enum label mapping + ViewModel migration"
+    status: todo
+    depends_on: [P07-T2]
+    tdd:
+      red:
+        test_file: app/src/test/kotlin/net/aieat/netswissknife/app/ui/i18n/ErrorTextMapperTest.kt
+        tests:
+          - "every ErrorCode value maps to a non-zero string id (iterate ErrorCode.entries; assert mapper.map(ErrorInfo(code,…)) is UiText.Res)"
+          - "null info -> UiText.Plain(fallback)"
+          - "args are forwarded in order"
+          - "ViewModel tests: UiState.Error holds UiText.Res(R.string.err_host_blank) for blank host (update ~14 test files)"
+        run: "./gradlew :app:testDebugUnitTest --no-daemon"
+        expect: "RED"
+      green:
+        steps:
+          - "Add strings err_<code lowercase> for all codes (with %1$s/%1$d placeholders where args exist)."
+          - "Migrate ViewModels: Error(message) -> Error(text: UiText); screens: `state.text.asString()`."
+          - "EnumLabels.kt mapping functions; replace `.displayName`/`.description`/`.label`/`.congestionLabel` usages in composables (grep each)."
+          - "Topology: Progress(ip, nodesDone); uptimeTicks on node; UI formats via strings topology_uptime_dhms/hms."
+          - "SecurityHeaderCheck.descriptionKey (e.g. 'hsts_pass') and strings httprobe_sec_<key>; analyzer tests assert keys not English."
+        run: "./gradlew :app:testDebugUnitTest :app:assembleDebug --no-daemon"
+        expect: "PASS"
+      refactor: ["Add app Kover includes: ui.i18n.* (ErrorTextMapper 100%)."]
+    acceptance_criteria: ["No composable reads `.message` from a core type for display."]
+
+  - id: P07-T4
+    title: "Literal sweep + guard test + plurals"
+    status: todo
+    depends_on: [P07-T3]
+    tdd:
+      red:
+        test_file: app/src/test/kotlin/net/aieat/netswissknife/app/ui/i18n/NoHardcodedUiStringsTest.kt
+        tests: ["scan fails on baseline (lists TopologyDiscoveryScreen, ToolHelpSheet, DnsScreen, NavRoutes, WifiScanViewModel, TopologyDiscoveryViewModel, ApSortOrder)"]
+        run: "./gradlew :app:testDebugUnitTest --tests '*NoHardcodedUiStringsTest' --no-daemon"
+        expect: "RED"
+      green:
+        steps:
+          - "Move each literal to strings.xml (keys: topology_snmp_config_title, topology_idle_hint, topology_failed_title, topology_empty_nodes, topology_snmp_unreachable, help_how_to_use, dns_via_server, dns_ttl_value, wifi_ap_out_of_range, topology_progress_starting, wifi_sort_signal/name/channel, tool_<route>_label/short/description …)."
+          - "NavRoutes.ToolInfo -> resource ids; NavRoutes.label -> labelRes; update HomeScreen/MoreToolsSheet/MainActivity/ToolHeroHeader callers."
+          - "Plurals per design; run lint: PluralsCandidate count 0 (or explicitly ignored with tools:ignore + comment)."
+        run: "./gradlew :app:testDebugUnitTest :app:lintDebug --no-daemon --no-parallel"
+        expect: "PASS; guard test green"
+    acceptance_criteria: ["Guard test is part of the normal unit test run."]
+
+  - id: P07-T5
+    title: "Locale config, per-app language entry point, pseudo-locales, first translation"
+    status: todo
+    depends_on: [P07-T4]
+    steps:
+      - "app/build.gradle.kts: androidResources { generateLocaleConfig = true } (A3) or manual locales_config.xml; debug { isPseudoLocalesEnabled = true }."
+      - "SettingsScreen: 'App language' row visible on API 33+ opening ACTION_APP_LOCALE_SETTINGS with package URI."
+      - "Create values-de/strings.xml: translate all keys (machine draft acceptable; keep placeholders identical; run `./gradlew :app:lintDebug` for StringFormatMatches / MissingTranslation / ExtraTranslation = 0 errors)."
+      - "Mark technical tokens translatable=\"false\" in values/strings.xml."
+      - "Instrumented smoke: UiSmokeTest runs under locale de (AndroidJUnitRunner arg or `adb shell settings put system system_locales de-DE` in a manual step) – at least a manual pass with screenshots in the PR."
+    validation:
+      - "Run app with pseudo-locale en-XA: no clipped hero titles at 1.0 font scale (log issues to P08)."
+      - "ar-XB: bottom nav, cards, chips mirror correctly; charts remain LTR by design (document)."
+    acceptance_criteria: ["values-de complete; lint 0 errors; README Localization section."]
+
+  - id: P07-T6
+    title: "Docs: README Localization section, CLAUDE.md invariant, tool_instructions checklist item"
+    status: todo
+    depends_on: [P07-T5]
+    steps:
+      - "CLAUDE.md Architecture Invariants: add 'core layers return ErrorInfo codes; :app maps to strings; no user-facing text below :app'."
+      - "claude/tool_instructions.md: add 'ErrorCode entries + err_* strings + values-de strings' to the new-tool checklist."
+      - "README: 'Languages: English, German (community translations welcome – values-<lang>/strings.xml)'."
+
+qa_validation:
+  automated:
+    - "./gradlew test --no-daemon"
+    - "./gradlew :app:lintDebug --no-daemon --no-parallel  (0 errors; 0 PluralsCandidate; MissingTranslation only for keys intentionally untranslated)"
+    - "./gradlew :app:koverVerify :core-domain:koverVerify :core-network:koverVerify --no-daemon"
+  manual_device:
+    - "Switch app language to German (API 33+) – all screens localized; error for invalid host localized."
+    - "Pseudo-locale en-XA/ar-XB walkthrough of all 14 tools; capture issues."
+
+docs_updates: [README.md, CLAUDE.md, claude/tool_instructions.md]
+
+risks:
+  - risk: "Wide mechanical change touches every ViewModel and test – merge conflicts with other phases."
+    mitigation: "Land P07-T1/T2 (core) first in one PR; T3+ per tool group in small PRs; coordinate ordering: P07 before P10/P12/P13."
+  - risk: "Translation quality."
+    mitigation: "Flag values-de as machine-drafted in a comment header; owner review."
+
+rollback: |
+  Additive at core level (info nullable). UI migration is mechanical; revert per PR.
+
+definition_of_done:
+  - "F017 closed; guard test enforcing; one translation shipped; global DoD."

@@ -1,0 +1,232 @@
+# =============================================================================
+# P10 – Security tools depth: TLS Inspector, HTTP Probe, WHOIS
+# =============================================================================
+# Audience: AI coding agent. Self-contained. Read plan/plan.yaml `agent_execution_rules` first.
+phase:
+  id: P10
+  title: "TLS (hostname verification, validity windows, chain issues, protocol/ALPN probing, PEM export, pin check) · HTTP Probe (OkHttp engine with timing breakdown + HTTP/2, redirect hops with status, downgrade as warning, deeper header grading, cookie check, cURL export, JSON pretty-print) · WHOIS (monotonic timing, RDAP with fallback, public suffix list)"
+  priority: medium
+  status: todo
+  estimated_effort: "L (4-6 agent sessions; split into three PR series TLS / HTTP / WHOIS)"
+  depends_on: [P07]          # error typing + descriptionKey model; can start core work earlier on a branch
+  enables: [P15]
+  findings: [F015, F028, F029]
+  target_modules: [":core-network", ":core-domain", ":app"]
+
+context:
+  problem: |
+    TLS Inspector
+      - Handshake uses TrustAllManager (by design, to capture bad chains) and evaluates chain trust
+        separately, but NEVER verifies the hostname against SAN/CN -> a valid certificate for the
+        wrong host reads as trusted. Lint flags TrustAllX509TrustManager on core-network.jar.
+      - Only `isExpired`; no not-yet-valid, days-until-expiry, weak signature/key, incomplete chain.
+      - Only the negotiated protocol/cipher; no per-protocol support probe, no ALPN result.
+      - Handshake time via System.currentTimeMillis includes DNS + TCP connect.
+      - No PEM export / pin comparison.
+    HTTP Probe
+      - HttpURLConnection: no HTTP/2, no DNS/connect/TLS/TTFB breakdown, transparent gzip hides sizes.
+      - HTTPS->HTTP redirect aborts the whole probe as an Error (HttpProbeRepositoryImpl.kt:126-133)
+        instead of reporting the downgrade; redirectChain has no status codes/locations.
+      - HttpSecurityAnalyzer rates HSTS/CSP PASS for any non-blank value; no Set-Cookie flags check.
+      - No cURL export; body is raw text (no JSON validity/pretty-print).
+    WHOIS
+      - Durations via System.currentTimeMillis (MonotonicClock exists).
+      - No RDAP (RFC 7480-7484) – the modern, structured, HTTPS-based registry protocol; many TLDs
+        now rate-limit or redact port-43 WHOIS.
+      - extractRegistrableDomain uses a 30-entry compound TLD list; TLD_FALLBACK 11 entries.
+  evidence:
+    - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/tls/TlsInspectorRepositoryImpl.kt", lines: "139-205" }
+    - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/tls/TlsCertificateParser.kt", lines: "26-27, 82-117" }
+    - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/httprobe/HttpProbeRepositoryImpl.kt", lines: "77-190" }
+    - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/httprobe/HttpSecurityAnalyzer.kt" }
+    - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/whois/WhoisRepositoryImpl.kt", lines: "queryServer, extractRegistrableDomain, TLD_FALLBACK" }
+
+goals:
+  - "TLS: hostname match, validity window, chain issue list, optional protocol probe, ALPN, PEM share, pin check; monotonic connect vs handshake timing."
+  - "HTTP: OkHttp-based engine (HTTP/2, EventListener timings), redirect hops with codes, downgrade warning, richer grading with keys (P07), cookie flags, cURL export, JSON pretty-print."
+  - "WHOIS: RDAP first with WHOIS fallback, PSL-based registrable domain, monotonic timing."
+  - "All parsing/grading logic pure and unit-tested; network only behind injectable engines."
+
+non_goals:
+  - "Certificate Transparency lookup (P15 tool)."
+  - "OCSP/CRL revocation network checks (later; note stapled OCSP status only if the platform exposes it)."
+  - "HTTP request history / collections."
+
+dependency_decision:
+  add_dependencies:
+    - { lib: "com.squareup.okhttp3:okhttp", version: "latest stable 5.x (verify)", module: ":core-network", reason: "HTTP/2, ALPN, EventListener timing, connection pooling; pure JVM; also reused by P11 speed test and P15 API tools" }
+    - { lib: "org.jetbrains.kotlinx:kotlinx-serialization-json", version: "latest stable", module: ":core-network", reason: "RDAP/GeoIP/CT/BGP JSON parsing without hand-rolled regexes; requires kotlin('plugin.serialization') in core-network" }
+  proguard: "OkHttp ships consumer rules; kotlinx-serialization needs `-keep,includedescriptorclasses class net.aieat.netswissknife.**$$serializer { *; }` + standard rules (add to app/proguard-rules.pro; verify in release-smoke job from P09)."
+  size_impact: "~1.2 MB dex before shrinking; acceptable for a diagnostics app – record delta in PR."
+
+assumptions:
+  - id: A1
+    statement: "ALPN: `SSLParameters.setApplicationProtocols` is a Java 9 API. core-network compiles against JDK 21 so the call compiles, but on Android < 29 the method does not exist at runtime and the call throws java.lang.NoSuchMethodError (an Error, not an Exception) – catch Throwable/LinkageError around it or gate via reflection (`SSLParameters::class.java.getMethod(\"setApplicationProtocols\", …)`), and read the negotiated value with `SSLSocket.getApplicationProtocol()` guarded the same way. Protocol probe: SSLSocket.enabledProtocols can restrict to a single protocol; on Android 10+ Conscrypt has TLSv1/TLSv1.1 disabled by default and setting them may throw IllegalArgumentException or fail the handshake – both mean 'unsupported by this device', which must be reported as 'not testable from this device' rather than 'server does not support'."
+    verify_with: "Device spike on an API 26-28 device (or emulator) and an API 34 device: ALPN call path + for p in [TLSv1, TLSv1.1, TLSv1.2, TLSv1.3]: socket.enabledProtocols = arrayOf(p); startHandshake(); classify exceptions."
+    if_false: "Protocol probe stays optional/hidden; ALPN shown only on API 29+."
+  - id: A2
+    statement: "OkHttp EventListener callbacks (dnsStart/dnsEnd, connectStart/secureConnectStart/secureConnectEnd/connectEnd, responseHeadersStart, responseBodyEnd) allow computing dns/connect/tls/ttfb/transfer durations."
+    verify_with: "OkHttp docs; unit test with MockWebServer. NOTE: for OkHttp 5.x the test artifact is `com.squareup.okhttp3:mockwebserver3` (package mockwebserver3), for 4.x it is `com.squareup.okhttp3:mockwebserver`. Pin whichever OkHttp line is chosen and record it in libs.versions.toml."
+  - id: A5
+    statement: "P07 introduced ErrorCode.HTTP_INSECURE_DOWNGRADE for the current abort-on-downgrade behaviour. This phase changes the downgrade into a followed-with-warning flag (`insecureDowngrade`), so that error code becomes unused in the success path – keep it only for the case where the user has disabled downgrade following (add a request option `allowInsecureDowngrade: Boolean = true`)."
+    verify_with: "Grep usages after implementation; no dead enum entries without a comment."
+  - id: A3
+    statement: "RDAP bootstrap: https://data.iana.org/rdap/dns.json maps TLDs to RDAP base URLs; https://rdap.org/ acts as a redirector for domains/IPs/ASNs (302 to the authoritative server)."
+    verify_with: "curl -sI https://rdap.org/domain/example.com | head"
+  - id: A4
+    statement: "Public suffix list can be bundled as a resource (~260 KB) from https://publicsuffix.org/list/public_suffix_list.dat and parsed at first use (< 50 ms)."
+
+constraints:
+  - "core-network remains Android-free; OkHttp and kotlinx-serialization are JVM libraries."
+  - "Keep existing repository interfaces working; add fields with defaults."
+  - "TrustAllManager stays for chain capture; document in code + lint.xml (P09) and ALWAYS pair with explicit trust + hostname evaluation surfaced in the result."
+  - "P07 typed errors + descriptionKey model must be used for new checks."
+
+design:
+  tls: |
+    TlsCertificate += notYetValid: Boolean, daysUntilExpiry: Long, isCa: Boolean, keyUsage: List<String>, pemEncoded: String
+    TlsInspectorResult += hostnameMatches: Boolean?, chainIssues: List<ChainIssue>, connectTimeMs, handshakeTimeMs (monotonic), alpn: String?,
+                          protocolSupport: Map<String, Boolean>? (null unless probed), ocspStapled: Boolean? (null if unknown), pinMatch: Boolean? (when expectedPinSha256 provided)
+    enum ChainIssue { EXPIRED, NOT_YET_VALID, EXPIRES_SOON, SELF_SIGNED, UNTRUSTED, HOSTNAME_MISMATCH, WEAK_SIGNATURE, WEAK_KEY, INCOMPLETE_CHAIN }
+    object HostnameMatcher { fun matches(host: String, sans: List<String>, subjectCn: String?): Boolean }  // RFC 6125: wildcard only in leftmost label, no partial wildcard, IP hosts must match IP SAN exactly, CN fallback only when no DNS SANs
+    TlsInspectorParams += probeProtocols: Boolean = false, expectedPinSha256: String? = null
+    Repository: resolve -> Socket().connect (connectTime) -> wrap via sslSocketFactory.createSocket(socket, host, port, autoClose=true) -> set SNI/ALPN -> startHandshake (handshakeTime) -> parse; then optional probe loop (new connections per protocol, max 4).
+    UI: issues list card (StatusColors warn/error), 'Days until expiry' badge, ALPN chip, 'Probe protocols' switch (advanced), 'Compare pin' field (paste SHA-256; shows match), share PEM (leaf/chain) via ShareUtils; copy rows exist.
+  http: |
+    interface HttpEngine { suspend fun execute(request: HttpEngineRequest): HttpEngineResponse }  // core-network/httprobe/engine
+    class OkHttpEngine(client: OkHttpClient) : HttpEngine – followRedirects=false (manual, as today), EventListener capturing timings, ALPN protocol (response.protocol), no automatic gzip (set Accept-Encoding: identity unless the user adds one), body read bounded as today.
+    HttpProbeRepositoryImpl(engine: HttpEngine = OkHttpEngine()) keeps redirect policy logic (moved to pure `RedirectPolicy` with tests): cross-origin strips custom headers; HTTPS->HTTP downgrade: FOLLOW but strip ALL custom headers and body, set warning flag; 10 hops max.
+    HttpProbeResult += timings: HttpTimings(dnsMs, connectMs, tlsMs, ttfbMs, transferMs, totalMs), protocol: String ("h2"/"http/1.1"), redirectHops: List<RedirectHop(url, statusCode, location)>, insecureDowngrade: Boolean, cookies: List<CookieCheck>, bodyKind: BodyKind (JSON/HTML/TEXT/BINARY), jsonValid: Boolean?
+    HttpSecurityAnalyzer v2 (keys per P07): HSTS max-age >= 1y PASS / < 1y WARN / missing FAIL (+ includeSubDomains/preload INFO); CSP: missing WARN; contains 'unsafe-inline' or 'unsafe-eval' in script-src/default-src WARN; report-only-only INFO; X-Frame-Options PASS also when CSP frame-ancestors present; Set-Cookie: each cookie Secure+HttpOnly (+SameSite) PASS/WARN; X-XSS-Protection present -> INFO 'deprecated'.
+    CurlExporter.build(request): String (pure; quotes/escapes; -X, -H, --data-raw, -L when follow, --compressed no)
+    JsonPrettyPrinter (pure minimal; validates) or kotlinx-serialization Json { prettyPrint = true } parse -> if fails jsonValid=false.
+    UI: Overview tab timing bar (stacked horizontal bar with legend), protocol chip, downgrade warning card (errorContainer), redirect hops list with status codes, Security tab new rows, Body tab 'Pretty JSON' toggle + validity chip, toolbar action 'Copy as cURL'.
+  whois: |
+    WhoisRepositoryImpl: MonotonicClock injected; RdapClient (OkHttp + kotlinx-serialization) with bootstrap cache (in-memory + DataStore-free; 24 h TTL in memory only) ; lookup(query, timeoutMs, protocol: WhoisProtocol = AUTO)
+      AUTO: try RDAP (domain: bootstrap TLD -> base/domain/<name>; ip/asn: rdap.org redirector) -> map to WhoisResult (+ raw JSON as a hop with role RDAP) ; on failure (404/timeout/unsupported) fall back to WHOIS chain as today.
+    WhoisServerRole += RDAP ; WhoisHop.rawResponse holds JSON for RDAP hops (UI shows 'RDAP' label).
+    PublicSuffix (core, resource public_suffix_list.dat): registrableDomain(host) replaces COMPOUND_TLDS.
+    UI: protocol toggle (Auto/RDAP/WHOIS) in advanced options; hop chain visualiser supports an RDAP node.
+
+  files_to_create:
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/tls/{HostnameMatcher,ChainIssue,ChainAnalyzer,PemEncoder}.kt + tests
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/httprobe/engine/{HttpEngine,OkHttpEngine,HttpTimings}.kt
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/httprobe/{RedirectPolicy,CurlExporter,JsonPrettyPrinter,CookieAnalyzer}.kt + tests
+    - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/whois/{RdapClient,RdapModels,RdapMapper,PublicSuffix}.kt + tests
+    - core-network/src/main/resources/psl/public_suffix_list.dat
+    - core-network/src/test/resources/rdap/{domain-example.json,ip-8.8.8.8.json,asn-15169.json,bootstrap-dns.json}
+    - core-network/src/test/resources/tls/*.pem (leaf/intermediate/root fixtures; expired; wildcard; ip-san) generated with openssl (script under tools/tls/make-fixtures.sh)
+  files_to_modify:
+    - core-network/build.gradle.kts (okhttp, kotlinx-serialization, mockwebserver test dep, serialization plugin)
+    - gradle/libs.versions.toml, app/proguard-rules.pro
+    - tls/*.kt, httprobe/*.kt, whois/*.kt + tests; core-domain {TlsInspectorUseCase,HttpProbeUseCase,WhoisLookupUseCase}.kt + tests
+    - app screens/ViewModels for tls, httprobe, whois; strings.xml (+de); README.md
+
+tasks:
+  - id: P10-T1
+    title: "TLS: HostnameMatcher + ChainAnalyzer + PEM (pure) with fixture certificates"
+    status: todo
+    tdd:
+      red:
+        test_file: core-network/src/test/kotlin/net/aieat/netswissknife/core/network/tls/HostnameMatcherTest.kt
+        tests:
+          - "'www.example.com' matches SAN DNS:www.example.com; matches DNS:*.example.com; does NOT match DNS:*.com; does NOT match 'a.b.example.com' for *.example.com"
+          - "IP host '1.1.1.1' matches IP:1.1.1.1 only; does not match DNS SAN"
+          - "CN fallback used only when no DNS SANs present"
+          - "case-insensitive; trailing dot tolerated"
+        also_test_file: core-network/src/test/kotlin/net/aieat/netswissknife/core/network/tls/ChainAnalyzerTest.kt
+        also_tests:
+          - "expired leaf -> EXPIRED; notBefore in future -> NOT_YET_VALID; < 30 days -> EXPIRES_SOON (clock injected)"
+          - "SHA1withRSA -> WEAK_SIGNATURE; RSA 1024 -> WEAK_KEY; EC 256 fine"
+          - "self-signed single cert -> SELF_SIGNED + UNTRUSTED (trusted=false)"
+          - "chain of leaf only with issuer != subject and untrusted -> INCOMPLETE_CHAIN"
+          - "PemEncoder.encode(cert) starts with '-----BEGIN CERTIFICATE-----' and wraps at 64 chars"
+        run: "./gradlew :core-network:test --tests '*tls*' --no-daemon"
+        expect: "RED"
+      green: { steps: ["Implement; fixture certs generated by tools/tls/make-fixtures.sh (openssl req/x509; commit PEMs)."], run: "same", expect: "PASS" }
+    acceptance_criteria: ["Pure code >= 95% covered."]
+
+  - id: P10-T2
+    title: "TLS repository: two-phase timing, hostname/chain results, ALPN, optional protocol probe, pin check; UI"
+    status: todo
+    depends_on: [P10-T1]
+    tdd:
+      red:
+        tests:
+          - "TlsInspectorRepositoryImplTest: inject a `HandshakeEngine` fake returning session data (protocol, cipher, certs, alpn) -> result.hostnameMatches computed via matcher; chainIssues from analyzer; pinMatch true/false when expectedPin given"
+          - "probeProtocols=true -> engine invoked once per candidate protocol; unsupported when engine throws SSLHandshakeException"
+          - "TlsInspectorUseCaseTest: pin string normalised (strip ':' , case) and validated (64 hex) -> else error code TLS_PIN_INVALID"
+          - "TlsInspectorViewModelTest: advanced toggles; share PEM builds text from result"
+          - "TlsInspectorScreenTest: issues card lists EXPIRED chip; ALPN chip; pin field"
+        expect: "RED"
+      green: { steps: ["Refactor repository around HandshakeEngine (default = SSLSocket impl) so the JVM test never opens sockets; UI per design."], expect: "PASS" }
+    acceptance_criteria: ["Manual: badssl.com hosts – expired.badssl.com (EXPIRED), wrong.host.badssl.com (HOSTNAME_MISMATCH), self-signed.badssl.com, incomplete-chain.badssl.com, tls-v1-0.badssl.com:1010 (probe)"]
+
+  - id: P10-T3
+    title: "HTTP: OkHttp engine + timings + protocol; RedirectPolicy pure; downgrade as warning; redirect hops"
+    status: todo
+    tdd:
+      red:
+        tests:
+          - "RedirectPolicyTest: 301 POST->GET no body; 307 keeps; cross-origin strips custom headers; https->http sets insecureDowngrade and strips headers+body; > 10 hops -> HTTP_TOO_MANY_REDIRECTS"
+          - "OkHttpEngineTest (MockWebServer): timings non-negative and totalMs >= ttfbMs; protocol reported; body bounded at maxBytes with truncated flag; error body for 4xx"
+          - "HttpProbeRepositoryTest (existing 617 lines) migrated to the engine fake; redirectHops carry status codes and Location"
+        expect: "RED"
+      green: { steps: ["Add deps; implement; keep HttpURLConnection engine class for one release as `LegacyHttpEngine` (not default)."], expect: "PASS" }
+    acceptance_criteria: ["Kover core-network >= 70% after adding OkHttp adapter (adapter thin; MockWebServer tests cover it)."]
+
+  - id: P10-T4
+    title: "HTTP: analyzer v2 (keys), cookie check, cURL export, JSON pretty-print; UI tabs"
+    status: todo
+    depends_on: [P10-T3, P07]
+    tdd:
+      red:
+        tests:
+          - "HttpSecurityAnalyzerTest: HSTS 'max-age=63072000; includeSubDomains; preload' -> PASS key hsts_pass_strong; 'max-age=300' -> WARN hsts_short; CSP with 'unsafe-inline' -> WARN csp_unsafe_inline; frame-ancestors present without XFO -> XFO PASS key xfo_via_csp"
+          - "CookieAnalyzerTest: 'sid=1; Secure; HttpOnly; SameSite=Lax' PASS; missing Secure on https WARN; missing HttpOnly WARN"
+          - "CurlExporterTest: GET simple; POST with headers and body escaped single quotes; follow -> -L"
+          - "JsonPrettyPrinterTest: valid object/array pretty; invalid -> null; large input 512 KB within 200 ms"
+          - "HttpProbeViewModelTest: copyAsCurl exposes string; prettyJson toggle"
+          - "HttpProbeScreenTest: timing bar node; downgrade warning card when insecureDowngrade; 'Copy as cURL' action"
+        expect: "RED"
+      green: { steps: ["Implement; strings via keys httprobe_sec_<key> (P07)."], expect: "PASS" }
+    acceptance_criteria: ["README HTTP Probe section rewritten: 12 checks incl. cookies; timing breakdown; HTTP/2; cURL; downgrade warning."]
+
+  - id: P10-T5
+    title: "WHOIS: MonotonicClock, PublicSuffix, RDAP client with bootstrap + fallback; UI protocol toggle"
+    status: todo
+    tdd:
+      red:
+        tests:
+          - "PublicSuffixTest: registrableDomain('sub.example.co.uk')=='example.co.uk'; ('foo.github.io')=='foo.github.io' (private suffix); ('example.com.')=='example.com'; unknown TLD falls back to last two labels"
+          - "RdapMapperTest: domain JSON fixture -> registrar (entities role registrar, vcard fn), events (registration/expiration/last changed) -> epoch ms, nameservers ldhName, status list, secureDNS.delegationSigned -> dnssec; ip fixture -> netName(name), netRange(startAddress-endAddress), country; asn fixture -> orgName/handle"
+          - "RdapClientTest (MockWebServer): bootstrap dns.json served -> base URL chosen for 'com'; 404 -> RdapUnsupported -> repository falls back to WHOIS chain (fake port-43 transport)"
+          - "WhoisRepositoryImplTest: hops timing uses injected clock (deterministic ms)"
+          - "WhoisViewModelTest: protocol selection forwarded; hop chain shows RDAP node"
+        expect: "RED"
+      green: { steps: ["Implement per design; RDAP raw JSON pretty-printed in the raw view."], expect: "PASS" }
+    acceptance_criteria: ["Manual: example.com, google.com, 8.8.8.8, AS15169, a .de domain (DENIC RDAP) – parsed fields non-empty."]
+
+  - id: P10-T6
+    title: "Docs + README sync for all three tools"
+    status: todo
+    depends_on: [P10-T2, P10-T4, P10-T5]
+    steps: ["README Features: TLS/HTTP/WHOIS sections rewritten to actual behaviour; PRIVACY_POLICY: RDAP servers (rdap.org redirector, IANA bootstrap, registry RDAP endpoints) added; help sheets updated."]
+
+qa_validation:
+  automated: ["./gradlew test --no-daemon", "koverVerify x3", "lintDebug (0 errors; TrustAll suppressed via lint.xml with justification)", "release-smoke (P09) passes with new deps"]
+  manual_device:
+    - "TLS: badssl matrix above; ALPN 'h2' for https://www.google.com; PEM share opens share sheet."
+    - "HTTP: http://neverssl.com (no downgrade), https://httpbin.org/redirect-to?url=http://example.com (downgrade warning), https://httpbin.org/json (pretty JSON), timing bar sums to total."
+    - "WHOIS: RDAP vs WHOIS toggle; chain animation shows RDAP node."
+  regression: ["Existing screen tests for tls/httprobe/whois green."]
+
+docs_updates: [README.md, PRIVACY_POLICY.md, strings.xml (+de)]
+
+risks:
+  - risk: "OkHttp changes body-size semantics (transparent gzip)."
+    mitigation: "Send Accept-Encoding: identity by default; expose a toggle 'Accept compressed' later."
+  - risk: "RDAP bootstrap fetch adds a network call on first WHOIS use."
+    mitigation: "Cache in memory; fall back to rdap.org redirector; timeout 5 s."
+
+definition_of_done: ["F015, F028, F029 closed; global DoD."]

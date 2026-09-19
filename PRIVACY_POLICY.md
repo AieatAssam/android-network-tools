@@ -27,6 +27,8 @@ The debug log records app events and errors with timestamps. It is used for diag
 
 You can view the full contents of the debug log at any time via the in-app **Debug Logs** screen. You can also delete it from the same screen.
 
+The LAN Scanner may send ICMP/TCP probes and local NetBIOS (UDP/137) or mDNS (multicast UDP/5353) queries to devices on the subnet you choose. These discovery packets stay on the local network; their results are displayed in the app and are not uploaded by Net Swiss Knife.
+
 ---
 
 ## External Services

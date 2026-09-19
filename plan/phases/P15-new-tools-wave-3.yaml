@@ -1,0 +1,131 @@
+# =============================================================================
+# P15 – New tools wave 3: Bandwidth Monitor · Certificate Transparency Lookup · BGP Looking Glass · IP Lookup hub
+# =============================================================================
+# Audience: AI coding agent. Self-contained. Read plan/plan.yaml `agent_execution_rules` first.
+phase:
+  id: P15
+  title: "New tools wave 3 (platform stats + public API backed; each optional and independent)"
+  priority: low
+  status: todo
+  estimated_effort: "L (each ≈ 1-2 agent sessions)"
+  depends_on: [P13]           # checklist; P10 (OkHttp/serialization, RDAP) and P11 (GeoIP chain) are reused where present
+  enables: []
+  findings: []
+  target_modules: [":core-network", ":core-domain", ":app"]
+
+new_tool_checklist: "Identical to plan/phases/P13-new-tools-wave-1.yaml `new_tool_checklist` – apply to every tool below."
+
+tools:
+  # ---------------------------------------------------------------------------
+  - id: P15-BANDWIDTH
+    name: "Bandwidth Monitor"
+    route: "bandwidth"
+    package: "bandwidth"
+    icon: "Icons.Default.DataUsage"
+    more_section: "Diagnostics"
+    why: "Live throughput of the device without running a test; complements Speed Test; no permission needed for device totals."
+    behaviour: |
+      Samples android.net.TrafficStats every 1 s (total rx/tx, mobile rx/tx; Wi-Fi = total − mobile) while the screen is visible: live Rx/Tx rate (Mbps) big numbers, 60-sample sparkline chart, session totals, since-boot totals, peak; interface split (Wi-Fi vs mobile). Keep-screen-on optional. Share summary.
+      Optional second step (flagged, separate task): per-app usage for today/7 days via NetworkStatsManager (requires PACKAGE_USAGE_STATS granted through Settings.ACTION_USAGE_ACCESS_SETTINGS) – show top 10 apps with icons; hidden until permission granted; explain privacy (local only).
+    core_network:
+      models: "TrafficSample(elapsedMs, rxBytes, txBytes, mobileRx, mobileTx) ; RateSample(elapsedMs, rxBps, txBps) ; BandwidthSession(samples, peakRxBps, peakTxBps, totalRx, totalTx)"
+      pure_logic: "RateCalculator (delta/Δt, counter reset detection when value decreases -> skip sample, EMA smoothing α=0.3) ; SparklineWindow(60)"
+      repository: "interface TrafficStatsSource { fun read(): TrafficSample } (Android impl) ; BandwidthRepository.observe(intervalMs): Flow<RateSample> (core, uses injected source + clock)"
+    app: "TrafficStatsSourceImpl (TrafficStats + SystemClock), Module, VM (session lifecycle tied to screen via onStart/onStop like PingViewModel.onLifecycleStop), Screen (rate cards, chart with TextMeasurer + contentDescription, totals)."
+    tests:
+      unit: ["RateCalculatorTest (steady, burst, counter reset, zero Δt)", "BandwidthRepositoryTest (virtual clock; interval; cancellation)", "BandwidthViewModelTest"]
+      instrumented: ["BandwidthScreenTest ≥ 4 cases"]
+    privacy: "Local statistics only."
+
+  # ---------------------------------------------------------------------------
+  - id: P15-CTLOG
+    name: "Certificate Transparency Lookup"
+    route: "ctlog"
+    package: "ctlog"
+    icon: "Icons.Default.VerifiedUser"
+    more_section: "Security"
+    why: "Find every certificate publicly issued for a domain (shadow IT, phishing look-alikes, expired lingering certs); complements TLS Inspector."
+    behaviour: |
+      Query https://crt.sh/?q=<domain>&output=json (and %.<domain> for subdomains toggle), 15 s timeout, bounded to 2 000 rows; parse (id, issuer_name, common_name, name_value (SAN list, newline separated), not_before, not_after, serial). Group by leaf (dedupe pre-cert/cert pairs by serial), sort newest first; filters: active only / expired / issuer; summary chips (total, active, issuers count, subdomains count); row -> details sheet (SANs, validity, issuer, 'Open crt.sh' link, 'Inspect host' hand-off to TLS Inspector for a SAN). Recent-issue highlight (< 7 days).
+    core_network:
+      models: "CtEntry(id, issuer, commonName, sans, notBefore, notAfter, serial, isExpired, isPrecert?) ; CtReport(domain, entries, issuers, subdomains, fetchedAt)"
+      pure_logic: "CtJsonParser (kotlinx-serialization; tolerant to missing fields) ; CtGrouper (dedupe by serial, subdomain extraction) ; CtFilters"
+      repository: "interface CtLogRepository { suspend fun search(domain, includeSubdomains): NetworkResult<CtReport> } ; impl via HttpEngine/OkHttp with an in-memory cache (10 min)"
+    app: "Module, VM (query, toggles, filters, expansion), Screen (input, summary chips, LazyColumn rows, details sheet), Settings attribution 'crt.sh (Sectigo)'."
+    tests:
+      unit: ["CtJsonParserTest (fixture 50 rows incl. precert duplicates, null issuer)", "CtGrouperTest", "CtFiltersTest", "CtLogRepositoryTest (MockWebServer 200/429/timeout -> typed errors)", "CtLogViewModelTest"]
+      instrumented: ["CtLogScreenTest ≥ 4 cases"]
+    privacy: "Domain sent to crt.sh; document; rate-limit friendly (single request per search)."
+
+  # ---------------------------------------------------------------------------
+  - id: P15-BGP
+    name: "BGP Looking Glass"
+    route: "bgp"
+    package: "bgp"
+    icon: "Icons.Default.Public"
+    more_section: "Diagnostics"
+    why: "Answers 'who announces this prefix / is it RPKI-valid / what does this ASN announce' from the phone; used by network engineers daily."
+    behaviour: |
+      Input: IP, prefix (CIDR) or ASN (AS15169 / 15169). Uses the RIPEstat Data API (https://stat.ripe.net/data/<call>/data.json?resource=…, sourceapp=netswissknife):
+        - network-info (IP -> prefix + origin ASNs), prefix-overview (holder, announced, ASNs), routing-status (visibility, first seen, less/more specifics), rpki-validation (resource=ASN&prefix=…: valid/invalid/unknown), as-overview (holder, announced), announced-prefixes (for ASN; capped 500 rows with 'show more'), whois-like abuse contacts (abuse-contact-finder).
+      Screen: input with type detection chip (IP/Prefix/ASN), overview card (prefix, origin AS + holder, RPKI badge via StatusColors), visibility card (percentage of RIS peers seeing it), related prefixes list, for ASN a prefixes list with search; hand-offs: 'WHOIS/RDAP', 'Traceroute'.
+    core_network:
+      models: "BgpQueryType { IP, PREFIX, ASN } ; BgpPrefixInfo(prefix, originAsns, holder, rpki: RpkiStatus, visibilityPercent, firstSeen?, lessSpecifics, moreSpecifics) ; BgpAsnInfo(asn, holder, announcedPrefixesCount, prefixes: List<String>) ; BgpResult sealed"
+      pure_logic: "BgpQueryDetector ; RipeStatParsers (kotlinx-serialization per call) ; RpkiStatus mapper"
+      repository: "interface BgpRepository { suspend fun lookup(query): NetworkResult<BgpResult> } ; impl: RipeStatClient (OkHttp) with sourceapp param, 10 s timeout, in-memory cache"
+    app: "Module, VM, Screen; Settings attribution 'RIPEstat (RIPE NCC)' + terms link."
+    tests:
+      unit: ["BgpQueryDetectorTest", "RipeStatParsersTest (fixtures per call incl. error status)", "BgpRepositoryTest (MockWebServer; 429 typed error; cache)", "BgpViewModelTest"]
+      instrumented: ["BgpScreenTest ≥ 4 cases"]
+    privacy: "Query sent to stat.ripe.net; document."
+
+  # ---------------------------------------------------------------------------
+  - id: P15-IPLOOKUP
+    name: "IP Lookup"
+    route: "iplookup"
+    package: "iplookup"
+    icon: "Icons.Default.TravelExplore (swap Ports to Icons.Default.Radar to avoid duplicates)"
+    more_section: "Diagnostics"
+    why: "One place to answer 'what is this IP?' by composing existing engines: reserved-range classification (P11 ReservedRanges), reverse DNS, GeoIP provider chain (P11), RDAP/WHOIS summary (P10), BGP origin/RPKI (P15-BGP), and hand-offs to Ping/Traceroute/Ports/TLS."
+    behaviour: |
+      Input IP (v4/v6) or hostname (resolved, all addresses listed, pick one). Sections load independently with shimmer placeholders: Classification, Reverse DNS, Geolocation (flag, city, ISP, ASN, map-less lat/lon with 'Open in maps' geo: intent), Registration (RDAP/WHOIS: netname, org, country, range), Routing (prefix, origin AS, RPKI). Share full summary; recents.
+    core_domain: "IpLookupUseCase orchestrates with supervisorScope: each section a NetworkResult; partial failures displayed per section."
+    tests:
+      unit: ["IpLookupUseCaseTest (one section fails -> others succeed; hostname with multiple addresses)", "IpLookupViewModelTest"]
+      instrumented: ["IpLookupScreenTest ≥ 4 cases"]
+    privacy: "Depends on enabled sections (GeoIP providers, RDAP, RIPEstat)."
+
+tasks:
+  - id: P15-T1
+    title: "Bandwidth Monitor"
+    status: todo
+    steps: ["Checklist for P15-BANDWIDTH; per-app usage as a follow-up task P15-T1b (optional)."]
+  - id: P15-T2
+    title: "Certificate Transparency Lookup"
+    status: todo
+    steps: ["Checklist for P15-CTLOG."]
+  - id: P15-T3
+    title: "BGP Looking Glass"
+    status: todo
+    steps: ["Checklist for P15-BGP."]
+  - id: P15-T4
+    title: "IP Lookup hub"
+    status: todo
+    depends_on: [P15-T3]
+    steps: ["Checklist for P15-IPLOOKUP; requires P10 RDAP + P11 GeoIP chain."]
+  - id: P15-T5
+    title: "Docs + counts + attributions"
+    status: todo
+    steps: ["README (4 subsections + rows), store description count, PRIVACY_POLICY (crt.sh, RIPEstat), Settings attributions (crt.sh, RIPE NCC), tool_instructions table."]
+
+qa_validation:
+  automated: ["./gradlew test --no-daemon", "koverVerify x3", "lintDebug", "release-smoke", "i18n guard"]
+  manual_device: ["Each tool with and without connectivity; rate limits (429) produce typed errors with retry."]
+
+risks:
+  - risk: "Third-party API availability/terms (crt.sh, RIPEstat)."
+    mitigation: "Typed errors, caching, attribution, and a Settings switch to disable online lookups per tool."
+  - risk: "Tool count growth clutters the More sheet/Home grid."
+    mitigation: "Sections already exist; consider a search field in MoreToolsSheet (small task, add here if needed)."
+
+definition_of_done: ["Deliverables shipped; global DoD."]

@@ -1,0 +1,202 @@
+# =============================================================================
+# P09 – Quality gates & test coverage: meaningful :app Kover scope, ktlint/detekt,
+#       release-build smoke in CI, Test Lab quota gating, secrets hygiene,
+#       dependency bumps, lint warnings, tests for untested classes, Dependabot
+# =============================================================================
+# Audience: AI coding agent. Self-contained. Read plan/plan.yaml `agent_execution_rules` first.
+phase:
+  id: P09
+  title: "Quality gates and test coverage"
+  priority: medium
+  status: todo
+  estimated_effort: "M (2-4 agent sessions)"
+  depends_on: []
+  enables: []
+  findings: [F014, F020, F021, F022, F034, F035, F038]
+  target_modules: [":app", ":core-network", ":core-domain", "CI"]
+
+context:
+  problem: |
+    - app/build.gradle.kts Kover `includes` lists 4 classes; the 90% gate ignores 216 ViewModel tests
+      and every util/platform class -> the gate cannot catch regressions in the code that matters.
+    - No ktlint/detekt although .editorconfig already carries ktlint settings; formatting drifts.
+    - CI never runs an R8/minified build; release.yml is the first place minification happens.
+    - ci.yml runs the Firebase Test Lab job on every push and PR; the Spark plan allows 10 runs/day
+      (see memory note); busy days silently exhaust quota and turn CI red.
+    - release.yml passes keystore/key passwords as `-P` CLI args (visible in `ps`, and in Gradle's
+      failure output when `--info`/stack traces print the invocation).
+    - Lint warnings: UnusedAttribute (enableOnBackInvokedCallback), ModifierParameter x2,
+      PluralsCandidate x3 (P07), TrustAllX509TrustManager x2 (intentional, unsuppressed), newer
+      versions available (compose-bom 2026.09.00, navigation 2.10.1, kotlin 2.4.20, junit 6.1.3).
+    - Untested non-Compose classes: AppLogger (rotation), FormatUtils, ShareUtils (intent building),
+      SystemDnsAddressProvider (mapping), CrashHandler, MdnsRepositoryImpl (state machine – P05-T4
+      extracts it), WifiScanRepositoryImpl mappers (P03), IcmpEnginTracerouteRepositoryImpl mapping.
+    - No Dependabot/Renovate; updates only surface via the informational dependencyUpdates task.
+  evidence:
+    - { file: "app/build.gradle.kts", lines: "kover { … includes { classes(4 entries) } minBound(90) }" }
+    - { file: ".editorconfig", note: "ktlint_* keys present; no plugin" }
+    - { file: ".github/workflows/ci.yml", note: "instrumented-tests job ungated; build-and-test builds debug only" }
+    - { file: ".github/workflows/release.yml", lines: "steps 8-9 -PstorePassword=… -PkeyPassword=…" }
+    - { file: "app/build/reports/lint-results-debug.txt", note: "warnings listed in plan.yaml F034" }
+
+goals:
+  - "Coverage gate reflects real logic: ViewModels, data, util, platform mappers, i18n included; floor set from a measured baseline and ratcheted."
+  - "ktlint + detekt with committed baselines, run in CI (non-blocking for 2 weeks, then blocking)."
+  - "CI job builds the unsigned release APK and checks R8 kept classes/resources."
+  - "Test Lab job gated (main pushes + label); concurrency cancel-in-progress."
+  - "Secrets via ORG_GRADLE_PROJECT_* env vars."
+  - "Lint warnings reduced to intentional ones with documented suppressions."
+  - "Dependency bumps applied and verified; Dependabot configured."
+  - "Unit tests for the pure parts of the untested classes."
+
+non_goals:
+  - "Baseline profiles / macrobenchmark (optional T9, low priority)."
+  - "Robolectric adoption."
+
+assumptions:
+  - id: A1
+    statement: "Kover 0.9.9 `includes { classes(...) }` accepts wildcard patterns like 'net.aieat.netswissknife.app.ui.screens.*.*ViewModel'."
+    verify_with: "Kover docs / try; else list classes explicitly."
+  - id: A2
+    statement: "Gradle 9 honours ORG_GRADLE_PROJECT_<prop> env vars for findProperty()."
+    verify_with: "Gradle docs (project properties from environment)."
+  - id: A3
+    statement: "ktlint Gradle plugin (org.jlleitschuh.gradle.ktlint) and detekt (io.gitlab.arturbosch.detekt) latest stable support Kotlin 2.4.x."
+    verify_with: "Check plugin release notes; pin versions in libs.versions.toml."
+  - id: A4
+    statement: "KSP version in libs.versions.toml ('2.3.10') is compatible with Kotlin 2.4.20 (KSP2 decouples from Kotlin versions)."
+    verify_with: "Build after bump; consult https://github.com/google/ksp/releases."
+  - id: A5
+    statement: "apkanalyzer is available in cmdline-tools on CI via android-actions/setup-android or the preinstalled SDK on ubuntu-latest."
+    verify_with: "`ls $ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer` in a CI step."
+
+constraints:
+  - "Lowering any Kover floor must be its own commit with a stated reason (CLAUDE.md)."
+  - "CI must stay green during migration: introduce new gates as continue-on-error first, flip to blocking in a follow-up commit once baselines are committed."
+  - "Do not change signing behaviour semantics (unsigned when secrets absent; never debug key)."
+  - "Memory-constrained local host: run gates one at a time."
+
+design:
+  overview: |
+    1. Kover (app/build.gradle.kts):
+         includes.classes(
+           "net.aieat.netswissknife.app.ui.screens.*.*ViewModel*",   // includes UiState sealed classes
+           "net.aieat.netswissknife.app.ui.navigation.AppNavigationViewModel",
+           "net.aieat.netswissknife.app.data.*",
+           "net.aieat.netswissknife.app.util.FormatUtils*",
+           "net.aieat.netswissknife.app.util.LogRotation*",
+           "net.aieat.netswissknife.app.platform.*Mapper*", "…NetworkSelection*", "…LinkInfoMapper*",
+           "net.aieat.netswissknife.app.ui.i18n.*",
+           "net.aieat.netswissknife.app.ui.screens.whois.RelayChainGeometry", "…ConnectorSegment")
+         excludes: androidGeneratedClasses(), @Composable, classes ending in Screen/Kt for compose files, Hilt generated (*_Factory, *_HiltModules*).
+         Measure: ./gradlew :app:koverHtmlReport -> read line coverage; set minBound to floor(measured) - 2 with a comment; ratchet +5 per release until 90.
+    2. ktlint: plugin org.jlleitschuh.gradle.ktlint (version pinned); `ktlint { version.set("1.x"); android.set(true); baseline.set(file("config/ktlint/baseline.xml")) }` per module; generate baseline once (`./gradlew ktlintGenerateBaseline`); CI step `./gradlew ktlintCheck --no-daemon`.
+       detekt: plugin io.gitlab.arturbosch.detekt; config/detekt/detekt.yml (start from default with `build-upon-default-config`), baseline config/detekt/baseline.xml via `detektBaseline`; CI step `./gradlew detekt --no-daemon`. Both continue-on-error: true initially (comment with the date to flip).
+    3. CI release smoke job (`release-smoke`, ubuntu-latest, needs nothing):
+         ./gradlew :app:assembleRelease --no-daemon --no-parallel   (unsigned)
+         apkanalyzer dex packages app/build/outputs/apk/release/app-release-unsigned.apk > /tmp/pkgs.txt
+         grep -E 'org.snmp4j.security.(USM|AuthSHA|PrivAES128)\\b' /tmp/pkgs.txt (>=3) ; grep 'me.impa.icmpenguin' /tmp/pkgs.txt
+         unzip -l app-release-unsigned.apk | grep -E 'lib/arm64-v8a/libicmpenguin.so'   # add 'oui/oui-prefixes.tsv' and 'psl/public_suffix_list.dat' once P01 / P10 have landed
+         NOTE: the apkanalyzer class grep only proves classes exist after R8; it does not prove SNMP4J's reflective property loading works – the manual v3 discovery on a release build (P02 qa_validation) remains the functional check.
+         upload mapping file as artifact (app/build/outputs/mapping/release/mapping.txt) for symbolication.
+    4. Test Lab gating: instrumented-tests job `if: github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'run-instrumented')`; `concurrency: { group: testlab-${{ github.ref }}, cancel-in-progress: true }`; README CI section documents the label.
+    5. Secrets: release.yml steps 8/9 add `env: ORG_GRADLE_PROJECT_storeFile: ${{ runner.temp }}/release.keystore; ORG_GRADLE_PROJECT_storePassword: …; ORG_GRADLE_PROJECT_keyAlias: …; ORG_GRADLE_PROJECT_keyPassword: …` and remove the four -P args (keep -PversionName/-PversionCode). app/build.gradle.kts unchanged (findProperty reads env-provided project properties).
+    6. Lint: manifest `tools:targetApi="33"` on <application> for enableOnBackInvokedCallback; reorder modifier params in ToolHeroHeader.kt:54 and TracerouteScreen.kt:980; app/lint.xml ignoring TrustAllX509TrustManager for path core-network with a justification comment (chain capture by design; trust evaluated separately + hostname verification from P10).
+    7. Bumps in libs.versions.toml: composeBom 2026.09.00, navigationCompose 2.10.1, kotlin 2.4.20, junit5 6.1.3 (+ ksp if needed). One PR; full test + lint + assembleDebug + assembleRelease.
+    8. Tests: FormatUtilsTest (bytes formatting boundaries, Locale.ROOT determinism), LogRotation extracted from AppLogger (pure: decide rotate when size > max; backup naming) + LogRotationTest, ShareUtils -> `buildShareIntent()` pure builder returning Intent? (Android class) -> keep as androidTest ShareUtilsTest, SystemDnsAddressProvider mapping helper (P04 introduces SystemDnsInfo) unit test, IcmpEnginTracerouteRepositoryImpl mapping extracted to `TracerouteHopMapper` (pure mirror like P04) + test, CrashHandler: androidTest verifying CrashActivity launched with extras (existing CrashActivity UI) – optional.
+    9. .github/dependabot.yml: package-ecosystem gradle (weekly, grouped minor/patch) + github-actions (weekly).
+    10. Optional T9: baseline profile module (:baselineprofile) with androidx.baselineprofile plugin generating startup profile on a managed device; skip if CI cost too high.
+
+  files_to_create:
+    - config/ktlint/baseline.xml (generated), config/detekt/detekt.yml, config/detekt/baseline.xml (generated)
+    - app/lint.xml
+    - .github/dependabot.yml
+    - app/src/test/kotlin/net/aieat/netswissknife/app/util/FormatUtilsTest.kt
+    - app/src/main/kotlin/net/aieat/netswissknife/app/util/LogRotation.kt + test
+    - app/src/main/kotlin/net/aieat/netswissknife/app/traceroute/TracerouteHopMapper.kt + test
+    - app/src/androidTest/kotlin/net/aieat/netswissknife/app/util/ShareUtilsTest.kt
+  files_to_modify:
+    - app/build.gradle.kts (kover includes/floor, lint, ktlint/detekt), core-network/build.gradle.kts, core-domain/build.gradle.kts, build.gradle.kts (plugins), gradle/libs.versions.toml
+    - .github/workflows/ci.yml, .github/workflows/release.yml
+    - app/src/main/AndroidManifest.xml, ToolHeroHeader.kt, TracerouteScreen.kt
+    - "README.md (CI section: label, release smoke), CLAUDE.md (Build Commands: ktlintCheck/detekt; coverage scope text)"
+
+tasks:
+  - id: P09-T1
+    title: "Kover scope widening + measured floor"
+    status: todo
+    steps:
+      - "Change includes per design; run ./gradlew :app:koverHtmlReport --no-daemon; read app/build/reports/kover/html/index.html line %."
+      - "Set minBound = floor(measured) - 2 in its own commit titled 'chore(kover): widen :app coverage scope to ViewModels/data/util; floor NN% (measured MM%)'."
+      - "Update CLAUDE.md/README coverage sentences."
+    acceptance_criteria: ["./gradlew :app:koverVerify passes; scope documented."]
+
+  - id: P09-T2
+    title: "Tests for pure parts of untested classes (raises the floor)"
+    status: todo
+    depends_on: [P09-T1]
+    tdd:
+      red:
+        tests:
+          - "FormatUtilsTest: 0 B, 1023 B, 1 KB (1024), 1.5 MB, 2.00 GB; uses Locale.ROOT (assert '.' decimal separator regardless of default locale – set Locale.GERMANY in test)"
+          - "LogRotationTest: shouldRotate(size=MAX+1) true; (MAX) false; backup name 'debug.log.bak'"
+          - "TracerouteHopMapperTest: hop with ips=[] -> TIMEOUT; probes [Success(1500us)] -> rt 1 ms; multiple successes -> first (until P11 changes to stats)"
+        run: "./gradlew :app:testDebugUnitTest --no-daemon"
+        expect: "RED"
+      green: { steps: ["Extract pure helpers; FormatUtils uses String.format(Locale.ROOT, …)."], run: "same", expect: "PASS" }
+    acceptance_criteria: ["Kover floor can be raised by >= 3 points; do it in a separate commit."]
+
+  - id: P09-T3
+    title: "ktlint + detekt with baselines; CI steps (non-blocking first)"
+    status: todo
+    steps:
+      - "Add plugins/versions; module config; generate baselines; commit."
+      - "ci.yml: steps 'Run ktlint' and 'Run detekt' with continue-on-error: true and reports uploaded as artifacts."
+      - "Follow-up commit (after 2 weeks or once baseline stable): remove continue-on-error."
+      - "CLAUDE.md Build Commands: add `./gradlew ktlintCheck detekt`."
+    acceptance_criteria: ["Both tasks run locally under the memory limits (< 1 GB heap): if detekt OOMs, set `detekt { jvmTarget… }` and run with --no-daemon; document."]
+
+  - id: P09-T4
+    title: "CI: release smoke job + Test Lab gating + concurrency"
+    status: todo
+    steps:
+      - "Add `release-smoke` job per design; upload mapping.txt and the unsigned APK as artifacts (retention 7 days)."
+      - "Gate instrumented-tests; add concurrency group; README CI docs."
+    acceptance_criteria: ["A PR without the label runs build-and-test + codeql + release-smoke only; a push to main runs Test Lab."]
+
+  - id: P09-T5
+    title: "release.yml secrets via ORG_GRADLE_PROJECT_ env"
+    status: todo
+    steps: ["Edit steps 8/9; verify on a workflow_dispatch run with create_github_release=false that the APK is signed (`apksigner verify --print-certs`)."]
+    acceptance_criteria: ["No password appears in any `run:` command line."]
+
+  - id: P09-T6
+    title: "Lint warnings + suppressions"
+    status: todo
+    steps: ["Apply design §6; run lintDebug; remaining warnings only GradleDependency/NewerVersionAvailable (handled by T7) and MissingTranslation (P07)."]
+  - id: P09-T7
+    title: "Dependency bumps"
+    status: todo
+    steps: ["Bump per design; ./gradlew test :app:assembleDebug :app:assembleRelease :app:lintDebug; if Kotlin bump breaks KSP/Hilt, pin and note in libs.versions.toml comment."]
+  - id: P09-T8
+    title: "Dependabot"
+    status: todo
+    steps: ["Add .github/dependabot.yml (gradle weekly grouped; github-actions weekly)."]
+  - id: P09-T9
+    title: "(Optional) Baseline profile"
+    status: todo
+    steps: ["Only if CI budget allows: :baselineprofile module + macrobenchmark; generate on a Gradle-managed device; commit baseline-prof.txt; README note."]
+
+qa_validation:
+  automated: ["./gradlew test ktlintCheck detekt :app:lintDebug :app:assembleDebug :app:assembleRelease --no-daemon (sequentially)", "koverVerify x3"]
+  manual: ["Open a PR: verify jobs and artifacts; run workflow_dispatch release with create_github_release=false."]
+
+docs_updates: [README.md, CLAUDE.md]
+
+risks:
+  - risk: "detekt/ktlint memory on the constrained host."
+    mitigation: "Run one at a time; `org.gradle.jvmargs` unchanged; if needed run only in CI locally skip."
+  - risk: "Widened Kover scope + floor churn."
+    mitigation: "Measured floor with ratchet policy documented in CLAUDE.md."
+
+definition_of_done: ["F014 (CI part), F020, F021, F022, F034 (non-i18n), F035, F038 closed; global DoD."]

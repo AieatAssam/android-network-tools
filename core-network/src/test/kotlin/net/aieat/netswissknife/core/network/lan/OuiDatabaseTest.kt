@@ -2,6 +2,7 @@ package net.aieat.netswissknife.core.network.lan
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 
@@ -35,5 +36,18 @@ class OuiDatabaseTest {
             OuiDatabase.lookup("B8:27:EB:AA:AA:AA"),
             OuiDatabase.lookup("B8:27:EB:BB:BB:BB")
         )
+    }
+
+    @Test
+    fun `loads the generated registry and normalises separators`() {
+        assertTrue(OuiDatabase.size >= 1_000)
+        assertTrue(OuiDatabase.lookup("3c-5a-b4-00-00-01")?.contains("Google") == true)
+        assertTrue(OuiDatabase.lookup("DC:A6:32:00:00:01")?.contains("Raspberry Pi") == true)
+    }
+
+    @Test
+    fun `locally administered addresses have no vendor`() {
+        assertTrue(OuiDatabase.isLocallyAdministered("02:00:00:00:00:01"))
+        assertNull(OuiDatabase.lookup("02:00:00:00:00:01"))
     }
 }
