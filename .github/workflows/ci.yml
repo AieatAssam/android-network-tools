@@ -171,6 +171,12 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x ./gradlew
 
+      # CodeQL 2.27.0 rejects Kotlin 2.4.20 before extraction. Use the last
+      # supported compiler line only in this ephemeral analysis checkout;
+      # production and the regular CI build continue using Kotlin 2.4.20.
+      - name: Select CodeQL-compatible Kotlin compiler
+        run: sed -i 's/^kotlin = "2\.4\.20"$/kotlin = "2.4.10"/' gradle/libs.versions.toml
+
       # Kotlin is excluded from CodeQL's build-mode none. A real Gradle build
       # lets the Java/Kotlin extractor observe both Kotlin and Java compilation.
       - uses: github/codeql-action/init@v4
