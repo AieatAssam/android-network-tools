@@ -185,6 +185,8 @@ jobs:
           build-mode: manual
 
       - name: Build Java and Kotlin for CodeQL
-        run: ./gradlew :app:assembleDebug --no-daemon --no-parallel
+        # CodeQL's compiler tracer needs to observe javac/kotlinc. A cached
+        # Gradle compilation produces a valid APK but no source extraction.
+        run: ./gradlew :app:assembleDebug --no-daemon --no-parallel --rerun-tasks --no-build-cache
 
       - uses: github/codeql-action/analyze@v4

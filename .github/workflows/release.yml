@@ -160,7 +160,17 @@ jobs:
       - name: Verify SNMP4J classes survived R8
         run: |
           APK=$(find app/build/outputs/apk/release -name '*.apk' | head -1)
-          apkanalyzer dex packages "$APK" \
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          APK_ANALYZER="$(command -v apkanalyzer || true)"
+          if [ -z "$APK_ANALYZER" ] && [ -n "$SDK_ROOT" ]; then
+            APK_ANALYZER="$(find "$SDK_ROOT" -type f -name apkanalyzer -print -quit)"
+          fi
+          if [ -z "$APK_ANALYZER" ]; then
+            echo "::error::apkanalyzer was not found on PATH or under the Android SDK"
+            exit 1
+          fi
+          echo "Using apkanalyzer: $APK_ANALYZER"
+          "$APK_ANALYZER" dex packages "$APK" \
             | grep -E 'org\.snmp4j\.security\.(AuthSHA|PrivAES128|USM)\b'
 
       # ── 9. Build release AAB ──────────────────────────────────────────────
