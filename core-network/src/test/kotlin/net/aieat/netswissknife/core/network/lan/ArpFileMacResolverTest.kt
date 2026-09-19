@@ -37,4 +37,3 @@ class ArpFileMacResolverTest {
         assertNull(ArpFileMacResolver { content }.resolve("192.168.1.99"))
     }
 }
-

@@ -79,4 +79,3 @@ class LanScanDiscoveryPipelineTest {
         portChecker = { _, _, _ -> false },
     )
 }
-

@@ -27,4 +27,3 @@ class LinkInfoProviderTest {
         assertNull(LinkInfoMapper.defaultGateway(listOf("0.0.0.0/0" to "::")))
     }
 }
-

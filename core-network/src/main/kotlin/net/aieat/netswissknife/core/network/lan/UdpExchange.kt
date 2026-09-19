@@ -8,7 +8,6 @@ import java.net.InetSocketAddress
 fun interface UdpExchange {
     fun exchange(ip: String, port: Int, payload: ByteArray, timeoutMs: Int): ByteArray?
 }
-
 object DefaultUdpExchange : UdpExchange {
     override fun exchange(ip: String, port: Int, payload: ByteArray, timeoutMs: Int): ByteArray? {
         return runCatching {
@@ -23,4 +22,3 @@ object DefaultUdpExchange : UdpExchange {
         }.getOrNull()
     }
 }
-

@@ -8,4 +8,3 @@ data class LanScanRequest(
     val presencePorts: List<Int> = DEFAULT_PRESENCE_PORTS,
     val enableNameProbes: Boolean = true,
 )
-

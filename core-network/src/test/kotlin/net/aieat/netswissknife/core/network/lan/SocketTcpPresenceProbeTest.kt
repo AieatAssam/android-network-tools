@@ -44,4 +44,3 @@ class SocketTcpPresenceProbeTest {
         assertEquals(listOf(80), calls)
     }
 }
-

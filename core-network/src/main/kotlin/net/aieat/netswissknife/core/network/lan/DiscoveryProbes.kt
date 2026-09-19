@@ -12,7 +12,6 @@ import java.net.SocketTimeoutException
 fun interface IcmpProbe {
     suspend fun echo(ip: String, timeoutMs: Int): Long?
 }
-
 /** Probe used to establish host presence from TCP reset/open semantics. */
 fun interface TcpPresenceProbe {
     suspend fun probe(ip: String, ports: List<Int>, timeoutMs: Int): TcpPresence
@@ -121,4 +120,3 @@ class SocketTcpPresenceProbe(
         }
     }
 }
-
