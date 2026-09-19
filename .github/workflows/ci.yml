@@ -68,6 +68,9 @@ jobs:
         run: ./gradlew :app:assembleDebug --no-daemon --no-parallel
 
   instrumented-tests:
+    # Firebase Test Lab is quota-limited on the free tier. Keep cloud device
+    # runs for pushes to main; pull requests retain the local build/test gates.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     # Runs on Firebase Test Lab instead of a GitHub-hosted emulator. The
     # reactivecircus/android-emulator-runner + local KVM/nested-virtualization
