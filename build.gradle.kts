@@ -1,5 +1,19 @@
 import com.github.benmanes.gradle.versions.updates.DependencyUpdatesTask
 
+buildscript {
+    dependencies {
+        // AGP currently brings these build-time libraries transitively at
+        // vulnerable versions. Keep the patched resolution on the Gradle
+        // classpath without adding any of them to the Android runtime graph.
+        classpath("org.bouncycastle:bcpkix-jdk18on:1.85")
+        classpath("org.bouncycastle:bcprov-jdk18on:1.85")
+        classpath("org.bitbucket.b_c:jose4j:0.9.6")
+        classpath("org.jdom:jdom2:2.0.6.1")
+        classpath("org.apache.commons:commons-lang3:3.18.0")
+        classpath("org.apache.httpcomponents:httpclient:4.5.14")
+    }
+}
+
 // Top-level build file. Configuration common to all sub-projects/modules.
 plugins {
     alias(libs.plugins.android.application) apply false

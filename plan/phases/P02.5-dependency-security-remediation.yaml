@@ -8,7 +8,7 @@ phase:
   id: P02.5
   title: "Dependency security remediation: close authenticated Dependabot alerts"
   priority: critical
-  status: todo
+  status: in_progress
   estimated_effort: "S-M (1-2 agent sessions)"
   depends_on: [P02]
   enables: [P09]
@@ -40,6 +40,16 @@ desired_behaviour: |
   documented, time-bounded exception backed by a concrete upstream issue. The
   critical/high alerts must be resolved first. The app's runtime graph must not gain
   unnecessary libraries solely for build-time alert suppression.
+
+implementation_status: |
+  The first remediation pass is complete locally. Kotlin Gradle Plugin 2.4.20,
+  AGP 9.4.1, and KSP 2.3.12 are now selected. The root buildscript pins the
+  patched build-only versions of Bouncy Castle 1.85, jose4j 0.9.6, JDOM 2.0.6.1,
+  Commons Lang 3.18.0, and HttpClient 4.5.14; these constraints upgrade AGP's
+  transitive classpath without adding the packages to the Android runtime graph.
+  The releaseRuntimeClasspath report contains none of the affected packages.
+  Dependabot was queried after the changes, but GitHub still reports the original
+  nine alerts open, so final closure remains pending the next dependency rescan.
 
 assumptions:
   - id: A1
@@ -84,34 +94,37 @@ files_to_modify:
 tasks:
   - id: P02.5-T1
     title: "Trace all nine alerts to resolved configurations and shipped artifacts"
-    status: todo
+    status: done
     steps:
       - "Record alert JSON, dependencyInsight output, settings plugin build environment, and app/runtime dependency graphs."
       - "Classify each package as settings/build-only, test-only, or shipped runtime."
+      - "Confirmed the eight transitive alerts originate in the AGP/build-tool classpath; Kotlin Gradle Plugin is the direct build dependency."
     acceptance_criteria: ["Every alert has an owning dependency path and a runtime/build scope classification."]
 
   - id: P02.5-T2
     title: "Upgrade direct build dependencies and owning plugins"
-    status: todo
+    status: done
     depends_on: [P02.5-T1]
     steps:
       - "Move Kotlin Gradle Plugin to a stable release that includes the fix, if available and compatible with AGP/KSP/Compose."
       - "Upgrade the settings/build plugin responsible for vulnerable transitives before adding constraints."
+      - "Upgraded the stable Kotlin/Compose plugin line to 2.4.20, AGP to 9.4.1, and KSP to 2.3.12; the settings plugin has no patched parent release needed for the affected AGP transitives."
     acceptance_criteria: ["Direct Kotlin alert is closed without introducing an unsupported beta-only build requirement."]
 
   - id: P02.5-T3
     title: "Constrain or replace remaining vulnerable transitives"
-    status: todo
+    status: done
     depends_on: [P02.5-T1, P02.5-T2]
     steps:
       - "Align Bouncy Castle modules to a patched compatible line."
       - "Remediate jose4j, JDOM, Commons Lang, and Apache HttpClient through their owning plugin/dependency path."
       - "Use explicit Gradle constraints only where the parent upgrade cannot resolve the alert cleanly; document why."
+      - "Applied buildscript classpath pins for all affected transitive artifacts and verified the patched versions resolve without entering releaseRuntimeClasspath."
     acceptance_criteria: ["No vulnerable package version remains in any shipped runtime graph; build-only exceptions are explicitly documented."]
 
   - id: P02.5-T4
     title: "Regression and security verification"
-    status: todo
+    status: in_progress
     depends_on: [P02.5-T3]
     run:
       - "./gradlew test --no-daemon"
@@ -119,6 +132,7 @@ tasks:
       - "./gradlew :app:lintDebug --no-daemon --no-parallel"
       - "./gradlew :app:assembleDebug :app:assembleRelease --no-daemon"
       - "gh api repos/AieatAssam/android-network-tools/dependabot/alerts --paginate"
+      - "Completed repository tests, all three Kover verification tasks, debug lint, release assembly, buildEnvironment resolution, and releaseRuntimeClasspath inspection; the GitHub alert rescan is still pending."
     acceptance_criteria: ["All quality gates pass and Dependabot reports no unresolved actionable alert introduced by this phase."]
 
 qa_validation:
