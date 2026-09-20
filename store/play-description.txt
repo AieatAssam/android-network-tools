@@ -4,7 +4,7 @@ Ping, traceroute, port and LAN scanners, Wi-Fi spectrum analyser, speed test, DN
 
 ━━ TOOLS ━━
 
-PING — per-packet RTT, packet loss and min/avg/max stats on a live chart. Configurable count, timeout and packet size. Continuous mode runs on a rolling 100-packet window and exports as CSV.
+PING — ICMP RTT, packet loss and min/avg/max stats on a live chart, with reachability fallback. Configure count, timeout, payload size, TTL and interval; continuous mode runs on a rolling 100-packet window and exports CSV.
 
 TRACEROUTE — every hop with IP, reverse-DNS hostname, RTT and approximate location. ICMP or UDP, up to 64 hops, 1–5 probes per hop, automatic MTU discovery.
 
@@ -16,7 +16,7 @@ WI-FI SCANNER — access points grouped by SSID with a spectrum analyser per ban
 
 SPEED TEST — latency, download and upload against Cloudflare's speed backend, streamed live with a gauge and throughput chart. Reports jitter, peak and average throughput.
 
-DNS LOOKUP — ten record types (A, AAAA, MX, TXT, CNAME, NS, SOA, PTR, SRV, CAA) against your system resolver, Google 8.8.8.8, Cloudflare 1.1.1.1 or a custom server. PTR accepts a plain IP; query time and raw response included.
+DNS LOOKUP — ten record types (A, AAAA, MX, TXT, CNAME, NS, SOA, PTR, SRV, CAA) against System, Google, Cloudflare, OpenDNS, Quad9 or a custom server. Shows actual RR types, response code, flags, sections, server used and raw response; PTR accepts a plain IP.
 
 WHOIS LOOKUP — domains, IPv4, IPv6 and ASNs resolved through the real referral chain: IANA to TLD registry to registrar. Parsed registrar, dates, name servers, DNSSEC and status codes in plain English.
 

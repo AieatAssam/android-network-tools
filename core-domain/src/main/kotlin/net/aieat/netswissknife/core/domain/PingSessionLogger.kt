@@ -7,15 +7,19 @@ import java.io.File
 class PingSessionLogger(internal val file: File) {
 
     fun init() {
-        file.writeText("seq,timestamp_ms,latency_ms,status\n")
+        file.writeText("seq,timestamp_ms,latency_ms,status,ttl,bytes\n")
     }
 
     fun append(seq: Int, packet: PingPacketResult) {
         val status = when (packet.status) {
             PingStatus.SUCCESS -> "ok"
             PingStatus.TIMEOUT -> "timeout"
+            PingStatus.UNREACHABLE -> "unreachable"
             PingStatus.ERROR -> "error"
         }
-        file.appendText("$seq,${System.currentTimeMillis()},${packet.rtTimeMs ?: ""},$status\n")
+        file.appendText(
+            "$seq,${System.currentTimeMillis()},${packet.rtTimeMs ?: ""},$status," +
+                "${packet.replyTtl ?: ""},${packet.bytes ?: ""}\n"
+        )
     }
 }

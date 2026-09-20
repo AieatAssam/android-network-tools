@@ -12,5 +12,7 @@ data class PingResult(
     val host: String,
     val packets: List<PingPacketResult>,
     val stats: PingStats,
-    val rawOutput: String
+    val rawOutput: String,
+    val engine: PingEngineKind = PingEngineKind.REACHABILITY,
+    val resolvedIp: String? = null
 )

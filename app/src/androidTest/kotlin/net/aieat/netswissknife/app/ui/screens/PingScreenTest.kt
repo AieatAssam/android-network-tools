@@ -129,6 +129,33 @@ class PingScreenTest {
     }
 
     @Test
+    fun advancedOptions_toggleShowsPacketControls() {
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                PingScreen(viewModel = fakePingViewModel(PingUiState.Idle))
+            }
+        }
+
+        composeRule.onNodeWithText("Advanced options").performClick()
+        composeRule.onNodeWithText("Payload size: 56 bytes").assertIsDisplayed()
+        composeRule.onNodeWithText("TTL: 64").assertIsDisplayed()
+        composeRule.onNodeWithText("Interval: 1000 ms").assertIsDisplayed()
+    }
+
+    @Test
+    fun advancedOptions_toggleHidesPacketControls() {
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                PingScreen(viewModel = fakePingViewModel(PingUiState.Idle))
+            }
+        }
+
+        composeRule.onNodeWithText("Advanced options").performClick()
+        composeRule.onNodeWithText("Advanced options").performClick()
+        composeRule.onNodeWithText("Payload size: 56 bytes").assertDoesNotExist()
+    }
+
+    @Test
     fun runningState_progressCounterUpdatesAsPacketsArrive() {
         val stateFlow = MutableStateFlow<PingUiState>(
             PingUiState.Running(host = "example.com", packets = listOf(fakePacket(1)), totalCount = 4)

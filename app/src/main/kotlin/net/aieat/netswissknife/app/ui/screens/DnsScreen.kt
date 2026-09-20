@@ -206,7 +206,9 @@ fun DnsScreen(viewModel: DnsViewModel = hiltViewModel()) {
                         )
                         is DnsUiState.Error -> DnsErrorPanel(
                             message = state.message,
-                            onRetry = viewModel::onRetry
+                            onRetry = viewModel::onRetry,
+                            canFallbackToCloudflare = state.canFallbackToCloudflare,
+                            onUseCloudflare = viewModel::onUseCloudflare
                         )
                         is DnsUiState.Success -> DnsResultPanel(
                             result = state.result,
@@ -678,6 +680,8 @@ private fun DnsLoadingPanel(modifier: Modifier = Modifier) {
 private fun DnsErrorPanel(
     message: String,
     onRetry: () -> Unit,
+    canFallbackToCloudflare: Boolean = false,
+    onUseCloudflare: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     ElevatedCard(
@@ -727,6 +731,22 @@ private fun DnsErrorPanel(
                 Spacer(Modifier.width(4.dp))
                 Text(stringResource(R.string.dns_retry))
             }
+            if (canFallbackToCloudflare) {
+                TextButton(
+                    onClick = onUseCloudflare,
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.primary
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Dns,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(stringResource(R.string.dns_use_cloudflare))
+                }
+            }
         }
     }
 }
@@ -747,6 +767,19 @@ private fun DnsResultPanel(
     ) {
         // Summary card
         DnsResultSummaryCard(result = result, onClear = onClear)
+
+        if (result.authority.isNotEmpty()) {
+            DnsSectionCard(
+                title = stringResource(R.string.dns_authority_section),
+                records = result.authority
+            )
+        }
+        if (result.additional.isNotEmpty()) {
+            DnsSectionCard(
+                title = stringResource(R.string.dns_additional_section),
+                records = result.additional
+            )
+        }
 
         // Records / empty state
         if (result.records.isEmpty()) {
@@ -814,6 +847,36 @@ private fun DnsResultSummaryCard(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+                    Text(
+                        text = stringResource(R.string.dns_rcode, result.rcode),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = when (result.rcode) {
+                            "NOERROR" -> MaterialTheme.colorScheme.tertiary
+                            "NXDOMAIN" -> MaterialTheme.colorScheme.primary
+                            else -> MaterialTheme.colorScheme.error
+                        }
+                    )
+                    Text(
+                        text = stringResource(R.string.dns_flags, result.flags.joinToString(" ").ifEmpty { "—" }),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = stringResource(R.string.dns_server_used, result.serverUsed),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    val systemServer = result.server as? DnsServer.System
+                    if (systemServer?.privateDnsActive == true) {
+                        Text(
+                            text = stringResource(
+                                R.string.dns_private_notice,
+                                systemServer.privateDnsHost?.let { " ($it)" } ?: ""
+                            ),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    }
                 }
                 Row {
                     IconButton(onClick = {
@@ -855,6 +918,32 @@ private fun DnsResultSummaryCard(
                     value = "${result.queryTimeMs}",
                     label = stringResource(R.string.dns_ms)
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DnsSectionCard(title: String, records: List<DnsRecord>) {
+    var expanded by remember { mutableStateOf(true) }
+    OutlinedCard(modifier = Modifier.fillMaxWidth(), shape = AppShapes.large) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded },
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                Icon(
+                    imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = if (expanded) stringResource(R.string.action_collapse)
+                    else stringResource(R.string.action_expand)
+                )
+            }
+            if (expanded) {
+                records.forEachIndexed { index, record ->
+                    DnsRecordCard(record = record, index = index)
+                }
             }
         }
     }
@@ -937,10 +1026,10 @@ private fun DnsRecordCard(record: DnsRecord, index: Int) {
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    RecordTypeIcon(type = record.type)
+                    RecordTypeIcon(type = record.type ?: DnsRecordType.TXT)
                     Column {
                         Text(
-                            text = record.type.displayName,
+                            text = record.rrTypeName,
                             style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.primary
                         )
@@ -1032,6 +1121,7 @@ private fun TtlBadge(ttl: Long) {
 @Composable
 private fun RecordValueDisplay(record: DnsRecord) {
     when (record.type) {
+        null -> PlainValueDisplay(value = record.value)
         DnsRecordType.A, DnsRecordType.AAAA -> {
             // Highlight IP addresses with monospace font and colored background
             SelectionContainer {
@@ -1292,7 +1382,7 @@ private fun buildDnsShareText(result: DnsResult): String = buildString {
         appendLine("No records found.")
     } else {
         result.records.forEach { record ->
-            appendLine("${record.type.name}\t${record.value}\tTTL: ${record.ttl}s")
+            appendLine("${record.rrTypeName}\t${record.value}\tTTL: ${record.ttl}s")
         }
     }
 }

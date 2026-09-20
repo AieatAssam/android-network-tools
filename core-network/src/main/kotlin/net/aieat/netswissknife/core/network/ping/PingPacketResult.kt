@@ -14,5 +14,10 @@ data class PingPacketResult(
     val host: String,
     val rtTimeMs: Long?,
     val status: PingStatus,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val rtTimeMicros: Int? = null,
+    val replyTtl: Int? = null,
+    val bytes: Int? = null,
+    val fromIp: String? = null,
+    val engine: PingEngineKind? = null
 )

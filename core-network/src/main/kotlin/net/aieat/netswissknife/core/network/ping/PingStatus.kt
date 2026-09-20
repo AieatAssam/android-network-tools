@@ -6,6 +6,8 @@ enum class PingStatus {
     SUCCESS,
     /** No response received before the timeout expired. */
     TIMEOUT,
+    /** An explicit ICMP/network rejection was received before the timeout. */
+    UNREACHABLE,
     /** Network or resolution error prevented the probe from completing. */
     ERROR
 }

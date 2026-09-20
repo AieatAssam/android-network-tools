@@ -14,7 +14,7 @@ data class TlsInspectorParams(
 class TlsInspectorUseCase(private val repository: TlsInspectorRepository) {
 
     suspend operator fun invoke(params: TlsInspectorParams): NetworkResult<TlsInspectorResult> {
-        val host = params.host.trim()
+        val host = HostValidator.normalize(params.host) ?: params.host.trim()
         if (host.isBlank()) return NetworkResult.Error("Host must not be blank")
         if (!HostValidator.isValidHostname(host)) return NetworkResult.Error("Invalid host or IP address")
         if (params.port !in 1..65_535) return NetworkResult.Error("Port must be between 1 and 65535")

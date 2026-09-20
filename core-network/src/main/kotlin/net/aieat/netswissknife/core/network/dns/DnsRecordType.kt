@@ -73,5 +73,8 @@ enum class DnsRecordType(
     companion object {
         fun fromDisplayName(name: String): DnsRecordType? =
             entries.find { it.displayName.equals(name, ignoreCase = true) }
+
+        fun fromDnsTypeInt(type: Int): DnsRecordType? =
+            entries.find { it.dnsTypeInt == type }
     }
 }

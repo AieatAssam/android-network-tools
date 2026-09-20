@@ -118,10 +118,10 @@ phases:
     file: plan/phases/P04-ping-dns-accuracy.yaml
     title: "Ping & DNS: accurate RTT (ICMP via icmpenguin, resolve-once), packet size/TTL, honest resolver labelling, correct record typing, IDN"
     priority: high
-    status: todo
+    status: done
     depends_on: []
     findings: [F008, F009, F010, F011, F025, F037]
-    summary: "Ping times include DNS resolution on every probe and cannot set size/TTL although icmpenguin.Pinger supports both; DNS mislabels CNAME answers and silently swaps System DNS for Cloudflare."
+    summary: "Implemented resolve-once ping sessions with icmpenguin ICMP and reachability fallback, configurable payload/TTL/interval, honest packet statuses and CSV output, plus typed DNS sections/RCODE/flags, resolver provenance, Private DNS awareness, IDN normalization, and matching UI/docs."
 
   - id: P05
     file: plan/phases/P05-local-network-binding-resilience.yaml
@@ -504,3 +504,5 @@ changelog:
     note: "Added P02.5 after authenticated Dependabot review: nine open Maven alerts (one critical, three high, five medium), with exact CVE/GHSA IDs, dependency provenance, upgrade constraints, and verification gates recorded for remediation."
   - date: "2026-09-19"
     note: "P02.5 remediation started: upgraded Kotlin 2.4.20, AGP 9.4.1, and KSP 2.3.12; constrained AGP's build classpath to patched Bouncy Castle 1.85, jose4j 0.9.6, JDOM 2.0.6.1, Commons Lang 3.18.0, and HttpClient 4.5.14. JVM tests, release assembly, and releaseRuntimeClasspath inspection pass; Dependabot rescan is pending."
+  - date: "2026-09-20"
+    note: "P04 complete: ping now resolves once and supports ICMP/reachability engines, payload/TTL/interval controls, honest loss statuses, and richer CSV output; DNS now preserves record types and sections, reports RCODE/flags/server provenance, handles Private DNS and IDNs, and offers an explicit Cloudflare fallback. JVM tests, builds, lint, coverage gates, and focused API 36 Ping/DNS instrumentation pass; the full connected suite retains two unrelated pre-existing Traceroute failures."

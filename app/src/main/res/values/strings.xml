@@ -55,6 +55,7 @@
     <string name="dns_querying_subtitle">Sending query to DNS server</string>
     <string name="dns_error_title">Lookup failed</string>
     <string name="dns_retry">Retry</string>
+    <string name="dns_use_cloudflare">Use Cloudflare</string>
 
     <!-- DNS Results -->
     <string name="dns_record_singular">record</string>
@@ -65,6 +66,12 @@
     <string name="dns_raw_response">Raw DNS response</string>
     <string name="dns_no_records_title">No records found</string>
     <string name="dns_no_records_subtitle">No %1$s records exist for %2$s</string>
+    <string name="dns_rcode">RCODE: %1$s</string>
+    <string name="dns_flags">Flags: %1$s</string>
+    <string name="dns_server_used">Server used: %1$s</string>
+    <string name="dns_private_notice">Private DNS is active%1$s. Plain DNS queries may be handled differently by the device.</string>
+    <string name="dns_authority_section">Authority</string>
+    <string name="dns_additional_section">Additional</string>
 
     <!-- Ping Screen -->
     <string name="ping_screen_title">Ping</string>
@@ -75,6 +82,10 @@
     <string name="ping_host_placeholder">e.g. google.com or 8.8.8.8</string>
     <string name="ping_count_label">Count</string>
     <string name="ping_timeout_label">Timeout (ms)</string>
+    <string name="ping_advanced_options">Advanced options</string>
+    <string name="ping_payload_label">Payload size: %1$d bytes</string>
+    <string name="ping_ttl_label">TTL: %1$d</string>
+    <string name="ping_interval_label">Interval: %1$d ms</string>
     <string name="ping_start_button">Start Ping</string>
     <string name="ping_stop_button">Stop</string>
     <string name="ping_retry">Retry</string>
@@ -103,6 +114,7 @@
     <string name="ping_rtt_jitter">Jitter</string>
     <string name="ping_ms_suffix">ms</string>
     <string name="ping_timeout_label_result">Timeout</string>
+    <string name="ping_unreachable_label_result">Destination unreachable</string>
     <string name="ping_error_label_result">Error</string>
     <string name="ping_raw_output">Raw Output</string>
     <string name="ping_copy_raw">Copy raw output</string>
@@ -797,18 +809,20 @@
     <string name="help_ping_concept_heading">What is a "ping"?</string>
     <string name="help_ping_concept_body">Every device on a network can be asked "are you there?" using a tiny message called an ICMP Echo Request — informally, a "ping." The target replies immediately if it\'s reachable. The time between sending the request and receiving the reply is the round-trip time (RTT), which tells you both whether a host is alive and how far away it is, network-wise.</string>
     <string name="help_ping_what_heading">What it does</string>
-    <string name="help_ping_what_body">Checks whether a host is reachable and measures round-trip time (RTT). Android attempts ICMP first and may fall back to TCP when ICMP is unavailable.</string>
+    <string name="help_ping_what_body">Checks whether a host is reachable and measures round-trip time (RTT). The app resolves a hostname once, tries ICMP echo, and falls back to Android reachability when the ICMP socket is unavailable.</string>
     <string name="help_ping_params_heading">Key parameters</string>
     <string name="help_ping_results_heading">Reading the results</string>
     <string-array name="help_ping_params_bullets">
         <item>Count — number of ping packets to send.</item>
         <item>Timeout — how long to wait for each reply before marking it lost.</item>
+        <item>Advanced — choose payload size (0–1,472 bytes), TTL (1–255), and interval (100–10,000 ms).</item>
         <item>Continuous — pings indefinitely until you stop it manually.</item>
     </string-array>
     <string-array name="help_ping_results_bullets">
         <item>Min / Avg / Max — the fastest, typical, and slowest round-trip times seen.</item>
         <item>Jitter — how much RTT varies between pings; high jitter means an unstable connection, even if the average looks fine.</item>
         <item>Packet loss — the percentage of pings that got no reply; anything above 0%% suggests congestion or a firewall dropping packets.</item>
+        <item>Unreachable — the network explicitly rejected the probe before the timeout; this is different from a silent timeout.</item>
     </string-array>
 
     <!-- Traceroute help -->
@@ -880,11 +894,13 @@
     <string-array name="help_dns_params_bullets">
         <item>Domain — the hostname or IP to query.</item>
         <item>Record type — A/AAAA return the IP address; MX returns the mail server that handles email for the domain; TXT holds arbitrary text, often used to prove domain ownership; CNAME is an alias pointing to another name; NS lists the servers authoritative for the domain; SOA holds zone administration info; PTR reverse-resolves an IP back to a hostname; SRV points to the host/port for a specific service.</item>
-        <item>DNS server — choose a preset (Google, Cloudflare, system) or enter a custom resolver IP.</item>
+        <item>DNS server — choose System, Google, Cloudflare, OpenDNS, Quad9, or enter a custom resolver IP.</item>
     </string-array>
     <string-array name="help_dns_results_bullets">
         <item>TTL (time-to-live) is in seconds — it tells other resolvers and browsers how long they\'re allowed to cache this answer before asking again.</item>
         <item>The raw response tab shows the full DNS wire-format response.</item>
+        <item>RCODE, flags, Authority, Additional, and the actual server used explain negative answers and resolver behaviour.</item>
+        <item>Private DNS is reported when Android exposes it; System DNS is never silently replaced by another resolver.</item>
         <item>Use PTR lookups to reverse-resolve an IP address to a hostname.</item>
     </string-array>
 

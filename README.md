@@ -13,16 +13,17 @@
 ## Features
 
 ### Ping
-Reachability and round-trip latency measurement with real-time streaming results. Android attempts ICMP and may fall back to TCP when ICMP is unavailable.
+ICMP echo and reachability round-trip latency measurement with real-time streaming results. The app resolves a hostname once per session, then uses icmpenguin ICMP echo with transparent reachability fallback when the socket is unavailable.
 - Configurable probe count (1–50 via slider; default configurable up to 100 in Settings) and timeout (100–30,000 ms)
-- Per-probe RTT reporting with sequence numbers and status (SUCCESS / TIMEOUT / ERROR)
+- Advanced payload size (0–1,472 bytes), TTL (1–255), and interval (100–10,000 ms) controls
+- Per-probe RTT reporting with sequence numbers and status (SUCCESS / TIMEOUT / UNREACHABLE / ERROR), including reply IP, TTL, and bytes when available
 - Live stats panel during active ping: packet loss %, min, avg, and max RTT updating after every packet
 - RTT chart with Y-axis ms labels and fill gradient, rendered as results arrive
 - **Continuous mode** — toggle replaces the count slider; pings indefinitely while the app is on screen, screen kept on automatically, stops when backgrounded or screen locked
   - Rolling window of the last 100 packets drives live stats and chart
   - Full session log streamed to a temp CSV file; shareable via the Share button on completion
 - Recent hosts saved per-session and offered as quick-select chips
-- Payload size is intentionally not configurable because Android's supported reachability API does not expose an ICMP payload-size control.
+- CSV exports retain the original columns and append reply TTL and payload bytes.
 
 ### Traceroute
 Network path analysis with per-hop geolocation enrichment.
@@ -48,11 +49,13 @@ Local network device discovery across IPv4 subnets.
 - Expanded hosts include a direct **Scan ports** hand-off; the OUI registry contains 50,000+ prefixes and can be refreshed with `python3 tools/oui/update_oui.py`
 
 ### DNS Lookup
-Full DNS record resolution with multiple resolver options.
+Full DNS record resolution with multiple resolver options and protocol-level response details.
 - 10 record types: A, AAAA, MX, TXT, CNAME, NS, SOA, PTR, SRV, CAA
-- Resolver options: system default, Google (8.8.8.8), Cloudflare (1.1.1.1), or custom server
+- Resolver options: system default, Google (8.8.8.8), Cloudflare (1.1.1.1), OpenDNS, Quad9, or custom server
 - PTR queries auto-reverse IPv4 addresses to `.in-addr.arpa` and IPv6 to `.ip6.arpa` form — just enter the IP
-- Returns resolved records, query time, and raw DNS response
+- Returns each record's actual RR type and section, RCODE, AA/AD/TC/RD/RA flags, query time, server actually used, and raw DNS response
+- System DNS is never silently replaced with Cloudflare; when Android reports no resolver, the UI explains the failure and offers an explicit Cloudflare fallback. Private DNS status is shown when available.
+- IDN hostnames and trailing-dot FQDNs are normalized consistently across network tools.
 
 ### Wi-Fi Scanner
 Wi-Fi environment analysis with SSID grouping and spectrum visualisation.

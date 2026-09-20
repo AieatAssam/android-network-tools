@@ -11,9 +11,14 @@ sealed class DnsServer(
     /**
      * Uses the device's configured DNS resolver.
      * [serverAddresses] must be populated by the app layer (via ConnectivityManager / LinkProperties)
-     * before performing a lookup. If empty the repository falls back to Cloudflare.
+     * before performing a lookup. If empty the repository returns an explicit
+     * error because the actual system resolver is unknown.
      */
-    data class System(val serverAddresses: List<String> = emptyList()) : DnsServer(
+    data class System(
+        val serverAddresses: List<String> = emptyList(),
+        val privateDnsActive: Boolean = false,
+        val privateDnsHost: String? = null
+    ) : DnsServer(
         displayName = "System DNS",
         description = "Uses the DNS server configured on your device"
     )
@@ -60,6 +65,8 @@ sealed class DnsServer(
     )
 
     companion object {
-        val presets: List<DnsServer> = listOf(System(), Google, Cloudflare, OpenDns, Quad9)
+        /** Built lazily to avoid JVM class-initialization cycles between the sealed parent and objects. */
+        val presets: List<DnsServer>
+            get() = listOf(System(), Google, Cloudflare, OpenDns, Quad9)
     }
 }

@@ -16,5 +16,10 @@ data class DnsResult(
     val server: DnsServer,
     val records: List<DnsRecord>,
     val queryTimeMs: Long,
-    val rawResponse: String
+    val rawResponse: String,
+    val authority: List<DnsRecord> = emptyList(),
+    val additional: List<DnsRecord> = emptyList(),
+    val rcode: String = "NOERROR",
+    val flags: Set<String> = emptySet(),
+    val serverUsed: String = ""
 )

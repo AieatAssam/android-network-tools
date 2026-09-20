@@ -8,7 +8,7 @@ phase:
   id: P04
   title: "Ping & DNS accuracy"
   priority: high
-  status: todo
+  status: done
   estimated_effort: "L (3-5 agent sessions)"
   depends_on: []
   enables: [P11, P14]
@@ -196,7 +196,7 @@ design:
 tasks:
   - id: P04-T1
     title: "HostValidator.normalize + IDN/FQDN acceptance"
-    status: todo
+    status: done
     tdd:
       red:
         test_file: core-network/src/test/kotlin/net/aieat/netswissknife/core/network/HostValidatorTest.kt
@@ -214,7 +214,7 @@ tasks:
 
   - id: P04-T2
     title: "Ping engine abstraction + fixed reachability engine + resolve-once repository"
-    status: todo
+    status: done
     depends_on: [P04-T1]
     tdd:
       red:
@@ -248,7 +248,7 @@ tasks:
 
   - id: P04-T3
     title: "icmpenguin ICMP engine in :app + DI + fallback wiring"
-    status: todo
+    status: done
     depends_on: [P04-T2]
     steps_before_tdd:
       - "Subtypes are recorded under `icmpenguin_api_verified`; re-run `javap -p` on each `ProbeResult$<Name>` class to capture any extra fields (e.g. an error message on NetError) and update the mapping table if they differ."
@@ -272,7 +272,7 @@ tasks:
 
   - id: P04-T4
     title: "Domain params (payload/ttl/interval) + CSV columns + ViewModel/Screen advanced options"
-    status: todo
+    status: done
     depends_on: [P04-T3]
     tdd:
       red:
@@ -302,7 +302,7 @@ tasks:
 
   - id: P04-T5
     title: "DNS: real RR types, sections, RCODE/flags, serverUsed, no silent fallback"
-    status: todo
+    status: done
     depends_on: []
     tdd:
       red:
@@ -332,7 +332,7 @@ tasks:
 
   - id: P04-T6
     title: "DNS app layer: SystemDnsInfo, Private DNS notice, RCODE/flags/sections UI, 'Use Cloudflare' action"
-    status: todo
+    status: done
     depends_on: [P04-T5]
     tdd:
       red:
@@ -360,7 +360,7 @@ tasks:
 
   - id: P04-T7
     title: "Docs/store sync"
-    status: todo
+    status: done
     depends_on: [P04-T4, P04-T6]
     steps:
       - "README Ping: remove the 'intentionally not configurable' paragraph; document payload/TTL/interval ranges, engines and fallback, UNREACHABLE status, CSV columns."

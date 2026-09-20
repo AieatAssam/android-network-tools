@@ -1,5 +1,8 @@
 package net.aieat.netswissknife.core.network
 
+import java.net.IDN
+import java.util.Locale
+
 /**
  * Utility for validating hostnames and IP addresses (IPv4 and IPv6).
  *
@@ -86,12 +89,40 @@ object HostValidator {
 
     private val looksLikeIpv4 = Regex("""^\d+\.\d+\.\d+\.\d+$""")
 
+    /**
+     * Returns the canonical value accepted by network clients.
+     *
+     * Hostnames are trimmed, lower-cased, converted to ASCII (IDNA), and have
+     * one optional DNS root dot removed. Literal IP addresses are returned as
+     * entered apart from surrounding whitespace and the root dot.
+     */
+    fun normalize(input: String): String? {
+        var host = input.trim()
+        if (host.endsWith('.')) host = host.dropLast(1)
+        if (host.isEmpty()) return null
+
+        if (looksLikeIpv4.matches(host)) {
+            return host.takeIf(::isValidIpv4)
+        }
+        if (host.contains(':')) {
+            return host.takeIf(::isValidIpv6)
+        }
+
+        return try {
+            IDN.toASCII(host, IDN.ALLOW_UNASSIGNED)
+                .lowercase(Locale.ROOT)
+                .takeIf { hostnameRegex.matches(it) }
+        } catch (_: IllegalArgumentException) {
+            null
+        }
+    }
+
     fun isValidHostname(host: String): Boolean {
-        if (host.isBlank()) return false
+        val normalized = normalize(host) ?: return false
         // If it looks like an IPv4 address (4 dot-separated groups of digits), require valid IPv4
-        if (looksLikeIpv4.matches(host)) return isValidIpv4(host)
+        if (looksLikeIpv4.matches(normalized)) return isValidIpv4(normalized)
         // IPv6 addresses contain colons
-        if (host.contains(':')) return isValidIpv6(host)
-        return hostnameRegex.matches(host)
+        if (normalized.contains(':')) return isValidIpv6(normalized)
+        return hostnameRegex.matches(normalized)
     }
 }
