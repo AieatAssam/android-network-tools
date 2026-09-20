@@ -62,7 +62,7 @@ Wi-Fi environment analysis with SSID grouping and spectrum visualisation.
 - Best-channel callout recommends the least-congested channel (1, 6, or 11) when 2.4 GHz is active
 - Expandable network cards show each BSSID with channel, width, RSSI, and vendor; tap any BSSID for full detail sheet
 - Detail sheet: signal arc gauge, band/channel/width/standard/speed, security capability tokens, live connection stats (IP, TX/RX speed) when connected
-- Auto-refresh every 10 seconds; sort by signal strength, SSID name, or channel
+- Each refresh requests a platform scan; auto-refresh is configurable (Off / 15 / 30 / 60 seconds, default 30 seconds). Android throttles foreground scans to four per two minutes, so the screen shows result age and when a request was throttled; Location Services must be enabled.
 
 ### TLS Inspector
 SSL/TLS certificate chain analysis for any TCP host.

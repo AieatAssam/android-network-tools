@@ -23,7 +23,13 @@ data class WifiConnectionInfo(
     val standard: WifiStandard,
     val security: WifiSecurity,
     /** SSID of the Wi-Fi network (same as ssid; kept for explicit labelling). */
-    val networkSsid: String = ssid
+    val networkSsid: String = ssid,
+    /** IPv6 addresses assigned to the Wi-Fi link, including link-local addresses. */
+    val ipv6Addresses: List<String> = emptyList(),
+    /** Gateway selected by the active network's default route, if available. */
+    val gateway: String? = null,
+    /** DNS servers advertised by the active network, in platform order. */
+    val dnsServers: List<String> = emptyList()
 ) {
     val signalQualityPercent: Int get() = when {
         rssi >= -50 -> 100

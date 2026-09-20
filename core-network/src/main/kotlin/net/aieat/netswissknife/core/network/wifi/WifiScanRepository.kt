@@ -17,5 +17,8 @@ interface WifiScanRepository {
      * Performs (or reads cached) scan results and returns an aggregated [WifiScanResult].
      * May throw if Wi-Fi is disabled or the required permissions are missing.
      */
-    suspend fun scan(): WifiScanResult
+    suspend fun scan(trigger: Boolean = true): WifiScanResult
+
+    /** Whether Android Location Services are currently enabled for Wi-Fi scanning. */
+    val isLocationEnabled: Boolean
 }

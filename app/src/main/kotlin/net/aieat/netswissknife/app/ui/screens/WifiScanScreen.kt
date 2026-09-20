@@ -1,7 +1,9 @@
 package net.aieat.netswissknife.app.ui.screens
 
 import android.Manifest
+import android.content.Intent
 import android.os.Build
+import android.provider.Settings
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -62,6 +64,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -98,6 +103,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.platform.testTag
 import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.ui.theme.AppShapes
 import net.aieat.netswissknife.app.ui.theme.StatusBad
@@ -108,6 +114,7 @@ import net.aieat.netswissknife.app.ui.theme.StatusWarn
 import net.aieat.netswissknife.app.ui.theme.SpectrumPalette
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
@@ -120,6 +127,10 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import net.aieat.netswissknife.app.ui.screens.wifi.ApSortOrder
 import net.aieat.netswissknife.app.ui.screens.wifi.WifiScanUiState
 import net.aieat.netswissknife.app.ui.screens.wifi.WifiScanViewModel
+import net.aieat.netswissknife.app.ui.screens.wifi.WifiConnectedNetworkCard
+import net.aieat.netswissknife.app.ui.screens.wifi.WifiLocationDisabledScreen
+import net.aieat.netswissknife.app.ui.screens.wifi.WifiRefreshIntervalPicker
+import net.aieat.netswissknife.app.ui.screens.wifi.WifiScanFreshnessStatus
 import net.aieat.netswissknife.core.network.wifi.WifiAccessPoint
 import net.aieat.netswissknife.core.network.wifi.WifiNetwork
 import androidx.compose.material.icons.filled.Info
@@ -135,6 +146,19 @@ import net.aieat.netswissknife.core.network.wifi.WifiBand
 private fun networkColor(colorIndex: Int): Color =
     SpectrumPalette[colorIndex % SpectrumPalette.size]
 
+object WifiScreenTestTags {
+    const val CONTENT_LIST = "wifi_content_list"
+    const val NETWORKS_START_INDEX = 7
+}
+
+/** Permissions needed by WifiManager scan APIs for the given platform SDK. */
+fun requiredWifiPermissions(sdkInt: Int): List<String> = buildList {
+    add(Manifest.permission.ACCESS_FINE_LOCATION)
+    if (sdkInt >= Build.VERSION_CODES.TIRAMISU) {
+        add(Manifest.permission.NEARBY_WIFI_DEVICES)
+    }
+}
+
 // ── Screen root ───────────────────────────────────────────────────────────────
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -142,30 +166,29 @@ private fun networkColor(colorIndex: Int): Color =
 fun WifiScanScreen(
     viewModel: WifiScanViewModel = hiltViewModel()
 ) {
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val autoRefresh by viewModel.autoRefresh.collectAsStateWithLifecycle()
+    val refreshIntervalMs by viewModel.refreshIntervalMs.collectAsStateWithLifecycle()
     val expandedNetworks by viewModel.expandedNetworks.collectAsStateWithLifecycle()
-    val apDisappearedMessage by viewModel.apDisappearedMessage.collectAsStateWithLifecycle()
+    val apDisappearedEvent by viewModel.apDisappearedEvent.collectAsStateWithLifecycle()
+    val apDisappearedMessage = apDisappearedEvent?.let { stringResource(it.messageResId) }
 
     val snackbarHostState = remember { SnackbarHostState() }
-    LaunchedEffect(apDisappearedMessage) {
+    LaunchedEffect(apDisappearedEvent) {
         apDisappearedMessage?.let { message ->
             snackbarHostState.showSnackbar(message)
-            viewModel.dismissApDisappearedMessage()
+            viewModel.dismissApDisappearedEvent()
         }
     }
 
-    val requiredPermissions = buildList {
-        add(Manifest.permission.ACCESS_FINE_LOCATION)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            add(Manifest.permission.NEARBY_WIFI_DEVICES)
-        }
-    }.toTypedArray()
+    val requiredPermissions = requiredWifiPermissions(Build.VERSION.SDK_INT).toTypedArray()
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { grants ->
-        if (grants.values.any { it }) viewModel.onPermissionGranted()
+        if (requiredPermissions.all { grants[it] == true }) viewModel.onPermissionGranted()
         else viewModel.onPermissionDenied()
     }
 
@@ -178,6 +201,18 @@ fun WifiScanScreen(
     }
 
     DisposableEffect(Unit) { onDispose { viewModel.stopAutoRefresh() } }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_PAUSE -> viewModel.stopAutoRefresh()
+                Lifecycle.Event.ON_RESUME -> viewModel.onLifecycleResume()
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
@@ -213,13 +248,19 @@ fun WifiScanScreen(
                 )
                 is WifiScanUiState.NotSupported -> WifiNotSupportedScreen()
                 is WifiScanUiState.WifiDisabled -> WifiDisabledScreen(onRetry = { viewModel.startScan() })
+                is WifiScanUiState.LocationDisabled -> WifiLocationDisabledScreen(
+                    onOpenSettings = {
+                        context.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+                    }
+                )
                 is WifiScanUiState.Scanning     -> WifiScanningScreen()
                 is WifiScanUiState.Success      -> WifiSuccessScreen(
                     state               = state,
                     autoRefresh         = autoRefresh,
+                    refreshIntervalMs   = refreshIntervalMs,
                     expandedNetworks    = expandedNetworks,
                     onScan              = { viewModel.startScan() },
-                    onToggleAutoRefresh = { viewModel.toggleAutoRefresh() },
+                    onRefreshInterval   = { viewModel.setRefreshInterval(it) },
                     onBandFilter        = { viewModel.setBandFilter(it) },
                     onSortOrder         = { viewModel.setSortOrder(it) },
                     onSelectAp          = { viewModel.selectAccessPoint(it) },
@@ -348,9 +389,10 @@ fun WifiScanScreen(
 @Composable private fun WifiSuccessScreen(
     state: WifiScanUiState.Success,
     autoRefresh: Boolean,
+    refreshIntervalMs: Long?,
     expandedNetworks: Set<String>,
     onScan: () -> Unit,
-    onToggleAutoRefresh: () -> Unit,
+    onRefreshInterval: (Long?) -> Unit,
     onBandFilter: (WifiBand?) -> Unit,
     onSortOrder: (ApSortOrder) -> Unit,
     onSelectAp: (WifiAccessPoint?) -> Unit,
@@ -360,7 +402,10 @@ fun WifiScanScreen(
     var showHelp by remember { mutableStateOf(false) }
 
     LazyColumn(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp)
+            .testTag(WifiScreenTestTags.CONTENT_LIST),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item { Spacer(Modifier.height(4.dp)) }
@@ -370,9 +415,14 @@ fun WifiScanScreen(
                 result = state.result,
                 autoRefresh = autoRefresh,
                 onScan = onScan,
-                onToggleAutoRefresh = onToggleAutoRefresh,
                 onHelpClick = { showHelp = true }
             )
+        }
+
+        item { WifiScanFreshnessStatus(state.result) }
+
+        state.result.connectedNetwork?.let { connectionInfo ->
+            item { WifiConnectedNetworkCard(connectionInfo) }
         }
 
         // Band tabs — always one tab per detected band
@@ -398,7 +448,14 @@ fun WifiScanScreen(
         item { WifiSpectrumCard(state = state) }
 
         // Sort row
-        item { WifiSortRow(current = state.sortOrder, onSelect = onSortOrder) }
+        item {
+            WifiSortRow(
+                current = state.sortOrder,
+                refreshIntervalMs = refreshIntervalMs,
+                onSelect = onSortOrder,
+                onRefreshInterval = onRefreshInterval
+            )
+        }
 
         // Network count
         item {
@@ -461,7 +518,6 @@ fun WifiScanScreen(
     result: net.aieat.netswissknife.core.network.wifi.WifiScanResult,
     autoRefresh: Boolean,
     onScan: () -> Unit,
-    onToggleAutoRefresh: () -> Unit,
     onHelpClick: () -> Unit,
 ) {
     val gradient = Brush.linearGradient(
@@ -731,18 +787,35 @@ private fun bandChannelLabels(band: WifiBand): List<Pair<Int, Float>> = when (ba
 
 // ── Sort row ──────────────────────────────────────────────────────────────────
 
-@Composable private fun WifiSortRow(current: ApSortOrder, onSelect: (ApSortOrder) -> Unit) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(stringResource(R.string.wifi_sort_label), style = MaterialTheme.typography.labelMedium,
-            modifier = Modifier.align(Alignment.CenterVertically),
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
-        ApSortOrder.values().forEach { order ->
-            FilterChip(
-                selected = current == order,
-                onClick  = { onSelect(order) },
-                label    = { Text(order.label, style = MaterialTheme.typography.labelSmall) }
-            )
+@Composable
+private fun WifiSortRow(
+    current: ApSortOrder,
+    refreshIntervalMs: Long?,
+    onSelect: (ApSortOrder) -> Unit,
+    onRefreshInterval: (Long?) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(stringResource(R.string.wifi_sort_label), style = MaterialTheme.typography.labelMedium,
+                modifier = Modifier.align(Alignment.CenterVertically),
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            ApSortOrder.values().forEach { order ->
+                FilterChip(
+                    selected = current == order,
+                    onClick  = { onSelect(order) },
+                    label    = { Text(order.label, style = MaterialTheme.typography.labelSmall) }
+                )
+            }
         }
+        Text(
+            stringResource(R.string.wifi_refresh_interval_label),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        WifiRefreshIntervalPicker(
+            selectedIntervalMs = refreshIntervalMs,
+            onSelected = onRefreshInterval
+        )
     }
 }
 
@@ -1018,6 +1091,15 @@ private fun signalLevelColor(level: net.aieat.netswissknife.core.network.wifi.Si
                 HorizontalDivider()
                 DetailSectionHeader(stringResource(R.string.wifi_live_connection_header))
                 DetailRow(stringResource(R.string.wifi_detail_ip),          connectedInfo.ipAddress.ifBlank { "—" })
+                if (connectedInfo.ipv6Addresses.isNotEmpty()) {
+                    DetailRow(stringResource(R.string.wifi_detail_ipv6), connectedInfo.ipv6Addresses.joinToString("\n"))
+                }
+                connectedInfo.gateway?.let {
+                    DetailRow(stringResource(R.string.wifi_detail_gateway), it)
+                }
+                if (connectedInfo.dnsServers.isNotEmpty()) {
+                    DetailRow(stringResource(R.string.wifi_detail_dns), connectedInfo.dnsServers.joinToString("\n"))
+                }
                 DetailRow(stringResource(R.string.wifi_detail_link_speed),  "${connectedInfo.linkSpeedMbps} Mbps")
                 if (connectedInfo.txLinkSpeedMbps >= 0)
                     DetailRow(stringResource(R.string.wifi_detail_tx_speed), "${connectedInfo.txLinkSpeedMbps} Mbps ↑")

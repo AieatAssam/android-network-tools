@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
+import net.aieat.netswissknife.app.ui.screens.wifi.WifiScanViewModel
 import javax.inject.Inject
 
 @HiltViewModel
@@ -38,6 +39,17 @@ class SettingsViewModel @Inject constructor(
     val defaultConcurrency: StateFlow<Int> = dataStore.data
         .map { it[AppPreferenceKeys.DEFAULT_CONCURRENCY] ?: 50 }
         .stateIn(viewModelScope, SharingStarted.Eagerly, 50)
+
+    val wifiRefreshIntervalMs: StateFlow<Long?> = dataStore.data
+        .map { preferences ->
+            when (val stored = preferences[AppPreferenceKeys.WIFI_REFRESH_INTERVAL_MS]) {
+                null -> WifiScanViewModel.DEFAULT_REFRESH_INTERVAL_MS
+                WifiScanViewModel.DISABLED_REFRESH_INTERVAL_MS -> null
+                in WifiScanViewModel.REFRESH_INTERVAL_OPTIONS -> stored
+                else -> WifiScanViewModel.DEFAULT_REFRESH_INTERVAL_MS
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, WifiScanViewModel.DEFAULT_REFRESH_INTERVAL_MS)
 
     fun setThemeOverride(value: String) {
         viewModelScope.launch {
@@ -66,6 +78,15 @@ class SettingsViewModel @Inject constructor(
     fun setDefaultConcurrency(value: Int) {
         viewModelScope.launch {
             dataStore.edit { it[AppPreferenceKeys.DEFAULT_CONCURRENCY] = value.coerceIn(1, 500) }
+        }
+    }
+
+    fun setWifiRefreshInterval(intervalMs: Long?) {
+        viewModelScope.launch {
+            dataStore.edit { preferences ->
+                preferences[AppPreferenceKeys.WIFI_REFRESH_INTERVAL_MS] =
+                    intervalMs ?: WifiScanViewModel.DISABLED_REFRESH_INTERVAL_MS
+            }
         }
     }
 

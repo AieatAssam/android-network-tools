@@ -5,9 +5,11 @@ import android.os.Build
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.rule.GrantPermissionRule
@@ -21,6 +23,7 @@ import net.aieat.netswissknife.app.ui.screens.wifi.WifiScanUiState
 import net.aieat.netswissknife.app.ui.screens.wifi.WifiScanViewModel
 import net.aieat.netswissknife.app.ui.theme.NetSwissKnifeTheme
 import net.aieat.netswissknife.core.network.wifi.WifiAccessPoint
+import net.aieat.netswissknife.core.network.wifi.WifiConnectionInfo
 import net.aieat.netswissknife.core.network.wifi.WifiScanResult
 import net.aieat.netswissknife.core.network.wifi.WifiSecurity
 import net.aieat.netswissknife.core.network.wifi.WifiStandard
@@ -35,8 +38,8 @@ import org.junit.runner.RunWith
  * network order (the app's live-refresh selection-preservation mechanism).
  *
  * [WifiScanScreen] requests `ACCESS_FINE_LOCATION` always and additionally
- * `NEARBY_WIFI_DEVICES` on API 33+ — pre-granting both avoids a system
- * permission dialog interrupting the test.
+ * `NEARBY_WIFI_DEVICES` on API 33+ because Android's scan APIs still require
+ * fine location — pre-granting both avoids a system permission dialog.
  */
 @RunWith(AndroidJUnit4::class)
 class WifiScanScreenTest {
@@ -129,6 +132,104 @@ class WifiScanScreenTest {
     }
 
     @Test
+    fun locationDisabledState_showsSettingsAction() {
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                WifiScanScreen(viewModel = fakeViewModel(WifiScanUiState.LocationDisabled))
+            }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        composeRule
+            .onNodeWithText(context.getString(R.string.wifi_location_disabled_title))
+            .assertIsDisplayed()
+        composeRule
+            .onNodeWithText(context.getString(R.string.wifi_open_location_settings))
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun throttledSuccessState_showsAgeAndThrottleLabel() {
+        val result = WifiScanResult(
+            accessPoints = listOf(fakeAp("HomeNet", "AA:AA:AA:AA:AA:01", -50)),
+            channels = emptyList(),
+            connectedNetwork = null,
+            scanTimestampMs = 0L,
+            isWifiEnabled = true,
+            isFresh = false,
+            scanAgeMs = 42_000L,
+            throttled = true
+        )
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                WifiScanScreen(viewModel = fakeViewModel(WifiScanUiState.Success(result)))
+            }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        composeRule.onNodeWithText(context.getString(R.string.wifi_scan_throttled)).assertIsDisplayed()
+        composeRule.onNodeWithText(
+            context.resources.getQuantityString(R.plurals.wifi_results_age, 42, 42)
+        ).assertIsDisplayed()
+    }
+
+    @Test
+    fun refreshIntervalPicker_exposesOptionsAndPersistsSelection() {
+        val viewModel = fakeViewModel(successState(listOf(fakeAp("HomeNet", "AA:AA:AA:AA:AA:01", -50))))
+        composeRule.setContent {
+            NetSwissKnifeTheme { WifiScanScreen(viewModel = viewModel) }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        composeRule.onNodeWithText(context.getString(R.string.wifi_refresh_interval_off)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.wifi_refresh_interval_15s)).performClick()
+
+        verify(exactly = 1) { viewModel.setRefreshInterval(15_000L) }
+    }
+
+    @Test
+    fun connectedCard_showsIpv6GatewayAndDns() {
+        val connection = WifiConnectionInfo(
+            ssid = "HomeNet",
+            bssid = "AA:AA:AA:AA:AA:01",
+            rssi = -50,
+            frequency = 2437,
+            channel = 6,
+            band = net.aieat.netswissknife.core.network.wifi.WifiBand.BAND_2_4GHZ,
+            linkSpeedMbps = 144,
+            txLinkSpeedMbps = 144,
+            rxLinkSpeedMbps = 144,
+            ipAddress = "192.168.1.5",
+            standard = WifiStandard.WIFI_4,
+            security = WifiSecurity.WPA2,
+            ipv6Addresses = listOf("fe80::1", "2001:db8::5"),
+            gateway = "192.168.1.1",
+            dnsServers = listOf("192.168.1.1", "2001:4860:4860::8888")
+        )
+        val result = WifiScanResult(
+            accessPoints = listOf(fakeAp("HomeNet", "AA:AA:AA:AA:AA:01", -50)),
+            channels = emptyList(),
+            connectedNetwork = connection,
+            scanTimestampMs = 0L,
+            isWifiEnabled = true
+        )
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                WifiScanScreen(viewModel = fakeViewModel(WifiScanUiState.Success(result)))
+            }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        composeRule
+            .onNodeWithText(context.getString(R.string.wifi_connected_network_header))
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule.onNodeWithText("fe80::1\n2001:db8::5").assertIsDisplayed()
+        composeRule.onNodeWithText("192.168.1.1", useUnmergedTree = true).assertIsDisplayed()
+        composeRule
+            .onNodeWithText("192.168.1.1\n2001:4860:4860::8888", useUnmergedTree = true)
+            .fetchSemanticsNode()
+    }
+
+    @Test
     fun sortChip_tapCallsSetSortOrder() {
         val viewModel = fakeViewModel(successState(listOf(fakeAp("HomeNet", "AA:AA:AA:AA:AA:01", -50))))
         composeRule.setContent {
@@ -178,7 +279,10 @@ class WifiScanScreenTest {
         // autoRefresh (off in this test), so nothing infinite keeps it from idling.
         composeRule.mainClock.autoAdvance = true
         composeRule.onNodeWithText("Bravo").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Charlie").performScrollTo().assertIsDisplayed()
+        composeRule
+            .onNodeWithTag(WifiScreenTestTags.CONTENT_LIST)
+            .performScrollToIndex(WifiScreenTestTags.NETWORKS_START_INDEX + 2)
+        composeRule.onNodeWithText("Charlie").assertIsDisplayed()
         composeRule.mainClock.autoAdvance = false
     }
 
@@ -223,8 +327,9 @@ class WifiScanScreenTest {
         val viewModel = mockk<WifiScanViewModel>(relaxed = true)
         every { viewModel.uiState } returns MutableStateFlow(state)
         every { viewModel.autoRefresh } returns MutableStateFlow(false)
+        every { viewModel.refreshIntervalMs } returns MutableStateFlow(30_000L)
         every { viewModel.expandedNetworks } returns MutableStateFlow(emptySet())
-        every { viewModel.apDisappearedMessage } returns MutableStateFlow(null)
+        every { viewModel.apDisappearedEvent } returns MutableStateFlow(null)
         return viewModel
     }
 }

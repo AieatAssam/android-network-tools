@@ -52,11 +52,11 @@ We do not control the geolocation service's own data-handling practices. The IP 
 | `ACCESS_NETWORK_STATE` | Check whether a network connection is available before running a tool |
 | `ACCESS_WIFI_STATE` | Read Wi-Fi network information for the Wi-Fi Scanner |
 | `CHANGE_WIFI_STATE` | Required by Android to initiate Wi-Fi scans |
-| `NEARBY_WIFI_DEVICES` *(Android 13+)* | Scan for nearby Wi-Fi access points without requiring location permission |
-| `ACCESS_FINE_LOCATION` *(Android 6–12)* | Required by the Android platform to scan for Wi-Fi access points on these versions |
-| `ACCESS_COARSE_LOCATION` *(Android 6–12)* | Required by the Android platform alongside fine location for Wi-Fi scanning |
+| `NEARBY_WIFI_DEVICES` *(Android 13+)* | Access nearby Wi-Fi devices while the Wi-Fi Scanner requests a platform scan |
+| `ACCESS_FINE_LOCATION` | Required by Android's `startScan()` and `getScanResults()` APIs for Wi-Fi scanning |
+| `ACCESS_COARSE_LOCATION` | Declared for Android compatibility; the scanner requests fine location at runtime |
 
-Location permissions are used exclusively to satisfy Android's platform requirement for Wi-Fi scanning. The app does not determine, record, or transmit your physical location.
+Location permissions and the Location Services toggle are used exclusively to satisfy Android's platform requirements for Wi-Fi scanning. The app does not determine, record, or transmit your physical location. On Android 13 and newer, the scanner requests both fine location and Nearby Wi-Fi access because the scan APIs still require fine location.
 
 ---
 

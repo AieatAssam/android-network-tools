@@ -273,13 +273,29 @@
     <string name="wifi_no_permission_title">Location Permission Required</string>
     <string name="wifi_no_permission_body">Android requires Location permission to scan for nearby Wi-Fi networks. Your location is not sent anywhere.</string>
     <string name="wifi_grant_permission">Grant Permission</string>
+    <string name="wifi_location_disabled_title">Location Services are Off</string>
+    <string name="wifi_location_disabled_body">Android requires Location Services to be enabled before Wi-Fi scan results can be read. Your location is not recorded or sent anywhere.</string>
+    <string name="wifi_open_location_settings">Open Location Settings</string>
     <string name="wifi_disabled_title">Wi-Fi is Off</string>
     <string name="wifi_disabled_body">Enable Wi-Fi in your device settings, then scan again.</string>
     <string name="wifi_not_supported_title">Wi-Fi Not Available</string>
     <string name="wifi_not_supported_body">This device does not have Wi-Fi hardware.</string>
     <string name="wifi_error_title">Scan Failed</string>
     <string name="wifi_retry">Retry</string>
+    <string name="wifi_ap_disappeared">This network is no longer in range</string>
+    <string name="wifi_value_unavailable">—</string>
     <string name="wifi_sort_label">Sort:</string>
+    <string name="wifi_refresh_interval_label">Auto-refresh interval</string>
+    <string name="wifi_refresh_interval_off">Off</string>
+    <string name="wifi_refresh_interval_15s">15 s</string>
+    <string name="wifi_refresh_interval_30s">30 s</string>
+    <string name="wifi_refresh_interval_60s">60 s</string>
+    <plurals name="wifi_results_age">
+        <item quantity="one">Updated %1$d second ago</item>
+        <item quantity="other">Updated %1$d seconds ago</item>
+    </plurals>
+    <string name="wifi_results_age_unknown">Result age unavailable</string>
+    <string name="wifi_scan_throttled">Scan throttled by Android</string>
     <string name="wifi_connected_badge">Connected</string>
     <string name="wifi_hidden_badge">Hidden</string>
     <string name="wifi_detail_band">Band</string>
@@ -290,6 +306,9 @@
     <string name="wifi_detail_vendor">Vendor</string>
     <string name="wifi_detail_security">Security</string>
     <string name="wifi_detail_ip">IP Address</string>
+    <string name="wifi_detail_ipv6">IPv6 Addresses</string>
+    <string name="wifi_detail_gateway">Gateway</string>
+    <string name="wifi_detail_dns">DNS Servers</string>
     <string name="wifi_detail_link_speed">Link Speed</string>
     <string name="wifi_detail_tx_speed">TX Speed</string>
     <string name="wifi_detail_rx_speed">RX Speed</string>
@@ -658,6 +677,7 @@
     <string name="settings_ping_count_label">Default ping count: %1$d</string>
     <string name="settings_timeout_label">Default timeout: %1$d ms</string>
     <string name="settings_concurrency_label">Default concurrency: %1$d</string>
+    <string name="settings_wifi_refresh_interval_label">Wi-Fi auto-refresh interval</string>
 
     <!-- Settings – Data -->
     <string name="settings_data_section">Data</string>
@@ -753,8 +773,8 @@
 
     <!-- Onboarding – Page 4: Permissions & privacy -->
     <string name="onboarding_page4_title">A couple of permissions, explained upfront</string>
-    <string name="onboarding_page4_permission1">Wi-Fi Scanner asks for Location because Android requires it to scan for nearby networks — your location is never sent anywhere.</string>
-    <string name="onboarding_page4_permission2">Some local-network tools may also ask for a Nearby Devices permission on newer Android versions, just to talk to devices on your own network.</string>
+    <string name="onboarding_page4_permission1">Wi-Fi Scanner asks for Location because Android requires it for startScan and getScanResults — your location is never recorded or sent anywhere.</string>
+    <string name="onboarding_page4_permission2">On Android 13 and newer it also asks for Nearby Wi-Fi Devices. Android requires both permissions for a live Wi-Fi scan, and Location Services must be switched on.</string>
     <string name="onboarding_page4_privacy">There\'s no analytics and no accounts — everything runs locally on your device.</string>
 
     <!-- Settings – Guide section -->
@@ -873,12 +893,14 @@
     <string name="help_wifi_concept_heading">What is a Wi-Fi channel?</string>
     <string name="help_wifi_concept_body">Wi-Fi radios talk over slices of radio frequency called channels, similar to how radio stations each get their own frequency so they don\'t talk over each other. Every network you see is a named group (SSID) that can be broadcast by one or more physical radios, each with its own hardware address (BSSID) — a mesh system or dual-band router shows up as one SSID but several BSSIDs. 2.4 GHz channels travel further through walls but there are only 3 that don\'t overlap, so they get crowded; 5 GHz and 6 GHz have far more non-overlapping channels and are faster, at the cost of shorter range.</string>
     <string name="help_wifi_what_heading">What it does</string>
-    <string name="help_wifi_what_body">Scans nearby Wi-Fi access points, groups them by network (SSID), and displays channel utilisation on a spectrum chart. Requires Location permission on Android.</string>
+    <string name="help_wifi_what_body">Triggers a platform Wi-Fi scan, groups nearby access points by network (SSID), and displays channel utilisation on a spectrum chart. Location Services and the Android Wi-Fi scan permissions are required; your location is not recorded or sent.</string>
     <string name="help_wifi_params_heading">Key parameters</string>
     <string name="help_wifi_results_heading">Reading the results</string>
     <string-array name="help_wifi_params_bullets">
-        <item>Scan — perform a fresh scan.</item>
-        <item>Auto-refresh — continuously re-scan.</item>
+        <item>Scan — request a fresh platform scan.</item>
+        <item>Auto-refresh — choose Off, 15, 30, or 60 seconds.</item>
+        <item>If Android throttles a request, the screen shows the cached result age.</item>
+        <item>Location Services must be enabled for Android to return scan results.</item>
         <item>Band filter — show only 2.4 GHz, 5 GHz, or 6 GHz networks.</item>
         <item>Sort — order by signal strength, channel, or SSID.</item>
     </string-array>

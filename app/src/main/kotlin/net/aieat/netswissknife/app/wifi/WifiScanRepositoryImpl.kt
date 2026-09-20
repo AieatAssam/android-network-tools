@@ -4,11 +4,16 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
 import android.net.ConnectivityManager
+import android.net.LinkProperties
 import android.net.NetworkCapabilities
 import android.net.wifi.ScanResult
 import android.net.wifi.WifiInfo
 import android.net.wifi.WifiManager
+import android.location.LocationManager
 import android.os.Build
+import android.os.SystemClock
+import androidx.annotation.RequiresApi
+import androidx.core.location.LocationManagerCompat
 import net.aieat.netswissknife.core.network.lan.OuiDatabase
 import net.aieat.netswissknife.core.network.wifi.WifiAccessPoint
 import net.aieat.netswissknife.core.network.wifi.WifiBand
@@ -17,6 +22,7 @@ import net.aieat.netswissknife.core.network.wifi.WifiChannelInfo
 import net.aieat.netswissknife.core.network.wifi.WifiConnectionInfo
 import net.aieat.netswissknife.core.network.wifi.WifiScanRepository
 import net.aieat.netswissknife.core.network.wifi.WifiScanResult
+import net.aieat.netswissknife.core.network.wifi.WifiScanFreshness
 import net.aieat.netswissknife.core.network.wifi.WifiSecurity
 import net.aieat.netswissknife.core.network.wifi.WifiStandard
 import kotlinx.coroutines.Dispatchers
@@ -33,68 +39,98 @@ class WifiScanRepositoryImpl(private val context: Context) : WifiScanRepository 
         context.applicationContext.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
     }
 
+    private val locationManager: LocationManager by lazy {
+        context.applicationContext.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+    }
+
+    private val scanRequestAwaiter: ScanRequestAwaiter by lazy {
+        ScanRequestAwaiter(context.applicationContext, wifiManager)
+    }
+
     override val isSupported: Boolean
         get() = context.packageManager.hasSystemFeature(PackageManager.FEATURE_WIFI)
+
+    override val isLocationEnabled: Boolean
+        get() = LocationManagerCompat.isLocationEnabled(locationManager)
 
     // Permission is verified by the caller (WifiScanScreen) before invoking scan(); a
     // SecurityException here (e.g. permission revoked mid-session) is caught by
     // WifiScanViewModel and surfaced as WifiScanUiState.NoPermission.
     @SuppressLint("MissingPermission")
-    override suspend fun scan(): WifiScanResult = withContext(Dispatchers.IO) {
+    override suspend fun scan(trigger: Boolean): WifiScanResult = withContext(Dispatchers.IO) {
+        val locationEnabled = isLocationEnabled
+        val requestOutcome = if (trigger && locationEnabled) {
+            scanRequestAwaiter.requestAndAwait(SCAN_TIMEOUT_MS)
+        } else {
+            null
+        }
         val rawResults: List<ScanResult> = wifiManager.scanResults ?: emptyList()
-        val connectedBssid = getConnectedBssid()
-        val connectedInfo = getConnectionInfo(connectedBssid)
+        val activeConnection = getActiveWifiConnection()
+        val connectedBssid = activeConnection?.wifiInfo?.bssid
+            ?.takeIf { it != "02:00:00:00:00:00" }
+        val connectedInfo = activeConnection?.let { buildConnectionInfo(it.wifiInfo, it.linkProperties) }
 
         val accessPoints = rawResults
             .map { sr -> mapScanResult(sr, connectedBssid) }
             .sortedByDescending { it.rssi }
 
         val channels = buildChannelInfo(accessPoints)
+        val freshness = WifiScanFreshness.compute(
+            newestTimestampUs = rawResults.maxOfOrNull { it.timestamp },
+            nowElapsedMs = SystemClock.elapsedRealtime()
+        )
 
         WifiScanResult(
             accessPoints = accessPoints,
             channels = channels,
             connectedNetwork = connectedInfo,
             scanTimestampMs = System.currentTimeMillis(),
-            isWifiEnabled = wifiManager.isWifiEnabled
+            isWifiEnabled = wifiManager.isWifiEnabled,
+            isFresh = freshness.isFresh,
+            scanAgeMs = freshness.ageMs,
+            throttled = requestOutcome?.throttled == true,
+            locationEnabled = locationEnabled
         )
     }
 
     // ── Connected network info ────────────────────────────────────────────────
 
-    private fun getConnectedBssid(): String? {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val network = connectivityManager.activeNetwork ?: return null
-            val caps = connectivityManager.getNetworkCapabilities(network) ?: return null
-            if (!caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) return null
-            val wifiInfo = caps.transportInfo as? WifiInfo ?: return null
-            wifiInfo.bssid?.takeIf { it != "02:00:00:00:00:00" }
-        } else {
-            @Suppress("DEPRECATION")
-            wifiManager.connectionInfo?.bssid?.takeIf { it != "02:00:00:00:00:00" }
+    private data class ActiveWifiConnection(
+        val wifiInfo: WifiInfo,
+        val linkProperties: LinkProperties?
+    )
+
+    @SuppressLint("MissingPermission")
+    private fun getActiveWifiConnection(): ActiveWifiConnection? {
+        val network = connectivityManager.activeNetwork
+        val capabilities = network?.let(connectivityManager::getNetworkCapabilities)
+        if (capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true) {
+            val wifiInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                transportWifiInfo(capabilities)
+            } else {
+                @Suppress("DEPRECATION")
+                wifiManager.connectionInfo
+            }
+            return wifiInfo?.let {
+                ActiveWifiConnection(it, connectivityManager.getLinkProperties(network))
+            }
         }
+
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            @Suppress("DEPRECATION")
+            return wifiManager.connectionInfo?.let { ActiveWifiConnection(it, null) }
+        }
+        return null
     }
 
-    private fun getConnectionInfo(connectedBssid: String?): WifiConnectionInfo? {
-        if (connectedBssid == null) return null
-
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val network = connectivityManager.activeNetwork ?: return null
-            val caps = connectivityManager.getNetworkCapabilities(network) ?: return null
-            if (!caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) return null
-            val wi = caps.transportInfo as? WifiInfo ?: return null
-            buildConnectionInfo(wi)
-        } else {
-            @Suppress("DEPRECATION")
-            val wi = wifiManager.connectionInfo ?: return null
-            buildConnectionInfo(wi)
-        }
-    }
+    @RequiresApi(Build.VERSION_CODES.Q)
+    private fun transportWifiInfo(capabilities: NetworkCapabilities): WifiInfo? =
+        capabilities.transportInfo as? WifiInfo
 
     // Same permission guarantee as scan(): caller has already verified the permission
     // before scan() (and transitively this) is invoked.
     @SuppressLint("MissingPermission")
-    private fun buildConnectionInfo(wi: WifiInfo): WifiConnectionInfo? {
+    private fun buildConnectionInfo(wi: WifiInfo, linkProperties: LinkProperties?): WifiConnectionInfo? {
         val rawSsid = wi.ssid ?: return null
         val ssid = rawSsid.removeSurrounding("\"")
         if (ssid == "<unknown ssid>" || ssid.isBlank()) return null
@@ -111,9 +147,16 @@ class WifiScanRepositoryImpl(private val context: Context) : WifiScanRepository 
             inferStandardFromBand(band)
         }
 
-        @Suppress("DEPRECATION")
-        val ipInt = wi.ipAddress
-        val ipAddress = intToIpAddress(ipInt)
+        val addresses = WifiConnectionInfoMapper.mapLinkAddresses(
+            linkProperties?.linkAddresses.orEmpty().mapNotNull { it.address.hostAddress }
+        )
+        val gateway = linkProperties?.routes
+            ?.firstOrNull { it.isDefaultRoute && it.gateway?.isAnyLocalAddress == false }
+            ?.gateway
+            ?.hostAddress
+            ?.substringBefore('%')
+        val dnsServers = linkProperties?.dnsServers.orEmpty()
+            .mapNotNull { it.hostAddress?.substringBefore('%') }
 
         // Find the capabilities from scan results to determine security
         val security = wifiManager.scanResults
@@ -132,9 +175,12 @@ class WifiScanRepositoryImpl(private val context: Context) : WifiScanRepository 
             linkSpeedMbps = wi.linkSpeed,
             txLinkSpeedMbps = txSpeed,
             rxLinkSpeedMbps = rxSpeed,
-            ipAddress = ipAddress,
+            ipAddress = addresses.ipv4Address,
             standard = standard,
-            security = security
+            security = security,
+            ipv6Addresses = addresses.ipv6Addresses,
+            gateway = gateway,
+            dnsServers = dnsServers
         )
     }
 
@@ -246,8 +292,7 @@ class WifiScanRepositoryImpl(private val context: Context) : WifiScanRepository 
         }
     }
 
-    private fun intToIpAddress(ip: Int): String {
-        if (ip == 0) return ""
-        return "${ip and 0xFF}.${(ip shr 8) and 0xFF}.${(ip shr 16) and 0xFF}.${(ip shr 24) and 0xFF}"
+    private companion object {
+        const val SCAN_TIMEOUT_MS = 8_000L
     }
 }

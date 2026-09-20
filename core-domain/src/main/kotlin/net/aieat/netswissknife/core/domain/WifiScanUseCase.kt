@@ -20,9 +20,9 @@ class WifiScanUseCase(private val repository: WifiScanRepository) {
      * @throws WifiNotSupportedException if the device lacks Wi-Fi hardware.
      * @throws Exception propagated from the repository on I/O or permission errors.
      */
-    suspend operator fun invoke(): WifiScanResult {
+    suspend operator fun invoke(trigger: Boolean = true): WifiScanResult {
         if (!repository.isSupported) throw WifiNotSupportedException()
-        return repository.scan()
+        return repository.scan(trigger)
     }
 }
 

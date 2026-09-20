@@ -67,6 +67,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import net.aieat.netswissknife.app.BuildConfig
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
+import net.aieat.netswissknife.app.ui.screens.wifi.WifiRefreshIntervalPicker
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.ui.theme.AppShapes
 import kotlin.math.roundToInt
@@ -80,6 +81,7 @@ fun SettingsScreen(
     val defaultPingCount by viewModel.defaultPingCount.collectAsStateWithLifecycle()
     val defaultTimeoutMs by viewModel.defaultTimeoutMs.collectAsStateWithLifecycle()
     val defaultConcurrency by viewModel.defaultConcurrency.collectAsStateWithLifecycle()
+    val wifiRefreshIntervalMs by viewModel.wifiRefreshIntervalMs.collectAsStateWithLifecycle()
 
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
@@ -116,9 +118,11 @@ fun SettingsScreen(
                     pingCount = defaultPingCount,
                     timeoutMs = defaultTimeoutMs,
                     concurrency = defaultConcurrency,
+                    wifiRefreshIntervalMs = wifiRefreshIntervalMs,
                     onPingCountChange = viewModel::setDefaultPingCount,
                     onTimeoutChange = viewModel::setDefaultTimeoutMs,
-                    onConcurrencyChange = viewModel::setDefaultConcurrency
+                    onConcurrencyChange = viewModel::setDefaultConcurrency,
+                    onWifiRefreshIntervalChange = viewModel::setWifiRefreshInterval
                 )
             }
             AnimatedVisibility(visible = visibleSections >= 3, enter = fadeIn(AppMotion.enter(250)) + slideInVertically(AppMotion.enter(250)) { it / 3 }) {
@@ -217,9 +221,11 @@ private fun DefaultsSection(
     pingCount: Int,
     timeoutMs: Int,
     concurrency: Int,
+    wifiRefreshIntervalMs: Long?,
     onPingCountChange: (Int) -> Unit,
     onTimeoutChange: (Int) -> Unit,
-    onConcurrencyChange: (Int) -> Unit
+    onConcurrencyChange: (Int) -> Unit,
+    onWifiRefreshIntervalChange: (Long?) -> Unit
 ) {
     SectionHeader(Icons.Default.Tune, stringResource(R.string.settings_defaults_section))
 
@@ -245,6 +251,15 @@ private fun DefaultsSection(
                 valueRange = 10f..500f,
                 steps = 48,
                 onValueChange = { onConcurrencyChange((it / 10).roundToInt() * 10) }
+            )
+            Text(
+                stringResource(R.string.settings_wifi_refresh_interval_label),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            WifiRefreshIntervalPicker(
+                selectedIntervalMs = wifiRefreshIntervalMs,
+                onSelected = onWifiRefreshIntervalChange
             )
         }
     }

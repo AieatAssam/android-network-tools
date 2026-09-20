@@ -109,10 +109,10 @@ phases:
     file: plan/phases/P03-wifi-live-scanning.yaml
     title: "Wi-Fi Scanner: trigger real scans, honour throttling, configurable refresh, richer connection info"
     priority: high
-    status: todo
+    status: done
     depends_on: []
     findings: [F007, F039]
-    summary: "WifiManager.startScan() is never called; the 10-second auto-refresh re-reads the OS cache. Add scan triggering with SCAN_RESULTS_AVAILABLE receiver, throttle awareness and a user-configurable interval. Resolve the neverForLocation/FINE_LOCATION contradiction."
+    summary: "Implemented live WifiManager.startScan() requests with receiver/timeout handling, freshness and throttle reporting, configurable 15/30/60-second or off refresh, Location Services state, LinkProperties IPv4/IPv6/gateway/DNS details, enterprise security mapping, and aligned API 33+ permission/privacy documentation."
 
   - id: P04
     file: plan/phases/P04-ping-dns-accuracy.yaml
