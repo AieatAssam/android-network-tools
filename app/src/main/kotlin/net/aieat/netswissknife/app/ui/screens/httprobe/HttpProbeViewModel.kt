@@ -3,6 +3,7 @@ package net.aieat.netswissknife.app.ui.screens.httprobe
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -105,28 +106,37 @@ class HttpProbeViewModel @Inject constructor(
                 .filter { it.key.isNotBlank() }
                 .map { it.key.trim() to it.value.trim() }
 
-            val result = useCase(
-                HttpProbeParams(
-                    url = state.url.trim(),
-                    method = state.method,
-                    headers = headers,
-                    body = state.body.takeIf { it.isNotBlank() && state.method.supportsBody },
-                    followRedirects = state.followRedirects
+            try {
+                val result = useCase(
+                    HttpProbeParams(
+                        url = state.url.trim(),
+                        method = state.method,
+                        headers = headers,
+                        body = state.body.takeIf { it.isNotBlank() && state.method.supportsBody },
+                        followRedirects = state.followRedirects
+                    )
                 )
-            )
 
-            _uiState.update { current ->
-                when (result) {
-                    is NetworkResult.Success -> current.copy(
-                        isLoading = false,
-                        result = result.data,
-                        selectedTab = 0
-                    )
-                    is NetworkResult.Error -> current.copy(
-                        isLoading = false,
-                        error = result.message
-                    )
+                _uiState.update { current ->
+                    when (result) {
+                        is NetworkResult.Success -> current.copy(
+                            isLoading = false,
+                            result = result.data,
+                            selectedTab = 0
+                        )
+                        is NetworkResult.Error -> current.copy(
+                            isLoading = false,
+                            error = result.message
+                        )
+                    }
                 }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                val detail = e.message?.trim().takeUnless { it.isNullOrEmpty() }
+                    ?: e::class.simpleName
+                    ?: "Unknown request error"
+                _uiState.update { it.copy(isLoading = false, error = "Request failed: $detail") }
             }
         }
     }

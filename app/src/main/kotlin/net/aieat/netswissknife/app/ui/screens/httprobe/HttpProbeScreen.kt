@@ -121,6 +121,7 @@ import net.aieat.netswissknife.core.network.httprobe.HttpMethod
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeResult
 import net.aieat.netswissknife.core.network.httprobe.SecurityHeaderCheck
 import net.aieat.netswissknife.core.network.httprobe.SecurityRating
+import net.aieat.netswissknife.core.domain.validateHttpProbeUrl
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
@@ -291,8 +292,7 @@ private fun HttpProbeInputCard(
 ) {
     val focusManager = LocalFocusManager.current
     val url = uiState.url
-    val isUrlInvalid = url.isNotBlank() &&
-        !url.startsWith("http://") && !url.startsWith("https://") && url.contains('.')
+    val isUrlInvalid = url.isNotBlank() && validateHttpProbeUrl(url) != null
 
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(

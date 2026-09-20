@@ -788,6 +788,11 @@ private fun ThroughputResultCard(
 
 @Composable
 private fun SpeedTestErrorContent(state: SpeedTestUiState.Error, onRetry: () -> Unit) {
+    val phaseLabel = when (state.phase) {
+        SpeedTestPhase.LATENCY -> R.string.speedtest_phase_latency
+        SpeedTestPhase.DOWNLOAD -> R.string.speedtest_phase_download
+        SpeedTestPhase.UPLOAD -> R.string.speedtest_phase_upload
+    }
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier
@@ -807,6 +812,12 @@ private fun SpeedTestErrorContent(state: SpeedTestUiState.Error, onRetry: () -> 
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.error
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = stringResource(R.string.speedtest_error_phase, stringResource(phaseLabel)),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(Modifier.height(4.dp))
             Text(

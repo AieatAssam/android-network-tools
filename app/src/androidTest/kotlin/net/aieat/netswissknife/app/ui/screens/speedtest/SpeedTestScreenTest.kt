@@ -171,6 +171,14 @@ class SpeedTestScreenTest {
 
         composeRule.onNodeWithText("Connection lost").assertIsDisplayed()
         composeRule
+            .onNodeWithText(
+                context.getString(
+                    R.string.speedtest_error_phase,
+                    context.getString(R.string.speedtest_phase_download)
+                )
+            )
+            .assertIsDisplayed()
+        composeRule
             .onNodeWithText(context.getString(R.string.speedtest_retry))
             .performClick()
 

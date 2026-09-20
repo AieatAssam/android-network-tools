@@ -103,6 +103,18 @@ class HttpProbeViewModelTest {
         }
 
         @Test
+        fun `exception sets error and stops loading`() = runTest {
+            coEvery { useCase(any()) } throws IllegalStateException("connection reset")
+            viewModel.onUrlChange("https://example.com")
+
+            viewModel.send()
+
+            val state = viewModel.uiState.value
+            assertFalse(state.isLoading)
+            assertEquals("Request failed: connection reset", state.error)
+        }
+
+        @Test
         fun `blank url does not trigger send`() = runTest {
             viewModel.onUrlChange("  ")
             viewModel.send()

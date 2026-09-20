@@ -113,6 +113,19 @@ class TlsInspectorViewModelTest {
         }
 
         @Test
+        fun `exception sets actionable error and stops loading`() = runTest {
+            coEvery { useCase(any()) } throws IllegalStateException("handshake failed")
+            viewModel.onHostChange("example.com")
+
+            viewModel.inspect()
+
+            val state = viewModel.uiState.value
+            assertTrue(!state.isLoading)
+            assertNull(state.result)
+            assertEquals("TLS inspection failed: handshake failed", state.error)
+        }
+
+        @Test
         fun `isLoading is false after completion`() = runTest {
             coEvery { useCase(any()) } returns NetworkResult.Success(stubResult)
             viewModel.onHostChange("example.com")

@@ -90,6 +90,7 @@ import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
@@ -121,6 +122,11 @@ import net.aieat.netswissknife.core.domain.PortScanPreset
 import net.aieat.netswissknife.core.network.portscan.PortScanResult
 import net.aieat.netswissknife.core.network.portscan.PortScanSummary
 import net.aieat.netswissknife.core.network.portscan.PortStatus
+
+object PortsScreenTestTags {
+    const val PRESET_FIELD = "ports_preset_field"
+    const val SCAN_BUTTON = "ports_scan_button"
+}
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -415,6 +421,7 @@ private fun PortScanInputCard(
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = presetExpanded) },
                     modifier = Modifier
                         .fillMaxWidth()
+                        .testTag(PortsScreenTestTags.PRESET_FIELD)
                         .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
                 )
                 ExposedDropdownMenu(
@@ -569,7 +576,9 @@ private fun PortScanInputCard(
                     Button(
                         onClick = hapticAction(onStartScan),
                         enabled = host.isNotBlank() && customRangeValid,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag(PortsScreenTestTags.SCAN_BUTTON)
                     ) {
                         Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(6.dp))
