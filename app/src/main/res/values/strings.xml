@@ -1105,6 +1105,7 @@
     <string name="speedtest_running_download">Testing download speed…</string>
     <string name="speedtest_running_upload">Testing upload speed…</string>
     <string name="speedtest_error_title">Speed test failed</string>
+    <string name="speedtest_error_phase">Failed during %1$s</string>
 
     <string name="speedtest_mbps_suffix">Mbps</string>
     <string name="speedtest_ms_suffix">ms</string>
