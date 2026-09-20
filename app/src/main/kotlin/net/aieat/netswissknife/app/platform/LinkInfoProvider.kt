@@ -19,6 +19,9 @@ data class LinkInfo(
 
 /** Pure mapping helpers kept separate from Android framework objects for JVM coverage. */
 object LinkInfoMapper {
+    fun isValidatedNetwork(capabilities: NetworkCapabilities?): Boolean =
+        capabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
+
     fun cidrOf(address: String, prefixLength: Int): String? {
         val octets = address.split('.').mapNotNull(String::toIntOrNull)
         if (octets.size != 4 || octets.any { it !in 0..255 }) return null
@@ -45,11 +48,36 @@ object LinkInfoMapper {
 }
 
 @Singleton
-class LinkInfoProvider @Inject constructor(
-    @param:ApplicationContext private val context: Context,
+class LinkInfoProvider private constructor(
+    private val context: Context?,
+    private val validatedNetworkOverride: (() -> Boolean)?,
 ) {
+    @Inject
+    constructor(@ApplicationContext context: Context) : this(context, null)
+
+    /**
+     * Test-only construction hook. The production constructor always uses the
+     * process ConnectivityManager; tests can provide a deterministic answer
+     * without needing an Android network stack.
+     */
+    constructor(hasValidatedNetwork: () -> Boolean) : this(null, hasValidatedNetwork)
+
+    /** True only when the active network has validated Internet connectivity. */
+    fun hasValidatedNetwork(): Boolean = runCatching {
+        validatedNetworkOverride?.let { return@runCatching it() }
+        val appContext = context ?: return@runCatching false
+        val connectivity = appContext.getSystemService(Context.CONNECTIVITY_SERVICE)
+            as? ConnectivityManager
+            ?: return@runCatching false
+        val network = connectivity.activeNetwork ?: return@runCatching false
+        LinkInfoMapper.isValidatedNetwork(connectivity.getNetworkCapabilities(network))
+    }.getOrDefault(false)
+
     fun getLinkInfo(): LinkInfo? = runCatching {
-        val connectivity = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val appContext = context ?: return@runCatching null
+        val connectivity = appContext.getSystemService(Context.CONNECTIVITY_SERVICE)
+            as? ConnectivityManager
+            ?: return@runCatching null
         val network = connectivity.activeNetwork ?: return null
         val properties = connectivity.getLinkProperties(network) ?: return null
         val capabilities = connectivity.getNetworkCapabilities(network)

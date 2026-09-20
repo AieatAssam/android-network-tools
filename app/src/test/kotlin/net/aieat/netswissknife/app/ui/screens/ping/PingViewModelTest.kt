@@ -22,6 +22,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
+import net.aieat.netswissknife.app.platform.LinkInfoProvider
 import net.aieat.netswissknife.core.domain.ContinuousPingUseCase
 import net.aieat.netswissknife.core.domain.PingFlowResult
 import net.aieat.netswissknife.core.domain.PingUseCase
@@ -49,6 +50,7 @@ class PingViewModelTest {
     private lateinit var dataStore: DataStore<Preferences>
     private lateinit var recentHostsRepository: RecentHostsRepository
     private lateinit var viewModel: PingViewModel
+    private var networkAvailable = true
 
     private val successPacket = PingPacketResult(
         sequence = 1, host = "example.com", status = PingStatus.SUCCESS, rtTimeMs = 15L
@@ -63,7 +65,13 @@ class PingViewModelTest {
         recentHostsRepository = mockk(relaxed = true) {
             every { getRecents(any()) } returns flowOf(emptyList())
         }
-        viewModel = PingViewModel(pingUseCase, continuousPingUseCase, dataStore, recentHostsRepository)
+        viewModel = PingViewModel(
+            pingUseCase,
+            continuousPingUseCase,
+            dataStore,
+            recentHostsRepository,
+            LinkInfoProvider { networkAvailable },
+        )
     }
 
     @AfterEach
@@ -182,6 +190,27 @@ class PingViewModelTest {
             viewModel.onHostChange("unreachable.host")
             viewModel.startPing()
             assertTrue(viewModel.uiState.value is PingUiState.Error)
+        }
+
+        @Test
+        fun `offline normal ping fails before invoking the probe`() = runTest {
+            networkAvailable = false
+            viewModel.onHostChange("example.com")
+
+            viewModel.startPing()
+
+            assertEquals(PingUiState.Error("No network connection"), viewModel.uiState.value)
+            coVerify(exactly = 0) { pingUseCase(any()) }
+        }
+
+        @Test
+        fun `probe exception is exposed as an error`() = runTest {
+            coEvery { pingUseCase(any()) } throws IllegalStateException("socket closed")
+            viewModel.onHostChange("example.com")
+
+            viewModel.startPing()
+
+            assertEquals(PingUiState.Error("socket closed"), viewModel.uiState.value)
         }
     }
 
@@ -324,6 +353,25 @@ class PingViewModelTest {
             )
             viewModel.startPing()
             assertTrue(viewModel.uiState.value is PingUiState.Error)
+        }
+
+        @Test
+        fun `offline continuous ping fails before creating a session or invoking the probe`() = runTest {
+            networkAvailable = false
+
+            viewModel.startPing()
+
+            assertEquals(PingUiState.Error("No network connection"), viewModel.uiState.value)
+            coVerify(exactly = 0) { continuousPingUseCase(any()) }
+        }
+
+        @Test
+        fun `continuous probe exception is exposed as an error`() = runTest {
+            coEvery { continuousPingUseCase(any()) } throws IllegalStateException("socket closed")
+
+            viewModel.startPing()
+
+            assertEquals(PingUiState.Error("socket closed"), viewModel.uiState.value)
         }
 
         @Test

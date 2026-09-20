@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
+import net.aieat.netswissknife.app.platform.LinkInfoProvider
 import net.aieat.netswissknife.core.domain.TracerouteFlowResult
 import net.aieat.netswissknife.core.domain.TracerouteParams
 import net.aieat.netswissknife.core.domain.TracerouteUseCase
@@ -40,8 +41,13 @@ sealed interface TracerouteUiState {
 @HiltViewModel
 class TracerouteViewModel @Inject constructor(
     private val tracerouteUseCase: TracerouteUseCase,
-    private val recentHostsRepository: RecentHostsRepository
+    private val recentHostsRepository: RecentHostsRepository,
+    private val linkInfoProvider: LinkInfoProvider = LinkInfoProvider { true },
 ) : ViewModel() {
+
+    companion object {
+        private const val NO_NETWORK_CONNECTION = "No network connection"
+    }
 
     private val _uiState = MutableStateFlow<TracerouteUiState>(TracerouteUiState.Idle)
     val uiState: StateFlow<TracerouteUiState> = _uiState.asStateFlow()
@@ -128,6 +134,12 @@ class TracerouteViewModel @Inject constructor(
 
     fun startTrace() {
         traceJob?.cancel()
+
+        if (!linkInfoProvider.hasValidatedNetwork()) {
+            _uiState.value = TracerouteUiState.Error(NO_NETWORK_CONNECTION)
+            return
+        }
+
         viewModelScope.launch {
             recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_TRACEROUTE_HOSTS, _host.value)
         }
