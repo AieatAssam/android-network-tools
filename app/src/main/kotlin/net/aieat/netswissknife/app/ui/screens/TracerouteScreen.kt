@@ -92,6 +92,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
+import net.aieat.netswissknife.app.ui.components.ToolErrorCard
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
 import net.aieat.netswissknife.app.ui.components.ToolStopButton
 import net.aieat.netswissknife.app.ui.components.hapticAction
@@ -1336,59 +1337,17 @@ private fun TracerouteErrorPanel(
     onRetry: () -> Unit,
     onClear: () -> Unit
 ) {
-    var scaleTarget by remember { mutableStateOf(0.85f) }
-    LaunchedEffect(Unit) { scaleTarget = 1f }
-    val scale by animateFloatAsState(
-        targetValue   = scaleTarget,
-        animationSpec = spring(Spring.DampingRatioMediumBouncy),
-        label         = "error-scale"
-    )
-    ElevatedCard(
-        modifier = Modifier
-            .fillMaxWidth()
-            .scale(scale)
+    ToolErrorCard(
+        title = stringResource(R.string.traceroute_error_title),
+        message = state.message,
     ) {
-        Column(
-            modifier            = Modifier.padding(20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(52.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.errorContainer),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    Icons.Default.Warning,
-                    null,
-                    tint     = MaterialTheme.colorScheme.onErrorContainer,
-                    modifier = Modifier.size(28.dp)
-                )
-            }
-            Text(
-                stringResource(R.string.traceroute_error_title),
-                style     = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                color     = MaterialTheme.colorScheme.error,
-                textAlign = TextAlign.Center
-            )
-            Text(
-                state.message,
-                style     = MaterialTheme.typography.bodySmall,
-                color     = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilledTonalButton(onClick = onClear) {
-                    Text(stringResource(R.string.traceroute_clear_button))
-                }
-                Button(onClick = onRetry) {
-                    Icon(Icons.Default.Refresh, null)
-                    Spacer(Modifier.width(4.dp))
-                    Text(stringResource(R.string.traceroute_retry_button))
-                }
-            }
+        FilledTonalButton(onClick = onClear) {
+            Text(stringResource(R.string.traceroute_clear_button))
+        }
+        Button(onClick = onRetry) {
+            Icon(Icons.Default.Refresh, null)
+            Spacer(Modifier.width(4.dp))
+            Text(stringResource(R.string.traceroute_retry_button))
         }
     }
 }

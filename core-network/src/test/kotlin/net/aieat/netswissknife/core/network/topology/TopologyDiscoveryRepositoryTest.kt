@@ -88,18 +88,15 @@ class TopologyDiscoveryRepositoryTest {
     }
 
     @Test
-    fun `SNMP timeout results in unreachable node`() = runTest {
+    fun `SNMP timeout reports an actionable failure`() = runTest {
         coEvery { snmpClient.get(any(), any()) } throws java.net.SocketTimeoutException("timeout")
         coEvery { snmpClient.walk(any(), any()) } returns emptyMap()
 
         val events = repository.discover(defaultParams).toList()
 
-        // When SNMP GETs fail due to timeout, node is still emitted as unreachable
-        val nodeEvents = events.filterIsInstance<TopologyDiscoveryEvent.NodeDiscovered>()
-        val completeEvents = events.filterIsInstance<TopologyDiscoveryEvent.Complete>()
-        assertTrue(nodeEvents.isNotEmpty())
-        assertEquals(1, completeEvents.size)
-        assertFalse(nodeEvents[0].node.snmpReachable)
+        val errors = events.filterIsInstance<TopologyDiscoveryEvent.Error>()
+        assertEquals(1, errors.size)
+        assertTrue(errors.single().message.contains("timeout", ignoreCase = true))
     }
 
     @Test

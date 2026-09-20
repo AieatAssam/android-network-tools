@@ -5,6 +5,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import net.aieat.netswissknife.core.network.HostValidator
 import java.util.LinkedList
 
 class TopologyDiscoveryRepositoryImpl(
@@ -15,10 +16,12 @@ class TopologyDiscoveryRepositoryImpl(
 
     override fun discover(params: TopologyParams): Flow<TopologyDiscoveryEvent> = flow {
         try {
-            snmpClientFactory.create(params).use { snmpClient ->
+            val normalizedTarget = HostValidator.normalize(params.targetIp) ?: params.targetIp
+            val effectiveParams = params.copy(targetIp = normalizedTarget)
+            snmpClientFactory.create(effectiveParams).use { snmpClient ->
                 val visited = mutableSetOf<String>()
                 val queue = LinkedList<Pair<String, Int>>() // ip to hop depth
-                queue.add(params.targetIp to 0)
+                queue.add(effectiveParams.targetIp to 0)
 
                 val allNodes = mutableListOf<TopologyNode>()
                 val allLinks = mutableListOf<TopologyLink>()
@@ -31,10 +34,19 @@ class TopologyDiscoveryRepositoryImpl(
 
                     emit(TopologyDiscoveryEvent.Progress("Querying $currentIp...", allNodes.size))
 
-                    val target = SnmpTarget(ip = currentIp, params = params)
+                    val target = SnmpTarget(ip = currentIp, params = effectiveParams)
 
-                    val sysDescr = safeGet(snmpClient, target, "1.3.6.1.2.1.1.1.0")
-                    val sysName = safeGet(snmpClient, target, "1.3.6.1.2.1.1.5.0")
+                    val sysDescrAttempt = attemptGet(snmpClient, target, "1.3.6.1.2.1.1.1.0")
+                    val sysNameAttempt = attemptGet(snmpClient, target, "1.3.6.1.2.1.1.5.0")
+                    val sysDescr = sysDescrAttempt.value
+                    val sysName = sysNameAttempt.value
+                    val systemFailure = sysDescrAttempt.error ?: sysNameAttempt.error
+                    if (sysDescr == null && sysName == null && systemFailure != null) {
+                        if (currentIp == effectiveParams.targetIp) {
+                            emit(TopologyDiscoveryEvent.Error(SnmpErrorFormatter.describe(systemFailure)))
+                            return@flow
+                        }
+                    }
                     val sysLocation = safeGet(snmpClient, target, "1.3.6.1.2.1.1.6.0")
                     val sysUpTimeStr = safeGet(snmpClient, target, "1.3.6.1.2.1.1.3.0")
 
@@ -90,7 +102,7 @@ class TopologyDiscoveryRepositoryImpl(
                         TopologyGraph(
                             nodes = allNodes,
                             links = allLinks,
-                            seedIp = params.targetIp,
+                            seedIp = effectiveParams.targetIp,
                             queriedAt = System.currentTimeMillis()
                         )
                     )
@@ -99,18 +111,23 @@ class TopologyDiscoveryRepositoryImpl(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            emit(TopologyDiscoveryEvent.Error(e.message ?: "Unknown SNMP error"))
+            emit(TopologyDiscoveryEvent.Error(SnmpErrorFormatter.describe(e)))
         }
     }
 
-    private suspend fun safeGet(client: SnmpClient, target: SnmpTarget, oid: String): String? =
+    private data class GetAttempt(val value: String?, val error: Exception?)
+
+    private suspend fun attemptGet(client: SnmpClient, target: SnmpTarget, oid: String): GetAttempt =
         try {
-            client.get(target, oid)
+            GetAttempt(client.get(target, oid), null)
         } catch (e: CancellationException) {
             throw e
-        } catch (_: Exception) {
-            null
+        } catch (e: Exception) {
+            GetAttempt(null, e)
         }
+
+    private suspend fun safeGet(client: SnmpClient, target: SnmpTarget, oid: String): String? =
+        attemptGet(client, target, oid).value
 
     private suspend fun safeWalk(client: SnmpClient, target: SnmpTarget, oid: String): Map<String, String> =
         try {

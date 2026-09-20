@@ -47,6 +47,8 @@
     <string name="dns_lookup_button">Look up</string>
     <string name="dns_looking_up">Looking up…</string>
     <string name="clear">Clear</string>
+    <string name="error_no_details">No additional details were provided.</string>
+    <string name="action_back">Back</string>
 
     <!-- DNS States -->
     <string name="dns_idle_title">Enter a domain to look up</string>

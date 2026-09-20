@@ -13,8 +13,8 @@ import org.junit.jupiter.params.provider.ValueSource
 @DisplayName("TopologyParamsValidator")
 class TopologyParamsValidatorTest {
 
-    private val invalidIpError = "Target IP must be a valid IPv4 address"
-    private val blankIpError = "Target IP must not be blank"
+    private val invalidIpError = "Target IP or hostname must be valid"
+    private val blankIpError = "Target IP or hostname must not be blank"
     private val communityError = "Community string must not be blank for SNMP v1/v2c"
     private val usernameError = "Username must not be blank for SNMP v3"
 
@@ -66,7 +66,6 @@ class TopologyParamsValidatorTest {
                 "192.168.1",
                 "192.168.1.1.1",
                 "192.168.1.a",
-                "router.local",
                 "1234.1.1.1",
                 "::1",
                 "192.168.1.-1"
@@ -85,6 +84,23 @@ class TopologyParamsValidatorTest {
         fun rejectsOutOfRangeOctets(ip: String) {
             val result = validate(targetIp = ip)
             assertFalse(result.isValid, "expected $ip to be rejected")
+            assertEquals(listOf(invalidIpError), result.errors)
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = ["router.local", "demo.pysnmp.com", "Demo.PySnmp.Com."])
+        @DisplayName("accepts valid hostnames, including the public demo target")
+        fun acceptsHostnames(host: String) {
+            val result = validate(targetIp = host)
+            assertTrue(result.isValid, "expected $host to be accepted: ${result.errors}")
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = ["bad host", "-starts-with-dash.example", "ends-with-dash-.example", "a..b"])
+        @DisplayName("rejects malformed hostnames")
+        fun rejectsMalformedHostnames(host: String) {
+            val result = validate(targetIp = host)
+            assertFalse(result.isValid, "expected $host to be rejected")
             assertEquals(listOf(invalidIpError), result.errors)
         }
     }
@@ -147,7 +163,7 @@ class TopologyParamsValidatorTest {
         @Test
         @DisplayName("combines a malformed IP with a missing v3 username")
         fun malformedIpAndMissingUsername() {
-            val result = validate(targetIp = "nope", version = SnmpVersion.V3, username = "")
+            val result = validate(targetIp = "bad host", version = SnmpVersion.V3, username = "")
             assertEquals(listOf(invalidIpError, usernameError), result.errors)
         }
     }

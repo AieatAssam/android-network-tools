@@ -1,25 +1,19 @@
 package net.aieat.netswissknife.core.network.topology
 
+import net.aieat.netswissknife.core.network.HostValidator
+
 data class ValidationResult(val isValid: Boolean, val errors: List<String>)
 
 object TopologyParamsValidator {
-    private val IPV4_REGEX = Regex("""^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$""")
+    private val numericTarget = Regex("^[0-9].*\\..*")
 
     fun validate(params: TopologyParams): ValidationResult {
         val errors = mutableListOf<String>()
 
         if (params.targetIp.isBlank()) {
-            errors.add("Target IP must not be blank")
-        } else {
-            val match = IPV4_REGEX.matchEntire(params.targetIp.trim())
-            if (match == null) {
-                errors.add("Target IP must be a valid IPv4 address")
-            } else {
-                val octets = match.groupValues.drop(1).map { it.toInt() }
-                if (octets.any { it > 255 }) {
-                    errors.add("Target IP must be a valid IPv4 address")
-                }
-            }
+            errors.add("Target IP or hostname must not be blank")
+        } else if (!isValidTarget(params.targetIp)) {
+            errors.add("Target IP or hostname must be valid")
         }
 
         when (params.snmpVersion) {
@@ -47,5 +41,14 @@ object TopologyParamsValidator {
         }
 
         return ValidationResult(isValid = errors.isEmpty(), errors = errors)
+    }
+
+    /** SNMP targets may be IPv4 literals or DNS names; reject IPv6 and malformed numeric IPs. */
+    private fun isValidTarget(value: String): Boolean {
+        val target = value.trim()
+        if (target.contains(':')) return false
+        if (HostValidator.isValidIpv4(target)) return true
+        if (numericTarget.matches(target)) return false
+        return HostValidator.isValidHostname(target)
     }
 }

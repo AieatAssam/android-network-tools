@@ -52,6 +52,50 @@ class Snmp4jClientImplLoopbackTest {
     }
 
     @Test
+    fun `v2c wrong community reports an actionable failure`() = runTest {
+        val params = TopologyParams(
+            targetIp = "127.0.0.1",
+            snmpVersion = SnmpVersion.V2C,
+            communityString = "wrong-community",
+            timeoutMs = 100,
+            retries = 0
+        )
+
+        withResponder(params, responderCommunity = "public") { port ->
+            Snmp4jClientImpl(params).use { client ->
+                val error = assertThrows(SnmpRequestException::class.java) {
+                    kotlinx.coroutines.runBlocking {
+                        client.get(SnmpTarget("127.0.0.1", port, params), sysDescrOid)
+                    }
+                }
+                assertEquals(true, error.message!!.contains("community string"))
+                assertEquals(true, error.message!!.contains("127.0.0.1:$port"))
+            }
+        }
+    }
+
+    @Test
+    fun `unresolvable hostname reports target resolution details`() = runTest {
+        val params = TopologyParams(
+            targetIp = "does-not-exist.invalid",
+            snmpVersion = SnmpVersion.V2C,
+            communityString = "public",
+            timeoutMs = 100,
+            retries = 0
+        )
+
+        Snmp4jClientImpl(params).use { client ->
+            val error = assertThrows(SnmpRequestException::class.java) {
+                kotlinx.coroutines.runBlocking {
+                    client.get(SnmpTarget(params.targetIp, 161, params), sysDescrOid)
+                }
+            }
+            assertEquals(true, error.message!!.contains("could not resolve"))
+            assertEquals(true, error.message!!.contains(params.targetIp))
+        }
+    }
+
+    @Test
     fun `v3 authPriv GET returns a responder value`() = runTest {
         val params = TopologyParams(
             targetIp = "127.0.0.1",
@@ -86,7 +130,11 @@ class Snmp4jClientImplLoopbackTest {
         }
     }
 
-    private suspend fun withResponder(params: TopologyParams, block: suspend (port: Int) -> Unit) {
+    private suspend fun withResponder(
+        params: TopologyParams,
+        responderCommunity: String = params.communityString,
+        block: suspend (port: Int) -> Unit
+    ) {
         SecurityProtocols.getInstance().apply {
             addDefaultProtocols()
             addAuthenticationProtocol(AuthMD5())
@@ -122,6 +170,11 @@ class Snmp4jClientImplLoopbackTest {
         }
         responder.addCommandResponder(object : CommandResponder {
             override fun <A : Address> processPdu(event: CommandResponderEvent<A>) {
+                if (params.snmpVersion != SnmpVersion.V3 &&
+                    String(event.securityName, Charsets.UTF_8) != responderCommunity
+                ) {
+                    return
+                }
                 val response = if (event.getPDU() is ScopedPDU) {
                     ScopedPDU(event.getPDU() as ScopedPDU)
                 } else {

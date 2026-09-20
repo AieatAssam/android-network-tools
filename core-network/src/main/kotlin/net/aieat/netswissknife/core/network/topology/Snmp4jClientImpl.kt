@@ -67,10 +67,31 @@ class Snmp4jClientImpl(
                 type = PDU.GET
                 add(VariableBinding(OID(oid)))
             }
-            val snmpTarget = targetFor(target)
+            val snmpTarget = try {
+                targetFor(target)
+            } catch (error: Exception) {
+                throw SnmpRequestException.unresolved(target, error)
+            }
             ensureAuthoritativeEngineId(target)
-            val response = snmp.get(pdu, snmpTarget) ?: return@withContext null
-            val variable = response.response?.getVariable(OID(oid)) ?: return@withContext null
+            val responseEvent = snmp.get(pdu, snmpTarget)
+            val response = responseEvent.response
+                ?: throw SnmpRequestException.noResponse(
+                    target = target,
+                    operation = "GET",
+                    oid = oid,
+                    timeoutMs = sessionParams.timeoutMs,
+                    cause = responseEvent.error
+                )
+            if (response.errorStatus != PDU.noError) {
+                throw SnmpRequestException.responseError(
+                    target = target,
+                    operation = "GET",
+                    oid = oid,
+                    status = response.errorStatusText,
+                    index = response.errorIndex
+                )
+            }
+            val variable = response.getVariable(OID(oid)) ?: return@withContext null
             if (variable is Null) null else variable.toString()
         }
 
@@ -79,16 +100,26 @@ class Snmp4jClientImpl(
             check(!closed) { "SNMP client is closed" }
             val results = linkedMapOf<String, String>()
             val treeUtils = TreeUtils(snmp, DefaultPDUFactory())
-            val snmpTarget = targetFor(target)
+            val snmpTarget = try {
+                targetFor(target)
+            } catch (error: Exception) {
+                throw SnmpRequestException.unresolved(target, error)
+            }
             ensureAuthoritativeEngineId(target)
             val events = treeUtils.getSubtree(snmpTarget, OID(oidPrefix))
             events?.forEach { event ->
-                if (!event.isError) {
-                    event.variableBindings?.forEach { variableBinding ->
-                        val value = variableBinding.variable
-                        if (value !is Null) {
-                            results[variableBinding.oid.toString()] = value.toString()
-                        }
+                if (event.isError) {
+                    throw SnmpRequestException(
+                        target = target,
+                        operation = "WALK",
+                        oid = oidPrefix,
+                        reason = event.errorMessage ?: "agent returned an error"
+                    )
+                }
+                event.variableBindings?.forEach { variableBinding ->
+                    val value = variableBinding.variable
+                    if (value !is Null) {
+                        results[variableBinding.oid.toString()] = value.toString()
                     }
                 }
             }

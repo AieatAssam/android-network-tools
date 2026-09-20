@@ -23,7 +23,7 @@ class TopologyParamsValidationTest {
 
     @Test
     fun `invalid IP format returns validation error`() {
-        val result = TopologyParamsValidator.validate(validV2cParams().copy(targetIp = "not.an.ip.address.at.all"))
+        val result = TopologyParamsValidator.validate(validV2cParams().copy(targetIp = "not an ip"))
         assertFalse(result.isValid)
     }
 

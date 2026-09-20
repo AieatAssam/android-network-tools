@@ -35,6 +35,31 @@ import net.aieat.netswissknife.app.ui.screens.whois.WhoisScreen
 import net.aieat.netswissknife.app.ui.screens.wol.WakeOnLanScreen
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 
+/**
+ * Select a tool as a top-level destination.
+ *
+ * Settings is intentionally not part of this root-level tool stack. Popping
+ * back to Home before selecting a tool prevents Settings from remaining above
+ * a tool in the back stack, while save/restore keeps each tool's own state.
+ */
+fun NavHostController.navigateToTool(route: String) {
+    navigate(route) {
+        popUpTo(graph.startDestinationId) { saveState = true }
+        launchSingleTop = true
+        restoreState = true
+    }
+}
+
+/** Return from Settings to the screen that opened it, with a safe Home fallback. */
+fun NavHostController.navigateBackFromSettings() {
+    if (!popBackStack()) {
+        navigate(NavRoutes.Home.route) {
+            popUpTo(graph.startDestinationId) { inclusive = true }
+            launchSingleTop = true
+        }
+    }
+}
+
 // ── Transition helpers ────────────────────────────────────────────────────────
 // Entering content uses emphasized-decelerate (settles in), exiting content uses
 // emphasized-accelerate (leaves quickly) — see AppMotion / m3.material.io motion spec.
@@ -89,11 +114,7 @@ fun AppNavHost(navController: NavHostController, modifier: Modifier = Modifier) 
             popExitTransition   = { homeExitTransition() }
         ) {
             HomeScreen(onNavigate = { route ->
-                navController.navigate(route) {
-                    popUpTo(navController.graph.startDestinationId) { saveState = true }
-                    launchSingleTop = true
-                    restoreState    = true
-                }
+                navController.navigateToTool(route)
             })
         }
 
@@ -110,7 +131,7 @@ fun AppNavHost(navController: NavHostController, modifier: Modifier = Modifier) 
             ),
         ) { PortsScreen() }
         composable(NavRoutes.Lan.route)        {
-            LanScreen(onNavigate = { route -> navController.navigate(route) })
+            LanScreen(onNavigate = { route -> navController.navigateToTool(route) })
         }
         composable(NavRoutes.Dns.route)        { DnsScreen() }
         composable(NavRoutes.WifiScan.route)   { WifiScanScreen() }
@@ -131,6 +152,6 @@ fun AppNavHost(navController: NavHostController, modifier: Modifier = Modifier) 
             exitTransition   = { fadeOut(AppMotion.exit()) },
             popEnterTransition  = { fadeIn(AppMotion.enter()) },
             popExitTransition   = { fadeOut(AppMotion.exit()) },
-        ) { SettingsScreen() }
+        ) { SettingsScreen(onBack = navController::navigateBackFromSettings) }
     }
 }

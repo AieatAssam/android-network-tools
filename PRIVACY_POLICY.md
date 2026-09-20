@@ -21,11 +21,6 @@ When you use a diagnostic tool you enter targets such as hostnames, IP addresses
 | Data | Where it lives | How long |
 |------|----------------|----------|
 | Diagnostic results (ping statistics, open ports, DNS records, Wi-Fi channel info, etc.) | Device RAM only | Until the screen is reset or the app is closed |
-| Debug log file | Private app storage on your device (`debug.log`, max 512 KB with one backup) | Until you clear it or uninstall the app |
-
-The debug log records app events and errors with timestamps. It is used for diagnosing app problems. It never leaves your device automatically and is never transmitted to us or any third party.
-
-You can view the full contents of the debug log at any time via the in-app **Debug Logs** screen. You can also delete it from the same screen.
 
 The LAN Scanner may send ICMP/TCP probes and local NetBIOS (UDP/137) or mDNS (multicast UDP/5353) queries to devices on the subnet you choose. These discovery packets stay on the local network; their results are displayed in the app and are not uploaded by Net Swiss Knife.
 
@@ -80,7 +75,6 @@ We do not sell, rent, or share your data with any third party, with the followin
 ## Data Retention
 
 - **In-app results:** Held in memory only; discarded when you reset a tool screen or close the app.
-- **Debug log:** Stored locally on your device. You can delete it at any time from the Debug Logs screen. It is also removed when you uninstall the app.
 - **No account, no server-side storage:** We do not operate any servers that store user data.
 
 ---

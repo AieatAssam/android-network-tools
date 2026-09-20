@@ -32,6 +32,7 @@ import net.aieat.netswissknife.app.ui.navigation.AppNavHost
 import net.aieat.netswissknife.app.ui.navigation.AppNavigationViewModel
 import net.aieat.netswissknife.app.ui.navigation.MoreToolsSheet
 import net.aieat.netswissknife.app.ui.navigation.NavRoutes
+import net.aieat.netswissknife.app.ui.navigation.navigateToTool
 import net.aieat.netswissknife.app.ui.screens.onboarding.OnboardingSheet
 import net.aieat.netswissknife.app.ui.screens.onboarding.OnboardingViewModel
 import net.aieat.netswissknife.app.ui.screens.settings.SettingsViewModel
@@ -88,11 +89,7 @@ fun NetSwissKnifeApp(navController: NavHostController) {
                 currentRoute  = currentRoute,
                 pinnedRoutes  = pinnedRoutes,
                 onNavigate    = { route ->
-                    navController.navigate(route) {
-                        popUpTo(navController.graph.startDestinationId) { saveState = true }
-                        launchSingleTop = true
-                        restoreState    = true
-                    }
+                    navController.navigateToTool(route)
                 },
                 onMoreClick   = { showMoreSheet = true }
             )
@@ -108,11 +105,7 @@ fun NetSwissKnifeApp(navController: NavHostController) {
             pinnedRoutes = pinnedRoutes,
             onNavigate   = { route ->
                 showMoreSheet = false
-                navController.navigate(route) {
-                    popUpTo(navController.graph.startDestinationId) { saveState = true }
-                    launchSingleTop = true
-                    restoreState    = true
-                }
+                navController.navigateToTool(route)
             },
             onTogglePin  = navViewModel::togglePin,
             maxPinned    = AppNavigationViewModel.MAX_PINNED,
