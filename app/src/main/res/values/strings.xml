@@ -1,10 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Net Swiss Knife</string>
+    <string name="app_name">NetSwiss</string>
+    <string name="app_name_full">Net Swiss Knife</string>
 
     <!-- Home Screen -->
     <string name="home_subtitle">Your all-in-one Android networking toolkit</string>
     <string name="home_all_tools">All Tools</string>
+    <string name="home_tools_scroll_hint">Scroll for more tools</string>
 
     <!-- Bottom Navigation -->
     <string name="nav_home">Home</string>
@@ -41,6 +43,7 @@
     <string name="dns_domain_label">Domain or IP address</string>
     <string name="dns_domain_placeholder">e.g. example.com or 8.8.8.8</string>
     <string name="dns_record_type_label">Record type</string>
+    <string name="dns_record_types_scroll_hint">More record types; swipe horizontally</string>
     <string name="dns_server_label">DNS server</string>
     <string name="dns_server_custom">Custom server…</string>
     <string name="dns_custom_server_placeholder">e.g. 192.168.1.1</string>
@@ -83,7 +86,7 @@
     <string name="ping_host_label">Host or IP address</string>
     <string name="ping_host_placeholder">e.g. google.com or 8.8.8.8</string>
     <string name="ping_count_label">Count</string>
-    <string name="ping_timeout_label">Timeout (ms)</string>
+    <string name="ping_timeout_label">Timeout (s)</string>
     <string name="ping_advanced_options">Advanced options</string>
     <string name="ping_payload_label">Payload size: %1$d bytes</string>
     <string name="ping_ttl_label">TTL: %1$d</string>
@@ -1102,7 +1105,6 @@
     <string name="speedtest_running_download">Testing download speed…</string>
     <string name="speedtest_running_upload">Testing upload speed…</string>
     <string name="speedtest_error_title">Speed test failed</string>
-    <string name="speedtest_error_phase">Failed during %1$s</string>
 
     <string name="speedtest_mbps_suffix">Mbps</string>
     <string name="speedtest_ms_suffix">ms</string>

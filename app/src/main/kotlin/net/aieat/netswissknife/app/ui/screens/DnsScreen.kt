@@ -34,6 +34,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -128,6 +129,8 @@ import net.aieat.netswissknife.core.network.dns.DnsServer
  */
 object DnsScreenTestTags {
     const val CONTENT_LIST = "dns_content_list"
+    const val RECORD_TYPE_CHIPS = "dns_record_type_chips"
+    const val RECORD_TYPE_SCROLL_HINT = "dns_record_type_scroll_hint"
 
     /** Index of the idle/loading/error/success panel within [CONTENT_LIST]. */
     const val STATE_PANEL_INDEX = 2
@@ -370,11 +373,6 @@ private fun DnsInputCard(
 
             // DNS server selector
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    text = stringResource(R.string.dns_server_label),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
                 DnsServerSelector(
                     selectedServer = selectedServer,
                     customServerAddress = customServerAddress,
@@ -429,26 +427,62 @@ private fun RecordTypeChips(
     selected: DnsRecordType,
     onSelect: (DnsRecordType) -> Unit
 ) {
-    Row(
-        modifier = Modifier.horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    val scrollState = rememberScrollState()
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
     ) {
-        DnsRecordType.entries.forEach { type ->
-            val isSelected = type == selected
-            FilterChip(
-                selected = isSelected,
-                onClick = { onSelect(type) },
-                label = {
-                    Text(
-                        text = type.displayName,
-                        style = MaterialTheme.typography.labelMedium
+        Row(
+            modifier = Modifier
+                .horizontalScroll(scrollState)
+                .padding(end = 36.dp)
+                .testTag(DnsScreenTestTags.RECORD_TYPE_CHIPS),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            DnsRecordType.entries.forEach { type ->
+                val isSelected = type == selected
+                FilterChip(
+                    selected = isSelected,
+                    onClick = { onSelect(type) },
+                    label = {
+                        Text(
+                            text = type.displayName,
+                            style = MaterialTheme.typography.labelMedium
+                        )
+                    },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                        selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
                     )
-                },
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
                 )
-            )
+            }
+        }
+
+        if (scrollState.canScrollForward) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .fillMaxHeight()
+                    .width(36.dp)
+                    .background(
+                        Brush.horizontalGradient(
+                            listOf(
+                                MaterialTheme.colorScheme.background.copy(alpha = 0f),
+                                MaterialTheme.colorScheme.background
+                            )
+                        )
+                    )
+                    .testTag(DnsScreenTestTags.RECORD_TYPE_SCROLL_HINT),
+                contentAlignment = Alignment.CenterEnd
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ChevronRight,
+                    contentDescription = stringResource(R.string.dns_record_types_scroll_hint),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
         }
     }
 }

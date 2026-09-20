@@ -10,6 +10,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.assertCountEquals
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import io.mockk.every
@@ -134,6 +135,28 @@ class DnsScreenTest {
         scrollToStatePanel()
         composeRule.onAllNodesWithText("example.com").onFirst().assertIsDisplayed()
         composeRule.onNodeWithText("93.184.216.34", substring = true).performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun input_exposesOneDnsServerLabelAndHorizontalOverflowCue() {
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                DnsScreen(viewModel = fakeDnsViewModel(DnsUiState.Idle))
+            }
+        }
+
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        composeRule
+            .onAllNodesWithText(
+                context.getString(R.string.dns_server_label),
+                substring = false,
+                useUnmergedTree = true
+            )
+            .assertCountEquals(1)
+        composeRule
+            .onNodeWithContentDescription(context.getString(R.string.dns_record_types_scroll_hint))
+            .assertIsDisplayed()
     }
 
     private fun scrollToStatePanel() {
