@@ -406,6 +406,24 @@ class PingViewModelTest {
             viewModel.startPing()
             coVerify { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_PING_HOSTS, "example.com") }
         }
+
+        @Test
+        fun `continuous ping normalizes host before displaying and storing it`() = runTest {
+            coEvery { continuousPingUseCase(any()) } returns flowOf(
+                PingFlowResult.Packet(successPacket)
+            )
+            viewModel.onHostChange("  EXAMPLE.COM.  ")
+
+            viewModel.startPing()
+
+            coVerify {
+                continuousPingUseCase(match { it.host == "example.com" })
+            }
+            coVerify {
+                recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_PING_HOSTS, "example.com")
+            }
+            assertEquals("example.com", (viewModel.uiState.value as PingUiState.Finished).result.host)
+        }
     }
 
     // ── Recent hosts ──────────────────────────────────────────────────────────

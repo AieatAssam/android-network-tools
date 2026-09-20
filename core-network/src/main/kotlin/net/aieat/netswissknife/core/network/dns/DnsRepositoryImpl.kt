@@ -17,6 +17,14 @@ import org.xbill.DNS.Type
 import java.net.Inet6Address
 import java.net.InetAddress
 import java.time.Duration
+import java.util.concurrent.CompletionStage
+import java.util.concurrent.Executor
+
+internal interface DnsResolverMetadata {
+    val lastServerAddress: String?
+}
+
+internal data class DnsResolverEndpoint(val address: String, val resolver: Resolver)
 
 class DnsRepositoryImpl(
     private val resolverFactory: ResolverFactory = ResolverFactory { server -> defaultResolver(server) }
@@ -59,8 +67,7 @@ class DnsRepositoryImpl(
         }
 
         private fun defaultResolver(server: DnsServer): Resolver = when (server) {
-            is DnsServer.System -> ExtendedResolver(server.serverAddresses.toTypedArray())
-                .also { it.setTimeout(TIMEOUT) }
+            is DnsServer.System -> TrackingExtendedResolver(server.serverAddresses).also { it.setTimeout(TIMEOUT) }
             is DnsServer.Google -> simpleResolver(DnsServer.Google.PRIMARY)
             is DnsServer.Cloudflare -> simpleResolver(DnsServer.Cloudflare.PRIMARY)
             is DnsServer.OpenDns -> simpleResolver(DnsServer.OpenDns.PRIMARY)
@@ -92,7 +99,9 @@ class DnsRepositoryImpl(
             val resolver = resolverFactory.create(server)
             val response = resolver.send(queryMessage)
             val queryTimeMs = (System.nanoTime() - startNs) / 1_000_000L
-            val serverUsed = serverAddress(server)
+            val serverUsed = (resolver as? DnsResolverMetadata)?.lastServerAddress
+                ?.let(::formatServerAddress)
+                ?: serverAddress(server)
             val result = DnsMessageMapper.toResult(
                 domain = domain.trimEnd('.'),
                 requestedType = recordType,
@@ -123,6 +132,56 @@ class DnsRepositoryImpl(
 
     private fun formatServerAddress(address: String): String =
         if (address.contains(':') && !address.startsWith('[')) "[$address]:53" else "$address:53"
+
+    private class ResolverSelection {
+        @Volatile
+        var lastServerAddress: String? = null
+    }
+
+    internal class TrackingExtendedResolver private constructor(
+        private val selection: ResolverSelection,
+        endpoints: Array<DnsResolverEndpoint>
+    ) : ExtendedResolver(
+        endpoints.map { endpoint ->
+            TrackingResolver(endpoint.resolver, endpoint.address) { selected ->
+                selection.lastServerAddress = selected
+            }
+        }.toTypedArray()
+    ), DnsResolverMetadata {
+        constructor(addresses: List<String>) : this(
+            ResolverSelection(),
+            addresses.map { address ->
+                DnsResolverEndpoint(
+                    address,
+                    SimpleResolver(address).also { it.setTimeout(TIMEOUT) }
+                )
+            }.toTypedArray()
+        )
+
+        internal constructor(endpoints: Array<DnsResolverEndpoint>) : this(ResolverSelection(), endpoints)
+
+        override val lastServerAddress: String?
+            get() = selection.lastServerAddress
+    }
+
+    private class TrackingResolver(
+        private val delegate: Resolver,
+        private val address: String,
+        private val onSuccess: (String) -> Unit
+    ) : Resolver {
+        override fun setPort(port: Int) = delegate.setPort(port)
+        override fun setTCP(flag: Boolean) = delegate.setTCP(flag)
+        override fun setIgnoreTruncation(flag: Boolean) = delegate.setIgnoreTruncation(flag)
+        override fun setEDNS(level: Int, payloadSize: Int, flags: Int, options: List<org.xbill.DNS.EDNSOption>) =
+            delegate.setEDNS(level, payloadSize, flags, options)
+        override fun setTSIGKey(key: org.xbill.DNS.TSIG?) = delegate.setTSIGKey(key)
+        override fun setTimeout(timeout: Duration) = delegate.setTimeout(timeout)
+        override fun send(query: Message): Message = delegate.send(query).also { onSuccess(address) }
+        override fun sendAsync(query: Message): CompletionStage<Message> =
+            delegate.sendAsync(query).whenComplete { _, error -> if (error == null) onSuccess(address) }
+        override fun sendAsync(query: Message, executor: Executor): CompletionStage<Message> =
+            delegate.sendAsync(query, executor).whenComplete { _, error -> if (error == null) onSuccess(address) }
+    }
 }
 
 /** Pure dnsjava-to-domain mapping, kept separate so malformed responses are testable in-memory. */

@@ -1,6 +1,7 @@
 package net.aieat.netswissknife.core.network.ping
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -52,7 +53,8 @@ class PingRepositoryImpl(
         return legacyFlow(PingRequest(host, count = 0, timeoutMs = timeoutMs), legacyChecker)
     }
 
-    override fun ping(request: PingRequest): Flow<PingPacketResult> = runSession(request.copy(count = request.count.coerceAtLeast(1)))
+    override fun ping(request: PingRequest): Flow<PingPacketResult> =
+        runSession(request.copy(count = request.count.coerceAtLeast(1)))
 
     override fun continuousPing(request: PingRequest): Flow<PingPacketResult> = runSession(request.copy(count = 0))
 
@@ -67,7 +69,10 @@ class PingRepositoryImpl(
         }
     }
 
-    private fun runSession(request: PingRequest): Flow<PingPacketResult> = flow {
+    private fun runSession(request: PingRequest): Flow<PingPacketResult> =
+        if (request.count == 0) runContinuousSession(request) else runBoundedSession(request)
+
+    private fun runBoundedSession(request: PingRequest): Flow<PingPacketResult> = flow {
         val resolvedIp = try {
             request.resolvedIp ?: resolver.resolve(request.host)
         } catch (e: UnknownHostException) {
@@ -102,13 +107,18 @@ class PingRepositoryImpl(
         }
 
         var selected = false
+        val failureMessages = mutableListOf<String>()
         for (engine in candidates) {
-            var emitted = false
+            var emittedUsablePacket = false
             var lastSequence = 0
             try {
                 engine.ping(resolvedRequest).collect { packet ->
-                    emitted = true
                     lastSequence = packet.sequence
+                    if (packet.status == PingStatus.ERROR && !emittedUsablePacket) {
+                        packet.errorMessage?.takeIf { it.isNotBlank() }?.let(failureMessages::add)
+                        throw EngineUnavailableException(packet.errorMessage)
+                    }
+                    emittedUsablePacket = true
                     selected = true
                     _lastEngineUsed.value = engine.kind
                     emit(packet.copy(engine = engine.kind))
@@ -116,14 +126,94 @@ class PingRepositoryImpl(
                 if (selected) return@flow
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
-                if (emitted) {
+                if (e !is EngineUnavailableException) {
+                    e.message?.takeIf { it.isNotBlank() }?.let(failureMessages::add)
+                }
+                if (emittedUsablePacket) {
                     _lastEngineUsed.value = engine.kind
                     emit(errorPacket(resolvedRequest, e.message ?: e.javaClass.simpleName, lastSequence + 1))
                     return@flow
                 }
             }
         }
-        emit(errorPacket(resolvedRequest, "All ping engines failed before producing a result"))
+        emit(errorPacket(resolvedRequest, allEnginesFailedMessage(failureMessages)))
+    }.flowOn(Dispatchers.IO)
+
+    private fun runContinuousSession(request: PingRequest): Flow<PingPacketResult> = flow {
+        val candidates = configuredEngines.filter { it.isAvailable }
+        if (candidates.isEmpty()) {
+            emit(errorPacket(request, "No ping engine is available"))
+            return@flow
+        }
+
+        var selectedEngine: PingEngine? = null
+        var sequence = 1
+        while (true) {
+            val resolvedIp = try {
+                request.resolvedIp ?: resolver.resolve(request.host)
+            } catch (e: UnknownHostException) {
+                emit(errorPacket(request, e.message ?: "Unknown host: ${request.host}", sequence))
+                sequence++
+                delay(request.intervalMs.toLong().coerceAtLeast(0L))
+                continue
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                emit(errorPacket(request, e.message ?: e.javaClass.simpleName, sequence))
+                sequence++
+                delay(request.intervalMs.toLong().coerceAtLeast(0L))
+                continue
+            }
+
+            val probeRequest = request.copy(resolvedIp = resolvedIp, count = 1)
+            val enginesToTry = buildList {
+                selectedEngine?.let(::add)
+                candidates.filter { it != selectedEngine }.forEach(::add)
+            }
+            var selectedPacket: PingPacketResult? = null
+            var engineForPacket: PingEngine? = null
+            val failureMessages = mutableListOf<String>()
+
+            for (engine in enginesToTry) {
+                var usablePacket: PingPacketResult? = null
+                try {
+                    engine.ping(probeRequest).collect { packet ->
+                        if (packet.status == PingStatus.ERROR && usablePacket == null) {
+                            packet.errorMessage?.takeIf { it.isNotBlank() }?.let(failureMessages::add)
+                            throw EngineUnavailableException(packet.errorMessage)
+                        }
+                        usablePacket = packet
+                    }
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                    if (e !is EngineUnavailableException) {
+                        e.message?.takeIf { it.isNotBlank() }?.let(failureMessages::add)
+                    }
+                    if (usablePacket != null) {
+                        selectedPacket = errorPacket(probeRequest, e.message ?: e.javaClass.simpleName)
+                        engineForPacket = engine
+                    }
+                }
+                if (usablePacket != null) {
+                    selectedPacket = usablePacket
+                    engineForPacket = engine
+                    selectedEngine = engine
+                    _lastEngineUsed.value = engine.kind
+                    break
+                }
+            }
+
+            emit(
+                (selectedPacket ?: errorPacket(
+                    probeRequest,
+                    allEnginesFailedMessage(failureMessages)
+                )).copy(
+                    sequence = sequence,
+                    engine = engineForPacket?.kind
+                )
+            )
+            sequence++
+            delay(request.intervalMs.toLong().coerceAtLeast(0L))
+        }
     }.flowOn(Dispatchers.IO)
 
     private fun errorPacket(request: PingRequest, message: String, sequence: Int = 1) = PingPacketResult(
@@ -134,4 +224,11 @@ class PingRepositoryImpl(
         errorMessage = message,
         fromIp = request.resolvedIp
     )
+
+    private fun allEnginesFailedMessage(failureMessages: List<String>): String =
+        failureMessages.distinct().takeIf { it.isNotEmpty() }?.let {
+            "All ping engines failed: ${it.joinToString("; ")}"
+        } ?: "All ping engines failed before producing a result"
+
+    private class EngineUnavailableException(message: String?) : Exception(message)
 }

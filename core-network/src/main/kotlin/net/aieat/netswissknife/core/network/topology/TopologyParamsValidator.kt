@@ -5,7 +5,8 @@ import net.aieat.netswissknife.core.network.HostValidator
 data class ValidationResult(val isValid: Boolean, val errors: List<String>)
 
 object TopologyParamsValidator {
-    private val numericTarget = Regex("^[0-9].*\\..*")
+    private val numericDottedTarget = Regex("^\\d+(?:\\.\\d+)+$")
+    private val malformedIpv4LikeTarget = Regex("^\\d{1,3}(?:\\.\\d{1,3}){2}\\.[A-Za-z]$")
 
     fun validate(params: TopologyParams): ValidationResult {
         val errors = mutableListOf<String>()
@@ -48,7 +49,8 @@ object TopologyParamsValidator {
         val target = value.trim()
         if (target.contains(':')) return false
         if (HostValidator.isValidIpv4(target)) return true
-        if (numericTarget.matches(target)) return false
+        if (numericDottedTarget.matches(target)) return false
+        if (malformedIpv4LikeTarget.matches(target)) return false
         return HostValidator.isValidHostname(target)
     }
 }

@@ -1,5 +1,15 @@
 package net.aieat.netswissknife.core.network.dns
 
+import kotlinx.coroutines.test.runTest
+import org.xbill.DNS.EDNSOption
+import org.xbill.DNS.Message
+import org.xbill.DNS.Resolver
+import org.xbill.DNS.TSIG
+import java.io.IOException
+import java.time.Duration
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CompletionStage
+import java.util.concurrent.Executor
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
@@ -9,6 +19,69 @@ import org.junit.jupiter.params.provider.CsvSource
 
 @DisplayName("DnsRepositoryImpl.normalizeDomain")
 class DnsRepositoryImplTest {
+
+    @Test
+    fun `system DNS result reports the resolver that actually answered`() = runTest {
+        val resolver = ReportingResolver("9.9.9.9")
+        val repository = DnsRepositoryImpl(
+            resolverFactory = DnsRepositoryImpl.ResolverFactory { resolver }
+        )
+
+        val result = repository.lookup(
+            domain = "example.com",
+            recordType = DnsRecordType.A,
+            server = DnsServer.System(listOf("1.1.1.1", "9.9.9.9"))
+        )
+
+        assertEquals(
+            "9.9.9.9:53",
+            (result as net.aieat.netswissknife.core.network.NetworkResult.Success).data.serverUsed
+        )
+    }
+
+    @Test
+    fun `tracking resolver records the endpoint that returned after fallback`() {
+        val query = Message.newQuery(
+            org.xbill.DNS.Record.newRecord(
+                org.xbill.DNS.Name.fromString("example.com."),
+                org.xbill.DNS.Type.A,
+                org.xbill.DNS.DClass.IN
+            )
+        )
+        val resolver = DnsRepositoryImpl.TrackingExtendedResolver(
+            arrayOf(
+                DnsResolverEndpoint("1.1.1.1", ReportingResolver(failure = IOException("offline"))),
+                DnsResolverEndpoint("9.9.9.9", ReportingResolver())
+            )
+        )
+
+        resolver.send(query)
+
+        assertEquals("9.9.9.9", (resolver as DnsResolverMetadata).lastServerAddress)
+    }
+
+    private class ReportingResolver(
+        override val lastServerAddress: String? = null,
+        private val failure: IOException? = null
+    ) : Resolver, DnsResolverMetadata {
+        override fun setPort(port: Int) = Unit
+        override fun setTCP(flag: Boolean) = Unit
+        override fun setIgnoreTruncation(flag: Boolean) = Unit
+        override fun setEDNS(
+            level: Int,
+            payloadSize: Int,
+            flags: Int,
+            options: List<EDNSOption>
+        ) = Unit
+        override fun setTSIGKey(key: TSIG?) = Unit
+        override fun setTimeout(timeout: Duration) = Unit
+        override fun send(query: Message): Message = failure?.let { throw it } ?: query
+        override fun sendAsync(query: Message): CompletionStage<Message> =
+            failure?.let { CompletableFuture.failedFuture<Message>(it) }
+                ?: CompletableFuture.completedFuture(query)
+        override fun sendAsync(query: Message, executor: Executor): CompletionStage<Message> =
+            sendAsync(query)
+    }
 
     // ── IPv4 PTR ──────────────────────────────────────────────────────────────
 

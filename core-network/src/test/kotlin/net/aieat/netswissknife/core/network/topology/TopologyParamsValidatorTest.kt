@@ -65,8 +65,8 @@ class TopologyParamsValidatorTest {
             strings = [
                 "192.168.1",
                 "192.168.1.1.1",
-                "192.168.1.a",
                 "1234.1.1.1",
+                "192.168.1.a",
                 "::1",
                 "192.168.1.-1"
             ]
@@ -88,7 +88,15 @@ class TopologyParamsValidatorTest {
         }
 
         @ParameterizedTest
-        @ValueSource(strings = ["router.local", "demo.pysnmp.com", "Demo.PySnmp.Com."])
+        @ValueSource(
+            strings = [
+                "router.local",
+                "demo.pysnmp.com",
+                "Demo.PySnmp.Com.",
+                "3.amazonaws.com",
+                "1.2.3.example"
+            ]
+        )
         @DisplayName("accepts valid hostnames, including the public demo target")
         fun acceptsHostnames(host: String) {
             val result = validate(targetIp = host)

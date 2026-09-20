@@ -1,11 +1,13 @@
 package net.aieat.netswissknife.core.network.topology
 
 import io.mockk.*
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import java.util.concurrent.atomic.AtomicInteger
 
 class TopologyDiscoveryRepositoryTest {
 
@@ -148,5 +150,24 @@ class TopologyDiscoveryRepositoryTest {
         assertEquals("192.168.1.3", links.single().toIp)
         assertEquals(LinkProtocol.CDP, links.single().protocol)
         assertTrue(events.filterIsInstance<TopologyDiscoveryEvent.NodeDiscovered>().any { it.node.ip == "192.168.1.3" })
+    }
+
+    @Test
+    fun `node walks run concurrently`() = runTest {
+        coEvery { snmpClient.get(any(), any()) } returns null
+        val activeWalks = AtomicInteger(0)
+        val maximumConcurrentWalks = AtomicInteger(0)
+        coEvery { snmpClient.walk(any(), any()) } coAnswers {
+            val active = activeWalks.incrementAndGet()
+            maximumConcurrentWalks.updateAndGet { current -> maxOf(current, active) }
+            delay(25)
+            activeWalks.decrementAndGet()
+            emptyMap()
+        }
+
+        repository.discover(defaultParams.copy(maxHops = 0)).toList()
+
+        assertTrue(maximumConcurrentWalks.get() > 1)
+        assertTrue(maximumConcurrentWalks.get() <= 4)
     }
 }

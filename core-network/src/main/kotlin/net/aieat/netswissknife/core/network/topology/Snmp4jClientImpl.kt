@@ -107,22 +107,7 @@ class Snmp4jClientImpl(
             }
             ensureAuthoritativeEngineId(target)
             val events = treeUtils.getSubtree(snmpTarget, OID(oidPrefix))
-            events?.forEach { event ->
-                if (event.isError) {
-                    throw SnmpRequestException(
-                        target = target,
-                        operation = "WALK",
-                        oid = oidPrefix,
-                        reason = event.errorMessage ?: "agent returned an error"
-                    )
-                }
-                event.variableBindings?.forEach { variableBinding ->
-                    val value = variableBinding.variable
-                    if (value !is Null) {
-                        results[variableBinding.oid.toString()] = value.toString()
-                    }
-                }
-            }
+            results.putAll(collectWalkResults(events))
             results
         }
 
@@ -227,4 +212,16 @@ class Snmp4jClientImpl(
         @Volatile
         private var usmSecurityModelRegistered = false
     }
+}
+
+internal fun collectWalkResults(events: List<org.snmp4j.util.TreeEvent>?): Map<String, String> {
+    val results = linkedMapOf<String, String>()
+    for (event in events.orEmpty()) {
+        if (event.isError) break
+        event.variableBindings?.forEach { variableBinding ->
+            val value = variableBinding.variable
+            if (value !is Null) results[variableBinding.oid.toString()] = value.toString()
+        }
+    }
+    return results
 }

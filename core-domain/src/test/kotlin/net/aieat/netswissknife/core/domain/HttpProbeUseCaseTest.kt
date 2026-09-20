@@ -66,6 +66,15 @@ class HttpProbeUseCaseTest {
     }
 
     @Test
+    @DisplayName("port zero is rejected")
+    fun `validateHttpProbeUrl rejects port zero`() {
+        assertEquals(
+            "URL port must be between 1 and 65535",
+            validateHttpProbeUrl("https://example.com:0")
+        )
+    }
+
+    @Test
     @DisplayName("valid HTTP URLs with paths and query parameters are accepted")
     fun `valid HTTP URLs with paths and query parameters are accepted`() = runTest {
         coEvery { repository.probe(any()) } returns NetworkResult.Success(fakeResult)

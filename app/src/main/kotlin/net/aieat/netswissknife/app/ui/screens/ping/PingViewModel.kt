@@ -255,7 +255,7 @@ class PingViewModel @Inject constructor(
             return
         }
 
-        val trimmedHost = _host.value.trim()
+        val trimmedHost = HostValidator.normalize(_host.value) ?: _host.value.trim()
         val params = ContinuousPingParams(
             host = trimmedHost,
             timeoutMs = _timeoutMs.value,

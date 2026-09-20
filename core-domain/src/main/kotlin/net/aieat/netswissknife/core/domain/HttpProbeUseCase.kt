@@ -74,7 +74,7 @@ fun validateHttpProbeUrl(rawUrl: String): String? {
         ?: return "URL must include a valid host"
     if (host.endsWith('.')) return "URL host is incomplete"
     if (!HostValidator.isValidHostname(host)) return "URL must include a valid host"
-    if (uri.port !in -1..65_535) return "URL port must be between 1 and 65535"
+    if (uri.port != -1 && uri.port !in 1..65_535) return "URL port must be between 1 and 65535"
 
     return null
 }
