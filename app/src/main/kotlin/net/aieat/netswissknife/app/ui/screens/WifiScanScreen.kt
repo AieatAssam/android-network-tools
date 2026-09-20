@@ -1090,7 +1090,7 @@ private fun signalLevelColor(level: net.aieat.netswissknife.core.network.wifi.Si
             if (ap.isConnected && connectedInfo != null) {
                 HorizontalDivider()
                 DetailSectionHeader(stringResource(R.string.wifi_live_connection_header))
-                DetailRow(stringResource(R.string.wifi_detail_ip),          connectedInfo.ipAddress.ifBlank { "—" })
+                DetailRow(stringResource(R.string.wifi_detail_ip),          connectedInfo.ipAddress.ifBlank { "N/A" })
                 if (connectedInfo.ipv6Addresses.isNotEmpty()) {
                     DetailRow(stringResource(R.string.wifi_detail_ipv6), connectedInfo.ipv6Addresses.joinToString("\n"))
                 }

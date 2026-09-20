@@ -21,6 +21,6 @@ enum class WifiStandard(
         WIFI_6 -> "9.6 Gbps"
         WIFI_6E -> "9.6 Gbps"
         WIFI_7 -> "46 Gbps"
-        UNKNOWN -> "—"
+        UNKNOWN -> "N/A"
     }
 }

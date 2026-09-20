@@ -633,13 +633,13 @@ private fun ExpiryBadge(cert: TlsCertificate) {
 private fun CertificateDetails(cert: TlsCertificate) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         // Subject
-        LabeledValue(stringResource(R.string.tls_subject_cn),  cert.subjectCN.ifBlank { "—" })
+        LabeledValue(stringResource(R.string.tls_subject_cn),  cert.subjectCN.ifBlank { "N/A" })
         cert.subjectOrg?.let { LabeledValue(stringResource(R.string.tls_subject_org), it) }
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
         // Issuer
-        LabeledValue(stringResource(R.string.tls_issuer_cn),  cert.issuerCN.ifBlank { "—" })
+        LabeledValue(stringResource(R.string.tls_issuer_cn),  cert.issuerCN.ifBlank { "N/A" })
         cert.issuerOrg?.let { LabeledValue(stringResource(R.string.tls_issuer_org), it) }
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))

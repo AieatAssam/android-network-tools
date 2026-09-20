@@ -864,7 +864,7 @@ private fun DnsResultSummaryCard(
                         }
                     )
                     Text(
-                        text = stringResource(R.string.dns_flags, result.flags.joinToString(" ").ifEmpty { "—" }),
+                        text = stringResource(R.string.dns_flags, result.flags.joinToString(" ").ifEmpty { "N/A" }),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

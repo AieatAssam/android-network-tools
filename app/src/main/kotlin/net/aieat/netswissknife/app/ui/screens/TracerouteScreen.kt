@@ -717,7 +717,7 @@ private fun TraceStatsSummary(result: TracerouteResult, onClear: () -> Unit) {
                 )
                 StatChip(
                     label = stringResource(R.string.traceroute_stat_time),
-                    value = if (result.totalTimeMs > 0) "${result.totalTimeMs}ms" else "—"
+                    value = if (result.totalTimeMs > 0) "${result.totalTimeMs}ms" else "N/A"
                 )
                 StatChip(
                     label = stringResource(R.string.traceroute_stat_reached),

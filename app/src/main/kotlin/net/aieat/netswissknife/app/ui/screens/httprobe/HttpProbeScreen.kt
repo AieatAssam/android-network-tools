@@ -744,7 +744,7 @@ private fun OverviewTabContent(result: HttpProbeResult) {
         )
         LabeledValue(
             stringResource(R.string.httprobe_content_type),
-            result.responseHeaders["Content-Type"]?.firstOrNull() ?: "—"
+            result.responseHeaders["Content-Type"]?.firstOrNull() ?: "N/A"
         )
         if (result.redirectChain.isNotEmpty()) {
             HorizontalDivider()

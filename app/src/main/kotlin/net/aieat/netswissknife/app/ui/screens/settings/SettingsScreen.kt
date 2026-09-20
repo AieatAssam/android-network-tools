@@ -537,7 +537,7 @@ private val THIRD_PARTY_LIBRARIES = listOf(
     LibraryInfo("icmpenguin", "1.0.0-rc.3", "Apache 2.0"),
     LibraryInfo("Dagger Hilt", "2.59.2", "Apache 2.0"),
     LibraryInfo("Kotlin Coroutines", "1.9.0", "Apache 2.0"),
-    LibraryInfo("AndroidX / Jetpack Compose", "—", "Apache 2.0"),
+    LibraryInfo("AndroidX / Jetpack Compose", "N/A", "Apache 2.0"),
     LibraryInfo("AndroidX DataStore", "1.1.4", "Apache 2.0"),
 )
 
@@ -594,7 +594,7 @@ private fun LibraryRow(lib: LibraryInfo) {
                 )
             }
         }
-        if (lib.version != "—") {
+        if (lib.version != "N/A") {
             Text(
                 text = "v${lib.version}",
                 style = MaterialTheme.typography.labelSmall,

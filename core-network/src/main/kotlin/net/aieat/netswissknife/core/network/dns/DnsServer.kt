@@ -26,7 +26,7 @@ sealed class DnsServer(
     /** Google Public DNS – 8.8.8.8 / 8.8.4.4 */
     object Google : DnsServer(
         displayName = "Google DNS",
-        description = "8.8.8.8 — Google's fast & reliable public resolver"
+        description = "8.8.8.8 - Google's fast & reliable public resolver"
     ) {
         const val PRIMARY = "8.8.8.8"
         const val SECONDARY = "8.8.4.4"
@@ -35,7 +35,7 @@ sealed class DnsServer(
     /** Cloudflare DNS – 1.1.1.1 / 1.0.0.1 */
     object Cloudflare : DnsServer(
         displayName = "Cloudflare DNS",
-        description = "1.1.1.1 — Cloudflare's privacy-focused public resolver"
+        description = "1.1.1.1 - Cloudflare's privacy-focused public resolver"
     ) {
         const val PRIMARY = "1.1.1.1"
         const val SECONDARY = "1.0.0.1"
@@ -44,7 +44,7 @@ sealed class DnsServer(
     /** OpenDNS – 208.67.222.222 / 208.67.220.220 */
     object OpenDns : DnsServer(
         displayName = "OpenDNS",
-        description = "208.67.222.222 — Cisco OpenDNS with optional content filtering"
+        description = "208.67.222.222 - Cisco OpenDNS with optional content filtering"
     ) {
         const val PRIMARY = "208.67.222.222"
         const val SECONDARY = "208.67.220.220"
@@ -53,7 +53,7 @@ sealed class DnsServer(
     /** Quad9 – 9.9.9.9 */
     object Quad9 : DnsServer(
         displayName = "Quad9",
-        description = "9.9.9.9 — Security-focused resolver that blocks malicious domains"
+        description = "9.9.9.9 - Security-focused resolver that blocks malicious domains"
     ) {
         const val PRIMARY = "9.9.9.9"
     }
