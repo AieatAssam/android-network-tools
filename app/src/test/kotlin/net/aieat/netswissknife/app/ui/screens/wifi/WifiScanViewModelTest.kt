@@ -1,6 +1,10 @@
 package net.aieat.netswissknife.app.ui.screens.wifi
 
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.emptyPreferences
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -10,6 +14,9 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.flow.MutableStateFlow
+import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.core.domain.WifiNotSupportedException
 import net.aieat.netswissknife.core.domain.WifiScanUseCase
 import net.aieat.netswissknife.core.network.wifi.WifiAccessPoint
@@ -40,6 +47,8 @@ class WifiScanViewModelTest {
     private val testDispatcher = StandardTestDispatcher()
 
     private lateinit var wifiScanUseCase: WifiScanUseCase
+    private lateinit var dataStore: DataStore<Preferences>
+    private lateinit var prefsFlow: MutableStateFlow<Preferences>
     private lateinit var viewModel: WifiScanViewModel
 
     private fun stubAp(
@@ -65,19 +74,39 @@ class WifiScanViewModelTest {
         timestampUs = 0L
     )
 
-    private fun stubResult(vararg aps: WifiAccessPoint, wifiEnabled: Boolean = true) = WifiScanResult(
+    private fun stubResult(
+        vararg aps: WifiAccessPoint,
+        wifiEnabled: Boolean = true,
+        locationEnabled: Boolean = true,
+        throttled: Boolean = false,
+        scanAgeMs: Long? = null
+    ) = WifiScanResult(
         accessPoints = aps.toList(),
         channels = emptyList<WifiChannelInfo>(),
         connectedNetwork = null,
         scanTimestampMs = 0L,
-        isWifiEnabled = wifiEnabled
+        isWifiEnabled = wifiEnabled,
+        isFresh = scanAgeMs == null || scanAgeMs <= 15_000L,
+        scanAgeMs = scanAgeMs,
+        throttled = throttled,
+        locationEnabled = locationEnabled
     )
 
     @BeforeEach
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
         wifiScanUseCase = mockk()
-        viewModel = WifiScanViewModel(wifiScanUseCase)
+        prefsFlow = MutableStateFlow(emptyPreferences())
+        dataStore = mockk {
+            every { data } answers { prefsFlow }
+            coEvery { updateData(any()) } coAnswers {
+                val transform = firstArg<suspend (Preferences) -> Preferences>()
+                val updated = transform(prefsFlow.value)
+                prefsFlow.value = updated
+                updated
+            }
+        }
+        viewModel = WifiScanViewModel(wifiScanUseCase, dataStore)
     }
 
     @AfterEach
@@ -110,7 +139,7 @@ class WifiScanViewModelTest {
         @Test
         fun `starts scan when Wi-Fi is supported`() = runTest(testDispatcher) {
             every { wifiScanUseCase.isSupported } returns true
-            coEvery { wifiScanUseCase() } returns stubResult(stubAp())
+            coEvery { wifiScanUseCase(trigger = true) } returns stubResult(stubAp())
 
             viewModel.onPermissionGranted()
             runCurrent()
@@ -143,7 +172,7 @@ class WifiScanViewModelTest {
         fun `Success state carries scan result`() = runTest(testDispatcher) {
             every { wifiScanUseCase.isSupported } returns true
             val ap = stubAp()
-            coEvery { wifiScanUseCase() } returns stubResult(ap)
+            coEvery { wifiScanUseCase(trigger = true) } returns stubResult(ap)
 
             viewModel.startScan()
             runCurrent()
@@ -155,7 +184,7 @@ class WifiScanViewModelTest {
 
         @Test
         fun `WifiDisabled when scan reports Wi-Fi off`() = runTest(testDispatcher) {
-            coEvery { wifiScanUseCase() } returns stubResult(wifiEnabled = false)
+            coEvery { wifiScanUseCase(trigger = true) } returns stubResult(wifiEnabled = false)
 
             viewModel.startScan()
             runCurrent()
@@ -164,8 +193,34 @@ class WifiScanViewModelTest {
         }
 
         @Test
+        fun `LocationDisabled when Location Services are off`() = runTest(testDispatcher) {
+            coEvery { wifiScanUseCase(trigger = true) } returns stubResult(locationEnabled = false)
+
+            viewModel.startScan()
+            runCurrent()
+
+            assertTrue(viewModel.uiState.value is WifiScanUiState.LocationDisabled)
+            assertTrue(!viewModel.autoRefresh.value)
+        }
+
+        @Test
+        fun `Success exposes freshness and throttle state`() = runTest(testDispatcher) {
+            coEvery { wifiScanUseCase(trigger = true) } returns
+                stubResult(stubAp(), throttled = true, scanAgeMs = 42_000L)
+
+            viewModel.startScan()
+            runCurrent()
+
+            val state = viewModel.uiState.value as WifiScanUiState.Success
+            assertTrue(state.throttled)
+            assertEquals(42_000L, state.scanAgeMs)
+            assertTrue(!state.isFresh)
+            viewModel.stopAutoRefresh()
+        }
+
+        @Test
         fun `NotSupported on WifiNotSupportedException`() = runTest(testDispatcher) {
-            coEvery { wifiScanUseCase() } throws WifiNotSupportedException()
+            coEvery { wifiScanUseCase(trigger = true) } throws WifiNotSupportedException()
 
             viewModel.startScan()
             runCurrent()
@@ -175,7 +230,7 @@ class WifiScanViewModelTest {
 
         @Test
         fun `NoPermission on SecurityException`() = runTest(testDispatcher) {
-            coEvery { wifiScanUseCase() } throws SecurityException("denied")
+            coEvery { wifiScanUseCase(trigger = true) } throws SecurityException("denied")
 
             viewModel.startScan()
             runCurrent()
@@ -185,7 +240,7 @@ class WifiScanViewModelTest {
 
         @Test
         fun `Error state on generic failure`() = runTest(testDispatcher) {
-            coEvery { wifiScanUseCase() } throws RuntimeException("boom")
+            coEvery { wifiScanUseCase(trigger = true) } throws RuntimeException("boom")
 
             viewModel.startScan()
             runCurrent()
@@ -207,7 +262,7 @@ class WifiScanViewModelTest {
 
         @Test
         fun `setBandFilter updates Success state`() = runTest(testDispatcher) {
-            coEvery { wifiScanUseCase() } returns stubResult(stubAp(band = WifiBand.BAND_2_4GHZ))
+            coEvery { wifiScanUseCase(trigger = true) } returns stubResult(stubAp(band = WifiBand.BAND_2_4GHZ))
             viewModel.startScan()
             runCurrent()
 
@@ -220,7 +275,7 @@ class WifiScanViewModelTest {
 
         @Test
         fun `setSortOrder updates Success state`() = runTest(testDispatcher) {
-            coEvery { wifiScanUseCase() } returns stubResult(stubAp())
+            coEvery { wifiScanUseCase(trigger = true) } returns stubResult(stubAp())
             viewModel.startScan()
             runCurrent()
 
@@ -234,7 +289,7 @@ class WifiScanViewModelTest {
         @Test
         fun `selectAccessPoint updates selectedAp`() = runTest(testDispatcher) {
             val ap = stubAp()
-            coEvery { wifiScanUseCase() } returns stubResult(ap)
+            coEvery { wifiScanUseCase(trigger = true) } returns stubResult(ap)
             viewModel.startScan()
             runCurrent()
 
@@ -254,7 +309,7 @@ class WifiScanViewModelTest {
         fun `selecting an AP freezes the list order across a live refresh`() = runTest(testDispatcher) {
             val weak = stubAp(ssid = "Weak", bssid = "AA:BB:CC:DD:EE:01", rssi = -80)
             val strong = stubAp(ssid = "Strong", bssid = "AA:BB:CC:DD:EE:02", rssi = -40)
-            coEvery { wifiScanUseCase() } returns stubResult(weak, strong)
+            coEvery { wifiScanUseCase(trigger = true) } returns stubResult(weak, strong)
             viewModel.startScan()
             runCurrent()
 
@@ -269,7 +324,7 @@ class WifiScanViewModelTest {
             // flip the order, but it must stay pinned while something is selected.
             val weakNowStrong = weak.copy(rssi = -30)
             val strongNowWeak = strong.copy(rssi = -90)
-            coEvery { wifiScanUseCase() } returns stubResult(weakNowStrong, strongNowWeak)
+            coEvery { wifiScanUseCase(trigger = true) } returns stubResult(weakNowStrong, strongNowWeak)
             viewModel.startScan(silent = true)
             runCurrent()
 
@@ -282,14 +337,14 @@ class WifiScanViewModelTest {
         fun `deselecting resumes live sort order`() = runTest(testDispatcher) {
             val weak = stubAp(ssid = "Weak", bssid = "AA:BB:CC:DD:EE:01", rssi = -80)
             val strong = stubAp(ssid = "Strong", bssid = "AA:BB:CC:DD:EE:02", rssi = -40)
-            coEvery { wifiScanUseCase() } returns stubResult(weak, strong)
+            coEvery { wifiScanUseCase(trigger = true) } returns stubResult(weak, strong)
             viewModel.startScan()
             runCurrent()
             viewModel.selectAccessPoint(weak)
 
             val weakNowStrong = weak.copy(rssi = -30)
             val strongNowWeak = strong.copy(rssi = -90)
-            coEvery { wifiScanUseCase() } returns stubResult(weakNowStrong, strongNowWeak)
+            coEvery { wifiScanUseCase(trigger = true) } returns stubResult(weakNowStrong, strongNowWeak)
             viewModel.startScan(silent = true)
             runCurrent()
 
@@ -303,18 +358,18 @@ class WifiScanViewModelTest {
         @Test
         fun `selected AP dropping out of range surfaces a message and clears selection`() = runTest(testDispatcher) {
             val ap = stubAp(ssid = "Gone", bssid = "AA:BB:CC:DD:EE:01")
-            coEvery { wifiScanUseCase() } returns stubResult(ap)
+            coEvery { wifiScanUseCase(trigger = true) } returns stubResult(ap)
             viewModel.startScan()
             runCurrent()
             viewModel.selectAccessPoint(ap)
 
-            coEvery { wifiScanUseCase() } returns stubResult() // ap no longer present
+            coEvery { wifiScanUseCase(trigger = true) } returns stubResult() // ap no longer present
             viewModel.startScan(silent = true)
             runCurrent()
 
             val state = viewModel.uiState.value as WifiScanUiState.Success
             assertNull(state.selectedAp)
-            assertEquals("This network is no longer in range", viewModel.apDisappearedMessage.value)
+            assertEquals(R.string.wifi_ap_disappeared, viewModel.apDisappearedEvent.value?.messageResId)
             viewModel.stopAutoRefresh()
         }
     }
@@ -348,7 +403,7 @@ class WifiScanViewModelTest {
 
         @Test
         fun `startScan success enables auto-refresh`() = runTest(testDispatcher) {
-            coEvery { wifiScanUseCase() } returns stubResult(stubAp())
+            coEvery { wifiScanUseCase(trigger = true) } returns stubResult(stubAp())
 
             viewModel.startScan()
             runCurrent()
@@ -367,12 +422,46 @@ class WifiScanViewModelTest {
 
     @Test
     fun `onRetry resets to Idle`() = runTest(testDispatcher) {
-        coEvery { wifiScanUseCase() } throws RuntimeException("boom")
+        coEvery { wifiScanUseCase(trigger = true) } throws RuntimeException("boom")
         viewModel.startScan()
         runCurrent()
 
         viewModel.onRetry()
 
         assertTrue(viewModel.uiState.value is WifiScanUiState.Idle)
+    }
+
+    @Test
+    fun `setRefreshInterval persists selected value and supports Off`() = runTest(testDispatcher) {
+        assertEquals(30_000L, viewModel.refreshIntervalMs.value)
+
+        viewModel.setRefreshInterval(15_000L)
+        runCurrent()
+        assertEquals(15_000L, prefsFlow.value[AppPreferenceKeys.WIFI_REFRESH_INTERVAL_MS])
+        assertEquals(15_000L, viewModel.refreshIntervalMs.value)
+
+        viewModel.setRefreshInterval(null)
+        runCurrent()
+        assertEquals(-1L, prefsFlow.value[AppPreferenceKeys.WIFI_REFRESH_INTERVAL_MS])
+        assertEquals(null, viewModel.refreshIntervalMs.value)
+    }
+
+    @Test
+    fun `onRetry from LocationDisabled starts another scan`() = runTest(testDispatcher) {
+        coEvery { wifiScanUseCase(trigger = true) } returnsMany listOf(
+            stubResult(locationEnabled = false),
+            stubResult(stubAp())
+        )
+
+        viewModel.startScan()
+        runCurrent()
+        assertTrue(viewModel.uiState.value is WifiScanUiState.LocationDisabled)
+
+        viewModel.onRetry()
+        runCurrent()
+
+        assertTrue(viewModel.uiState.value is WifiScanUiState.Success)
+        coVerify(exactly = 2) { wifiScanUseCase(trigger = true) }
+        viewModel.stopAutoRefresh()
     }
 }

@@ -3,6 +3,7 @@ package net.aieat.netswissknife.app.ui.screens.tls
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -65,21 +66,34 @@ class TlsInspectorViewModel @Inject constructor(
         }
         _uiState.value = state.copy(isLoading = true, error = null, result = null)
         viewModelScope.launch {
-            val params = TlsInspectorParams(
-                host      = state.host,
-                port      = state.port.toIntOrNull() ?: 443,
-                timeoutMs = 10_000
-            )
-            when (val res = useCase(params)) {
-                is NetworkResult.Success -> _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    result    = res.data,
-                    error     = null
+            try {
+                val params = TlsInspectorParams(
+                    host      = state.host,
+                    port      = state.port.toIntOrNull() ?: 443,
+                    timeoutMs = 10_000
                 )
-                is NetworkResult.Error   -> _uiState.value = _uiState.value.copy(
+                when (val res = useCase(params)) {
+                    is NetworkResult.Success -> _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        result    = res.data,
+                        error     = null
+                    )
+                    is NetworkResult.Error   -> _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        result    = null,
+                        error     = res.message
+                    )
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                val detail = e.message?.trim().takeUnless { it.isNullOrEmpty() }
+                    ?: e::class.simpleName
+                    ?: "Unknown TLS inspection error"
+                _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    result    = null,
-                    error     = res.message
+                    result = null,
+                    error = "TLS inspection failed: $detail"
                 )
             }
         }

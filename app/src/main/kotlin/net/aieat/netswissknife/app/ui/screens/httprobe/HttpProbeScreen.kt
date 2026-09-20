@@ -94,6 +94,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
+import net.aieat.netswissknife.app.ui.components.ToolErrorCard
 import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.R
@@ -120,6 +121,7 @@ import net.aieat.netswissknife.core.network.httprobe.HttpMethod
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeResult
 import net.aieat.netswissknife.core.network.httprobe.SecurityHeaderCheck
 import net.aieat.netswissknife.core.network.httprobe.SecurityRating
+import net.aieat.netswissknife.core.domain.validateHttpProbeUrl
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
@@ -290,8 +292,7 @@ private fun HttpProbeInputCard(
 ) {
     val focusManager = LocalFocusManager.current
     val url = uiState.url
-    val isUrlInvalid = url.isNotBlank() &&
-        !url.startsWith("http://") && !url.startsWith("https://") && url.contains('.')
+    val isUrlInvalid = url.isNotBlank() && validateHttpProbeUrl(url) != null
 
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -568,38 +569,14 @@ private fun HttpProbeLoadingContent() {
 
 @Composable
 private fun HttpProbeErrorContent(message: String, onRetry: () -> Unit) {
-    ElevatedCard(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.elevatedCardColors(
-            containerColor = MaterialTheme.colorScheme.errorContainer
-        )
+    ToolErrorCard(
+        title = stringResource(R.string.httprobe_error_title),
+        message = message,
     ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Default.Warning,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text = stringResource(R.string.httprobe_error_title),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onErrorContainer,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-            Text(
-                text = message,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onErrorContainer
-            )
-            TextButton(onClick = onRetry) {
-                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(4.dp))
-                Text(stringResource(R.string.httprobe_retry))
-            }
+        TextButton(onClick = onRetry) {
+            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(4.dp))
+            Text(stringResource(R.string.httprobe_retry))
         }
     }
 }
@@ -767,7 +744,7 @@ private fun OverviewTabContent(result: HttpProbeResult) {
         )
         LabeledValue(
             stringResource(R.string.httprobe_content_type),
-            result.responseHeaders["Content-Type"]?.firstOrNull() ?: "—"
+            result.responseHeaders["Content-Type"]?.firstOrNull() ?: "N/A"
         )
         if (result.redirectChain.isNotEmpty()) {
             HorizontalDivider()

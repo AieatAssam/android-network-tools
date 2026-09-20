@@ -4,6 +4,9 @@ import net.aieat.netswissknife.core.domain.ContinuousPingUseCase
 import net.aieat.netswissknife.core.domain.PingUseCase
 import net.aieat.netswissknife.core.network.ping.PingRepository
 import net.aieat.netswissknife.core.network.ping.PingRepositoryImpl
+import net.aieat.netswissknife.core.network.ping.PingEngine
+import net.aieat.netswissknife.core.network.ping.ReachabilityPingEngine
+import net.aieat.netswissknife.app.ping.IcmpenguinPingEngine
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -16,7 +19,9 @@ object PingModule {
 
     @Provides
     @Singleton
-    fun providePingRepository(): PingRepository = PingRepositoryImpl()
+    fun providePingRepository(): PingRepository = PingRepositoryImpl(
+        engines = listOf<PingEngine>(IcmpenguinPingEngine(), ReachabilityPingEngine())
+    )
 
     @Provides
     @Singleton

@@ -31,7 +31,7 @@ class PingSessionLoggerTest {
         fun `init writes CSV header`() {
             logger.init()
             val lines = file.readLines()
-            assertEquals("seq,timestamp_ms,latency_ms,status", lines[0])
+            assertEquals("seq,timestamp_ms,latency_ms,status,ttl,bytes", lines[0])
         }
 
         @Test
@@ -40,7 +40,7 @@ class PingSessionLoggerTest {
             logger.init()
             val lines = file.readLines()
             assertEquals(1, lines.size)
-            assertEquals("seq,timestamp_ms,latency_ms,status", lines[0])
+            assertEquals("seq,timestamp_ms,latency_ms,status,ttl,bytes", lines[0])
         }
     }
 
@@ -53,7 +53,7 @@ class PingSessionLoggerTest {
             logger.init()
             logger.append(1, PingPacketResult(1, "8.8.8.8", 15L, PingStatus.SUCCESS))
             val dataLine = file.readLines()[1]
-            assertTrue(dataLine.endsWith(",ok"), "Expected line to end with ',ok' but was: $dataLine")
+            assertTrue(dataLine.endsWith(",ok,,"), "Expected line to end with ',ok,,' but was: $dataLine")
         }
 
         @Test
@@ -61,7 +61,7 @@ class PingSessionLoggerTest {
             logger.init()
             logger.append(2, PingPacketResult(2, "8.8.8.8", null, PingStatus.TIMEOUT))
             val dataLine = file.readLines()[1]
-            assertTrue(dataLine.endsWith(",timeout"), "Expected ',timeout' but was: $dataLine")
+            assertTrue(dataLine.endsWith(",timeout,,"), "Expected ',timeout,,' but was: $dataLine")
             val cols = dataLine.split(",")
             assertEquals("", cols[2], "latency should be empty for timeout")
         }
@@ -71,7 +71,7 @@ class PingSessionLoggerTest {
             logger.init()
             logger.append(3, PingPacketResult(3, "bad", null, PingStatus.ERROR, "unknown host"))
             val dataLine = file.readLines()[1]
-            assertTrue(dataLine.endsWith(",error"), "Expected ',error' but was: $dataLine")
+            assertTrue(dataLine.endsWith(",error,,"), "Expected ',error,,' but was: $dataLine")
         }
 
         @Test

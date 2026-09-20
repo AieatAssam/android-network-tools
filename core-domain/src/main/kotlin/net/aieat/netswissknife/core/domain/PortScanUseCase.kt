@@ -19,7 +19,7 @@ import kotlinx.coroutines.flow.flow
 class PortScanUseCase(private val repository: PortScanRepository) {
 
     operator fun invoke(params: PortScanParams): Flow<PortScanFlowResult> = flow {
-        val host = params.host.trim()
+        val host = HostValidator.normalize(params.host) ?: params.host.trim()
 
         // Validate host
         if (host.isBlank()) {

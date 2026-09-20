@@ -67,16 +67,16 @@ class WifiScanUseCaseTest {
         @Test
         fun `delegates to repository when supported`() = runTest {
             every { repository.isSupported } returns true
-            coEvery { repository.scan() } returns emptyResult
+            coEvery { repository.scan(true) } returns emptyResult
             val result = useCase()
             assertEquals(emptyResult, result)
-            coVerify(exactly = 1) { repository.scan() }
+            coVerify(exactly = 1) { repository.scan(true) }
         }
 
         @Test
         fun `propagates repository exceptions`() = runTest {
             every { repository.isSupported } returns true
-            coEvery { repository.scan() } throws SecurityException("Location permission denied")
+            coEvery { repository.scan(true) } throws SecurityException("Location permission denied")
             var caught: SecurityException? = null
             try { useCase() } catch (e: SecurityException) { caught = e }
             assertEquals("Location permission denied", caught?.message)
@@ -86,7 +86,7 @@ class WifiScanUseCaseTest {
         fun `result contains correct scan timestamp`() = runTest {
             every { repository.isSupported } returns true
             val timestamped = emptyResult.copy(scanTimestampMs = 99_000L)
-            coEvery { repository.scan() } returns timestamped
+            coEvery { repository.scan(true) } returns timestamped
             val result = useCase()
             assertEquals(99_000L, result.scanTimestampMs)
         }
@@ -101,9 +101,18 @@ class WifiScanUseCaseTest {
                     mockk(relaxed = true)
                 )
             )
-            coEvery { repository.scan() } returns resultWith3Aps
+            coEvery { repository.scan(true) } returns resultWith3Aps
             val result = useCase()
             assertEquals(3, result.accessPoints.size)
         }
+    }
+
+    @Test
+    fun `explicit trigger flag is forwarded`() = runTest {
+        every { repository.isSupported } returns true
+        coEvery { repository.scan(false) } returns emptyResult
+
+        assertEquals(emptyResult, useCase(trigger = false))
+        coVerify(exactly = 1) { repository.scan(false) }
     }
 }

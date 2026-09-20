@@ -23,7 +23,7 @@ class TracerouteUseCase(
     private val geoIpRepository: GeoIpRepository
 ) {
     operator fun invoke(params: TracerouteParams): Flow<TracerouteFlowResult> {
-        val trimmedHost = params.host.trim()
+        val trimmedHost = HostValidator.normalize(params.host) ?: params.host.trim()
 
         val errorMessage: String? = when {
             trimmedHost.isBlank()                        -> "Host must not be empty"

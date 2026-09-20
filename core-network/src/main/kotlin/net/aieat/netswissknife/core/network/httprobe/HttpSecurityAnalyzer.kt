@@ -42,7 +42,7 @@ object HttpSecurityAnalyzer {
                 headerName = "Strict-Transport-Security",
                 value = null,
                 rating = SecurityRating.FAIL,
-                description = "HSTS not set — browsers may downgrade connections to HTTP."
+                description = "HSTS not set - browsers may downgrade connections to HTTP."
             )
         }
     }
@@ -61,7 +61,7 @@ object HttpSecurityAnalyzer {
                 headerName = "Content-Security-Policy",
                 value = null,
                 rating = SecurityRating.WARN,
-                description = "No CSP header — the site may be vulnerable to XSS attacks."
+                description = "No CSP header - the site may be vulnerable to XSS attacks."
             )
         }
     }
@@ -88,7 +88,7 @@ object HttpSecurityAnalyzer {
                     headerName = "X-Frame-Options",
                     value = null,
                     rating = SecurityRating.FAIL,
-                    description = "No X-Frame-Options — page may be embeddable in iframes (clickjacking risk)."
+                    description = "No X-Frame-Options - page may be embeddable in iframes (clickjacking risk)."
                 )
         }
     }
@@ -107,7 +107,7 @@ object HttpSecurityAnalyzer {
                 headerName = "X-Content-Type-Options",
                 value = value,
                 rating = SecurityRating.FAIL,
-                description = "No 'nosniff' directive — browsers may MIME-sniff responses."
+                description = "No 'nosniff' directive - browsers may MIME-sniff responses."
             )
         }
     }
@@ -141,7 +141,7 @@ object HttpSecurityAnalyzer {
                     headerName = "Referrer-Policy",
                     value = null,
                     rating = SecurityRating.WARN,
-                    description = "No Referrer-Policy — referrer data may be sent to third parties."
+                    description = "No Referrer-Policy - referrer data may be sent to third parties."
                 )
         }
     }
@@ -160,7 +160,7 @@ object HttpSecurityAnalyzer {
                 headerName = "Permissions-Policy",
                 value = null,
                 rating = SecurityRating.WARN,
-                description = "No Permissions-Policy — browser features like camera/mic are unrestricted."
+                description = "No Permissions-Policy - browser features like camera/mic are unrestricted."
             )
         }
     }
@@ -187,7 +187,7 @@ object HttpSecurityAnalyzer {
                     headerName = "Cross-Origin-Opener-Policy",
                     value = null,
                     rating = SecurityRating.WARN,
-                    description = "No Cross-Origin-Opener-Policy — the page can be accessed by cross-origin windows."
+                    description = "No Cross-Origin-Opener-Policy - the page can be accessed by cross-origin windows."
                 )
         }
     }
@@ -206,7 +206,7 @@ object HttpSecurityAnalyzer {
                 headerName = "Cross-Origin-Embedder-Policy",
                 value = value,
                 rating = SecurityRating.INFO,
-                description = "No Cross-Origin-Embedder-Policy — only required for cross-origin isolation features (e.g. SharedArrayBuffer)."
+                description = "No Cross-Origin-Embedder-Policy - only required for cross-origin isolation features (e.g. SharedArrayBuffer)."
             )
         }
     }

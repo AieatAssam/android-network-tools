@@ -27,7 +27,9 @@ data class PingStats(
          */
         fun compute(packets: List<PingPacketResult>): PingStats {
             val sent = packets.size
-            val successRtts = packets.mapNotNull { it.rtTimeMs }
+            val successRtts = packets
+                .filter { it.status == PingStatus.SUCCESS }
+                .mapNotNull { it.rtTimeMs }
             val received = successRtts.size
 
             val lossPercent = if (sent == 0) 0f else ((sent - received).toFloat() / sent) * 100f

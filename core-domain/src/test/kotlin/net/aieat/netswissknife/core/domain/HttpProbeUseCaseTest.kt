@@ -56,6 +56,36 @@ class HttpProbeUseCaseTest {
     }
 
     @Test
+    @DisplayName("invoke returns Error for an incomplete host")
+    fun `invoke returns Error for incomplete host`() = runTest {
+        val result = useCase(HttpProbeParams(url = "https://example."))
+
+        assertTrue(result is NetworkResult.Error)
+        assertTrue((result as NetworkResult.Error).message.contains("incomplete", ignoreCase = true))
+        coVerify(exactly = 0) { repository.probe(any()) }
+    }
+
+    @Test
+    @DisplayName("port zero is rejected")
+    fun `validateHttpProbeUrl rejects port zero`() {
+        assertEquals(
+            "URL port must be between 1 and 65535",
+            validateHttpProbeUrl("https://example.com:0")
+        )
+    }
+
+    @Test
+    @DisplayName("valid HTTP URLs with paths and query parameters are accepted")
+    fun `valid HTTP URLs with paths and query parameters are accepted`() = runTest {
+        coEvery { repository.probe(any()) } returns NetworkResult.Success(fakeResult)
+
+        val result = useCase(HttpProbeParams(url = "https://example.com/api?v=1"))
+
+        assertTrue(result is NetworkResult.Success)
+        coVerify { repository.probe(match { it.url == "https://example.com/api?v=1" }) }
+    }
+
+    @Test
     @DisplayName("invoke returns Error for timeout below 500ms")
     fun `invoke returns Error for timeout below 500ms`() = runTest {
         val result = useCase(HttpProbeParams(url = "https://example.com", timeoutMs = 499))

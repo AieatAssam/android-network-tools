@@ -5,6 +5,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -36,6 +37,9 @@ object AppPreferenceKeys {
 
     /** Default number of concurrent probes (1–500). */
     val DEFAULT_CONCURRENCY = intPreferencesKey("default_concurrency")
+
+    /** Wi-Fi auto-refresh interval in milliseconds; -1 means explicitly disabled. */
+    val WIFI_REFRESH_INTERVAL_MS = longPreferencesKey("wifi_refresh_interval_ms")
 
     // ── Recent hosts (ordered pipe-delimited lists, max 5 entries each) ───────
     val RECENT_PING_HOSTS       = stringPreferencesKey("recent_ping_hosts")

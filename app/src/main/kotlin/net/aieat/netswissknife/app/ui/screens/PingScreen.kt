@@ -52,7 +52,6 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -75,6 +74,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -120,6 +120,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
+import net.aieat.netswissknife.app.ui.components.ToolErrorCard
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
 import net.aieat.netswissknife.app.ui.components.ToolStopButton
 import net.aieat.netswissknife.app.ui.components.hapticAction
@@ -154,6 +155,9 @@ fun PingScreen(
     val host by viewModel.host.collectAsStateWithLifecycle()
     val count by viewModel.count.collectAsStateWithLifecycle()
     val timeoutMs by viewModel.timeoutMs.collectAsStateWithLifecycle()
+    var payloadBytes by remember { mutableIntStateOf(56) }
+    var ttl by remember { mutableIntStateOf(64) }
+    var intervalMs by remember { mutableIntStateOf(1_000) }
     val continuousMode by viewModel.continuousMode.collectAsStateWithLifecycle()
     val recentHosts by viewModel.recentHosts.collectAsStateWithLifecycle()
 
@@ -202,12 +206,18 @@ fun PingScreen(
                     host = host,
                     count = count,
                     timeoutMs = timeoutMs,
+                    payloadBytes = payloadBytes,
+                    ttl = ttl,
+                    intervalMs = intervalMs,
                     isRunning = uiState is PingUiState.Running,
                     continuousMode = continuousMode,
                     recentHosts = recentHosts,
                     onHostChange = viewModel::onHostChange,
                     onCountChange = viewModel::onCountChange,
                     onTimeoutChange = viewModel::onTimeoutChange,
+                    onPayloadSizeChange = { payloadBytes = it; viewModel.onPayloadSizeChange(it) },
+                    onTtlChange = { ttl = it; viewModel.onTtlChange(it) },
+                    onIntervalChange = { intervalMs = it; viewModel.onIntervalChange(it) },
                     onToggleContinuous = viewModel::onToggleContinuous,
                     onStart = viewModel::startPing,
                     onStop = viewModel::onStop,
@@ -318,12 +328,18 @@ private fun PingInputCard(
     host: String,
     count: Int,
     timeoutMs: Int,
+    payloadBytes: Int,
+    ttl: Int,
+    intervalMs: Int,
     isRunning: Boolean,
     continuousMode: Boolean,
     recentHosts: List<String>,
     onHostChange: (String) -> Unit,
     onCountChange: (Int) -> Unit,
     onTimeoutChange: (Int) -> Unit,
+    onPayloadSizeChange: (Int) -> Unit,
+    onTtlChange: (Int) -> Unit,
+    onIntervalChange: (Int) -> Unit,
     onToggleContinuous: (Boolean) -> Unit,
     onStart: () -> Unit,
     onStop: () -> Unit,
@@ -426,6 +442,16 @@ private fun PingInputCard(
                 enabled = !isRunning
             )
 
+            PingAdvancedOptions(
+                payloadBytes = payloadBytes,
+                ttl = ttl,
+                intervalMs = intervalMs,
+                onPayloadSizeChange = onPayloadSizeChange,
+                onTtlChange = onTtlChange,
+                onIntervalChange = onIntervalChange,
+                enabled = !isRunning
+            )
+
             // Action button
             if (isRunning) {
                 ToolStopButton(
@@ -445,6 +471,59 @@ private fun PingInputCard(
                     Icon(Icons.Default.Speed, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(stringResource(R.string.ping_start_button))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PingAdvancedOptions(
+    payloadBytes: Int,
+    ttl: Int,
+    intervalMs: Int,
+    onPayloadSizeChange: (Int) -> Unit,
+    onTtlChange: (Int) -> Unit,
+    onIntervalChange: (Int) -> Unit,
+    enabled: Boolean
+) {
+    var expanded by remember { mutableStateOf(false) }
+    OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = stringResource(R.string.ping_advanced_options),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+                TextButton(onClick = { expanded = !expanded }, enabled = enabled) {
+                    Text(
+                        if (expanded) stringResource(R.string.action_collapse)
+                        else stringResource(R.string.action_expand)
+                    )
+                }
+            }
+            AnimatedVisibility(visible = expanded) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PingSliderRow(
+                        label = stringResource(R.string.ping_payload_label, payloadBytes),
+                        value = payloadBytes.toFloat(), valueRange = 0f..1472f, steps = 31,
+                        onValueChange = { onPayloadSizeChange(it.toInt()) }, enabled = enabled
+                    )
+                    PingSliderRow(
+                        label = stringResource(R.string.ping_ttl_label, ttl),
+                        value = ttl.toFloat(), valueRange = 1f..255f, steps = 31,
+                        onValueChange = { onTtlChange(it.toInt()) }, enabled = enabled
+                    )
+                    PingSliderRow(
+                        label = stringResource(R.string.ping_interval_label, intervalMs),
+                        value = intervalMs.toFloat(), valueRange = 100f..10_000f, steps = 49,
+                        onValueChange = { onIntervalChange(it.toInt()) }, enabled = enabled
+                    )
                 }
             }
         }
@@ -753,42 +832,16 @@ private fun PingErrorPanel(
     onRetry: () -> Unit,
     onClear: () -> Unit
 ) {
-    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Default.Warning,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.size(24.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = stringResource(R.string.ping_error_title),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.error,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-            Text(
-                text = message,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = onRetry) {
-                    Icon(Icons.Default.Refresh, contentDescription = null)
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(stringResource(R.string.ping_retry))
-                }
-                TextButton(onClick = onClear) {
-                    Text(stringResource(R.string.clear))
-                }
-            }
+    ToolErrorCard(
+        title = stringResource(R.string.ping_error_title),
+        message = message,
+    ) {
+        Button(onClick = onRetry) {
+            Icon(Icons.Default.Refresh, contentDescription = null)
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(stringResource(R.string.ping_retry))
         }
+        TextButton(onClick = onClear) { Text(stringResource(R.string.clear)) }
     }
 }
 
@@ -1077,6 +1130,7 @@ private fun PacketRow(packet: PingPacketResult) {
                     when (packet.status) {
                         PingStatus.SUCCESS -> MaterialTheme.colorScheme.primaryContainer
                         PingStatus.TIMEOUT -> MaterialTheme.colorScheme.surfaceVariant
+                        PingStatus.UNREACHABLE -> MaterialTheme.colorScheme.tertiaryContainer
                         PingStatus.ERROR -> MaterialTheme.colorScheme.errorContainer
                     }
                 ),
@@ -1088,6 +1142,7 @@ private fun PacketRow(packet: PingPacketResult) {
                 color = when (packet.status) {
                     PingStatus.SUCCESS -> MaterialTheme.colorScheme.onPrimaryContainer
                     PingStatus.TIMEOUT -> MaterialTheme.colorScheme.onSurfaceVariant
+                    PingStatus.UNREACHABLE -> MaterialTheme.colorScheme.onTertiaryContainer
                     PingStatus.ERROR -> MaterialTheme.colorScheme.onErrorContainer
                 },
                 fontWeight = FontWeight.Bold
@@ -1134,6 +1189,16 @@ private fun PacketRow(packet: PingPacketResult) {
                     text = stringResource(R.string.ping_timeout_label_result),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.outline,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+            PingStatus.UNREACHABLE -> {
+                Text(
+                    text = packet.errorMessage ?: stringResource(R.string.ping_unreachable_label_result),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.tertiary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -1228,11 +1293,11 @@ private fun csvField(value: String): String =
     }
 
 private fun buildCsvOutput(result: PingResult): String = buildString {
-    appendLine("sequence,host,status,rtt_ms,error")
+    appendLine("sequence,host,status,rtt_ms,error,ttl,bytes")
     result.packets.forEach { p ->
         appendLine(
             "${p.sequence},${csvField(p.host)},${p.status},${p.rtTimeMs ?: ""}," +
-                csvField(p.errorMessage ?: "")
+                csvField(p.errorMessage ?: "") + ",${p.replyTtl ?: ""},${p.bytes ?: ""}"
         )
     }
     appendLine()

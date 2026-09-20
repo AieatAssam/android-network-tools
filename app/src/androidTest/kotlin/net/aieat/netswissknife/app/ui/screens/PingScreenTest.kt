@@ -85,6 +85,21 @@ class PingScreenTest {
     }
 
     @Test
+    fun errorState_withoutMessage_showsHelpfulDetailsPlaceholder() {
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                PingScreen(viewModel = fakePingViewModel(PingUiState.Error("")))
+            }
+        }
+
+        composeRule.mainClock.advanceTimeBy(2_000L)
+        composeRule
+            .onNodeWithTag(PingScreenTestTags.CONTENT_LIST)
+            .performScrollToIndex(PingScreenTestTags.RESULTS_PANEL_INDEX)
+        composeRule.onNodeWithText(context.getString(R.string.error_no_details)).assertIsDisplayed()
+    }
+
+    @Test
     fun helpSheet_showsConceptHeading() {
         composeRule.setContent {
             NetSwissKnifeTheme {
@@ -126,6 +141,38 @@ class PingScreenTest {
         composeRule
             .onNodeWithText(context.getString(R.string.error_invalid_host))
             .assertIsDisplayed()
+    }
+
+    @Test
+    fun advancedOptions_toggleShowsPacketControls() {
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                PingScreen(viewModel = fakePingViewModel(PingUiState.Idle))
+            }
+        }
+
+        composeRule.mainClock.advanceTimeBy(2_000L)
+        composeRule.onNodeWithText(context.getString(R.string.action_expand)).performClick()
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        composeRule.onNodeWithText("Payload size: 56 bytes").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("TTL: 64").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Interval: 1000 ms").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun advancedOptions_toggleHidesPacketControls() {
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                PingScreen(viewModel = fakePingViewModel(PingUiState.Idle))
+            }
+        }
+
+        composeRule.mainClock.advanceTimeBy(2_000L)
+        composeRule.onNodeWithText(context.getString(R.string.action_expand)).performClick()
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        composeRule.onNodeWithText(context.getString(R.string.action_collapse)).performClick()
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        composeRule.onNodeWithText("Payload size: 56 bytes").assertDoesNotExist()
     }
 
     @Test

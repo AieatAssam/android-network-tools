@@ -13,6 +13,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
+import net.aieat.netswissknife.app.platform.LinkInfoProvider
 import net.aieat.netswissknife.core.domain.TracerouteFlowResult
 import net.aieat.netswissknife.core.domain.TracerouteUseCase
 import net.aieat.netswissknife.core.network.traceroute.HopResult
@@ -35,6 +36,7 @@ class TracerouteViewModelTest {
     private lateinit var tracerouteUseCase: TracerouteUseCase
     private lateinit var recentHostsRepository: RecentHostsRepository
     private lateinit var viewModel: TracerouteViewModel
+    private var networkAvailable = true
 
     private val stubHop = HopResult(
         hopNumber = 1,
@@ -51,7 +53,11 @@ class TracerouteViewModelTest {
         recentHostsRepository = mockk(relaxed = true) {
             every { getRecents(any()) } returns flowOf(emptyList())
         }
-        viewModel = TracerouteViewModel(tracerouteUseCase, recentHostsRepository)
+        viewModel = TracerouteViewModel(
+            tracerouteUseCase,
+            recentHostsRepository,
+            LinkInfoProvider { networkAvailable },
+        )
     }
 
     @AfterEach
@@ -95,6 +101,28 @@ class TracerouteViewModelTest {
             viewModel.onHostChange("unreachable")
             viewModel.startTrace()
             assertTrue(viewModel.uiState.value is TracerouteUiState.Error)
+        }
+
+        @Test
+        fun `offline trace fails before invoking the probe`() = runTest {
+            networkAvailable = false
+            viewModel.onHostChange("example.com")
+
+            viewModel.startTrace()
+
+            assertEquals(TracerouteUiState.Error("No network connection"), viewModel.uiState.value)
+            coVerify(exactly = 0) { recentHostsRepository.addRecent(any(), any()) }
+            io.mockk.verify(exactly = 0) { tracerouteUseCase(any()) }
+        }
+
+        @Test
+        fun `probe exception is exposed as an error`() = runTest {
+            every { tracerouteUseCase(any()) } throws IllegalStateException("route socket closed")
+            viewModel.onHostChange("example.com")
+
+            viewModel.startTrace()
+
+            assertEquals(TracerouteUiState.Error("route socket closed"), viewModel.uiState.value)
         }
 
         @Test

@@ -86,7 +86,7 @@ class UiSmokeTest {
         }
 
         composeRule.mainClock.advanceTimeBy(2_000L)
-        composeRule.onNodeWithText(context.getString(R.string.app_name)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.app_name_full)).assertIsDisplayed()
         composeRule.onNodeWithText(context.getString(R.string.home_all_tools)).assertIsDisplayed()
     }
 

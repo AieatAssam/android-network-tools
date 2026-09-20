@@ -7,7 +7,9 @@ import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -149,6 +151,31 @@ class PortsScreenTest {
             .onFirst()
             .performScrollTo()
             .assertIsDisplayed()
+    }
+
+    @Test
+    fun commonServicesPicker_closesAndLeavesScanCtaReachable() {
+        val viewModel = fakePortScanViewModel()
+        every { viewModel.host } returns MutableStateFlow("example.com")
+
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                PortsScreen(viewModel = viewModel)
+            }
+        }
+
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        composeRule.onNodeWithTag(PortsScreenTestTags.PRESET_FIELD).performClick()
+        composeRule
+            .onAllNodesWithText(PortScanPreset.COMMON.label)
+            .onLast()
+            .performClick()
+
+        composeRule
+            .onNodeWithTag(PortsScreenTestTags.SCAN_BUTTON)
+            .assertIsDisplayed()
+            .performClick()
+        io.mockk.verify(exactly = 1) { viewModel.startScan() }
     }
 
     private fun fakePortScanViewModel(

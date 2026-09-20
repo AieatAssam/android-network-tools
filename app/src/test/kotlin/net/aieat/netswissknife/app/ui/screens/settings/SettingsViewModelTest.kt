@@ -18,6 +18,7 @@ import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
@@ -82,6 +83,11 @@ class SettingsViewModelTest {
         fun `defaultConcurrency defaults to 50`() {
             assertEquals(50, viewModel.defaultConcurrency.value)
         }
+
+        @Test
+        fun `wifi refresh interval defaults to 30 seconds`() {
+            assertEquals(30_000L, viewModel.wifiRefreshIntervalMs.value)
+        }
     }
 
     @Nested
@@ -128,6 +134,17 @@ class SettingsViewModelTest {
 
             viewModel.setDefaultConcurrency(0)
             assertEquals(1, prefsFlow.value[AppPreferenceKeys.DEFAULT_CONCURRENCY])
+        }
+
+        @Test
+        fun `setWifiRefreshInterval writes values and Off sentinel`() = runTest {
+            viewModel.setWifiRefreshInterval(60_000L)
+            assertEquals(60_000L, prefsFlow.value[AppPreferenceKeys.WIFI_REFRESH_INTERVAL_MS])
+            assertEquals(60_000L, viewModel.wifiRefreshIntervalMs.value)
+
+            viewModel.setWifiRefreshInterval(null)
+            assertEquals(-1L, prefsFlow.value[AppPreferenceKeys.WIFI_REFRESH_INTERVAL_MS])
+            assertNull(viewModel.wifiRefreshIntervalMs.value)
         }
 
         @Test

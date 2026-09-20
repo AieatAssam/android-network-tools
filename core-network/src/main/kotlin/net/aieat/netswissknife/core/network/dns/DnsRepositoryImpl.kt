@@ -1,14 +1,15 @@
 package net.aieat.netswissknife.core.network.dns
 
-import net.aieat.netswissknife.core.network.NetworkResult
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import net.aieat.netswissknife.core.network.NetworkResult
 import org.xbill.DNS.DClass
 import org.xbill.DNS.ExtendedResolver
 import org.xbill.DNS.Message
 import org.xbill.DNS.Name
 import org.xbill.DNS.Record
+import org.xbill.DNS.Rcode
 import org.xbill.DNS.Resolver
 import org.xbill.DNS.Section
 import org.xbill.DNS.SimpleResolver
@@ -16,54 +17,66 @@ import org.xbill.DNS.Type
 import java.net.Inet6Address
 import java.net.InetAddress
 import java.time.Duration
+import java.util.concurrent.CompletionStage
+import java.util.concurrent.Executor
 
-/**
- * Production DNS repository using dnsjava for full record-type support and
- * custom DNS server selection (IPv4 & IPv6).
- */
-class DnsRepositoryImpl : DnsRepository {
+internal interface DnsResolverMetadata {
+    val lastServerAddress: String?
+}
+
+internal data class DnsResolverEndpoint(val address: String, val resolver: Resolver)
+
+class DnsRepositoryImpl(
+    private val resolverFactory: ResolverFactory = ResolverFactory { server -> defaultResolver(server) }
+) : DnsRepository {
+
+    fun interface ResolverFactory {
+        fun create(server: DnsServer): Resolver
+    }
 
     companion object {
         private val TIMEOUT = Duration.ofSeconds(8)
-
         private val IPV4_REGEX = Regex("""^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$""")
 
-        /** Transforms a query name into the canonical fully-qualified form for the given record type.
-         *  PTR queries auto-reverse IPv4 (in-addr.arpa) and IPv6 (ip6.arpa) addresses. */
         internal fun normalizeDomain(domain: String, recordType: DnsRecordType): String {
             val stripped = domain.trimEnd('.')
             if (recordType == DnsRecordType.PTR) {
-                // IPv4 – reverse octets and append .in-addr.arpa.
                 val ipv4Match = IPV4_REGEX.matchEntire(stripped)
                 if (ipv4Match != null) {
                     val (a, b, c, d) = ipv4Match.destructured
                     return "$d.$c.$b.$a.in-addr.arpa."
                 }
-                // IPv6 – expand to 32 nibbles, reverse, and append .ip6.arpa.
                 if (stripped.contains(':')) {
                     val reversed = reverseIPv6(stripped)
                     if (reversed != null) return reversed
                 }
-                // Already in reverse-lookup form – just ensure trailing dot
                 if (stripped.endsWith(".in-addr.arpa") || stripped.endsWith(".ip6.arpa")) {
                     return "$stripped."
                 }
             }
-            return if (domain.endsWith(".")) domain else "$domain."
+            return "$stripped."
         }
 
-        /** Parses an IPv6 address string and returns its .ip6.arpa. PTR form, or null on failure. */
-        private fun reverseIPv6(ip: String): String? {
-            return try {
-                val addr = InetAddress.getByName(ip)
-                if (addr !is Inet6Address) return null
-                val hex = addr.address.joinToString("") { "%02x".format(it) }
-                val nibbles = hex.reversed().toList().joinToString(".")
-                "$nibbles.ip6.arpa."
-            } catch (_: Exception) {
-                null
-            }
+        private fun reverseIPv6(ip: String): String? = try {
+            val addr = InetAddress.getByName(ip)
+            if (addr !is Inet6Address) return null
+            val hex = addr.address.joinToString("") { "%02x".format(it) }
+            "${hex.reversed().toList().joinToString(".")}.ip6.arpa."
+        } catch (_: Exception) {
+            null
         }
+
+        private fun defaultResolver(server: DnsServer): Resolver = when (server) {
+            is DnsServer.System -> TrackingExtendedResolver(server.serverAddresses).also { it.setTimeout(TIMEOUT) }
+            is DnsServer.Google -> simpleResolver(DnsServer.Google.PRIMARY)
+            is DnsServer.Cloudflare -> simpleResolver(DnsServer.Cloudflare.PRIMARY)
+            is DnsServer.OpenDns -> simpleResolver(DnsServer.OpenDns.PRIMARY)
+            is DnsServer.Quad9 -> simpleResolver(DnsServer.Quad9.PRIMARY)
+            is DnsServer.Custom -> simpleResolver(server.address)
+        }
+
+        private fun simpleResolver(address: String): Resolver =
+            SimpleResolver(address).also { it.setTimeout(TIMEOUT) }
     }
 
     override suspend fun lookup(
@@ -71,48 +84,33 @@ class DnsRepositoryImpl : DnsRepository {
         recordType: DnsRecordType,
         server: DnsServer
     ): NetworkResult<DnsResult> = withContext(Dispatchers.IO) {
-        val startNs = System.nanoTime()
+        if (server is DnsServer.System && server.serverAddresses.isEmpty()) {
+            return@withContext NetworkResult.Error(
+                "No system DNS server reported by Android (Private DNS or no network). Choose a resolver."
+            )
+        }
 
+        val startNs = System.nanoTime()
         try {
             val normalizedDomain = normalizeDomain(domain, recordType)
             val queryName = Name.fromString(normalizedDomain)
-            val dnsType = recordType.dnsTypeInt
-
-            // Build resolver for the chosen server
-            val resolver = buildResolver(server)
-
-            // Build the DNS query message
-            val queryRecord = Record.newRecord(queryName, dnsType, DClass.IN)
+            val queryRecord = Record.newRecord(queryName, recordType.dnsTypeInt, DClass.IN)
             val queryMessage = Message.newQuery(queryRecord)
-
-            // Send query and receive response
+            val resolver = resolverFactory.create(server)
             val response = resolver.send(queryMessage)
             val queryTimeMs = (System.nanoTime() - startNs) / 1_000_000L
-
-            // Extract answer records
-            val answerRecords = response.getSection(Section.ANSWER)
-            val rawResponse = buildRawResponse(response, queryTimeMs)
-
-            val dnsRecords = answerRecords.map { rec ->
-                DnsRecord(
-                    type = recordType,
-                    name = rec.name.toString().trimEnd('.'),
-                    value = formatRecordValue(rec),
-                    ttl = rec.ttl,
-                    rawLine = rec.toString()
-                )
-            }
-
-            NetworkResult.Success(
-                DnsResult(
-                    domain = domain.trimEnd('.'),
-                    recordType = recordType,
-                    server = server,
-                    records = dnsRecords,
-                    queryTimeMs = queryTimeMs,
-                    rawResponse = rawResponse
-                )
+            val serverUsed = (resolver as? DnsResolverMetadata)?.lastServerAddress
+                ?.let(::formatServerAddress)
+                ?: serverAddress(server)
+            val result = DnsMessageMapper.toResult(
+                domain = domain.trimEnd('.'),
+                requestedType = recordType,
+                server = server,
+                response = response,
+                serverUsed = serverUsed,
+                queryTimeMs = queryTimeMs
             )
+            NetworkResult.Success(result)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -123,84 +121,139 @@ class DnsRepositoryImpl : DnsRepository {
         }
     }
 
-    // ── Resolver factory ─────────────────────────────────────────────────────
-
-    private fun buildResolver(server: DnsServer): Resolver {
-        return when (server) {
-            is DnsServer.System     -> buildSystemResolver(server)
-            is DnsServer.Google     -> simpleResolver(DnsServer.Google.PRIMARY)
-            is DnsServer.Cloudflare -> simpleResolver(DnsServer.Cloudflare.PRIMARY)
-            is DnsServer.OpenDns    -> simpleResolver(DnsServer.OpenDns.PRIMARY)
-            is DnsServer.Quad9      -> simpleResolver(DnsServer.Quad9.PRIMARY)
-            is DnsServer.Custom     -> simpleResolver(server.address)
-        }
+    private fun serverAddress(server: DnsServer): String = when (server) {
+        is DnsServer.System -> formatServerAddress(server.serverAddresses.first())
+        is DnsServer.Google -> formatServerAddress(DnsServer.Google.PRIMARY)
+        is DnsServer.Cloudflare -> formatServerAddress(DnsServer.Cloudflare.PRIMARY)
+        is DnsServer.OpenDns -> formatServerAddress(DnsServer.OpenDns.PRIMARY)
+        is DnsServer.Quad9 -> formatServerAddress(DnsServer.Quad9.PRIMARY)
+        is DnsServer.Custom -> formatServerAddress(server.address)
     }
 
-    private fun simpleResolver(address: String): Resolver =
-        SimpleResolver(address).also { it.setTimeout(TIMEOUT) }
+    private fun formatServerAddress(address: String): String =
+        if (address.contains(':') && !address.startsWith('[')) "[$address]:53" else "$address:53"
 
-    private fun buildSystemResolver(server: DnsServer.System): Resolver {
-        // serverAddresses are populated by the app layer (ConnectivityManager / LinkProperties).
-        // Never use ExtendedResolver() with no args – on Android that falls back to localhost:53
-        // which has no DNS listener and throws "Port unreachable".
-        return if (server.serverAddresses.isNotEmpty()) {
-            try {
-                ExtendedResolver(server.serverAddresses.toTypedArray()).also { it.setTimeout(TIMEOUT) }
-            } catch (e: Exception) {
-                simpleResolver(DnsServer.Cloudflare.PRIMARY)
+    private class ResolverSelection {
+        @Volatile
+        var lastServerAddress: String? = null
+    }
+
+    internal class TrackingExtendedResolver private constructor(
+        private val selection: ResolverSelection,
+        endpoints: Array<DnsResolverEndpoint>
+    ) : ExtendedResolver(
+        endpoints.map { endpoint ->
+            TrackingResolver(endpoint.resolver, endpoint.address) { selected ->
+                selection.lastServerAddress = selected
             }
-        } else {
-            simpleResolver(DnsServer.Cloudflare.PRIMARY)
-        }
+        }.toTypedArray()
+    ), DnsResolverMetadata {
+        constructor(addresses: List<String>) : this(
+            ResolverSelection(),
+            addresses.map { address ->
+                DnsResolverEndpoint(
+                    address,
+                    SimpleResolver(address).also { it.setTimeout(TIMEOUT) }
+                )
+            }.toTypedArray()
+        )
+
+        internal constructor(endpoints: Array<DnsResolverEndpoint>) : this(ResolverSelection(), endpoints)
+
+        override val lastServerAddress: String?
+            get() = selection.lastServerAddress
     }
 
-    // ── Record formatting ────────────────────────────────────────────────────
-
-    /**
-     * Extracts a human-readable value string from a DNS record.
-     * Falls back to rdataToString() for any type not explicitly handled.
-     */
-    private fun formatRecordValue(record: Record): String {
-        return try {
-            when (record.getType()) {
-                Type.A, Type.AAAA -> {
-                    record.rdataToString()
-                }
-                Type.MX -> {
-                    record.rdataToString()
-                }
-                Type.TXT -> {
-                    record.rdataToString()
-                        .removePrefix("\"")
-                        .removeSuffix("\"")
-                        .replace("\" \"", " ")
-                }
-                Type.CNAME, Type.NS, Type.PTR -> {
-                    record.rdataToString().trimEnd('.')
-                }
-                Type.SOA -> {
-                    record.rdataToString()
-                        .split(" ")
-                        .joinToString(" ") { part -> part.trimEnd('.') }
-                }
-                Type.SRV -> {
-                    record.rdataToString().trimEnd('.')
-                }
-                else -> record.rdataToString()
-            }
-        } catch (e: Exception) {
-            record.rdataToString()
-        }
+    private class TrackingResolver(
+        private val delegate: Resolver,
+        private val address: String,
+        private val onSuccess: (String) -> Unit
+    ) : Resolver {
+        override fun setPort(port: Int) = delegate.setPort(port)
+        override fun setTCP(flag: Boolean) = delegate.setTCP(flag)
+        override fun setIgnoreTruncation(flag: Boolean) = delegate.setIgnoreTruncation(flag)
+        override fun setEDNS(level: Int, payloadSize: Int, flags: Int, options: List<org.xbill.DNS.EDNSOption>) =
+            delegate.setEDNS(level, payloadSize, flags, options)
+        override fun setTSIGKey(key: org.xbill.DNS.TSIG?) = delegate.setTSIGKey(key)
+        override fun setTimeout(timeout: Duration) = delegate.setTimeout(timeout)
+        override fun send(query: Message): Message = delegate.send(query).also { onSuccess(address) }
+        override fun sendAsync(query: Message): CompletionStage<Message> =
+            delegate.sendAsync(query).whenComplete { _, error -> if (error == null) onSuccess(address) }
+        override fun sendAsync(query: Message, executor: Executor): CompletionStage<Message> =
+            delegate.sendAsync(query, executor).whenComplete { _, error -> if (error == null) onSuccess(address) }
     }
+}
 
-    // ── Raw response ─────────────────────────────────────────────────────────
-
-    private fun buildRawResponse(response: Message, queryTimeMs: Long): String {
-        return buildString {
-            appendLine(";; Query time: ${queryTimeMs} ms")
-            appendLine(";; SERVER: (see selected server above)")
+/** Pure dnsjava-to-domain mapping, kept separate so malformed responses are testable in-memory. */
+object DnsMessageMapper {
+    fun toResult(
+        domain: String,
+        requestedType: DnsRecordType,
+        server: DnsServer,
+        response: Message,
+        serverUsed: String,
+        queryTimeMs: Long
+    ): DnsResult {
+        val records = mapSection(response, Section.ANSWER, DnsSection.ANSWER)
+        val authority = mapSection(response, Section.AUTHORITY, DnsSection.AUTHORITY)
+        val additional = mapSection(response, Section.ADDITIONAL, DnsSection.ADDITIONAL)
+        val flags = buildSet {
+            val header = response.header
+            if (header.getFlag(org.xbill.DNS.Flags.AA.toInt())) add("AA")
+            if (header.getFlag(org.xbill.DNS.Flags.AD.toInt())) add("AD")
+            if (header.getFlag(org.xbill.DNS.Flags.TC.toInt())) add("TC")
+            if (header.getFlag(org.xbill.DNS.Flags.RA.toInt())) add("RA")
+            if (header.getFlag(org.xbill.DNS.Flags.RD.toInt())) add("RD")
+        }
+        val rcode = Rcode.string(response.header.rcode)
+        val rawResponse = buildString {
+            appendLine(";; Query time: $queryTimeMs ms")
+            appendLine(";; SERVER: $serverUsed")
+            appendLine(";; RCODE: $rcode")
+            appendLine(";; FLAGS: ${flags.joinToString(" ")}")
             appendLine()
             append(response.toString())
         }
+        return DnsResult(
+            domain = domain,
+            recordType = requestedType,
+            server = server,
+            records = records,
+            authority = authority,
+            additional = additional,
+            rcode = rcode,
+            flags = flags,
+            serverUsed = serverUsed,
+            queryTimeMs = queryTimeMs,
+            rawResponse = rawResponse
+        )
+    }
+
+    private fun mapSection(response: Message, section: Int, dnsSection: DnsSection): List<DnsRecord> =
+        response.getSection(section).map { record ->
+            val typeName = runCatching { Type.string(record.type) }.getOrDefault("TYPE${record.type}")
+            DnsRecord(
+                type = DnsRecordType.fromDnsTypeInt(record.type),
+                rrTypeName = typeName,
+                name = record.name.toString().trimEnd('.'),
+                value = formatRecordValue(record),
+                ttl = record.ttl,
+                rawLine = record.toString(),
+                section = dnsSection
+            )
+        }
+
+    private fun formatRecordValue(record: Record): String = try {
+        when (record.type) {
+            Type.TXT -> record.rdataToString()
+                .removePrefix("\"")
+                .removeSuffix("\"")
+                .replace("\" \"", " ")
+            Type.CNAME, Type.NS, Type.PTR, Type.SRV -> record.rdataToString().trimEnd('.')
+            Type.SOA -> record.rdataToString().split(" ").joinToString(" ") { it.trimEnd('.') }
+            else -> record.rdataToString()
+        }
+    } catch (_: Exception) {
+        record.rdataToString()
     }
 }

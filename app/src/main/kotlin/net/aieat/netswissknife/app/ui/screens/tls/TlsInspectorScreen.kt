@@ -75,6 +75,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
+import net.aieat.netswissknife.app.ui.components.ToolErrorCard
 import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.R
@@ -370,38 +371,14 @@ private fun TlsLoadingContent() {
 
 @Composable
 private fun TlsErrorContent(message: String, onRetry: () -> Unit) {
-    ElevatedCard(
-        modifier = Modifier.fillMaxWidth(),
-        colors   = androidx.compose.material3.CardDefaults.elevatedCardColors(
-            containerColor = MaterialTheme.colorScheme.errorContainer
-        )
+    ToolErrorCard(
+        title = stringResource(R.string.tls_error_title),
+        message = message,
     ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Default.Warning,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text  = stringResource(R.string.tls_error_title),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onErrorContainer,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-            Text(
-                text  = message,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onErrorContainer
-            )
-            TextButton(onClick = onRetry) {
-                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(4.dp))
-                Text(stringResource(R.string.tls_retry))
-            }
+        TextButton(onClick = onRetry) {
+            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(4.dp))
+            Text(stringResource(R.string.tls_retry))
         }
     }
 }
@@ -656,13 +633,13 @@ private fun ExpiryBadge(cert: TlsCertificate) {
 private fun CertificateDetails(cert: TlsCertificate) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         // Subject
-        LabeledValue(stringResource(R.string.tls_subject_cn),  cert.subjectCN.ifBlank { "—" })
+        LabeledValue(stringResource(R.string.tls_subject_cn),  cert.subjectCN.ifBlank { "N/A" })
         cert.subjectOrg?.let { LabeledValue(stringResource(R.string.tls_subject_org), it) }
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
         // Issuer
-        LabeledValue(stringResource(R.string.tls_issuer_cn),  cert.issuerCN.ifBlank { "—" })
+        LabeledValue(stringResource(R.string.tls_issuer_cn),  cert.issuerCN.ifBlank { "N/A" })
         cert.issuerOrg?.let { LabeledValue(stringResource(R.string.tls_issuer_org), it) }
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))

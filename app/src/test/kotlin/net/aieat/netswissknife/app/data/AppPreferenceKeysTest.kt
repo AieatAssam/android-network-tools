@@ -17,6 +17,7 @@ class AppPreferenceKeysTest {
     @Test fun `DEFAULT_PING_COUNT key name`()      = assertKey("default_ping_count",       AppPreferenceKeys.DEFAULT_PING_COUNT)
     @Test fun `DEFAULT_TIMEOUT_MS key name`()      = assertKey("default_timeout_ms",       AppPreferenceKeys.DEFAULT_TIMEOUT_MS)
     @Test fun `DEFAULT_CONCURRENCY key name`()     = assertKey("default_concurrency",      AppPreferenceKeys.DEFAULT_CONCURRENCY)
+    @Test fun `WIFI_REFRESH_INTERVAL_MS key name`() = assertKey("wifi_refresh_interval_ms", AppPreferenceKeys.WIFI_REFRESH_INTERVAL_MS)
     @Test fun `RECENT_PING_HOSTS key name`()       = assertKey("recent_ping_hosts",        AppPreferenceKeys.RECENT_PING_HOSTS)
     @Test fun `RECENT_DNS_HOSTS key name`()        = assertKey("recent_dns_hosts",         AppPreferenceKeys.RECENT_DNS_HOSTS)
     @Test fun `RECENT_PORTS_HOSTS key name`()      = assertKey("recent_ports_hosts",       AppPreferenceKeys.RECENT_PORTS_HOSTS)

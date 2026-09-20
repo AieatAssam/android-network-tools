@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -41,7 +42,11 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -52,6 +57,11 @@ import net.aieat.netswissknife.app.ui.navigation.NavRoutes
 import net.aieat.netswissknife.app.ui.navigation.ToolInfo
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import kotlinx.coroutines.delay
+
+object HomeScreenTestTags {
+    const val TOOL_GRID = "home_tool_grid"
+    const val SCROLL_HINT = "home_tools_scroll_hint"
+}
 
 @Composable
 fun HomeScreen(onNavigate: (String) -> Unit) {
@@ -79,6 +89,9 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
 
         AnimatedVisibility(
             visible = cardsVisible,
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
             enter   = fadeIn(tween(durationMillis = 400, delayMillis = 100, easing = AppMotion.EmphasizedDecelerate))
         ) {
             ToolGrid(onNavigate = onNavigate)
@@ -134,7 +147,7 @@ private fun HeroHeader() {
             Box(Modifier.height(12.dp))
 
             Text(
-                text      = stringResource(R.string.app_name),
+                text      = stringResource(R.string.app_name_full),
                 style     = MaterialTheme.typography.displaySmall,
                 maxLines  = 1,
                 overflow  = TextOverflow.Ellipsis,
@@ -166,26 +179,60 @@ private fun ToolGrid(onNavigate: (String) -> Unit) {
         gridAppeared = true
     }
 
-    Column(modifier = Modifier.fillMaxWidth()) {
+    val gridState = rememberLazyGridState()
+
+    Column(modifier = Modifier.fillMaxSize()) {
         Text(
             text     = stringResource(R.string.home_all_tools),
             style    = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
             color    = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
         )
-        LazyVerticalGrid(
-            columns               = GridCells.Adaptive(minSize = 160.dp),
-            contentPadding        = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement   = Arrangement.spacedBy(12.dp)
-        ) {
-            itemsIndexed(NavRoutes.allTools, key = { _, tool -> tool.route }) { index, tool ->
-                AnimatedToolCard(
-                    tool           = tool,
-                    delayMs        = index * 60,
-                    skipEntrance   = gridAppeared,
-                    onClick        = hapticAction { onNavigate(tool.route) }
-                )
+        Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+            LazyVerticalGrid(
+                state                 = gridState,
+                modifier              = Modifier
+                    .fillMaxSize()
+                    .testTag(HomeScreenTestTags.TOOL_GRID),
+                columns               = GridCells.Adaptive(minSize = 160.dp),
+                contentPadding        = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement   = Arrangement.spacedBy(12.dp)
+            ) {
+                itemsIndexed(NavRoutes.allTools, key = { _, tool -> tool.route }) { index, tool ->
+                    AnimatedToolCard(
+                        tool           = tool,
+                        delayMs        = index * 60,
+                        skipEntrance   = gridAppeared,
+                        onClick        = hapticAction { onNavigate(tool.route) }
+                    )
+                }
+            }
+
+            if (gridState.canScrollForward) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .height(52.dp)
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(
+                                    MaterialTheme.colorScheme.background.copy(alpha = 0f),
+                                    MaterialTheme.colorScheme.background
+                                )
+                            )
+                        )
+                        .testTag(HomeScreenTestTags.SCROLL_HINT),
+                    contentAlignment = Alignment.BottomCenter
+                ) {
+                    Text(
+                        text = stringResource(R.string.home_tools_scroll_hint),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                }
             }
         }
     }
@@ -217,7 +264,8 @@ private fun AnimatedToolCard(tool: ToolInfo, delayMs: Int, skipEntrance: Boolean
         modifier = Modifier
             .fillMaxWidth()
             .scale(cardScale)
-            .alpha(cardAlpha),
+            .alpha(cardAlpha)
+            .semantics(mergeDescendants = true) { role = Role.Button },
         shape = RoundedCornerShape(16.dp)
     ) {
         Column(

@@ -23,49 +23,49 @@ enum class DnsRecordType(
     ),
     MX(
         displayName = "MX",
-        description = "Mail Exchange — specifies mail servers responsible for accepting " +
+        description = "Mail Exchange - specifies mail servers responsible for accepting " +
             "email for the domain, along with a priority value (lower = higher priority).",
         dnsTypeInt = 15
     ),
     TXT(
         displayName = "TXT",
-        description = "Text record — stores arbitrary human-readable or machine-readable text. " +
+        description = "Text record - stores arbitrary human-readable or machine-readable text. " +
             "Commonly used for SPF (email authentication), DKIM keys, DMARC policies, and domain verification.",
         dnsTypeInt = 16
     ),
     CNAME(
         displayName = "CNAME",
-        description = "Canonical Name — creates an alias from one hostname to another. " +
+        description = "Canonical Name - creates an alias from one hostname to another. " +
             "The resolver will follow the chain until it finds an A or AAAA record.",
         dnsTypeInt = 5
     ),
     NS(
         displayName = "NS",
-        description = "Name Server — delegates a DNS zone to the given authoritative name servers. " +
+        description = "Name Server - delegates a DNS zone to the given authoritative name servers. " +
             "These servers are responsible for all records within the zone.",
         dnsTypeInt = 2
     ),
     SOA(
         displayName = "SOA",
-        description = "Start of Authority — provides administrative info about the DNS zone: " +
+        description = "Start of Authority - provides administrative info about the DNS zone: " +
             "primary name server, responsible email, serial number, and refresh/retry/expiry timers.",
         dnsTypeInt = 6
     ),
     PTR(
         displayName = "PTR",
-        description = "Pointer — used for reverse DNS lookups to map an IP address back to a hostname. " +
+        description = "Pointer - used for reverse DNS lookups to map an IP address back to a hostname. " +
             "Query format: last-octet.third-octet.second-octet.first-octet.in-addr.arpa",
         dnsTypeInt = 12
     ),
     SRV(
         displayName = "SRV",
-        description = "Service — specifies the host and port for specific services (e.g. SIP, XMPP). " +
+        description = "Service - specifies the host and port for specific services (e.g. SIP, XMPP). " +
             "Contains priority, weight, port, and target hostname.",
         dnsTypeInt = 33
     ),
     CAA(
         displayName = "CAA",
-        description = "Certification Authority Authorization — controls which certificate authorities " +
+        description = "Certification Authority Authorization - controls which certificate authorities " +
             "are permitted to issue SSL/TLS certificates for the domain.",
         dnsTypeInt = 257
     );
@@ -73,5 +73,8 @@ enum class DnsRecordType(
     companion object {
         fun fromDisplayName(name: String): DnsRecordType? =
             entries.find { it.displayName.equals(name, ignoreCase = true) }
+
+        fun fromDnsTypeInt(type: Int): DnsRecordType? =
+            entries.find { it.dnsTypeInt == type }
     }
 }

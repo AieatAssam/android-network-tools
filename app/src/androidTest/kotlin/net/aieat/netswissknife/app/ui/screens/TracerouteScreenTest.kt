@@ -25,7 +25,6 @@ import net.aieat.netswissknife.core.network.traceroute.HopStatus
 import net.aieat.netswissknife.core.network.traceroute.TracerouteProbeType
 import net.aieat.netswissknife.core.network.traceroute.TracerouteResult
 import org.junit.Before
-import org.junit.Ignore
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -101,16 +100,6 @@ class TracerouteScreenTest {
             .assertIsDisplayed()
     }
 
-    // Quarantined: performScrollTo() chained onto a hop-card node hangs the whole
-    // instrumentation run here, the same failure class as
-    // finishedState_displaysHopResults below — both target text inside HopCard/
-    // TracerouteRunningPanel's per-item entrance-animated list, and both reproduced
-    // a hang on Firebase Test Lab where a plain assertIsDisplayed() (no scroll)
-    // instead failed fast and cleanly ("is not displayed", off-screen behind the
-    // expanded-by-default config card). Needs the same profiling this session's
-    // tooling couldn't do to find why performScrollTo() specifically hangs against
-    // this animated list rather than just failing like everywhere else it's used.
-    @Ignore("performScrollTo() hangs against this animated hop list; see comment above.")
     @Test
     fun runningState_hopsAccumulateAsTheyArrive() {
         val stateFlow = MutableStateFlow<TracerouteUiState>(
@@ -123,15 +112,22 @@ class TracerouteScreenTest {
         }
 
         composeRule.mainClock.advanceTimeBy(2_000L)
+        // performScrollTo() drives a scroll animation; let the test clock advance it
+        // even though the rest of this class uses a paused clock for deterministic
+        // entrance animations.
+        composeRule.mainClock.autoAdvance = true
         composeRule.onNodeWithText("10.0.0.1").performScrollTo().assertIsDisplayed()
+        composeRule.mainClock.autoAdvance = false
 
         stateFlow.value = TracerouteUiState.Running(
             host = "example.com",
             hops = listOf(fakeHop(1, "10.0.0.1"), fakeHop(2, "10.0.0.2"))
         )
         composeRule.mainClock.advanceTimeBy(500L)
+        composeRule.mainClock.autoAdvance = true
         composeRule.onNodeWithText("10.0.0.1").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("10.0.0.2").performScrollTo().assertIsDisplayed()
+        composeRule.mainClock.autoAdvance = false
     }
 
     @Test
@@ -171,21 +167,6 @@ class TracerouteScreenTest {
         verify(exactly = 1) { viewModel.onToggleMtuDiscovery(true) }
     }
 
-    // Quarantined: reproducibly hangs the whole instrumentation run until the outer
-    // timeout kills it — confirmed independently 4 times (twice locally, twice on
-    // Firebase Test Lab, both with and without Android Test Orchestrator), always at
-    // exactly this test with a "started:" log line and no matching "finished:". Ruled
-    // out so far: an IP-text collision between resolvedIp and a hop's IP (fixed, hang
-    // persisted), Android Test Orchestrator's own shell-executor crashing on long runs
-    // (fixed separately and confirmed real via a distinct crash in the raw logcat, hang
-    // persisted after removing --use-orchestrator too), and unscrolled off-screen
-    // content (fixed for all help-sheet tests, unrelated to this one). The remaining
-    // suspects are something specific to TracerouteScreen's Finished/Visual rendering
-    // path (HopDetailList / TraceJourneyStats / animateContentSize inside HopCard) that
-    // this environment's tooling hasn't been able to pin down via static reading alone.
-    // Needs a proper profiler/debugger attached to a hung instrumentation process to
-    // resolve — re-enable once fixed.
-    @Ignore("Reproducibly hangs the whole suite; see comment above. Needs profiling to diagnose further.")
     @Test
     fun finishedState_displaysHopResults() {
         val hops = listOf(fakeHop(1, "10.0.0.1"), fakeHop(2, "10.0.0.2"))
@@ -203,7 +184,9 @@ class TracerouteScreenTest {
         }
 
         composeRule.mainClock.advanceTimeBy(2_000L)
+        composeRule.mainClock.autoAdvance = true
         composeRule.onNodeWithText("10.0.0.2").performScrollTo().assertIsDisplayed()
+        composeRule.mainClock.autoAdvance = false
     }
 
     private fun fakeHop(hopNumber: Int, ip: String) = HopResult(

@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -24,6 +25,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.foundation.clickable
 import androidx.compose.material3.AlertDialog
@@ -33,6 +35,7 @@ import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -55,6 +58,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.activity.compose.BackHandler
 import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -67,19 +71,24 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import net.aieat.netswissknife.app.BuildConfig
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
+import net.aieat.netswissknife.app.ui.screens.wifi.WifiRefreshIntervalPicker
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.ui.theme.AppShapes
 import kotlin.math.roundToInt
 
 @Composable
 fun SettingsScreen(
+    onBack: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
+    BackHandler(onBack = onBack)
+
     val themeOverride by viewModel.themeOverride.collectAsStateWithLifecycle()
     val dynamicColor by viewModel.dynamicColor.collectAsStateWithLifecycle()
     val defaultPingCount by viewModel.defaultPingCount.collectAsStateWithLifecycle()
     val defaultTimeoutMs by viewModel.defaultTimeoutMs.collectAsStateWithLifecycle()
     val defaultConcurrency by viewModel.defaultConcurrency.collectAsStateWithLifecycle()
+    val wifiRefreshIntervalMs by viewModel.wifiRefreshIntervalMs.collectAsStateWithLifecycle()
 
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
@@ -99,10 +108,11 @@ fun SettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
+                .navigationBarsPadding()
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            SettingsHeader()
+            SettingsHeader(onBack = onBack)
             AnimatedVisibility(visible = visibleSections >= 1, enter = fadeIn(AppMotion.enter(250)) + slideInVertically(AppMotion.enter(250)) { it / 3 }) {
                 ThemeSection(
                     themeOverride = themeOverride,
@@ -116,9 +126,11 @@ fun SettingsScreen(
                     pingCount = defaultPingCount,
                     timeoutMs = defaultTimeoutMs,
                     concurrency = defaultConcurrency,
+                    wifiRefreshIntervalMs = wifiRefreshIntervalMs,
                     onPingCountChange = viewModel::setDefaultPingCount,
                     onTimeoutChange = viewModel::setDefaultTimeoutMs,
-                    onConcurrencyChange = viewModel::setDefaultConcurrency
+                    onConcurrencyChange = viewModel::setDefaultConcurrency,
+                    onWifiRefreshIntervalChange = viewModel::setWifiRefreshInterval
                 )
             }
             AnimatedVisibility(visible = visibleSections >= 3, enter = fadeIn(AppMotion.enter(250)) + slideInVertically(AppMotion.enter(250)) { it / 3 }) {
@@ -142,11 +154,26 @@ fun SettingsScreen(
 }
 
 @Composable
-private fun SettingsHeader() {
+private fun SettingsHeader(onBack: () -> Unit) {
+    val backDescription = stringResource(R.string.action_back)
     ToolHeroHeader(
         title = stringResource(R.string.settings_screen_title),
         subtitle = stringResource(R.string.settings_screen_subtitle),
         icon = Icons.Default.Settings,
+        iconContent = {
+            IconButton(
+                onClick = onBack,
+                modifier = Modifier
+                    .size(52.dp)
+                    .semantics { contentDescription = backDescription },
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+            }
+        },
     )
 }
 
@@ -217,9 +244,11 @@ private fun DefaultsSection(
     pingCount: Int,
     timeoutMs: Int,
     concurrency: Int,
+    wifiRefreshIntervalMs: Long?,
     onPingCountChange: (Int) -> Unit,
     onTimeoutChange: (Int) -> Unit,
-    onConcurrencyChange: (Int) -> Unit
+    onConcurrencyChange: (Int) -> Unit,
+    onWifiRefreshIntervalChange: (Long?) -> Unit
 ) {
     SectionHeader(Icons.Default.Tune, stringResource(R.string.settings_defaults_section))
 
@@ -245,6 +274,15 @@ private fun DefaultsSection(
                 valueRange = 10f..500f,
                 steps = 48,
                 onValueChange = { onConcurrencyChange((it / 10).roundToInt() * 10) }
+            )
+            Text(
+                stringResource(R.string.settings_wifi_refresh_interval_label),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            WifiRefreshIntervalPicker(
+                selectedIntervalMs = wifiRefreshIntervalMs,
+                onSelected = onWifiRefreshIntervalChange
             )
         }
     }
@@ -499,7 +537,7 @@ private val THIRD_PARTY_LIBRARIES = listOf(
     LibraryInfo("icmpenguin", "1.0.0-rc.3", "Apache 2.0"),
     LibraryInfo("Dagger Hilt", "2.59.2", "Apache 2.0"),
     LibraryInfo("Kotlin Coroutines", "1.9.0", "Apache 2.0"),
-    LibraryInfo("AndroidX / Jetpack Compose", "—", "Apache 2.0"),
+    LibraryInfo("AndroidX / Jetpack Compose", "N/A", "Apache 2.0"),
     LibraryInfo("AndroidX DataStore", "1.1.4", "Apache 2.0"),
 )
 
@@ -556,7 +594,7 @@ private fun LibraryRow(lib: LibraryInfo) {
                 )
             }
         }
-        if (lib.version != "—") {
+        if (lib.version != "N/A") {
             Text(
                 text = "v${lib.version}",
                 style = MaterialTheme.typography.labelSmall,

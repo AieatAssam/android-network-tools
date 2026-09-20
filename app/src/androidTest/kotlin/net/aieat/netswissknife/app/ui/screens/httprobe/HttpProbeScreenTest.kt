@@ -105,6 +105,22 @@ class HttpProbeScreenTest {
     }
 
     @Test
+    fun incompleteUrlHost_showsValidationErrorBeforeSend() {
+        val viewModel = fakeViewModel(HttpProbeUiState(url = "https://example."))
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                HttpProbeScreen(viewModel = viewModel)
+            }
+        }
+
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        composeRule
+            .onNodeWithText(context.getString(R.string.error_invalid_url))
+            .assertIsDisplayed()
+        verify(exactly = 0) { viewModel.send() }
+    }
+
+    @Test
     fun tabClick_notifiesViewModelOfSelection() {
         val result = HttpProbeResult(
             request = HttpProbeRequest(url = "https://example.com"),

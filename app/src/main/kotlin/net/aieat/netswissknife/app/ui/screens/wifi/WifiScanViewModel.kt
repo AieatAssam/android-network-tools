@@ -1,13 +1,11 @@
 package net.aieat.netswissknife.app.ui.screens.wifi
 
+import androidx.annotation.StringRes
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.edit
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import net.aieat.netswissknife.core.domain.WifiNotSupportedException
-import net.aieat.netswissknife.core.domain.WifiScanUseCase
-import net.aieat.netswissknife.core.network.wifi.WifiAccessPoint
-import net.aieat.netswissknife.core.network.wifi.WifiBand
-import net.aieat.netswissknife.core.network.wifi.WifiNetwork
-import net.aieat.netswissknife.core.network.wifi.WifiScanResult
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -15,7 +13,18 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import net.aieat.netswissknife.core.domain.WifiNotSupportedException
+import net.aieat.netswissknife.core.domain.WifiScanUseCase
+import net.aieat.netswissknife.core.network.wifi.WifiAccessPoint
+import net.aieat.netswissknife.core.network.wifi.WifiBand
+import net.aieat.netswissknife.core.network.wifi.WifiNetwork
+import net.aieat.netswissknife.core.network.wifi.WifiScanResult
+import net.aieat.netswissknife.app.data.AppPreferenceKeys
+import net.aieat.netswissknife.app.R
 import javax.inject.Inject
 
 // ── UI State ──────────────────────────────────────────────────────────────────
@@ -32,6 +41,9 @@ sealed interface WifiScanUiState {
 
     /** Wi-Fi adapter is turned off. */
     object WifiDisabled : WifiScanUiState
+
+    /** Location Services are off, so Android will not provide Wi-Fi scan results. */
+    object LocationDisabled : WifiScanUiState
 
     /** Scan is in progress. */
     object Scanning : WifiScanUiState
@@ -52,6 +64,10 @@ sealed interface WifiScanUiState {
         val selectedAp: WifiAccessPoint? = null,
         val frozenOrder: List<String>? = null
     ) : WifiScanUiState {
+        val isFresh: Boolean get() = result.isFresh
+        val scanAgeMs: Long? get() = result.scanAgeMs
+        val throttled: Boolean get() = result.throttled
+
         val filteredAccessPoints: List<WifiAccessPoint> get() {
             val base = if (bandFilter == null) result.accessPoints
                        else result.accessPoints.filter { it.band == bandFilter }
@@ -92,11 +108,14 @@ enum class ApSortOrder(val label: String) {
     SIGNAL("Signal"), SSID("Name"), CHANNEL("Channel")
 }
 
+data class ApDisappearedEvent(@StringRes val messageResId: Int = R.string.wifi_ap_disappeared)
+
 // ── ViewModel ─────────────────────────────────────────────────────────────────
 
 @HiltViewModel
 class WifiScanViewModel @Inject constructor(
-    private val wifiScanUseCase: WifiScanUseCase
+    private val wifiScanUseCase: WifiScanUseCase,
+    private val dataStore: DataStore<Preferences>
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<WifiScanUiState>(WifiScanUiState.Idle)
@@ -106,16 +125,32 @@ class WifiScanViewModel @Inject constructor(
     private val _autoRefresh = MutableStateFlow(false)
     val autoRefresh: StateFlow<Boolean> = _autoRefresh.asStateFlow()
 
+    /** Null means the user explicitly disabled automatic refresh. */
+    val refreshIntervalMs: StateFlow<Long?> = dataStore.data
+        .map { preferences ->
+            when (val stored = preferences[AppPreferenceKeys.WIFI_REFRESH_INTERVAL_MS]) {
+                null -> DEFAULT_REFRESH_INTERVAL_MS
+                DISABLED_REFRESH_INTERVAL_MS -> null
+                in REFRESH_INTERVAL_OPTIONS -> stored
+                else -> DEFAULT_REFRESH_INTERVAL_MS
+            }
+        }
+        .stateIn(
+            viewModelScope,
+            kotlinx.coroutines.flow.SharingStarted.Eagerly,
+            DEFAULT_REFRESH_INTERVAL_MS
+        )
+
     /** Network IDs (ssid|security) that the user has expanded. Survives scans. */
     private val _expandedNetworks = MutableStateFlow<Set<String>>(emptySet())
     val expandedNetworks: StateFlow<Set<String>> = _expandedNetworks.asStateFlow()
 
     /** One-shot message for the screen to show (e.g. as a Snackbar), then dismiss. */
-    private val _apDisappearedMessage = MutableStateFlow<String?>(null)
-    val apDisappearedMessage: StateFlow<String?> = _apDisappearedMessage.asStateFlow()
+    private val _apDisappearedEvent = MutableStateFlow<ApDisappearedEvent?>(null)
+    val apDisappearedEvent: StateFlow<ApDisappearedEvent?> = _apDisappearedEvent.asStateFlow()
 
-    fun dismissApDisappearedMessage() {
-        _apDisappearedMessage.value = null
+    fun dismissApDisappearedEvent() {
+        _apDisappearedEvent.value = null
     }
 
     private var scanJob: Job? = null
@@ -146,8 +181,11 @@ class WifiScanViewModel @Inject constructor(
         scanJob = viewModelScope.launch {
             if (!silent) _uiState.value = WifiScanUiState.Scanning
             try {
-                val result = wifiScanUseCase()
-                if (!result.isWifiEnabled) {
+                val result = wifiScanUseCase(trigger = true)
+                if (!result.locationEnabled) {
+                    stopAutoRefresh()
+                    _uiState.value = WifiScanUiState.LocationDisabled
+                } else if (!result.isWifiEnabled) {
                     _uiState.value = WifiScanUiState.WifiDisabled
                 } else {
                     // Keep the detail sheet open if the AP is still present in the new scan;
@@ -156,7 +194,7 @@ class WifiScanViewModel @Inject constructor(
                         result.accessPoints.find { it.bssid == prevAp.bssid }
                     }
                     if (prev?.selectedAp != null && stillPresentAp == null) {
-                        _apDisappearedMessage.value = "This network is no longer in range"
+                        _apDisappearedEvent.value = ApDisappearedEvent()
                     }
                     _uiState.value = WifiScanUiState.Success(
                         result = result,
@@ -230,11 +268,20 @@ class WifiScanViewModel @Inject constructor(
     }
 
     fun startAutoRefresh() {
+        if (refreshIntervalMs.value == null) {
+            _autoRefresh.value = false
+            return
+        }
         _autoRefresh.value = true
         autoRefreshJob?.cancel()
         autoRefreshJob = viewModelScope.launch {
-            while (true) {
-                delay(AUTO_REFRESH_INTERVAL_MS)
+            while (_autoRefresh.value) {
+                val interval = refreshIntervalMs.first()
+                if (interval == null) {
+                    _autoRefresh.value = false
+                    break
+                }
+                delay(interval)
                 if (_uiState.value !is WifiScanUiState.Scanning) {
                     startScan(silent = true)
                 }
@@ -248,8 +295,31 @@ class WifiScanViewModel @Inject constructor(
         autoRefreshJob = null
     }
 
+    /** Resumes the configured refresh loop when the Wi-Fi screen becomes visible again. */
+    fun onLifecycleResume() {
+        if (_uiState.value is WifiScanUiState.Success && !_autoRefresh.value) {
+            startAutoRefresh()
+        }
+    }
+
+    fun setRefreshInterval(intervalMs: Long?) {
+        viewModelScope.launch {
+            dataStore.edit { preferences ->
+                preferences[AppPreferenceKeys.WIFI_REFRESH_INTERVAL_MS] =
+                    intervalMs ?: DISABLED_REFRESH_INTERVAL_MS
+            }
+        }
+        if (intervalMs == null) {
+            stopAutoRefresh()
+        } else if (_uiState.value is WifiScanUiState.Success && !_autoRefresh.value) {
+            startAutoRefresh()
+        }
+    }
+
     fun onRetry() {
+        val shouldScan = _uiState.value is WifiScanUiState.LocationDisabled
         _uiState.value = WifiScanUiState.Idle
+        if (shouldScan) startScan()
     }
 
     override fun onCleared() {
@@ -258,6 +328,8 @@ class WifiScanViewModel @Inject constructor(
     }
 
     companion object {
-        private const val AUTO_REFRESH_INTERVAL_MS = 10_000L
+        const val DEFAULT_REFRESH_INTERVAL_MS = 30_000L
+        const val DISABLED_REFRESH_INTERVAL_MS = -1L
+        val REFRESH_INTERVAL_OPTIONS = setOf(15_000L, DEFAULT_REFRESH_INTERVAL_MS, 60_000L)
     }
 }

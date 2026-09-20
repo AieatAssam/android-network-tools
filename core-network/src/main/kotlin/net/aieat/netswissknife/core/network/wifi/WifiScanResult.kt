@@ -13,7 +13,15 @@ data class WifiScanResult(
     /** Wall-clock time when the scan completed (System.currentTimeMillis()). */
     val scanTimestampMs: Long,
     /** Whether Wi-Fi is currently enabled on the device. */
-    val isWifiEnabled: Boolean
+    val isWifiEnabled: Boolean,
+    /** Whether the newest returned scan result is no more than 15 seconds old. */
+    val isFresh: Boolean = true,
+    /** Age of the newest scan result, measured from elapsed realtime, or null if unknown. */
+    val scanAgeMs: Long? = null,
+    /** Whether Android rejected the requested scan because of platform throttling. */
+    val throttled: Boolean = false,
+    /** Whether Location Services were enabled when this result was read. */
+    val locationEnabled: Boolean = true
 ) {
     /** Access points grouped into logical networks by (SSID, security). Computed once at construction. */
     val networks: List<WifiNetwork> = WifiNetworkGrouper.group(accessPoints)

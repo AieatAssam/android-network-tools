@@ -25,7 +25,10 @@ sealed interface DnsUiState {
     object Idle : DnsUiState
     object Loading : DnsUiState
     data class Success(val result: DnsResult, val showRaw: Boolean = false) : DnsUiState
-    data class Error(val message: String) : DnsUiState
+    data class Error(
+        val message: String,
+        val canFallbackToCloudflare: Boolean = false
+    ) : DnsUiState
 }
 
 @HiltViewModel
@@ -90,6 +93,11 @@ class DnsViewModel @Inject constructor(
         performLookup()
     }
 
+    fun onUseCloudflare() {
+        _selectedServer.value = DnsServer.Cloudflare
+        performLookup()
+    }
+
     fun removeRecentHost(host: String) {
         viewModelScope.launch {
             recentHostsRepository.removeRecent(AppPreferenceKeys.RECENT_DNS_HOSTS, host)
@@ -103,12 +111,19 @@ class DnsViewModel @Inject constructor(
     }
 
     fun performLookup() {
-        viewModelScope.launch {
-            recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_DNS_HOSTS, _domain.value)
-        }
         val server = when (val s = _selectedServer.value) {
             is DnsServer.Custom -> DnsServer.Custom(_customServerAddress.value)
-            is DnsServer.System -> DnsServer.System(systemDnsAddressProvider.getAddresses())
+            is DnsServer.System -> {
+                val info = runCatching { systemDnsAddressProvider.getInfo() }
+                    .getOrElse {
+                        SystemDnsAddressProvider.SystemDnsInfo(
+                            addresses = systemDnsAddressProvider.getAddresses(),
+                            privateDnsActive = false,
+                            privateDnsHost = null
+                        )
+                    }
+                DnsServer.System(info.addresses, info.privateDnsActive, info.privateDnsHost)
+            }
             else -> s
         }
 
@@ -121,8 +136,27 @@ class DnsViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = DnsUiState.Loading
             _uiState.value = when (val result = dnsLookupUseCase(params)) {
-                is NetworkResult.Success -> DnsUiState.Success(result.data)
-                is NetworkResult.Error   -> DnsUiState.Error(result.message)
+                is NetworkResult.Success -> {
+                    addRecentIfInputWasValid(server)
+                    DnsUiState.Success(result.data)
+                }
+                is NetworkResult.Error   -> {
+                    addRecentIfInputWasValid(server)
+                    DnsUiState.Error(
+                        message = result.message,
+                        canFallbackToCloudflare = server is DnsServer.System && server.serverAddresses.isEmpty()
+                    )
+                }
+            }
+        }
+    }
+
+    private fun addRecentIfInputWasValid(server: DnsServer) {
+        val domain = _domain.value.trim()
+        val customValid = (server as? DnsServer.Custom)?.address?.isNotBlank() ?: true
+        if (domain.isNotBlank() && domain.length <= 253 && customValid) {
+            viewModelScope.launch {
+                recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_DNS_HOSTS, domain)
             }
         }
     }

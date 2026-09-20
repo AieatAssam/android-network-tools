@@ -1,10 +1,47 @@
 package net.aieat.netswissknife.app.platform
 
+import android.net.NetworkCapabilities
+import io.mockk.every
+import io.mockk.mockk
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class LinkInfoProviderTest {
+    @Test
+    fun `validated capability is required for an online precheck`() {
+        val capabilities = mockk<NetworkCapabilities>()
+        every {
+            capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+        } returns true
+
+        assertTrue(LinkInfoMapper.isValidatedNetwork(capabilities))
+    }
+
+    @Test
+    fun `missing validated capability fails the online precheck`() {
+        val capabilities = mockk<NetworkCapabilities>()
+        every {
+            capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+        } returns false
+
+        assertFalse(LinkInfoMapper.isValidatedNetwork(capabilities))
+        assertFalse(LinkInfoMapper.isValidatedNetwork(null))
+    }
+
+    @Test
+    fun `network availability can be injected without Android connectivity`() {
+        assertTrue(LinkInfoProvider { true }.hasValidatedNetwork())
+        assertFalse(LinkInfoProvider { false }.hasValidatedNetwork())
+    }
+
+    @Test
+    fun `network availability override is fail safe`() {
+        assertFalse(LinkInfoProvider { error("connectivity unavailable") }.hasValidatedNetwork())
+    }
+
     @Test
     fun `cidrOf normalises host address`() {
         assertEquals("192.168.1.0/24", LinkInfoMapper.cidrOf("192.168.1.37", 24))

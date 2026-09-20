@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
+import net.aieat.netswissknife.app.platform.LinkInfoProvider
 import net.aieat.netswissknife.core.domain.ContinuousPingParams
 import net.aieat.netswissknife.core.domain.ContinuousPingUseCase
 import net.aieat.netswissknife.core.domain.PingFlowResult
@@ -27,6 +28,8 @@ import net.aieat.netswissknife.core.network.ping.PingPacketResult
 import net.aieat.netswissknife.core.network.ping.PingResult
 import net.aieat.netswissknife.core.network.ping.PingStats
 import net.aieat.netswissknife.core.network.ping.PingStatus
+import net.aieat.netswissknife.core.network.ping.PingEngineKind
+import net.aieat.netswissknife.core.network.HostValidator
 import java.io.File
 import javax.inject.Inject
 
@@ -53,11 +56,13 @@ class PingViewModel @Inject constructor(
     private val pingUseCase: PingUseCase,
     private val continuousPingUseCase: ContinuousPingUseCase,
     private val dataStore: DataStore<Preferences>,
-    private val recentHostsRepository: RecentHostsRepository
+    private val recentHostsRepository: RecentHostsRepository,
+    private val linkInfoProvider: LinkInfoProvider = LinkInfoProvider { true },
 ) : ViewModel() {
 
     companion object {
         private const val ROLLING_WINDOW = 100
+        private const val NO_NETWORK_CONNECTION = "No network connection"
     }
 
     private val _uiState = MutableStateFlow<PingUiState>(PingUiState.Idle)
@@ -73,6 +78,15 @@ class PingViewModel @Inject constructor(
 
     private val _timeoutMs = MutableStateFlow(2_000)
     val timeoutMs: StateFlow<Int> = _timeoutMs.asStateFlow()
+
+    private val _payloadBytes = MutableStateFlow(56)
+    val payloadBytes: StateFlow<Int> = _payloadBytes.asStateFlow()
+
+    private val _ttl = MutableStateFlow(64)
+    val ttl: StateFlow<Int> = _ttl.asStateFlow()
+
+    private val _intervalMs = MutableStateFlow(1_000)
+    val intervalMs: StateFlow<Int> = _intervalMs.asStateFlow()
 
     private val _continuousMode = MutableStateFlow(false)
     val continuousMode: StateFlow<Boolean> = _continuousMode.asStateFlow()
@@ -99,6 +113,12 @@ class PingViewModel @Inject constructor(
     fun onCountChange(value: Int) { _count.value = value.coerceIn(1, 100) }
 
     fun onTimeoutChange(value: Int) { _timeoutMs.value = value.coerceIn(100, 30_000) }
+
+    fun onPayloadSizeChange(value: Int) { _payloadBytes.value = value.coerceIn(0, 1_472) }
+
+    fun onTtlChange(value: Int) { _ttl.value = value.coerceIn(1, 255) }
+
+    fun onIntervalChange(value: Int) { _intervalMs.value = value.coerceIn(100, 10_000) }
 
     fun onToggleContinuous(enabled: Boolean) { _continuousMode.value = enabled }
 
@@ -163,12 +183,20 @@ class PingViewModel @Inject constructor(
     private fun startNormalPing() {
         pingJob?.cancel()
 
+        if (!linkInfoProvider.hasValidatedNetwork()) {
+            _uiState.value = PingUiState.Error(NO_NETWORK_CONNECTION)
+            return
+        }
+
         val params = PingParams(
             host = _host.value,
             count = _count.value,
-            timeoutMs = _timeoutMs.value
+            timeoutMs = _timeoutMs.value,
+            intervalMs = _intervalMs.value,
+            payloadBytes = _payloadBytes.value,
+            ttl = _ttl.value
         )
-        val trimmedHost = params.host.trim()
+        val trimmedHost = HostValidator.normalize(params.host) ?: params.host.trim()
 
         _uiState.value = PingUiState.Running(
             host = trimmedHost, packets = emptyList(), totalCount = params.count
@@ -178,34 +206,40 @@ class PingViewModel @Inject constructor(
             val accumulated = mutableListOf<PingPacketResult>()
             var savedToRecents = false
 
-            pingUseCase(params).collect { result ->
-                when (result) {
-                    is PingFlowResult.ValidationError -> {
-                        _uiState.value = PingUiState.Error(result.message)
-                        return@collect
-                    }
-                    is PingFlowResult.Packet -> {
-                        if (!savedToRecents) {
-                            savedToRecents = true
-                            recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_PING_HOSTS, trimmedHost)
+            try {
+                pingUseCase(params).collect { result ->
+                    when (result) {
+                        is PingFlowResult.ValidationError -> {
+                            _uiState.value = PingUiState.Error(result.message)
+                            return@collect
                         }
-                        accumulated.add(result.packet)
-                        _uiState.value = PingUiState.Running(
-                            host = trimmedHost,
-                            packets = accumulated.toList(),
-                            totalCount = params.count
-                        )
+                        is PingFlowResult.Packet -> {
+                            if (!savedToRecents) {
+                                savedToRecents = true
+                                recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_PING_HOSTS, trimmedHost)
+                            }
+                            accumulated.add(result.packet)
+                            _uiState.value = PingUiState.Running(
+                                host = trimmedHost,
+                                packets = accumulated.toList(),
+                                totalCount = params.count
+                            )
+                        }
                     }
                 }
-            }
 
-            val current = _uiState.value
-            if (current is PingUiState.Running) {
-                _uiState.value = if (current.packets.isEmpty()) {
-                    PingUiState.Error("No response received from $trimmedHost")
-                } else {
-                    PingUiState.Finished(buildResult(current.host, current.packets, params.count))
+                val current = _uiState.value
+                if (current is PingUiState.Running) {
+                    _uiState.value = if (current.packets.isEmpty()) {
+                        PingUiState.Error("No response received from $trimmedHost")
+                    } else {
+                        PingUiState.Finished(buildResult(current.host, current.packets, params.count))
+                    }
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _uiState.value = PingUiState.Error(e.message ?: "Ping failed")
             }
         }
     }
@@ -216,10 +250,18 @@ class PingViewModel @Inject constructor(
         pingJob?.cancel()
         cleanupSessionFile()
 
-        val trimmedHost = _host.value.trim()
+        if (!linkInfoProvider.hasValidatedNetwork()) {
+            _uiState.value = PingUiState.Error(NO_NETWORK_CONNECTION)
+            return
+        }
+
+        val trimmedHost = HostValidator.normalize(_host.value) ?: _host.value.trim()
         val params = ContinuousPingParams(
             host = trimmedHost,
-            timeoutMs = _timeoutMs.value
+            timeoutMs = _timeoutMs.value,
+            intervalMs = _intervalMs.value,
+            payloadBytes = _payloadBytes.value,
+            ttl = _ttl.value
         )
 
         val logFile = File.createTempFile("ping_session_", ".csv")
@@ -246,38 +288,47 @@ class PingViewModel @Inject constructor(
             var seq = 0
             var savedToRecents = false
 
-            continuousPingUseCase(params).collect { result ->
-                when (result) {
-                    is PingFlowResult.ValidationError -> {
-                        logChannel.close()
-                        cleanupSessionFile()
-                        _uiState.value = PingUiState.Error(result.message)
-                        return@collect
-                    }
-                    is PingFlowResult.Packet -> {
-                        seq++
-                        if (!savedToRecents) {
-                            savedToRecents = true
-                            recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_PING_HOSTS, trimmedHost)
+            try {
+                continuousPingUseCase(params).collect { result ->
+                    when (result) {
+                        is PingFlowResult.ValidationError -> {
+                            logChannel.close()
+                            cleanupSessionFile()
+                            _uiState.value = PingUiState.Error(result.message)
+                            return@collect
                         }
-                        logChannel.trySend(Pair(seq, result.packet))
-                        if (window.size >= ROLLING_WINDOW) window.removeFirst()
-                        window.addLast(result.packet)
-                        _uiState.value = PingUiState.Running(
-                            host = trimmedHost,
-                            packets = window.toList(),
-                            totalCount = 0,
-                            isContinuous = true,
-                            pingsSent = seq
-                        )
+                        is PingFlowResult.Packet -> {
+                            seq++
+                            if (!savedToRecents) {
+                                savedToRecents = true
+                                recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_PING_HOSTS, trimmedHost)
+                            }
+                            logChannel.trySend(Pair(seq, result.packet))
+                            if (window.size >= ROLLING_WINDOW) window.removeFirst()
+                            window.addLast(result.packet)
+                            _uiState.value = PingUiState.Running(
+                                host = trimmedHost,
+                                packets = window.toList(),
+                                totalCount = 0,
+                                isContinuous = true,
+                                pingsSent = seq
+                            )
+                        }
                     }
                 }
-            }
 
-            logChannel.close()
-            val current = _uiState.value
-            if (current is PingUiState.Running && current.isContinuous) {
-                finalizeContinuousSession(current)
+                logChannel.close()
+                val current = _uiState.value
+                if (current is PingUiState.Running && current.isContinuous) {
+                    finalizeContinuousSession(current)
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                logChannel.close()
+                throw e
+            } catch (e: Exception) {
+                logChannel.close()
+                cleanupSessionFile()
+                _uiState.value = PingUiState.Error(e.message ?: "Ping failed")
             }
         }
     }
@@ -309,7 +360,16 @@ class PingViewModel @Inject constructor(
     private fun buildResult(host: String, packets: List<PingPacketResult>, totalCount: Int): PingResult {
         val stats = PingStats.compute(packets)
         val raw = buildRawOutput(host, packets, stats)
-        return PingResult(host = host, packets = packets, stats = stats, rawOutput = raw)
+        return PingResult(
+            host = host,
+            packets = packets,
+            stats = stats,
+            rawOutput = raw,
+            engine = packets.firstNotNullOfOrNull { it.engine }
+                ?: observedEngine()
+                ?: PingEngineKind.REACHABILITY,
+            resolvedIp = packets.firstNotNullOfOrNull { it.fromIp }
+        )
     }
 
     private fun buildRawOutput(
@@ -317,7 +377,14 @@ class PingViewModel @Inject constructor(
         packets: List<PingPacketResult>,
         stats: PingStats
     ): String = buildString {
-        appendLine("PING $host")
+        val firstPacket = packets.firstOrNull()
+        val resolvedIp = firstPacket?.fromIp
+        val engine = firstPacket?.engine ?: observedEngine()
+        appendLine(
+            "PING $host${resolvedIp?.let { " ($it)" } ?: ""}: " +
+                "${_payloadBytes.value} data bytes, ttl ${_ttl.value}, " +
+                "engine ${if (engine == PingEngineKind.ICMP) "ICMP" else "Reachability (ICMP/TCP fallback)"}"
+        )
         appendLine()
         packets.forEach { p ->
             when (p.status) {
@@ -325,6 +392,8 @@ class PingViewModel @Inject constructor(
                     appendLine("${p.host}: probe_seq=${p.sequence} time=${p.rtTimeMs} ms")
                 PingStatus.TIMEOUT ->
                     appendLine("Request timeout for probe_seq ${p.sequence}")
+                PingStatus.UNREACHABLE ->
+                    appendLine("Destination unreachable for probe_seq ${p.sequence}: ${p.errorMessage ?: "unknown reason"}")
                 PingStatus.ERROR ->
                     appendLine("Error for probe_seq ${p.sequence}: ${p.errorMessage}")
             }
@@ -342,4 +411,7 @@ class PingViewModel @Inject constructor(
             )
         }
     }
+
+    private fun observedEngine(): PingEngineKind? =
+        runCatching { pingUseCase.lastEngineUsed?.value }.getOrNull()
 }

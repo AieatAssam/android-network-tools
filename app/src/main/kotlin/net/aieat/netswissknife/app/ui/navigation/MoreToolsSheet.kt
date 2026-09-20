@@ -44,8 +44,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.testTag
 import kotlinx.coroutines.launch
 import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.R
@@ -58,6 +62,10 @@ private val TOOL_SECTIONS = listOf(
     ToolSection(R.string.more_section_security,    listOf("tls", "whois", "httprobe")),
     ToolSection(R.string.more_section_utilities,   listOf("subnet", "speedtest", "wol")),
 )
+
+object MoreToolsSheetTestTags {
+    const val TOOL_LIST = "more_tools_list"
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -117,7 +125,8 @@ fun MoreToolsSheet(
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
-                            .verticalScroll(scrollState),
+                            .verticalScroll(scrollState)
+                            .testTag(MoreToolsSheetTestTags.TOOL_LIST),
                     ) {
                         TOOL_SECTIONS.forEach { section ->
                             val sectionTools = NavRoutes.allTools.filter { it.route in section.routes }
@@ -189,6 +198,7 @@ fun MoreToolsSheet(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable(onClick = onSettingsClick)
+                        .semantics(mergeDescendants = true) { role = Role.Button }
                         .padding(vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -233,6 +243,7 @@ fun MoreToolsSheet(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable(onClick = onDebugLogsClick)
+                            .semantics(mergeDescendants = true) { role = Role.Button }
                             .padding(vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -311,6 +322,7 @@ private fun ToolSheetRow(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onNavigate)
+            .semantics(mergeDescendants = true) { role = Role.Button }
             .padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

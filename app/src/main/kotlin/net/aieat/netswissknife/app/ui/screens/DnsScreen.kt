@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -34,6 +35,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -102,6 +104,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
+import net.aieat.netswissknife.app.ui.components.ToolErrorCard
 import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
@@ -127,6 +130,8 @@ import net.aieat.netswissknife.core.network.dns.DnsServer
  */
 object DnsScreenTestTags {
     const val CONTENT_LIST = "dns_content_list"
+    const val RECORD_TYPE_CHIPS = "dns_record_type_chips"
+    const val RECORD_TYPE_SCROLL_HINT = "dns_record_type_scroll_hint"
 
     /** Index of the idle/loading/error/success panel within [CONTENT_LIST]. */
     const val STATE_PANEL_INDEX = 2
@@ -206,7 +211,9 @@ fun DnsScreen(viewModel: DnsViewModel = hiltViewModel()) {
                         )
                         is DnsUiState.Error -> DnsErrorPanel(
                             message = state.message,
-                            onRetry = viewModel::onRetry
+                            onRetry = viewModel::onRetry,
+                            canFallbackToCloudflare = state.canFallbackToCloudflare,
+                            onUseCloudflare = viewModel::onUseCloudflare
                         )
                         is DnsUiState.Success -> DnsResultPanel(
                             result = state.result,
@@ -367,11 +374,6 @@ private fun DnsInputCard(
 
             // DNS server selector
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    text = stringResource(R.string.dns_server_label),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
                 DnsServerSelector(
                     selectedServer = selectedServer,
                     customServerAddress = customServerAddress,
@@ -426,26 +428,62 @@ private fun RecordTypeChips(
     selected: DnsRecordType,
     onSelect: (DnsRecordType) -> Unit
 ) {
-    Row(
-        modifier = Modifier.horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    val scrollState = rememberScrollState()
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
     ) {
-        DnsRecordType.entries.forEach { type ->
-            val isSelected = type == selected
-            FilterChip(
-                selected = isSelected,
-                onClick = { onSelect(type) },
-                label = {
-                    Text(
-                        text = type.displayName,
-                        style = MaterialTheme.typography.labelMedium
+        Row(
+            modifier = Modifier
+                .horizontalScroll(scrollState)
+                .padding(end = 36.dp)
+                .testTag(DnsScreenTestTags.RECORD_TYPE_CHIPS),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            DnsRecordType.entries.forEach { type ->
+                val isSelected = type == selected
+                FilterChip(
+                    selected = isSelected,
+                    onClick = { onSelect(type) },
+                    label = {
+                        Text(
+                            text = type.displayName,
+                            style = MaterialTheme.typography.labelMedium
+                        )
+                    },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                        selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
                     )
-                },
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
                 )
-            )
+            }
+        }
+
+        if (scrollState.canScrollForward) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .fillMaxHeight()
+                    .width(36.dp)
+                    .background(
+                        Brush.horizontalGradient(
+                            listOf(
+                                MaterialTheme.colorScheme.background.copy(alpha = 0f),
+                                MaterialTheme.colorScheme.background
+                            )
+                        )
+                    )
+                    .testTag(DnsScreenTestTags.RECORD_TYPE_SCROLL_HINT),
+                contentAlignment = Alignment.CenterEnd
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ChevronRight,
+                    contentDescription = stringResource(R.string.dns_record_types_scroll_hint),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
         }
     }
 }
@@ -678,41 +716,15 @@ private fun DnsLoadingPanel(modifier: Modifier = Modifier) {
 private fun DnsErrorPanel(
     message: String,
     onRetry: () -> Unit,
+    canFallbackToCloudflare: Boolean = false,
+    onUseCloudflare: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    ElevatedCard(
-        modifier = modifier.fillMaxWidth(),
-        shape = AppShapes.large
+    ToolErrorCard(
+        modifier = modifier,
+        title = stringResource(R.string.dns_error_title),
+        message = message,
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f))
-                .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Warning,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.size(24.dp)
-                )
-                Text(
-                    text = stringResource(R.string.dns_error_title),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.error,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-            Text(
-                text = message,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onErrorContainer
-            )
             TextButton(
                 onClick = onRetry,
                 colors = ButtonDefaults.textButtonColors(
@@ -727,7 +739,22 @@ private fun DnsErrorPanel(
                 Spacer(Modifier.width(4.dp))
                 Text(stringResource(R.string.dns_retry))
             }
-        }
+            if (canFallbackToCloudflare) {
+                TextButton(
+                    onClick = onUseCloudflare,
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.primary
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Dns,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(stringResource(R.string.dns_use_cloudflare))
+                }
+            }
     }
 }
 
@@ -747,6 +774,19 @@ private fun DnsResultPanel(
     ) {
         // Summary card
         DnsResultSummaryCard(result = result, onClear = onClear)
+
+        if (result.authority.isNotEmpty()) {
+            DnsSectionCard(
+                title = stringResource(R.string.dns_authority_section),
+                records = result.authority
+            )
+        }
+        if (result.additional.isNotEmpty()) {
+            DnsSectionCard(
+                title = stringResource(R.string.dns_additional_section),
+                records = result.additional
+            )
+        }
 
         // Records / empty state
         if (result.records.isEmpty()) {
@@ -814,6 +854,36 @@ private fun DnsResultSummaryCard(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+                    Text(
+                        text = stringResource(R.string.dns_rcode, result.rcode),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = when (result.rcode) {
+                            "NOERROR" -> MaterialTheme.colorScheme.tertiary
+                            "NXDOMAIN" -> MaterialTheme.colorScheme.primary
+                            else -> MaterialTheme.colorScheme.error
+                        }
+                    )
+                    Text(
+                        text = stringResource(R.string.dns_flags, result.flags.joinToString(" ").ifEmpty { "N/A" }),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = stringResource(R.string.dns_server_used, result.serverUsed),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    val systemServer = result.server as? DnsServer.System
+                    if (systemServer?.privateDnsActive == true) {
+                        Text(
+                            text = stringResource(
+                                R.string.dns_private_notice,
+                                systemServer.privateDnsHost?.let { " ($it)" } ?: ""
+                            ),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    }
                 }
                 Row {
                     IconButton(onClick = {
@@ -855,6 +925,32 @@ private fun DnsResultSummaryCard(
                     value = "${result.queryTimeMs}",
                     label = stringResource(R.string.dns_ms)
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DnsSectionCard(title: String, records: List<DnsRecord>) {
+    var expanded by remember { mutableStateOf(true) }
+    OutlinedCard(modifier = Modifier.fillMaxWidth(), shape = AppShapes.large) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded },
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                Icon(
+                    imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = if (expanded) stringResource(R.string.action_collapse)
+                    else stringResource(R.string.action_expand)
+                )
+            }
+            if (expanded) {
+                records.forEachIndexed { index, record ->
+                    DnsRecordCard(record = record, index = index)
+                }
             }
         }
     }
@@ -937,10 +1033,10 @@ private fun DnsRecordCard(record: DnsRecord, index: Int) {
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    RecordTypeIcon(type = record.type)
+                    RecordTypeIcon(type = record.type ?: DnsRecordType.TXT)
                     Column {
                         Text(
-                            text = record.type.displayName,
+                            text = record.rrTypeName,
                             style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.primary
                         )
@@ -1032,6 +1128,7 @@ private fun TtlBadge(ttl: Long) {
 @Composable
 private fun RecordValueDisplay(record: DnsRecord) {
     when (record.type) {
+        null -> PlainValueDisplay(value = record.value)
         DnsRecordType.A, DnsRecordType.AAAA -> {
             // Highlight IP addresses with monospace font and colored background
             SelectionContainer {
@@ -1292,7 +1389,7 @@ private fun buildDnsShareText(result: DnsResult): String = buildString {
         appendLine("No records found.")
     } else {
         result.records.forEach { record ->
-            appendLine("${record.type.name}\t${record.value}\tTTL: ${record.ttl}s")
+            appendLine("${record.rrTypeName}\t${record.value}\tTTL: ${record.ttl}s")
         }
     }
 }

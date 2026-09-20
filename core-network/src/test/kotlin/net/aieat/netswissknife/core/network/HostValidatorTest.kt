@@ -1,6 +1,8 @@
 package net.aieat.netswissknife.core.network
 
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
@@ -17,6 +19,34 @@ import org.junit.jupiter.params.provider.ValueSource
  */
 @DisplayName("HostValidator")
 class HostValidatorTest {
+
+    @Nested
+    @DisplayName("normalize")
+    inner class Normalize {
+
+        @Test
+        fun `converts unicode hostname to IDN ascii`() {
+            assertEquals("xn--bcher-kva.de", HostValidator.normalize("bücher.de"))
+            assertTrue(HostValidator.isValidHostname("bücher.de"))
+        }
+
+        @Test
+        fun `strips root dot and canonicalizes case`() {
+            assertEquals("example.com", HostValidator.normalize("  Example.COM. "))
+        }
+
+        @Test
+        fun `rejects malformed labels`() {
+            assertNull(HostValidator.normalize("ex ample.com"))
+            assertNull(HostValidator.normalize("a..b"))
+        }
+
+        @Test
+        fun `preserves IP literals`() {
+            assertEquals("192.168.1.1", HostValidator.normalize("192.168.1.1"))
+            assertEquals("[fe80::1%wlan0]", HostValidator.normalize("[fe80::1%wlan0]"))
+        }
+    }
 
     @Nested
     @DisplayName("isValidIpv4")

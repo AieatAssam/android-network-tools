@@ -2,6 +2,7 @@ package net.aieat.netswissknife.core.domain
 
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.topology.*
 
 class TopologyDiscoveryUseCase(
@@ -14,6 +15,10 @@ class TopologyDiscoveryUseCase(
                 emit(TopologyDiscoveryEvent.Error(validation.errors.joinToString("; ")))
             }
         }
-        return repository.discover(params)
+        val normalizedTarget = HostValidator.normalize(params.targetIp)
+            ?: return flow {
+                emit(TopologyDiscoveryEvent.Error("Target IP or hostname must be valid"))
+            }
+        return repository.discover(params.copy(targetIp = normalizedTarget))
     }
 }
