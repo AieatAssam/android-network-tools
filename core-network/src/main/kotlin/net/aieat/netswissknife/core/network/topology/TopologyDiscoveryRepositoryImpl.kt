@@ -1,12 +1,14 @@
 package net.aieat.netswissknife.core.network.topology
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import net.aieat.netswissknife.core.network.HostValidator
@@ -20,6 +22,8 @@ class TopologyDiscoveryRepositoryImpl(
 
     constructor(client: SnmpClient) : this(SnmpClientFactory { client })
 
+    // Snmp4jClientImpl starts a UDP transport while it is constructed. Keep the
+    // factory, discovery calls, and client teardown off Android's main thread.
     override fun discover(params: TopologyParams): Flow<TopologyDiscoveryEvent> = flow {
         try {
             val normalizedTarget = HostValidator.normalize(params.targetIp) ?: params.targetIp
@@ -123,7 +127,7 @@ class TopologyDiscoveryRepositoryImpl(
         } catch (e: Exception) {
             emit(TopologyDiscoveryEvent.Error(SnmpErrorFormatter.describe(e)))
         }
-    }
+    }.flowOn(Dispatchers.IO)
 
     private data class GetAttempt(val value: String?, val error: Exception?)
 

@@ -5,6 +5,7 @@ import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Test
 
 class ReachabilityPingEngineTest {
@@ -42,5 +43,19 @@ class ReachabilityPingEngineTest {
             .take(5)
             .toList()
         assertEquals(listOf(1, 2, 3, 4, 5), packets.map { it.sequence })
+    }
+
+    @Test
+    fun `blocking checker runs off the collecting thread`() = runTest {
+        val collectingThread = Thread.currentThread().name
+        var checkerThread: String? = null
+        val engine = ReachabilityPingEngine { _, _ ->
+            checkerThread = Thread.currentThread().name
+            ReachabilityResult(true, 1)
+        }
+
+        engine.ping(PingRequest("host", "192.0.2.1", 1, 1_000)).toList()
+
+        assertNotEquals(collectingThread, checkerThread)
     }
 }
