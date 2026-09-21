@@ -6,6 +6,8 @@ import net.aieat.netswissknife.core.network.traceroute.TracerouteProbeType
 import net.aieat.netswissknife.core.network.traceroute.TracerouteRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.flowOn
 import me.impa.icmpenguin.ProbeType
@@ -47,38 +49,42 @@ class IcmpEnginTracerouteRepositoryImpl : TracerouteRepository {
             ProbeSize.Static(packetSize)
         }
 
-        val tracer = SimpleTracer(
-            host          = host,
-            probeType     = icmpProbeType,
-            timeout       = timeoutMs,
-            maxHops       = maxHops,
-            probesPerHop  = probesPerHop,
-            concurrency   = minOf(probesPerHop, 5),
-            portStrategy  = PortStrategy.Sequential(),
-            probeSize     = probeSize
-        )
+        return flow {
+            // Keep construction inside the IO-bound flow as well as trace execution.
+            // Native tracer setup may allocate sockets before the first hop is emitted.
+            val tracer = SimpleTracer(
+                host          = host,
+                probeType     = icmpProbeType,
+                timeout       = timeoutMs,
+                maxHops       = maxHops,
+                probesPerHop  = probesPerHop,
+                concurrency   = minOf(probesPerHop, 5),
+                portStrategy  = PortStrategy.Sequential(),
+                probeSize     = probeSize
+            )
 
-        return tracer.trace()
-            .map { icmpHop ->
-                val ip = icmpHop.ips.firstOrNull()
-                val rttMs = icmpHop.probes
-                    .filterIsInstance<Response.Success>()
-                    .firstOrNull()
-                    ?.timeUsec
-                    ?.let { it.toLong() / 1_000L }
+            emitAll(
+                tracer.trace().map { icmpHop ->
+                    val ip = icmpHop.ips.firstOrNull()
+                    val rttMs = icmpHop.probes
+                        .filterIsInstance<Response.Success>()
+                        .firstOrNull()
+                        ?.timeUsec
+                        ?.let { it.toLong() / 1_000L }
 
-                val status = if (ip != null) HopStatus.SUCCESS else HopStatus.TIMEOUT
-                val hostname = if (ip != null) resolveHostname(ip) else null
+                    val status = if (ip != null) HopStatus.SUCCESS else HopStatus.TIMEOUT
+                    val hostname = if (ip != null) resolveHostname(ip) else null
 
-                HopResult(
-                    hopNumber = icmpHop.num,
-                    ip        = ip,
-                    hostname  = hostname,
-                    rtTimeMs  = rttMs,
-                    status    = status
-                )
-            }
-            .flowOn(Dispatchers.IO)
+                    HopResult(
+                        hopNumber = icmpHop.num,
+                        ip        = ip,
+                        hostname  = hostname,
+                        rtTimeMs  = rttMs,
+                        status    = status
+                    )
+                }
+            )
+        }.flowOn(Dispatchers.IO)
     }
 
     private fun resolveHostname(ip: String): String? = try {

@@ -1,9 +1,11 @@
 package net.aieat.netswissknife.core.network.ping
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 
 /** Reachability fallback used when the platform ICMP socket is unavailable. */
 class ReachabilityPingEngine(
@@ -52,7 +54,7 @@ class ReachabilityPingEngine(
             }
             sequence++
         }
-    }
+    }.flowOn(Dispatchers.IO)
 
     companion object {
         val DEFAULT_CHECKER: (String, Int) -> ReachabilityResult = { ip, timeoutMs ->
