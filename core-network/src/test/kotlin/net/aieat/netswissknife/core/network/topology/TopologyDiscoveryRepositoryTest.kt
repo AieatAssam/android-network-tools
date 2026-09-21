@@ -170,4 +170,22 @@ class TopologyDiscoveryRepositoryTest {
         assertTrue(maximumConcurrentWalks.get() > 1)
         assertTrue(maximumConcurrentWalks.get() <= 4)
     }
+
+    @Test
+    fun `SNMP client is created off the collecting thread`() = runTest {
+        val collectingThreadId = Thread.currentThread().id
+        var factoryThreadId: Long? = null
+        val factoryClient = mockk<SnmpClient>(relaxed = true)
+        coEvery { factoryClient.get(any(), any()) } returns null
+        coEvery { factoryClient.walk(any(), any()) } returns emptyMap()
+        val factoryRepository = TopologyDiscoveryRepositoryImpl(SnmpClientFactory {
+            factoryThreadId = Thread.currentThread().id
+            factoryClient
+        })
+
+        factoryRepository.discover(defaultParams.copy(maxHops = 0)).toList()
+
+        assertNotNull(factoryThreadId)
+        assertNotEquals(collectingThreadId, factoryThreadId)
+    }
 }
