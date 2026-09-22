@@ -2,6 +2,7 @@ package net.aieat.netswissknife.app.ui.screens.lan
 
 import android.Manifest
 import android.os.Build
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -20,7 +21,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.theme.NetSwissKnifeTheme
 import net.aieat.netswissknife.core.network.lan.LanHost
+import net.aieat.netswissknife.core.network.lan.LanScanDiagnostic
+import net.aieat.netswissknife.core.network.lan.LanScanDiagnosticReason
 import net.aieat.netswissknife.core.network.lan.LanScanSummary
+import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -169,6 +173,77 @@ class LanScanScreenTest {
             .performClick()
 
         verify(exactly = 1) { viewModel.startScan() }
+    }
+
+    @Test
+    fun finishedState_hidesUncertainDiagnosticsUntilOptedIn_withoutChangingConfirmedSummary() {
+        val uncertainIp = "192.168.1.77"
+        val summary = LanScanSummary(
+            subnet = "192.168.1.0/24",
+            totalScanned = 2,
+            aliveHosts = 1,
+            scanDurationMs = 500,
+            hosts = listOf(fakeHost("192.168.1.1")),
+            uncertainHosts = listOf(
+                LanScanDiagnostic(
+                    ip = uncertainIp,
+                    reason = LanScanDiagnosticReason.TCP_REFUSED,
+                    port = 80,
+                )
+            ),
+            uncertainCount = 1,
+        )
+        val stateFlow = MutableStateFlow<LanScanUiState>(LanScanUiState.Finished(summary))
+        val viewModel = fakeViewModel(flow = stateFlow)
+        every { viewModel.onToggleDiagnostics() } answers {
+            val current = stateFlow.value as LanScanUiState.Finished
+            stateFlow.value = current.copy(showDiagnostics = !current.showDiagnostics)
+        }
+
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                LanScreen(viewModel = viewModel)
+            }
+        }
+
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        // Uncertain/refused probes are excluded from the normal host list.
+        composeRule.onAllNodesWithText(uncertainIp, substring = true).assertCountEquals(0)
+        composeRule
+            .onAllNodesWithText(context.getString(R.string.lan_hosts_header, 1), substring = true)
+            .assertCountEquals(1)
+        val numericSummaryBefore = listOf("1", "2").associateWith { text ->
+            composeRule.onAllNodesWithText(text, substring = false).fetchSemanticsNodes().size
+        }
+
+        composeRule.mainClock.autoAdvance = true
+        composeRule
+            .onNodeWithText(context.getString(R.string.lan_show_diagnostics, 1))
+            .performScrollTo()
+            .performClick()
+        composeRule.mainClock.autoAdvance = false
+        composeRule.mainClock.advanceTimeBy(500L)
+
+        composeRule
+            .onAllNodesWithText(uncertainIp, substring = true)
+            .assertCountEquals(1)
+        composeRule
+            .onAllNodesWithText(context.getString(R.string.lan_diagnostic_tcp_refused), substring = true)
+            .assertCountEquals(1)
+        composeRule
+            .onAllNodesWithText(context.getString(R.string.lan_hide_diagnostics))
+            .assertCountEquals(1)
+
+        // Revealing diagnostics does not add to confirmed hosts or alter scan totals.
+        composeRule
+            .onAllNodesWithText(context.getString(R.string.lan_hosts_header, 1), substring = true)
+            .assertCountEquals(1)
+        val numericSummaryAfter = listOf("1", "2").associateWith { text ->
+            composeRule.onAllNodesWithText(text, substring = false).fetchSemanticsNodes().size
+        }
+        assertEquals(numericSummaryBefore, numericSummaryAfter)
+        verify(exactly = 1) { viewModel.onToggleDiagnostics() }
     }
 
     private fun fakeHost(ip: String) = LanHost(
