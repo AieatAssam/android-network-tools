@@ -420,17 +420,19 @@ private fun TopologyScreenContent(
                                 }
                                 Text(stringResource(R.string.topology_discover_button))
                             }
+                        }
+                    }
 
-                            AnimatedVisibility(visible = isDiscovering) {
-                                OutlinedButton(
-                                    onClick = onReset,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(top = 8.dp)
-                                ) {
-                                    Text(stringResource(R.string.topology_cancel_button))
-                                }
-                            }
+                    // Keep cancellation available after Discover collapses the
+                    // configuration fields for the active scan.
+                    AnimatedVisibility(visible = isDiscovering) {
+                        OutlinedButton(
+                            onClick = onReset,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp)
+                        ) {
+                            Text(stringResource(R.string.topology_cancel_button))
                         }
                     }
                 }
@@ -462,11 +464,12 @@ private fun TopologyScreenContent(
                                         .padding(12.dp)
                                 ) {
                                     ScanningBadge(
-                                        message = pluralStringResource(
+                                        countMessage = pluralStringResource(
                                             R.plurals.topology_scanning_badge,
                                             state.nodesDone,
                                             state.nodesDone
-                                        )
+                                        ),
+                                        progressMessage = state.progressMessage
                                     )
                                 }
                             }
@@ -691,7 +694,7 @@ private fun ErrorContent(message: String, onRetry: () -> Unit) {
 }
 
 @Composable
-private fun ScanningBadge(message: String) {
+private fun ScanningBadge(countMessage: String, progressMessage: String) {
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
     val alpha by infiniteTransition.animateFloat(
         initialValue = 0.6f,
@@ -715,11 +718,22 @@ private fun ScanningBadge(message: String) {
                 color = MaterialTheme.colorScheme.primary
             )
             Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = message,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
-            )
+            Column(modifier = Modifier.widthIn(max = 240.dp)) {
+                Text(
+                    text = countMessage,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+                if (progressMessage.isNotBlank()) {
+                    Text(
+                        text = progressMessage,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
         }
     }
 }

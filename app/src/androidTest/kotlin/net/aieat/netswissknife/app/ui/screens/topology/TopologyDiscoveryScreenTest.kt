@@ -85,7 +85,7 @@ class TopologyDiscoveryScreenTest {
             TopologyUiState.Discovering(
                 nodes = listOf(fakeNode("10.0.0.1", "core-switch")),
                 links = emptyList(),
-                progressMessage = "Discovering...",
+                progressMessage = "Querying 10.0.0.1...",
                 nodesDone = 1
             )
         )
@@ -100,16 +100,56 @@ class TopologyDiscoveryScreenTest {
         // the same accumulating `nodes` list.
         composeRule.mainClock.advanceTimeBy(500L)
         composeRule.onNodeWithText(scanningBadgeText(1)).assertIsDisplayed()
+        composeRule.onNodeWithText("Querying 10.0.0.1...").assertIsDisplayed()
 
         // A second node arrives; the count must grow (accumulation, not reset).
         stateFlow.value = TopologyUiState.Discovering(
             nodes = listOf(fakeNode("10.0.0.1", "core-switch"), fakeNode("10.0.0.2", "edge-router")),
             links = emptyList(),
-            progressMessage = "Discovering...",
+            progressMessage = "Querying 10.0.0.2...",
             nodesDone = 2
         )
         composeRule.mainClock.advanceTimeBy(500L)
         composeRule.onNodeWithText(scanningBadgeText(2)).assertIsDisplayed()
+        composeRule.onNodeWithText("Querying 10.0.0.2...").assertIsDisplayed()
+    }
+
+    @Test
+    fun discoveringState_cancelInvokesReset() {
+        val stateFlow = MutableStateFlow<TopologyUiState>(TopologyUiState.Idle)
+        val viewModel = fakeViewModel(flow = stateFlow)
+        every { viewModel.startDiscovery(any()) } answers {
+            stateFlow.value = TopologyUiState.Discovering(
+                nodes = emptyList(),
+                links = emptyList(),
+                progressMessage = "Querying 10.0.0.1...",
+                nodesDone = 0
+            )
+        }
+        every { viewModel.reset() } answers { stateFlow.value = TopologyUiState.Idle }
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                TopologyDiscoveryScreen(viewModel = viewModel)
+            }
+        }
+        composeRule.mainClock.advanceTimeBy(500L)
+
+        composeRule
+            .onNodeWithText(context.getString(R.string.topology_target_ip_label))
+            .performTextInput("10.0.2.2")
+        composeRule
+            .onNodeWithText(context.getString(R.string.topology_discover_button))
+            .performClick()
+        composeRule.mainClock.advanceTimeBy(500L)
+
+        // Starting a scan collapses the configuration fields; Cancel must remain
+        // reachable outside that collapsible section.
+        composeRule
+            .onNodeWithText(context.getString(R.string.topology_cancel_button))
+            .assertIsDisplayed()
+            .performClick()
+
+        verify(exactly = 1) { viewModel.reset() }
     }
 
     private fun scanningBadgeText(count: Int): String =

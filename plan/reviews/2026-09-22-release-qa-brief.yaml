@@ -40,7 +40,7 @@ brief_items:
     route: "RUI010 closed by 83c4e08. E01-T10 remains open for broader shared form architecture and other fields."
   - id: ISS-21
     disposition: partial
-    evidence: "Topology already exposes Cancel/Reset, sysName/IP labels, a node-details sheet, and a streaming node count. TopologyDiscoveryViewModel stores progressMessage, but TopologyDiscoveryScreen renders only the count; no instrumented Cancel-button assertion exists. Sparse-canvas behavior with the supplied SNMP lab needs device QA."
+    evidence: "Topology now renders progressMessage alongside its streaming node count, and Cancel remains visible after Discover collapses the config card. API 36 TopologyDiscoveryScreenTest passed 7/7, including visible progress updates and a real UI start-then-cancel flow. Existing sysName/IP labels and node-details sheet remain; sparse-canvas behavior with the supplied API 33 SNMP lab still needs device QA."
     route: "E01-T07/E01-T09 and existing P02 topology ownership; RUI012."
   - id: ISS-22
     disposition: tracked_device_check
@@ -83,13 +83,13 @@ findings:
     title: "Topology progress message is stored but not shown, and Cancel lacks UI regression coverage"
     evidence:
       - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/topology/TopologyDiscoveryViewModel.kt", lines: "80-100", detail: "Progress events update TopologyUiState.progressMessage and nodesDone." }
-      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/topology/TopologyDiscoveryScreen.kt", lines: "418-438,444-470,699-735", detail: "Cancel invokes reset and ScanningBadge displays only the node count; progressMessage is not rendered." }
-      - { file: "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/screens/topology/TopologyDiscoveryScreenTest.kt", lines: "83-113", detail: "Existing coverage checks the count while nodes accumulate, but not the event message or Cancel action." }
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/topology/TopologyDiscoveryScreen.kt", lines: "427-438,467-475,697-735", detail: "Cancel is outside the collapsible config fields, and ScanningBadge renders the current progress message next to the node count." }
+      - { file: "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/screens/topology/TopologyDiscoveryScreenTest.kt", lines: "82-114,117-153", detail: "Compose coverage asserts progress-message updates and starts discovery through the UI before checking Cancel remains visible and invokes reset." }
     recommended_action: "Render concise current progress alongside the count and add a deterministic screen test proving Cancel invokes reset; keep existing node labels and detail sheet."
-    validation: "Instrumented tests assert progress text, count updates, Cancel action, node labels, and details; perform the 10.0.2.2/public/v2c sparse-canvas check on the API 33 SNMP lab."
+    validation: "API 36 TopologyDiscoveryScreenTest passed 7/7, asserting progress-message updates and the start/collapse/Cancel/reset UI flow; existing tests cover the node detail sheet. Adversarial review found no blocker. The 10.0.2.2/public/v2c sparse-canvas check remains an API 33 device-only follow-up."
     related_phase: P08
     owner: E01-T07/E01-T09
-    status: todo
+    status: done
 
 manual_checks:
   - "API 33 emulator with host snmpd at 10.0.2.2/community public/v2c: assess topology progress and sparse-canvas usability; emulator public ICMP/DNS success is not a requirement."
