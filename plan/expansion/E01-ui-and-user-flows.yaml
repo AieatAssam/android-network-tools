@@ -324,6 +324,7 @@ tasks:
     source_evidence:
       - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanViewModel.kt", lines: "35-52,180-231,234-255", detail: "LAN has Idle/Scanning/Finished/Error and turns stop into a Finished partial summary without a distinct canceled state."}
       - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/traceroute/TracerouteViewModel.kt", lines: "28-42,106-116,180-203", detail: "Traceroute similarly models stop/clear around a small state set, with source-review follow-up for stopped metadata."}
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/topology/TopologyDiscoveryScreen.kt", lines: "418-470,699-735", detail: "Topology has a Cancel action and streaming node count, but the event progress message is not rendered and Cancel has no UI regression assertion (RUI012)."}
       - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/ToolStopButton.kt", lines: "17-39", detail: "A shared stop affordance exists but carries no canceling/confirmation state."}
       - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/ToolErrorCard.kt", lines: "27-88", detail: "Errors have a shared visual seam but action meaning varies by tool."}
       - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/wifi/WifiScanViewModel.kt", lines: "32-125", detail: "Wi-Fi has a different refresh/status lifecycle, demonstrating the need for a capability-based contract rather than copy-paste state names."}
@@ -332,8 +333,9 @@ tasks:
       - "Stop changes to Canceling immediately, disables duplicate actions, then resolves to Canceled with the partial result and a clear 'resume/rescan' choice; a natural timeout remains an error or empty result according to the repository contract."
       - "Separate 'no data' from 'failed' and 'filtered to zero'; retain the user's input and offer edit/retry without silently changing it."
       - "Announce only meaningful phase changes through P08's ToolStateAnnouncer; streaming updates must not spam TalkBack."
+      - "For Topology, show the current discovery message with the node count and keep Cancel available until cleanup finishes; cancellation returns a truthful idle/partial state."
     depends_on: []
-    refines_findings: [RAPP001, RAPP002]
+    refines_findings: [RAPP001, RAPP002, RUI012]
     files_and_seams:
       create: ["app/src/main/kotlin/net/aieat/netswissknife/app/ui/operation/OperationStatus.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/operation/OperationActionBar.kt", "app/src/test/kotlin/net/aieat/netswissknife/app/ui/operation/OperationStatusTest.kt", "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/operation/OperationStateScreenTest.kt"]
       modify: ["all 14 tool ViewModels and screens", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/ToolStopButton.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/ToolErrorCard.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/ToolStateAnnouncer.kt"]
@@ -347,7 +349,7 @@ tasks:
       - "A repeated start cannot overlap or display a stale result for a different input."
       - "Canceling is idempotent, closes the operation resources, and leaves a truthful partial/canceled result."
     validation:
-      automated: ["Pure state transition tests", "ViewModel deferred-repository tests with out-of-order completion", "instrumented stop/back/retry/empty/error tests for one streaming and one one-shot tool", "P08 live-region regression suite"]
+      automated: ["Pure state transition tests", "ViewModel deferred-repository tests with out-of-order completion", "instrumented stop/back/retry/empty/error tests for one streaming and one one-shot tool", "instrumented Topology progress-message and Cancel/reset assertions", "P08 live-region regression suite"]
       manual: ["Start each long-running tool, stop at several progress points, rotate/navigate back, and verify no late result or snackbar appears."]
     risks_constraints:
       - "Do not force all domain repositories into one hierarchy; use UI adapters around existing StateFlows."
@@ -395,16 +397,19 @@ tasks:
     status: todo
     kind: proposal
     title: "Give every tool deliberate empty, filtered-empty, error, retry, and cancel recovery copy"
+    refines_findings: [RUI011, RUI012]
     source_evidence:
       - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanScreen.kt", lines: "713-808,1279-1327", detail: "LAN has a generic empty card and custom error panel, but the empty reason and recovery actions are not modeled."}
       - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/DnsScreen.kt", lines: "791-846,723-750", detail: "DNS has result/empty and error actions, but recovery behavior is screen-specific and does not distinguish filtered or stale data."}
       - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/ToolErrorCard.kt", lines: "34-84", detail: "The shared card can host actions but currently receives free-form title/message only."}
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/traceroute/TracerouteViewModel.kt", lines: "49,142-180", detail: "Offline validation and Retry/Clear exist, but dead-path progress and recovery parity still need deterministic and device validation (RUI011)."}
       - { file: "app/src/main/res/values/strings.xml", lines: "1-1172", detail: "String resources exist, but a cross-tool state vocabulary and coverage guard are absent."}
     proposed_behavior:
       - "Define a RecoveryModel with reason, user-facing explanation, primary action, secondary action, and whether prior data remains trustworthy/stale."
       - "Render distinct states for first-use empty, valid zero-result, filter zero-result, stale cache, validation error, permission/binding failure, network failure, timeout, and user canceled."
       - "Retry repeats the captured input/settings; Edit returns focus to the invalid field; Clear removes the result only after an explicit action; back does not lose a finished result."
       - "Provide contextual help links to the relevant settings/permission screen without forcing users through onboarding again."
+      - "For Traceroute, keep progress visible while probes time out, distinguish offline/no-route from a blank result area, and provide the same clear retry path used by Ping/TLS."
     depends_on: [E01-T07]
     files_and_seams:
       create: ["app/src/main/kotlin/net/aieat/netswissknife/app/ui/operation/RecoveryModel.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/ToolEmptyState.kt", "app/src/test/kotlin/net/aieat/netswissknife/app/ui/operation/RecoveryModelTest.kt", "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/components/ToolStateCoverageTest.kt"]
@@ -419,7 +424,7 @@ tasks:
       - "User-visible recovery messages are localized through P07 and do not expose raw exception class names."
     validation:
       automated: ["RecoveryModel unit matrix", "instrumented tests for DNS empty/error, LAN uncertain-empty, and one streaming cancellation", "source guard for state coverage", "lint and localization checks"]
-      manual: ["Force airplane mode, deny permissions, use malformed inputs, cancel mid-scan, and filter to zero on phone/tablet."]
+      manual: ["Force airplane mode, deny permissions, use malformed inputs, cancel mid-scan, and filter to zero on phone/tablet.", "For Traceroute, exercise airplane mode and a dead local/public route; verify progress, a nonblank error/offline explanation, and Retry/Clear actions."]
     risks_constraints:
       - "Do not call a timed-out or cached operation successful merely to avoid an empty state; preserve repository truth."
       - "Avoid a giant generic screen abstraction; keep domain-specific content in slots."
@@ -430,8 +435,11 @@ tasks:
     status: todo
     kind: actual_gap_plus_refinement
     title: "Unify form validation, normalization, defaults, and advanced-option disclosure"
+    refines_findings: [RUI010]
     source_evidence:
       - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/PingScreen.kt", lines: "350-476,481-600", detail: "Ping combines host input, recent chips, continuous mode, sliders, timeout chips, advanced options, and start/stop controls, but validation and disclosure are screen-local."}
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/TracerouteScreen.kt", lines: "321,347-351,462", detail: "The form rejects every space in the raw host string and disables Start, including surrounding whitespace that HostValidator.normalize already trims (RUI010)."}
+      - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/HostValidator.kt", lines: "99-121", detail: "Shared host normalization trims surrounding whitespace; forms should use the same normalized validation result."}
       - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/PortsScreen.kt", lines: "374-496,540-590", detail: "Ports has host/range/concurrency fields and presets with multiple independent input paths."}
       - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/tls/TlsInspectorScreen.kt", lines: "240-290", detail: "TLS port input accepts arbitrary text; RUI006 documents silent fallback to 443 for invalid input."}
       - { file: "plan/reviews/2026-09-21-ui-domain.yaml", lines: "(finding RUI003, RUI004, RUI006, RUI009)", detail: "Existing review identifies inconsistent ranges, stale advanced controls, invalid TLS port fallback, and a Port concurrency range mismatch; P08/P10 own the defect fixes, E01 owns consistent form flow and presentation."}
@@ -439,6 +447,7 @@ tasks:
     proposed_behavior:
       - "Create a shared ToolInputField contract with raw text, normalized value, validation result, IME action, helper/error text, clear/paste affordance, and a stable field ID."
       - "Validate on change enough to explain the error and validate again on submit; never coerce malformed text to a different target. Preserve the raw edit so users can correct it."
+      - "Trim surrounding whitespace consistently in Ping, Traceroute, and other shared host fields before validating/submitting; continue rejecting spaces inside a hostname and pass the normalized host to the use case."
       - "Centralize range/default metadata between Settings and tool forms, including Ping count/timeout, Port concurrency, TLS port, WOL port, subnet, and DNS record/server fields."
       - "Keep advanced options collapsed by default with a summary of non-default values; reset advanced options only with an explicit action and retain them through rotation."
       - "Use the same input normalization for handoffs, recents, history, and export, while preserving the original display form when useful."
@@ -456,7 +465,7 @@ tasks:
       - "Settings and tool forms use the same declared ranges/defaults; upper/lower boundary values render and submit unchanged."
       - "Editing, clearing, pasting, IME submit, rotation, and back navigation preserve or discard values only under documented rules."
     validation:
-      automated: ["Pure validator/property tests", "ViewModel tests for raw-vs-normalized input and invalid submit", "instrumented forms at compact/large font sizes including IME actions", "P08 source guard for keyboard actions"]
+      automated: ["Pure validator/property tests", "ViewModel tests for raw-vs-normalized input and invalid submit", "instrumented forms at compact/large font sizes including IME actions", "Compose Ping/Traceroute whitespace tests for trimmed outer spaces and rejected internal spaces", "P08 source guard for keyboard actions"]
       manual: ["Paste malformed IPv6/IDN/port/range values and verify errors, then correct without retyping the entire form."]
     risks_constraints:
       - "P04/P10/P12 own domain validation semantics; E01 must call their validators or adapters instead of duplicating protocol rules."

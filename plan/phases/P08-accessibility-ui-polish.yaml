@@ -15,16 +15,17 @@ phase:
   estimated_effort: "M (2-4 agent sessions)"
   depends_on: [P07-T3]
   enables: []
-  findings: [F024, F030]
+  findings: [F024, F030, RUI010, RUI011, RUI012]
   target_modules: [":app"]
 
 review_follow_up:
   reviewed_on: "2026-09-21"
   status: todo
-  findings: [RUI001, RUI003, RUI004, RUI009]
+  findings: [RUI001, RUI003, RUI004, RUI009, RUI010, RUI011, RUI012]
   reports:
     - plan/reviews/2026-09-21-ui-domain.yaml
-  note: "New source-review follow-ups; preserve historical task completion. See report evidence, recommended_action, and validation before implementation."
+    - plan/reviews/2026-09-22-release-qa-brief.yaml
+  note: "New source-review and release-QA follow-ups; preserve historical task completion. See report evidence, recommended_action, and validation before implementation."
 
 context:
   problem: |

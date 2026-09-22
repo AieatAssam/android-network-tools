@@ -53,8 +53,14 @@ implementation_status: |
   Commons Lang 3.18.0, and HttpClient 4.5.14; these constraints upgrade AGP's
   transitive classpath without adding the packages to the Android runtime graph.
   The releaseRuntimeClasspath report contains none of the affected packages.
-  Dependabot was queried after the changes, but GitHub still reports the original
-  nine alerts open, so final closure remains pending the next dependency rescan.
+  Re-querying GitHub on 2026-09-22 shows alerts #3 (JDOM), #4 (jose4j), and #7
+  (Kotlin KGP) fixed; six remain open (#1/#2/#5/#6/#8/#9). `buildEnvironment`
+  resolves AGP's older requests to the patched pins (for example bcprov 1.80.2 ->
+  1.85, commons-lang3 3.16.0 -> 3.18.0, and httpclient 4.5.6 -> 4.5.14), and
+  `releaseRuntimeClasspath` contains none of the affected artifacts. GitHub's SBOM
+  still lists some older requested versions and the open alerts have not updated
+  since 2026-09-18; final closure is pending a dependency rescan or a documented
+  alert disposition, not an unverified claim that the requested versions are loaded.
 
 assumptions:
   - id: A1
@@ -85,7 +91,7 @@ design:
   verification:
     - "Run dependencyInsight again and confirm no vulnerable version remains in the relevant configuration."
     - "Run JVM tests, Kover gates, lint, debug/release builds, and the existing SNMP4J APK class check."
-    - "Re-query Dependabot after GitHub rescans; record any remaining alert as accepted risk only if it is not actionable upstream."
+    - "Re-query Dependabot after GitHub rescans; current API state is six open alerts (#1/#2/#5/#6/#8/#9) and three fixed (#3/#4/#7). Record any remaining alert as accepted risk only with an approved, time-bounded exception if it is not actionable upstream."
 
 files_to_modify:
   - gradle/libs.versions.toml
@@ -137,7 +143,7 @@ tasks:
       - "./gradlew :app:lintDebug --no-daemon --no-parallel"
       - "./gradlew :app:assembleDebug :app:assembleRelease --no-daemon"
       - "gh api repos/AieatAssam/android-network-tools/dependabot/alerts --paginate"
-      - "Completed repository tests, all three Kover verification tasks, debug lint, release assembly, buildEnvironment resolution, and releaseRuntimeClasspath inspection; the GitHub alert rescan is still pending."
+      - "Completed repository tests, all three Kover verification tasks, debug lint, release assembly, buildEnvironment resolution, and releaseRuntimeClasspath inspection. On 2026-09-22, alerts #3/#4/#7 were fixed while #1/#2/#5/#6/#8/#9 remained open; the remaining alerts have not updated since 2026-09-18 despite the resolved build graph."
     acceptance_criteria: ["All quality gates pass and Dependabot reports no unresolved actionable alert introduced by this phase."]
 
 qa_validation:

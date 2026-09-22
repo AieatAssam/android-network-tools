@@ -237,7 +237,9 @@ tasks:
         run: "./gradlew :core-network:test :app:assembleDebug --no-daemon"
         expect: "PASS"
       refactor: []
-    acceptance_criteria: ["MdnsDiscoverySession has tests for: meta-query PTR -> type registered; instance PTR -> SRV/TXT queries requested; SRV+A -> service emitted once; end-of-scan sweep emits partials with hostname."]
+    acceptance_criteria:
+      - "MdnsDiscoverySession has tests for: meta-query PTR -> type registered; instance PTR -> SRV/TXT queries requested; SRV+A -> service emitted once; end-of-scan sweep emits partials with hostname."
+      - "A platform setup failure such as emulator ENODEV remains an explicit failure with Dismiss, never a successful empty scan; a physical Wi-Fi run uses the selected active interface (commonly wlan0)."
 
   - id: P05-T5
     title: "UI: NetworkStatusBanner + LNP error mapping on LAN tools"
@@ -273,6 +275,7 @@ qa_validation:
     - "./gradlew test --no-daemon; koverVerify x3; lintDebug"
   manual_device:
     - "VPN OFF: LAN scan, mDNS, WOL, topology, LAN port scan behave as before."
+    - "mDNS: API 33 emulator with no usable Wi-Fi interface shows graceful ENODEV failure; physical Wi-Fi confirms the active interface is selected and discovery remains usable."
     - "VPN ON (full tunnel): LAN scan finds hosts; mDNS lists services; WOL packet received by laptop tcpdump on the Wi-Fi segment; banner shows VPN info."
     - "Wi-Fi off, cellular on: LAN tools show 'no local network' banner; ping/DNS work."
     - "Airplane mode: internet tools show 'no internet' banner; no crashes."

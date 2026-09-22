@@ -239,6 +239,7 @@ incremental_review:
     - { area: ui-domain, file: plan/reviews/2026-09-21-ui-domain.yaml }
     - { area: build-release-plan, file: plan/reviews/2026-09-21-build.yaml }
     - { area: lan-scan-discovery, file: plan/reviews/2026-09-22-lan-scan-noise.yaml }
+    - { area: release-qa-brief, file: plan/reviews/2026-09-22-release-qa-brief.yaml }
   prioritized_findings:
     - { id: RLAN001, severity: high, kind: bug, phase: P01, status: in_progress, title: "A failed TCP connect is promoted to a live host and floods LAN results with false positives" }
     - { id: RAPP001, severity: medium, kind: bug, phase: P03, status: todo, title: "Wi-Fi scan failures are reported as completed scans" }
@@ -262,6 +263,9 @@ incremental_review:
     - { id: RAPP003, severity: medium, kind: gap, phase: P04, status: todo, title: "Native ICMP load failures bypass the advertised reachability fallback" }
     - { id: RNET003, severity: medium, kind: gap, phase: P02, status: todo, title: "Topology parameters omit bounds for hops, timeout, and retries" }
     - { id: RNET006, severity: medium, kind: gap, phase: P10, status: todo, title: "WHOIS cancellation does not bound blocking DNS and socket work" }
+    - { id: RUI010, severity: medium, kind: bug, phase: P08, status: todo, owner: E01-T10, title: "Host fields reject surrounding whitespace even though shared validation trims it" }
+    - { id: RUI011, severity: medium, kind: gap, phase: P08, status: todo, owner: E01-T07/E01-T09, title: "Traceroute dead-path state lacks verified Ping-style recovery presentation" }
+    - { id: RUI012, severity: medium, kind: gap, phase: P08, status: todo, owner: E01-T07/E01-T09, title: "Topology progress message is stored but not shown, and Cancel lacks UI regression coverage" }
     - { id: RNET004, severity: low, kind: bug, phase: P03, status: todo, title: "Wi-Fi unique-network count collapses all hidden APs" }
     - { id: RNET007, severity: low, kind: bug, phase: P11, status: todo, title: "GeoIP bogon detection rejects explicit false values" }
     - { id: RUI007, severity: low, kind: bug, phase: P11, status: todo, title: "Stopped traceroute results discard elapsed-time metadata" }
@@ -367,7 +371,7 @@ phases:
     status: in_progress
     depends_on: [P02]
     findings: [F041]
-    summary: "Initial remediation upgrades Kotlin 2.4.20, AGP 9.4.1, and KSP 2.3.12 and pins all affected build-only transitives to patched versions; tests and release assembly pass, while Dependabot's nine alerts await GitHub's next rescan."
+    summary: "Initial remediation upgrades Kotlin 2.4.20, AGP 9.4.1, and KSP 2.3.12 and pins affected build-only transitives. buildEnvironment selects patched artifacts and releaseRuntimeClasspath is clean; three original alerts are fixed, while six alerts last updated 2026-09-18 await GitHub rescan or documented disposition."
 
   - id: P03
     file: plan/phases/P03-wifi-live-scanning.yaml
@@ -420,8 +424,8 @@ phases:
     priority: medium
     status: todo
     depends_on: [P07]
-    findings: [F024, F030]
-    summary: "Concrete a11y defects (4 sub-48dp buttons, no live regions, nativeCanvas text in Wi-Fi charts) plus small UX gaps identified by the 2026-09-12 audit and re-verified."
+    findings: [F024, F030, RUI010, RUI011, RUI012]
+    summary: "Concrete a11y defects (4 sub-48dp buttons, no live regions, nativeCanvas text in Wi-Fi charts) plus 2026-09-22 QA follow-ups for host whitespace, Traceroute recovery, and visible Topology progress."
 
   - id: P09
     file: plan/phases/P09-quality-gates-and-test-coverage.yaml
@@ -748,9 +752,9 @@ findings:
   - id: F041
     severity: critical
     area: dependencies
-    title: "Nine open Dependabot Maven alerts in the settings dependency graph"
-    evidence: "Authenticated `gh api repos/AieatAssam/android-network-tools/dependabot/alerts --paginate` on 2026-09-19 reports one critical, three high, and five medium alerts. The direct alert is org.jetbrains.kotlin:kotlin-gradle-plugin; the other eight are transitive bcprov/bcpkix, jose4j, jdom2, commons-lang3, and httpclient packages, all attributed to settings.gradle.kts."
-    impact: "Build/plugin tooling or any affected shipped configuration may retain known vulnerabilities until the owning dependency graph is upgraded or a scoped, documented exception is approved."
+    title: "Six Dependabot build-tool alerts remain open after patched Gradle resolution"
+    evidence: "Authenticated `gh api repos/AieatAssam/android-network-tools/dependabot/alerts` on 2026-09-19 reported nine alerts. Rechecked 2026-09-22: #3 JDOM, #4 jose4j, and #7 Kotlin KGP are fixed; six remain open (#1/#2/#5/#6/#8/#9). Root buildEnvironment selects patched versions for affected build-classpath requests, while releaseRuntimeClasspath contains none of them; GitHub's SBOM still records some older requested versions, so the remaining alert state awaits a rescan/disposition."
+    impact: "GitHub still reports six open alerts even though Gradle resolves the affected build classpath to patched versions and the shipped runtime graph excludes them; the security status remains unresolved until a rescan or documented alert disposition."
     phase: P02.5
 
 changelog:
@@ -778,3 +782,5 @@ changelog:
     note: "Rechecked the user-reported noisy LAN list: every ConnectException becomes REFUSED and is emitted as a live host; the existing all-refused test expects all addresses alive. Clarification of the preceding entry: neither a TCP reset nor its origin was established on the user's LAN. RLAN001/E00-T01 and P01's explicit policy override require positive host evidence, optional uncertain diagnostics, and zero confirmed hosts for all-refused input. Planning only; no application fix applied."
   - date: "2026-09-22"
     note: "Completed incremental comprehensive plan enrichment from three Luna/xhigh workstreams and primary integration: 53 new execution/UI/tool/engineering tasks, all 14 shipped tools covered, four additional protocol/platform diagnostics plus cross-tool comparison, and corrections to P13-P15 specifications. Routed 28 review findings to owners, synchronized all phase cross-links, and verified 26 YAML files, required task fields, evidence paths, index parity and an acyclic task dependency graph. Implementation tasks remain todo; no production changes."
+  - date: "2026-09-22"
+    note: "Audited the v2026.09.21.1 release QA brief against latest main and current source. Kept fixed-release items closed; API 36 accessibility/onboarding instrumentation passed. Added RUI010-RUI012 for host whitespace, Traceroute recovery parity, and Topology progress/cancel coverage; routed mDNS ENODEV to existing P05 interface-binding/device checks."

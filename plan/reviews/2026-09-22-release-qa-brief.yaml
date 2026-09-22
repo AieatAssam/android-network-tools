@@ -1,0 +1,96 @@
+review:
+  area: release-qa-brief
+  status: done
+  source: "User-provided Net Swiss Knife QA brief v2026.09.21.1, based on the latest main release."
+  baseline_commit: "5e183721e64ce8a8946f1a0b50f52b83544e8898"
+  checked_commit: "990138c77ea1ab33ec5da7f10ad379d2fb838644"
+  environment:
+    connected_emulator: "API 36 (Android 16); not the brief's API 33 emulator"
+    host_snmpd: "Not available in this audit"
+    physical_wifi: "Not available in this audit"
+  implementation_source_matches_main: true
+  note: "The current branch is based on the brief's latest main commit. Fixed-release reports remain closed unless listed evidence contradicts them."
+
+fixed_release_items:
+  - { id: ISS-01, status: confirmed_fixed, evidence: "Ping timeout label and chip units are both seconds in current resources/UI." }
+  - { id: ISS-02, status: confirmed_fixed, evidence: "Home renders the scroll cue when tool cards extend below the fold; API 36 UI test passed." }
+  - { id: ISS-03, status: confirmed_fixed, evidence: "More sheet includes WHOIS, HTTP, Subnet, Speed Test, and Wake-on-LAN routes." }
+  - { id: ISS-04, status: confirmed_fixed, evidence: "Ping maps unavailable validated network to No network connection; ViewModel coverage exists." }
+  - { id: ISS-08, status: confirmed_fixed, evidence: "Launcher label is NetSwiss; API 36 launcher-label UI test passed." }
+  - { id: ISS-09, status: confirmed_fixed, evidence: "Settings attribution remains in the vertically scrollable settings content." }
+  - { id: ISS-15, status: confirmed_fixed, evidence: "TLS error panel exposes Inspection failed state and Retry." }
+  - { id: SNMP-threading, status: confirmed_fixed, evidence: "SNMP calls run on Dispatchers.IO; current main-release instrumentation/regression coverage is present." }
+
+brief_items:
+  - id: ISS-05
+    disposition: already_covered
+    evidence: "Home tool cards merge descendant semantics and expose Role.Button; More tool cards do likewise. NavigationAccessibilityTest.home_everyToolCard_isMergedClickableButton and moreSheet_containsEveryHomeToolAsMergedClickableButton both passed on API 36."
+    route: "No new implementation task; retain P08 semantics coverage."
+  - id: ISS-06
+    disposition: already_covered
+    evidence: "OnboardingSheet's 'Don't show again' action calls onDismiss. NavigationAccessibilityTest.onboardingSkip_dismissesWelcomeSheet passed on API 36."
+    route: "No new implementation task."
+  - id: ISS-17
+    disposition: partial
+    evidence: "TracerouteViewModel maps unavailable validated network to Error('No network connection'); TracerouteErrorPanel offers Retry/Clear and unit coverage exists. Dead-path progress and Ping-style offline presentation remain unverified on device."
+    route: "E01-T07 and E01-T09; RUI011."
+  - id: ISS-20
+    disposition: confirmed_gap
+    evidence: "TracerouteScreen and PingScreen treat any space, including surrounding whitespace, as invalid and disable Start. HostValidator.normalize and the domain use cases already trim surrounding whitespace."
+    route: "E01-T10; RUI010. Preserve rejection of internal hostname spaces."
+  - id: ISS-21
+    disposition: partial
+    evidence: "Topology already exposes Cancel/Reset, sysName/IP labels, a node-details sheet, and a streaming node count. TopologyDiscoveryViewModel stores progressMessage, but TopologyDiscoveryScreen renders only the count; no instrumented Cancel-button assertion exists. Sparse-canvas behavior with the supplied SNMP lab needs device QA."
+    route: "E01-T07/E01-T09 and existing P02 topology ownership; RUI012."
+  - id: ISS-22
+    disposition: tracked_device_check
+    evidence: "mDNS setup exceptions reach the error state and the screen shows a failure card with Dismiss. MdnsRepositoryImpl still owns fixed-port/interface setup, already covered by P05-T4; API 33 emulator ENODEV and a real Wi-Fi interface have not been tested here."
+    route: "P05-T4/P05-T5; do not add a duplicate mDNS finding."
+
+findings:
+  - id: RUI010
+    severity: medium
+    kind: bug
+    title: "Host fields reject surrounding whitespace even though shared validation trims it"
+    evidence:
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/TracerouteScreen.kt", lines: "321,347-351,462", detail: "Any space marks the host invalid and disables Start, including a trailing space." }
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/PingScreen.kt", lines: "350,469", detail: "Ping uses the same contains-space UI check." }
+      - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/HostValidator.kt", lines: "99-121", detail: "Shared normalization trims surrounding whitespace before validation." }
+      - { file: "core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/TracerouteUseCase.kt", lines: "26-30", detail: "Traceroute domain validation already normalizes its host input." }
+    recommended_action: "Use the shared normalized validation result in host forms so surrounding whitespace is accepted/trimmed consistently while internal whitespace remains invalid."
+    validation: "Compose tests cover leading/trailing whitespace in Ping and Traceroute, verify Start is enabled and receives the normalized host, and keep an internal-space case invalid."
+    related_phase: P08
+    owner: E01-T10
+    status: todo
+
+  - id: RUI011
+    severity: medium
+    kind: gap
+    title: "Traceroute dead-path state lacks verified Ping-style recovery presentation"
+    evidence:
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/traceroute/TracerouteViewModel.kt", lines: "49,142-180", detail: "Offline validation yields No network connection; an empty completed stream becomes a no-route error, while a dead path can remain Running until probes finish." }
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/TracerouteScreen.kt", lines: "198-222,546-582,1335-1350", detail: "Running shows progress and Error offers Retry/Clear, but the error treatment is not yet validated for dead-path/offline parity with Ping." }
+    recommended_action: "Keep the configuration/result states visible, announce meaningful progress, and align dead-path/offline recovery copy and retry behavior with the shared operation-state work."
+    validation: "Run deterministic no-network and no-hop cases plus API 33 device airplane/dead-route checks; verify progress, no blank hop area, and an actionable retry state."
+    related_phase: P08
+    owner: E01-T07/E01-T09
+    status: todo
+
+  - id: RUI012
+    severity: medium
+    kind: gap
+    title: "Topology progress message is stored but not shown, and Cancel lacks UI regression coverage"
+    evidence:
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/topology/TopologyDiscoveryViewModel.kt", lines: "80-100", detail: "Progress events update TopologyUiState.progressMessage and nodesDone." }
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/topology/TopologyDiscoveryScreen.kt", lines: "418-438,444-470,699-735", detail: "Cancel invokes reset and ScanningBadge displays only the node count; progressMessage is not rendered." }
+      - { file: "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/screens/topology/TopologyDiscoveryScreenTest.kt", lines: "83-113", detail: "Existing coverage checks the count while nodes accumulate, but not the event message or Cancel action." }
+    recommended_action: "Render concise current progress alongside the count and add a deterministic screen test proving Cancel invokes reset; keep existing node labels and detail sheet."
+    validation: "Instrumented tests assert progress text, count updates, Cancel action, node labels, and details; perform the 10.0.2.2/public/v2c sparse-canvas check on the API 33 SNMP lab."
+    related_phase: P08
+    owner: E01-T07/E01-T09
+    status: todo
+
+manual_checks:
+  - "API 33 emulator with host snmpd at 10.0.2.2/community public/v2c: assess topology progress and sparse-canvas usability; emulator public ICMP/DNS success is not a requirement."
+  - "API 33 emulator without a usable Wi-Fi interface: mDNS ENODEV must remain a clear failure with Dismiss, not a successful empty scan."
+  - "Physical Wi-Fi device: verify mDNS uses the active local interface (often wlan0) and retains graceful error handling."
