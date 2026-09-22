@@ -175,6 +175,34 @@ class TracerouteViewModelTest {
     }
 
     @Test
+    fun `startTrace normalizes host before saving and probing`() = runTest {
+        every { tracerouteUseCase(any()) } returns flowOf()
+        viewModel.onHostChange("  Example.COM. ")
+
+        viewModel.startTrace()
+
+        coVerify {
+            recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_TRACEROUTE_HOSTS, "example.com")
+        }
+        io.mockk.verify { tracerouteUseCase(match { it.host == "example.com" }) }
+    }
+
+    @Test
+    fun `invalid host is not saved to recents`() = runTest {
+        every { tracerouteUseCase(any()) } returns flowOf(
+            TracerouteFlowResult.ValidationError("Invalid host or IP address")
+        )
+        viewModel.onHostChange("bad host")
+
+        viewModel.startTrace()
+
+        coVerify(exactly = 0) {
+            recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_TRACEROUTE_HOSTS, any())
+        }
+        assertTrue(viewModel.uiState.value is TracerouteUiState.Error)
+    }
+
+    @Test
     fun `Finished result has non-null rawOutput`() = runTest {
         every { tracerouteUseCase(any()) } returns flowOf(TracerouteFlowResult.Hop(stubHop))
         viewModel.onHostChange("example.com")

@@ -2,12 +2,15 @@ package net.aieat.netswissknife.app.ui.screens
 
 import android.Manifest
 import android.os.Build
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -88,9 +91,10 @@ class TracerouteScreenTest {
 
     @Test
     fun hostWithSpace_showsValidationError() {
+        val viewModel = fakeViewModel(TracerouteUiState.Idle, host = "bad host")
         composeRule.setContent {
             NetSwissKnifeTheme {
-                TracerouteScreen(viewModel = fakeViewModel(TracerouteUiState.Idle, host = "bad host"))
+                TracerouteScreen(viewModel = viewModel)
             }
         }
 
@@ -98,6 +102,33 @@ class TracerouteScreenTest {
         composeRule
             .onNodeWithText(context.getString(R.string.error_invalid_host))
             .assertIsDisplayed()
+        composeRule
+            .onNodeWithText(context.getString(R.string.traceroute_start_button))
+            .assertIsNotEnabled()
+
+        composeRule.onNodeWithText("bad host").performClick().performImeAction()
+        verify(exactly = 0) { viewModel.startTrace() }
+    }
+
+    @Test
+    fun hostWithOuterWhitespace_remainsStartable() {
+        val viewModel = fakeViewModel(TracerouteUiState.Idle, host = "  example.com  ")
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                TracerouteScreen(viewModel = viewModel)
+            }
+        }
+
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        composeRule.mainClock.autoAdvance = true
+        composeRule
+            .onNodeWithText(context.getString(R.string.traceroute_start_button))
+            .performScrollTo()
+            .assertIsEnabled()
+            .performClick()
+        composeRule.mainClock.autoAdvance = false
+
+        verify(exactly = 1) { viewModel.startTrace() }
     }
 
     @Test

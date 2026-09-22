@@ -2,12 +2,15 @@ package net.aieat.netswissknife.app.ui.screens
 
 import android.Manifest
 import android.os.Build
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -15,6 +18,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.rule.GrantPermissionRule
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.screens.ping.PingUiState
@@ -131,9 +135,10 @@ class PingScreenTest {
 
     @Test
     fun hostWithSpace_showsValidationError() {
+        val viewModel = fakePingViewModel(PingUiState.Idle, host = "bad host")
         composeRule.setContent {
             NetSwissKnifeTheme {
-                PingScreen(viewModel = fakePingViewModel(PingUiState.Idle, host = "bad host"))
+                PingScreen(viewModel = viewModel)
             }
         }
 
@@ -141,6 +146,33 @@ class PingScreenTest {
         composeRule
             .onNodeWithText(context.getString(R.string.error_invalid_host))
             .assertIsDisplayed()
+        composeRule
+            .onNodeWithText(context.getString(R.string.ping_start_button))
+            .assertIsNotEnabled()
+
+        composeRule.onNodeWithText("bad host").performClick().performImeAction()
+        verify(exactly = 0) { viewModel.startPing() }
+    }
+
+    @Test
+    fun hostWithOuterWhitespace_remainsStartable() {
+        val viewModel = fakePingViewModel(PingUiState.Idle, host = "  example.com  ")
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                PingScreen(viewModel = viewModel)
+            }
+        }
+
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        composeRule.mainClock.autoAdvance = true
+        composeRule
+            .onNodeWithText(context.getString(R.string.ping_start_button))
+            .performScrollTo()
+            .assertIsEnabled()
+            .performClick()
+        composeRule.mainClock.autoAdvance = false
+
+        verify(exactly = 1) { viewModel.startPing() }
     }
 
     @Test

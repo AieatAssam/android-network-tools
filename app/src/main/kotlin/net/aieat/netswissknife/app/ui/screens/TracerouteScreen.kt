@@ -124,6 +124,7 @@ import net.aieat.netswissknife.app.ui.screens.traceroute.TracerouteUiState
 import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.app.ui.screens.traceroute.TracerouteViewModel
 import net.aieat.netswissknife.app.ui.screens.traceroute.TracerouteViewMode
+import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.traceroute.HopGeoLocation
 import net.aieat.netswissknife.core.network.traceroute.HopResult
 import net.aieat.netswissknife.core.network.traceroute.HopStatus
@@ -318,7 +319,9 @@ private fun TracerouteInputCard(
 ) {
     val keyboard = LocalSoftwareKeyboardController.current
     val mtuDiscovery = packetSize == 0
-    val isHostInvalid = host.isNotBlank() && host.contains(' ')
+    val normalizedHost = HostValidator.normalize(host)
+    val isHostInvalid = host.isNotBlank() && normalizedHost == null
+    val canStart = normalizedHost != null
 
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -354,7 +357,7 @@ private fun TracerouteInputCard(
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
                 keyboardActions = KeyboardActions(onGo = {
                     keyboard?.hide()
-                    if (!isRunning) onStart()
+                    if (!isRunning && canStart) onStart()
                 })
             )
 
@@ -459,7 +462,7 @@ private fun TracerouteInputCard(
             } else {
                 Button(
                     onClick  = hapticAction { keyboard?.hide(); onStart() },
-                    enabled  = host.isNotBlank() && !isHostInvalid,
+                    enabled  = canStart && !isRunning,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Icon(Icons.Default.Public, null)

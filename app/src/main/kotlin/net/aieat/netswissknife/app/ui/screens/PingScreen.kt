@@ -132,6 +132,7 @@ import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.ui.screens.ping.PingUiState
 import net.aieat.netswissknife.app.ui.screens.ping.PingViewModel
 import net.aieat.netswissknife.app.util.shareText
+import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.ping.PingPacketResult
 import net.aieat.netswissknife.core.network.ping.PingResult
 import net.aieat.netswissknife.core.network.ping.PingStats
@@ -347,7 +348,9 @@ private fun PingInputCard(
     onClearRecentHosts: () -> Unit
 ) {
     val keyboardController = LocalSoftwareKeyboardController.current
-    val isHostInvalid = host.isNotBlank() && host.contains(' ')
+    val normalizedHost = HostValidator.normalize(host)
+    val isHostInvalid = host.isNotBlank() && normalizedHost == null
+    val canStart = normalizedHost != null
 
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -381,7 +384,7 @@ private fun PingInputCard(
                 ),
                 keyboardActions = KeyboardActions(onGo = {
                     keyboardController?.hide()
-                    if (!isRunning) onStart()
+                    if (!isRunning && canStart) onStart()
                 }),
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !isRunning
@@ -466,7 +469,7 @@ private fun PingInputCard(
                         onStart()
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    enabled = host.isNotBlank() && !isHostInvalid
+                    enabled = canStart && !isRunning
                 ) {
                     Icon(Icons.Default.Speed, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))

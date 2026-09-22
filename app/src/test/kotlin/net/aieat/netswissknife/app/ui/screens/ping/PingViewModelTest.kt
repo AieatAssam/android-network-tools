@@ -442,6 +442,20 @@ class PingViewModelTest {
         }
 
         @Test
+        fun `normal ping normalizes host before probing displaying and storing it`() = runTest {
+            coEvery { pingUseCase(any()) } returns flowOf(PingFlowResult.Packet(successPacket))
+            viewModel.onHostChange("  EXAMPLE.COM.  ")
+
+            viewModel.startPing()
+
+            coVerify { pingUseCase(match { it.host == "example.com" }) }
+            coVerify {
+                recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_PING_HOSTS, "example.com")
+            }
+            assertEquals("example.com", (viewModel.uiState.value as PingUiState.Finished).result.host)
+        }
+
+        @Test
         fun `addRecent is NOT called when ValidationError fires`() = runTest {
             coEvery { pingUseCase(any()) } returns flowOf(PingFlowResult.ValidationError("bad host"))
             viewModel.onHostChange("bad!!host")

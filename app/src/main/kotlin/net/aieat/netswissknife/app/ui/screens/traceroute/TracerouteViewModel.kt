@@ -8,6 +8,7 @@ import net.aieat.netswissknife.app.platform.LinkInfoProvider
 import net.aieat.netswissknife.core.domain.TracerouteFlowResult
 import net.aieat.netswissknife.core.domain.TracerouteParams
 import net.aieat.netswissknife.core.domain.TracerouteUseCase
+import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.traceroute.HopResult
 import net.aieat.netswissknife.core.network.traceroute.HopStatus
 import net.aieat.netswissknife.core.network.traceroute.TracerouteProbeType
@@ -140,20 +141,24 @@ class TracerouteViewModel @Inject constructor(
             return
         }
 
-        viewModelScope.launch {
-            recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_TRACEROUTE_HOSTS, _host.value)
+        val validatedHost = HostValidator.normalize(_host.value)
+        val normalizedHost = validatedHost ?: _host.value.trim()
+        if (validatedHost != null) {
+            viewModelScope.launch {
+                recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_TRACEROUTE_HOSTS, validatedHost)
+            }
         }
         val generation = ++traceGeneration
 
         val params = TracerouteParams(
-            host          = _host.value,
+            host          = normalizedHost,
             maxHops       = _maxHops.value,
             timeoutMs     = _timeoutMs.value,
             probesPerHop  = _probesPerHop.value,
             probeType     = _probeType.value,
             packetSize    = _packetSize.value
         )
-        val trimmedHost = params.host.trim()
+        val trimmedHost = params.host
         val startTime   = System.currentTimeMillis()
         val accumulated = mutableListOf<HopResult>()
 

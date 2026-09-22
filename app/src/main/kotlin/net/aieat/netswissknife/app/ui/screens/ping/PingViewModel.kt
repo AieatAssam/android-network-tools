@@ -188,16 +188,15 @@ class PingViewModel @Inject constructor(
             return
         }
 
+        val trimmedHost = HostValidator.normalize(_host.value) ?: _host.value.trim()
         val params = PingParams(
-            host = _host.value,
+            host = trimmedHost,
             count = _count.value,
             timeoutMs = _timeoutMs.value,
             intervalMs = _intervalMs.value,
             payloadBytes = _payloadBytes.value,
             ttl = _ttl.value
         )
-        val trimmedHost = HostValidator.normalize(params.host) ?: params.host.trim()
-
         _uiState.value = PingUiState.Running(
             host = trimmedHost, packets = emptyList(), totalCount = params.count
         )
