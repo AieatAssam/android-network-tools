@@ -3,6 +3,11 @@
 #       UI/ViewModels, plurals, per-app language, pseudo-locales, first translation
 # =============================================================================
 # Audience: AI coding agent. Self-contained. Read plan/plan.yaml `agent_execution_rules` first.
+expansion_tasks:
+  index: plan/plan.yaml
+  tasks: [E01-T15, E01-T10]
+  rule: "Coordinate with these expansion tasks; do not duplicate existing scope or block independent regression fixes on optional enhancements. See comprehensive_expansion.regression_delivery for fresh follow-up ownership."
+
 phase:
   id: P07
   title: "Localization architecture + first translation"

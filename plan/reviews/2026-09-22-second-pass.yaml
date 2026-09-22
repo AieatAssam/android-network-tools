@@ -1,0 +1,235 @@
+review:
+  area: adversarial-second-pass
+  status: done
+  baseline_commit: "5e183721e64ce8a8946f1a0b50f52b83544e8898"
+  reviewed_on: "2026-09-22"
+  method: "Recheck expanded plan against source; persist novel findings incrementally. No implementation changes."
+  evidence_scope: "Production evidence is at the unchanged baseline commit. Plan-defect evidence records the pre-amendment text; recommendations were applied to plan specifications during this review, not to application code."
+
+findings:
+  - id: R2-001
+    severity: high
+    kind: security_gap
+    status: todo
+    title: "Cross-origin redirects strip headers but can replay a sensitive request body"
+    related_phase: P10
+    implementation_task: P10-T3
+    evidence:
+      - { file: core-network/src/main/kotlin/net/aieat/netswissknife/core/network/httprobe/HttpProbeRepositoryImpl.kt, line: 140, detail: "An origin change disables custom headers but leaves currentBody to redirectRequest; 307/308 preserve the entity and non-POST 301/302 requests can also retain it." }
+      - { file: core-network/src/main/kotlin/net/aieat/netswissknife/core/network/httprobe/HttpProbeRepositoryImpl.kt, line: 279, detail: "redirectRequest preserves method/body outside 303 and POST 301/302 handling." }
+      - { file: core-network/src/test/kotlin/net/aieat/netswissknife/core/network/httprobe/HttpProbeRepositoryTest.kt, line: 493, detail: "Origin-boundary tests cover credential headers; the separate 307 test verifies body preservation, not consent for cross-origin entity replay." }
+    impact: "A user-entered token or other sensitive data in a POST/PUT/PATCH body can be sent to a different origin via a redirect despite header stripping. This is a missing diagnostic-tool safety policy, not a claim that HTTP method-preservation semantics are incorrect."
+    recommended_action: "Before any cross-origin redirect that retains an entity, stop with redirect evidence and require explicit approval of destination/method/body replay. Default deny replay; do not silently discard an entity yet claim the same diagnostic request. Preserve compliant same-origin redirect semantics."
+    validation: "Two controlled loopback origins: POST 307/308 and PUT/PATCH 301/302 must cause zero destination requests until explicit approval; same-origin 307 preserves body; headers remain stripped across origins; approval is scoped to the displayed run and destination."
+
+  - id: R2-002
+    severity: high
+    kind: plan_defect
+    status: todo
+    title: "The HTTP roadmap weakens secure downgrade behavior by default"
+    related_phase: P10
+    implementation_task: P10-T3
+    evidence:
+      - { file: plan/phases/P10-security-tools-depth.yaml, line: 85, detail: "A3 explicitly proposes allowInsecureDowngrade=true and followed-with-warning behavior." }
+      - { file: core-network/src/main/kotlin/net/aieat/netswissknife/core/network/httprobe/HttpProbeRepositoryImpl.kt, line: 130, detail: "Current code refuses HTTPS-to-HTTP redirects before connecting to the destination." }
+    impact: "Implementing the plan would silently send a request over cleartext. Removing headers/body does not remove potentially sensitive URL path/query data or make an altered diagnostic equivalent."
+    recommended_action: "Keep allowInsecureDowngrade=false by default. Report the blocked hop and allow a separate explicit cleartext probe after destination/data disclosure; do not automatically forward original credentials, URL secrets, or request body."
+    validation: "Controlled HTTPS endpoint redirects to HTTP: default sends zero HTTP requests and preserves the blocked Location as evidence; explicit new probe captures its own configuration and security warning. Verify URL-userinfo/query redaction in UI exports and logs."
+
+  - id: R2-003
+    severity: medium
+    kind: bug
+    status: todo
+    title: "NBSTAT parser assumes a question section that standard responses omit"
+    related_phase: P01
+    implementation_task: P01-T3
+    evidence:
+      - { file: core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/NetBiosNameProbe.kt, line: 54, detail: "Parser unconditionally skips a name and four question bytes before reading answers; it never reads QDCOUNT." }
+      - { file: core-network/src/test/kotlin/net/aieat/netswissknife/core/network/lan/NetBiosNameProbeTest.kt, line: 37, detail: "Test fixture copies the query header/question, leaving QDCOUNT=1 and query flags, so it does not represent a standard NBSTAT response." }
+    protocol_reference: { url: "https://www.ietf.org/rfc/rfc1002", section: "4.2.1.1 and 4.2.18", detail: "Response question count is zero; the node-status answer starts directly after the header." }
+    impact: "Real NetBIOS responses can be parsed at the wrong offsets and discarded, reducing discovery coverage precisely when ICMP/TCP do not establish presence. The existing test conceals this compatibility failure."
+    recommended_action: "Parse header counts and response flags before walking records; accept standards-shaped zero-question responses. Replace the synthetic happy path with a complete standards-shaped fixture and retain malformed/count-mismatch tests."
+    validation: "Zero-question, one-answer fixture returns PC-1; multiple name entries, group names, truncated records, compression bounds and invalid flags are tested. Validate with an anonymized real response when available."
+
+  - id: R2-004
+    severity: medium
+    kind: security_gap
+    status: todo
+    title: "LAN UDP discovery loses sender provenance and accepts uncorrelated NBSTAT data"
+    related_phase: P01
+    implementation_task: P01-T3
+    evidence:
+      - { file: core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/UdpExchange.kt, line: 14, detail: "An unconnected socket accepts the first datagram; the returned ByteArray discards sender address and port." }
+      - { file: core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/NetBiosNameProbe.kt, line: 12, detail: "Queries use a fixed default transaction ID; parsing does not correlate the received ID, flags or endpoint with the request." }
+      - { file: core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/LanScanRepositoryImpl.kt, line: 198, detail: "A nonblank name-probe result is promoted to host presence." }
+    impact: "Unrelated or spoofed UDP traffic can be attributed to the scanned IP and become false positive host evidence. This is separate from TCP refusal handling."
+    recommended_action: "Return a typed datagram envelope with sender and receive context. Correlate unicast NBSTAT endpoint, per-query ID and protocol response fields; ignore unrelated packets within a fixed deadline. Give multicast mDNS its own owner/source/TTL policy rather than requiring a multicast-group sender address."
+    validation: "Wrong sender/port/transaction ID, query-not-response, error response and stale reply never confirm a host; an unrelated datagram followed by a matching response succeeds within the original deadline. Include multicast responder cases and cancellation."
+
+  - id: R2-005
+    severity: high
+    kind: privacy_gap
+    status: todo
+    title: "HTTP recents persist the complete URL before validation, including possible secrets"
+    related_phase: P12
+    implementation_task: E01-T02
+    evidence:
+      - { file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/httprobe/HttpProbeViewModel.kt, line: 100, detail: "send saves state.url.trim() to RECENT_HTTP_HOSTS before the request is validated or executed." }
+      - { file: app/src/main/kotlin/net/aieat/netswissknife/app/data/RecentHostsRepository.kt, line: 23, detail: "The repository stores supplied strings verbatim in DataStore apart from trimming and a five-entry cap." }
+    impact: "URL userinfo, signed query tokens, fragments and sensitive paths may survive app restarts and appear in recent-input UI without an explicit report-save choice. Backup exclusion does not prevent local retention or screen disclosure."
+    recommended_action: "Introduce a tool-aware safe recent-input representation: HTTP defaults to normalized scheme/host/port only, never userinfo or query/fragment secrets. Keep full request only in the transient run. Sanitize existing HTTP recents atomically and disclose the change; do not wipe unrelated preferences."
+    validation: "Submit a synthetic URL containing userinfo, token query, sensitive path and fragment; none survive in persisted recents or recent-input UI. Invalid requests do not persist raw text. Migration preserves safe origin/order while stripping sensitive components."
+
+  - id: R2-006
+    severity: medium
+    kind: bug
+    status: todo
+    title: "Ping CSV statistics use locale-specific decimal commas as field separators"
+    related_phase: P04
+    implementation_task: E01-T12
+    evidence:
+      - { file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/PingScreen.kt, line: 1308, detail: "Statistics interpolate %.1f/%.3f.format without a fixed locale into comma-delimited fields; unlike packet text, the formatted statistics are not CSV-escaped." }
+    impact: "On decimal-comma locales, numeric values add extra CSV columns and corrupt imported statistics. The broad localization/export proposal did not identify this existing regression explicitly."
+    recommended_action: "Extract a pure export serializer and use locale-neutral numeric fields plus consistent CSV quoting. Keep localized human presentation separate. Fix the current exporter without waiting for the full export sheet/history redesign."
+    validation: "Serialize identical fixtures under en-US, de-DE and fr-FR; a CSV parser sees identical numeric values and exactly seven statistics columns. Cover null values, quotes/newlines in text and special floating-point values with an explicit policy."
+
+  - id: R2-007
+    severity: high
+    kind: plan_gap
+    status: todo
+    title: "New history persistence needs an explicit consent, backup and version-compatibility contract"
+    related_phase: P12
+    implementation_task: E01-T11
+    evidence:
+      - { file: plan/expansion/E01-ui-and-user-flows.yaml, line: 463, detail: "History proposes metadata/payload persistence but leaves default consent, payload storage locations and unknown report-version handling underspecified." }
+      - { file: app/src/main/res/xml/backup_rules.xml, line: 3, detail: "Current exclusions target existing preferences/log paths, not newly proposed history/report files." }
+      - { file: app/src/main/res/xml/data_extraction_rules.xml, line: 3, detail: "Cloud/device-transfer rules must explicitly cover newly introduced sensitive durable paths." }
+    impact: "A literal implementation can begin retaining network identifiers automatically or back up new report files while claiming a local-only history policy. Unsupported future reports can be misread as valid current results."
+    recommended_action: "Default new history to off for new/upgraded installs until an explicit mode selection. Define off/metadata-only/explicit-report modes, schema compatibility and exact private storage paths; gate durable rollout on E03-T11 backup/migration verification. Existing recents remain a separate feature."
+    validation: "Test install/upgrade/mode changes, retention and clear-all; backup/restore excludes report/history payloads; prior versions migrate, unknown future versions remain unsupported and deletable without being executed or shown as live. Explain that externally saved/shared copies cannot be revoked."
+
+  - id: R2-008
+    severity: medium
+    kind: plan_gap
+    status: todo
+    title: "Report privacy and SAF handling have multiple implementation paths without a single contract owner"
+    related_phase: P12
+    implementation_task: E01-T12
+    evidence:
+      - { file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/PingScreen.kt, line: 795, detail: "Existing direct copy/share paths bypass any future report preview/adapter unless explicitly migrated." }
+      - { file: app/src/main/kotlin/net/aieat/netswissknife/app/util/ShareUtils.kt, line: 6, detail: "shareText accepts arbitrary text, with no structured sensitive-field policy." }
+      - { file: plan/expansion/E01-ui-and-user-flows.yaml, line: 503, detail: "Report SAF/copy/share work overlaps the separate P12 settings exporter; fast-copy preservation needs a clear exception boundary." }
+    impact: "Different buttons may apply inconsistent privacy rules, and independently built file adapters can disagree on cancellation, partial writes and URI lifetimes."
+    recommended_action: "E03-T05 owns the reusable bounded file/SAF transport contract, E03-T06 owns structured redaction, E01-T12 owns report presentation, and P12-T5 owns settings schema/import. Migrate report/body/log sharing through those adapters. Explicit single-field Copy IP/hostname remains exact and user-initiated, not silently masked."
+    validation: "Inventory every share/copy site; sensitive multi-field reports follow preview/redaction rules, explicit field-copy preserves the selected value, secret fixtures never leak through default reports, and shared SAF tests cover cancellation/write failure/URI retention without mixing report and settings schemas."
+
+  - id: R2-009
+    severity: medium
+    kind: isolation_gap
+    status: todo
+    title: "WHOIS progress is repository-global rather than lookup-scoped"
+    related_phase: P10
+    implementation_task: E03-T03
+    evidence:
+      - { file: core-network/src/main/kotlin/net/aieat/netswissknife/core/network/whois/WhoisRepositoryImpl.kt, line: 14, detail: "All lookups emit WhoisHop into one SharedFlow, without request identity." }
+      - { file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/whois/WhoisViewModel.kt, line: 95, detail: "The new progress collector appends every repository event; cancelling old jobs is not an event-origin filter." }
+    impact: "Overlapping consumers or delayed work can mix hop events between lookup sessions, even if terminal results are guarded. This is especially relevant to the planned combined diagnostics runner."
+    recommended_action: "Prefer a per-call event flow, or tag every progress and terminal event with an opaque lookup ID and filter at consumers. Do not rely solely on cancellation of a UI collector."
+    validation: "Interleave two lookups sharing one repository and delay A's hop until B starts; each consumer sees only its own hops. Cover replacement, cancellation and a second independent consumer."
+
+  - id: R2-010
+    severity: high
+    kind: resource_gap
+    status: todo
+    title: "Topology fan-out and SNMP walks can grow before UI caps take effect"
+    related_phase: P02
+    implementation_task: E03-T05
+    evidence:
+      - { file: core-network/src/main/kotlin/net/aieat/netswissknife/core/network/topology/TopologyDiscoveryRepositoryImpl.kt, line: 32, detail: "Visited, queue, allNodes and allLinks grow across traversal; maxHops limits depth, not fan-out or retained entries." }
+      - { file: core-network/src/main/kotlin/net/aieat/netswissknife/core/network/topology/Snmp4jClientImpl.kt, line: 109, detail: "getSubtree materializes walk events before collectWalkResults builds another map; a UI row cap cannot bound this stage." }
+    impact: "A dense or adversarial SNMP graph can consume substantial memory/network work with a small hop depth. Bounded rendering does not make repository collection bounded."
+    recommended_action: "Add node/link/pending-queue/per-device-interface/VLAN/walk-entry and byte budgets at producers. Replace full-subtree materialization with a bounded streaming walk seam where needed; stop scheduling and report partial/truncated reasons when caps are reached."
+    validation: "Synthetic high-fan-out graph and large walk fixtures assert caps before materialization, queue deduplication, bounded retained memory, accurate truncation metadata and prompt cancellation. Depth-only tests are insufficient."
+
+  - id: R2-011
+    severity: medium
+    kind: privacy_gap
+    status: todo
+    title: "Crash diagnostics bypass the planned redaction and payload-size limits"
+    related_phase: P09
+    implementation_task: E03-T06
+    evidence:
+      - { file: app/src/main/kotlin/net/aieat/netswissknife/app/crash/CrashHandler.kt, line: 19, detail: "Full stack trace and exception message are rendered into an Intent with no explicit size/redaction policy." }
+      - { file: app/src/main/kotlin/net/aieat/netswissknife/app/crash/CrashActivity.kt, line: 84, detail: "Copy/share builds a report from raw crash extras, outside AppLogger and the planned report exporter." }
+    impact: "Secret-bearing exception text or paths can reach default crash reports, while very large payloads can prevent delivery of the crash UI. The logger-only redaction scope misses this separate pipeline."
+    recommended_action: "Use a small bounded sanitized crash-report builder before Intent creation; avoid unbounded StringWriter expansion. Preserve default-handler invocation even if pre-handle hooks/report construction fail. Route crash copy/share through the report privacy policy."
+    validation: "Synthetic multi-megabyte messages, nested causes and secret/path fixtures produce bounded sanitized extras; failing hooks/builders still call the default handler once. Copy/share uses sanitized content and does not crash recursively."
+
+  - id: R2-012
+    severity: medium
+    kind: plan_gap
+    status: todo
+    title: "Response limits cover bodies but do not define header-count or metadata budgets"
+    related_phase: P10
+    implementation_task: E03-T04
+    evidence:
+      - { file: core-network/src/main/kotlin/net/aieat/netswissknife/core/network/httprobe/HttpProbeRepositoryImpl.kt, line: 151, detail: "Every header list is copied into responseHeaders; the configurable maxResponseBodyBytes applies only to the body reader." }
+      - { file: plan/expansion/E03-performance-reliability-and-quality.yaml, line: 329, detail: "Shared byte budgets focus on response bodies; transport header parsing/retention limits are not specified." }
+    impact: "Application-level response-size guarantees do not cover headers or their subsequent UI/export copies. Transport implementations may impose their own limits, but the app neither defines nor verifies a portable contract."
+    recommended_action: "Specify aggregate header bytes/count and per-value limits at the engine boundary, document underlying parser bounds, and preserve duplicate header semantics with explicit truncated/rejected outcomes. Do not claim bounded parser memory merely by truncating after materialization."
+    validation: "Scripted engine fixtures with huge values/counts test application retention bounds; transport integration tests verify behavior before materialization. Security grading treats omitted headers as unknown rather than absent."
+
+  - id: R2-013
+    severity: high
+    kind: correctness_gap
+    status: todo
+    title: "Port scan reports one resolved address but sends probes using the hostname again"
+    related_phase: P11
+    implementation_task: E02-T03
+    evidence:
+      - { file: core-network/src/main/kotlin/net/aieat/netswissknife/core/network/portscan/PortScanRepositoryImpl.kt, line: 92, detail: "resolvedIp is captured once only for the summary." }
+      - { file: core-network/src/main/kotlin/net/aieat/netswissknife/core/network/portscan/PortScanRepositoryImpl.kt, line: 118, detail: "Workers pass the original host to effectiveChecker; defaultChecker constructs InetSocketAddress(host, port), allowing another hostname resolution." }
+    impact: "Changing DNS answers or different address selection can make ports attributed to one IP actually belong to another. It also undermines explicit target/network selection and trustworthy scan comparisons."
+    recommended_action: "Resolve and select an immutable literal endpoint before scheduling; use it for every connection and report. Fail clearly if resolution fails; represent multiple selected addresses as separate per-address scans. Preserve the hostname separately for display and TLS SNI where applicable."
+    validation: "Inject alternating DNS results and assert one resolution/selected endpoint for all probes; summary and diff keys match that endpoint. Cover IPv4/IPv6, failed resolution and explicit multi-address selection."
+
+  - id: R2-014
+    severity: medium
+    kind: correctness_gap
+    status: todo
+    title: "Topology table failures become empty collections and misleading snapshot removals"
+    related_phase: P02
+    implementation_task: E02-T08
+    evidence:
+      - { file: core-network/src/main/kotlin/net/aieat/netswissknife/core/network/topology/TopologyDiscoveryRepositoryImpl.kt, line: 146, detail: "Interface and VLAN collection consumes safeWalk maps; failed walks become empty maps rather than per-table failure evidence." }
+      - { file: core-network/src/main/kotlin/net/aieat/netswissknife/core/network/topology/TopologyModels.kt, line: 34, detail: "Node collections lack separate per-table completeness/error states for snapshot comparisons." }
+    impact: "Timeouts, authentication failures or unsupported MIBs can look like no interfaces/neighbours/VLANs. Proposed diffs may then report removals from incomplete evidence."
+    recommended_action: "Carry per-table success/empty/unsupported/timeout/auth-failed/partial states through repository, node, report and diff. Only compare absence when both relevant observations are sufficiently complete; unknown data is not removal."
+    validation: "Fake each walk failure and partial-return mode; snapshots retain successful sections, disclose missing evidence, and never report a removed interface/link solely from a failed candidate table."
+
+  - id: R2-015
+    severity: medium
+    kind: resource_gap
+    status: todo
+    title: "mDNS service enumeration can grow its state and query fan-out without producer budgets"
+    related_phase: P12
+    implementation_task: E03-T05
+    evidence:
+      - { file: app/src/main/kotlin/net/aieat/netswissknife/app/mdns/MdnsRepositoryImpl.kt, line: 65, detail: "The loop uses wall-clock elapsed time and maintains service-type/instance collections without producer caps; each discovered type/instance creates follow-up queries." }
+      - { file: core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/MdnsDiscoveryUseCase.kt, line: 7, detail: "Timeout is forwarded without a domain range check." }
+    impact: "A noisy/adversarial LAN or wall-clock adjustment can amplify discovery work beyond the intended scan window. A UI-only row cap does not constrain these maps or outgoing queries."
+    recommended_action: "Validate timeout at the boundary, use an injected monotonic deadline and cap service types, instances, address/TXT bytes and outbound queries before allocation/scheduling. Emit a typed partial/cap-reached result."
+    validation: "Negative/huge timeout, backward wall-clock change and thousands of PTR/SRV/TXT records remain within producer/query budgets and the original monotonic deadline; cancellation closes the socket and releases the multicast lock."
+
+coverage:
+  parallel_review: "Three gpt-5.6-luna/xhigh reviewers completed read-only bounded audits; primary verified and integrated findings."
+  deduplication:
+    - "GeoIP body/cancellation concerns already belong to E03-T04 and RNET006-adjacent lifecycle work; no duplicate finding added."
+    - "The suggested WOL cancellation-to-error claim was not established for its current synchronous loop; shared cancellation/resource tests remain required under E03-T01/E02-T14."
+    - "Recent URL secret retention overlapped two reviewers and is consolidated in R2-005; history consent/backup/versioning is consolidated in R2-007."
+  diagnostic_checks:
+    - "Existing compiled NetBiosNameProbe invoked with a standards-shaped zero-question/one-answer fixture: expected PC-1, actual null. This was a local diagnostic, not a fresh Gradle test build; source inspection confirms the unconditional skip."
+    - "Kotlin numeric-format reproduction under Locale.GERMANY yields ten CSV fields for the seven-column Ping statistics schema. No network calls or application implementation changes."
+    - "All 27 YAML files parse with duplicate-key checking; 149 task IDs and their hard dependencies resolve without cycles; all 15 findings link to owners and source paths."
+  limitations:
+    - "No exploit, physical-device reproduction or full application/Gradle test suite was run; only the two bounded local diagnostics above."

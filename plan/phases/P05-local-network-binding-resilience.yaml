@@ -3,6 +3,11 @@
 #       Android 16 Local Network Protections readiness, mDNS bind fallback
 # =============================================================================
 # Audience: AI coding agent. Self-contained. Read plan/plan.yaml `agent_execution_rules` first.
+expansion_tasks:
+  index: plan/plan.yaml
+  tasks: [E01-T13, E03-T01, E03-T02, E03-T03]
+  rule: "Coordinate with these expansion tasks; do not duplicate existing scope or block independent regression fixes on optional enhancements. See comprehensive_expansion.regression_delivery for fresh follow-up ownership."
+
 phase:
   id: P05
   title: "NetworkBinder abstraction + Wi-Fi/Ethernet binding for all LAN sockets, connectivity status banner, LNP error mapping, mDNS port-bind fallback"
@@ -13,6 +18,15 @@ phase:
   enables: [P11, P12, P13]
   findings: [F012, F013]
   target_modules: [":core-network", ":app"]
+
+review_follow_up:
+  reviewed_on: "2026-09-21"
+  status: todo
+  findings: [RAPP002, RNET002]
+  reports:
+    - plan/reviews/2026-09-21-app.yaml
+    - plan/reviews/2026-09-21-network.yaml
+  note: "New source-review follow-ups; preserve historical task completion. See report evidence, recommended_action, and validation before implementation."
 
 context:
   problem: |
@@ -147,7 +161,7 @@ tasks:
         test_file: core-network/src/test/kotlin/net/aieat/netswissknife/core/network/net/LocalDestinationPolicyTest.kt
         tests:
           - "policy('192.168.1.0/24').isLocal('192.168.1.7') true; ('192.168.2.7') false; ('8.8.8.8') false"
-          - "policy(null).isLocal(any site-local) true (no subnet known: bind for all RFC1918/link-local)"
+          - "policy(null) must not automatically force all RFC1918 traffic onto a guessed LAN; preserve the default route when destination membership cannot be established. Explicit user-selected network override is separate, visible, and tested with VPN/private routes."
           - "IPv6 link-local fe80:: -> true; global v6 -> false"
           - "hostname input (non-IP) -> false (caller must resolve first)"
         run: "./gradlew :core-network:test --tests '*LocalDestinationPolicyTest' --no-daemon"

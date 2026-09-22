@@ -4,6 +4,11 @@
 # This phase follows P02 because the dependency scan was performed after the
 # P01/P02 implementation landed. It is deliberately separate from topology
 # behavior so dependency upgrades can be reviewed and reverted independently.
+expansion_tasks:
+  index: plan/plan.yaml
+  tasks: [E03-T10]
+  rule: "Coordinate with these expansion tasks; do not duplicate existing scope or block independent regression fixes on optional enhancements. See comprehensive_expansion.regression_delivery for fresh follow-up ownership."
+
 phase:
   id: P02.5
   title: "Dependency security remediation: close authenticated Dependabot alerts"

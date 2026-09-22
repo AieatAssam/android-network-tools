@@ -2,16 +2,29 @@
 # P08 – Accessibility & UI polish
 # =============================================================================
 # Audience: AI coding agent. Self-contained. Read plan/plan.yaml `agent_execution_rules` first.
+expansion_tasks:
+  index: plan/plan.yaml
+  tasks: [E01-T01, E01-T03, E01-T05, E01-T07, E01-T08, E01-T09, E01-T10, E01-T14, E01-T16, E01-T17]
+  rule: "Coordinate with these expansion tasks; do not duplicate existing scope or block independent regression fixes on optional enhancements. See comprehensive_expansion.regression_delivery for fresh follow-up ownership."
+
 phase:
   id: P08
   title: "Accessibility & UI polish: 48dp targets, live regions, RTL/font-scale-safe chart text, chart descriptions, slider labels, narrow-width layouts, reduced-motion, IME actions, contrast test"
   priority: medium
   status: todo
   estimated_effort: "M (2-4 agent sessions)"
-  depends_on: [P07]
+  depends_on: [P07-T3]
   enables: []
   findings: [F024, F030]
   target_modules: [":app"]
+
+review_follow_up:
+  reviewed_on: "2026-09-21"
+  status: todo
+  findings: [RUI001, RUI003, RUI004, RUI009]
+  reports:
+    - plan/reviews/2026-09-21-ui-domain.yaml
+  note: "New source-review follow-ups; preserve historical task completion. See report evidence, recommended_action, and validation before implementation."
 
 context:
   problem: |
@@ -118,7 +131,7 @@ tasks:
   - id: P08-T2
     title: "ToolStateAnnouncer (live region) in all tool screens"
     status: todo
-    depends_on: [P07]
+    depends_on: [P07-T3]
     tdd:
       red:
         test_file: app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/a11y/LiveRegionTest.kt

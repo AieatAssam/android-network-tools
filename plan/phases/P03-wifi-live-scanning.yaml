@@ -3,6 +3,11 @@
 #       location-services state, richer connection info, enterprise security detection
 # =============================================================================
 # Audience: AI coding agent. Self-contained. Read plan/plan.yaml `agent_execution_rules` first.
+expansion_tasks:
+  index: plan/plan.yaml
+  tasks: [E02-T06, E03-T02]
+  rule: "Coordinate with these expansion tasks; do not duplicate existing scope or block independent regression fixes on optional enhancements. See comprehensive_expansion.regression_delivery for fresh follow-up ownership."
+
 phase:
   id: P03
   title: "Wi-Fi Scanner: live scanning with WifiManager.startScan + receiver, throttle/age reporting, configurable interval, LocationDisabled state, LinkProperties-based connection info, EAP/WPA3-Enterprise"
@@ -13,6 +18,15 @@ phase:
   enables: [P08]
   findings: [F007]
   target_modules: [":core-network", ":app"]
+
+review_follow_up:
+  reviewed_on: "2026-09-21"
+  status: todo
+  findings: [RAPP001, RNET004, RNET009]
+  reports:
+    - plan/reviews/2026-09-21-app.yaml
+    - plan/reviews/2026-09-21-network.yaml
+  note: "New source-review follow-ups; preserve historical task completion. See report evidence, recommended_action, and validation before implementation."
 
 context:
   problem: |

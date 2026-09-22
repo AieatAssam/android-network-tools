@@ -2,6 +2,11 @@
 # P06 – Documentation & consistency sync, dead code, default mismatches
 # =============================================================================
 # Audience: AI coding agent. Self-contained. Read plan/plan.yaml `agent_execution_rules` first.
+expansion_tasks:
+  index: plan/plan.yaml
+  tasks: [E01-T18]
+  rule: "Coordinate with these expansion tasks; do not duplicate existing scope or block independent regression fixes on optional enhancements. See comprehensive_expansion.regression_delivery for fresh follow-up ownership."
+
 phase:
   id: P06
   title: "Docs & consistency: README/CLAUDE.md/PRIVACY_POLICY/store/tool_instructions truthfulness; remove dead code; align defaults and recents behaviour"

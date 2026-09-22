@@ -1,0 +1,225 @@
+review:
+  area: core-network
+  status: done
+  baseline_commit: "5e183721e64ce8a8946f1a0b50f52b83544e8898"
+  reviewer_model: "gpt-5.6-luna"
+  reviewer_reasoning_effort: xhigh
+coverage:
+  scope: "All core-network production sources, JVM tests, fixtures, and public interfaces under core-network/src."
+  reviewed_areas: [lan, wifi, dns, whois, traceroute, portscan, subnet, topology, ping, mdns, tls, http_probe, speedtest]
+  revalidated_existing: [F001, F002, F003, F004, F005, F006, F008, F009, F010, F011, F012, F013, F014, F015, F025, F026, F027, F028, F029, F031, F032, F033, F037, F040]
+  limitations:
+    - "No Gradle task was run by this sub-review; parent ran the fresh all-module JVM suite."
+    - "Android framework/network behavior and physical-device conditions remain unverified; findings identify source-level contracts and required regression tests."
+findings:
+  - id: RNET001
+    severity: medium
+    kind: bug
+    title: "ARP enrichment snapshots the cache before all probes finish"
+    evidence:
+      - file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/ArpFileMacResolver.kt"
+        line: 10
+        detail: "The resolver stores reader() in a lazy table and every later resolve reads only that cached snapshot."
+      - file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/LanScanRepositoryImpl.kt"
+        line: 229
+        detail: "Each discovered host calls effectiveMacResolver.resolve() during concurrent enrichment, so the first completing host initializes the cache before other host probes have populated ARP."
+      - file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/LanScanRepositoryImpl.kt"
+        line: 126
+        detail: "The later pass is documented as a second read after workers complete, but it cannot be a second OS read because ArpFileMacResolver.table is already cached."
+      - file: "app/src/main/kotlin/net/aieat/netswissknife/app/di/LanModule.kt"
+        line: 25
+        detail: "The resolver is injected into a SingletonComponent repository, so the cached table can also survive across later scans, not just the current scan."
+    impact: "Where /proc/net/arp is readable, MAC/vendor results for hosts discovered after the first enrichment snapshot remain missing despite the P01 post-probe enrichment design; the singleton wiring can preserve stale results across scans."
+    recommended_action: "Make ArpFileMacResolver parse a fresh reader result per scan/final pass, or defer all MAC resolution until workers finish and inject a scan-scoped immutable ARP snapshot."
+    validation: "Add a deterministic test whose reader returns an initial table on the first call and a larger table on the second call; use two hosts with staggered probe completion and assert both final MACs are present."
+    related_phase: P01
+    status: todo
+  - id: RNET002
+    severity: medium
+    kind: bug
+    title: "Both platform and fallback subnet detection silently clamp the real prefix length"
+    evidence:
+      - file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/SubnetUtils.kt"
+        line: 31
+        detail: "getCurrentSubnet coerces every interface networkPrefixLength into 16..30 instead of preserving the platform-provided prefix."
+      - file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/SubnetUtils.kt"
+        line: 33
+        detail: "The returned network address is computed from the coerced prefix, so a valid 10.0.0.0/8 link becomes 10.0.0.0/16 and /31-/32 links become /30."
+      - file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanViewModel.kt"
+        line: 130
+        detail: "The app uses LinkInfoProvider.cidr first and SubnetUtils.getCurrentSubnet() as fallback; both currently apply the same silent prefix clamp."
+      - file: "app/src/main/kotlin/net/aieat/netswissknife/app/platform/LinkInfoProvider.kt"
+        line: 29
+        detail: "LinkInfoMapper.cidrOf also uses prefixLength.coerceIn(16, 30). The 2026-09-22 expansion corrected the earlier review's incomplete fallback-only characterization."
+    impact: "Both current-subnet detection paths can suggest the wrong address space: broad networks are silently narrowed and /31-/32 links are expanded to /30. Scan-size limits must be explicit product constraints rather than fabricated network metadata."
+    recommended_action: "Preserve valid platform prefixes (0..32), then apply an explicit product scan-size guard at the call site; if large networks are unsupported, return a clear limitation instead of changing the CIDR."
+    validation: "Add tests around an injectable interface-address seam for /8, /16, /30, /31, and /32, asserting exact CIDR preservation or an explicit rejection policy."
+    related_phase: P05
+    status: todo
+  - id: RNET003
+    severity: medium
+    kind: gap
+    title: "Topology parameters omit bounds for hops, timeout, and retries"
+    evidence:
+      - file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/topology/TopologyParamsValidator.kt"
+        line: 11
+        detail: "validate checks only target and credential fields; maxHops, timeoutMs, and retries in TopologyParams are never range-checked."
+      - file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/topology/Snmp4jClientImpl.kt"
+        line: 154
+        detail: "The unvalidated timeout and retries are passed directly into SNMP4J targets."
+      - file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/topology/TopologyDiscoveryRepositoryImpl.kt"
+        line: 108
+        detail: "An unbounded maxHops controls breadth-first neighbour expansion and can permit unexpectedly large discovery runs."
+    impact: "Invalid values can fail late in transport construction, produce zero-hop/no-neighbour behavior, or create excessive retries and graph traversal; callers receive no actionable validation error."
+    recommended_action: "Define and validate finite ranges for maxHops, timeoutMs, and retries at the core boundary, with constants shared by UI/use-case validation and tests."
+    validation: "Add boundary tests for zero, negative, and above-limit values and assert repository discovery is not called for invalid parameter sets."
+    related_phase: P02
+    status: todo
+  - id: RNET004
+    severity: low
+    kind: bug
+    title: "Wi-Fi unique-network count collapses all hidden APs"
+    evidence:
+      - file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/wifi/WifiNetworkGrouper.kt"
+        line: 17
+        detail: "Hidden access points are deliberately emitted as separate WifiNetwork instances keyed by BSSID."
+      - file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/wifi/WifiScanResult.kt"
+        line: 38
+        detail: "uniqueNetworkCount instead counts distinct SSID strings, so every hidden AP with an empty SSID contributes to one shared set entry."
+    impact: "This is a latent public-model inconsistency (no current production caller of uniqueNetworkCount was found): any caller that displays the property can report one unique network while networks contains multiple hidden networks, misleading summaries in dense environments."
+    recommended_action: "Derive the count from networks.size (or the same visible SSID/security plus hidden-BSSID identity used by WifiNetworkGrouper)."
+    validation: "Construct a WifiScanResult with two hidden APs and assert uniqueNetworkCount equals networks.size while visible same-SSID BSSIDs remain grouped."
+    related_phase: P03
+    status: todo
+  - id: RNET005
+    severity: medium
+    kind: bug
+    title: "DNS lookup does not normalize Unicode domains to IDNA"
+    evidence:
+      - file: "core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/DnsLookupUseCase.kt"
+        line: 21
+        detail: "The DNS use case only trims and length-checks the user domain before delegating, so valid Unicode hostnames such as bücher.de reach the network repository unchanged."
+      - file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/dns/DnsRepositoryImpl.kt"
+        line: 41
+        detail: "normalizeDomain only removes a trailing root dot and handles PTR reversal; non-PTR labels are not passed through IDN.toASCII."
+      - file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/dns/DnsRepositoryImpl.kt"
+        line: 96
+        detail: "Name.fromString receives the unconverted Unicode domain; dnsjava 3.6.5 represents bücher.de as a backslash-escaped high-byte label rather than xn--bcher-kva.de."
+    impact: "DNS lookups for internationalized domains can query a different invalid wire name and return an error or no records even though the same hostname is valid under IDNA. This also makes DNS behavior inconsistent with HostValidator.normalize, which already returns the ASCII form."
+    recommended_action: "Normalize non-literal DNS names with IDN.toASCII (per label, preserving leading underscore service labels and PTR conversion) before constructing dnsjava Name; return a clear validation error for invalid IDNA input."
+    validation: "Add A/AAAA/SRV tests for bücher.de and an IDN service target, asserting the resolver receives xn--bcher-kva.de. and that malformed Unicode is rejected without a network call."
+    related_phase: P04
+    related_findings: [F025]
+    status: todo
+  - id: RNET006
+    severity: medium
+    kind: gap
+    title: "WHOIS cancellation does not bound blocking DNS and socket work"
+    evidence:
+      - file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/whois/WhoisRepositoryImpl.kt"
+        line: 22
+        detail: "The entire IO operation is wrapped in a broad catch(Exception), with no explicit CancellationException propagation; cancellation can be converted into a NetworkResult.Error while a hop is still unwinding."
+      - file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/whois/WhoisRepositoryImpl.kt"
+        line: 171
+        detail: "queryServer performs blocking InetAddress.getByName, Socket.connect, output, and InputStreamReader reads; socket timeout bounds connect/read idle time but no cancellation hook closes the socket or interrupts DNS resolution."
+      - file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/whois/WhoisRepositoryImpl.kt"
+        line: 179
+        detail: "The configured timeout is applied to connect and socket idle reads, but a cancelled coroutine has no direct path to stop an in-flight hop before that timeout."
+    impact: "Cancelling a WHOIS request can leave a blocking resolver/socket operation occupying an IO worker until timeout; the broad catch also obscures cancellation intent inside the repository even though withContext may re-check cancellation at its return boundary. Repeated retries can consume threads and delay UI teardown."
+    recommended_action: "Rethrow kotlinx.coroutines.CancellationException before the generic error handler and run blocking DNS/socket work through a cancellation-aware bridge that closes the socket on cancellation; retain connect/read and total-operation deadlines."
+    validation: "Use a controllable server that blocks during connect and response read, cancel the lookup in each state, assert the Job cancels promptly, no NetworkResult.Error is emitted for cancellation, and the socket is closed."
+    related_phase: P10
+    status: todo
+  - id: RNET007
+    severity: low
+    kind: bug
+    title: "GeoIP bogon detection rejects explicit false values"
+    evidence:
+      - file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/traceroute/GeoIpRepositoryImpl.kt"
+        line: 59
+        detail: "parseIpInfoResponse treats any JSON containing the key string \"bogon\" as a bogon response, without checking whether the value is true."
+      - file: "core-network/src/test/kotlin/net/aieat/netswissknife/core/network/traceroute/GeoIpRepositoryImplTest.kt"
+        line: 67
+        detail: "The successful-response test omits a bogon field, so an explicit \"bogon\":false response is not covered."
+    impact: "If the provider includes the standard bogon flag with false for a public address, valid country/city coordinates are discarded and the traceroute loses optional location enrichment."
+    recommended_action: "Parse bogon as a boolean and short-circuit only when its value is true; use a structured JSON parser or a strict field matcher rather than key-presence matching."
+    validation: "Serve successful responses with bogon:false and bogon:true and assert the first parses while the second returns null; retain coverage for absent bogon."
+    related_phase: P11
+    status: todo
+  - id: RNET008
+    severity: low
+    kind: opportunity
+    title: "Open-port banner reads can exceed the configured per-port timeout"
+    evidence:
+      - file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/portscan/PortScanRepositoryImpl.kt"
+        line: 60
+        detail: "After a connection succeeds, defaultChecker performs a banner read with a fixed 300 ms socket timeout, independent of the scan timeoutMs passed to the checker."
+      - file: "core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/PortScanUseCase.kt"
+        line: 35
+        detail: "The public use-case allows timeoutMs as low as 100 ms and documents it as the per-port timeout, so an open port that sends no banner can run beyond the selected limit."
+    impact: "Scans with low per-port timeouts can spend up to an additional 300 ms on every open, silent service; dense scans then exceed the advertised timing and delay completion despite bounded worker concurrency."
+    recommended_action: "Use a banner budget derived from timeoutMs (for example min(timeoutMs, BANNER_TIMEOUT_MS)) or explicitly separate and expose connection versus banner timing in the contract."
+    validation: "Exercise defaultChecker against a server that accepts but sends no bytes at timeout values 100, 300, and 2_000 ms; assert the banner phase never exceeds its documented budget and scan duration remains bounded."
+    related_phase: P11
+    status: todo
+  - id: RNET009
+    severity: medium
+    kind: bug
+    title: "Unknown Wi-Fi capabilities are classified as open networks"
+    evidence:
+      - file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/wifi/WifiSecurity.kt"
+        line: 35
+        detail: "fromCapabilities maps empty capabilities (the Android null fallback) to OPEN, even though the enum defines UNKNOWN."
+      - file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/wifi/WifiSecurity.kt"
+        line: 36
+        detail: "The default branch maps every unrecognized non-empty capabilities string to OPEN instead of UNKNOWN; for example, the Android-formatted [RSN-PSK-CCMP][ESS] token is not matched by the WPA/WPA2 branches and falls through to OPEN."
+      - file: "app/src/main/kotlin/net/aieat/netswissknife/app/wifi/WifiScanRepositoryImpl.kt"
+        line: 192
+        detail: "The platform adapter passes sr.capabilities ?: \"\" into fromCapabilities, so missing Android scan metadata takes the OPEN branch."
+    impact: "A scan with unavailable or newly formatted capability metadata can display an encrypted network as Open and mislead users about Wi-Fi security; unknown and genuinely open networks cannot be distinguished by the public model."
+    recommended_action: "Return UNKNOWN for blank or unrecognized capabilities and reserve OPEN for an explicit unencrypted marker such as [ESS] with no security tokens; add compatibility handling for new Android capability tokens."
+    validation: "Add tests for blank, unknown, [ESS], and representative future tokens; assert only explicit unencrypted capabilities produce OPEN and null platform capabilities remain UNKNOWN."
+    related_phase: P03
+    status: todo
+  - id: RNET010
+    severity: low
+    kind: gap
+    title: "Subnet calculator has no RFC 3021 point-to-point /31 mode"
+    evidence:
+      - file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/subnet/SubnetCalculatorRepositoryImpl.kt"
+        line: 15
+        detail: "The calculator hardcodes usableHosts=0 for every /31 and applies the conventional network/broadcast interpretation without a link-type parameter."
+      - file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/subnet/SubnetModels.kt"
+        line: 33
+        detail: "The public model documents usable host count as 0 for /31, so callers cannot distinguish a conventional subnet result from an RFC 3021 point-to-point result."
+      - file: "core-network/src/test/kotlin/net/aieat/netswissknife/core/network/subnet/SubnetCalculatorRepositoryTest.kt"
+        line: 154
+        detail: "The /31 test codifies zero usable hosts and does not exercise the point-to-point interpretation."
+      - url: "https://www.rfc-editor.org/rfc/rfc3021"
+        section: "2"
+        detail: "For a 31-bit mask on a point-to-point link, the two addresses are interpreted as host addresses rather than network and broadcast addresses."
+    impact: "Users applying the calculator to a valid point-to-point /31 link see zero usable hosts and no indication that the result follows a conventional LAN assumption; this can mislead address planning."
+    recommended_action: "Expose an explicit point-to-point interpretation (or annotate the conventional result and link to the exception), then calculate both /31 endpoints as usable in that mode while retaining the current default for ordinary broadcast subnets."
+    validation: "Add tests for conventional /31 and point-to-point /31 modes, asserting usableHosts and first/lastHost semantics separately; document the selected default in the UI and README."
+    related_phase: P12
+    related_findings: [F032]
+    status: todo
+  - id: RNET011
+    severity: medium
+    kind: bug
+    title: "LAN enrichment can swallow cancellation from injected suspend probes"
+    evidence:
+      - file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/LanScanRepositoryImpl.kt"
+        line: 196
+        detail: "Presence name probes are invoked inside runCatching, which catches Throwable including CancellationException and treats cancellation as a failed probe."
+      - file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/LanScanRepositoryImpl.kt"
+        line: 219
+        detail: "The enrichment name-probe loop repeats the same broad runCatching around each suspend resolveName call."
+      - file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/LanScanRepositoryImpl.kt"
+        line: 229
+        detail: "MAC enrichment also catches cancellation from MacResolver.resolve, after which the worker proceeds to synchronous QUICK_PORTS checks."
+    impact: "A cancelled scan can continue best-effort enrichment instead of promptly unwinding; with the default ten sequential port checks per host, cancellation latency can grow while workers occupy IO threads and emit no useful result."
+    recommended_action: "Handle expected probe failures with a CancellationException-preserving helper (or explicit catch/rethrow) and make synchronous enrichment interruptible or cancellation-aware before continuing to the next host."
+    validation: "Inject suspend NameProbe and MacResolver implementations that throw CancellationException at each enrichment stage; collect the flow in a cancelled Job and assert prompt cancellation, no later port checks, and no completion event."
+    related_phase: P01
+    status: todo

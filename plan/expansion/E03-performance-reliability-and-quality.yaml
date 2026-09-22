@@ -1,0 +1,798 @@
+# =============================================================================
+# E03 – Performance, reliability, lifecycle, and engineering quality expansion
+# =============================================================================
+# Audience: coding agents. This file is planning only; it deliberately does not
+# change production code, build files, or the master index.
+# Scope: cross-cutting work that remains after the feature phases. P05 owns the
+# first NetworkBinder implementation, P09 owns baseline CI/Kover/format gates,
+# P12 owns the first DataStore split/export flow, and this expansion supplies the
+# contracts, failure tests, and release evidence those phases need to be safe at
+# scale.
+
+phase:
+  id: E03
+  title: "Performance, reliability, lifecycle safety, and reproducible quality"
+  priority: high
+  status: todo
+  estimated_effort: "XL (8-12 agent sessions; execute as small PR-sized task series)"
+  depends_on: []
+  related_phases: [P05, P09, P12, P01, P03, P04, P07, P10, P11]
+  enables: [P10, P11, P13, P14, P15]
+  findings: [F012, F013, F020, F021, F023, F038]
+  target_modules: [":core-network", ":core-domain", ":app", ":benchmarks", "CI/release"]
+
+intent:
+  problem: |
+    The app has good pure-network coverage, but each tool still owns its own job,
+    timeout, collection, and export decisions. Several collectors can retain an
+    entire scan in mutable lists, a UI can publish a partial result while child
+    writers are still draining, and blocking Java sockets/DNS calls are only
+    indirectly cancellable. The Android availability check currently means
+    "validated Internet" even for operations that only need the local LAN. The
+    result models also omit a consistent operation id, selected route, target
+    normalization, and cancellation reason, making timing and support reports
+    difficult to compare. Logging is debug-only but still records raw hosts,
+    addresses, subnets, and exception text. Existing P09 gates do not prove
+    deterministic network failure behavior, ABI stability, benchmark budgets,
+    or bit-for-bit release reproducibility.
+  evidence:
+    - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanViewModel.kt", lines: "162-231", detail: "Every scan creates a mutable host list, copies it on every emission, and owns a per-screen Job; cancellation has no shared deadline/resource contract." }
+    - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/portscan/PortScanViewModel.kt", lines: "139-180", detail: "Port results are accumulated and copied for each progress event; stop constructs a summary with resolvedIp=null and scanDurationMs=0." }
+    - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/speedtest/SpeedTestViewModel.kt", lines: "46-108", detail: "Latency/download/upload samples remain in unbounded mutable lists for the whole operation and a cancelled run has no structured reason or route metadata." }
+    - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/ping/PingViewModel.kt", lines: "206-336", detail: "Continuous ping uses an UNLIMITED channel and exposes its temp file before an asynchronous writer is proven drained; rolling packets and export state are separate." }
+    - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/mdns/MdnsRepositoryImpl.kt", lines: "42-213", detail: "mDNS allocates a 64 KiB receive buffer per receive, blocks in MulticastSocket.receive, catches all I/O as empty results, and has no injected clock/socket close seam." }
+    - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/SubnetUtils.kt", lines: "81-100", detail: "Subnet expansion materializes every host address as a List; /16 therefore retains up to 65,534 strings before probing." }
+    - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/LanScanRepositoryImpl.kt", lines: "83-157", detail: "LAN scans materialize all addresses, retain all live hosts, and only expose completion after enrichment; cancellation/resource closure is implicit in coroutine scope." }
+    - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/portscan/PortScanRepositoryImpl.kt", lines: "82-165", detail: "Port scanning keeps a result list, uses a bounded channel but has no operation deadline, and performs blocking Socket.connect/read work without an injected socket close hook." }
+    - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/whois/WhoisRepositoryImpl.kt", lines: "17-35,171-207", detail: "WHOIS wraps blocking DNS/socket work in Dispatchers.IO; per-socket timeouts exist but cancellation cannot interrupt resolution and response size is only checked after reads." }
+    - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/traceroute/GeoIpRepositoryImpl.kt", lines: "23-55", detail: "GeoIP has an unbounded ConcurrentHashMap and fixed 5-second connect/read timeouts with no TTL, negative cache, in-flight deduplication, or cancellation-aware close." }
+    - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/dns/DnsRepositoryImpl.kt", lines: "82-121", detail: "DNS has a per-resolver timeout but no overall deadline, cache policy, query id, or route/session metadata." }
+    - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/platform/LinkInfoProvider.kt", lines: "22-74", detail: "hasValidatedNetwork only recognizes NET_CAPABILITY_VALIDATED, which rejects useful local-only scans when Internet validation is absent." }
+    - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/ping/PingViewModel.kt", lines: "183-191,249-258", detail: "Both normal and continuous ping refuse to start when Internet validation is false, even when the target is a local address." }
+    - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/util/AppLogger.kt", lines: "44-53,61-70,87-113", detail: "Logger persists full messages and stack traces, reads both log files into one String, and callers pass raw IPs/subnets/hosts." }
+    - { file: "app/src/main/res/xml/backup_rules.xml", lines: "3-13", detail: "The whole app_prefs DataStore is excluded from backup, so settings and recent activity cannot yet be separated by sensitivity." }
+    - { file: "gradle.properties", lines: "1-13", detail: "Build is intentionally serialized and memory capped; quality work must preserve these constraints and record measured resource budgets." }
+    - { file: ".github/workflows/ci.yml", lines: "1-150", detail: "CI runs tests, Kover, lint, debug build, Test Lab, and CodeQL, but has no deterministic network fixture job, API/ABI check, benchmark gate, or reproducible-artifact comparison." }
+
+goals:
+  - "Every network operation has an explicit target requirement, monotonic deadline, bounded concurrency/bytes, cancellation reason, and closeable resource scope; cancellation closes blocking sockets and does not publish stale terminal states."
+  - "Local targets continue to work on a connected LAN without Internet validation; public targets use a bounded attempt when validation is merely advisory and explain a missing route/permission/policy; lifecycle transitions stop or explicitly foreground long-running work to avoid battery drain."
+  - "Large subnet/port scans, live lists, charts, logs, and exports remain bounded and incremental with quantified caps; UI uses lazy/keyed rendering and does not copy O(N) state on every probe."
+  - "Results carry stable run/session metadata and route provenance suitable for support reports while secrets and raw network identifiers stay redacted by default in logs."
+  - "Deterministic fault-injection tests cover timeout, cancellation, route change, VPN/local-only, malformed input, partial response, and permission denial without relying on a real network."
+  - "Core API/ABI changes, performance regressions, dependency/toolchain drift, and release reproducibility are visible in CI with measured baselines and explicit future targets."
+
+non_goals:
+  - "Replacing P05's Android NetworkBinder implementation or duplicating P09's Kover/ktlint/detekt/release-smoke tasks."
+  - "Keeping arbitrary network scans alive in the background without a user-visible foreground-service contract and notification."
+  - "Persisting raw scan results, DNS responses, packet captures, credentials, or full debug logs as an implicit offline database."
+
+constraints:
+  - "Preserve zero Android SDK imports in core-network/core-domain and the existing StateFlow/Hilt/ViewModel architecture."
+  - "Run one Gradle invocation at a time on this host; benchmark and release comparisons must state device/JDK/SDK/tool versions."
+  - "Use monotonic time for elapsed durations and wall-clock time only for display/export timestamps."
+  - "Use typed error categories at the core/app seam; map them through the current UI error layer and let P07 replace remaining literals. E03 correctness and cancellation work must not wait for the localization phase."
+  - "All caps are configurable constants with safe defaults, validated at the domain boundary, and covered by boundary tests."
+
+reusable_defaults:
+  note: "These are proposed shared defaults, not measured current performance. Agents must record the baseline before changing a default and may tune only with benchmark/device evidence."
+  operation:
+    max_concurrent_probes: 64
+    interactive_max_operation_duration_ms: 120_000
+    continuous_max_operation_duration_ms: null
+    continuous_requires_explicit_budget_and_foreground_state: true
+    cancellation_cleanup_target_ms: 500
+    progress_emit_min_interval_ms: 100
+  payloads:
+    max_single_response_bytes: 1_048_576
+    max_export_bytes: 5_242_880
+    max_log_read_bytes: 1_048_576
+    max_live_rows_per_tool: 2_000
+  caches:
+    max_entries: 256
+    positive_ttl_ms: 300_000
+    negative_ttl_ms: 30_000
+    stale_while_offline_ms: 86_400_000
+  battery:
+    background_policy: "pause_interactive_operations; require_explicit_foreground_notification_for_continuous_runs"
+    wifi_auto_refresh_min_interval_ms: 15_000
+
+design:
+  operation_contract: |
+    Add pure core-network contracts (`OperationId`, `OperationTarget`,
+    `OperationRequirement`, `OperationDeadline`, `CancellationReason`,
+    `ResourceScope`, and `OperationBudget`) and an app adapter that supplies
+    Android route/lifecycle state. Repositories receive a context/budget rather
+    than inventing independent constants. `ResourceScope` registers sockets,
+    streams, response bodies, multicast locks, and temporary files; cancellation
+    closes them before the flow completes. Every flow emits at most one terminal
+    event and checks `ensureActive` between blocking boundaries. The 120-second
+    default applies only to interactive runs; an explicit foreground continuous
+    session supplies its own budget/renewal policy and is never silently cut off
+    by this default. Existing P05 binder calls are made through this scope so
+    route selection and cleanup stay coupled.
+  availability_and_lifecycle: |
+    Model `LOCAL_NETWORK`, `INTERNET`, and `ANY_NETWORK` requirements. Evaluate
+    target scope against ConnectivityObserver snapshots: local reachability does
+    not require NET_CAPABILITY_VALIDATED, and HTTP/TLS/DNS may target local
+    endpoints even when their tool also supports public endpoints. Missing route,
+    denied permission, or explicit policy is definitive; lack of
+    NET_CAPABILITY_VALIDATED is advisory and permits a bounded user-requested
+    attempt. A lifecycle owner pauses auto-refresh and cancels
+    interactive operations on STOPPED; a continuous session either finishes a
+    bounded grace period or transitions to Paused. A foreground service is an
+    explicit, user-visible opt-in for runs that must continue while backgrounded.
+  metadata: |
+    Add immutable `OperationMetadata` (opaque runId, tool, normalized target,
+    requirement, start/finish monotonic and wall times, duration, selected
+    transport/interface/vpn state, resolved address, cancellation reason,
+    bytes sent/received, and result count). Keep credentials, raw packets, and
+    full exception messages out of the common metadata. Repositories and
+    ViewModels update metadata through a single session coordinator so Stop,
+    cancellation, and natural completion report the same fields.
+  memory_and_export: |
+    Replace eager subnet/list expansion with bounded iterators or ranges and
+    stream work into workers. Keep a capped ring buffer for live UI rows while
+    retaining aggregate counters; final results may be streamed to a temporary
+    export writer and atomically renamed only after close/flush. Compose lists
+    use LazyColumn/LazyVerticalGrid with stable keys. Exports have a byte cap,
+    cancellation cleanup, UTF-8/BOM policy, and format-specific truncation:
+    CSV/text stop at record boundaries with a footer, while JSON/settings fail
+    atomically. A user Stop may finalize an intended partial session after the
+    writer drains; abrupt failures delete temporary output.
+  observability: |
+    Introduce structured events with redaction at the logger boundary. Default
+    to hashed/truncated host/IP/subnet values, remove query credentials and
+    sensitive headers, classify exception types, and attach runId/route without
+    dumping full stack traces into shared exports. Debug builds may opt into a
+    local diagnostics detail switch; release builds keep the redaction invariant.
+
+files_to_create:
+  - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/operation/{OperationModels,OperationBudget,ResourceScope,TimeoutPolicy,NetworkCache,CappedResultBuffer}.kt
+  - core-network/src/test/kotlin/net/aieat/netswissknife/core/network/operation/{OperationBudgetTest,ResourceScopeTest,NetworkCacheTest}.kt
+  - app/src/main/kotlin/net/aieat/netswissknife/app/platform/{OperationAvailability,OperationLifecycleCoordinator,OperationSessionCoordinator,AndroidResourceScope,StructuredAppLogger}.kt
+  - app/src/test/kotlin/net/aieat/netswissknife/app/platform/{OperationAvailabilityTest,OperationLifecycleCoordinatorTest,StructuredAppLoggerTest}.kt
+  - core-network/src/test/kotlin/net/aieat/netswissknife/core/network/testkit/{FakeClock,ScriptedSocket,NetworkFault,NetworkFixture}.kt
+  - app/src/test/kotlin/net/aieat/netswissknife/app/testkit/{FakeConnectivityObserver,FakeLifecycleOwner,OperationFixture}.kt
+  - app/src/main/kotlin/net/aieat/netswissknife/app/util/{Redactor,BoundedExportWriter}.kt
+  - benchmarks/src/main/kotlin/net/aieat/netswissknife/benchmarks/{SubnetBenchmark,PortScanAggregationBenchmark,ExportBenchmark}.kt
+  - api/core-network.api
+  - api/core-domain.api
+
+files_to_modify:
+  - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/{HostResolver,NetworkResult,MonotonicClock}.kt and all repository implementations
+  - core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/*UseCase.kt and result/params models
+  - app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/**/*ViewModel.kt and shared screen/export utilities
+  - app/src/main/kotlin/net/aieat/netswissknife/app/platform/LinkInfoProvider.kt
+  - app/src/main/kotlin/net/aieat/netswissknife/app/util/AppLogger.kt and DebugLogScreen.kt
+  - app/src/main/kotlin/net/aieat/netswissknife/app/data/{AppPreferencesDataStore,RecentHostsRepository}.kt and DataStoreModule.kt
+  - app/src/main/res/xml/{backup_rules,data_extraction_rules}.xml and AndroidManifest.xml
+  - .github/workflows/ci.yml and .github/workflows/release.yml
+  - gradle/libs.versions.toml, settings.gradle.kts, build.gradle.kts, gradle/verification-metadata.xml
+  - README.md, PRIVACY_POLICY.md, CLAUDE.md
+
+tasks:
+  - id: E03-T01
+    title: "Introduce one bounded operation, deadline, and resource-scope contract"
+    priority: high
+    status: todo
+    source_evidence:
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanViewModel.kt", lines: "162-231", why: "Per-tool Job and mutable collection have no common deadline or close hook." }
+      - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/portscan/PortScanRepositoryImpl.kt", lines: "104-151", why: "Worker channels are bounded, but blocking checker calls are not governed by an operation budget." }
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/mdns/MdnsRepositoryImpl.kt", lines: "50-60,203-213", why: "A blocking multicast receive is only time-bounded by socket timeout and swallows non-timeout I/O." }
+      - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/whois/WhoisRepositoryImpl.kt", lines: "171-207", why: "Closing the socket is finally-based but a coroutine cancellation cannot interrupt DNS resolution before the socket exists." }
+    proposed_behavior: |
+      Add pure `OperationBudget` and `ResourceScope` APIs. A budget carries an
+      opaque run id, requirement, monotonic deadline, max concurrency, max
+      response/export bytes, and cancellation reason. A scope registers every
+      Closeable/AutoCloseable, socket, stream, multicast lock, and temp file;
+      closing the scope is idempotent and closes resources in reverse order.
+      Repository flows create the scope once, pass the same budget to child
+      probes, call `ensureActive` before/after every blocking boundary, and emit
+      one terminal outcome only after the scope has closed. Existing callers get
+      a safe default budget while new code can inject a deterministic clock.
+    depends_on: [P05-T1, P05-T2]
+    implementation_steps:
+      - "Write RED tests with FakeClock and ScriptedSocket: deadline expiry cancels all children, close is idempotent, resources close in reverse registration order, and a cancelled collector receives no later success event."
+      - "Implement `OperationModels`, `OperationBudget`, and `ResourceScope` in core-network without Android imports; map `CancellationException`, deadline, user Stop, lifecycle pause, permission, and network loss to typed reasons."
+      - "Add adapters to LanScan, port scan, ping, traceroute, DNS, HTTP, TLS, WHOIS, speed test, topology, mDNS, WOL, and Wi-Fi repository seams. Keep P05 NetworkBinder binding inside the scope so a route-bound socket is closed with the operation."
+      - "Replace `Channel.UNLIMITED` in continuous ping and make child jobs siblings of the scope owner; use bounded channels/backpressure and `ensureActive` in all worker loops."
+      - "Keep cancellation finalization outside the cancelled collector: record the reason, close/join the resource scope in `finally`, then publish the stopped/paused terminal state from the owning coordinator without catching and re-emitting `CancellationException` into the cancelled flow."
+      - "Add a static CI check that fails when production network code introduces `GlobalScope`, `Channel.UNLIMITED`, or a new raw `Socket`/`HttpURLConnection` without a scope seam and test reference."
+    files_or_seams:
+      - "core-network/.../operation/{OperationModels,OperationBudget,ResourceScope}.kt"
+      - "core-network/.../testkit/{FakeClock,ScriptedSocket,NetworkFault}.kt"
+      - "core-network/.../{lan,portscan,ping,dns,httprobe,tls,whois,speedtest,topology}/**"
+      - "app/.../mdns/MdnsRepositoryImpl.kt, app/.../ping/PingViewModel.kt, app/.../ui/screens/*/*ViewModel.kt"
+      - "core-network/src/test/** and app/src/test/** operation cancellation fixtures"
+    acceptance_criteria:
+      - "Every networked tool listed in the coverage matrix accepts or receives an OperationBudget; no production coroutine launches an unowned child network job."
+      - "A fake operation with three sockets, one blocking read, and two workers closes every resource and reaches a typed terminal cancellation outcome exactly once when cancelled; the cancelled collector receives no terminal success/error emission."
+      - "A deadline of 100 ms is observed by all fake probes without advancing past the injected clock; no test waits on wall-clock sleep."
+      - "The bounded queue and live progress path contain no `Channel.UNLIMITED`; queue capacities and max workers are asserted at the boundary."
+      - "Cleanup target of <=500 ms is recorded as a future device/CI target; the implementation report records the measured distribution separately rather than claiming it is already met."
+    validation:
+      red: "./gradlew :core-network:test --tests '*Operation*Test' --no-daemon"
+      green: "./gradlew :core-network:test :core-domain:test :app:testDebugUnitTest --no-daemon --no-parallel"
+      static: "rg -n 'GlobalScope|Channel\\.UNLIMITED' app/src/main core-network/src/main core-domain/src/main must return zero production hits after migration"
+      manual: "On a device, start and stop one LAN scan, mDNS scan, port scan, and continuous ping; inspect session metadata and confirm no socket/read continues after Stop."
+    effort: "L (3-5 agent sessions)"
+    risk_rollout: "Introduce compatibility adapters that register and close the actual existing resources immediately; a no-op scope is allowed only for a caller with no owned resource and cannot satisfy cancellation coverage by itself. Land one tool family per commit; a missing close hook must fail the test rather than silently fall back to an unbounded thread."
+
+  - id: E03-T02
+    title: "Make availability target-aware and make lifecycle/background behavior explicit"
+    priority: high
+    status: todo
+    source_evidence:
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/platform/LinkInfoProvider.kt", lines: "22-23,65-74", why: "The only reusable status predicate requires NET_CAPABILITY_VALIDATED, which describes Internet validation rather than LAN reachability." }
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/ping/PingViewModel.kt", lines: "183-191,249-258", why: "Both ping modes reject a local target when the active network has no validated Internet." }
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/traceroute/TracerouteViewModel.kt", lines: "135-145", why: "Traceroute performs the same global validation gate before it captures a target-specific operation." }
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/wifi/WifiScanViewModel.kt", lines: "270-328", why: "Auto-refresh is a loop owned by the ViewModel, not by screen visibility, and can continue consuming battery while the screen is hidden." }
+    proposed_behavior: |
+      Add `OperationRequirement.LOCAL_NETWORK`, `INTERNET`, and `ANY_NETWORK`
+      plus target-aware `OperationAvailability`. Requirement is derived from the
+      actual destination/route, not the tool name: HTTP/TLS can target a private
+      LAN address, and DNS may use a local resolver even when the queried name is
+      public. A missing route, denied local-network permission, or explicit policy
+      is definitive; lack of NET_CAPABILITY_VALIDATED is advisory because captive
+      portals and firewalls can make validation fail while the requested target
+      works. Permit a bounded user-requested attempt in that advisory state and
+      report its actual result. Attach a lifecycle coordinator: auto-refresh
+      pauses outside RESUMED, interactive runs cancel/pause on STOPPED, and only
+      an explicit user action may promote a continuous run to a foreground
+      service with a persistent notification.
+    depends_on: [P05-T3, P05-T5, E03-T01]
+    implementation_steps:
+      - "Write RED pure tests for local-only, Internet-only, VPN-only, captive-portal/unvalidated, cellular, Wi-Fi, and no-network snapshots; classify literal IP/private CIDR targets before DNS resolution and model DNS resolver destination separately from the queried name."
+      - "Implement `OperationAvailability` over P05 ConnectivityObserver snapshots; preserve separate `hasInternet`, `hasLocalNetwork`, `routePresent`, and `permissionAllowed` signals. Missing route/permission is definitive; unvalidated is an advisory reason that permits one bounded user-requested attempt."
+      - "Replace Ping/Traceroute and any equivalent global gates with requirement-aware checks; verify each operation supplies its actual destination requirement, including LAN HTTP/TLS and local DNS resolver cases."
+      - "Use repeatOnLifecycle/ProcessLifecycleOwner through `OperationLifecycleCoordinator` to pause Wi-Fi refresh and cancel in-flight interactive work. Persist only an explicit foreground-session intent; do not silently start a service."
+      - "Add a foreground service seam only if product behavior requires background continuous ping: notification text, stop action, network binder, typed lifecycle state, and Android 14+ service-start permission checks must be covered before enabling it."
+    files_or_seams:
+      - "app/.../platform/{OperationAvailability,OperationLifecycleCoordinator,LinkInfoProvider}.kt"
+      - "app/.../ui/screens/{ping/PingViewModel,traceroute/TracerouteViewModel,wifi/WifiScanViewModel}.kt"
+      - "app/.../ui/screens/{lan,mdns,wol,topology,portscan}/*ViewModel.kt"
+      - "app/src/test/.../platform/OperationAvailabilityTest.kt and lifecycle tests"
+      - "app/src/main/AndroidManifest.xml only if the explicit foreground service seam is enabled"
+    acceptance_criteria:
+      - "With `hasInternet=false` and an active Wi-Fi/Ethernet local route, a ping to 192.168.1.1, LAN scan, and HTTP/TLS probe to 192.168.1.1 are allowed; a public speed/WHOIS attempt is bounded and reports its actual result or advisory-unvalidated state."
+      - "With a full-tunnel VPN and no route that can reach the requested private destination, local tools show the existing P05 route/permission guidance; a VPN route that can reach that destination remains eligible even without Internet validation."
+      - "When lifecycle enters STOPPED, no new refresh/probe starts; an in-flight interactive operation reaches Paused/Cancelled and closes its scope. Resume requires an explicit, bounded restart or resumes only the documented session type."
+      - "Wi-Fi auto-refresh cannot run faster than the shared 15,000 ms lower bound; tests prove the loop is cancelled on STOPPED and on ViewModel clear."
+      - "Foreground continuation is opt-in and visible; no background service is started by navigation, process restart, or an ordinary scan button."
+    validation:
+      red: "./gradlew :app:testDebugUnitTest --tests '*OperationAvailability*' --tests '*PingViewModelTest' --tests '*WifiScanViewModelTest' --no-daemon"
+      green: "./gradlew :app:testDebugUnitTest :app:lintDebug --no-daemon --no-parallel"
+      manual: "Use an emulator/device with Wi-Fi connected behind a captive portal or with Internet validation disabled; run local ping/LAN scan and public speed/WHOIS, then background and resume Wi-Fi auto-refresh."
+    effort: "L (3-4 agent sessions)"
+    risk_rollout: "Ship target classification and tests before changing gates. Keep a debug-only lifecycle event trace for rollout; fail closed only when route/permission/policy is definitively unavailable, while treating incomplete validation callbacks as advisory and recording the bounded probe result."
+
+  - id: E03-T03
+    second_pass_review:
+      report: plan/reviews/2026-09-22-second-pass.yaml
+      findings: [R2-009]
+      rule: "Treat each linked finding as a required independently verified acceptance case; urgent regression slices do not wait for optional task breadth."
+    title: "Attach session metadata and network-route provenance to every operation"
+    priority: high
+    status: todo
+    source_evidence:
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanViewModel.kt", lines: "164-172,239-246", why: "LAN has a start timestamp but only a partial summary; target, route, and stop reason are not retained as a shared session." }
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/portscan/PortScanViewModel.kt", lines: "120-135", why: "Stopped scans discard resolved IP and duration even though the repository normally computes them." }
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/traceroute/TracerouteViewModel.kt", lines: "146-218", why: "Start timing and generation guards are local to one ViewModel and stopped/normal result construction can diverge." }
+      - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/dns/DnsRepositoryImpl.kt", lines: "93-112", why: "DNS records resolver address but not operation id, interface, VPN state, or target normalization in a reusable model." }
+    proposed_behavior: |
+      Introduce immutable `OperationMetadata` and a `NetworkPathSnapshot` that
+      can be embedded in summaries/results and exports. Capture normalized target,
+      resolved address (when known), run id, tool, requirement, start/finish
+      timestamps, monotonic duration, transport/interface, VPN/captive state,
+      bytes, result counts, and terminal/cancellation reason. P05's selected
+      Network object/interface is the source of route truth; a route change
+      creates a metadata event and never silently merges samples from two paths.
+      Keep sensitive credentials, full headers, packet payloads, and raw DNS/WHOIS
+      text out of the common metadata.
+    depends_on: [P05-T2, P05-T3, E03-T01]
+    implementation_steps:
+      - "Write RED tests for stable runId uniqueness, normalized host/IP target, monotonic non-negative duration, route snapshot serialization, and stop/cancel/error terminal reason."
+      - "Implement operation session coordinator in core/app boundary; inject `MonotonicClock`, wall clock, and route observer so JVM tests never depend on System.currentTimeMillis."
+      - "Thread metadata into LanScanSummary, PortScanSummary, PingResult/session report, DnsResult, HttpProbeResult, TlsInspectorResult, WhoisResult, TracerouteResult, SpeedTestResult, Wi-Fi scan result, topology graph, mDNS discovery, and WOL report without changing user-visible copy until mapping exists."
+      - "Update Stop paths to finalize the same metadata builder as natural completion; retain resolved IP and elapsed time where already available."
+      - "Add report/export serializers with a schema version and omit route details when the platform reports unavailable; document fields in README for support reproduction."
+    files_or_seams:
+      - "core-network/.../operation/OperationModels.kt"
+      - "core-network/.../{dns,httprobe,lan,ping,portscan,speedtest,tls,traceroute,topology,whois,wifi,wol}/*Result*.kt"
+      - "core-domain/.../*FlowResult.kt and *UseCase.kt"
+      - "app/.../platform/OperationSessionCoordinator.kt and all networked ViewModels"
+      - "app/.../util/ShareUtils.kt plus each tool's report builder"
+    acceptance_criteria:
+      - "Every networked tool listed in the coverage matrix emits exactly one metadata-bearing terminal result for success, typed failure, or cancellation; replacing a running session cannot overwrite the newer run's metadata."
+      - "Stopped port scans retain the last resolved IP and measured non-negative duration; stopped traceroute/ping/LAN sessions retain their captured elapsed time and reason."
+      - "A route change fixture produces two ordered NetworkPathSnapshot events and no sample is attributed to the wrong interface/VPN state."
+      - "Serialized metadata has a schema version, contains no password/token/header value, and preserves target normalization plus runId across share/import round trips."
+    validation:
+      red: "./gradlew :core-network:test :core-domain:test :app:testDebugUnitTest --tests '*OperationMetadata*' --tests '*PortScanViewModelTest' --tests '*TracerouteViewModelTest' --no-daemon"
+      green: "./gradlew test --no-daemon --no-parallel"
+      manual: "Stop a hostname-based port scan, traceroute, continuous ping, and LAN scan after one result; inspect UI and shared report for run id, resolved target, duration, route label, and stop reason."
+    effort: "L (3-5 agent sessions)"
+    risk_rollout: "Add nullable/versioned metadata fields first so old reports remain readable. Use an adapter at each result boundary; do not expose interface names or IPs in logs without the redaction policy from E03-T06."
+
+  - id: E03-T04
+    second_pass_review:
+      report: plan/reviews/2026-09-22-second-pass.yaml
+      findings: [R2-012]
+      rule: "Treat each linked finding as a required independently verified acceptance case; urgent regression slices do not wait for optional task breadth."
+    title: "Unify timeout, cache, and response-size policies"
+    priority: high
+    status: todo
+    source_evidence:
+      - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/traceroute/GeoIpRepositoryImpl.kt", lines: "23-55", why: "Successful GeoIP values live in an unbounded process cache and each request reads an unconstrained response body." }
+      - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/dns/DnsRepositoryImpl.kt", lines: "70-121", why: "Resolver timeout is per attempt; no overall budget, cache policy, or stale/offline semantics are shared." }
+      - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/httprobe/HttpProbeRepositoryImpl.kt", lines: "81-85,189-226", why: "HTTP has per-connection timeouts and bounded body reads but no common deadline/cache contract." }
+      - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/whois/WhoisRepositoryImpl.kt", lines: "177-203", why: "WHOIS bounds response bytes but not DNS resolution or total chained referral time." }
+    proposed_behavior: |
+      Create a pure `TimeoutPolicy`/`NetworkCache` with explicit connect, read,
+      DNS, overall, and cleanup budgets. Diagnostic DNS/HTTP/TLS probes are fresh
+      by default so a cache cannot hide a changed answer; callers must explicitly
+      request a labeled stale/offline view. Cache only read-only, privacy-reviewed
+      values (DNS records honoring each record's TTL, GeoIP/provider metadata)
+      with bounded positive/negative TTL, in-flight deduplication, and
+      route-aware keys. Never cache credentials, raw packet data, scan results,
+      WHOIS bodies, or TLS sessions. Every response reader enforces the shared
+      byte budget and every chained lookup consumes one overall deadline rather
+      than resetting a timeout per referral.
+    depends_on: [E03-T01]
+    implementation_steps:
+      - "Record current timeout and response-size behavior in tests before changing defaults; distinguish measured baseline from the proposed shared defaults."
+      - "Implement `TimeoutPolicy` and bounded TTL cache with injectable clock, max entries 256, positive/negative TTLs, route/scope key, and single-flight lookup; keep fresh diagnostic probes opt-out of cache by default."
+      - "Adapt HostResolver/DNS/GeoIP/HTTP/TLS/WHOIS/speed-test and provider-chain seams; ensure `CancellationException` propagates and `disconnect/close` runs on cancellation."
+      - "Add a maximum total response budget of 1 MiB by default, per-tool overrides only when justified by an acceptance test, and a typed `ResponseTruncated`/`DeadlineExceeded` outcome."
+      - "Add offline read path only for an explicit stale-view action; show age/source and provide clear-cache controls through the existing settings architecture (coordinate with P12 rather than duplicating its export). Honor DNS record TTL and never replace it with the generic positive TTL."
+    files_or_seams:
+      - "core-network/.../operation/{TimeoutPolicy,NetworkCache}.kt"
+      - "core-network/.../{HostResolver,dns/DnsRepositoryImpl,traceroute/GeoIpRepositoryImpl,httprobe/HttpProbeRepositoryImpl,whois/WhoisRepositoryImpl}.kt"
+      - "core-network/src/test/.../{TimeoutPolicyTest,NetworkCacheTest} plus repository fault tests"
+      - "app/.../ui/components/ToolErrorCard.kt and settings cache controls"
+    acceptance_criteria:
+      - "Each blocking network call has connect/read/overall timeout values derived from one policy; a fixture that never returns reaches DeadlineExceeded within the injected deadline and closes the resource."
+      - "Cache size never exceeds 256 entries; repeated concurrent identical opt-in cached lookups invoke the fake provider once; expiry, negative expiry, route-key separation, DNS record TTL, clear, fresh-by-default behavior, and stale-offline labeling are tested."
+      - "No default response reader retains more than 1 MiB; oversized HTTP/WHOIS/GeoIP fixtures return a typed truncation/size outcome and do not create an unbounded StringBuilder. Fresh DNS/HTTP/TLS diagnostics never silently serve a cache hit."
+      - "Cache contents and exported settings contain no password, authorization header, packet payload, WHOIS body, or raw scan host list."
+    validation:
+      red: "./gradlew :core-network:test --tests '*Timeout*' --tests '*Cache*' --tests '*GeoIpRepositoryImplTest' --tests '*DnsRepositoryImplTest' --no-daemon"
+      green: "./gradlew :core-network:test :core-domain:test :app:testDebugUnitTest --no-daemon --no-parallel"
+      manual: "Disable Internet while retaining a LAN route; verify a labeled stale DNS/GeoIP value may be displayed only within the configured stale window and a fresh public request reports the capability error."
+    effort: "L (3-5 agent sessions)"
+    risk_rollout: "Land policy and fixtures before changing production defaults. Keep provider-specific parsing/cache work in P10/P11; E03 owns the shared policy and safety tests, avoiding a second GeoIP implementation."
+
+  - id: E03-T05
+    second_pass_review:
+      report: plan/reviews/2026-09-22-second-pass.yaml
+      findings: [R2-010, R2-015]
+      rule: "Treat each linked finding as a required independently verified acceptance case; urgent regression slices do not wait for optional task breadth."
+    title: "Bound large scans, live UI state, charts, logs, and exports"
+    priority: high
+    status: todo
+    source_evidence:
+      - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/SubnetUtils.kt", lines: "81-100", why: "parseSubnet returns a materialized host List and allows /16 (up to 65,534 host strings)." }
+      - { file: "core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/PortScanUseCase.kt", lines: "46-68", why: "Custom port ranges are materialized with toList and then retained by repository/ViewModel layers." }
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/mdns/MdnsDiscoveryViewModel.kt", lines: "54-66", why: "Every mDNS update copies the entire service list and recomputes groupBy." }
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/topology/TopologyDiscoveryViewModel.kt", lines: "57-84", why: "Topology progress copies all nodes and links for every event." }
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/util/AppLogger.kt", lines: "61-70", why: "Log export reads active and backup files into one unbounded String." }
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/PingScreen.kt", lines: "795-804", why: "Sharing reads the whole session file before launching a share intent." }
+    proposed_behavior: |
+      Make address/port work producers lazy and bounded, preserving counts and
+      deterministic order without materializing every candidate. Introduce a
+      capped ring buffer for live rows (2,000 default) and aggregate counts;
+      retained terminal results may use a compact sorted store or streamed export
+      rather than copying O(N) on each event. Convert large Compose result lists
+      to keyed lazy containers. Build one reusable UTF-8 export writer that writes
+      incrementally to a temp file, enforces a 5 MiB default cap, and
+      flushes/closes before exposure. Unsuccessful staging output is removed.
+      Format policy is explicit: CSV/text may stop at a
+      record boundary and append a valid truncation footer; JSON/settings backup
+      either writes a complete document or fails atomically without exposing a
+      partial file. A user-requested Stop drains/finalizes an intended partial
+      ping/session run with cancellation metadata; abrupt failure deletes its
+      temporary artifact. Successfully shared files remain available through a
+      bounded receiver-access window before expiry cleanup; a share intent is not
+      proof that the receiving app finished reading. Debug-log sharing becomes bounded/paginated.
+      This task owns the shared app-layer file/SAF transport adapter, including URI
+      writes, cancellation and failure cleanup. E01-T12 owns report UX/schema;
+      P12-T5 owns settings schema/import. Neither consumer creates another adapter.
+    depends_on: [E03-T01]
+    implementation_steps:
+      - "Write RED stress tests for /16 address generation, 10,000-port custom scans, 5,000 mDNS updates, 5,000 topology events, 100,000 ping samples, and a log/export file over each cap; assert bounded retained rows and no lost aggregate counters."
+      - "Replace `SubnetUtils.parseSubnet`/port range materialization at worker boundaries with lazy range iterators or a value-type address cursor; preserve validation max and network/broadcast semantics."
+      - "Add `CappedResultBuffer`/`ProgressCoalescer` with deterministic drop policy and an explicit `droppedCount`/`truncated` field; emit progress no faster than 100 ms unless terminal."
+      - "Update LAN/port/mDNS/topology/ping/speed/traceroute ViewModels and screens to use stable keys and LazyColumn/LazyVerticalGrid; do not silently drop terminal export data."
+      - "Route ping CSV, all share reports, debug logs, and settings export through the atomic capped writer; only expose a finished file after writer join/flush. Apply format policies so JSON/settings never receive a footer or arbitrary byte cut, while a user Stop finalizes a valid partial CSV/text report."
+    files_or_seams:
+      - "core-network/.../lan/SubnetUtils.kt, core-domain/.../PortScanUseCase.kt"
+      - "core-network/.../operation/CappedResultBuffer.kt and tests"
+      - "app/.../ui/screens/{lan,portscan,mdns,topology,ping,speedtest,traceroute}/*ViewModel.kt"
+      - "app/.../ui/screens/{LanScanScreen,PortsScreen,MdnsDiscoveryScreen,TopologyDiscoveryScreen,PingScreen}.kt"
+      - "app/.../util/{BoundedExportWriter,AppLogger,ShareUtils}.kt"
+    acceptance_criteria:
+      - "Generating a /16 or a 10,000-port custom plan retains O(1) candidate state per worker; a stress test asserts peak retained candidate collection is <= worker count + queue capacity rather than 65,534/10,000."
+      - "Each live UI state retains at most 2,000 rows by default, reports dropped/truncated counts, and updates aggregate scanned/found/open counters exactly."
+      - "A >5 MiB CSV/text export stops at a record boundary with a valid header and explicit truncation footer; JSON/settings exports fail atomically when the cap would make them invalid; no half-written file is exposed."
+      - "Stopping a continuous ping drains/finalizes the intended partial CSV and marks it stopped; abrupt coroutine failure deletes its temporary file."
+      - "Ping/Speed/Topology/mDNS progress updates are coalesced to at most 10 emissions per second in a stress fixture, while terminal completion remains immediate."
+      - "The UI uses stable item keys and lazy containers for every large result list covered by the matrix; Compose tests render first/last visible rows without composing the entire list."
+    validation:
+      red: "./gradlew :core-network:test :core-domain:test :app:testDebugUnitTest --tests '*SubnetUtilsTest' --tests '*PortScanUseCaseTest' --tests '*Bounded*' --no-daemon"
+      green: "./gradlew :core-network:test :core-domain:test :app:testDebugUnitTest --no-daemon --no-parallel"
+      benchmark: "Run E03 benchmark module and record allocation/latency baseline for 1k, 10k, and 65k candidates before setting release thresholds."
+      manual: "Run a /16 LAN scan and 10,000-port custom scan on a low-memory device; scroll results, stop, and share the export; verify UI responsiveness and truncation disclosure."
+    effort: "XL (4-6 agent sessions)"
+    risk_rollout: "Land range/cursor and export primitives with compatibility overloads. Roll out UI caps behind a visible truncation indicator; never cap a security result without an explicit count and export path."
+
+  - id: E03-T06
+    second_pass_review:
+      report: plan/reviews/2026-09-22-second-pass.yaml
+      findings: [R2-011]
+      rule: "Treat each linked finding as a required independently verified acceptance case; urgent regression slices do not wait for optional task breadth."
+    title: "Add redacted structured observability and bounded diagnostics"
+    priority: high
+    status: todo
+    source_evidence:
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/util/AppLogger.kt", lines: "44-53,87-113", why: "Logger writes caller text and full throwable stack traces to Logcat and a persistent file; redaction is not centralized." }
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanViewModel.kt", lines: "126-139,182-229", why: "Logs include subnet, IP, ping, ports, validation text, and exception messages at operation boundaries." }
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/debug/DebugLogScreen.kt", lines: "61-84,204-220", why: "The debug screen reads and shares the full accumulated log instead of a bounded/redacted diagnostic bundle." }
+      - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/dns/DnsRepositoryImpl.kt", lines: "209-228", why: "Raw DNS output intentionally includes server and complete response text, which must remain separate from default logs." }
+    proposed_behavior: |
+      Replace free-form diagnostic logging at operation seams with structured
+      events containing tool, phase, runId, duration, error category, redacted
+      target fingerprint, route class, and counters. Redact IPv4/IPv6/subnet
+      values by default (stable per-install hash plus last-label/last-octet only
+      when useful), strip URI userinfo/query secrets and Authorization/Cookie
+      headers, cap message/stack bytes, and classify exception types instead of
+      persisting arbitrary messages. Keep full DNS/WHOIS/HTTP response exports
+      behind an explicit share action and never copy them into AppLogger.
+    depends_on: [E03-T03, E03-T05]
+    implementation_steps:
+      - "Write RED tests for IPv4, IPv6, CIDR, URL query/userinfo, Authorization, Cookie, API-key-looking values, passwords, stack traces, and malformed/unicode inputs."
+      - "Implement pure `Redactor` and structured event schema with a per-install salt that is not exported; add bounded ring/file writer and rotation tests."
+      - "Route AppLogger and network operation adapters through redaction; add runId/route metadata without logging raw packet/body data."
+      - "Make DebugLogScreen show event summaries, age/size/truncation, and an explicit 'include detailed response' action that uses the bounded export writer; default share excludes sensitive payloads."
+      - "Add release-build invariant test that `StructuredAppLogger` never writes a full target/credential and that BuildConfig.DEBUG cannot enable raw mode in release."
+    files_or_seams:
+      - "app/.../util/{AppLogger,StructuredAppLogger,Redactor,BoundedExportWriter}.kt"
+      - "app/.../ui/screens/debug/DebugLogScreen.kt"
+      - "app/.../ui/screens/*/*ViewModel.kt operation log calls"
+      - "app/src/test/.../platform/StructuredAppLoggerTest.kt and RedactorTest.kt"
+    acceptance_criteria:
+      - "A fixture containing every supported sensitive token class produces logs with zero original password/token/header/query values; redacted host/IP fingerprints remain stable within one install and differ for two salts."
+      - "A single event is <=4 KiB and a diagnostic file is <=1 MiB by default; overflow reports dropped bytes/events rather than allocating an unbounded String."
+      - "Default diagnostic sharing contains operation summaries and typed errors but no raw DNS/WHOIS/HTTP body, packet payload, credential, cookie, or full stack trace."
+      - "All existing operation log sites either call the structured adapter or are explicitly annotated as user-facing report data; an agent can verify this with a source scan."
+    validation:
+      red: "./gradlew :app:testDebugUnitTest --tests '*Logger*Test' --tests '*Redactor*Test' --no-daemon"
+      green: "./gradlew :app:testDebugUnitTest :app:lintDebug --no-daemon --no-parallel"
+      manual: "Generate a failed TLS/WHOIS/DNS/LAN operation and share the default diagnostic file; inspect it for redaction and truncation before opening any raw-result share action."
+    effort: "M (2-3 agent sessions)"
+    risk_rollout: "Keep old AppLogger method signatures as redacting adapters for one migration window. Never make raw mode the default; if support needs a raw artifact, require an explicit per-share confirmation and bounded export."
+
+  - id: E03-T07
+    title: "Build deterministic network fault and route-change test fixtures"
+    priority: high
+    status: todo
+    source_evidence:
+      - { file: "core-network/src/test/kotlin/net/aieat/netswissknife/core/network/lan/LanScanDiscoveryPipelineTest.kt", lines: "1-81", why: "LAN tests inject probe outcomes but do not exercise real socket closure, middlebox resets, route change, or worker cancellation." }
+      - { file: "core-network/src/test/kotlin/net/aieat/netswissknife/core/network/portscan/PortScanRepositoryImplTest.kt", lines: "1-260", why: "Port tests use a checker seam but cannot assert socket lifecycle, blocking reads, or bind ordering across route changes." }
+      - { file: "core-network/src/test/kotlin/net/aieat/netswissknife/core/network/httprobe/HttpProbeRepositoryTest.kt", lines: "1-240", why: "HTTP parsing is covered, but deterministic network faults and cancellation at each I/O stage are not shared across tools." }
+      - { file: ".github/workflows/ci.yml", lines: "1-150", why: "CI's network-related validation uses unit tests and Test Lab but has no fault matrix or no-real-network enforcement." }
+    proposed_behavior: |
+      Create a reusable JVM-only network fixture kit: scripted clock, socket and
+      datagram factories, fake NetworkBinder/ConnectivityObserver, MockWebServer
+      adapter where HTTP semantics matter, and faults for delay, timeout, reset,
+      malformed bytes, permission denial, route loss, cancellation, oversized
+      response, and duplicate/out-of-order events. Tests must prove no production
+      unit suite requires Internet, DNS, a VPN, or a physical LAN. Add a matrix
+      runner so each networked tool executes common lifecycle/fault cases while
+      retaining tool-specific parser tests.
+    depends_on: [E03-T01, P05-T3]
+    implementation_steps:
+      - "Write RED fixture contract tests: FakeClock advances deadlines without sleep; ScriptedSocket records connect/read/write/close; FakeNetworkBinder records target/interface and can throw permission or route loss."
+      - "Implement `NetworkFixture` and `NetworkFault` in test source sets only; keep host/port fixtures deterministic and avoid binding fixed real ports except MockWebServer's ephemeral port."
+      - "Add common tests for every networked repository: success, timeout, cancellation, malformed response, max-byte response, route change, and terminal-event uniqueness."
+      - "Add a LAN middlebox-reset scenario to the P01 regression: refused TCP alone remains ambiguous per RLAN001, while corroborated evidence emits a host."
+      - "Add CI `--offline` unit-test invocation after dependencies are cached plus an OS/JVM egress guard: allow loopback MockWebServer only and deny external DNS/HTTP/socket destinations. `--offline` controls dependency resolution; the egress guard is required for the no-real-network claim."
+    files_or_seams:
+      - "core-network/src/test/.../testkit/{FakeClock,ScriptedSocket,NetworkFault,NetworkFixture}.kt"
+      - "app/src/test/.../testkit/{FakeConnectivityObserver,FakeLifecycleOwner,OperationFixture}.kt"
+      - "core-network/src/test/.../{lan,portscan,dns,httprobe,ping,tls,whois,speedtest,topology}/**"
+      - ".github/workflows/ci.yml test-fixtures/offline step"
+    acceptance_criteria:
+      - "The fixture suite covers all 13 networked tools in the matrix and has zero calls to public DNS, Internet URLs, or fixed LAN addresses; `./gradlew test --offline` passes after dependency warm-up."
+      - "For every repository, cancellation during connect, read, parse, and emit closes the scripted resource and produces no later success/complete event."
+      - "Route/VPN fixtures verify P05 binder selection is passed to every local socket and Internet tools do not accidentally inherit a local-only route."
+      - "LAN false-positive regression proves one reset-only address is absent, while ICMP/name/open-TCP corroboration retains a host and metadata."
+      - "A deliberately attempted external socket/DNS request fails under the CI network sandbox while loopback fixtures pass; the job records that enforcement separately from Gradle's offline dependency mode."
+    validation:
+      red: "./gradlew :core-network:test --tests '*NetworkFixture*' --tests '*Cancellation*' --no-daemon"
+      green: "Run `./gradlew test --offline --no-daemon --no-parallel` inside the documented loopback-only network sandbox (for Linux, an `unshare --net`/firewall wrapper with loopback enabled, or the equivalent hosted-runner egress policy)."
+      manual: "Run one instrumented smoke on an emulator with airplane mode and one with a VPN/local-only route; verify typed capability/error states and no crash."
+    effort: "L (3-4 agent sessions)"
+    risk_rollout: "Keep fixtures in test source sets and use adapters rather than mocking final Android framework classes. If a repository cannot be made deterministic, record the blocking seam and add a narrow integration test rather than allowing live network calls in unit CI."
+
+  - id: E03-T08
+    title: "Add API/ABI compatibility checks for core modules"
+    priority: medium
+    status: todo
+    source_evidence:
+      - { file: "core-network/build.gradle.kts", lines: "1-42", why: "core-network is a published-style Kotlin JVM library module with Kover but no binary API dump/compatibility task." }
+      - { file: "core-domain/build.gradle.kts", lines: "1-42", why: "core-domain exposes use cases/models across the app boundary without an API/ABI baseline." }
+      - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/NetworkResult.kt", lines: "1-9", why: "Public result contracts can change source/binary behavior for app and future tools even when unit tests pass." }
+      - { file: "core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/UseCase.kt", lines: "1-11", why: "The domain boundary is intentionally shared and needs explicit compatibility policy." }
+    proposed_behavior: |
+      Establish public API dumps for core-domain and core-network and run a
+      compatibility check on every PR. Public model/result changes require an
+      additive migration or an intentional baseline update with a changelog and
+      dependent app compile. Internal implementation remains excluded. Cover
+      JVM signature, nullability/annotations, enum/sealed additions, default
+      parameters, and serialization/report schema compatibility separately; API
+      checks are a guardrail, not a claim that Android runtime behavior is ABI
+      safe.
+    depends_on: [E03-T03, P09-T1]
+    implementation_steps:
+      - "Verify a Kotlin binary compatibility validator version compatible with Kotlin 2.4.x; otherwise use a pinned japicmp/Metalava-compatible task and document the reason."
+      - "Generate checked-in API dumps from the current public surface after excluding Android/generated/test classes; add a deliberately failing fixture change to prove the gate."
+      - "Wire `apiCheck` into CI beside, but independently from, P09 Kover/style gates; require an API baseline update to include a rationale and migration note."
+      - "Add schema-version tests for OperationMetadata/result/export JSON so source API compatibility does not mask persisted/share format breakage."
+    files_or_seams:
+      - "core-network/build.gradle.kts, core-domain/build.gradle.kts, build.gradle.kts"
+      - "api/core-network.api, api/core-domain.api"
+      - ".github/workflows/ci.yml"
+      - "core-domain/.../result and core-network/.../result schema tests"
+    acceptance_criteria:
+      - "A public method removal, parameter type/nullability change, or incompatible sealed/result change fails `apiCheck`; additive compatible changes pass after compilation."
+      - "API baseline generation is reproducible on JDK 21 and does not include generated Hilt/Compose/Android classes."
+      - "A source-compatibility fixture and app compile catch call-site/default-parameter breakage, while independent serialization/schema fixtures catch sealed-state, nullability-at-runtime, and persisted/share-format behavior that an API dump cannot prove."
+      - "CI requires apiCheck on pull requests and uploads the diff; intentional updates include a migration note and dependent app test."
+    validation:
+      red: "./gradlew apiCheck --no-daemon (plus a temporary local breaking-signature fixture that must fail)"
+      green: "./gradlew apiCheck test --no-daemon --no-parallel"
+      manual: "Review one planned OperationMetadata API change from the dump diff through app compile, report schema test, and README migration note."
+    effort: "M (1-2 agent sessions)"
+    risk_rollout: "Start with core modules only and keep app-internal Compose code out of the dump. If the chosen validator cannot parse Kotlin 2.4/Java 21, stop at a documented pinned tool rather than weakening the gate."
+
+  - id: E03-T09
+    title: "Create benchmark module and performance regression budgets"
+    priority: medium
+    status: todo
+    source_evidence:
+      - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/SubnetUtils.kt", lines: "16-34,81-100", why: "Subnet detection and expansion are pure hot paths with materially different allocation behavior at /24 versus /16." }
+      - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/portscan/PortScanRepositoryImpl.kt", lines: "89-165", why: "Port aggregation/sorting and bounded worker completion are scalable paths suitable for a deterministic benchmark seam." }
+      - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/httprobe/HttpProbeRepositoryImpl.kt", lines: "189-226", why: "Bounded response decoding is a correctness/performance boundary for large bodies and charset handling." }
+      - { file: "gradle.properties", lines: "1-13", why: "The memory-constrained build host requires serialized benchmark/test execution and explicit resource reporting." }
+    proposed_behavior: |
+      Add a small benchmark target for pure and Android-runtime paths: lazy
+      subnet cursor, port result aggregation, capped export writing, redaction,
+      DNS/HTTP parser mapping, and first-screen/lazy-list rendering where a
+      managed device is available. Capture median/p95 time, allocations, peak
+      retained bytes, and battery/thermal observations with toolchain/device
+      metadata. The first run records measured baselines; only subsequent runs
+      enforce budgets. Keep thresholds relative (for example <=1.25x baseline)
+      until enough devices establish absolute targets.
+    depends_on: [E03-T05, P09-T4]
+    implementation_steps:
+      - "Verify the AndroidX Benchmark/Gradle plugin version against Kotlin/AGP; choose a pure JVM JMH-like task only for core code if an Android benchmark module is too costly."
+      - "Add deterministic benchmark fixtures at 1k, 10k, and /16 candidates, 1k/10k result rows, 1/5/20 MiB export inputs, and redaction-heavy logs."
+      - "Run warm-up plus at least 10 measured iterations on a fixed profile; save a machine-readable baseline with JDK/OS/CPU/ABI/build variant and no network."
+      - "Add CI benchmark smoke (short, no threshold) on PRs and scheduled/labelled regression benchmark with a 1.25x time/allocation alert; never make noisy hosted-device readings block ordinary PRs until variance is characterized."
+    files_or_seams:
+      - "benchmarks/build.gradle.kts and benchmarks/src/main/..."
+      - "benchmarks/src/main/.../{SubnetBenchmark,PortScanAggregationBenchmark,ExportBenchmark}.kt"
+      - "benchmarks/baselines/*.json and .github/workflows/ci.yml"
+    acceptance_criteria:
+      - "A baseline artifact exists for all six workload sizes with environment metadata and distinguishes measured values from future targets."
+      - "The benchmark proves the lazy /16 path does not scale retained candidate memory linearly with 65,534 strings; any regression beyond 1.25x baseline is reported with workload and commit."
+      - "PR CI executes a deterministic smoke benchmark without public network access; threshold enforcement is isolated to a scheduled/labelled job until variance is documented."
+    validation:
+      red: "./gradlew :benchmarks:test --no-daemon (or the validated benchmark task selected after plugin compatibility check)"
+      green: "./gradlew :benchmarks:assemble --no-daemon --no-parallel"
+      manual: "Run the benchmark twice on the same device/profile, record thermal/battery state, and review variance before enabling the regression threshold."
+    effort: "L (2-4 agent sessions)"
+    risk_rollout: "Do not claim a performance improvement from one run. Keep benchmark fixtures offline and deterministic; use alerts before gates on hosted hardware, and allow a documented baseline refresh only when workload/toolchain changes."
+
+  - id: E03-T10
+    title: "Make release builds reproducible and dependency resolution auditable"
+    priority: high
+    status: todo
+    source_evidence:
+      - { file: "app/build.gradle.kts", lines: "9-19,41-47,72-101", why: "Version/signing values are injected at build time and release is minified/shrunk; the output identity and reproducibility inputs are not recorded in an attested manifest." }
+      - { file: ".github/workflows/release.yml", lines: "40-115", why: "Daily version allocation, dependency/build steps, and release artifacts are assembled in CI without a same-commit reproducibility comparison." }
+      - { file: "settings.gradle.kts", lines: "1-31", why: "Repositories are centralized, but dependency verification/lock state is not visible in the current settings contract." }
+      - { file: "gradle/libs.versions.toml", lines: "1-80", why: "Versions are catalog-pinned, while resolved transitive checksums and toolchain provenance are not checked into the plan's quality path." }
+    proposed_behavior: |
+      Pin and record the complete build input set: Gradle wrapper, JDK 21,
+      Android SDK/build tools, Kotlin/AGP/KSP/catalog versions, repository
+      policy, dependency locks/checksums, locale/timezone, and source commit.
+      Make unsigned release APK/AAB packaging deterministic where Android tooling
+      permits it, emit a non-secret build provenance JSON, and compare two clean
+      builds from the same commit after normalizing known signing/zip metadata.
+      Any non-deterministic path must be named, measured, and excluded narrowly;
+      a changed dependency checksum or unpinned repository must fail CI.
+    depends_on: [P09-T4, P09-T5, E03-T08]
+    implementation_steps:
+      - "Run two clean unsigned release builds from the same checkout with fixed `SOURCE_DATE_EPOCH`, `TZ=UTC`, `LC_ALL=C`, JDK/SDK versions, and no parallel workers; record raw APK/AAB hashes first, then perform a documented canonical comparison that removes only known generated metadata."
+      - "Enable Gradle dependency verification/locking for app, core-domain, core-network, plugins, and buildscript classpaths; review generated metadata for accidental local/file repositories and exercise strict verification during a real resolution/build."
+      - "Add `build-provenance.json` to CI artifacts with commit, versions, variant, dependency graph hash, and toolchain paths; exclude secrets, keystore material, and absolute user paths."
+      - "Add reproducibility CI on a scheduled/labelled job, with a PR smoke that verifies provenance and dependency verification. Keep P09 release smoke as the functional R8/signing check."
+      - "Document intentional unstable entries (timestamps, signing, native pre-stripped metadata) and compare normalized outputs so the gate cannot hide a real dex/resource change."
+    files_or_seams:
+      - "gradle/verification-metadata.xml, gradle/dependency-locks/**, settings.gradle.kts"
+      - "gradle/libs.versions.toml, build.gradle.kts, app/build.gradle.kts"
+      - ".github/workflows/ci.yml and release.yml"
+      - "tools/reproducibility/{build_provenance.sh,compare_artifacts.sh} (or equivalent Gradle task)"
+      - "README.md and CLAUDE.md build/release sections"
+    acceptance_criteria:
+      - "A same-commit pair of clean unsigned release builds records raw hashes and yields identical canonical artifact hashes; any raw or canonical differing entry is listed with a documented reason and test, and canonicalization cannot hide a dex/resource/native binary difference."
+      - "A changed dependency checksum, repository, wrapper/toolchain version, or unresolved dynamic version fails strict dependency verification before release artifacts are published; a tampered checksum fixture fails the job."
+      - "Every release artifact has provenance containing commit and toolchain/dependency graph hashes but no signing secret, keystore bytes, absolute home path, or raw diagnostic payload."
+      - "The reproducibility check is independent of P09's release smoke and does not claim functional R8/SNMP retention from byte equality alone."
+    validation:
+      red: "./gradlew :app:assembleRelease --offline --no-daemon --no-parallel (repeat in a clean output directory and compare before adding the gate)"
+      green: "Run the reproducibility compare script plus `./gradlew --dependency-verification strict :app:assembleRelease --offline --no-daemon --no-parallel`; verify the tampered-checksum fixture fails before restoring the trusted metadata."
+      manual: "Download two CI artifact pairs from the same commit, run the documented normalization/compare command, and inspect provenance for secrets/path leaks."
+    effort: "L (2-4 agent sessions)"
+    risk_rollout: "Start in report-only mode and enumerate tool-generated nondeterminism. Fail closed on new or unexplained differences; keep signing semantics unchanged and never commit generated secret material."
+
+  - id: E03-T11
+    title: "Harden DataStore/file migration and backup invariants"
+    priority: high
+    status: todo
+    source_evidence:
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/data/AppPreferencesDataStore.kt", lines: "13-62", why: "One app_prefs file contains settings, pins, defaults, recent hosts, and subnet history with no schema version." }
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/di/DataStoreModule.kt", lines: "14-21", why: "A single unqualified DataStore is injected throughout the app, so future split/migration errors can affect every consumer." }
+      - { file: "plan/phases/P12-lan-utilities-and-settings-depth.yaml", lines: "142-166", why: "P12 already plans split DataStore, settings export/import, and backup rules; E03 must add crash/upgrade verification without duplicating the feature design." }
+      - { file: "app/src/main/res/xml/backup_rules.xml", lines: "3-13", why: "The whole DataStore is excluded, which protects recents but also drops non-sensitive settings on restore." }
+      - { file: "app/src/main/res/xml/data_extraction_rules.xml", lines: "7-17", why: "API 31+ cloud/device-transfer rules mirror the broad exclusion and need selective retention tests after the P12 split." }
+    proposed_behavior: |
+      Extend P12's store split with explicit schema/version migration through
+      DataStore's migration/serialization seams, a completion marker, idempotence,
+      crash/partial-write recovery, downgrade and unknown-key tolerance, and
+      backup/restore assertions. Settings (theme,
+      pins, safe defaults) may be backed up; recent hosts, subnets, diagnostics,
+      cached network responses, session files, and logs remain excluded. Export
+      and import share a versioned schema with range validation and no implicit
+      secrets. A migration failure preserves the old source and surfaces a typed
+      recoverable error; it never silently resets user settings.
+    depends_on: [P12-T4, P12-T5, E03-T05, E03-T06]
+    implementation_steps:
+      - "Add RED migration tests for first install, old single-store upgrade, already-migrated rerun, unknown keys, corrupt bytes, interrupted DataMigration, read-only destination, downgrade, and duplicate recents."
+      - "Implement coordinated DataMigration/serialization for the P12 split with per-store durable writes and a completion marker; retain the old source until every new store is verified durable, then mark complete. Do not hand-edit/rename an active DataStore file or assume multiple files commit atomically on Android."
+      - "Update legacy and API 31+ backup rules after the split; add an allowlist test that enumerates settings keys and an explicit denylist test for recents/logs/cache/session files."
+      - "Add emulator backup/restore smoke using `bmgr` with a disposable debug package; verify theme/pins survive and recents/network artifacts do not. Do not use deprecated `adb backup`."
+      - "Version settings export/import separately from backup; reject malformed JSON and out-of-range values with typed errors, preserve unknown future keys, and record migration/export version in provenance only."
+    files_or_seams:
+      - "app/.../data/{AppPreferencesDataStore,RecentHostsRepository,SettingsMigration,SettingsExporter}.kt"
+      - "app/.../di/DataStoreModule.kt and all qualified store consumers"
+      - "app/src/main/res/xml/{backup_rules,data_extraction_rules}.xml"
+      - "app/src/test/.../data/{PreferencesMigrationTest,BackupRuleTest,SettingsExporterTest}.kt"
+      - "app/src/androidTest/.../data/BackupRestoreSmokeTest.kt"
+    acceptance_criteria:
+      - "Migration is idempotent and crash-safe per store: every injected failure leaves valid old data and/or valid independently committed new stores with no completion marker; incomplete new stores are ignored and a rerun converges without duplicate recents. The implementation does not claim impossible all-files atomicity."
+      - "Backup allowlist retains only documented non-sensitive settings; tests prove recent hosts/subnets, logs, cached responses, session exports, and credentials are absent from cloud/device-transfer rules."
+      - "An emulator `bmgr` upgrade/restore preserves theme/pins/defaults and drops recents/network artifacts; the command/output is recorded in the implementation report."
+      - "Export/import round-trip preserves supported settings, rejects malformed/range-invalid data, ignores unknown fields, and reports schema version without embedding secrets or raw network history."
+    validation:
+      red: "./gradlew :app:testDebugUnitTest --tests '*Migration*Test' --tests '*Backup*Test' --tests '*SettingsExporterTest' --no-daemon"
+      green: "./gradlew :app:testDebugUnitTest :app:assembleDebug --no-daemon --no-parallel"
+      manual: "Run documented `bmgr enable/backupnow/restore` smoke on an API 31+ emulator with a baseline build and upgraded build; inspect restored settings and excluded files."
+    effort: "L (3-5 agent sessions; after P12 implementation)"
+    risk_rollout: "Do not alter P12's settings UX while adding migration safety. Keep old store until verified and retain a debug-only migration status/reset diagnostic; never delete user data as a migration shortcut."
+
+  - id: E03-T12
+    title: "Integrate reliability, offline, ABI, benchmark, and reproducibility gates"
+    priority: high
+    status: todo
+    source_evidence:
+      - { file: ".github/workflows/ci.yml", lines: "1-150", why: "Existing jobs cover ordinary unit/Kover/lint/debug, Test Lab, and CodeQL but do not sequence new deterministic/reproducible/API/performance checks." }
+      - { file: "plan/phases/P09-quality-gates-and-test-coverage.yaml", lines: "133-199", why: "P09 already owns baseline coverage/style/release-smoke work; E03 must add gates with explicit ordering and resource limits." }
+      - { file: "gradle.properties", lines: "4-13", why: "CI/local commands must remain serialized and within the 1 GiB Gradle/768 MiB Kotlin daemon caps." }
+    proposed_behavior: |
+      Add a staged CI path that makes the new contracts executable: unit tests
+      and offline fault fixtures, API/ABI check, Kover/style/lint from P09,
+      benchmark smoke, debug/release builds, reproducibility report, and
+      instrumented lifecycle/backup smoke. Use one Gradle invocation at a time,
+      artifact retention, cancellation/concurrency limits, and a report that
+      distinguishes blocking failures from measured alerts and future targets.
+      A PR must not consume public-network or Firebase quota for deterministic
+      checks; Test Lab remains P09's main-push/label policy.
+    depends_on: [E03-T07, E03-T08, E03-T09, E03-T10, E03-T11, P09-T3, P09-T4]
+    implementation_steps:
+      - "Add CI jobs/steps in dependency order: `test --offline` fixture suite, apiCheck, P09 style/Kover/lint, benchmark smoke, debug/release smoke, provenance/reproducibility report, then optional instrumented backup/lifecycle job."
+      - "Configure per-job timeout, concurrency cancellation, artifact uploads for reports/baselines, and a shared summary table showing measured values, alert-only thresholds, and blocking gates."
+      - "Add a no-network guard to unit jobs and ensure the reproducibility job uses dependency verification/cache state rather than silently resolving a newer version."
+      - "Run the staged workflow on a PR and a main push in a disposable branch; record wall time, peak memory, flaky tests, and Firebase quota usage before switching report-only checks to blocking."
+      - "Update CLAUDE.md/README with the exact local sequence and a troubleshooting path for `./gradlew --stop` after OOM/hung worker."
+    files_or_seams:
+      - ".github/workflows/ci.yml, .github/workflows/release.yml"
+      - "benchmarks/, api/, tools/reproducibility/"
+      - "CLAUDE.md and README.md quality/build sections"
+    acceptance_criteria:
+      - "A PR runs all deterministic checks without Internet/Firebase quota and fails on fixture, API/ABI, lint/Kover, or build regressions; benchmark/reproducibility are report-only until their variance/baseline policy is documented."
+      - "A main push runs P09 Test Lab policy once with concurrency cancellation and uploads E03 artifacts; no job invokes Gradle in parallel on the constrained runner."
+      - "CI summary identifies each gate as PASS/FAIL/ALERT/UNMEASURED and links the exact report; no future target is represented as a measured current fact."
+      - "The full local sequence passes from a clean checkout using documented JDK/SDK/tool versions and stays within the repository's memory/worker settings."
+    validation:
+      automated: "./gradlew test --offline --no-daemon --no-parallel; ./gradlew apiCheck --no-daemon; ./gradlew :app:koverVerify :core-domain:koverVerify :core-network:koverVerify --no-daemon; ./gradlew :app:lintDebug :app:assembleDebug :app:assembleRelease --no-daemon --no-parallel (sequentially)"
+      ci: "Open a disposable PR and push to main-equivalent workflow; inspect job graph, artifacts, no-network logs, cancellation, and summary classifications."
+      manual: "Re-run only the failed deterministic job after `./gradlew --stop`; verify no unrelated job or Firebase quota is consumed."
+    effort: "M (2-3 agent sessions)"
+    risk_rollout: "Keep new jobs report-only during baseline capture, but make safety failures (resource leaks, API breaks, redaction, backup allowlist, dependency verification) blocking immediately. Flip performance/reproducibility thresholds only after two clean runs and variance review."
+
+qa_validation:
+  automated:
+    - "Unit/core deterministic path: ./gradlew test --offline --no-daemon --no-parallel"
+    - "Static/compatibility: ./gradlew apiCheck ktlintCheck detekt :app:lintDebug --no-daemon --no-parallel (one invocation per host policy)"
+    - "Coverage/build: ./gradlew :app:koverVerify :core-domain:koverVerify :core-network:koverVerify :app:assembleDebug :app:assembleRelease --no-daemon --no-parallel"
+    - "Benchmark: validated :benchmarks smoke task plus scheduled baseline comparison; no public network"
+    - "Artifact: same-commit clean unsigned release pair, normalized diff, provenance/schema inspection"
+  manual_device:
+    - "Wi-Fi/local-only route with Internet validation false: local ping/LAN/mDNS/WOL/port/topology behavior and route banner"
+    - "VPN full tunnel and route change while each local tool runs; sockets close or restart with a new path snapshot"
+    - "Background/resume: Wi-Fi auto-refresh pauses; interactive scan stops; opt-in foreground continuous run displays notification and stop action"
+    - "Large /16 LAN and 10,000-port scan: lazy scrolling, bounded memory, stop metadata, capped export"
+    - "API 31+ backup/restore and settings export/import upgrade from the pre-P12 single store"
+    - "Release APK provenance, redacted diagnostics share, and no secret/path leakage"
+  regression:
+    - "RLAN001 LAN TCP-reset false-positive scenario remains covered in P01 tests."
+    - "P05 binder selection and LNP permission mapping remain covered; E03 adds lifecycle/resource assertions."
+    - "P09 release SNMP/R8 retention, version allocation, Kover, lint, style, and Test Lab policy remain independently verified."
+    - "P12 settings split/export/backup behavior remains the product owner; E03 migration tests cover crash/restore invariants."
+
+coverage_matrix:
+  note: "Rows identify the required E03 contract. A checkmark means the task owns the cross-cutting seam/test; feature-specific semantics remain in the named phase."
+  columns: [tool_or_surface, requirement, budget_cancellation, target_lifecycle, route_metadata, bounded_memory_export, deterministic_faults, existing_phase_owner]
+  rows:
+    - [LAN scan, LOCAL_NETWORK, E03-T01, E03-T02, E03-T03/P05, E03-T05, E03-T07, P01/P05]
+    - [mDNS, LOCAL_NETWORK, E03-T01, E03-T02, E03-T03/P05, E03-T05, E03-T07, P05/P12]
+    - [WOL, LOCAL_NETWORK, E03-T01, E03-T02, E03-T03/P05, E03-T05, E03-T07, P05/P12]
+    - [Topology/SNMP, LOCAL_NETWORK, E03-T01, E03-T02, E03-T03/P05, E03-T05, E03-T07, P02/P05]
+    - [LAN port scan, LOCAL_NETWORK, E03-T01, E03-T02, E03-T03/P05, E03-T05, E03-T07, P05/P11]
+    - [Ping, ANY_NETWORK, E03-T01, E03-T02, E03-T03, E03-T05, E03-T07, P04]
+    - [Wi-Fi scan, LOCAL_NETWORK, E03-T01, E03-T02, E03-T03, E03-T05, E03-T07, P03]
+    - [DNS, INTERNET-or-explicit-resolver, E03-T01/E03-T04, E03-T02, E03-T03, E03-T05, E03-T07, P04]
+    - [HTTP probe, INTERNET-or-local-target, E03-T01/E03-T04, E03-T02, E03-T03, E03-T05, E03-T07, P10]
+    - [TLS inspector, INTERNET-or-local-target, E03-T01/E03-T04, E03-T02, E03-T03, E03-T05, E03-T07, P10]
+    - [WHOIS, INTERNET, E03-T01/E03-T04, E03-T02, E03-T03, E03-T05, E03-T07, P10]
+    - [Speed test, INTERNET, E03-T01/E03-T04, E03-T02, E03-T03, E03-T05, E03-T07, P11]
+    - [Traceroute, ANY_NETWORK-by-target, E03-T01/E03-T04, E03-T02, E03-T03, E03-T05, E03-T07, P11]
+    - [Subnet calculator/settings, NONE-or-offline, E03-T05/E03-T11, E03-T02, E03-T03-optional, E03-T05, E03-T07, P12]
+    - [Logs/diagnostics, NONE, E03-T01/E03-T06, E03-T02, E03-T03, E03-T05/E03-T06, E03-T07, P09/P12]
+
+critical_path:
+  sequence:
+    - "P05-T1 -> P05-T2 -> P05-T3: NetworkBinder and ConnectivityObserver seams"
+    - "E03-T01: operation budget/resource cleanup contract"
+    - "E03-T02 + E03-T03: target-aware availability, lifecycle, and route/session metadata"
+    - "E03-T04 + E03-T05: timeout/cache and bounded memory/export primitives"
+    - "E03-T06 + E03-T07: redaction and deterministic fault matrix"
+    - "E03-T08 + E03-T09 + E03-T10 + E03-T11: API/ABI, benchmark, reproducibility, migration/backup evidence"
+    - "E03-T12: staged CI integration after baselines and fault coverage are green"
+  parallel_safe_work:
+    - "E03-T06 redactor tests can proceed beside E03-T04 policy tests once the metadata shape is agreed."
+    - "E03-T08 API dumps and E03-T09 pure benchmarks can proceed beside E03-T07 fixtures."
+    - "E03-T11 backup tests must wait for P12-T4/T5 store shape but can be designed from current single-store evidence."
+
+definition_of_done:
+  - "Every task is status done or dropped with a reason; measured baselines and future targets are explicitly labeled."
+  - "Operation cancellation, target-aware availability, route/session metadata, cache/timeout, memory/export, redaction, deterministic fault, API/ABI, benchmark, reproducible build, and migration/backup acceptance criteria are all evidenced by tests or documented device/build output."
+  - "P05/P09/P12 ownership boundaries remain intact; no duplicate implementation is left as an unowned alternative."
+  - "Global plan gates still pass: tests, lint with zero errors, debug/release build, Kover floors, README/CLAUDE/privacy sync, and release smoke."
+
+docs_updates: [README.md, PRIVACY_POLICY.md, CLAUDE.md]
+
+risks:
+  - risk: "A shared budget changes timing or cancellation semantics in one of the 14 tools."
+    mitigation: "Migrate one family at a time behind injected seams, preserve typed terminal states, and require deterministic cancellation tests before changing defaults."
+  - risk: "Capping live rows or exports hides useful diagnostics."
+    mitigation: "Retain exact aggregate counts, show truncation, stream bounded files, and make the cap visible/configurable within safe limits."
+  - risk: "OEM ConnectivityManager/lifecycle callbacks disagree with the model."
+    mitigation: "Keep route snapshots conservative, expose capability state, allow explicit retry, and gather device evidence before enabling background continuation."
+  - risk: "Hosted benchmark and artifact reproducibility checks are noisy."
+    mitigation: "Record environment, use report-only baselines first, normalize only known generated metadata, and gate unexplained safety/build-input changes immediately."
+  - risk: "DataStore migration or selective backup loses settings/history."
+    mitigation: "Use atomic/idempotent migration, old-store retention, injected failure tests, emulator bmgr smoke, and explicit privacy allow/deny lists."

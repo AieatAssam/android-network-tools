@@ -4,6 +4,17 @@
 #       resolver labelling, Private-DNS awareness; IDN/FQDN host normalisation
 # =============================================================================
 # Audience: AI coding agent. Self-contained. Read plan/plan.yaml `agent_execution_rules` first.
+expansion_tasks:
+  index: plan/plan.yaml
+  tasks: [E02-T01, E02-T05, E01-T10, E03-T05]
+  rule: "Coordinate with these expansion tasks; do not duplicate existing scope or block independent regression fixes on optional enhancements. See comprehensive_expansion.regression_delivery for fresh follow-up ownership."
+
+second_pass_follow_up:
+  status: todo
+  report: plan/reviews/2026-09-22-second-pass.yaml
+  findings: [R2-006]
+  rule: "Apply report recommendations and regression acceptance before closing the listed follow-ups; historical phase completion does not close new findings."
+
 phase:
   id: P04
   title: "Ping & DNS accuracy"
@@ -14,6 +25,16 @@ phase:
   enables: [P11, P14]
   findings: [F008, F009, F010, F011, F025, F037]
   target_modules: [":core-network", ":core-domain", ":app"]
+
+review_follow_up:
+  reviewed_on: "2026-09-21"
+  status: todo
+  findings: [RAPP003, RNET005, RUI005, RUI008]
+  reports:
+    - plan/reviews/2026-09-21-app.yaml
+    - plan/reviews/2026-09-21-network.yaml
+    - plan/reviews/2026-09-21-ui-domain.yaml
+  note: "New source-review follow-ups; preserve historical task completion. See report evidence, recommended_action, and validation before implementation."
 
 context:
   problem: |

@@ -1,0 +1,215 @@
+expansion:
+  id: E00
+  title: "Agent execution contract and corrections to the existing roadmap"
+  status: todo
+  authored_on: "2026-09-22"
+  baseline_commit: "5e183721e64ce8a8946f1a0b50f52b83544e8898"
+  intent: "Planning only; executable increments for coding agents, preserving existing feature ownership and implementation history."
+
+execution_contract:
+  selection:
+    - "Read plan/plan.yaml comprehensive_expansion and incremental_review, then the selected expansion task and its referenced existing phase."
+    - "Select the highest-priority ready task. Honor explicit hard dependencies only; a whole phase used as background context is not automatically a prerequisite."
+    - "Current correctness regressions may ship independently of P07 localization, optional tools, or a global architecture rewrite. Extract only the shared seam required for that fix."
+  task_fields:
+    required: [id, title, priority, status, source_evidence, proposed_behavior, implementation_steps, acceptance_criteria, validation]
+    recommended: [depends_on, refines, files_or_seams, effort, risks, rollout]
+    evidence_format: "Use real baseline paths and numeric lines when known; label proposed files as proposed. Use url plus section for external sources."
+    dependency_format: "depends_on contains exact executable task IDs; refines/related_phases identify context and original ownership. List capability dependencies separately if the owning task is not yet indexed."
+    status_values: [todo, in_progress, blocked, done, dropped]
+    priority_values: [critical, high, medium, low]
+    effort_values: [S, M, L, XL]
+    effort_meaning: "S = one focused change; M = a few dependent changes; L/XL = split into independently verifiable increments before coding. Session estimates in workstreams are rough relative sizing, not promised elapsed time."
+  implementation_cycle:
+    - "Recheck HEAD, worktree ownership, source evidence and existing tests. Record changes since baseline; preserve user edits."
+    - "For a behavior fix, reproduce the failure with a deterministic seam or fixture, implement the smallest complete behavior, and verify acceptance before refactoring."
+    - "For UI-only polish use relevant Compose/device checks; do not invent unit tests that merely mirror layout code."
+    - "Run only one Gradle invocation at a time. Capture running session IDs, poll them to terminal status, and do not start replacement builds because output paused."
+    - "Record the exact commands, exit status, device/configuration, and limits of validation. Cached UP-TO-DATE tasks are not newly executed tests."
+    - "Update task status, source review status, master index and affected phase follow-up together after acceptance passes. Historical completed tasks stay completed."
+    - "README/store/privacy claims change when the feature ships. Do not advertise planned features as implemented."
+  incremental_checkpoint:
+    required: [task_id, baseline_or_current_commit, status, files_changed, verified_acceptance, remaining_acceptance, next_action, running_handles, blockers]
+    cadence: "Save after each coherent discovery or verified implementation slice, and before any long operation."
+    location: "Append a checkpoint mapping to the owning expansion task or phase; use explicit none for no active process."
+    resume: "Inspect current source and each recorded process handle before continuing; completed checks are not rerun without a relevant change."
+  authority:
+    - "Planning does not authorize releases, purchases, API subscriptions, external messages, or implementation in this review."
+    - "When implementing a later authorized feature, per-run network destination and transmitted data are explicit in the product; imported profiles never auto-run diagnostics."
+    - "Do not copy the historical fixed Co-Authored-By footer to new commits. Use truthful authorship according to the active agent/workflow."
+  release_gates:
+    - "Applicable deterministic tests, lint, affected coverage gates, and debug/release smoke as scoped by P09."
+    - "API 26 minimum plus representative modern API and target-SDK behavior are validated where platform code changes. Any untested device condition is recorded."
+    - "Persistent state/schema migrations have old-format fixtures and rollback/forward compatibility decisions; secret-bearing state is excluded from ordinary backups/exports by default."
+    - "Large architectural changes roll out tool by tool behind internal capability routing; no mass rewrite prerequisite for bug fixes."
+
+tasks:
+  - id: E00-T04
+    title: "Implement future-tool correctness refinements within their owning phase slices"
+    priority: high
+    status: todo
+    depends_on: []
+    refines: [P13-T1, P13-T2, P13-T3, P14-T1, P14-T3, P15-T1, P15-T2, P15-T3]
+    effort: "M per owning tool; not a prerequisite to implementing unrelated fixes"
+    execution: "This is a cross-phase acceptance contract, not a second implementation of the tools. Execute each slice together with its referenced owner; close only after all slices have recorded evidence."
+    source_evidence:
+      - { file: plan/phases/P13-new-tools-wave-1.yaml, line: 85, detail: "NTP device-minus-server label contradicts the server-minus-device formula; public-IP family and XML safety assumptions also need explicit contracts." }
+      - { file: plan/phases/P14-new-tools-wave-2.yaml, line: 32, detail: "AD/RRSIG observations and a configured Private DNS hostname can be mistaken for locally verified DNSSEC or observed encrypted transport." }
+      - { file: plan/phases/P15-new-tools-wave-3.yaml, line: 28, detail: "Total-minus-mobile is labelled Wi-Fi; certificate grouping uses serial alone; routing results omit collector-vantage caveats." }
+    authoritative_references:
+      - { url: "https://www.rfc-editor.org/rfc/rfc5905", section: "8: on-wire protocol", supports: "Offset is server relative to client; origin correlation and timestamp handling." }
+      - { url: "https://developer.android.com/reference/android/net/TrafficStats", section: "getTotalRxBytes and getRxBytes", supports: "Totals span network interfaces; per-interface statistics have accounting limitations." }
+      - { url: "https://www.ipify.org/", section: "API usage", supports: "api64 is dual stack, not an IPv6-only endpoint." }
+      - { url: "https://www.rfc-editor.org/rfc/rfc4035", section: "3.2.3 and 4.9.3", supports: "AD is a resolver assertion with trust considerations, not independent validation by the client." }
+    proposed_behavior: "Ship diagnostic evidence with explicit provenance and uncertainty; reject unsafe or uncorrelated protocol input. The refinements below override conflicting older prose."
+    implementation_steps:
+      - "Before each owning tool lands, translate its slice into typed model fields, deterministic fixtures, and localized presentation. Do not build all tools in one change."
+      - "Record each slice independently in the owning task checkpoint. Recheck provider and Android API contracts at implementation time."
+    slices:
+      - owner: P13-T1
+        scope: "Network Info"
+        requirements:
+          - "Label public IP by validated response address family and actual selected route. api64 can return IPv4; IPv6 unavailable is a valid result, not proof of network failure."
+          - "Separate platform estimates, unavailable/redacted fields, configured Private DNS, and measured results. Do not report zero/unsupported DHCP fields as known values."
+          - "Derive network metadata from the selected Network's LinkProperties and capabilities; do not use deprecated global DNS properties as the acceptance oracle. Verify each API's minimum level individually."
+        tests: ["IPv4 returned from dual-stack provider", "IPv6 unavailable", "permission-redacted Wi-Fi fields", "VPN/default-network change invalidates stale snapshot"]
+      - owner: P13-T2
+        scope: "SSDP/UPnP safe metadata fetching"
+        requirements:
+          - "Fail closed on XML with DOCTYPE/external entities; if secure parser configuration cannot be established, retain discovery headers and omit XML details. Catching an unsupported hardening feature must not permit insecure parsing."
+          - "Validate and pin resolved LOCATION/control addresses to the chosen local network; prevent validation-then-reresolution bypass, reject redirects and non-HTTP(S) schemes, cap bytes and concurrency."
+          - "Apply the same URL policy to SOAP controls; presentation links require explicit user action and clearly display destination. Rejecting metadata must not discard the observed SSDP response."
+        tests: ["XXE and entity expansion on JVM and supported Android parsers", "DNS address changes between validation and connection", "redirect off LAN", "oversized XML", "metadata rejected but device retained"]
+      - owner: P13-T3
+        scope: "NTP timestamp and quality contract"
+        requirements:
+          - "Use server-minus-device offset consistently; positive means the server is ahead. If displaying device-minus-server, negate explicitly. Correlate originate timestamp, endpoint, version and response mode before accepting a sample."
+          - "Represent unsynchronized replies, stratum-zero control responses, malformed packets and timeouts separately; honor server rate limits and use bounded comparison concurrency."
+          - "Handle timestamp era boundaries and wall-clock jumps; use monotonic time for elapsed deadlines. Reference IDs are not universally IPv4 addresses. Never label uncertain high-delay measurements as exact clock accuracy."
+        tests: ["Known positive and negative offset", "wrong originate timestamp", "truncated packet", "unsynchronized/stratum-zero replies", "2036-era boundary", "wall-clock adjustment", "controlled local-server quality test; public servers exploratory only"]
+      - owner: P14-T1
+        scope: "Secure DNS evidence"
+        requirements:
+          - "Expose DNSSEC requested, AD observed, RRSIG present, and locally validated as distinct fields; leave local validation unavailable unless an actual validating implementation exists."
+          - "Label Private DNS as configured platform state, not proof of every query's transport. Validate DoT certificate trust and hostname; show negotiated ALPN but do not require dot merely because the plan lists it."
+          - "Use controlled valid/bogus DNS fixtures for acceptance. Compare latency only with disclosed sample count, cold/warm state, timeouts and endpoint; fastest in this run is not a security rating."
+        tests: ["AD without RRSIG", "RRSIG without validation", "wrong TLS hostname", "partial DNS TCP frame", "one resolver times out", "configured Private DNS differs from explicit probe"]
+      - owner: P14-T3
+        scope: "Bufferbloat measurement comparability"
+        requirements:
+          - "Do not mix ICMP and HTTP latency samples into one grade. Restart baseline after an engine or route change, or mark the result incomparable."
+          - "Require minimum valid samples per phase; loss and load failures remain visible. Grade thresholds are app policy with documented version, not a guarantee tied to router model or SQM setting."
+          - "Preview transfer/data budget, respect metered-network confirmation and stop both load and latency children on cancellation."
+        tests: ["Engine switch mid-run", "no valid idle samples", "load transfer failure", "route change", "grade boundaries with synthetic distributions", "cancellation closes all children"]
+      - owner: P15-T1
+        scope: "Traffic accounting"
+        requirements:
+          - "Label total-minus-mobile as a non-cellular residual estimate, never exact Wi-Fi usage. Display accounting source, interface and VPN limitations."
+          - "Represent unsupported counters, reset counters and nonpositive elapsed intervals without negative rates or fabricated zero traffic. Gate optional per-app views on verified platform capability and user-granted access."
+        tests: ["Ethernet-only traffic not labelled Wi-Fi", "VPN accounting caveat", "unsupported sentinel", "counter reset", "zero elapsed interval", "permission denied/revoked"]
+      - owner: P15-T2
+        scope: "Certificate Transparency identity and completeness"
+        requirements:
+          - "Do not deduplicate unrelated issuers' certificates by serial alone. Prefer verified certificate fingerprint where available; otherwise retain issuer identity plus serial and disambiguating fields without claiming a proven precert/cert equivalence."
+          - "Bound response bytes before parsing, record truncation/provider failure/cache age, and describe results as provider-observed issuance records rather than every certificate."
+          - "Within-validity-window is not deployed, trusted, or unrevoked; handoff performs a separate current TLS inspection."
+        tests: ["Same serial across issuers retained", "ambiguous issuer identity retained", "oversized JSON", "429 and stale cache", "expired record not labelled a currently deployed vulnerability"]
+      - owner: P15-T3
+        scope: "BGP/RPKI provenance"
+        requirements:
+          - "Model RPKI per prefix/origin pair, including multiple origins and unavailable responses. Collector visibility is not the phone's forwarding path, reachability, or a security guarantee."
+          - "Record provider, data timestamp and cache age per section; preserve useful partial responses when one endpoint fails. Verify RIPEstat schemas and terms before implementation."
+        tests: ["Multiple origins with different validation outcomes", "unknown versus invalid", "stale collector data", "partial provider outage", "bounded prefix pagination"]
+    acceptance_criteria:
+      - "Every slice has fixtures and presentation checks in its owning phase; contradictory historical acceptance criteria are not used as gates."
+      - "No live-provider SLA, exact router grade, or coarse shell-clock comparison is required for deterministic CI success."
+    validation:
+      - "Run focused pure model/protocol tests and ViewModel tests per owner; add Android parser/platform tests only for affected slices."
+      - "Record optional device/provider observations separately from deterministic acceptance results, including endpoint and capture time."
+    risks: ["Strict evidence may reduce apparent coverage; explain uncertainty instead of weakening acceptance.", "Provider and platform behavior can change; verify contracts before shipping."]
+
+  - id: E00-T01
+    title: "Fix LAN host-presence confidence and remove unused-address noise"
+    second_pass_refinements:
+      - "R2-003/R2-004 refine positive name evidence: parsing must respect response counts and correlate sender/query/protocol fields. A nonblank uncorrelated UDP name is not sufficient target evidence."
+    priority: high
+    status: todo
+    refines: [RLAN001, P01]
+    depends_on: []
+    effort: M
+    source_evidence:
+      - { file: core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/DiscoveryProbes.kt, line: 105, detail: "All ConnectException values become REFUSED; exception type alone does not record an observed TCP RST or its source." }
+      - { file: core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/LanScanRepositoryImpl.kt, line: 187, detail: "Refused alone creates a host; the ICMP success branch returns before TCP probing." }
+      - { file: core-network/src/test/kotlin/net/aieat/netswissknife/core/network/lan/LanScanDiscoveryPipelineTest.kt, line: 28, detail: "The current test promotes every refused address to alive." }
+    proposed_behavior: |
+      The default results show only endpoints supported by positive target evidence. A failed connect alone is unconfirmed.
+      Preserve confirmed/open, refused, timed_out, unreachable, policy_denied, and unknown_failure as probe outcomes;
+      retain error provenance when available. Never display 'blocked' as a fact inferred solely from a failed probe.
+      A successful ICMP echo, completed TCP connection, or validated target-specific local protocol reply can produce a
+      confirmed endpoint; an ambiguous refusal is retained only in an optional collapsed diagnostics view and excluded
+      from confirmed device count, topology, exports of confirmed hosts, and expensive enrichment by default.
+      Repeated identical refusals across ports are not independent corroboration of target ownership. Do not assume ARP
+      is readable on modern Android, reverse DNS proves current presence, or a socket exception exposes packet source.
+      Confirmed means observed responsive endpoint through the selected route, not proven physical device identity.
+    files_or_seams: [DiscoveryProbes.kt, LanScanRepositoryImpl.kt, LanScanUpdate.kt, LanHost.kt, LanScanSummary.kt, LanScanFlowResult.kt, LanScanViewModel.kt, LanScanScreen.kt, strings.xml]
+    implementation_steps:
+      - "Introduce a pure presence classifier receiving typed probe evidence; preserve existing event compatibility while adding explicit confidence and outcome reasons."
+      - "Separate connection failure classification from target presence. Preserve expected platform errno/cause where available; unknown ConnectException remains ambiguous."
+      - "Collect refusal evidence without early host promotion. Continue bounded positive probes; only confirmed endpoints proceed to hostname/MAC/quick-port enrichment."
+      - "Keep progress for every attempted address independently of device count. Preserve stop/partial-result behavior and show a compact uncertain count only when requested."
+      - "Remove the unconditional all-refused-alive test and replace it with the evidence matrix below. Recheck discovery of real ICMP-blocked services without restoring false positives."
+    acceptance_criteria:
+      - "All addresses return refusal, timeout or unreachable and no positive evidence: zero confirmed host events and zero confirmed count; scan progress still reaches total attempted."
+      - "Exactly one endpoint completes TCP while all others fail: exactly one confirmed endpoint; no expensive enrichment for the others."
+      - "ICMP success alone is confirmed and does not fabricate TCP_REFUSED metadata for a probe that was never run."
+      - "Multiple refused ports alone remain unconfirmed; optional diagnostic entries are clearly labeled and cannot populate the confirmed topology/export."
+      - "A routed-LAN fixture returning path-generated errors for unused addresses does not inflate device count. Source attribution remains unknown when unavailable."
+    validation:
+      deterministic: "Focused core-network classifier/pipeline tests with fake probes and enrichment invocation counts; app ViewModel tests for separate progress/confirmed/uncertain counts; Compose checks for default list and opt-in diagnostics."
+      device: "Capture a user-like LAN run on Wi-Fi and with a VPN, including known unused IPs, and compare observed app outcomes with controlled server presence. Do not claim a packet-reset root cause without capture/errno evidence."
+      commands: ["./gradlew :core-network:test --tests '*LanScan*' --tests '*SocketTcpPresenceProbe*' --no-daemon --no-parallel", "./gradlew :app:testDebugUnitTest --tests '*LanScanViewModelTest' --no-daemon --no-parallel"]
+    rollout: "Ship as a focused P01 follow-up before optional discovery enhancements. Update README/help to explain confirmed endpoints and incomplete visibility."
+    risks: ["Conservative classification may omit closed-port hosts without another signal; expose uncertainty honestly rather than presenting unused IPs as devices."]
+
+  - id: E00-T02
+    title: "Turn the review ledger into independently closable regression work"
+    priority: high
+    status: todo
+    refines: [P01, P02, P03, P04, P05, P08, P09, P10, P11, P12]
+    depends_on: []
+    effort: M
+    source_evidence:
+      - { file: plan/plan.yaml, detail: "incremental_review indexes 28 findings; some are follow-ups on completed phases." }
+    proposed_behavior: "Each current finding has exactly one owning implementation slice and explicit closure evidence; low-priority feature phases do not delay a higher-priority correctness fix assigned to them."
+    files_or_seams: [plan/plan.yaml, plan/reviews, plan/phases, plan/expansion]
+    implementation_steps:
+      - "Resolve each finding to the existing task or expansion task that owns the behavior. For unowned defects, copy recommended_action and validation into a scoped follow-up task using the finding ID as its stable reference."
+      - "Record required capability prerequisites at task granularity. Distinguish UI, transport, and platform layers when multiple reports describe related symptoms."
+      - "Close a finding only after its recorded trigger is tested; passing existing broad suites alone is insufficient. Drop disproven findings with reasoning and retain their IDs."
+    acceptance_criteria:
+      - "All current findings have owner/closure mappings; duplicate symptoms share implementation but retain separate acceptance cases."
+      - "P01/P03/P04 historical done statuses do not hide unresolved review follow-ups."
+    validation: { static: "Plan validator resolves every finding, owner task, phase, and report reference; audit confirms no orphan or duplicate implementation slice." }
+    rollout: "Apply incrementally as each implementation task is selected; this mapping does not require all bug fixes to wait for a planning refactor."
+
+  - id: E00-T03
+    title: "Automate roadmap consistency and resumable agent handoff checks"
+    priority: medium
+    status: todo
+    refines: [P06, P09]
+    depends_on: []
+    effort: S
+    source_evidence:
+      - { file: plan/plan.yaml, detail: "Master index, historical phase state, review reports and expansion tasks form separate reference graphs." }
+    proposed_behavior: "A fast plan-only validation command rejects invalid YAML, duplicate task IDs, missing references, dependency cycles and false completion claims without invoking Gradle."
+    files_or_seams: ["proposed tools/plan/validate.mjs", "proposed tools/plan/schema.json", plan/plan.yaml, .github/workflows/ci.yml]
+    implementation_steps:
+      - "Choose one parser/schema dependency in a small isolated tools package; prohibit duplicate YAML keys and validate status/priority fields."
+      - "Resolve task/finding/phase references and hard-dependency DAGs; distinguish proposed file targets from existing source evidence."
+      - "Require closure/checkpoint evidence for done implementation tasks, but preserve imported historical phase states with a baseline marker."
+      - "Add fixtures for broken references, cycles, missing checkpoints and valid historical-done/new-todo combinations. Run only on plan/tool changes in CI."
+    acceptance_criteria:
+      - "Validator exits nonzero with file/task/key context for each invalid fixture; current valid roadmap passes."
+      - "No filesystem/network mutation, Gradle invocation or external API call is required for validation."
+    validation: { command: "Node tool fixture suite and validator against all plan YAML; record parser version and exact output." }
+    rollout: "Introduce as a report for existing schema differences, reconcile them once, then gate future plan edits."

@@ -1,0 +1,125 @@
+review:
+  area: app-platform-integrations
+  status: done
+  baseline_commit: "5e183721e64ce8a8946f1a0b50f52b83544e8898"
+  reviewer_model: "gpt-5.6-luna"
+  reviewer_reasoning_effort: xhigh
+
+findings:
+  - id: RAPP001
+    severity: medium
+    kind: bug
+    title: "Wi-Fi scan failures are reported as completed scans"
+    evidence:
+      - file: app/src/main/kotlin/net/aieat/netswissknife/app/wifi/ScanRequestAwaiter.kt
+        line: 51
+        detail: "The dynamic receiver treats every SCAN_RESULTS_AVAILABLE_ACTION broadcast as success and sets broadcastArrived=true without reading WifiManager.EXTRA_RESULTS_UPDATED. Android sends this extra as false when the requested scan did not update results."
+      - file: app/src/main/kotlin/net/aieat/netswissknife/app/wifi/ScanRequestAwaiter.kt
+        line: 82
+        detail: "requestAndAwait returns only startScanReturned and broadcastArrived; a false-update broadcast therefore produces throttled=false even though scanResults may still be the previous cache."
+      - file: app/src/main/kotlin/net/aieat/netswissknife/app/wifi/WifiScanRepositoryImpl.kt
+        line: 91
+        detail: "The repository derives throttled solely from requestOutcome.throttled (which is !startScanReturned) and ignores broadcastArrived=false, including the timeout path where startScan returned true but no completion broadcast arrived."
+      - file: app/src/main/kotlin/net/aieat/netswissknife/app/wifi/WifiScanRepositoryImpl.kt
+        line: 87
+        detail: "scanTimestampMs is always set to the current read time, even when the platform returned no updated-results broadcast; the Wi-Fi header renders this as the scan time while the actual cache age is only shown in a separate status chip."
+      - file: app/src/main/kotlin/net/aieat/netswissknife/app/wifi/WifiScanRepositoryImpl.kt
+        line: 67
+        detail: "The repository immediately maps wifiManager.scanResults after the awaiter returns, so a failed broadcast can surface the previous cache as the result of the new refresh; freshness age may expose that staleness, but the request outcome does not identify the failure."
+    impact: "A user can be told a refresh completed while the displayed data is unchanged; the UI's throttle indicator cannot distinguish a platform scan failure from a completed scan even though timestamp-age may still show stale data."
+    recommended_action: "Capture EXTRA_RESULTS_UPDATED in the awaiter outcome (and distinguish rejected, completed, and failed requests); only report a successful refresh when the broadcast confirms updated results, while retaining the prior cache with an explicit failure/stale status otherwise."
+    validation: "Add JVM decision tests for updated=false and instrumented tests that dispatch SCAN_RESULTS_AVAILABLE_ACTION with EXTRA_RESULTS_UPDATED=false/true, asserting the repository/UI state and stale indicator differ."
+    related_phase: P03
+    status: todo
+
+  - id: RAPP002
+    severity: medium
+    kind: bug
+    title: "mDNS stop/cancellation does not promptly terminate the socket loop"
+    evidence:
+      - file: app/src/main/kotlin/net/aieat/netswissknife/app/mdns/MdnsRepositoryImpl.kt
+        line: 71
+        detail: "The receive loop is bounded only by wall-clock timeoutMs and does not check coroutine cancellation/currentCoroutineContext().isActive."
+      - file: app/src/main/kotlin/net/aieat/netswissknife/app/mdns/MdnsRepositoryImpl.kt
+        line: 78
+        detail: "Each iteration can block in MulticastSocket.receive through receivePacket; the socket is only closed by the enclosing finally after the loop exits."
+      - file: app/src/main/kotlin/net/aieat/netswissknife/app/mdns/MdnsRepositoryImpl.kt
+        line: 44
+        detail: "The Wi-Fi multicast lock is acquired for the whole flow and released only after socket cleanup, so a cancelled scan can retain the lock until the timeout path completes."
+      - file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/mdns/MdnsDiscoveryViewModel.kt
+        line: 86
+        detail: "stopScan cancels the collection job and immediately marks the UI idle, but has no repository-level close/cancellation hook to interrupt the blocking receive."
+    impact: "Stopping or navigating away from a long mDNS scan can keep a socket and multicast lock alive for the remaining timeout, wasting radio/battery and allowing late cleanup/error work after the UI says scanning stopped (Flow cancellation prevents normal post-cancel emissions)."
+    recommended_action: "Make the receive loop cancellation-aware, use a cancellable socket/close hook (or a short receive timeout plus ensureActive), and release the multicast lock in a cancellation-safe finally path before returning."
+    validation: "Add a fake socket/adapter test that cancels during receive and asserts close/release immediately; add an integration test with a long timeout verifying stopScan leaves no active receiver/socket/lock and no post-cancel update."
+    related_phase: P05
+    status: todo
+
+  - id: RAPP003
+    severity: medium
+    kind: gap
+    title: "Native ICMP load failures bypass the advertised reachability fallback"
+    evidence:
+      - file: app/src/main/kotlin/net/aieat/netswissknife/app/ping/IcmpenguinPingEngine.kt
+        line: 91
+        detail: "IcmpenguinPingEngine hard-codes isAvailable=true even though every probe constructs and invokes a JNI-backed Pinger. There is no capability/load probe before the engine is selected."
+      - file: app/src/main/kotlin/net/aieat/netswissknife/app/ping/IcmpenguinPingEngine.kt
+        line: 93
+        detail: "The Pinger construction/collection path is not guarded against LinkageError/UnsatisfiedLinkError; PingRepository's fallback catches Exception, which does not catch these linkage Errors."
+      - file: app/src/main/kotlin/net/aieat/netswissknife/app/lan/IcmpenguinIcmpProbe.kt
+        line: 11
+        detail: "The LAN ICMP adapter catches Exception only around Pinger construction and execution, so a missing/incompatible native library can escape and abort a scan rather than returning null for its normal fallback probes."
+      - file: app/src/main/kotlin/net/aieat/netswissknife/app/traceroute/IcmpEnginTracerouteRepositoryImpl.kt
+        line: 55
+        detail: "Traceroute also constructs the same native engine without catching linkage failures, leaving a device/ABI load failure to propagate out of the network operation."
+    impact: "If a device has an unsupported ABI, damaged native extraction, or a native loader failure, ping can bypass its Reachability fallback and LAN/traceroute can fail catastrophically. The hard-coded availability flag also makes the UI report ICMP as available when it is not; this is conditional on such a loader failure because the shipped AAR currently contains the four common Android ABIs."
+    recommended_action: "Probe/load the native capability lazily and cache the result, treat LinkageError as engine unavailability, and preserve a Reachability fallback for ping; return a user-visible, typed traceroute/LAN error when no native path exists."
+    validation: "Add adapter-factory tests that inject a throwing native constructor/flow and assert ping selects Reachability; add tests for LAN/traceroute linkage failures and an ABI smoke test on every supported architecture."
+    related_phase: P04
+    status: todo
+
+  - id: RAPP004
+    severity: medium
+    kind: bug
+    title: "mDNS packet I/O failures are converted into successful empty scans"
+    evidence:
+      - file: app/src/main/kotlin/net/aieat/netswissknife/app/mdns/MdnsRepositoryImpl.kt
+        line: 63
+        detail: "The initial meta-query is sent through sendQuery, which catches every Exception and returns Unit without recording whether the query was sent."
+      - file: app/src/main/kotlin/net/aieat/netswissknife/app/mdns/MdnsRepositoryImpl.kt
+        line: 74
+        detail: "All re-queries use the same silent sendQuery path, so a socket/network send failure does not alter discovery state."
+      - file: app/src/main/kotlin/net/aieat/netswissknife/app/mdns/MdnsRepositoryImpl.kt
+        line: 78
+        detail: "receivePacket returns null for every non-timeout Exception, making a closed/broken socket indistinguishable from a quiet network."
+      - file: app/src/main/kotlin/net/aieat/netswissknife/app/mdns/MdnsRepositoryImpl.kt
+        line: 185
+        detail: "After the loop, the repository unconditionally emits DiscoveryComplete rather than carrying an I/O failure into the result."
+    impact: "A permission, interface, socket, or transient network failure after setup can produce a normal-looking empty result instead of an actionable error, causing users to conclude that no mDNS services exist."
+    recommended_action: "Return/propagate typed send and receive outcomes; distinguish expected SocketTimeoutException from I/O/security failures, and emit an error update or fail the flow when queries cannot be sent or the socket becomes unusable."
+    validation: "Inject a socket abstraction in tests and exercise send failure, receive IOException, and normal timeout separately; assert only normal timeout emits DiscoveryComplete while I/O failure reaches the UI error state."
+    related_phase: P12
+    status: todo
+
+coverage:
+  reviewed:
+    - app/src/main/kotlin/net/aieat/netswissknife/app/wifi
+    - app/src/main/kotlin/net/aieat/netswissknife/app/mdns
+    - app/src/main/kotlin/net/aieat/netswissknife/app/ping
+    - app/src/main/kotlin/net/aieat/netswissknife/app/lan
+    - app/src/main/kotlin/net/aieat/netswissknife/app/traceroute
+    - app/src/main/kotlin/net/aieat/netswissknife/app/platform
+    - app/src/main/kotlin/net/aieat/netswissknife/app/data
+    - app/src/main/kotlin/net/aieat/netswissknife/app/di
+    - app/src/main/kotlin/net/aieat/netswissknife/app/crash
+    - app/src/main/kotlin/net/aieat/netswissknife/app/util
+    - app/src/main/AndroidManifest.xml
+    - app/src/main/res/xml
+  revalidated_existing:
+    - F012  # mDNS and other LAN sockets still lack Network binding; tracked by P05.
+    - F013  # mDNS remains IPv4-only and binds a fixed 5353 port; tracked by P05.
+    - F023  # backup rules still exclude the whole preferences DataStore; tracked by P12.
+    - F038  # platform adapters and crash/logger classes remain lightly tested; tracked by P09.
+  limitations:
+    - "No Gradle task was run by this review; parent agent owns build/CI validation."
+    - "Android framework behavior requiring a device/emulator (broadcast extras, socket interruption, and multicast-lock lifetime) is identified from the adapter contract and must be confirmed by instrumented tests."

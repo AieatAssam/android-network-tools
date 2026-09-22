@@ -2,6 +2,17 @@
 # P11 – Diagnostics depth: Speed Test, Traceroute, Port Scanner
 # =============================================================================
 # Audience: AI coding agent. Self-contained. Read plan/plan.yaml `agent_execution_rules` first.
+expansion_tasks:
+  index: plan/plan.yaml
+  tasks: [E02-T02, E02-T03, E02-T13, E03-T04]
+  rule: "Coordinate with these expansion tasks; do not duplicate existing scope or block independent regression fixes on optional enhancements. See comprehensive_expansion.regression_delivery for fresh follow-up ownership."
+
+second_pass_follow_up:
+  status: todo
+  report: plan/reviews/2026-09-22-second-pass.yaml
+  findings: [R2-013]
+  rule: "Apply report recommendations and regression acceptance before closing the listed follow-ups; historical phase completion does not close new findings."
+
 phase:
   id: P11
   title: "Speed Test (keep-alive/TCP latency, server-timing correction, multi-stream, loaded latency capture, server metadata) · Traceroute (per-probe RTT stats, async rDNS/GeoIP enrichment events, provider chain + reserved ranges + IPv6, country flags) · Port Scanner (banner truncation flag, protocol-aware probes, TLS subject)"
@@ -12,6 +23,15 @@ phase:
   enables: [P14]
   findings: [F026, F027]
   target_modules: [":core-network", ":core-domain", ":app"]
+
+review_follow_up:
+  reviewed_on: "2026-09-21"
+  status: todo
+  findings: [RNET007, RNET008, RUI002, RUI007]
+  reports:
+    - plan/reviews/2026-09-21-network.yaml
+    - plan/reviews/2026-09-21-ui-domain.yaml
+  note: "New source-review follow-ups; preserve historical task completion. See report evidence, recommended_action, and validation before implementation."
 
 context:
   problem: |

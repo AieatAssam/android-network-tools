@@ -1,0 +1,815 @@
+# =============================================================================
+# E01 – UI and user-flow expansion
+# =============================================================================
+# Audience: coding agents. This is a planning artifact only; it must not be
+# treated as permission to edit production code during plan review.
+# Scope: user-facing information architecture, responsive layouts, task flows,
+# and reusable result/form behavior that is not already owned by P07/P08/P12.
+#
+# Distinction used below:
+#   actual_defect: source evidence demonstrates the behavior already exists.
+#   proposal: a new capability or UX refinement; implementation must first add
+#             a failing contract test or a reviewed design fixture.
+#
+# Sequence follows exact task dependencies, not numeric order. Immediate fixes
+# do not wait for broad navigation, preferences or localization migrations.
+# Keep this file independently parseable and update each task as it lands.
+
+phase:
+  id: E01
+  title: "UI and user flows: discoverability, trustworthy results, handoffs, and responsive tool workflows"
+  priority: high
+  status: todo
+  type: expansion
+  estimated_effort: "XL (8-12 coding-agent sessions; land as small PR-sized task groups)"
+  audience: "AI coding agents; each task has a seam, a test contract, and a rollout gate"
+  depends_on: []
+  related_phases: [P01, P05, P06, P07]
+  coordinates_with: [P08, P09, P10, P11, P12, P13, P14, P15]
+  findings: [RLAN001]
+  source_review_basis:
+    - file: "app/src/main/kotlin/net/aieat/netswissknife/app/MainActivity.kt"
+      lines: "74-130"
+      detail: "The app shell already owns adaptive navigation, pinned routes, More sheet, onboarding, and the single nav host; E01 should extend these seams rather than create a second shell."
+    - file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/navigation/NavRoutes.kt"
+      lines: "24-83"
+      detail: "Tool metadata and route arguments are centralized, but ToolInfo is string-valued and only Ports has a host handoff route. P07 owns resource mapping; E01 owns richer route intent and discovery behavior."
+    - file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/navigation/AppNavigationViewModel.kt"
+      lines: "22-58"
+      detail: "Pinned routes are a pipe-delimited list capped at three, with no ordering, favorites metadata, or migration contract."
+    - file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/AdaptiveContentBounds.kt"
+      lines: "12-26"
+      detail: "All screens receive an 840dp centered single-column cap; E01 must specify when a two-pane or wider tool layout is justified instead of merely increasing the cap."
+    - file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/onboarding/OnboardingSheet.kt"
+      lines: "65-127"
+      detail: "Onboarding is a four-page modal pager with a dismiss action and no permission/result verification state."
+    - file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/LocalNetworkPermission.kt"
+      lines: "13-45"
+      detail: "The API 36+ permission requester launches with a no-op callback and does not expose granted/denied/permanently-denied state to the initiating flow."
+    - file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanViewModel.kt"
+      lines: "35-67,162-267"
+      detail: "LAN state has Idle/Scanning/Finished/Error, search text, and Ports-only navigation; the result contract needs confidence-aware presentation after RLAN001 is fixed."
+    - file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanScreen.kt"
+      lines: "447-520,602-808"
+      detail: "The scanner presents a live host list and result cards, but does not distinguish verified hosts from ambiguous TCP resets or provide a confidence explanation/filter."
+    - file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/RecentHostsRow.kt"
+      lines: "30-99"
+      detail: "Recents are a horizontal chip row with 32dp remove and 40dp clear controls; the component has no typed host metadata, favorites, history detail, or overflow strategy."
+    - file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/ToolErrorCard.kt"
+      lines: "27-88"
+      detail: "The shared error card supports selectable text and injected actions, providing the seam for retry, edit-input, copy-diagnostics, and permission actions."
+    - file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/settings/SettingsScreen.kt"
+      lines: "79-184,242-317,318-417"
+      detail: "Settings currently exposes theme, dynamic color, a few defaults, Wi-Fi refresh, recents clearing, and onboarding reset; there is no feature-level preferences, export/import, history, or privacy control surface."
+
+principles:
+  - "Preserve the existing NavigationSuiteScaffold, AdaptiveContentBounds, ViewModel StateFlow, Hilt, and shared tool components."
+  - "Every new user-visible state has an explicit loading, empty, error, canceled, and retry contract where the operation can reach that state."
+  - "A result must identify its input, timestamp, source/limitations, and confidence before offering copy/share/export or a cross-tool action."
+  - "Do not hide uncertainty behind a green success card. LAN results in particular must not imply that every scanned address is a live host."
+  - "P07 owns string resources and typed error mapping; P08 owns baseline accessibility primitives and reduced motion; E01 consumes those contracts and adds flow-specific semantics."
+  - "Responsive behavior is specified by window width, height, font scale, orientation, and input method; agents must add deterministic Compose tests at compact, medium, and expanded sizes."
+
+state_and_rollout:
+  status_vocabulary: [todo, in_progress, blocked, done, dropped]
+  task_status_rule: "Keep task status todo until its tests/contracts and acceptance criteria are implemented; do not mark done for a design-only sketch."
+  rollout_sequence:
+    - gate: E01-G0
+      after: [E01-T01, E01-T02]
+      condition: "Route metadata and user preference migrations are backward compatible; no existing destination loses a saved host or pinned route."
+    - gate: E01-G1
+      after: [E01-T03, E01-T04, E01-T05]
+      condition: "Home/More search and onboarding/permission recovery are usable on compact and expanded windows with TalkBack and keyboard navigation."
+    - gate: E01-G2
+      after: [E01-T06, E01-T07, E01-T08, E01-T09]
+      condition: "LAN confidence, empty/error/cancel state contracts, and cross-tool handoffs are verified against fake repositories and instrumented navigation."
+    - gate: E01-G3
+      after: [E01-T10, E01-T11, E01-T12, E01-T13]
+      condition: "Forms, recents/favorites/history, and durable export/import are internally consistent and survive process recreation."
+    - gate: E01-G4
+      after: [E01-T14, E01-T15, E01-T16, E01-T17]
+      condition: "Responsive, accessibility, localization, performance, and release validation gates pass; staged rollout uses local/debug validation signals and explicit rollback criteria."
+
+tasks:
+  - id: E01-T01
+    priority: high
+    status: todo
+    kind: actual_defect_plus_refinement
+    title: "Introduce typed destination intents and safe cross-tool handoff arguments"
+    source_evidence:
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/navigation/NavRoutes.kt", lines: "32-60", detail: "Only Ports declares a host argument; other routes are bare strings."}
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/navigation/AppNavigation.kt", lines: "121-148", detail: "Most destinations construct screens without a route-scoped prefill contract."}
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanViewModel.kt", lines: "54-55,264-266", detail: "LAN emits NavigateToPorts(host) only."}
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/PortsScreen.kt", lines: "140-170,384-404", detail: "Ports reads a route-provided host and has an established prefill seam."}
+    proposed_behavior:
+      - "Replace ad-hoc route string construction at flow boundaries with a sealed ToolIntent/ToolDestination model that encodes host, IP, port, subnet, and optional source context."
+      - "Support validated handoffs at minimum LAN host -> Ping, Ports, HTTP Probe, TLS (when port is known), WOL (when MAC is known), and mDNS service -> HTTP/Ping; preserve URL/IPv6/bracket encoding."
+      - "Prefill fields without auto-submitting; show a compact 'from <source>' context label and allow the user to edit before running."
+      - "Reject unsupported or ambiguous values with an inline explanation and keep the destination usable as a blank form."
+    depends_on: []
+    files_and_seams:
+      create: ["app/src/main/kotlin/net/aieat/netswissknife/app/ui/navigation/ToolIntent.kt", "app/src/test/kotlin/net/aieat/netswissknife/app/ui/navigation/ToolIntentTest.kt"]
+      modify: ["app/src/main/kotlin/net/aieat/netswissknife/app/ui/navigation/NavRoutes.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/navigation/AppNavigation.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScreen.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanViewModel.kt", "all destination ViewModels that accept prefill"]
+    implementation_steps:
+      - "Define a versioned, URL-safe argument codec with a round-trip test matrix for hostname, IPv4, IPv6, zone ID, port, MAC, and Unicode IDN inputs."
+      - "Add optional route arguments and one-time consume semantics so process recreation does not re-run a handoff or overwrite user edits."
+      - "Add source context and clear-prefill actions to the shared form header; keep P07 resource mapping for all labels."
+      - "Migrate LAN/mDNS result actions first, then add the remaining tools in small destination-specific commits."
+    acceptance_criteria:
+      - "Every supported handoff is represented by a typed intent and tested for encoded/decode round trip."
+      - "Destination forms show the supplied value, never silently submit, and retain edits after rotation/process recreation."
+      - "Invalid or unsupported handoff data produces a localized inline message and no malformed route."
+    validation:
+      automated: ["./gradlew :app:testDebugUnitTest --tests '*ToolIntentTest' --no-daemon", "instrumented navigation tests for each supported handoff", "source scan confirms route strings are declared only in NavRoutes.kt"]
+      manual: ["On phone and tablet, open LAN host actions and verify back navigation returns to the originating result without duplicate scans."]
+    risks_constraints:
+      - "Do not break existing deep links or the current Ports?host={host} route; preserve a compatibility decoder."
+      - "Do not put Android Uri or resource IDs in core-domain/core-network."
+    effort: "M (2-3 agent sessions)"
+
+  - id: E01-T02
+    second_pass_review:
+      report: plan/reviews/2026-09-22-second-pass.yaml
+      findings: [R2-005]
+      rule: "Treat each linked finding as a required independently verified acceptance case; urgent regression slices do not wait for optional task breadth."
+    priority: high
+    status: todo
+    kind: actual_gap
+    title: "Unify favorites, pinned navigation, and recent inputs with a versioned preference model"
+    second_pass_refinements:
+      - "R2-005: fix HTTP recent-input secret retention independently of the broader preference migration. Persist safe origin only by default; sanitize existing HTTP values without deleting other preferences."
+      - "Recent-input preservation means preserving safe intent/order, not migrating historical userinfo, query tokens, fragments or sensitive URL paths verbatim. Add privacy fixtures before implementing favorites/history."
+    source_evidence:
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/navigation/AppNavigationViewModel.kt", lines: "22-58", detail: "Pinned routes are pipe-delimited, capped at three, and have no ordering or schema version."}
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/navigation/MoreToolsSheet.kt", lines: "57-116,150-246", detail: "More sheet sections list all tools and expose pin toggles, but it has no search/favorite grouping contract."}
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/RecentHostsRow.kt", lines: "38-98", detail: "Recent input UI is host-only and row width is unbounded on compact screens."}
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/data/AppPreferencesDataStore.kt", lines: "13-63", detail: "Preference keys are the existing migration seam for durable user choices and recents."}
+    proposed_behavior:
+      - "Create a single versioned UserToolPreferences model: favorite tools (ordered), navigation shortcuts, last-used tool order, and per-tool recent inputs with labels/type/timestamp."
+      - "Keep bottom navigation compact (at most the existing visible item budget) while allowing unlimited favorites in Home/More; pinning is a shortcut placement, not data loss."
+      - "Deduplicate recents by normalized input, retain a bounded per-tool history, expose favorite/star affordances, and offer clear-one/clear-tool/clear-all confirmation."
+      - "Preserve old PINNED_ROUTES and RECENT_* values through idempotent migration and recover gracefully from malformed preference data."
+    depends_on: [P12-T4]
+    files_and_seams:
+      create: ["app/src/main/kotlin/net/aieat/netswissknife/app/data/UserToolPreferences.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/data/RecentInput.kt", "app/src/test/kotlin/net/aieat/netswissknife/app/data/UserToolPreferencesMigrationTest.kt"]
+      modify: ["app/src/main/kotlin/net/aieat/netswissknife/app/ui/navigation/AppNavigationViewModel.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/navigation/MoreToolsSheet.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/HomeScreen.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/RecentHostsRow.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/data/AppPreferencesDataStore.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/settings/SettingsScreen.kt"]
+    implementation_steps:
+      - "Specify schema version, normalization rules, maximum counts, stable IDs, and migration order before changing the UI."
+      - "Implement pure migration/repair functions first; test old keys, duplicate values, unknown routes, empty lists, and interrupted writes."
+      - "Expose StateFlow snapshots and intent methods (favorite, reorder, pin, remove, clear) with serialized writes to avoid lost updates."
+      - "Update Home, More, and settings from the same state source; add overflow/scroll behavior for long labels and large font scale."
+    acceptance_criteria:
+      - "A baseline install with existing pins and recents opens with equivalent visible choices after upgrade."
+      - "Favorite/recent changes are reflected in Home, More, tool forms, and Settings without app restart."
+      - "Malformed preference entries are ignored and repaired without crashing or deleting unrelated settings."
+    validation:
+      automated: ["JVM migration/property tests", "ViewModel tests with two concurrent writes", "instrumented Home/More/Settings tests covering add/remove/reorder/clear"]
+      manual: ["Upgrade a seeded debug app, rotate during a pin change, and verify the next launch preserves the result."]
+    risks_constraints:
+      - "P12 owns DataStore splitting and backup policy; E01 must use the agreed store and never export secrets or raw recent values without user action."
+      - "Do not increase bottom navigation items beyond the adaptive shell's compact usability budget."
+    effort: "M (2-3 agent sessions)"
+
+  - id: E01-T03
+    priority: high
+    status: todo
+    kind: proposal
+    title: "Add fast tool discovery with search, task phrases, filters, and keyboard navigation"
+    source_evidence:
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/HomeScreen.kt", lines: "170-239,241-302", detail: "Home renders every tool in a fixed adaptive grid with no search, category filter, recent/favorite section, or task-oriented entry point."}
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/navigation/MoreToolsSheet.kt", lines: "57-82,150-246", detail: "More groups tools by fixed sections but provides no query/filter state."}
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/navigation/NavRoutes.kt", lines: "64-79", detail: "Tool metadata already has labels, short labels, and descriptions that can seed a local search index."}
+    proposed_behavior:
+      - "Provide one shared ToolCatalog query model used by Home and More: search title/description/synonyms, filter by category, show favorites and recent tools first, and retain a clear empty state."
+      - "Offer task prompts such as 'Is this host reachable?', 'What devices are on my Wi-Fi?', 'Why is this site slow?', and 'Is this certificate valid?' that map to one or more tools without pretending to diagnose before a run."
+      - "Support IME Search, arrow/tab navigation on hardware keyboards, predictable focus, and a query-independent 'all tools' reset."
+      - "Keep catalog data local and static; no network search or telemetry is required for the first rollout."
+    depends_on: [E01-T02]
+    files_and_seams:
+      create: ["app/src/main/kotlin/net/aieat/netswissknife/app/ui/navigation/ToolCatalog.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/ToolSearchField.kt", "app/src/test/kotlin/net/aieat/netswissknife/app/ui/navigation/ToolCatalogTest.kt", "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/ToolDiscoveryTest.kt"]
+      modify: ["app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/HomeScreen.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/navigation/MoreToolsSheet.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/navigation/NavRoutes.kt"]
+    implementation_steps:
+      - "Define normalized tokens, synonyms, category IDs, ranking tie-breakers, and stable test fixtures for every current tool."
+      - "Add the shared search/filter state with debounce only for UI rendering; navigation remains immediate on selection."
+      - "Build compact-width and expanded-width layouts: full-width search plus filter chips on phones; persistent search/sidebar filters on expanded windows."
+      - "Add task prompt cards with explicit 'choose a tool' wording and analytics-free deterministic behavior."
+    acceptance_criteria:
+      - "All 14 implemented tools are discoverable by exact label, common synonym, and at least one task phrase."
+      - "No query result leaves a blank grid; the empty state offers clear query and category reset actions."
+      - "Search and filter state is not incorrectly carried into a tool destination or restored as a stale query after process death."
+    validation:
+      automated: ["ToolCatalog ranking and synonym unit tests", "Compose tests at 320dp, 600dp, and 840dp widths", "keyboard IME/focus test for Search"]
+      manual: ["TalkBack and keyboard walkthrough; verify no tool is more than two interactions from Home with a known task phrase."]
+    risks_constraints:
+      - "P07 owns localized labels; search indexing must use localized display text plus stable nonlocalized synonym keys."
+      - "Do not add remote recommendations or unbounded animations; respect P08 reduced-motion contract."
+    effort: "M (2-3 agent sessions)"
+
+  - id: E01-T04
+    priority: high
+    status: todo
+    kind: actual_gap
+    title: "Make onboarding an actionable setup and recovery flow"
+    source_evidence:
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/onboarding/OnboardingSheet.kt", lines: "65-127,129-162,300-377", detail: "The welcome guide is a static four-page modal with dismiss/next controls and explanatory pages; it cannot request or verify a permission/network setup."}
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/onboarding/OnboardingViewModel.kt", lines: "18-29", detail: "Onboarding persists only a Boolean completed flag."}
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/LocalNetworkPermission.kt", lines: "27-45", detail: "The permission callback is no-op, so the initiating UI cannot show granted/denied/retry/open-settings state."}
+      - { file: "app/src/main/AndroidManifest.xml", lines: "1-50", detail: "Permission declarations and feature constraints must remain the source of truth for setup copy."}
+    proposed_behavior:
+      - "Turn onboarding into skippable setup steps: choose a first task, understand local-network privacy, optionally grant the currently relevant permission, and run a lightweight self-check."
+      - "Each step has explicit Not now, Try again, Open system settings, and Continue actions; completion is recorded per step with a schema version, not a single irreversible Boolean."
+      - "Tool entry from an unconfigured state opens the same contextual setup step and returns to the original destination after success or a deliberate skip."
+      - "Never request location/nearby/network permissions merely because the app launched; request only after the user chooses a task that needs it."
+    depends_on: [P05-T5, E01-T01]
+    files_and_seams:
+      create: ["app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/onboarding/OnboardingStep.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/onboarding/SetupCheckViewModel.kt", "app/src/test/kotlin/net/aieat/netswissknife/app/ui/screens/onboarding/SetupCheckViewModelTest.kt", "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/screens/onboarding/OnboardingRecoveryTest.kt"]
+      modify: ["app/src/main/kotlin/net/aieat/netswissknife/app/MainActivity.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/onboarding/OnboardingSheet.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/onboarding/OnboardingViewModel.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/LocalNetworkPermission.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/navigation/AppNavigation.kt"]
+    implementation_steps:
+      - "Define setup state machine and reason-coded permission result (granted, denied, denied-without-prompt, unavailable, canceled) with no UI literals in Kotlin."
+      - "Add a fakeable permission/system-settings launcher and network self-check seam; make callback state survive recomposition and back navigation."
+      - "Implement return-to-origin routing via E01-T01, including a no-op result when the user skips."
+      - "Add reset/migrate behavior for existing ONBOARDING_COMPLETED so existing users are not unexpectedly blocked."
+    acceptance_criteria:
+      - "A fresh install can choose a task, see why a permission is needed, grant/deny/skip it, and reach Home or the selected tool."
+      - "A denial shows actionable recovery and never loops a permission prompt without a user tap."
+      - "Existing installs keep their current onboarding completion behavior until the user explicitly resets the guide."
+    validation:
+      automated: ["State-machine unit tests for every result and back/cancel path", "instrumented permission launcher test with granted/denied fakes", "process-death test restoring the current setup step"]
+      manual: ["API 26, API 33, and API 36+ permission walkthrough; VPN/no-Wi-Fi and denied-permission cases."]
+    risks_constraints:
+      - "Android permission prompts are OS-owned; tests must assert our state after callback, never pixel-match system dialogs."
+      - "P05 remains owner of actual network binding and connectivity policy; E01 only presents setup and recovery."
+    effort: "M (2-3 agent sessions)"
+
+  - id: E01-T05
+    priority: high
+    status: todo
+    kind: proposal
+    title: "Define responsive tool scaffolds and split-pane behavior by window class"
+    source_evidence:
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/AdaptiveContentBounds.kt", lines: "12-26", detail: "Every tool is centered in one max-840dp column; the current abstraction does not express list/detail or form/result panes."}
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/MainActivity.kt", lines: "84-100,133-181", detail: "Adaptive navigation changes suite placement, while content sizing is shared at the nav-host boundary."}
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/ToolHeroHeader.kt", lines: "57-126", detail: "Hero content is a single horizontal row with a trailing help action and can become crowded at narrow width or large font scale."}
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/settings/SettingsScreen.kt", lines: "103-184", detail: "Settings is a long single-column scroll, a useful baseline but not a scalable tablet information architecture."}
+    proposed_behavior:
+      - "Introduce a shared ToolScaffold layout policy with compact (under 600dp), medium (600-839dp), and expanded (840dp+) classes plus height/font-scale overrides."
+      - "On compact windows keep one vertical flow and make the primary action sticky above the navigation/IME inset when the form is long; on medium/expanded windows use an optional form/result two-pane layout for LAN, DNS, Ports, mDNS, and long diagnostic results."
+      - "On expanded windows retain a readable content cap for prose while allowing result tables/charts to use a second pane; never stretch text paragraphs edge to edge."
+      - "Make hero title/help/action rows wrap into an intentional stacked layout instead of clipping, and preserve state when switching portrait/landscape or folding posture."
+    depends_on: [P08-T4, P08-T5]
+    files_and_seams:
+      create: ["app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/ToolScaffold.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/WindowClass.kt", "app/src/test/kotlin/net/aieat/netswissknife/app/ui/components/WindowClassTest.kt", "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/components/ToolScaffoldResponsiveTest.kt"]
+      modify: ["app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/AdaptiveContentBounds.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/ToolHeroHeader.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/MainActivity.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/LanScreen.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/DnsScreen.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/PortsScreen.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/mdns/MdnsDiscoveryScreen.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/settings/SettingsScreen.kt"]
+    implementation_steps:
+      - "Write a pure WindowClass classifier from width/height/fontScale and test all boundary values, including split-screen widths."
+      - "Define scaffold slots (hero, input, progress, result, secondary actions) and a deterministic placement policy; do not make each screen invent breakpoints."
+      - "Migrate one representative form/result screen (LAN) and one table/chart screen (DNS or Ports), then migrate remaining candidates only after screenshot/layout review."
+      - "Use WindowInsets and IME visibility to keep primary actions reachable; preserve scroll position and focused field across configuration changes."
+    acceptance_criteria:
+      - "At 320dp, no horizontal clipping or inaccessible primary action occurs at font scales 1.0, 1.5, and 2.0."
+      - "At 600dp and 840dp, the selected screens use the documented pane policy and keep prose/cards within readable widths."
+      - "Rotating or resizing a running/form-filled screen does not restart work or lose entered values."
+    validation:
+      automated: ["WindowClass pure boundary tests", "Compose screenshot/semantics tests at 320/600/840/1200dp and font scales 1.0/1.5/2.0", "instrumented rotation and split-screen smoke tests"]
+      manual: ["Phone portrait, phone landscape, tablet portrait, tablet landscape, foldable hinge, hardware keyboard, and software IME walkthroughs."]
+    risks_constraints:
+      - "P08 owns minimum target sizes, chart text, and reduced motion; E01 must consume those primitives."
+      - "Avoid a blanket two-column rewrite: use evidence-based screen candidates and keep small forms simpler."
+    effort: "L (3-4 agent sessions)"
+
+  - id: E01-T06
+    priority: high
+    status: todo
+    kind: actual_defect_follow_up
+    title: "Present ambiguous connection failures as confidence-limited LAN evidence"
+    refines_findings: [RLAN001]
+    source_evidence:
+      - { file: "plan/reviews/2026-09-22-lan-scan-noise.yaml", lines: "10-34", detail: "RLAN001 establishes that a lone ConnectException/TCP reset is promoted to a live host and that the existing regression test locks in the false-positive behavior; the source does not identify the reset origin."}
+      - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/DiscoveryProbes.kt", lines: "89-105", detail: "The probe classifies every ConnectException as REFUSED and returns early."}
+      - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/LanScanRepositoryImpl.kt", lines: "187-205", detail: "TCP_REFUSED is currently treated as definitive presence and triggers enrichment/emission."}
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanScreen.kt", lines: "621-674,713-808", detail: "The UI labels the result as scan complete/alive and has All/Gateway/HasPorts filters but no confidence/ambiguous state."}
+      - { file: "app/src/main/res/values/strings.xml", lines: "238-252", detail: "'TCP refused' is user-visible wording without a warning that the reset may originate from infrastructure."}
+    proposed_behavior:
+      - "Make presence evidence and port state separate data: a TCP refusal alone is ambiguous and is excluded from the default confirmed-host list after the P01 fix."
+      - "Expose confirmed, probable, and ambiguous counts plus an explanation sheet that names the evidence and its limits; allow an explicit 'include uncertain results' filter for ICMP-blocked networks."
+      - "Keep raw TCP refusal metadata for diagnostics and export, but never call it a live device or count it as alive by default."
+      - "When no confirmed hosts exist, distinguish no confirmed responses, all probes inconclusive, permission/binding failure, and 'uncertain results hidden' with actionable recovery. Silence alone does not prove an empty subnet."
+    depends_on: [E00-T01]
+    files_and_seams:
+      create: ["core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/DiscoveryConfidence.kt", "core-network/src/test/kotlin/net/aieat/netswissknife/core/network/lan/DiscoveryConfidenceTest.kt", "app/src/test/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanConfidencePresentationTest.kt", "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanConfidenceScreenTest.kt"]
+      modify: ["core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/DiscoveryProbes.kt", "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/LanScanRepositoryImpl.kt", "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/LanHost.kt", "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/LanScanSummary.kt", "core-network/src/test/kotlin/net/aieat/netswissknife/core/network/lan/LanScanDiscoveryPipelineTest.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanViewModel.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanScreen.kt", "app/src/main/res/values/strings.xml", "README.md"]
+    implementation_steps:
+      - "Consume E00-T01's positive-evidence/default-list contract and add explicit UI fixtures: all addresses reset/no corroboration -> no default rows; reset plus ICMP/name/verified source -> visible confidence metadata; open response -> confirmed."
+      - "Define confidence presentation as a pure policy over the evidence emitted by E00-T01, document which evidence is strong/weak, and carry both confidence and port findings through the summary."
+      - "Update ViewModel counts/filter state and screen copy; keep host enrichment bounded so uncertain addresses do not trigger expensive work unless the user opts in."
+      - "Add a reproducible fake gateway/firewall reset fixture and, where possible, a device validation matrix for VPN, ICMP blocked, and real closed ports."
+    acceptance_criteria:
+      - "A fixture whose every address returns only failed/ambiguous connections yields zero confirmed hosts and no noisy default rows; the user-network failure origin is not assumed."
+      - "A real host with ICMP blocked but independently verified TCP evidence remains discoverable with an explicit confidence explanation."
+      - "The UI never labels TCP_REFUSED alone as alive; uncertain results are opt-in and visibly marked."
+    validation:
+      automated: ["./gradlew :core-network:test --tests '*LanScanDiscoveryPipelineTest' --no-daemon", "confidence policy/property tests", "LanScanScreenTest for default/uncertain filters and empty-state copy", "LAN instrumented test with gateway-reset fixture or deterministic fake transport"]
+      manual: ["Run on a normal router, VPN-on device, ICMP-blocking host, and a subnet with no devices; compare confirmed/uncertain counts and scan duration."]
+    risks_constraints:
+      - "This is the user-reported correctness priority; do not preserve the old all-REFUSED-as-alive expectation for compatibility."
+      - "Do not promise certainty when the network cannot verify source identity; wording must remain calibrated and localized through P07."
+      - "Coordinate with P01 owner before changing LanHost/LanScanSummary serialization or README claims."
+    effort: "L (3-4 agent sessions; must precede E01-G2)"
+
+  - id: E01-T07
+    priority: high
+    status: todo
+    kind: actual_gap_plus_refinement
+    title: "Standardize operation states: idle, validating, running, canceling, canceled, partial, success, empty, and error"
+    source_evidence:
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanViewModel.kt", lines: "35-52,180-231,234-255", detail: "LAN has Idle/Scanning/Finished/Error and turns stop into a Finished partial summary without a distinct canceled state."}
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/traceroute/TracerouteViewModel.kt", lines: "28-42,106-116,180-203", detail: "Traceroute similarly models stop/clear around a small state set, with source-review follow-up for stopped metadata."}
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/ToolStopButton.kt", lines: "17-39", detail: "A shared stop affordance exists but carries no canceling/confirmation state."}
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/ToolErrorCard.kt", lines: "27-88", detail: "Errors have a shared visual seam but action meaning varies by tool."}
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/wifi/WifiScanViewModel.kt", lines: "32-125", detail: "Wi-Fi has a different refresh/status lifecycle, demonstrating the need for a capability-based contract rather than copy-paste state names."}
+    proposed_behavior:
+      - "Define a shared OperationStatus contract with input snapshot, start/finish timestamps, progress, cancelability, partial-result flag, retry/edit actions, and typed failure category; each tool maps its domain state into it."
+      - "Stop changes to Canceling immediately, disables duplicate actions, then resolves to Canceled with the partial result and a clear 'resume/rescan' choice; a natural timeout remains an error or empty result according to the repository contract."
+      - "Separate 'no data' from 'failed' and 'filtered to zero'; retain the user's input and offer edit/retry without silently changing it."
+      - "Announce only meaningful phase changes through P08's ToolStateAnnouncer; streaming updates must not spam TalkBack."
+    depends_on: []
+    refines_findings: [RAPP001, RAPP002]
+    files_and_seams:
+      create: ["app/src/main/kotlin/net/aieat/netswissknife/app/ui/operation/OperationStatus.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/operation/OperationActionBar.kt", "app/src/test/kotlin/net/aieat/netswissknife/app/ui/operation/OperationStatusTest.kt", "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/operation/OperationStateScreenTest.kt"]
+      modify: ["all 14 tool ViewModels and screens", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/ToolStopButton.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/ToolErrorCard.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/ToolStateAnnouncer.kt"]
+    implementation_steps:
+      - "Write an adapter contract and test it with a fake one-shot repository, a streaming repository, validation failure, cancellation, timeout, empty result, and partial result."
+      - "Migrate two representative tools first (LAN streaming and DNS one-shot), preserving their domain-specific result models."
+      - "Migrate remaining tools in groups; add a shared action bar and ensure back/navigation cancellation follows the same policy."
+      - "Record input and result provenance at start so a late coroutine cannot replace a newer result."
+    acceptance_criteria:
+      - "Every tool has visible and semantic states for loading/running, canceling, canceled/partial, empty, success, and error where applicable."
+      - "A repeated start cannot overlap or display a stale result for a different input."
+      - "Canceling is idempotent, closes the operation resources, and leaves a truthful partial/canceled result."
+    validation:
+      automated: ["Pure state transition tests", "ViewModel deferred-repository tests with out-of-order completion", "instrumented stop/back/retry/empty/error tests for one streaming and one one-shot tool", "P08 live-region regression suite"]
+      manual: ["Start each long-running tool, stop at several progress points, rotate/navigate back, and verify no late result or snackbar appears."]
+    risks_constraints:
+      - "Do not force all domain repositories into one hierarchy; use UI adapters around existing StateFlows."
+      - "P04/P05/P11 own underlying cancellation correctness; E01 must not mask a repository that fails to cancel."
+    effort: "L (3-5 agent sessions)"
+
+  - id: E01-T08
+    priority: high
+    status: todo
+    kind: proposal
+    title: "Add shared result provenance, limitation, and next-action presentation"
+    source_evidence:
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/ToolHeroHeader.kt", lines: "41-129", detail: "The shared hero has title/subtitle/help but no result provenance or limitation slot."}
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/PingScreen.kt", lines: "724-825", detail: "Ping results offer stats, raw output, copy, clear, and share, but the result header does not standardize input/time/source metadata or next-tool actions."}
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanScreen.kt", lines: "621-710", detail: "LAN summary shows scanned/alive/duration but has no evidence limitations or selected filter context."}
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/util/ShareUtils.kt", lines: "6-13", detail: "Sharing is a generic text Intent with no typed report metadata or export lifecycle."}
+    proposed_behavior:
+      - "Add a reusable ResultHeader/ResultMeta component showing exact input, completed/canceled time, network context when available, data source, and limitations; metadata is copyable and screen-reader readable."
+      - "Use collapsible detail for advanced provenance so the primary result remains scannable; never imply that a missing MAC, blocked ICMP, cached Wi-Fi result, or resolver limitation is a positive finding."
+      - "Expose context-aware next actions (Ping, DNS, Ports, TLS, HTTP, share/export, copy) using E01-T01 and hide actions that lack valid input."
+      - "Provide a report preview before share/export, with redaction controls for local addresses, hostnames, raw packets, and credentials."
+    depends_on: [E01-T01, E01-T07, E03-T03]
+    files_and_seams:
+      create: ["app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/ResultHeader.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/ResultMeta.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/report/ReportPreviewState.kt", "app/src/test/kotlin/net/aieat/netswissknife/app/ui/report/ReportRedactionTest.kt"]
+      modify: ["all result screens", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/ToolHeroHeader.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/util/ShareUtils.kt", "all report builders"]
+    implementation_steps:
+      - "Define ResultProvenance and Limitation models independent of Compose; require each migrated result builder to declare the minimum input/time/source fields."
+      - "Build a shared header and details sheet with test tags/semantics; migrate Ping, LAN, DNS, Ports, HTTP, TLS first."
+      - "Add redaction-aware report preview and enforce that sensitive settings/passwords never enter reports by default."
+      - "Add next-action factories that validate intent inputs before rendering buttons."
+    acceptance_criteria:
+      - "A user can tell what was tested, when, using which source, and what the result cannot prove."
+      - "Every shown next action either opens a valid prefilled destination or is omitted with no dead click."
+      - "Copy/share/export output matches the visible selected result and redaction choice."
+    validation:
+      automated: ["ResultProvenance/report redaction unit tests", "golden text/report tests for representative tools", "instrumented semantics tests for metadata and next actions"]
+      manual: ["Compare visible result, copy text, and share preview after editing the input while a request is in flight."]
+    risks_constraints:
+      - "Do not leak credentials, SecureOn passwords, SNMP secrets, or raw personally identifying data into logs or reports."
+      - "Keep the first version deterministic and local; remote report storage is out of scope."
+    effort: "M (2-3 agent sessions)"
+
+  - id: E01-T09
+    priority: high
+    status: todo
+    kind: proposal
+    title: "Give every tool deliberate empty, filtered-empty, error, retry, and cancel recovery copy"
+    source_evidence:
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanScreen.kt", lines: "713-808,1279-1327", detail: "LAN has a generic empty card and custom error panel, but the empty reason and recovery actions are not modeled."}
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/DnsScreen.kt", lines: "791-846,723-750", detail: "DNS has result/empty and error actions, but recovery behavior is screen-specific and does not distinguish filtered or stale data."}
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/ToolErrorCard.kt", lines: "34-84", detail: "The shared card can host actions but currently receives free-form title/message only."}
+      - { file: "app/src/main/res/values/strings.xml", lines: "1-1172", detail: "String resources exist, but a cross-tool state vocabulary and coverage guard are absent."}
+    proposed_behavior:
+      - "Define a RecoveryModel with reason, user-facing explanation, primary action, secondary action, and whether prior data remains trustworthy/stale."
+      - "Render distinct states for first-use empty, valid zero-result, filter zero-result, stale cache, validation error, permission/binding failure, network failure, timeout, and user canceled."
+      - "Retry repeats the captured input/settings; Edit returns focus to the invalid field; Clear removes the result only after an explicit action; back does not lose a finished result."
+      - "Provide contextual help links to the relevant settings/permission screen without forcing users through onboarding again."
+    depends_on: [E01-T07]
+    files_and_seams:
+      create: ["app/src/main/kotlin/net/aieat/netswissknife/app/ui/operation/RecoveryModel.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/ToolEmptyState.kt", "app/src/test/kotlin/net/aieat/netswissknife/app/ui/operation/RecoveryModelTest.kt", "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/components/ToolStateCoverageTest.kt"]
+      modify: ["app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/ToolErrorCard.kt", "all 14 tool screens/ViewModels", "app/src/main/res/values/strings.xml", "README.md"]
+    implementation_steps:
+      - "Inventory each tool's reachable states and map them to stable RecoveryModel reason IDs before changing layouts."
+      - "Implement shared empty/error/recovery components with slot-based actions and semantics, then migrate tools in groups."
+      - "Add a source/contract guard requiring every operation screen to declare its empty/error/cancel behavior or an explicit not-applicable reason."
+    acceptance_criteria:
+      - "No tool shows a blank result area after a valid zero-result, filter miss, failure, or cancellation."
+      - "Retry/edit/clear actions have deterministic input semantics and are covered by tests."
+      - "User-visible recovery messages are localized through P07 and do not expose raw exception class names."
+    validation:
+      automated: ["RecoveryModel unit matrix", "instrumented tests for DNS empty/error, LAN uncertain-empty, and one streaming cancellation", "source guard for state coverage", "lint and localization checks"]
+      manual: ["Force airplane mode, deny permissions, use malformed inputs, cancel mid-scan, and filter to zero on phone/tablet."]
+    risks_constraints:
+      - "Do not call a timed-out or cached operation successful merely to avoid an empty state; preserve repository truth."
+      - "Avoid a giant generic screen abstraction; keep domain-specific content in slots."
+    effort: "M (2-3 agent sessions)"
+
+  - id: E01-T10
+    priority: high
+    status: todo
+    kind: actual_gap_plus_refinement
+    title: "Unify form validation, normalization, defaults, and advanced-option disclosure"
+    source_evidence:
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/PingScreen.kt", lines: "350-476,481-600", detail: "Ping combines host input, recent chips, continuous mode, sliders, timeout chips, advanced options, and start/stop controls, but validation and disclosure are screen-local."}
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/PortsScreen.kt", lines: "374-496,540-590", detail: "Ports has host/range/concurrency fields and presets with multiple independent input paths."}
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/tls/TlsInspectorScreen.kt", lines: "240-290", detail: "TLS port input accepts arbitrary text; RUI006 documents silent fallback to 443 for invalid input."}
+      - { file: "plan/reviews/2026-09-21-ui-domain.yaml", lines: "(finding RUI003, RUI004, RUI006, RUI009)", detail: "Existing review identifies inconsistent ranges, stale advanced controls, invalid TLS port fallback, and a Port concurrency range mismatch; P08/P10 own the defect fixes, E01 owns consistent form flow and presentation."}
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/settings/SettingsScreen.kt", lines: "242-317", detail: "Defaults are sliders with display labels, but ranges and validation are not shared with each tool form."}
+    proposed_behavior:
+      - "Create a shared ToolInputField contract with raw text, normalized value, validation result, IME action, helper/error text, clear/paste affordance, and a stable field ID."
+      - "Validate on change enough to explain the error and validate again on submit; never coerce malformed text to a different target. Preserve the raw edit so users can correct it."
+      - "Centralize range/default metadata between Settings and tool forms, including Ping count/timeout, Port concurrency, TLS port, WOL port, subnet, and DNS record/server fields."
+      - "Keep advanced options collapsed by default with a summary of non-default values; reset advanced options only with an explicit action and retain them through rotation."
+      - "Use the same input normalization for handoffs, recents, history, and export, while preserving the original display form when useful."
+    depends_on: []
+    files_and_seams:
+      create: ["app/src/main/kotlin/net/aieat/netswissknife/app/ui/forms/ToolInputState.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/forms/ToolFieldValidation.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/ToolInputField.kt", "app/src/test/kotlin/net/aieat/netswissknife/app/ui/forms/ToolFieldValidationTest.kt", "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/forms/ToolFormInteractionTest.kt"]
+      modify: ["all tool forms", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/settings/SettingsScreen.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/settings/SettingsViewModel.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/tls/TlsInspectorViewModel.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/portscan/PortScanViewModel.kt"]
+    implementation_steps:
+      - "Inventory every user-editable field, its validator, default, normalization, range, and submit path; write a matrix before extracting code."
+      - "Implement pure validators and a field-state reducer; cover blank, whitespace, Unicode, IPv4/IPv6, IDN, numeric overflow, pasted delimiters, and invalid ranges."
+      - "Migrate TLS/Ports/Ping first to prove custom numeric and multi-field range behavior, then apply to DNS/HTTP/WOL/WHOIS/Topology/Subnet."
+      - "Add a shared FormActionBar that reflects dirty/valid/running state and supports IME Done/Go as specified by P08."
+    acceptance_criteria:
+      - "Every invalid value shows an actionable inline error and never silently becomes a different value."
+      - "Settings and tool forms use the same declared ranges/defaults; upper/lower boundary values render and submit unchanged."
+      - "Editing, clearing, pasting, IME submit, rotation, and back navigation preserve or discard values only under documented rules."
+    validation:
+      automated: ["Pure validator/property tests", "ViewModel tests for raw-vs-normalized input and invalid submit", "instrumented forms at compact/large font sizes including IME actions", "P08 source guard for keyboard actions"]
+      manual: ["Paste malformed IPv6/IDN/port/range values and verify errors, then correct without retyping the entire form."]
+    risks_constraints:
+      - "P04/P10/P12 own domain validation semantics; E01 must call their validators or adapters instead of duplicating protocol rules."
+      - "Do not persist secrets or raw SecureOn/SNMP credentials in general recent history."
+    effort: "L (3-4 agent sessions)"
+
+  - id: E01-T11
+    second_pass_review:
+      report: plan/reviews/2026-09-22-second-pass.yaml
+      findings: [R2-007]
+      rule: "Treat each linked finding as a required independently verified acceptance case; urgent regression slices do not wait for optional task breadth."
+    priority: medium
+    status: todo
+    kind: proposal
+    title: "Add privacy-aware run history with resume, compare, and delete flows"
+    source_evidence:
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/data/RecentHostsRepository.kt", lines: "11-44", detail: "The existing persistence seam is bounded recent input strings rather than completed run metadata."}
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/settings/SettingsViewModel.kt", lines: "93-105", detail: "Settings can clear all recent host keys but has no run-history policy or per-tool retention control."}
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/PingScreen.kt", lines: "724-825", detail: "Finished results remain in ViewModel state and can be shared, but are not available after process death or from a history surface."}
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanViewModel.kt", lines: "46-51,219-246", detail: "LAN keeps a finished summary only in memory and converts a stopped scan into a partial summary."}
+    proposed_behavior:
+      - "Persist a bounded, user-controlled run history of metadata and opt-in result payloads: tool, normalized input, display label, status, started/completed time, duration, network context, and schema version."
+      - "Default new run history to off on install/upgrade. Offer explicit off, metadata-only and saved-report modes; show retained identifiers and retention limits before consent. Existing recent inputs are separate. Never persist credentials in any mode."
+      - "Home/More expose recent runs separately from recent inputs; a history detail screen can reopen the result, rerun the input, compare two compatible runs, export, or delete."
+      - "A rerun always revalidates current settings/network and never treats an old result as current; saved results display their age and stale limitations."
+    depends_on: [E01-T02, E01-T07, E03-T03, P12-T4, E03-T11]
+    files_and_seams:
+      create: ["app/src/main/kotlin/net/aieat/netswissknife/app/data/RunHistoryEntry.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/data/RunHistoryRepository.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/history/RunHistoryScreen.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/history/RunHistoryViewModel.kt", "app/src/test/kotlin/net/aieat/netswissknife/app/data/RunHistoryRepositoryTest.kt", "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/screens/history/RunHistoryScreenTest.kt"]
+      modify: ["app/src/main/kotlin/net/aieat/netswissknife/app/ui/navigation/NavRoutes.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/settings/SettingsScreen.kt", "all tool ViewModels that finish a run", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/HomeScreen.kt"]
+    implementation_steps:
+      - "Define an explicit schema and sensitivity classification; add migration/version repair tests and a hard storage cap."
+      - "Implement repository writes off the main thread, coalescing identical updates and deleting payloads atomically."
+      - "Add history list/detail with loading/empty/corrupt-entry/permission-free recovery states and stable deep links."
+      - "Integrate only Ping, DNS, Ports, LAN, HTTP, TLS first; add remaining tools after result schemas prove stable."
+    acceptance_criteria:
+      - "Process death/restart can reopen metadata and explicitly saved reports without presenting them as live."
+      - "Clear-one, clear-tool, clear-all, retention change, and deletion of a corrupted entry are safe and confirmed."
+      - "History never stores passwords or tokens. Raw diagnostic payloads require a separate explicit report-save choice, with secret redaction regardless of that choice."
+    validation:
+      automated: ["Repository migration/size/privacy tests", "ViewModel tests for rerun vs reopen", "instrumented history navigation and delete/empty tests"]
+      manual: ["Create runs offline/online, kill and relaunch, change network, reopen an old result, and verify age/limitations are visible."]
+    risks_constraints:
+      - "Coordinate storage ownership with P12 DataStore split/backup policy; run payloads may require private files rather than Preferences."
+      - "Do not add background monitoring or scheduled execution; history is user-initiated only."
+    effort: "L (3-4 agent sessions)"
+
+  - id: E01-T12
+    second_pass_review:
+      report: plan/reviews/2026-09-22-second-pass.yaml
+      findings: [R2-006, R2-008]
+      rule: "Treat each linked finding as a required independently verified acceptance case; urgent regression slices do not wait for optional task breadth."
+    priority: medium
+    status: todo
+    kind: actual_gap_plus_refinement
+    title: "Replace clipboard/share-only reporting with a durable export and redaction flow"
+    second_pass_refinements:
+      - "R2-006: fix the existing Ping CSV's default-locale numeric serialization as a standalone regression before the broader export flow. CSV-parser fixtures must assert field counts and numeric identity across decimal-dot/comma locales."
+    source_evidence:
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/util/ShareUtils.kt", lines: "6-13", detail: "The current export seam launches a generic ACTION_SEND text chooser and has no file destination, success/failure state, or cancellation result."}
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/PingScreen.kt", lines: "745-822", detail: "Ping offers clipboard CSV and share but no durable file export or preview/redaction choice."}
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanScreen.kt", lines: "676-710", detail: "LAN similarly offers share text only."}
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/settings/SettingsScreen.kt", lines: "318-417", detail: "Settings has clear/reset actions but no report export/import/history surface."}
+      - { file: "plan/phases/P12-lan-utilities-and-settings-depth.yaml", lines: "142-167", detail: "P12 owns settings export/import and backup semantics; E01 must share its SAF/report policy rather than create a competing settings format."}
+    proposed_behavior:
+      - "Offer Copy, Share, and Save file from a common report preview; use ACTION_CREATE_DOCUMENT for user-selected CSV/JSON/TXT and show progress/success/canceled/failure feedback."
+      - "Let the user choose redaction for local IP/MAC/hostname, raw payload, and diagnostic logs; default to safe redaction for share while keeping local file export explicit."
+      - "Give every report a schema version, tool/input/time metadata, stable line endings, locale-neutral machine fields, and localized human-readable sections."
+      - "For large streaming reports, write incrementally to a private temp file; remove unsuccessful staging files, but retain successful shared files for a bounded documented receiver-access window before cleanup. Never block the main thread."
+    depends_on: [E01-T08, E03-T05, E03-T06]
+    files_and_seams:
+      create: ["app/src/main/kotlin/net/aieat/netswissknife/app/report/ReportDocument.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/report/ReportExporter.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/ReportExportSheet.kt", "app/src/test/kotlin/net/aieat/netswissknife/app/report/ReportExporterTest.kt", "app/src/androidTest/kotlin/net/aieat/netswissknife/app/report/ReportExportFlowTest.kt"]
+      modify: ["app/src/main/kotlin/net/aieat/netswissknife/app/util/ShareUtils.kt", "all result screens", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/settings/SettingsScreen.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/settings/SettingsViewModel.kt"]
+    implementation_steps:
+      - "Define typed report document and redaction policy; add golden fixture tests for Ping/LAN/DNS/Ports/HTTP/TLS."
+      - "Implement streaming exporter with SAF adapter, share adapter, clipboard adapter, and user-visible outcome state."
+      - "Migrate existing clipboard/share buttons through the shared sheet without removing the fast copy path."
+      - "Align settings export/import file format and privacy language with P12; test malformed/unknown-version imports as no-op failures."
+    acceptance_criteria:
+      - "A user can preview, redact, save, share, or copy a report and see a truthful outcome for success/cancel/failure."
+      - "Saved CSV/JSON is parseable, versioned, deterministic, and matches the visible result; no credentials leak by default."
+      - "Large continuous results do not freeze the UI; unsuccessful staging files are removed, successful share URIs remain readable for the documented retention window, and expired files are cleaned on later startup/use."
+    validation:
+      automated: ["Golden report/redaction tests", "SAF adapter tests with fake resolver", "instrumented export cancel/failure/relaunch tests", "lint for scoped storage APIs"]
+      manual: ["Save to local files app, share to a text target, cancel the picker, revoke target storage, and inspect resulting files."]
+    risks_constraints:
+      - "Use SAF on API 26+; do not request broad storage permission."
+      - "Settings import/export is P12-owned; report export must not silently import app preferences or secrets."
+    effort: "M (2-3 agent sessions)"
+
+  - id: E01-T13
+    priority: high
+    status: todo
+    kind: proposal
+    title: "Show active network context and actionable local-network/VPN recovery across tools"
+    source_evidence:
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/LocalNetworkPermission.kt", lines: "13-25", detail: "The current comment acknowledges future Local Network Protection enforcement, but no shared UI state tells users which network/permission path is active."}
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/MainActivity.kt", lines: "74-101", detail: "The shell has no persistent connectivity or active-network status surface."}
+      - { file: "plan/phases/P05-local-network-binding-resilience.yaml", lines: "24-63,190-213", detail: "P05 introduces NetworkBinder and VPN-safe binding; E01 must present its result and recovery affordances."}
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/wifi/WifiScanStatusComponents.kt", lines: "42-78", detail: "Wi-Fi already has a permission/settings action pattern that can seed a shared network-context component."}
+    proposed_behavior:
+      - "Expose a compact, dismissible NetworkContextBanner when a tool needs local access, when VPN/cellular is active, when no usable network exists, or when the selected network changed during a run."
+      - "Show interface/transport and binding outcome in result provenance; offer Open Wi-Fi settings, Open app permission settings, Retry on active network, and Continue with limitations."
+      - "Do not interrupt internet-only tools with LAN warnings; classify tools by declared network capability and show the banner only when relevant."
+      - "When the network changes, cancel/rebind according to the operation contract and never silently mix results from two interfaces."
+    depends_on: [P05-T3, P05-T5, E03-T02, E01-T08]
+    files_and_seams:
+      create: ["app/src/main/kotlin/net/aieat/netswissknife/app/platform/NetworkContext.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/NetworkContextBanner.kt", "app/src/test/kotlin/net/aieat/netswissknife/app/platform/NetworkContextMapperTest.kt", "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/components/NetworkContextBannerTest.kt"]
+      modify: ["app/src/main/kotlin/net/aieat/netswissknife/app/MainActivity.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/LocalNetworkPermission.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/wifi/WifiScanStatusComponents.kt", "LAN/mDNS/WOL/SNMP/Port tool screens", "P05 NetworkBinder adapters"]
+    implementation_steps:
+      - "Define a capability enum (internet, local-unicast, multicast, broadcast, Wi-Fi scan) and a fakeable mapper from ConnectivityManager/NetworkBinder outcomes."
+      - "Implement banner state with one-time dismiss per network identity, permission/settings launchers, and a recheck callback."
+      - "Wire P05 binding outcome into the result provenance and operation cancellation policy."
+      - "Add network-switch tests that assert no stale banner or result survives a new network identity."
+    acceptance_criteria:
+      - "A LAN tool clearly explains no network, wrong interface/VPN, permission denial, and successful binding with one actionable recovery path each."
+      - "Internet-only tools do not show irrelevant local-network prompts."
+      - "A network change cannot produce a result labeled as coming from the previous interface."
+    validation:
+      automated: ["Network capability/context mapper tests", "instrumented banner permission/settings/recheck tests", "fake NetworkBinder network-switch tests"]
+      manual: ["Wi-Fi, cellular, VPN, airplane mode, captive portal, and API 36+ local-network protection walkthrough."]
+    risks_constraints:
+      - "P05 owns binding lifecycle and Android API behavior; E01 must consume a stable adapter and not duplicate socket selection."
+      - "Avoid identifying networks with sensitive SSID/BSSID in reports unless the user explicitly includes it."
+    effort: "M (2-3 agent sessions)"
+
+  - id: E01-T14
+    priority: high
+    status: todo
+    kind: proposal
+    title: "Make flow-specific focus, semantics, keyboard, and motion behavior predictable"
+    source_evidence:
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/ToolHeroHeader.kt", lines: "101-125,137-163", detail: "Hero title and help action have basic semantics, but no flow-level focus target after state changes or error recovery."}
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/RecentHostsRow.kt", lines: "55-95", detail: "Recent chips and removal actions are nested in a horizontal row, with a sub-48dp explicit IconButton size that P08 audits; focus order and overflow are not specified."}
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/HomeScreen.kt", lines: "241-302", detail: "Tool cards merge semantics as buttons but do not expose category/favorite/recent context or restore focus after returning from a tool."}
+      - { file: "plan/phases/P08-accessibility-ui-polish.yaml", lines: "50-89,113-186", detail: "P08 owns shared live regions, touch targets, chart descriptions, reduced motion, and contrast; E01 must add flow-level focus/action contracts."}
+    proposed_behavior:
+      - "After validation error, completion, cancellation, filter-empty, or permission recovery, move accessibility focus to the state heading/action summary without stealing focus during ordinary streaming updates."
+      - "Expose stable semantics for input -> primary action -> result summary -> secondary actions; merge decorative cards while preserving individual copy/share/delete controls."
+      - "Restore the originating tool/card/search result focus on back navigation; on compact screens keep the focused item visible after list updates."
+      - "Use P08 reduced-motion tokens for all E01 transitions; when animations are disabled, preserve state ordering and focus announcements."
+      - "Support keyboard tab/arrow activation for search, filters, cards, result actions, and modal sheets without relying on pointer-only gestures."
+    depends_on: [P08-T1, P08-T2, P08-T3, P08-T5, E01-T03, E01-T07, E01-T09]
+    files_and_seams:
+      create: ["app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/FlowFocusManager.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/AccessibleActionRow.kt", "app/src/test/kotlin/net/aieat/netswissknife/app/ui/components/FlowFocusPolicyTest.kt", "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/a11y/FlowFocusAndKeyboardTest.kt"]
+      modify: ["app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/RecentHostsRow.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/ToolErrorCard.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/ToolStopButton.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/HomeScreen.kt", "all tool screens with result/recovery transitions"]
+    implementation_steps:
+      - "Define focus intents and a no-op-safe manager that only requests focus after a semantic state transition, not every recomposition."
+      - "Add test tags/semantics for headings, primary actions, result summaries, and recovery actions; use explicit traversal order where cards merge descendants."
+      - "Exercise TalkBack, keyboard, switch access, 200% font scale, RTL, and reduced-motion behavior on representative Home, LAN, DNS, and history flows."
+    acceptance_criteria:
+      - "Every changed state has one discoverable semantic heading/summary and one primary recovery/action target."
+      - "Keyboard and accessibility focus never lands on a removed node after list/filter/state updates."
+      - "Reduced motion changes timing only; no state, result, or focus transition is lost."
+    validation:
+      automated: ["Pure focus-policy tests", "Compose semantics/traversal tests", "instrumented TalkBack-compatible node/action assertions", "P08 reduced-motion and live-region suites"]
+      manual: ["TalkBack, switch access, hardware keyboard, RTL pseudo-locale, and animator scale 0 walkthrough of Home -> tool -> result -> back."]
+    risks_constraints:
+      - "Do not duplicate P08's live-region component or loosen minimum touch targets."
+      - "Avoid forced focus on first composition unless it is an explicit modal/setup step."
+    effort: "M (2-3 agent sessions)"
+
+  - id: E01-T15
+    priority: medium
+    status: todo
+    kind: actual_gap_follow_up
+    title: "Complete localization for dynamic task phrases, reports, identifiers, and bidirectional text"
+    source_evidence:
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/navigation/NavRoutes.kt", lines: "24-79", detail: "Tool labels/descriptions are currently embedded in ToolInfo and will be moved/resource-mapped by P07; E01's catalog needs stable localized search fields."}
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/ToolHelpSheet.kt", lines: "45-116", detail: "Help content is passed as strings and still contains a literal 'How to use' at line 77; P07 owns the literal sweep, E01 owns contextual help/search/report composition."}
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/WifiScanScreen.kt", lines: "550-565", detail: "Result time formatting uses Locale.getDefault and a fixed clock pattern, demonstrating the need for locale-aware UI formatting while reports remain machine-stable."}
+      - { file: "plan/phases/P07-localization-architecture.yaml", lines: "35-55,164-222", detail: "P07 establishes ErrorCode/UiText, locale config, German resources, pseudo-locales, and zero-literal guards."}
+    proposed_behavior:
+      - "Give each tool catalog entry localized label/description/synonyms plus stable nonlocalized keywords; search matches the current locale without making English the hidden source of truth."
+      - "Format dates, durations, decimals, units, counts, and plural messages with resources/locale APIs in the UI; report machine fields remain locale-neutral and human sections use the selected locale."
+      - "Wrap IPs, hostnames, URLs, ports, and code in bidi-safe spans so RTL text does not reorder identifiers; keep charts/tables and code blocks directionally intentional."
+      - "Translate setup, recovery, confidence, history, redaction, and export copy together with P07's values-de/pseudo-locale process; no new literal strings in E01 code."
+    depends_on: [P07-T3, P07-T4, P07-T5, E01-T03, E01-T08, E01-T09, E01-T12]
+    files_and_seams:
+      create: ["app/src/main/kotlin/net/aieat/netswissknife/app/ui/i18n/ToolCatalogText.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/i18n/BidiIdentifier.kt", "app/src/test/kotlin/net/aieat/netswissknife/app/ui/i18n/BidiIdentifierTest.kt", "app/src/test/kotlin/net/aieat/netswissknife/app/ui/i18n/E01LocalizedFlowCoverageTest.kt"]
+      modify: ["app/src/main/kotlin/net/aieat/netswissknife/app/ui/navigation/NavRoutes.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/navigation/ToolCatalog.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/ToolHelpSheet.kt", "all E01 screens/components", "app/src/main/res/values/strings.xml", "app/src/main/res/values-de/strings.xml"]
+    implementation_steps:
+      - "Define resource keys and stable search synonyms per tool; make tests fail for missing E01 keys in every supported locale."
+      - "Create locale-safe formatter helpers for UI and report serialization, including bidi isolation around identifiers."
+      - "Run en-XA/ar-XB and de snapshots through Home/search/setup/LAN confidence/history/export, logging any P08 layout issue to the owning phase."
+    acceptance_criteria:
+      - "E01 user-facing text is resource-backed and every new key exists in the required locale set with matching placeholders."
+      - "Localized search finds all tools by localized title and task phrase; changing locale does not corrupt stored stable IDs."
+      - "RTL screenshots keep IPs/URLs/ports readable and report machine fields parseable."
+    validation:
+      automated: ["P07 literal/localization guards", "placeholder/plural lint", "formatter and bidi unit tests", "Compose tests under en-XA/ar-XB/de"]
+      manual: ["Switch language, use large font, search in translated text, inspect reports and copied identifiers in RTL."]
+    risks_constraints:
+      - "P07 remains the owner of core error/resource architecture; E01 must not add a second translation mechanism."
+      - "Do not localize protocol names, IP/host input, CSV headers used by machine consumers, or stable route IDs."
+    effort: "M (2-3 agent sessions)"
+
+  - id: E01-T16
+    priority: high
+    status: todo
+    kind: proposal
+    title: "Protect UI performance and memory for large scans, histories, charts, and streaming output"
+    source_evidence:
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanScreen.kt", lines: "503-520,606-618", detail: "LAN receives live host lists, sorts/filters them in composition, and renders a height-limited LazyColumn; noisy scans can amplify work."}
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/PingScreen.kt", lines: "703-716,765-771", detail: "Ping holds packet lists and renders rows/charts while a continuous session may continue producing data."}
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/HomeScreen.kt", lines: "170-239,241-259", detail: "Home animates a staggered grid of every tool and delays per-item entrance, requiring a measured cost on low-end devices."}
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/util/AppLogger.kt", lines: "87-113", detail: "Debug logging writes synchronously to a file under a synchronized block; high-frequency flow logging must not run on the main thread."}
+    proposed_behavior:
+      - "Keep list identity stable and move sort/filter/ranking off composition where useful; render bounded windows for host/packet/history lists and expose counts for omitted rows."
+      - "Throttle/coalesce streaming UI updates by frame or a documented interval while retaining every data point in the repository/export path when requested."
+      - "Cache expensive chart summaries and text layouts by stable result/version; cancel work when a result is cleared or a screen leaves composition."
+      - "Make Home entrance animation lazy and reduced-motion-aware; instrument frame/jank and memory budgets in debug/profile builds without remote telemetry."
+    depends_on: [E03-T05]
+    files_and_seams:
+      create: ["app/src/main/kotlin/net/aieat/netswissknife/app/ui/performance/UiUpdatePolicy.kt", "app/src/test/kotlin/net/aieat/netswissknife/app/ui/performance/UiUpdatePolicyTest.kt", "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/performance/LargeResultPerformanceTest.kt"]
+      modify: ["app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanScreen.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/PingScreen.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/HomeScreen.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/util/AppLogger.kt", "history/report screens"]
+    implementation_steps:
+      - "Create deterministic large fixtures (full /24 scan events, 10k port rows, 10k ping packets, 500 history entries) and profile baseline before edits."
+      - "Introduce update policy and bounded rendering incrementally; preserve accessibility summaries and export completeness."
+      - "Move high-frequency logging/file I/O to an IO queue with backpressure and test shutdown/rotation."
+      - "Set debug performance budgets and record before/after results in the PR; do not fail tests on nondeterministic wall-clock timing without a stable threshold."
+    acceptance_criteria:
+      - "Large result fixtures do not cause unbounded Compose node growth or main-thread file writes."
+      - "Visible streaming updates stay responsive while exported/history data remains complete according to the chosen retention policy."
+      - "Clearing/navigating away cancels collectors, chart work, and temp exports without leaks."
+    validation:
+      automated: ["UiUpdatePolicy unit tests", "instrumented large-fixture scroll/recomposition tests", "Android Studio/profileable macrobenchmark or documented trace", "P09 test/coverage gates"]
+      manual: ["Low-end device and tablet scroll through large LAN/port/history results while running TalkBack and screen recording."]
+    risks_constraints:
+      - "Do not sacrifice evidence or export completeness solely to make the list look fast."
+      - "Keep performance instrumentation debug/local by default and privacy-preserving."
+    effort: "M (2-3 agent sessions)"
+
+  - id: E01-T17
+    priority: high
+    status: todo
+    kind: proposal
+    title: "Create an end-to-end flow contract suite and staged rollout gate"
+    source_evidence:
+      - { file: "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/UiSmokeTest.kt", lines: "1-158", detail: "A smoke suite exists for app navigation, but E01 needs stateful task flows, process recreation, permissions, and export outcomes."}
+      - { file: "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/NavigationAccessibilityTest.kt", lines: "1-138", detail: "Navigation/accessibility coverage exists but does not cover the new catalog, handoff, confidence, history, or recovery contracts."}
+      - { file: "plan/phases/P09-quality-gates-and-test-coverage.yaml", lines: "132-198", detail: "P09 owns quality gates, coverage, lint, release smoke, and CI policy; E01 supplies flow fixtures and gates."}
+      - { file: "plan/plan.yaml", lines: "120-190", detail: "Global DoD requires tests, assemble, lint, Kover, README sync, and phase/task statuses."}
+    proposed_behavior:
+      - "Add a deterministic fake app graph/repository harness for Home -> search/favorite -> setup/permission -> tool form -> run -> result -> handoff -> export/history -> back, with each terminal state asserted."
+      - "Run the matrix on compact/medium/expanded widths, font scales, locales, RTL, reduced motion, process recreation, and network/permission fakes."
+      - "Gate staged rollout on no high-severity regressions, zero false-positive LAN default rows in the RLAN fixture, no sensitive report leaks, and no navigation/route compatibility break."
+      - "Use no telemetry by default; any adoption/performance counters are local debug-only and opt-in, with no remote analytics without a separate product/privacy decision."
+    depends_on: [E01-T01, E01-T03, E01-T04, E01-T06, E01-T07, E01-T10, E01-T11, E01-T12, E01-T14, E01-T16]
+    verification_hooks: [P09-T1, P09-T6]
+    files_and_seams:
+      create: ["app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/flows/E01FlowHarness.kt", "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/flows/E01EndToEndFlowTest.kt", "app/src/test/kotlin/net/aieat/netswissknife/app/ui/flows/E01ContractCoverageTest.kt", "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/flows/E01ResponsiveMatrixTest.kt"]
+      modify: ["app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/UiSmokeTest.kt", "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/NavigationAccessibilityTest.kt", "CI workflow owning Android tests", "README.md"]
+    implementation_steps:
+      - "Enumerate flow contracts and fixtures in a YAML/ Kotlin data table so each new task adds cases instead of duplicating test setup."
+      - "Build fakes for DataStore, NavController, permission launcher, NetworkBinder, repository outcomes, SAF picker, clipboard, and share target."
+      - "Add one full happy path and one recovery path per major tool family; run compact tests first, then expand the matrix after failures are actionable."
+      - "Document staged rollout checks and rollback signals in the PR; update phase status only when all required gates pass."
+    acceptance_criteria:
+      - "The harness proves no duplicate run, stale result, lost handoff input, false-positive LAN default row, or leaked secret across the full flow."
+      - "All supported window/locale/accessibility modes have at least a smoke assertion and known exclusions are linked to P08/P07 tasks."
+      - "A clean release candidate passes the global plan quality gates before E01 is marked done."
+    validation:
+      automated: ["./gradlew :app:testDebugUnitTest --no-daemon", "instrumented E01 flow matrix", "./gradlew :app:lintDebug --no-daemon --no-parallel", "./gradlew :app:koverVerify :core-domain:koverVerify :core-network:koverVerify --no-daemon", "./gradlew :app:assembleRelease --no-daemon"]
+      manual: ["Fresh install, upgrade install, denied permission, VPN, offline, large font, RTL, process death, SAF cancel, and TalkBack release-candidate walkthrough."]
+    risks_constraints:
+      - "Respect Test Lab quota and run only one Gradle invocation at a time per global plan rules."
+      - "A passing fake harness does not replace physical LAN/VPN/API-level checks; record those separately."
+    effort: "L (3-4 agent sessions)"
+
+  - id: E01-T18
+    priority: medium
+    status: todo
+    kind: proposal
+    title: "Make contextual help and troubleshooting part of the task flow"
+    source_evidence:
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/ToolHelpSheet.kt", lines: "30-116", detail: "Help is a generic modal with sections and concept callout, but it is not linked to the current field/error/result or a next action."}
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/settings/SettingsScreen.kt", lines: "376-417,420-477", detail: "Settings exposes onboarding reset and about links but no troubleshooting index or support bundle flow."}
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/debug/DebugLogScreen.kt", lines: "1-237", detail: "A debug log surface exists, but normal users have no contextual path from a failed tool to a redacted diagnostic bundle."}
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/ToolErrorCard.kt", lines: "66-85", detail: "Selectable error text and action slots can host contextual 'why/how to fix' content."}
+    proposed_behavior:
+      - "Add field/help/error links that open a compact contextual sheet: what was tested, common causes, safe next checks, and one relevant action (edit, settings, retry, handoff, or export diagnostics)."
+      - "Generate a user-selected redacted support bundle containing app/version, tool input class (not secrets), operation status, network capability, and relevant logs; preview before share/save."
+      - "Keep help content versioned/localized and tied to stable reason IDs, so error copy changes do not break navigation or tests."
+      - "Make troubleshooting usable offline and never imply that sending a bundle is required."
+    depends_on: [E01-T09, E01-T12]
+    files_and_seams:
+      create: ["app/src/main/kotlin/net/aieat/netswissknife/app/ui/help/ContextualHelpModel.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/help/ContextualHelpSheet.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/report/SupportBundleExporter.kt", "app/src/test/kotlin/net/aieat/netswissknife/app/ui/help/ContextualHelpModelTest.kt", "app/src/test/kotlin/net/aieat/netswissknife/app/report/SupportBundleRedactionTest.kt"]
+      modify: ["app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/ToolHelpSheet.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/ToolErrorCard.kt", "all result/error screens", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/debug/DebugLogScreen.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/settings/SettingsScreen.kt"]
+    implementation_steps:
+      - "Define stable help/recovery reason IDs and map them to localized content/actions."
+      - "Add contextual sheet slots and a redacted support-bundle builder that reuses E01-T12 export primitives."
+      - "Wire high-value errors first: local permission/binding, DNS failure, TLS hostname/port, LAN uncertain results, and empty Wi-Fi scan."
+    acceptance_criteria:
+      - "Every high-value error has a useful next check or explicit 'no additional action' explanation."
+      - "Support bundles are user-selected, previewable, redacted by default, versioned, and share/save through the common exporter."
+      - "Help opens from the current context and returns without losing the form/result."
+    validation:
+      automated: ["Reason/action mapping coverage test", "support-bundle redaction/golden tests", "instrumented error -> help -> back flow"]
+      manual: ["Trigger offline, permission, invalid-input, and uncertain-LAN paths; check advice accuracy and sensitive-data handling."]
+    risks_constraints:
+      - "Never include passwords, raw packet payloads, full host lists, or precise network identifiers unless the user explicitly chooses them."
+      - "Keep long-form writing in resources/docs; this task should not reintroduce hardcoded UI literals outside P07's permitted seams."
+    effort: "M (2 agent sessions)"
+
+coverage_matrix:
+  explicit_user_requirements:
+    better_ui: [E01-T03, E01-T05, E01-T08, E01-T14, E01-T18]
+    better_user_flows: [E01-T01, E01-T04, E01-T07, E01-T09, E01-T13, E01-T17]
+    additional_tools_or_enhancements: [E01-T03, E01-T08, E01-T11, E01-T12, E01-T18]
+    performance: [E01-T05, E01-T07, E01-T16, E01-T17]
+    responsive_adaptive_layouts: [E01-T05, E01-T14, E01-T15]
+    onboarding_permissions: [E01-T04, E01-T13, E01-T17]
+    discovery_confidence_noisy_lan: [E01-T06, E01-T08, E01-T09, E01-T17]
+    cross_tool_handoff: [E01-T01, E01-T08, E01-T11]
+    search_favorites: [E01-T02, E01-T03]
+    forms: [E01-T01, E01-T07, E01-T09, E01-T10]
+    empty_error_cancel: [E01-T07, E01-T09, E01-T13, E01-T17]
+    history: [E01-T02, E01-T11]
+    export: [E01-T08, E01-T11, E01-T12, E01-T18]
+    accessibility_motion_usability: [E01-T05, E01-T07, E01-T09, E01-T14, E01-T15]
+    localization: [E01-T03, E01-T04, E01-T06, E01-T09, E01-T12, E01-T15, E01-T18]
+  existing_phase_ownership:
+    P01: "Network discovery evidence and LAN repository correctness; E01-T06 owns confidence presentation and user-flow policy after the fix."
+    P05: "Network binding, multicast/socket lifecycle, and connectivity adapter; E01-T04/T13 own setup/recovery presentation."
+    P06: "README/privacy consistency and recents-before-validation baseline; E01 consumes the documented contracts."
+    P07: "Typed errors, string resources, locale config, first translation, and literal guard; E01 adds dynamic flow keys/formatting requirements."
+    P08: "Baseline touch targets, live regions, chart semantics, reduced motion, IME, and contrast; E01 adds focus/traversal contracts around flows."
+    P09: "Global quality, coverage, CI, release smoke, and security hygiene; E01 provides end-to-end fixture/gate requirements."
+    P10_P11: "Security/diagnostic tool domain depth; E01 standardizes input/result/report flows around those domain contracts."
+    P12: "mDNS/WOL/subnet/settings/export-import/backup domain depth; E01 owns history/report UX and coordinates file/privacy policy."
+    P13_P14_P15: "New tool capabilities; every new tool must adopt E01-T01/T07/T08/T09/T10/T12 contracts before its screen is considered complete."
+
+qa_validation:
+  required_before_phase_done:
+    - "All E01 tasks are done or dropped with a reason; no task is marked done from a design-only artifact."
+    - "Every changed screen has compact/medium/expanded and font-scale test coverage appropriate to its layout policy."
+    - "Every operation has a tested terminal-state matrix and every report/export path has redaction and cancel/failure coverage."
+    - "RLAN001 fake reset fixture proves the default LAN list contains no lone-reset false positives."
+    - "P07/P08/P09 global gates pass: unit tests, instrumented flow tests, lint, Kover, debug/release assembly, and README/privacy sync."
+  commands:
+    unit: "./gradlew :core-network:test :core-domain:test :app:testDebugUnitTest --no-daemon --no-parallel"
+    instrumented: "Run E01 flow/responsive/accessibility suites on API 26, API 33, and API 36+ using the repository's Test Lab quota policy."
+    lint: "./gradlew :app:lintDebug --no-daemon --no-parallel"
+    coverage: "./gradlew :app:koverVerify :core-domain:koverVerify :core-network:koverVerify --no-daemon"
+    release: "./gradlew :app:assembleDebug :app:assembleRelease --no-daemon"
+  manual_matrix:
+    - "320dp phone, 600dp medium, 840dp/1200dp expanded; portrait/landscape/fold posture."
+    - "font scale 1.0/1.5/2.0; display size largest; en/de/en-XA/ar-XB."
+    - "TalkBack and hardware keyboard; animator duration scale 0; touch-only fallback."
+    - "fresh install, upgrade from current preferences, process death, back during run, cancel, retry, empty, filtered-empty, permission denial, VPN, offline, SAF cancel."
+    - "LAN normal network, all addresses reset by gateway/firewall, ICMP-blocked host with corroborating evidence, uncertain filter enabled, and no-device subnet."
+
+definition_of_done:
+  - "E01-T01 through E01-T18 are done/dropped with reasons and stable tests/fixtures exist for every retained contract."
+  - "The plan index references E01 as an expansion phase without changing P07/P08/P12 ownership or historical completion claims."
+  - "All user-facing additions are localized, accessible, responsive, privacy-preserving, and validated by the required gates."

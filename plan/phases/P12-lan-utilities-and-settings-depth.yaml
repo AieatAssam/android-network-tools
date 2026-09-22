@@ -2,6 +2,17 @@
 # P12 – LAN utilities & settings depth: mDNS, Wake-on-LAN, Subnet Calculator, Settings
 # =============================================================================
 # Audience: AI coding agent. Self-contained. Read plan/plan.yaml `agent_execution_rules` first.
+expansion_tasks:
+  index: plan/plan.yaml
+  tasks: [E01-T02, E01-T11, E01-T12, E02-T11, E02-T12, E02-T14, E03-T11]
+  rule: "Coordinate with these expansion tasks; do not duplicate existing scope or block independent regression fixes on optional enhancements. See comprehensive_expansion.regression_delivery for fresh follow-up ownership."
+
+second_pass_follow_up:
+  status: todo
+  report: plan/reviews/2026-09-22-second-pass.yaml
+  findings: [R2-005, R2-007, R2-008, R2-015]
+  rule: "Apply report recommendations and regression acceptance before closing the listed follow-ups; historical phase completion does not close new findings."
+
 phase:
   id: P12
   title: "mDNS (IPv6 group, service-type filters, friendly names, TXT semantics, actions) · WOL (saved devices, subnet broadcast, SecureOn, wake verification) · Subnet (address scope classification) · Settings (privacy statement, per-tool defaults, export/import, split DataStore + backup rules, local-network preference)"
@@ -12,6 +23,15 @@ phase:
   enables: []
   findings: [F013, F030, F031, F032, F033, F023]
   target_modules: [":core-network", ":core-domain", ":app"]
+
+review_follow_up:
+  reviewed_on: "2026-09-21"
+  status: todo
+  findings: [RAPP004, RNET010]
+  reports:
+    - plan/reviews/2026-09-21-app.yaml
+    - plan/reviews/2026-09-21-network.yaml
+  note: "New source-review follow-ups; preserve historical task completion. See report evidence, recommended_action, and validation before implementation."
 
 context:
   problem: |
@@ -146,7 +166,7 @@ tasks:
   - id: P12-T5
     title: "Settings: per-tool defaults + export/import"
     status: todo
-    depends_on: [P12-T4]
+    depends_on: [P12-T4, E03-T05]
     tdd:
       red:
         tests:

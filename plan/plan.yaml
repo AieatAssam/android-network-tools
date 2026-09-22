@@ -4,7 +4,7 @@
 # Purpose : Single tracking file for the whole improvement programme.
 #           Each phase has its own detailed YAML under plan/phases/ written for
 #           AI coding agents (not humans). This file is the index + status board
-#           + the complete findings ledger, so it is usable on its own.
+#           + the baseline findings ledger and prioritized incremental review index.
 # Author  : Claude Fable 5.1 (full codebase analysis session, 2026-09-18)
 # Baseline: git main @ 518c814 ("test: expand instrumented coverage to all 14 tools (#104)")
 # =============================================================================
@@ -36,8 +36,272 @@ meta:
   status_vocabulary: [todo, in_progress, blocked, done, dropped]
   severity_vocabulary: [critical, high, medium, low]
 
+second_pass_review:
+  status: done
+  started_on: "2026-09-22"
+  completed_on: "2026-09-22"
+  reviewer_model: gpt-5.6-luna
+  reviewer_reasoning_effort: xhigh
+  validation: { yaml_files: 27, all_tasks: 149, added_findings: 15, high: 6, medium: 9, dependency_graph: acyclic, implementation_changes: false }
+  report: plan/reviews/2026-09-22-second-pass.yaml
+  findings: [R2-001, R2-002, R2-005, R2-007, R2-010, R2-013, R2-003, R2-004, R2-006, R2-008, R2-009, R2-011, R2-012, R2-014, R2-015]
+  prioritized_findings:
+    - {"id":"R2-001","priority":"high","kind":"security_gap","status":"todo","owner":"P10-T3","title":"Cross-origin redirects strip headers but can replay a sensitive request body"}
+    - {"id":"R2-002","priority":"high","kind":"plan_defect","status":"todo","owner":"P10-T3","title":"The HTTP roadmap weakens secure downgrade behavior by default"}
+    - {"id":"R2-005","priority":"high","kind":"privacy_gap","status":"todo","owner":"E01-T02","title":"HTTP recents persist the complete URL before validation, including possible secrets"}
+    - {"id":"R2-007","priority":"high","kind":"plan_gap","status":"todo","owner":"E01-T11","title":"New history persistence needs an explicit consent, backup and version-compatibility contract"}
+    - {"id":"R2-010","priority":"high","kind":"resource_gap","status":"todo","owner":"E03-T05","title":"Topology fan-out and SNMP walks can grow before UI caps take effect"}
+    - {"id":"R2-013","priority":"high","kind":"correctness_gap","status":"todo","owner":"E02-T03","title":"Port scan reports one resolved address but sends probes using the hostname again"}
+    - {"id":"R2-003","priority":"medium","kind":"bug","status":"todo","owner":"P01-T3","title":"NBSTAT parser assumes a question section that standard responses omit"}
+    - {"id":"R2-004","priority":"medium","kind":"security_gap","status":"todo","owner":"P01-T3","title":"LAN UDP discovery loses sender provenance and accepts uncorrelated NBSTAT data"}
+    - {"id":"R2-006","priority":"medium","kind":"bug","status":"todo","owner":"E01-T12","title":"Ping CSV statistics use locale-specific decimal commas as field separators"}
+    - {"id":"R2-008","priority":"medium","kind":"plan_gap","status":"todo","owner":"E01-T12","title":"Report privacy and SAF handling have multiple implementation paths without a single contract owner"}
+    - {"id":"R2-009","priority":"medium","kind":"isolation_gap","status":"todo","owner":"E03-T03","title":"WHOIS progress is repository-global rather than lookup-scoped"}
+    - {"id":"R2-011","priority":"medium","kind":"privacy_gap","status":"todo","owner":"E03-T06","title":"Crash diagnostics bypass the planned redaction and payload-size limits"}
+    - {"id":"R2-012","priority":"medium","kind":"plan_gap","status":"todo","owner":"E03-T04","title":"Response limits cover bodies but do not define header-count or metadata budgets"}
+    - {"id":"R2-014","priority":"medium","kind":"correctness_gap","status":"todo","owner":"E02-T08","title":"Topology table failures become empty collections and misleading snapshot removals"}
+    - {"id":"R2-015","priority":"medium","kind":"resource_gap","status":"todo","owner":"E03-T05","title":"mDNS service enumeration can grow its state and query fan-out without producer budgets"}
+  rule: "These are additional follow-ups, not duplicates of the first-pass ledger. Apply report acceptance as overrides to conflicting plan prose; existing completed phase records remain historical."
+
+comprehensive_expansion:
+  started_on: "2026-09-22"
+  status: done
+  completed_on: "2026-09-22"
+  status_scope: "Planning review and integration complete; all 53 expansion implementation tasks remain todo."
+  baseline_commit: "5e183721e64ce8a8946f1a0b50f52b83544e8898"
+  objective: "Comprehensive improvements to the app: UI, user flows, existing and new tools, performance, architecture, reliability, and delivery quality. Planning artifacts are for coding agents; this review does not implement features."
+  reviewer_model: "gpt-5.6-luna"
+  reviewer_reasoning_effort: xhigh
+  persistence: "Each workstream writes task batches immediately; primary agent integrates dependencies, source checks, and roadmap routing incrementally."
+  delivery_order:
+    policy: "These are prioritization lanes, not whole-wave hard dependencies. Select a ready task using its exact depends_on list; regressions remain independently shippable."
+    lanes:
+      - { order: 0, focus: "Current correctness and safety regressions", entry_points: [E00-T01], ledger: comprehensive_expansion.regression_delivery, note: "LAN false positives first among current review findings; preserve precedence of unresolved critical baseline security work." }
+      - { order: 1, focus: "Reliable operations and everyday flows", entry_points: [E01-T01, E01-T07, E01-T10, E03-T01, E03-T02, E03-T05], note: "Extract small compatible seams; do not require a whole-app migration before fixing one tool." }
+      - { order: 2, focus: "Navigation, accessibility, history, exports and existing-tool depth", workstreams: [E01, E02, E03], note: "Land each tool independently after its relevant data/consent and protocol dependencies." }
+      - { order: 3, focus: "New diagnostics and cross-tool experiments", entry_points: [E02-T15, E02-T16, E02-T17, E02-T18, E02-T19], existing_waves: [P13, P14, P15], note: "E00-T04 refines existing future-tool owners; feasibility checks and explicit traffic/privacy contracts precede enabling new routes." }
+  coverage:
+    shipped_tool_routes:
+      - { route: ping, depth_task: E02-T01 }
+      - { route: traceroute, depth_task: E02-T02 }
+      - { route: ports, depth_task: E02-T03 }
+      - { route: lan, depth_task: E02-T04, urgent_fix: E00-T01 }
+      - { route: dns, depth_task: E02-T05 }
+      - { route: wifi_scan, depth_task: E02-T06 }
+      - { route: tls, depth_task: E02-T07 }
+      - { route: topology, depth_task: E02-T08 }
+      - { route: whois, depth_task: E02-T09 }
+      - { route: httprobe, depth_task: E02-T10 }
+      - { route: mdns, depth_task: E02-T11 }
+      - { route: subnet, depth_task: E02-T12 }
+      - { route: speedtest, depth_task: E02-T13 }
+      - { route: wol, depth_task: E02-T14 }
+    objective_to_evidence:
+      - { requirement: "Better UI and accessibility", tasks: [E01-T03, E01-T05, E01-T14, E01-T15, E01-T16], artifact: plan/expansion/E01-ui-and-user-flows.yaml }
+      - { requirement: "Better user flows and recovery", tasks: [E01-T01, E01-T02, E01-T04, E01-T07, E01-T09, E01-T10, E01-T13, E01-T18], artifact: plan/expansion/E01-ui-and-user-flows.yaml }
+      - { requirement: "Enhancements to every existing tool", tasks: [E02-T01, E02-T02, E02-T03, E02-T04, E02-T05, E02-T06, E02-T07, E02-T08, E02-T09, E02-T10, E02-T11, E02-T12, E02-T13, E02-T14], artifact: plan/expansion/E02-tool-depth-and-new-tools.yaml }
+      - { requirement: "Additional tools and combined workflows", tasks: [E00-T04, E02-T15, E02-T16, E02-T17, E02-T18, E02-T19], artifact: plan/expansion/E02-tool-depth-and-new-tools.yaml }
+      - { requirement: "Performance, battery and resilience", tasks: [E03-T01, E03-T02, E03-T04, E03-T05, E03-T07, E03-T09], artifact: plan/expansion/E03-performance-reliability-and-quality.yaml }
+      - { requirement: "Privacy, data safety and reliable delivery", tasks: [E01-T11, E01-T12, E03-T06, E03-T08, E03-T10, E03-T11, E03-T12], artifact: plan/expansion/E03-performance-reliability-and-quality.yaml }
+      - { requirement: "Agent-targeted, incremental and prioritized planning", tasks: [E00-T01, E00-T02, E00-T03, E00-T04], artifact: plan/expansion/E00-execution-and-plan-refinements.yaml }
+    limitations: "Planning coverage is not implemented-feature coverage. Runtime budgets, device/API/provider feasibility and future test commands require evidence when the corresponding task is implemented. Proposed file paths are not asserted to exist."
+  review_execution:
+    parallel_reviewers: "Three gpt-5.6-luna/xhigh workstreams; separate files saved incrementally."
+    terminal_states: "Engineering completed; UI completed its primary draft, then its optional cross-review hit usage limits. Tool-depth draft and corrections were saved before a usage-limit termination. Primary agent completed integration and final checks locally."
+    implementation_status: "No application, test, build, dependency, or release implementation performed in this planning expansion."
+  final_plan_validation:
+    checked_on: "2026-09-22"
+    baseline_commit: "5e183721e64ce8a8946f1a0b50f52b83544e8898"
+    result: passed
+    scope: "First-pass planning snapshot before second_pass_review; not runtime acceptance of unimplemented tasks. See second_pass_review for the later validation/counts."
+    counts: { yaml_files: 26, all_phase_and_expansion_tasks: 149, expansion_tasks: 53, review_findings_routed: 28, shipped_routes_covered: 14, expansion_evidence_path_occurrences_checked: 246 }
+    checks:
+      - "All plan YAML parses with duplicate-key rejection."
+      - "Every expansion task has priority/status, source evidence, proposed behavior, steps, acceptance criteria and validation."
+      - "Master task index matches task files; all hard task dependencies resolve and the task graph is acyclic."
+      - "All 28 review findings have an owner task and report; historical completed phases retain separate todo follow-ups."
+      - "All 14 NavRoutes.allTools routes have a depth task; objective coverage and phase cross-links resolve."
+      - "All expansion source-evidence paths exist; referenced production-source line bounds are valid."
+      - "Primary integration reviewed confidence, privacy, cancellation, provider/protocol assumptions, scope ownership and dependency ordering."
+      - "git diff --check passes; the worktree changes for this expansion are confined to plan files."
+    not_run: "No Gradle, instrumented, live-network, performance, or release tests for plan-only edits. Future commands and budgets are implementation gates, not completed measurements."
+  workstreams:
+    - { id: E00, file: plan/expansion/E00-execution-and-plan-refinements.yaml, owner: primary-agent, purpose: "Executable task contract, corrections to existing plans, gates and resume protocol" }
+    - { id: E01, file: plan/expansion/E01-ui-and-user-flows.yaml, owner: ux_plan_expansion, purpose: "UI, adaptive layouts, discovery, forms and cross-tool workflows" }
+    - { id: E02, file: plan/expansion/E02-tool-depth-and-new-tools.yaml, owner: tools_plan_expansion, purpose: "Depth across all existing tools and feasible new tools" }
+    - { id: E03, file: plan/expansion/E03-performance-reliability-and-quality.yaml, owner: engineering_plan_expansion, purpose: "Performance, resource limits, data handling, resilience and quality gates" }
+  integration_rules:
+    - "P01-P15 retain ownership of their original scope. Expansion tasks must state whether they refine, extend, or depend on an existing task; do not implement the same change twice."
+    - "A historically completed phase can have new todo follow-ups. Fixes to live defects are not blocked on completing optional localization, new-tool waves, or broad architectural migrations."
+    - "Evidence is source-relative to the baseline; proposed behaviors and performance budgets are targets, not claims about current runtime behavior."
+    - "Prioritize critical/high correctness and current user pain, then shared foundations and everyday flows, then feature depth and optional new capabilities."
+  task_index:
+    - {"id":"E00-T01","priority":"high","status":"todo","file":"plan/expansion/E00-execution-and-plan-refinements.yaml","title":"Fix LAN host-presence confidence and remove unused-address noise"}
+    - {"id":"E00-T02","priority":"high","status":"todo","file":"plan/expansion/E00-execution-and-plan-refinements.yaml","title":"Turn the review ledger into independently closable regression work"}
+    - {"id":"E00-T04","priority":"high","status":"todo","file":"plan/expansion/E00-execution-and-plan-refinements.yaml","title":"Implement future-tool correctness refinements within their owning phase slices"}
+    - {"id":"E01-T01","priority":"high","status":"todo","file":"plan/expansion/E01-ui-and-user-flows.yaml","title":"Introduce typed destination intents and safe cross-tool handoff arguments"}
+    - {"id":"E01-T02","priority":"high","status":"todo","file":"plan/expansion/E01-ui-and-user-flows.yaml","title":"Unify favorites, pinned navigation, and recent inputs with a versioned preference model"}
+    - {"id":"E01-T03","priority":"high","status":"todo","file":"plan/expansion/E01-ui-and-user-flows.yaml","title":"Add fast tool discovery with search, task phrases, filters, and keyboard navigation"}
+    - {"id":"E01-T04","priority":"high","status":"todo","file":"plan/expansion/E01-ui-and-user-flows.yaml","title":"Make onboarding an actionable setup and recovery flow"}
+    - {"id":"E01-T05","priority":"high","status":"todo","file":"plan/expansion/E01-ui-and-user-flows.yaml","title":"Define responsive tool scaffolds and split-pane behavior by window class"}
+    - {"id":"E01-T06","priority":"high","status":"todo","file":"plan/expansion/E01-ui-and-user-flows.yaml","title":"Present ambiguous connection failures as confidence-limited LAN evidence"}
+    - {"id":"E01-T07","priority":"high","status":"todo","file":"plan/expansion/E01-ui-and-user-flows.yaml","title":"Standardize operation states: idle, validating, running, canceling, canceled, partial, success, empty, and error"}
+    - {"id":"E01-T08","priority":"high","status":"todo","file":"plan/expansion/E01-ui-and-user-flows.yaml","title":"Add shared result provenance, limitation, and next-action presentation"}
+    - {"id":"E01-T09","priority":"high","status":"todo","file":"plan/expansion/E01-ui-and-user-flows.yaml","title":"Give every tool deliberate empty, filtered-empty, error, retry, and cancel recovery copy"}
+    - {"id":"E01-T10","priority":"high","status":"todo","file":"plan/expansion/E01-ui-and-user-flows.yaml","title":"Unify form validation, normalization, defaults, and advanced-option disclosure"}
+    - {"id":"E01-T13","priority":"high","status":"todo","file":"plan/expansion/E01-ui-and-user-flows.yaml","title":"Show active network context and actionable local-network/VPN recovery across tools"}
+    - {"id":"E01-T14","priority":"high","status":"todo","file":"plan/expansion/E01-ui-and-user-flows.yaml","title":"Make flow-specific focus, semantics, keyboard, and motion behavior predictable"}
+    - {"id":"E01-T16","priority":"high","status":"todo","file":"plan/expansion/E01-ui-and-user-flows.yaml","title":"Protect UI performance and memory for large scans, histories, charts, and streaming output"}
+    - {"id":"E01-T17","priority":"high","status":"todo","file":"plan/expansion/E01-ui-and-user-flows.yaml","title":"Create an end-to-end flow contract suite and staged rollout gate"}
+    - {"id":"E02-T04","priority":"high","status":"todo","file":"plan/expansion/E02-tool-depth-and-new-tools.yaml","title":"LAN confidence model, false-positive suppression, and inventory diff"}
+    - {"id":"E03-T01","priority":"high","status":"todo","file":"plan/expansion/E03-performance-reliability-and-quality.yaml","title":"Introduce one bounded operation, deadline, and resource-scope contract"}
+    - {"id":"E03-T02","priority":"high","status":"todo","file":"plan/expansion/E03-performance-reliability-and-quality.yaml","title":"Make availability target-aware and make lifecycle/background behavior explicit"}
+    - {"id":"E03-T03","priority":"high","status":"todo","file":"plan/expansion/E03-performance-reliability-and-quality.yaml","title":"Attach session metadata and network-route provenance to every operation"}
+    - {"id":"E03-T04","priority":"high","status":"todo","file":"plan/expansion/E03-performance-reliability-and-quality.yaml","title":"Unify timeout, cache, and response-size policies"}
+    - {"id":"E03-T05","priority":"high","status":"todo","file":"plan/expansion/E03-performance-reliability-and-quality.yaml","title":"Bound large scans, live UI state, charts, logs, and exports"}
+    - {"id":"E03-T06","priority":"high","status":"todo","file":"plan/expansion/E03-performance-reliability-and-quality.yaml","title":"Add redacted structured observability and bounded diagnostics"}
+    - {"id":"E03-T07","priority":"high","status":"todo","file":"plan/expansion/E03-performance-reliability-and-quality.yaml","title":"Build deterministic network fault and route-change test fixtures"}
+    - {"id":"E03-T10","priority":"high","status":"todo","file":"plan/expansion/E03-performance-reliability-and-quality.yaml","title":"Make release builds reproducible and dependency resolution auditable"}
+    - {"id":"E03-T11","priority":"high","status":"todo","file":"plan/expansion/E03-performance-reliability-and-quality.yaml","title":"Harden DataStore/file migration and backup invariants"}
+    - {"id":"E03-T12","priority":"high","status":"todo","file":"plan/expansion/E03-performance-reliability-and-quality.yaml","title":"Integrate reliability, offline, ABI, benchmark, and reproducibility gates"}
+    - {"id":"E00-T03","priority":"medium","status":"todo","file":"plan/expansion/E00-execution-and-plan-refinements.yaml","title":"Automate roadmap consistency and resumable agent handoff checks"}
+    - {"id":"E01-T11","priority":"medium","status":"todo","file":"plan/expansion/E01-ui-and-user-flows.yaml","title":"Add privacy-aware run history with resume, compare, and delete flows"}
+    - {"id":"E01-T12","priority":"medium","status":"todo","file":"plan/expansion/E01-ui-and-user-flows.yaml","title":"Replace clipboard/share-only reporting with a durable export and redaction flow"}
+    - {"id":"E01-T15","priority":"medium","status":"todo","file":"plan/expansion/E01-ui-and-user-flows.yaml","title":"Complete localization for dynamic task phrases, reports, identifiers, and bidirectional text"}
+    - {"id":"E01-T18","priority":"medium","status":"todo","file":"plan/expansion/E01-ui-and-user-flows.yaml","title":"Make contextual help and troubleshooting part of the task flow"}
+    - {"id":"E02-T01","priority":"medium","status":"todo","file":"plan/expansion/E02-tool-depth-and-new-tools.yaml","title":"Ping run records, percentile evidence, and baseline comparison"}
+    - {"id":"E02-T02","priority":"medium","status":"todo","file":"plan/expansion/E02-tool-depth-and-new-tools.yaml","title":"Traceroute route snapshots and path-change explanation"}
+    - {"id":"E02-T03","priority":"medium","status":"todo","file":"plan/expansion/E02-tool-depth-and-new-tools.yaml","title":"Port scanner profiles, scan budget, and result delta"}
+    - {"id":"E02-T05","priority":"medium","status":"todo","file":"plan/expansion/E02-tool-depth-and-new-tools.yaml","title":"DNS resolver comparison, answer drift, and query provenance"}
+    - {"id":"E02-T06","priority":"medium","status":"todo","file":"plan/expansion/E02-tool-depth-and-new-tools.yaml","title":"Wi-Fi channel occupancy, AP stability, and roaming evidence"}
+    - {"id":"E02-T07","priority":"medium","status":"todo","file":"plan/expansion/E02-tool-depth-and-new-tools.yaml","title":"TLS endpoint policy audit and batch comparison"}
+    - {"id":"E02-T08","priority":"medium","status":"todo","file":"plan/expansion/E02-tool-depth-and-new-tools.yaml","title":"Topology snapshot identity, graph diff, and credential-safe export"}
+    - {"id":"E02-T10","priority":"medium","status":"todo","file":"plan/expansion/E02-tool-depth-and-new-tools.yaml","title":"HTTP request scenarios with bounded assertions and response diff"}
+    - {"id":"E02-T11","priority":"medium","status":"todo","file":"plan/expansion/E02-tool-depth-and-new-tools.yaml","title":"mDNS service watch and local endpoint health evidence"}
+    - {"id":"E02-T13","priority":"medium","status":"todo","file":"plan/expansion/E02-tool-depth-and-new-tools.yaml","title":"Speed-test run quality, data budget, and trend comparison"}
+    - {"id":"E02-T15","priority":"medium","status":"todo","file":"plan/expansion/E02-tool-depth-and-new-tools.yaml","title":"MQTT broker handshake inspector"}
+    - {"id":"E02-T16","priority":"medium","status":"todo","file":"plan/expansion/E02-tool-depth-and-new-tools.yaml","title":"WebSocket handshake and bounded frame probe"}
+    - {"id":"E02-T18","priority":"medium","status":"todo","file":"plan/expansion/E02-tool-depth-and-new-tools.yaml","title":"Active captive-portal diagnosis"}
+    - {"id":"E02-T19","priority":"medium","status":"todo","file":"plan/expansion/E02-tool-depth-and-new-tools.yaml","title":"Diagnostics Compare: repeatable before/after experiment bundles"}
+    - {"id":"E03-T08","priority":"medium","status":"todo","file":"plan/expansion/E03-performance-reliability-and-quality.yaml","title":"Add API/ABI compatibility checks for core modules"}
+    - {"id":"E03-T09","priority":"medium","status":"todo","file":"plan/expansion/E03-performance-reliability-and-quality.yaml","title":"Create benchmark module and performance regression budgets"}
+    - {"id":"E02-T09","priority":"low","status":"todo","file":"plan/expansion/E02-tool-depth-and-new-tools.yaml","title":"WHOIS/RDAP registration snapshots and deadline diff"}
+    - {"id":"E02-T12","priority":"low","status":"todo","file":"plan/expansion/E02-tool-depth-and-new-tools.yaml","title":"Subnet overlap planner and point-to-point semantics"}
+    - {"id":"E02-T14","priority":"low","status":"todo","file":"plan/expansion/E02-tool-depth-and-new-tools.yaml","title":"Wake-on-LAN batch groups with safety gates and per-target outcomes"}
+    - {"id":"E02-T17","priority":"low","status":"todo","file":"plan/expansion/E02-tool-depth-and-new-tools.yaml","title":"System proxy and PAC route tester"}
+
+  regression_delivery:
+    rule: "Each finding is an independently closable follow-up to owner_task, even if that historical task is done. Implement the minimal regression first using the report evidence and validation; optional E01-E03 enhancements do not gate it. Update finding and index only after fresh regression evidence."
+    entries:
+      - {"finding":"RAPP001","owner_task":"P03-T2","follow_up_status":"todo","report":"plan/reviews/2026-09-21-app.yaml"}
+      - {"finding":"RAPP002","owner_task":"P05-T4","follow_up_status":"todo","report":"plan/reviews/2026-09-21-app.yaml"}
+      - {"finding":"RAPP003","owner_task":"P04-T3","follow_up_status":"todo","report":"plan/reviews/2026-09-21-app.yaml"}
+      - {"finding":"RAPP004","owner_task":"P12-T1","follow_up_status":"todo","report":"plan/reviews/2026-09-21-app.yaml"}
+      - {"finding":"RBUILD001","owner_task":"P09-T4","follow_up_status":"todo","report":"plan/reviews/2026-09-21-build.yaml"}
+      - {"finding":"RBUILD002","owner_task":"P09-T4","follow_up_status":"todo","report":"plan/reviews/2026-09-21-build.yaml"}
+      - {"finding":"RBUILD003","owner_task":"P01-T7","follow_up_status":"todo","report":"plan/reviews/2026-09-21-build.yaml"}
+      - {"finding":"RLAN001","owner_task":"E00-T01","follow_up_status":"todo","report":"plan/reviews/2026-09-22-lan-scan-noise.yaml"}
+      - {"finding":"RNET001","owner_task":"P01-T4","follow_up_status":"todo","report":"plan/reviews/2026-09-21-network.yaml"}
+      - {"finding":"RNET002","owner_task":"P05-T1","follow_up_status":"todo","report":"plan/reviews/2026-09-21-network.yaml"}
+      - {"finding":"RNET003","owner_task":"P02-T2","follow_up_status":"todo","report":"plan/reviews/2026-09-21-network.yaml"}
+      - {"finding":"RNET004","owner_task":"P03-T1","follow_up_status":"todo","report":"plan/reviews/2026-09-21-network.yaml"}
+      - {"finding":"RNET005","owner_task":"P04-T5","follow_up_status":"todo","report":"plan/reviews/2026-09-21-network.yaml"}
+      - {"finding":"RNET006","owner_task":"P10-T5","follow_up_status":"todo","report":"plan/reviews/2026-09-21-network.yaml"}
+      - {"finding":"RNET007","owner_task":"P11-T2","follow_up_status":"todo","report":"plan/reviews/2026-09-21-network.yaml"}
+      - {"finding":"RNET008","owner_task":"P11-T3","follow_up_status":"todo","report":"plan/reviews/2026-09-21-network.yaml"}
+      - {"finding":"RNET009","owner_task":"P03-T1","follow_up_status":"todo","report":"plan/reviews/2026-09-21-network.yaml"}
+      - {"finding":"RNET010","owner_task":"P12-T3","follow_up_status":"todo","report":"plan/reviews/2026-09-21-network.yaml"}
+      - {"finding":"RNET011","owner_task":"P01-T4","follow_up_status":"todo","report":"plan/reviews/2026-09-21-network.yaml"}
+      - {"finding":"RUI001","owner_task":"P12-T1","follow_up_status":"todo","report":"plan/reviews/2026-09-21-ui-domain.yaml"}
+      - {"finding":"RUI002","owner_task":"P11-T3","follow_up_status":"todo","report":"plan/reviews/2026-09-21-ui-domain.yaml"}
+      - {"finding":"RUI003","owner_task":"P04-T4","follow_up_status":"todo","report":"plan/reviews/2026-09-21-ui-domain.yaml"}
+      - {"finding":"RUI004","owner_task":"P04-T4","follow_up_status":"todo","report":"plan/reviews/2026-09-21-ui-domain.yaml"}
+      - {"finding":"RUI005","owner_task":"P04-T4","follow_up_status":"todo","report":"plan/reviews/2026-09-21-ui-domain.yaml"}
+      - {"finding":"RUI006","owner_task":"P10-T2","follow_up_status":"todo","report":"plan/reviews/2026-09-21-ui-domain.yaml"}
+      - {"finding":"RUI007","owner_task":"P11-T2","follow_up_status":"todo","report":"plan/reviews/2026-09-21-ui-domain.yaml"}
+      - {"finding":"RUI008","owner_task":"P04-T6","follow_up_status":"todo","report":"plan/reviews/2026-09-21-ui-domain.yaml"}
+      - {"finding":"RUI009","owner_task":"P08-T4","follow_up_status":"todo","report":"plan/reviews/2026-09-21-ui-domain.yaml"}
+
+incremental_review:
+  reviewed_on: "2026-09-21"
+  baseline_commit: "5e183721e64ce8a8946f1a0b50f52b83544e8898"
+  status: done
+  reviewer_model: "gpt-5.6-luna"
+  reviewer_reasoning_effort: xhigh
+  method: "Parallel source review; findings saved in small verified batches before final consolidation. Existing F001-F041 remain historical baseline findings."
+  priority_order: [critical, high, medium, low]
+  recommended_first_followups: [RLAN001, RNET005, RUI005, RUI008, RAPP002, RAPP004, RNET009]
+  first_followups_rationale: "Prioritize the LAN false-positive regression first, then incorrect diagnostic queries/results, incomplete exports, operations continuing after Stop, and misleading security labels. Existing unresolved critical/high findings still come first."
+  execution_guidance: "Merge these findings with open phase work by severity; existing unresolved critical/high findings retain precedence. Address confirmed bugs before optional feature waves P13-P15. Follow each finding's related_phase and validation, including follow-ups to historically completed phases."
+  reports:
+    - { area: core-network, file: plan/reviews/2026-09-21-network.yaml }
+    - { area: app-platform-data, file: plan/reviews/2026-09-21-app.yaml }
+    - { area: ui-domain, file: plan/reviews/2026-09-21-ui-domain.yaml }
+    - { area: build-release-plan, file: plan/reviews/2026-09-21-build.yaml }
+    - { area: lan-scan-discovery, file: plan/reviews/2026-09-22-lan-scan-noise.yaml }
+  prioritized_findings:
+    - { id: RLAN001, severity: high, kind: bug, phase: P01, status: todo, title: "A failed TCP connect is promoted to a live host and floods LAN results with false positives" }
+    - { id: RAPP001, severity: medium, kind: bug, phase: P03, status: todo, title: "Wi-Fi scan failures are reported as completed scans" }
+    - { id: RAPP002, severity: medium, kind: bug, phase: P05, status: todo, title: "mDNS stop/cancellation does not promptly terminate the socket loop" }
+    - { id: RAPP004, severity: medium, kind: bug, phase: P12, status: todo, title: "mDNS packet I/O failures are converted into successful empty scans" }
+    - { id: RBUILD001, severity: medium, kind: bug, phase: P09, status: todo, title: "Release SNMP retention gate succeeds when only one required class survives" }
+    - { id: RBUILD002, severity: medium, kind: bug, phase: P09, status: todo, title: "Daily release version allocation can reuse an existing version" }
+    - { id: RNET001, severity: medium, kind: bug, phase: P01, status: todo, title: "ARP enrichment snapshots the cache before all probes finish" }
+    - { id: RNET002, severity: medium, kind: bug, phase: P05, status: todo, title: "Both platform and fallback subnet detection silently clamp the real prefix length" }
+    - { id: RNET005, severity: medium, kind: bug, phase: P04, status: todo, title: "DNS lookup does not normalize Unicode domains to IDNA" }
+    - { id: RNET009, severity: medium, kind: bug, phase: P03, status: todo, title: "Unknown Wi-Fi capabilities are classified as open networks" }
+    - { id: RNET011, severity: medium, kind: bug, phase: P01, status: todo, title: "LAN enrichment can swallow cancellation from injected suspend probes" }
+    - { id: RUI001, severity: medium, kind: bug, phase: P08, status: todo, title: "mDNS user cancellation is surfaced as a discovery error" }
+    - { id: RUI002, severity: medium, kind: bug, phase: P11, status: todo, title: "Stopping a port scan loses resolved IP and reports zero duration" }
+    - { id: RUI003, severity: medium, kind: bug, phase: P08, status: todo, title: "Ping count settings and the Ping slider disagree on the supported range" }
+    - { id: RUI004, severity: medium, kind: bug, phase: P08, status: todo, title: "Ping advanced controls can display stale values after recreation" }
+    - { id: RUI005, severity: medium, kind: bug, phase: P04, status: todo, title: "Stopping continuous ping can publish a CSV before its writer drains" }
+    - { id: RUI006, severity: medium, kind: bug, phase: P10, status: todo, title: "TLS inspection silently substitutes port 443 for invalid port text" }
+    - { id: RUI008, severity: medium, kind: bug, phase: P04, status: todo, title: "DNS IME submission can overlap lookups and attach recents to the wrong edit" }
+    - { id: RUI009, severity: medium, kind: bug, phase: P08, status: todo, title: "Port scanner cannot represent the configured concurrency maximum" }
+    - { id: RAPP003, severity: medium, kind: gap, phase: P04, status: todo, title: "Native ICMP load failures bypass the advertised reachability fallback" }
+    - { id: RNET003, severity: medium, kind: gap, phase: P02, status: todo, title: "Topology parameters omit bounds for hops, timeout, and retries" }
+    - { id: RNET006, severity: medium, kind: gap, phase: P10, status: todo, title: "WHOIS cancellation does not bound blocking DNS and socket work" }
+    - { id: RNET004, severity: low, kind: bug, phase: P03, status: todo, title: "Wi-Fi unique-network count collapses all hidden APs" }
+    - { id: RNET007, severity: low, kind: bug, phase: P11, status: todo, title: "GeoIP bogon detection rejects explicit false values" }
+    - { id: RUI007, severity: low, kind: bug, phase: P11, status: todo, title: "Stopped traceroute results discard elapsed-time metadata" }
+    - { id: RBUILD003, severity: low, kind: gap, phase: P01, status: todo, title: "OUI refresh can replace a complete registry with a partial download" }
+    - { id: RNET010, severity: low, kind: gap, phase: P12, status: todo, title: "Subnet calculator has no RFC 3021 point-to-point /31 mode" }
+    - { id: RNET008, severity: low, kind: opportunity, phase: P11, status: todo, title: "Open-port banner reads can exceed the configured per-port timeout" }
+  validation:
+    unit_tests:
+      command: "./gradlew :core-network:test --rerun :core-domain:test --rerun :app:testDebugUnitTest --rerun --no-daemon --no-parallel"
+      result: passed
+      note: "All three test tasks executed freshly; existing passing tests do not cover all review findings."
+      cases: { core_network: 785, core_domain: 170, app: 263, skipped: 1, failures: 0, errors: 0 }
+  baseline_revalidation:
+    - finding: F014
+      state: partially_resolved
+      note: "SNMP4J keep rules and a release-workflow check now exist; a PR release build is still absent and RBUILD001 identifies a defect in the retention assertion."
+    - finding: F020
+      state: still_open
+      note: "The Kover allowlist now contains five classes including LinkInfoMapper; ViewModels and most platform/data logic remain outside the gate."
+    - finding: F021
+      state: partially_resolved
+      note: "Firebase runs only for main pushes now; quota-aware concurrency and any optional PR label policy remain work for P09."
+    - finding: F012
+      state: still_open
+      note: "LAN socket binding remains a P05 priority; the platform review reconfirmed this without adding a duplicate finding."
+    - finding: F013
+      state: still_open
+      note: "mDNS is still IPv4-only with a fixed port bind; new cancellation and I/O reporting findings are separate follow-ups."
+    - finding: F023
+      state: still_open
+      note: "Backup exclusions still cover the whole preferences DataStore; selectively preserving non-sensitive settings remains a P12 opportunity."
+    - finding: F025
+      state: related_gap
+      note: "HostValidator normalization is implemented, but the DNS query path bypasses it; RNET005 captures the remaining internationalized-domain defect."
+    - finding: F038
+      state: still_open
+      note: "Platform adapter, socket lifecycle, and logger/crash test seams remain useful P09 investments; existing tests passed but leave these gaps."
+
 how_to_use:
-  - "Work phases top-to-bottom; the order IS the priority (critical first)."
+  - "Triage incremental_review.prioritized_findings alongside open phases by severity; existing unresolved critical/high work stays ahead of new medium/low work. New follow-ups do not invalidate the recorded completion of earlier phase tasks."
   - "Open plan/phases/<id>-*.yaml for the phase you are executing. It is self-contained."
   - "Update `status` fields here AND in the phase file as tasks progress. Keep `changelog` below appended."
   - "Every phase uses RED -> GREEN -> REFACTOR. Never write production code before a failing test exists for it (pure-Kotlin modules). Compose-only work is validated by instrumented tests + manual device checks."
@@ -166,7 +430,7 @@ phases:
     status: todo
     depends_on: []
     findings: [F014, F020, F021, F022, F034, F035, F038]
-    summary: "The :app Kover gate measures only 4 classes; no style gate; no R8 release build ever compiled in CI; Firebase job burns the 10/day quota on every push; secrets passed as CLI args."
+    summary: "The :app Kover gate measures only 5 classes; no style gate or PR release smoke build; Firebase is gated to main pushes but lacks concurrency control; secrets remain CLI args. The 2026-09-21 review adds release retention-check and version-allocation defects."
 
   - id: P10
     file: plan/phases/P10-security-tools-depth.yaml
@@ -506,3 +770,11 @@ changelog:
     note: "P02.5 remediation started: upgraded Kotlin 2.4.20, AGP 9.4.1, and KSP 2.3.12; constrained AGP's build classpath to patched Bouncy Castle 1.85, jose4j 0.9.6, JDOM 2.0.6.1, Commons Lang 3.18.0, and HttpClient 4.5.14. JVM tests, release assembly, and releaseRuntimeClasspath inspection pass; Dependabot rescan is pending."
   - date: "2026-09-20"
     note: "P04 complete: ping now resolves once and supports ICMP/reachability engines, payload/TTL/interval controls, honest loss statuses, and richer CSV output; DNS now preserves record types and sections, reports RCODE/flags/server provenance, handles Private DNS and IDNs, and offers an explicit Cloudflare fallback. JVM tests, builds, lint, coverage gates, and focused API 36 Ping/DNS instrumentation pass; the full connected suite retains two unrelated pre-existing Traceroute failures."
+  - date: "2026-09-22"
+    note: "Incremental Luna xhigh review resumed and completed across core-network, app platform integrations, UI/domain, and build/release workflows. Added 27 source-evidence findings (prioritized in incremental_review), synchronized phase follow-ups, revalidated F012/F013/F014/F020/F021/F023/F025/F038, and verified all plan YAML plus evidence paths. Fresh JVM suite: core-network 785 (1 skipped), core-domain 170, app 263; 0 failures/errors."
+  - date: "2026-09-22"
+    note: "Confirmed the reported LAN false-positive behavior: a single TCP reset is treated as definitive host presence, so infrastructure-generated resets can list unused addresses as devices. Added high-priority RLAN001 with corroboration/confidence requirements and regression validation under P01."
+  - date: "2026-09-22"
+    note: "Rechecked the user-reported noisy LAN list: every ConnectException becomes REFUSED and is emitted as a live host; the existing all-refused test expects all addresses alive. Clarification of the preceding entry: neither a TCP reset nor its origin was established on the user's LAN. RLAN001/E00-T01 and P01's explicit policy override require positive host evidence, optional uncertain diagnostics, and zero confirmed hosts for all-refused input. Planning only; no application fix applied."
+  - date: "2026-09-22"
+    note: "Completed incremental comprehensive plan enrichment from three Luna/xhigh workstreams and primary integration: 53 new execution/UI/tool/engineering tasks, all 14 shipped tools covered, four additional protocol/platform diagnostics plus cross-tool comparison, and corrections to P13-P15 specifications. Routed 28 review findings to owners, synchronized all phase cross-links, and verified 26 YAML files, required task fields, evidence paths, index parity and an acyclic task dependency graph. Implementation tasks remain todo; no production changes."

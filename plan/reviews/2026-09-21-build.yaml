@@ -1,0 +1,63 @@
+review:
+  area: build-release-plan
+  status: done
+  baseline_commit: "5e183721e64ce8a8946f1a0b50f52b83544e8898"
+  reviewer: primary-agent
+  method: "Source review and local non-mutating reproductions; no release was published."
+
+findings:
+  - id: RBUILD001
+    severity: medium
+    kind: bug
+    title: "Release SNMP retention gate succeeds when only one required class survives"
+    evidence:
+      - file: .github/workflows/release.yml
+        line: 173
+        detail: "One grep alternation checks AuthSHA|PrivAES128|USM; grep succeeds on any one match, although the step claims to check the required implementations."
+    impact: "A release missing an authentication or privacy implementation can pass this guard and break SNMPv3 on installed builds. This is a defective regression guard, not evidence that the current APK is missing a class."
+    recommended_action: "Capture apkanalyzer output and require each exact class separately, with a failure naming each missing class; use the same assertion in the planned PR release smoke gate."
+    validation: "Feed complete, USM-only, and each single-class-missing fixture into the assertion. Only the complete fixture must pass."
+    related_phase: P09
+    related_findings: [F014]
+    status: todo
+
+  - id: RBUILD002
+    severity: medium
+    kind: bug
+    title: "Daily release version allocation can reuse an existing version"
+    evidence:
+      - file: .github/workflows/release.yml
+        line: 66
+        detail: "The next suffix is release count + 1, not maximum existing suffix + 1; lookup errors become zero and only 100 releases are queried. The workflow has no concurrency lock."
+      - file: .github/workflows/release.yml
+        line: 319
+        detail: "The generated version is used as the release tag, so duplicate allocation targets the same release/versionCode."
+    impact: "For existing same-day suffixes 1 and 3, the next dispatch allocates 3 again. Concurrent dispatches can also allocate the same version; a failed lookup can reuse suffix 1. Publication and install/upgrade identity become unreliable."
+    recommended_action: "Serialize publishing, fail closed on lookup errors, inspect all relevant tags/releases, and allocate a checked monotonic unused suffix from the maximum. Explicitly handle artifact-only dispatches and validate versionCode bounds."
+    validation: "Check sparse suffixes [1,3], concurrent allocations, API failure, artifact-only builds, and more than one page of releases. No already-published tag or versionCode may be allocated."
+    related_phase: P09
+    status: todo
+
+  - id: RBUILD003
+    severity: low
+    kind: gap
+    title: "OUI refresh can replace a complete registry with a partial download"
+    evidence:
+      - file: tools/oui/update_oui.py
+        line: 50
+        detail: "After one source yields rows, a later source failure only emits a warning; OUTPUT.write_text then overwrites the complete resource with the partial result. A valid CSV with an unexpected header can also produce zero rows without failing."
+    impact: "A transient failure fetching MA-M or MA-S silently removes those vendor prefixes from the next generated resource, weakening LAN vendor enrichment."
+    recommended_action: "Validate each source's expected headers and non-empty result, require all required registries to succeed before replacement, and expose an explicit partial-update mode only if needed. Replace the resource atomically after validation."
+    validation: "Mock a successful MA-L response followed by failed or malformed MA-M/MA-S responses and assert the previous resource remains intact; check a complete three-source update."
+    related_phase: P01
+    status: todo
+
+coverage:
+  inspected: [".github/workflows/ci.yml", ".github/workflows/release.yml", "app/build.gradle.kts", "build.gradle.kts", "settings.gradle.kts", "tools/oui/update_oui.py", "plan/plan.yaml"]
+  limitations: ["GitHub workflows were not executed; findings concern locally verifiable workflow logic."]
+
+validation_performed:
+  - "Locally passed a USM-only fixture through the workflow's exact grep expression; it exits 0 despite missing AuthSHA and PrivAES128."
+  - "Reproduced the release-count allocation: existing suffixes 1 and 3 have count 2, so the current expression allocates 3 again."
+  - "Fresh core-network, core-domain, and app JVM test tasks passed: 1218 reported cases, 1 skipped, 0 failures/errors."
+  - "Revalidated existing F014, F020, and F021 and corrected the P09 context; no duplicate findings added for those existing work items."

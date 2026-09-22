@@ -4,6 +4,17 @@
 #       dependency bumps, lint warnings, tests for untested classes, Dependabot
 # =============================================================================
 # Audience: AI coding agent. Self-contained. Read plan/plan.yaml `agent_execution_rules` first.
+expansion_tasks:
+  index: plan/plan.yaml
+  tasks: [E00-T03, E03-T07, E03-T08, E03-T09, E03-T10, E03-T12]
+  rule: "Coordinate with these expansion tasks; do not duplicate existing scope or block independent regression fixes on optional enhancements. See comprehensive_expansion.regression_delivery for fresh follow-up ownership."
+
+second_pass_follow_up:
+  status: todo
+  report: plan/reviews/2026-09-22-second-pass.yaml
+  findings: [R2-011]
+  rule: "Apply report recommendations and regression acceptance before closing the listed follow-ups; historical phase completion does not close new findings."
+
 phase:
   id: P09
   title: "Quality gates and test coverage"
@@ -15,14 +26,22 @@ phase:
   findings: [F014, F020, F021, F022, F034, F035, F038]
   target_modules: [":app", ":core-network", ":core-domain", "CI"]
 
+review_follow_up:
+  reviewed_on: "2026-09-21"
+  status: todo
+  findings: [RBUILD001, RBUILD002]
+  reports:
+    - plan/reviews/2026-09-21-build.yaml
+  note: "New source-review follow-ups; preserve historical task completion. See report evidence, recommended_action, and validation before implementation."
+
 context:
   problem: |
-    - app/build.gradle.kts Kover `includes` lists 4 classes; the 90% gate ignores 216 ViewModel tests
+    - app/build.gradle.kts Kover `includes` lists 5 classes as of 2026-09-21; the 90% gate ignores ViewModel tests
       and every util/platform class -> the gate cannot catch regressions in the code that matters.
     - No ktlint/detekt although .editorconfig already carries ktlint settings; formatting drifts.
     - CI never runs an R8/minified build; release.yml is the first place minification happens.
-    - ci.yml runs the Firebase Test Lab job on every push and PR; the Spark plan allows 10 runs/day
-      (see memory note); busy days silently exhaust quota and turn CI red.
+    - ci.yml now gates Firebase Test Lab to main pushes. Concurrency control is still absent;
+      busy push sequences can consume the quota. Any label-based PR opt-in remains optional work.
     - release.yml passes keystore/key passwords as `-P` CLI args (visible in `ps`, and in Gradle's
       failure output when `--info`/stack traces print the invocation).
     - Lint warnings: UnusedAttribute (enableOnBackInvokedCallback), ModifierParameter x2,
@@ -33,9 +52,9 @@ context:
       extracts it), WifiScanRepositoryImpl mappers (P03), IcmpEnginTracerouteRepositoryImpl mapping.
     - No Dependabot/Renovate; updates only surface via the informational dependencyUpdates task.
   evidence:
-    - { file: "app/build.gradle.kts", lines: "kover { … includes { classes(4 entries) } minBound(90) }" }
+    - { file: "app/build.gradle.kts", lines: "kover { … includes { classes(5 entries) } minBound(90) }" }
     - { file: ".editorconfig", note: "ktlint_* keys present; no plugin" }
-    - { file: ".github/workflows/ci.yml", note: "instrumented-tests job ungated; build-and-test builds debug only" }
+    - { file: ".github/workflows/ci.yml", note: "instrumented-tests gated to main pushes; no concurrency control; build-and-test builds debug only" }
     - { file: ".github/workflows/release.yml", lines: "steps 8-9 -PstorePassword=… -PkeyPassword=…" }
     - { file: "app/build/reports/lint-results-debug.txt", note: "warnings listed in plan.yaml F034" }
 

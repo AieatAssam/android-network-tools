@@ -2,6 +2,17 @@
 # P02 – Network Topology: SNMPv3 works, LLDP/CDP neighbour parsing fixed, R8 keep rules
 # =============================================================================
 # Audience: AI coding agent. Self-contained. Read plan/plan.yaml `agent_execution_rules` first.
+expansion_tasks:
+  index: plan/plan.yaml
+  tasks: [E02-T08, E03-T01, E03-T07]
+  rule: "Coordinate with these expansion tasks; do not duplicate existing scope or block independent regression fixes on optional enhancements. See comprehensive_expansion.regression_delivery for fresh follow-up ownership."
+
+second_pass_follow_up:
+  status: todo
+  report: plan/reviews/2026-09-22-second-pass.yaml
+  findings: [R2-010, R2-014]
+  rule: "Apply report recommendations and regression acceptance before closing the listed follow-ups; historical phase completion does not close new findings."
+
 phase:
   id: P02
   title: "Network Topology: SNMPv3 USM registration, index-based LLDP mgmt-address parsing, hex CDP addresses, session reuse, R8 rules"
@@ -12,6 +23,14 @@ phase:
   enables: [P09]
   findings: [F001, F002, F003, F014]
   target_modules: [":core-network", ":app"]
+
+review_follow_up:
+  reviewed_on: "2026-09-21"
+  status: todo
+  findings: [RNET003]
+  reports:
+    - plan/reviews/2026-09-21-network.yaml
+  note: "New source-review follow-ups; preserve historical task completion. See report evidence, recommended_action, and validation before implementation."
 
 context:
   problem: |

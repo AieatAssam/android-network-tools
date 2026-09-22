@@ -2,16 +2,36 @@
 # P10 – Security tools depth: TLS Inspector, HTTP Probe, WHOIS
 # =============================================================================
 # Audience: AI coding agent. Self-contained. Read plan/plan.yaml `agent_execution_rules` first.
+expansion_tasks:
+  index: plan/plan.yaml
+  tasks: [E02-T07, E02-T09, E02-T10, E02-T15, E02-T16]
+  rule: "Coordinate with these expansion tasks; do not duplicate existing scope or block independent regression fixes on optional enhancements. See comprehensive_expansion.regression_delivery for fresh follow-up ownership."
+
+second_pass_follow_up:
+  status: todo
+  report: plan/reviews/2026-09-22-second-pass.yaml
+  findings: [R2-001, R2-002, R2-009, R2-012]
+  rule: "Apply report recommendations and regression acceptance before closing the listed follow-ups; historical phase completion does not close new findings."
+
 phase:
   id: P10
-  title: "TLS (hostname verification, validity windows, chain issues, protocol/ALPN probing, PEM export, pin check) · HTTP Probe (OkHttp engine with timing breakdown + HTTP/2, redirect hops with status, downgrade as warning, deeper header grading, cookie check, cURL export, JSON pretty-print) · WHOIS (monotonic timing, RDAP with fallback, public suffix list)"
+  title: "TLS (hostname verification, validity windows, chain issues, protocol/ALPN probing, PEM export, pin check) · HTTP Probe (OkHttp engine with timing breakdown + HTTP/2, redirect hops with status, explicit downgrade diagnostics, deeper header grading, cookie check, cURL export, JSON pretty-print) · WHOIS (monotonic timing, RDAP with fallback, public suffix list)"
   priority: medium
   status: todo
   estimated_effort: "L (4-6 agent sessions; split into three PR series TLS / HTTP / WHOIS)"
-  depends_on: [P07]          # error typing + descriptionKey model; can start core work earlier on a branch
+  depends_on: [P07-T1, P07-T3]          # error typing + descriptionKey model; can start core work earlier on a branch
   enables: [P15]
   findings: [F015, F028, F029]
   target_modules: [":core-network", ":core-domain", ":app"]
+
+review_follow_up:
+  reviewed_on: "2026-09-21"
+  status: todo
+  findings: [RNET006, RUI006]
+  reports:
+    - plan/reviews/2026-09-21-network.yaml
+    - plan/reviews/2026-09-21-ui-domain.yaml
+  note: "New source-review follow-ups; preserve historical task completion. See report evidence, recommended_action, and validation before implementation."
 
 context:
   problem: |
@@ -43,7 +63,7 @@ context:
 
 goals:
   - "TLS: hostname match, validity window, chain issue list, optional protocol probe, ALPN, PEM share, pin check; monotonic connect vs handshake timing."
-  - "HTTP: OkHttp-based engine (HTTP/2, EventListener timings), redirect hops with codes, downgrade warning, richer grading with keys (P07), cookie flags, cURL export, JSON pretty-print."
+  - "HTTP: OkHttp-based engine (HTTP/2, EventListener timings), redirect hops with codes, blocked-downgrade evidence, richer grading with keys (P07), cookie flags, cURL export, JSON pretty-print."
   - "WHOIS: RDAP first with WHOIS fallback, PSL-based registrable domain, monotonic timing."
   - "All parsing/grading logic pure and unit-tested; network only behind injectable engines."
 
@@ -68,7 +88,7 @@ assumptions:
     statement: "OkHttp EventListener callbacks (dnsStart/dnsEnd, connectStart/secureConnectStart/secureConnectEnd/connectEnd, responseHeadersStart, responseBodyEnd) allow computing dns/connect/tls/ttfb/transfer durations."
     verify_with: "OkHttp docs; unit test with MockWebServer. NOTE: for OkHttp 5.x the test artifact is `com.squareup.okhttp3:mockwebserver3` (package mockwebserver3), for 4.x it is `com.squareup.okhttp3:mockwebserver`. Pin whichever OkHttp line is chosen and record it in libs.versions.toml."
   - id: A5
-    statement: "P07 introduced ErrorCode.HTTP_INSECURE_DOWNGRADE for the current abort-on-downgrade behaviour. This phase changes the downgrade into a followed-with-warning flag (`insecureDowngrade`), so that error code becomes unused in the success path – keep it only for the case where the user has disabled downgrade following (add a request option `allowInsecureDowngrade: Boolean = true`)."
+    statement: "R2-002 overrides the original proposal: keep allowInsecureDowngrade=false. Report a blocked downgrade as evidence; an explicit separately configured cleartext probe requires destination/data disclosure. No automatic replay of the original URL secrets, headers or body."
     verify_with: "Grep usages after implementation; no dead enum entries without a comment."
   - id: A3
     statement: "RDAP bootstrap: https://data.iana.org/rdap/dns.json maps TLDs to RDAP base URLs; https://rdap.org/ acts as a redirector for domains/IPs/ASNs (302 to the authoritative server)."
@@ -95,7 +115,7 @@ design:
   http: |
     interface HttpEngine { suspend fun execute(request: HttpEngineRequest): HttpEngineResponse }  // core-network/httprobe/engine
     class OkHttpEngine(client: OkHttpClient) : HttpEngine – followRedirects=false (manual, as today), EventListener capturing timings, ALPN protocol (response.protocol), no automatic gzip (set Accept-Encoding: identity unless the user adds one), body read bounded as today.
-    HttpProbeRepositoryImpl(engine: HttpEngine = OkHttpEngine()) keeps redirect policy logic (moved to pure `RedirectPolicy` with tests): cross-origin strips custom headers; HTTPS->HTTP downgrade: FOLLOW but strip ALL custom headers and body, set warning flag; 10 hops max.
+    HttpProbeRepositoryImpl(engine: HttpEngine = OkHttpEngine()) uses pure RedirectPolicy: cross-origin strips custom headers and blocks entity replay pending explicit approval (R2-001); HTTPS-to-HTTP stays blocked by default (R2-002). Preserve same-origin method semantics and the 10-hop cap.
     HttpProbeResult += timings: HttpTimings(dnsMs, connectMs, tlsMs, ttfbMs, transferMs, totalMs), protocol: String ("h2"/"http/1.1"), redirectHops: List<RedirectHop(url, statusCode, location)>, insecureDowngrade: Boolean, cookies: List<CookieCheck>, bodyKind: BodyKind (JSON/HTML/TEXT/BINARY), jsonValid: Boolean?
     HttpSecurityAnalyzer v2 (keys per P07): HSTS max-age >= 1y PASS / < 1y WARN / missing FAIL (+ includeSubDomains/preload INFO); CSP: missing WARN; contains 'unsafe-inline' or 'unsafe-eval' in script-src/default-src WARN; report-only-only INFO; X-Frame-Options PASS also when CSP frame-ancestors present; Set-Cookie: each cookie Secure+HttpOnly (+SameSite) PASS/WARN; X-XSS-Protection present -> INFO 'deprecated'.
     CurlExporter.build(request): String (pure; quotes/escapes; -X, -H, --data-raw, -L when follow, --compressed no)
@@ -163,12 +183,16 @@ tasks:
     acceptance_criteria: ["Manual: badssl.com hosts – expired.badssl.com (EXPIRED), wrong.host.badssl.com (HOSTNAME_MISMATCH), self-signed.badssl.com, incomplete-chain.badssl.com, tls-v1-0.badssl.com:1010 (probe)"]
 
   - id: P10-T3
-    title: "HTTP: OkHttp engine + timings + protocol; RedirectPolicy pure; downgrade as warning; redirect hops"
+    second_pass_review:
+      report: plan/reviews/2026-09-22-second-pass.yaml
+      findings: [R2-001, R2-002]
+      rule: "Treat each linked finding as a required independently verified acceptance case; urgent regression slices do not wait for optional task breadth."
+    title: "HTTP: OkHttp engine + timings + protocol; RedirectPolicy pure; explicit downgrade diagnostics; redirect hops"
     status: todo
     tdd:
       red:
         tests:
-          - "RedirectPolicyTest: 301 POST->GET no body; 307 keeps; cross-origin strips custom headers; https->http sets insecureDowngrade and strips headers+body; > 10 hops -> HTTP_TOO_MANY_REDIRECTS"
+          - "RedirectPolicyTest: same-origin 301 POST->GET and 307 body preservation; cross-origin entity replay blocked until destination-scoped approval; headers stripped; default downgrade sends zero cleartext requests; >10 hops typed failure"
           - "OkHttpEngineTest (MockWebServer): timings non-negative and totalMs >= ttfbMs; protocol reported; body bounded at maxBytes with truncated flag; error body for 4xx"
           - "HttpProbeRepositoryTest (existing 617 lines) migrated to the engine fake; redirectHops carry status codes and Location"
         expect: "RED"
@@ -178,7 +202,7 @@ tasks:
   - id: P10-T4
     title: "HTTP: analyzer v2 (keys), cookie check, cURL export, JSON pretty-print; UI tabs"
     status: todo
-    depends_on: [P10-T3, P07]
+    depends_on: [P10-T3, P07-T1, P07-T3]
     tdd:
       red:
         tests:

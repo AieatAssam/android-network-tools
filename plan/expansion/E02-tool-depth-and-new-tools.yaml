@@ -1,0 +1,1101 @@
+# =============================================================================
+# E02 – Tool depth, comparison workflows, and feasible new diagnostics
+# =============================================================================
+# Audience: AI coding agents. This file is an additive expansion to P01–P15;
+# it is deliberately implementation-oriented and must be read with
+# plan/plan.yaml agent_execution_rules plus the owning phase file.
+# Scope: planning only. No production implementation is implied by this file.
+# =============================================================================
+
+expansion:
+  id: E02
+  title: "Evidence-grade workflows for every shipped tool and a small set of new diagnostics"
+  priority: high
+  status: todo
+  owner_file: "plan/expansion/E02-tool-depth-and-new-tools.yaml"
+  audience: "coding agents working in small RED -> GREEN -> REFACTOR PRs"
+  baseline: "README.md and current source at the working tree on 2026-09-22"
+  depends_on: []
+  related_phases: [P01, P02, P03, P04, P10, P11, P12, P13, P14, P15]
+  purpose: |
+    Turn one-shot screens into trustworthy diagnostic workflows. Results must
+    retain the exact input, network context, timing basis, evidence quality,
+    and privacy scope needed to compare runs later. Additions here must reuse
+    existing repositories and shared UI seams; a new screen is justified only
+    when it answers a distinct diagnostic question.
+
+  execution_rules:
+    - "Do not mark an item done because a screen renders; prove the core model and the user-visible state with deterministic tests."
+    - "Use monotonic clocks for durations, immutable captured input for every run, typed errors from P07, and CancellationException-preserving cleanup."
+    - "Keep :core-network and :core-domain free of Android imports. Put NetworkBinder, ConnectivityManager, TrafficStats, ProxyInfo, WifiManager, and share/SAF work in :app."
+    - "Every external provider is injectable, has a bounded timeout, cache/rate-limit behavior, attribution, and an offline/disabled state. Never make a third-party API silently mandatory for a local result."
+    - "Local-only probes must bind through P05 NetworkBinder when a local interface is intended. Never require root, shell commands, packet capture, or VPN interception."
+    - "Every streaming tool has a stop test proving sockets, jobs, multicast locks, and writers are released within the advertised budget."
+    - "Extend existing result models with defaulted fields or versioned export schemas; preserve current public APIs while migrations are pending."
+    - "For each item, first reconcile overlapping P01–P15 work and close the listed existing finding before adding optional polish."
+
+  evidence_index:
+    - "README.md (lines 3-171) — 14 implemented tools and their advertised behavior, limits, providers, and privacy claims."
+    - "plan/plan.yaml (lines 1-130) — tool count, execution invariants, phase order, and unresolved review findings."
+    - "plan/reviews/2026-09-21-network.yaml:15-221 — LAN, DNS, Wi-Fi, topology, traceroute, and port-scan correctness gaps."
+    - "plan/reviews/2026-09-21-app.yaml:9-104 — Wi-Fi/mDNS/ICMP lifecycle and platform adapter gaps."
+    - "plan/reviews/2026-09-21-ui-domain.yaml:9-198 — stop, recreation, input, export, and concurrency UX gaps."
+    - "plan/reviews/2026-09-22-lan-scan-noise.yaml:1-44 — lone TCP reset false-positive mechanism and required confidence semantics."
+
+  coverage_matrix:
+    # The row's E02 task is the minimum meaningful depth item for that tool;
+    # the owning phase remains responsible for its existing correctness scope.
+    - { tool: Ping, current_seam: "PingRepository/PingResult + PingViewModel", e02_task: E02-T01, outcome: "captured runs, baseline/delta comparison, evidence-aware export" }
+    - { tool: Traceroute, current_seam: "TracerouteRepository/TracerouteResult + TracerouteViewModel", e02_task: E02-T02, outcome: "route snapshot diff and hop-change explanation" }
+    - { tool: Port Scanner, current_seam: "PortScanRepository/PortScanResult + PortScanViewModel", e02_task: E02-T03, outcome: "safe profiles, bounded scan evidence, result diff" }
+    - { tool: LAN Scanner, current_seam: "LanScanRepository/DiscoveryProbes + LanScanViewModel", e02_task: E02-T04, outcome: "confidence-aware discovery and device inventory diff" }
+    - { tool: DNS Lookup, current_seam: "DnsRepository/DnsResult + DnsViewModel", e02_task: E02-T05, outcome: "resolver comparison and answer drift explanation" }
+    - { tool: Wi-Fi Scanner, current_seam: "WifiScanRepository/WifiNetwork + WifiScanViewModel", e02_task: E02-T06, outcome: "channel/roaming evidence and short history" }
+    - { tool: TLS Inspector, current_seam: "TlsInspectorRepository/TlsInspectorResult + TlsInspectorViewModel", e02_task: E02-T07, outcome: "policy profile and repeatable security diff" }
+    - { tool: Network Topology, current_seam: "TopologyDiscoveryRepository/TopologyModels + TopologyViewModel", e02_task: E02-T08, outcome: "snapshot identity, graph diff, safe export" }
+    - { tool: WHOIS, current_seam: "WhoisRepository/WhoisModels + WhoisViewModel", e02_task: E02-T09, outcome: "registration snapshot diff and deadline clarity" }
+    - { tool: HTTP Probe, current_seam: "HttpProbeRepository/HttpProbeResult + HttpProbeViewModel", e02_task: E02-T10, outcome: "repeatable assertions and response comparison" }
+    - { tool: mDNS Browser, current_seam: "MdnsRepository/MdnsUpdate + MdnsDiscoveryViewModel", e02_task: E02-T11, outcome: "service watch and endpoint health evidence" }
+    - { tool: Subnet Calculator, current_seam: "SubnetCalculatorRepository/SubnetInfo + SubnetViewModel", e02_task: E02-T12, outcome: "overlap/plan validation and RFC 3021 clarity" }
+    - { tool: Speed Test, current_seam: "SpeedTestRepository/SpeedTestEvent + SpeedTestViewModel", e02_task: E02-T13, outcome: "comparable runs, confidence and data budget" }
+    - { tool: Wake-on-LAN, current_seam: "WakeOnLanRepository/WolSendReport + WolViewModel", e02_task: E02-T14, outcome: "safe batch wake and per-target verification" }
+    - { tool: MQTT Inspector, current_seam: "new core-network/mqtt protocol seam", e02_task: E02-T15, outcome: "local or public broker handshake diagnostics" }
+    - { tool: WebSocket Probe, current_seam: "new core-network/websocket seam over P10 OkHttp", e02_task: E02-T16, outcome: "handshake, protocol, frames, and close diagnostics" }
+    - { tool: Proxy/PAC Tester, current_seam: "new app platform proxy source + P10 HttpEngine", e02_task: E02-T17, outcome: "direct/proxy/PAC route comparison" }
+    - { tool: Captive Portal Check, current_seam: "new core-network/captiveportal + P13 NetworkInfo", e02_task: E02-T18, outcome: "validation, redirect, DNS, and login-required evidence" }
+    - { tool: Diagnostics Compare, current_seam: "new core-domain run bundle + shared app UI", e02_task: E02-T19, outcome: "cross-tool before/after experiment bundle" }
+
+  shared_contract:
+    run_metadata: "RunMetadata(id, startedAtEpochMs, durationMs, networkLabel?, transport?, interfaceName?, localOnly, target, capturedConfigHash, appVersion, schemaVersion)"
+    evidence_quality: "EvidenceQuality { CONFIRMED, CORROBORATED, OBSERVED, AMBIGUOUS, UNAVAILABLE }; every adapter maps raw outcomes without overstating them."
+    comparison: "Comparison<T>(baseline, candidate, comparableFields, changedFields, incomparableReasons); never compare values with different target/config/network context without labeling them."
+    export: "Versioned JSON plus existing human-readable/CSV formats where already supported; redact credentials, SecureOn secrets, SNMP communities, HTTP Authorization/Cookie headers, and raw packet payloads by default."
+    persistence: "Use E01-T11's opt-in run-history policy and E01-T12's report/redaction flow. Default to in-memory metadata only; durable result payloads require an explicit user save, a per-tool retention setting, bounded size, clear/delete controls, and no cloud sync."
+    ui: "Reuse ToolHeroHeader, ToolHelpSheet, ToolStateAnnouncer, NetworkStatusBanner, ToolErrorCard, stop controls, status colors, and existing share utilities; add a consistent RunContextCard, EvidenceBadge, ComparePicker, and ExportOptionsSheet only after pure contracts exist."
+
+  tasks:
+    # -----------------------------------------------------------------------
+    - id: E02-T01
+      priority: medium
+      status: todo
+      title: "Ping run records, percentile evidence, and baseline comparison"
+      source_evidence:
+        - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/ping/PingResult.kt", lines: "3-17", detail: "Result retains packets/stats/raw text and resolved IP, but no captured configuration, monotonic duration, network context, percentiles, or evidence quality." }
+        - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/ping/PingStats.kt", lines: "14-53", detail: "Stats expose min/max/average/jitter only; latency distribution and status counts are discarded." }
+        - { file: "core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/PingSessionLogger.kt", lines: "7-23", detail: "Continuous CSV uses wall-clock timestamps and is written asynchronously; RUI005 requires drain-safe finalization before sharing." }
+        - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/ping/PingViewModel.kt", lines: "36-60, 177-229", detail: "ViewModel owns run lifecycle and form values, making it the seam for immutable captured input and comparison state." }
+        - { file: "plan/reviews/2026-09-21-ui-domain.yaml", lines: "89-109", detail: "RUI005 shows that exports need a completion boundary before they are made available." }
+      proposed_behavior: |
+        Add a pure PingRunRecord/PingRunComparator. Capture normalized host, resolved
+        address, engine (ICMP/reachability), count/timeout/interval/payload/TTL,
+        monotonic duration, network label/interface when available, status counts,
+        p50/p95/p99, standard deviation, and whether any packet was corroborated by
+        an actual ICMP reply. Compare only runs with matching target and material
+        configuration; otherwise show the reason they are incomparable. Offer an
+        explicit Save to History through E01-T11 after the logger has drained; keep
+        default completion in-memory metadata and do not persist raw packets. Add a
+        "Compare previous" card, a timeline delta view, and versioned JSON export;
+        retain the existing CSV with a `metadata` header section. Continuous mode
+        must publish a record only after the writer job has joined.
+      depends_on: [E01-T11, E01-T12, P04-T1, P04-T2, P04-T5, P08-T1, P12-T4]
+      files_seams:
+        create:
+          - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/ping/PingDistribution.kt"
+          - "core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/PingRunRecord.kt"
+          - "core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/PingRunComparator.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/data/PingRunHistoryRepository.kt"
+          - "core-domain/src/test/kotlin/net/aieat/netswissknife/core/domain/PingRunComparatorTest.kt"
+        modify:
+          - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/ping/PingResult.kt"
+          - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/ping/PingStats.kt"
+          - "core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/PingSessionLogger.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/ping/PingViewModel.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/PingScreen.kt"
+      implementation_steps:
+        - "Write RED tests for percentile interpolation, all-timeout distributions, config mismatch, engine/evidence badges, and writer drain ordering; preserve P04 typed validation and RUI003/RUI004 fixes in the same captured-config path."
+        - "Use an injected MonotonicClock and a run-scoped immutable PingParams snapshot; do not derive comparison metadata from mutable form state after completion."
+        - "Extract a suspendable logger close/drain contract, rethrow cancellation, and make JSON/CSV export redact no secrets while preserving packet sequence and reply IP when the user requests it."
+        - "Integrate history through E01-T11 and report redaction/export through E01-T12, with user-controlled retention, delete-all, and schema-version handling."
+        - "Add screen states for no comparable run, incomparable context, and changed percentile values; announce completion and loss/ambiguous evidence through P08."
+      acceptance_criteria:
+        - "A run with RTTs [10, 20, 30, timeout] reports loss, p50/p95, jitter, duration, engine, resolved IP, and captured parameters consistently in screen, JSON, and CSV metadata."
+        - "Comparing different hosts, payload/TTL, or engine mode shows an explicit incomparable reason and never labels a delta as a regression."
+        - "Stopping continuous mode with a blocked writer exposes the share action only after every queued packet is present; cancellation deletes incomplete temporary files."
+        - "The UI distinguishes ICMP evidence from reachability fallback and never calls a refusal/timeout an ICMP success."
+      validation:
+        automated: ["./gradlew :core-network:test --tests '*Ping*' --no-daemon", "./gradlew :core-domain:test --tests '*Ping*' --no-daemon", "./gradlew :app:testDebugUnitTest --tests '*Ping*' --no-daemon", "instrumented PingScreenTest: idle/running/finished/compare/export"]
+        manual: ["Run the same host on Wi-Fi then cellular and verify the context badge prevents a misleading comparison.", "Stop continuous ping while several rows are queued and open the exported CSV/JSON."]
+      effort: "L (2-3 coding-agent sessions)"
+      constraints_rollout: "Ship result/model and export compatibility first; gate history/compare UI behind a local feature flag until the drain and migration tests pass. No cloud history, notification, background ping, or root privileges."
+
+    - id: E02-T02
+      priority: medium
+      status: todo
+      title: "Traceroute route snapshots and path-change explanation"
+      source_evidence:
+        - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/traceroute/TracerouteResult.kt", lines: "3-24", detail: "Result has hops and total time but no probe configuration, capture network, or stable snapshot identity." }
+        - { file: "core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/TracerouteUseCase.kt", lines: "21-60", detail: "Use case validates and streams hops/enrichment but does not retain a comparable run record." }
+        - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/traceroute/TracerouteViewModel.kt", lines: "36-176", detail: "ViewModel merges streaming hops and owns stop/retry, the seam for snapshot completion and RUI007 elapsed-time repair." }
+        - { file: "plan/phases/P11-diagnostics-tools-depth.yaml", lines: "52-59, 95-100", detail: "P11 adds per-probe stats and asynchronous enrichment; E02 must consume those fields instead of duplicating them." }
+      proposed_behavior: |
+        After P11 per-probe work, create a stable RouteSnapshot containing target,
+        resolved IP, probe type, packet size, max hops, each hop's ordered address,
+        hostname, probe outcomes, and network context. RouteDiff classifies added,
+        removed, changed, and reordered hops and computes latency deltas only where
+        the probe count and target match. The UI keeps the live route view, then
+        offers "Compare previous" with a compact hop-by-hop diff, a plain-language
+        note for private/unknown hops, and a redacted share/export option.
+      depends_on: [E01-T11, E01-T12, P05-T1, P08-T1, P11-T2, P12-T4]
+      files_seams:
+        create:
+          - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/traceroute/RouteSnapshot.kt"
+          - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/traceroute/RouteDiff.kt"
+          - "core-network/src/test/kotlin/net/aieat/netswissknife/core/network/traceroute/RouteDiffTest.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/data/RouteHistoryRepository.kt"
+        modify:
+          - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/traceroute/TracerouteResult.kt"
+          - "core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/TracerouteUseCase.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/traceroute/TracerouteViewModel.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/TracerouteScreen.kt"
+      implementation_steps:
+        - "Write RED tests for identical paths, a single changed gateway, timeouts becoming replies, target IP changes, and IPv4/IPv6 address normalization."
+        - "Use hop number plus canonical address as identity; never match a missing hop only by list index. Preserve P11 enrichment arrival order in the snapshot."
+        - "Capture stop duration and resolved IP before cancellation clears the running state; keep partial snapshots explicitly marked incomplete."
+        - "Offer explicit Save Snapshot through E01-T11 with bounded retention and add a user-controlled redaction option for public IPs/hostnames; do not geolocate or map beyond P11."
+      acceptance_criteria:
+        - "A changed route shows exact hop additions/removals/address changes and latency deltas with an 'incomplete comparison' reason when settings differ."
+        - "A stopped trace includes non-zero elapsed metadata when probes were emitted, satisfying RUI007 without inventing a successful destination."
+        - "An explicitly saved snapshot survives process recreation and remains local; an unsaved completion does not become durable; share output includes target/config/time basis and no credentials."
+      validation:
+        automated: ["./gradlew :core-network:test --tests '*Traceroute*' --no-daemon", "./gradlew :core-domain:test --tests '*Traceroute*' --no-daemon", "./gradlew :app:testDebugUnitTest --tests '*Traceroute*' --no-daemon", "instrumented TracerouteScreenTest: live/partial/diff/redaction"]
+        manual: ["Compare Wi-Fi and cellular paths to the same target; verify changed network context is visible.", "Stop during enrichment and confirm no late update mutates the saved snapshot."]
+      effort: "M (1-2 coding-agent sessions)"
+      constraints_rollout: "Depends on P11's hop schema. Keep map rendering, continuous background tracing, and automatic route alerts deferred."
+
+    - id: E02-T03
+      second_pass_review:
+        report: plan/reviews/2026-09-22-second-pass.yaml
+        findings: [R2-013]
+        rule: "Treat each linked finding as a required independently verified acceptance case; urgent regression slices do not wait for optional task breadth."
+      priority: medium
+      status: todo
+      title: "Port scanner profiles, scan budget, and result delta"
+      source_evidence:
+        - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/portscan/PortScanRepositoryImpl.kt", lines: "1-70", detail: "Repository owns host resolution, concurrent connect probes, and the current port iteration; it needs an explicit scan budget and evidence metadata." }
+        - { file: "core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/PortScanParams.kt", lines: "1-60", detail: "Parameters expose preset/ports/concurrency/timeout but no named safety profile, budget, or capture mode." }
+        - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/portscan/PortScanResult.kt", lines: "1-20", detail: "Per-port results lack a stable scan profile/config hash and result provenance for comparison." }
+        - { file: "plan/reviews/2026-09-21-ui-domain.yaml", lines: "175-198", detail: "RUI009 requires one shared concurrency range; E02 must consume that fix rather than introduce a second slider contract." }
+        - { file: "plan/phases/P11-diagnostics-tools-depth.yaml", lines: "57-60, 101-104", detail: "P11 owns banner/protocol probes and explicitly defers UDP scanning." }
+      proposed_behavior: |
+        Add named Safe/Web/Database/Custom scan profiles as immutable port lists
+        with a visible port count, connection timeout, total wall-clock budget, and
+        aggressive-banner toggle. Adapt concurrency downward on repeated resource or
+        timeout errors while reporting the effective value. Return resolved IP,
+        start/end monotonic times, per-port evidence (connect/banner/TLS), and a
+        partial flag. Add a pure PortScanDiff for newly open/closed/changed-service
+        ports and a UI Compare Previous action. Keep UDP out of this task.
+      depends_on: [E01-T11, E01-T12, P07-T2, P07-T3, P08-T2, P09-T2, P11-T3, P12-T5]
+      files_seams:
+        create:
+          - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/portscan/PortScanProfile.kt"
+          - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/portscan/PortScanDiff.kt"
+          - "core-network/src/test/kotlin/net/aieat/netswissknife/core/network/portscan/PortScanDiffTest.kt"
+          - "core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/PortScanBudget.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/data/PortScanHistoryRepository.kt"
+        modify:
+          - "core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/PortScanParams.kt"
+          - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/portscan/PortScanResult.kt"
+          - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/portscan/PortScanRepositoryImpl.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/portscan/PortScanViewModel.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/PortsScreen.kt"
+      implementation_steps:
+        - "Write RED tests for profile expansion/deduplication, cap and budget validation, adaptive concurrency, partial cancellation, and open/closed/service/banner delta semantics."
+        - "Make the host and resolved IP immutable per run; tie every result to the exact profile hash and P11 probe kind."
+        - "Enforce a hard upper bound on ports, workers, banner bytes, and total duration before opening sockets; return a typed budget error."
+        - "Add a confirmation affordance for custom scans over the common-service preset and an explicit explanation that TCP refusal is port state, not host identity."
+      acceptance_criteria:
+        - "A custom scan cannot exceed the configured port/worker/time caps and reports the effective configuration in the result and share text."
+        - "Diffing the same host identifies port 443 changing from open to closed and a banner/service change without treating timeout as closed when the run was partial."
+        - "Stop preserves resolved IP and elapsed duration and releases all workers within the configured cancellation budget."
+      validation:
+        automated: ["./gradlew :core-network:test --tests '*portscan*' --no-daemon", "./gradlew :core-domain:test --tests '*PortScan*' --no-daemon", "./gradlew :app:testDebugUnitTest --tests '*PortScan*' --no-daemon", "instrumented PortsScreenTest: profile/budget/partial/diff"]
+        manual: ["Run Web profile against a local test server and compare a second run after stopping it.", "Try the highest Settings concurrency and verify the screen represents it and the request uses it consistently."]
+      effort: "M (1-2 coding-agent sessions)"
+      constraints_rollout: "No stealth scanning, UDP, SYN/raw sockets, or bypass of Android network policy. Keep P11 aggressive probes opt-in for open ports only."
+
+    - id: E02-T04
+      priority: high
+      status: todo
+      title: "LAN confidence model, false-positive suppression, and inventory diff"
+      source_evidence:
+        - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/DiscoveryProbes.kt", lines: "15-24, 76-118", detail: "TcpPresence.Refused is produced from any ConnectException and the default probe stops at the first refusal; origin is not verified." }
+        - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/LanScanRepositoryImpl.kt", lines: "159-209", detail: "A lone TCP refusal is currently promoted to Presence and emitted as a host before name/MAC enrichment." }
+        - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/LanHost.kt", lines: "3-24", detail: "LanHost records discovery methods but has no confidence, ambiguity, or corroboration fields." }
+        - { file: "plan/reviews/2026-09-22-lan-scan-noise.yaml", lines: "8-43", detail: "RLAN001 confirms the reported noisy scan and requires ambiguous TCP evidence to be separated from confirmed hosts." }
+        - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanViewModel.kt", lines: "35-52, 162-222", detail: "ViewModel owns live host list, scan history input, and finished summary; it is the seam for confirmed/ambiguous filters and snapshots." }
+      proposed_behavior: |
+        Consume E00-T01's presence contract; do not implement a second classifier.
+        Reuse its PresenceEvidence-equivalent model containing method,
+        port(s), corroborating signals, confidence, and ambiguity reason. ICMP,
+        NetBIOS/mDNS response, or verified local neighbour evidence can be confirmed;
+        TCP_OPEN is confirmed responsive endpoint evidence (without claiming physical
+        device identity); one or more TCP_REFUSED outcomes alone
+        are AMBIGUOUS and are excluded from the default confirmed host list. If the
+        user enables "include ambiguous", show them in a separate section with an
+        explanation that a gateway/VPN/firewall reset may be the source. Allow a
+        configurable display policy for ambiguous observations, but never promote a
+        refusal-only policy; preserve a test mode for ICMP-blocked networks. Add
+        bounded inventory snapshots using IP/MAC/hostname only as candidate keys and
+        mark conflicting/reused/randomized identities ambiguous instead of merging
+        physical devices automatically.
+      depends_on: [E00-T01, P01-T4, P01-T5, P01-T7, P01-T9, P05-T1, P08-T1, P12-T4]
+      files_seams:
+        create:
+          - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/PresenceEvidence.kt"
+          - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/LanInventoryDiff.kt"
+          - "core-network/src/test/kotlin/net/aieat/netswissknife/core/network/lan/PresenceConfidenceTest.kt"
+          - "core-network/src/test/kotlin/net/aieat/netswissknife/core/network/lan/LanInventoryDiffTest.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/data/LanInventoryHistoryRepository.kt"
+        modify:
+          - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/DiscoveryProbes.kt"
+          - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/LanHost.kt"
+          - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/LanScanSummary.kt"
+          - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/LanScanRepositoryImpl.kt"
+          - "core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/LanScanUseCase.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanViewModel.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanScreen.kt"
+      implementation_steps:
+        - "Reuse E00-T01 regression fixtures: all refused yields no confirmed host, successful ICMP is confirmed without fabricated TCP metadata when TCP was not run, and open TCP is a confirmed responsive endpoint. Add inventory-specific identity conflict, partial scan and cancellation tests."
+        - "Make the policy explicit in LanScanRequest; default `includeAmbiguous=false`, and preserve a clearly labeled opt-in for environments where ICMP is blocked."
+        - "Do not infer reset origin from ConnectException. Keep `TCP_REFUSED` as port evidence and require independent evidence before setting CONFIRMED."
+        - "Take a fresh, scan-scoped MAC/neighbor snapshot after workers finish; retain P01 ARP/OUI safety and never read privileged interfaces or claim MAC certainty when unavailable."
+        - "Add snapshot diff using candidate IP/MAC/normalized-hostname matches, with explicit conflict/reuse/unknown identity states and changed confidence separate from changed device state."
+      acceptance_criteria:
+        - "A subnet where every unused IP receives TCP reset produces zero confirmed hosts and a bounded ambiguous count when opt-in is enabled."
+        - "A real ICMP-blocked host with a verified open service remains discoverable as a confirmed responsive endpoint with an explicit identity limit; refusal alone never triggers enrichment or a default list row."
+        - "The result summary reports confirmed/ambiguous counts, evidence methods, scan context, and an explanation users can understand."
+        - "Inventory diff reports a host as missing/new/changed without treating a transient ambiguous observation as a device removal."
+      validation:
+        automated: ["./gradlew :core-network:test --tests '*LanScan*' --tests '*Presence*' --no-daemon", "./gradlew :core-domain:test --tests '*LanScan*' --no-daemon", "./gradlew :app:testDebugUnitTest --tests '*LanScan*' --no-daemon", "instrumented LanScanScreenTest: confirmed/ambiguous/filter/diff"]
+        manual: ["On a gateway that resets closed ports, scan a /24 and verify unused addresses stay out of confirmed results.", "Verify an ICMP-blocked local service appears only with observed TCP evidence and the explanation remains visible in share output."]
+      effort: "L (2-3 coding-agent sessions)"
+      constraints_rollout: "Land the confidence model and regression tests before enabling inventory history. Do not promise ARP visibility on Android 10+; do not use root, raw packet injection, or a network-side reset detector."
+
+    - id: E02-T05
+      priority: medium
+      status: todo
+      title: "DNS resolver comparison, answer drift, and query provenance"
+      source_evidence:
+        - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/dns/DnsRepository.kt", lines: "9-20", detail: "The repository currently performs one lookup against one selected server per call, with no comparison contract." }
+        - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/dns/DnsResult.kt", lines: "3-25", detail: "Result already carries sections, RCODE, flags, actual server, and raw response; E02 can compare these without a second wire parser." }
+        - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/dns/DnsRepositoryImpl.kt", lines: "41-57, 82-121", detail: "Normalization and resolver selection are central seams; RNET005 requires IDNA normalization before this comparison is trusted." }
+        - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/dns/DnsViewModel.kt", lines: "23-39, 113-151", detail: "Current ViewModel has one selected resolver and overlapping-submit risk (RUI008); matrix state belongs above the existing use case." }
+        - { file: "plan/phases/P14-new-tools-wave-2.yaml", lines: "20-45", detail: "Secure DNS owns transport comparison; E02 is answer/provenance comparison and must reuse its resolver presets rather than duplicate DoH/DoT probing." }
+      proposed_behavior: |
+        Add a DNS comparison mode for one normalized domain/record type against up
+        to four selected existing resolvers (system, Google, Cloudflare, OpenDNS,
+        Quad9, or custom). Run with bounded parallelism and return one row per
+        resolver containing normalized answer set, RCODE, authority/additional
+        records, AD/AA/TC/RD/RA flags, query time, actual endpoint, and typed error.
+        A pure AnswerDiff classifies matching answers, missing/extra records, TTL
+        differences when available, NXDOMAIN-vs-NOERROR, and likely split-horizon
+        behavior. Show Private DNS and IDNA provenance in the context card. This is
+        a user-triggered matrix, never a background polling service.
+      depends_on: [E01-T11, E01-T12, P04-T3, P04-T5, P07-T2, P07-T3, P08-T1, P12-T4, P14-T1]
+      files_seams:
+        create:
+          - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/dns/DnsAnswerDiff.kt"
+          - "core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/DnsComparisonUseCase.kt"
+          - "core-network/src/test/kotlin/net/aieat/netswissknife/core/network/dns/DnsAnswerDiffTest.kt"
+          - "core-domain/src/test/kotlin/net/aieat/netswissknife/core/domain/DnsComparisonUseCaseTest.kt"
+        modify:
+          - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/dns/DnsResult.kt"
+          - "core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/DnsLookupUseCase.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/dns/DnsViewModel.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/DnsScreen.kt"
+      implementation_steps:
+        - "Write RED tests for canonical A/AAAA/CNAME/TXT record comparison, TTL-preserving values, NXDOMAIN/NODATA distinctions, resolver failures, bounded concurrency, and stale-generation suppression from RUI008."
+        - "Capture a single normalized input and resolver list before launching; display the exact IDNA form and server actually used, including system Private DNS metadata."
+        - "Reuse DnsRecord typed values and raw response only for an opt-in detail view; never diff formatting strings when structured records are available."
+        - "Add a matrix card with per-cell loading/error states, answer-set diff chips, copy/share output, and a clear explanation that public resolver answers can legitimately differ by geography or split DNS."
+      acceptance_criteria:
+        - "Four resolver rows can complete independently; one timeout does not hide successful rows or falsely mark the whole comparison as a DNS outage."
+        - "The same answer set in different order compares equal; differing RCODE/records/flags are surfaced with a machine-readable and localized reason."
+        - "Submitting a second comparison while the first is pending cancels or ignores the stale generation; recents use the captured normalized query."
+      validation:
+        automated: ["./gradlew :core-network:test --tests '*dns*' --no-daemon", "./gradlew :core-domain:test --tests '*Dns*' --no-daemon", "./gradlew :app:testDebugUnitTest --tests '*Dns*' --no-daemon", "instrumented DnsScreenTest: single/matrix/partial/error"]
+        manual: ["Compare an internal split-horizon name using System DNS and a public resolver; verify the explanation names the resolver and endpoint.", "Use a Unicode domain and confirm the displayed query and comparison use its IDNA form."]
+      effort: "M (1-2 coding-agent sessions)"
+      constraints_rollout: "Keep one-shot DNS route unchanged. No promise of global propagation testing, DNS cache flushing, or packet capture; those require infrastructure outside Android app scope."
+
+    - id: E02-T06
+      priority: medium
+      status: todo
+      title: "Wi-Fi channel occupancy, AP stability, and roaming evidence"
+      source_evidence:
+        - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/wifi/WifiAccessPoint.kt", lines: "6-36, 72-105", detail: "AP model already includes RSSI, frequency, width, channel, band, BSSID, connected state, and overlap helper inputs." }
+        - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/wifi/WifiNetwork.kt", lines: "3-59", detail: "Logical SSID/security grouping and hidden-BSSID identity are available for stable history keys." }
+        - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/wifi/WifiScanViewModel.kt", lines: "32-100, 173-219, 223-325", detail: "ViewModel supports refresh, frozen ordering, auto-refresh, and disappearing AP events; E02 adds an opt-in evidence mode without disrupting the existing list." }
+        - { file: "plan/reviews/2026-09-21-network.yaml", lines: "78-89, 165-179", detail: "RNET004 and RNET009 require correct hidden-network identity and UNKNOWN security handling before occupancy summaries are trusted." }
+        - { file: "plan/reviews/2026-09-21-app.yaml", lines: "9-32", detail: "RAPP001 requires distinguishing updated, rejected, and failed scans so history does not treat stale results as fresh samples." }
+      proposed_behavior: |
+        Add a manual "Environment analysis" mode that computes a pure occupancy
+        score per band/channel from AP RSSI, channel width, and overlapping channels,
+        while stating that scan visibility is not a measurement of airtime. Maintain
+        a bounded in-memory timeline of scan samples with result age/throttle/failure
+        status. For the associated SSID, report BSSID changes, RSSI/frequency/channel
+        changes, and AP disappearance across samples as roaming/stability evidence;
+        never call a BSSID change a handoff success without a connection event.
+        Provide a compact channel recommendation with tie explanations and offer an
+        explicit redacted export of the sample window through E01-T12.
+      depends_on: [P03-T1, P03-T2, P03-T3, P03-T5, P08-T1]
+      files_seams:
+        create:
+          - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/wifi/WifiOccupancyAnalyzer.kt"
+          - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/wifi/WifiStabilityTimeline.kt"
+          - "core-network/src/test/kotlin/net/aieat/netswissknife/core/network/wifi/WifiOccupancyAnalyzerTest.kt"
+          - "core-network/src/test/kotlin/net/aieat/netswissknife/core/network/wifi/WifiStabilityTimelineTest.kt"
+        modify:
+          - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/wifi/WifiScanResult.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/wifi/WifiScanViewModel.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/WifiScanScreen.kt"
+      implementation_steps:
+        - "Write RED tests for 2.4 GHz overlap weighted by RSSI/width, 5/6 GHz non-overlap rules, ties, hidden AP identity, unknown security, stale/throttled samples, and BSSID transitions."
+        - "Keep the score labeled as observed AP congestion; do not infer channel airtime, throughput, or interference from scan rows alone."
+        - "Feed only successful fresh scans into the stability timeline while retaining failed/throttled events as explicit gaps. Cap samples and stop the auto-refresh job when analysis leaves the screen."
+        - "Add accessibility descriptions for channel charts and a table alternative for narrow screens; preserve frozen list order while details are open."
+      acceptance_criteria:
+        - "The analyzer returns deterministic scores/recommendations for all bands and explains the inputs used; blank/unknown channels are excluded rather than scored as zero congestion."
+        - "A stale or failed platform scan cannot create a false AP disappearance or a fresh occupancy sample."
+        - "Associated BSSID/RSSI changes are shown as observations with timestamps and no claim that a roam occurred when connection state is unknown."
+      validation:
+        automated: ["./gradlew :core-network:test --tests '*wifi*' --no-daemon", "./gradlew :app:testDebugUnitTest --tests '*Wifi*' --no-daemon", "instrumented WifiScanScreenTest: environment mode/empty/stale/accessibility"]
+        manual: ["Walk between two APs sharing an SSID and verify BSSID transitions and gaps are visible.", "Test a dense 2.4 GHz environment and verify recommendation text states scan limitations."]
+      effort: "M (1-2 coding-agent sessions)"
+      constraints_rollout: "No background scan service, hidden Android APIs, location bypass, or promise of RF spectrum analysis. Respect platform scan throttling and permissions from P03."
+
+    - id: E02-T07
+      priority: medium
+      status: todo
+      title: "TLS endpoint policy audit and batch comparison"
+      source_evidence:
+        - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/tls/TlsInspectorRepositoryImpl.kt", lines: "16-79", detail: "Current inspector opens one endpoint, captures chain/protocol/cipher, and measures a combined wall-clock handshake; P10 is responsible for splitting and validating that result." }
+        - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/tls/TlsInspectorResult.kt", lines: "3-11", detail: "Result has no policy verdict, endpoint label, or comparable evidence fields." }
+        - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/tls/TlsInspectorViewModel.kt", lines: "21-75", detail: "ViewModel currently accepts one host/port and exposes one inspection result; batch input can be layered above it." }
+        - { file: "plan/phases/P10-security-tools-depth.yaml", lines: "53-61, 95-103, 158-203", detail: "P10 adds hostname/chain/protocol/ALPN/PEM/pin primitives; E02 adds policy evaluation across endpoints and must not reimplement those checks." }
+      proposed_behavior: |
+        Add a pure TlsPolicyProfile with explicit user-visible rules (hostname must
+        match, trusted chain required, minimum TLS version, allowed/blocked cipher
+        families, minimum key size, expiry warning days, optional expected SPKI pin).
+        Let users enter or import a bounded list of host:port endpoints from recent
+        hosts, LAN/mDNS/port results, or manual text. Run at most four inspections in
+        parallel, summarize PASS/WARN/FAIL/UNAVAILABLE per endpoint, and compare a
+        later run to detect certificate/key/protocol/policy changes. Keep full PEM
+        sharing opt-in and redact it from batch JSON by default.
+      depends_on: [E01-T11, E01-T12, P05-T1, P07-T2, P07-T3, P08-T1, P10-T1, P10-T2, P12-T4]
+      files_seams:
+        create:
+          - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/tls/TlsPolicyProfile.kt"
+          - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/tls/TlsPolicyEvaluator.kt"
+          - "core-network/src/test/kotlin/net/aieat/netswissknife/core/network/tls/TlsPolicyEvaluatorTest.kt"
+          - "core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/TlsBatchUseCase.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/data/TlsAuditHistoryRepository.kt"
+        modify:
+          - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/tls/TlsInspectorResult.kt"
+          - "core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/TlsInspectorUseCase.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/tls/TlsInspectorViewModel.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/TlsInspectorScreen.kt"
+      implementation_steps:
+        - "Write RED evaluator tests for each policy rule, unknown/unavailable values, wildcard/IP SAN behavior from P10, expiry boundaries, pin normalization, and deterministic ordering."
+        - "Add endpoint list validation (host normalization, numeric port range, duplicate removal, max 20) and capture one immutable profile/config per batch."
+        - "Reuse the P10 HandshakeEngine/TlsInspectorUseCase; bound parallelism and preserve cancellation, with individual endpoint errors rather than failing the batch."
+        - "Add policy profile presets only as named data (Balanced/Strict/Custom), with a detail sheet showing exactly which rule produced each verdict."
+      acceptance_criteria:
+        - "A batch of endpoints completes independently and clearly distinguishes a policy failure from an unavailable handshake."
+        - "Changing a certificate, negotiated protocol, or endpoint name between runs produces a field-level diff; unchanged endpoints remain stable."
+        - "No private key, SNMP credential, HTTP cookie, or full PEM is included in default batch exports."
+      validation:
+        automated: ["./gradlew :core-network:test --tests '*tls*' --no-daemon", "./gradlew :core-domain:test --tests '*Tls*' --no-daemon", "./gradlew :app:testDebugUnitTest --tests '*Tls*' --no-daemon", "instrumented TlsInspectorScreenTest: profile/batch/verdict/export"]
+        manual: ["Audit a mixed list of valid, expired, self-signed, and wrong-host fixtures from P10 and verify independent verdicts.", "Share the default batch report and confirm PEM is omitted until explicitly selected."]
+      effort: "L (2-3 coding-agent sessions)"
+      constraints_rollout: "No certificate revocation guarantee, packet capture, private-key inspection, or claim that a server supports a protocol when the device cannot probe it. P10's API/device compatibility rules remain authoritative."
+
+    - id: E02-T08
+      second_pass_review:
+        report: plan/reviews/2026-09-22-second-pass.yaml
+        findings: [R2-014]
+        rule: "Treat each linked finding as a required independently verified acceptance case; urgent regression slices do not wait for optional task breadth."
+      priority: medium
+      status: todo
+      title: "Topology snapshot identity, graph diff, and credential-safe export"
+      source_evidence:
+        - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/topology/TopologyModels.kt", lines: "10-62", detail: "TopologyGraph already represents nodes/links/seed/time, but node identity, scan parameters, and graph comparison are unspecified." }
+        - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/topology/TopologyDiscoveryRepositoryImpl.kt", lines: "27-100", detail: "BFS discovery streams nodes/links and runs bounded parallel table queries; E02 must snapshot only after completion and preserve partial state on cancellation." }
+        - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/topology/TopologyDiscoveryViewModel.kt", lines: "19-103, 118-139", detail: "ViewModel maintains streaming lists and completion/reset boundaries, suitable for snapshot and diff actions." }
+        - { file: "plan/phases/P02-topology-snmp-correctness.yaml", lines: "157-280", detail: "P02 fixes SNMPv3/LLDP/CDP/parser/retention behavior; E02 assumes those fields are correct and focuses on longitudinal evidence." }
+      proposed_behavior: |
+        Add TopologySnapshot with normalized candidate identity signals (IP, sysName,
+        MAC/interface identity), captured SNMP version and
+        scope, and redacted credential metadata. TopologyDiff classifies nodes/links
+        added, removed, renamed, capability/interface/VLAN changes, and links whose
+        protocol changed. The UI retains the live canvas, then adds a list-based diff
+        view with filters and a shareable graph JSON. Community strings and v3 auth/
+        privacy values must never enter snapshot storage or share output.
+      depends_on: [E01-T11, E01-T12, P02-T1, P02-T2, P02-T3, P02-T5, P07-T2, P07-T3, P08-T1, P12-T4]
+      files_seams:
+        create:
+          - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/topology/TopologySnapshot.kt"
+          - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/topology/TopologyDiff.kt"
+          - "core-network/src/test/kotlin/net/aieat/netswissknife/core/network/topology/TopologyDiffTest.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/data/TopologyHistoryRepository.kt"
+        modify:
+          - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/topology/TopologyModels.kt"
+          - "core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/TopologyDiscoveryUseCase.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/topology/TopologyDiscoveryViewModel.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/topology/TopologyDiscoveryScreen.kt"
+      implementation_steps:
+        - "Write RED tests for reordered nodes/links, same device with changed sysName, interface/VLAN changes, duplicate LLDP/CDP links, partial/cancelled runs, and secret redaction."
+        - "Canonicalize IPs, MACs, interface names, and link endpoints before diff; preserve original display values separately and mark conflicting/reused identities ambiguous rather than treating an IP or sysName as a permanent physical identity."
+        - "Capture graph only on Complete or explicitly Save Partial; attach params hash and queriedAt monotonic/epoch metadata."
+        - "Add a diff panel usable without the canvas so large graphs remain navigable and accessible; reuse existing node selection."
+      acceptance_criteria:
+        - "A second scan with one added neighbour and one changed interface yields deterministic changes independent of event arrival order."
+        - "Exported snapshots omit community/auth/privacy values and include a clear redaction marker."
+        - "A cancelled run cannot be silently stored as a complete topology; the UI labels partial evidence and offers discard/save."
+      validation:
+        automated: ["./gradlew :core-network:test --tests '*topology*' --no-daemon", "./gradlew :core-domain:test --tests '*Topology*' --no-daemon", "./gradlew :app:testDebugUnitTest --tests '*Topology*' --no-daemon", "instrumented TopologyDiscoveryScreenTest: stream/diff/partial/redaction"]
+        manual: ["Run two scans against a lab switch with a changed port state and verify the list diff.", "Share a graph and inspect the JSON for credential absence."]
+      effort: "L (2 coding-agent sessions)"
+      constraints_rollout: "Do not add topology cloud sync, SNMP write operations, automatic credential guessing, or a map. Respect P02 parameter bounds and release keep rules."
+
+    - id: E02-T09
+      priority: low
+      status: todo
+      title: "WHOIS/RDAP registration snapshots and deadline diff"
+      source_evidence:
+        - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/whois/WhoisModels.kt", lines: "3-43", detail: "WhoisResult already contains registration, expiry, update, status, DNSSEC, network, and hop fields but no source protocol, confidence, or snapshot identity." }
+        - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/whois/WhoisRepositoryImpl.kt", lines: "17-35, 171-207", detail: "Current lookups use blocking referral sockets and wall-clock durations; RNET006 and P10 own cancellation/monotonic timing repairs." }
+        - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/whois/WhoisViewModel.kt", lines: "34-47, 79-137", detail: "ViewModel has progress/result jobs and raw-response display, a natural seam for protocol/source labels and saved snapshots." }
+        - { file: "plan/phases/P10-security-tools-depth.yaml", lines: "53-61, 113-118, 204-226", detail: "P10 adds RDAP-first/fallback and public suffix parsing; E02 consumes that normalized result and adds longitudinal interpretation." }
+      proposed_behavior: |
+        Add a local WHOIS/RDAP snapshot record with query normalization, protocol
+        actually used, authoritative source, captured timestamps, and parsed fields.
+        A pure RegistrationDiff compares registrar, expiry/registration/update dates,
+        nameservers, status, DNSSEC, netrange, and organization; missing/redacted
+        values are unknown rather than changes. Show an expiry window card with
+        "date supplied by registry" and no promise of renewal validity. Allow users
+        to save a snapshot, compare the next manual lookup, delete history, or
+        export a redacted report. Keep reminder scheduling and background lookups out
+        of scope; users may export a calendar date manually if desired.
+      depends_on: [E01-T11, E01-T12, P07-T2, P07-T3, P08-T1, P10-T5, P12-T4]
+      files_seams:
+        create:
+          - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/whois/RegistrationDiff.kt"
+          - "core-network/src/test/kotlin/net/aieat/netswissknife/core/network/whois/RegistrationDiffTest.kt"
+          - "core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/WhoisSnapshot.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/data/WhoisHistoryRepository.kt"
+        modify:
+          - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/whois/WhoisModels.kt"
+          - "core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/WhoisLookupUseCase.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/whois/WhoisViewModel.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/whois/WhoisScreen.kt"
+      implementation_steps:
+        - "Write RED tests for date changes, status additions/removals, nameserver set order, redacted/null fields, RDAP-vs-WHOIS protocol labels, and deterministic deadline buckets."
+        - "Capture the normalized registrable domain/IP/ASN and source hop before the request; prevent a later edit from attaching history to the wrong query."
+        - "Offer explicit snapshot save through E01-T11 using P12 settings/recents separation; store parsed fields by default and raw responses only through E01-T12's explicit opt-in."
+        - "Add a diff screen that highlights changed fields and distinguishes provider redaction from an actual empty value."
+      acceptance_criteria:
+        - "Two lookups with the same query produce a stable snapshot and a field-level diff; a changed expiry date is shown with its source/protocol."
+        - "A query interrupted by cancellation never saves a complete snapshot or leaves a progress node marked done."
+        - "Default exports contain no raw registrant contact data beyond the existing parsed fields selected by the user."
+      validation:
+        automated: ["./gradlew :core-network:test --tests '*whois*' --no-daemon", "./gradlew :core-domain:test --tests '*Whois*' --no-daemon", "./gradlew :app:testDebugUnitTest --tests '*Whois*' --no-daemon", "instrumented WhoisScreenTest: RDAP/source/diff/redaction"]
+        manual: ["Compare a domain through RDAP and WHOIS fallback and verify protocol/source labels.", "Save, edit the query, then compare and verify the prior snapshot remains attached to its original normalized name."]
+      effort: "M (1-2 coding-agent sessions)"
+      constraints_rollout: "No automatic periodic polling, registrar account integration, renewal guarantees, or background alarms. Respect registry terms, timeouts, referral safety, and P10 attributions."
+
+    - id: E02-T10
+      priority: medium
+      status: todo
+      title: "HTTP request scenarios with bounded assertions and response diff"
+      source_evidence:
+        - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/httprobe/HttpProbeModels.kt", lines: "15-51", detail: "Current request/result support one request, bounded body, redirect chain, and security checks but no reusable scenario or assertions." }
+        - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/httprobe/HttpProbeRepositoryImpl.kt", lines: "31-64, 67-186", detail: "Repository already has validation, bounded body reads, redirect handling, and injectable seams planned by P10; scenario orchestration should call it rather than fork transport code." }
+        - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/httprobe/HttpProbeViewModel.kt", lines: "23-45, 95-132", detail: "ViewModel owns headers/body/method and one in-flight send; scenario editing and per-step results must capture immutable state." }
+        - { file: "plan/phases/P10-security-tools-depth.yaml", lines: "55-61, 104-112, 158-203", detail: "P10 covers OkHttp timings, redirect policy, cURL, cookies, and JSON rendering; E02 adds deterministic multi-request workflow semantics." }
+      proposed_behavior: |
+        Add an optional HTTP Scenario mode with at most five sequential steps. Each
+        step defaults to safe read-only GET/HEAD/OPTIONS methods; mutating methods
+        require an explicit per-step review/confirmation and can be disabled by a
+        profile. Each step references a request template and can assert status range/exact code,
+        header presence/value, bounded body text, and a small JSON path equality;
+        it may capture one redacted value (for example a header or JSON scalar) for
+        the next URL/header/body template. No arbitrary scripts, file uploads,
+        cookie persistence, or hidden credential storage. Return per-step timing,
+        redirect/security result, assertion outcome, and a scenario summary. On an
+        origin change or redirect, strip Authorization/Cookie and captured secrets
+        unless the user explicitly re-enters them for the new origin. Add a
+        pure ScenarioDiff to compare two runs by step and assertion.
+      depends_on: [E01-T12, P07-T2, P07-T3, P08-T1, P10-T3, P10-T4, P12-T4]
+      files_seams:
+        create:
+          - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/httprobe/HttpScenario.kt"
+          - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/httprobe/HttpAssertion.kt"
+          - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/httprobe/ScenarioDiff.kt"
+          - "core-network/src/test/kotlin/net/aieat/netswissknife/core/network/httprobe/HttpScenarioTest.kt"
+          - "core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/HttpScenarioUseCase.kt"
+        modify:
+          - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/httprobe/HttpProbeRepository.kt"
+          - "core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/HttpProbeUseCase.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/httprobe/HttpProbeViewModel.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/httprobe/HttpProbeScreen.kt"
+      implementation_steps:
+        - "Write RED tests for status/header/body/JSON assertions, variable allowlist and escaping, failed-step stop/continue policy, five-step cap, response/body caps, cancellation, and diff semantics."
+        - "Define templates as typed data, validate URLs/headers/body limits before any network call, capture all steps before starting so edits cannot race execution, and require a visible review for mutating methods."
+        - "Use P10 HttpEngine/RedirectPolicy per step; strip Authorization/Cookie at every origin change and never carry captured secrets to a new origin without explicit re-entry."
+        - "Add a small stepper UI with per-step loading/result, retry-from-step only when previous captures are still valid, and a share report that redacts captured values."
+      acceptance_criteria:
+        - "A two-step login-free flow can assert a redirect/status then use a bounded response value in the next request, with deterministic pass/fail reasons."
+        - "A failed assertion is distinct from network failure, HTTP error, truncation, or invalid JSON; scenario summary preserves all completed steps."
+        - "No default export contains Authorization, Cookie, Set-Cookie, or captured secret values."
+      validation:
+        automated: ["./gradlew :core-network:test --tests '*httprobe*' --no-daemon", "./gradlew :core-domain:test --tests '*Http*' --no-daemon", "./gradlew :app:testDebugUnitTest --tests '*HttpProbe*' --no-daemon", "instrumented HttpProbeScreenTest: single/scenario/assertion/redaction"]
+        manual: ["Run a local MockWebServer-backed scenario fixture and inspect each step's timing and assertion output.", "Try a scenario containing an Authorization header and verify it is never persisted by default."]
+      effort: "L (2-3 coding-agent sessions)"
+      constraints_rollout: "Do not become a general API client, collection sync service, browser, or credential manager. Require explicit user action per run; no background requests."
+
+    - id: E02-T11
+      priority: medium
+      status: todo
+      title: "mDNS service watch and local endpoint health evidence"
+      source_evidence:
+        - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/mdns/MdnsRepository.kt", lines: "5-21", detail: "Service model has type/name/host/port/IP/TXT and a one-shot Flow; no expiry, update/removal, or health state exists." }
+        - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/mdns/MdnsRepositoryImpl.kt", lines: "42-80, 177-213", detail: "Current implementation uses a fixed IPv4 group, swallows socket errors, and has cancellation/lock concerns captured by RAPP002/RAPP004." }
+        - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/mdns/MdnsDiscoveryViewModel.kt", lines: "17-25, 38-104", detail: "ViewModel groups one scan's services and currently maps cancellation/errors through one catch; watch state must preserve partial results and clean stop semantics." }
+        - { file: "plan/phases/P12-lan-utilities-and-settings-depth.yaml", lines: "45-56, 71-89, 101-174", detail: "P12 owns IPv6/catalog/TXT/actions and must land before E02 health/watch behavior." }
+      proposed_behavior: |
+        Add an explicit "Watch for changes" session consisting of bounded repeated
+        mDNS queries (default three samples, user-controlled interval) that reports
+        services added, not observed, or changed in port/IP/TXT. Treat absence as
+        "not observed" unless the advertisement's TTL/expiry or an explicit goodbye
+        record proves removal. Use the P12 dual-stack,
+        catalog, and service identity work, and preserve a sample as stale/partial
+        when the platform scan is throttled or socket setup fails. Add optional
+        local-only endpoint checks: for HTTP/HTTPS service types perform one bounded
+        HEAD/GET through the bound local network and show status/latency; for other
+        types only show TCP connect evidence. Never follow a service into the public
+        internet without an explicit user action.
+      depends_on: [E01-T11, E01-T12, P05-T1, P05-T4, P08-T1, P12-T1, P12-T2]
+      files_seams:
+        create:
+          - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/mdns/MdnsServiceDiff.kt"
+          - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/mdns/MdnsHealthProbe.kt"
+          - "core-network/src/test/kotlin/net/aieat/netswissknife/core/network/mdns/MdnsServiceDiffTest.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/mdns/MdnsWatchCoordinator.kt"
+        modify:
+          - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/mdns/MdnsRepository.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/mdns/MdnsRepositoryImpl.kt"
+          - "core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/MdnsDiscoveryUseCase.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/mdns/MdnsDiscoveryViewModel.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/mdns/MdnsDiscoveryScreen.kt"
+      implementation_steps:
+        - "Write RED tests for dual-stack service identity, repeated sample diffs, not-observed versus TTL-expired/goodbye removal, TXT changes, socket failure versus timeout, cancellation, multicast-lock release, and local endpoint probe limits."
+        - "Make MdnsUpdate carry a sample/session id and typed health/error state; preserve partial services when stop is user initiated and rethrow cancellation."
+        - "Use P05 NetworkBinder and a short receive timeout/close hook; never swallow non-timeout I/O/security errors into an empty successful scan."
+        - "Restrict endpoint health to IPs confirmed in the current local subnet and cap requests/body reads; disclose each network action in the detail sheet."
+      acceptance_criteria:
+        - "A service appearing across samples is classified deterministically; absence alone is not called removal, while TTL expiry or goodbye is explicitly labeled when observed."
+        - "Pressing Stop releases the multicast lock/socket promptly and leaves partial results without an error state; P12/P05 I/O failures remain actionable."
+        - "Health check results clearly identify TCP versus HTTP evidence and never imply the advertised service is authenticated or safe."
+      validation:
+        automated: ["./gradlew :core-network:test --tests '*mdns*' --no-daemon", "./gradlew :core-domain:test --tests '*Mdns*' --no-daemon", "./gradlew :app:testDebugUnitTest --tests '*Mdns*' --no-daemon", "instrumented MdnsDiscoveryScreenTest: one-shot/watch/stop/error"]
+        manual: ["Use an IPv6-only advertiser and a service that changes TXT/port; verify the watch diff.", "Stop a long session and confirm no late error snackbar appears and the lock is released."]
+      effort: "L (2-3 coding-agent sessions)"
+      constraints_rollout: "No passive always-on service monitor, internet crawling, arbitrary URL fetches, or background multicast. P12 service actions remain explicit user taps."
+
+    - id: E02-T12
+      priority: low
+      status: todo
+      title: "Subnet overlap planner and point-to-point semantics"
+      source_evidence:
+        - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/subnet/SubnetCalculatorRepositoryImpl.kt", lines: "5-52, 54-70, 82-107", detail: "Calculator handles one CIDR or one min/max range and returns IPv4 breakdown; it has no multi-range overlap planner." }
+        - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/subnet/SubnetCalculatorRepositoryImpl.kt", lines: "156-175", detail: "Scope logic is a small private range set; P12 expands it to RFC 6890 classifications." }
+        - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/subnet/SubnetCalculatorViewModel.kt", lines: "15-99", detail: "ViewModel has CIDR/range modes and is the seam for a third plan mode while preserving existing inputs." }
+        - { file: "plan/reviews/2026-09-21-network.yaml", lines: "184-201", detail: "RNET010 calls for explicit RFC 3021 /31 point-to-point interpretation while retaining conventional LAN behavior." }
+        - { file: "plan/phases/P14-new-tools-wave-2.yaml", lines: "46-64", detail: "P14 owns IPv6 parsing/classification; E02 must consume its parser instead of creating a second IPv6 implementation." }
+      proposed_behavior: |
+        Add a pure Plan mode accepting up to 16 IPv4/IPv6 CIDRs (after P14's IPv6
+        parser is available). Report overlaps, containment, adjacent ranges, shared
+        boundaries, duplicate inputs, and aggregate address counts with scope labels.
+        Add an explicit IPv4 /31 interpretation switch: conventional LAN mode keeps
+        zero usable hosts; point-to-point mode reports both endpoints usable with an
+        RFC 3021 explanation. Provide copyable allocation warnings but do not assign
+        addresses or mutate routing tables.
+      depends_on: [P07-T2, P07-T3, P08-T1, P12-T3, P14-T2]
+      files_seams:
+        create:
+          - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/subnet/SubnetPlan.kt"
+          - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/subnet/SubnetOverlapAnalyzer.kt"
+          - "core-network/src/test/kotlin/net/aieat/netswissknife/core/network/subnet/SubnetOverlapAnalyzerTest.kt"
+        modify:
+          - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/subnet/SubnetModels.kt"
+          - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/subnet/SubnetCalculatorRepository.kt"
+          - "core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/SubnetCalculatorUseCase.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/subnet/SubnetCalculatorViewModel.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/SubnetCalculatorScreen.kt"
+      implementation_steps:
+        - "Write RED tests for identical/contained/partial/disjoint IPv4 networks, IPv6 plans through the P14 parser, duplicate/invalid input, address-count overflow, and /31 both-mode boundaries."
+        - "Canonicalize networks before sorting and pairwise comparison; use BigInteger for aggregate counts and never silently coerce an IPv6 input to IPv4."
+        - "Add plan input editing with bounded rows, validation before calculation, copy/share output, and a table fallback for narrow screens."
+      acceptance_criteria:
+        - "The plan reports every overlap and containment pair deterministically and labels mixed-family inputs as incomparable rather than overlapping."
+        - "192.0.2.0/31 shows two usable endpoints only in explicit point-to-point mode; default LAN semantics remain compatible with P12."
+        - "Large IPv6 totals display exact BigInteger values and a readable power-of-two form without overflow."
+      validation:
+        automated: ["./gradlew :core-network:test --tests '*subnet*' --no-daemon", "./gradlew :core-domain:test --tests '*Subnet*' --no-daemon", "./gradlew :app:testDebugUnitTest --tests '*Subnet*' --no-daemon", "instrumented SubnetCalculatorScreenTest: single/plan/31-mode/overflow"]
+        manual: ["Enter overlapping office/VLAN ranges and verify containment warnings.", "Compare /31 output with a point-to-point sample and inspect the mode explanation."]
+      effort: "M (1-2 coding-agent sessions)"
+      constraints_rollout: "No DHCP allocator, route editor, scanner, or promise that a mathematically non-overlapping plan is deployable without router policy review."
+
+    - id: E02-T13
+      priority: medium
+      status: todo
+      title: "Speed-test run quality, data budget, and trend comparison"
+      source_evidence:
+        - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/speedtest/SpeedTestModels.kt", lines: "14-84", detail: "Current result has latency/throughput samples but no server/config/context/quality metadata or comparison contract." }
+        - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/speedtest/SpeedTestRepositoryImpl.kt", lines: "28-50, 128-167", detail: "Repository uses fixed phase durations/payloads and Cloudflare endpoints; P11 changes the engine, while E02 adds user budget and interpretation." }
+        - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/speedtest/SpeedTestViewModel.kt", lines: "22-34, 46-121", detail: "ViewModel owns run/cancel and currently discards completed history/context after Finished." }
+        - { file: "plan/phases/P11-diagnostics-tools-depth.yaml", lines: "52-59, 85-100, 128-167", detail: "P11 adds keep-alive, streams, loaded latency, and server info; E02 must not create a competing transfer engine." }
+        - { file: "plan/phases/P14-new-tools-wave-2.yaml", lines: "65-105", detail: "P14 consumes loaded latency for Bufferbloat; E02 should link to it and avoid reimplementing the test phases." }
+      proposed_behavior: |
+        Extend the P11 speed engine with a user-visible data/time budget (short,
+        standard, custom bounded) and a SpeedRunQuality verdict. A completed run
+        records server/colo, phase duration, stream counts, bytes, cancellation,
+        network context, idle/loaded latency, and whether all requested phases
+        completed. A pure SpeedRunComparator permits deltas only when target backend,
+        stream count, budget, and context match; otherwise it explains why the trend
+        is directional. Offer explicit Save to History through E01-T11 and show
+        median/percentile trend cards only for retained runs. Keep Cloudflare
+        attribution and an explicit data-use estimate.
+      depends_on: [E01-T11, E01-T12, P08-T1, P09-T2, P11-T1, P12-T4, P14-T3]
+      files_seams:
+        create:
+          - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/speedtest/SpeedTestBudget.kt"
+          - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/speedtest/SpeedRunComparator.kt"
+          - "core-network/src/test/kotlin/net/aieat/netswissknife/core/network/speedtest/SpeedRunComparatorTest.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/data/SpeedTestHistoryRepository.kt"
+        modify:
+          - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/speedtest/SpeedTestModels.kt"
+          - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/speedtest/SpeedTestRepositoryImpl.kt"
+          - "core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/SpeedTestUseCase.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/speedtest/SpeedTestViewModel.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/SpeedTestScreen.kt"
+      implementation_steps:
+        - "Write RED tests for budget byte caps, cancellation at every phase, incomplete verdicts, same/different server comparison, percentile trends, and counter/zero-sample handling."
+        - "Make the budget part of the immutable config; enforce it in every concurrent stream and include actual bytes in the final result."
+        - "Capture P11 server metadata and P14 loaded-latency fields without treating a failed optional metadata request as a failed speed test."
+        - "Add history/trend UI with a clear 'directional only' label when Wi-Fi/cellular, server, or configuration differs."
+      acceptance_criteria:
+        - "User can predict the maximum configured transfer duration/bytes within documented overhead; cancellation stops all streams."
+        - "Trend cards never compare a 1-stream short run against a 4-stream standard run as an equivalent regression."
+        - "The share report includes server, data amount, context, quality verdict, and Cloudflare attribution."
+      validation:
+        automated: ["./gradlew :core-network:test --tests '*speedtest*' --no-daemon", "./gradlew :core-domain:test --tests '*SpeedTest*' --no-daemon", "./gradlew :app:testDebugUnitTest --tests '*SpeedTest*' --no-daemon", "instrumented SpeedTestScreenTest: budget/running/cancel/trend"]
+        manual: ["Run short and standard budgets on Wi-Fi and cellular; verify comparisons are labeled by context.", "Cancel during download/upload and verify no stream continues and actual bytes are shown."]
+      effort: "L (2-3 coding-agent sessions)"
+      constraints_rollout: "No background monitoring, arbitrary test servers, hidden data transfer, or removal of Cloudflare attribution. Keep P11's 500 ms cancellation target and P14 Bufferbloat composition."
+
+    - id: E02-T14
+      priority: low
+      status: todo
+      title: "Wake-on-LAN batch groups with safety gates and per-target outcomes"
+      source_evidence:
+        - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/wol/WolSendReport.kt", lines: "3-16", detail: "Send report describes one MAC/broadcast/port/packet count and cannot represent a batch or wake verification outcome." }
+        - { file: "core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/WakeOnLanUseCase.kt", lines: "8-24", detail: "Current params validate MAC/broadcast/port but deliberately have no target identity, local-network guard, or batch policy." }
+        - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/wol/WakeOnLanRepositoryImpl.kt", lines: "10-39", detail: "Repository sends repeated broadcast datagrams without binding/route metadata; P05 and P12 own binding, SecureOn, subnet broadcast, and verification seams." }
+        - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/wol/WakeOnLanViewModel.kt", lines: "17-79", detail: "ViewModel is single-target send state; batch editor and per-target results belong above it." }
+        - { file: "plan/phases/P12-lan-utilities-and-settings-depth.yaml", lines: "46-56, 76-89, 116-132", detail: "P12 adds saved devices, SecureOn, subnet broadcast, and wake verification; E02 adds grouping and confirmation after those primitives land." }
+      proposed_behavior: |
+        Add saved device groups (for example workstation/lab) with a bounded maximum
+        of 16 targets. Before sending, show a review sheet with target names/MACs,
+        broadcast/port, local-network status, duplicate detection, and a required
+        confirmation when the destination is global broadcast. Send at most four
+        targets concurrently through the P05-bound socket, then optionally run the
+        P12 bounded wake verification per target. Return independent Sent/Verified/
+        Timeout/Skipped outcomes and a batch share summary. SecureOn values remain
+        write-only and are never exported.
+      depends_on: [P05-T1, P08-T1, P12-T2, P12-T4]
+      files_seams:
+        create:
+          - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/wol/WolBatch.kt"
+          - "core-network/src/test/kotlin/net/aieat/netswissknife/core/network/wol/WolBatchTest.kt"
+          - "core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/WakeBatchUseCase.kt"
+          - "core-domain/src/test/kotlin/net/aieat/netswissknife/core/domain/WakeBatchUseCaseTest.kt"
+        modify:
+          - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/wol/WolSendReport.kt"
+          - "core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/WakeOnLanUseCase.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/wol/WakeOnLanViewModel.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/wol/WakeOnLanScreen.kt"
+      implementation_steps:
+        - "Write RED tests for duplicate MACs, group size cap, global-broadcast confirmation requirement, cancellation, bounded parallelism, SecureOn redaction, and independent verification outcomes."
+        - "Reuse P12 SavedDevicesRepository/WakeVerifyUseCase; capture a group snapshot before sending and never read mutable editor state during the batch."
+        - "Use P05 NetworkBinder and the selected usable local route; do not require Internet NET_CAPABILITY_VALIDATED for a local WOL send, and block only when no suitable local route exists instead of guessing."
+        - "Add review/undo-friendly UI and per-device retry without resending successful targets."
+      acceptance_criteria:
+        - "Batch sends are capped and cancellable; each target reports sent/verified/timeout/error independently."
+        - "A global broadcast requires explicit confirmation and is labeled; subnet-directed broadcast is suggested when P12 can derive it."
+        - "Exports include target names/MACs only when selected and never include SecureOn passwords."
+      validation:
+        automated: ["./gradlew :core-network:test --tests '*wol*' --no-daemon", "./gradlew :core-domain:test --tests '*Wake*' --no-daemon", "./gradlew :app:testDebugUnitTest --tests '*Wol*' --no-daemon", "instrumented WakeOnLanScreenTest: review/batch/verify/redaction"]
+        manual: ["Wake two lab machines with one offline and verify one success plus one timeout.", "Try batch wake on cellular/VPN and verify the local-network safety gate."]
+      effort: "M (1-2 coding-agent sessions)"
+      constraints_rollout: "No scheduled wake, internet relay, magic-packet forwarding, or claim that a sent datagram powered on a machine. P12's secure password handling and verification limits are mandatory."
+
+    - id: E02-T15
+      priority: medium
+      status: todo
+      title: "MQTT broker handshake inspector"
+      source_evidence:
+        - { file: "README.md", lines: "3-171", detail: "The current 14-tool surface has no MQTT diagnostic even though P12's mDNS catalog already recognizes _mqtt._tcp as a local service type." }
+        - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/UdpExchange.kt", lines: "1-24", detail: "Existing injectable local transport patterns can guide a new socket seam, but MQTT requires a bounded TCP/TLS stream and must not reuse UDP framing." }
+        - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/tls/TlsInspectorRepository.kt", lines: "1-7", detail: "Existing TLS repository and P10 HandshakeEngine are reusable for TLS summary; MQTT must keep TLS trust/hostname verdict separate from broker protocol response." }
+        - { file: "plan/phases/P12-lan-utilities-and-settings-depth.yaml", lines: "71-89", detail: "P12's mDNS catalog includes MQTT service discovery; E02 should offer a hand-off from a discovered service without assuming credentials." }
+      proposed_behavior: |
+        Add an MQTT Inspector for MQTT 3.1.1 and MQTT 5 CONNECT/CONNACK only. The
+        user enters host/port or hands off an mDNS service, chooses plain TCP or TLS,
+        and optionally supplies username/password for one run. The inspector sends
+        a minimal CONNECT with a cryptographically random non-reused client id,
+        clean-start/session-expiry-zero, and no Will; it reads one bounded CONNACK, records
+        DNS/connect/TLS/protocol timing, return code/reason, negotiated keep-alive,
+        server properties, maximum packet size, and whether authentication is
+        required, then sends DISCONNECT and closes. Username/password are transient
+        and the UI warns that plain TCP transmits them without transport encryption.
+        It never publishes, subscribes, reads retained messages, stores credentials,
+        or logs packet payloads.
+      depends_on: [P05-T1, P07-T1, P07-T2, P07-T3, P08-T1, P10-T2, P12-T1]
+      files_seams:
+        create:
+          - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/mqtt/MqttModels.kt"
+          - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/mqtt/MqttCodec.kt"
+          - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/mqtt/MqttHandshakeRepository.kt"
+          - "core-network/src/test/kotlin/net/aieat/netswissknife/core/network/mqtt/MqttCodecTest.kt"
+          - "core-network/src/test/kotlin/net/aieat/netswissknife/core/network/mqtt/MqttHandshakeRepositoryTest.kt"
+          - "core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/MqttInspectorUseCase.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/mqtt/MqttInspectorViewModel.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/mqtt/MqttInspectorScreen.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/di/MqttModule.kt"
+        modify:
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/ui/navigation/NavRoutes.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/ui/navigation/MoreToolsSheet.kt"
+          - "app/src/main/res/values/strings.xml"
+      implementation_steps:
+        - "Verify MQTT 3.1.1/5 wire rules from the authoritative specifications before coding; write RED codec tests for UTF-8, variable-byte-integer bounds, properties, malformed packets, and maximum packet size."
+        - "Define TcpStream/TlsStream interfaces with connect/read/write deadlines and a close hook; bind local targets through P05 and use platform TLS hostname verification from P10."
+        - "Implement a minimal handshake state machine that rejects unexpected packet types, caps packet size, preserves cancellation, and maps CONNACK codes to typed localized errors."
+        - "Add UI for host/port/TLS/version/optional transient credentials with a prominent 'CONNECT only' explanation, result evidence badges, and redacted share output."
+      acceptance_criteria:
+        - "A broker fixture returns parsed MQTT 3.1.1 and MQTT 5 CONNACK fields and closes cleanly; malformed/oversized responses fail typed and bounded."
+        - "TLS hostname/trust failures are shown separately from broker authentication refusal; plain TCP does not claim TLS security."
+        - "Credentials are never persisted, placed in recent-host storage, logs, crash payloads, or default exports."
+      validation:
+        automated: ["./gradlew :core-network:test --tests '*mqtt*' --no-daemon", "./gradlew :core-domain:test --tests '*Mqtt*' --no-daemon", "./gradlew :app:testDebugUnitTest --tests '*Mqtt*' --no-daemon", "instrumented MqttInspectorScreenTest: idle/loading/success/error"]
+        manual: ["Test a local anonymous broker and a TLS broker with wrong/valid SNI; verify separate verdicts.", "Hand off an _mqtt._tcp mDNS service and confirm host/port are captured without auto-connecting."]
+      effort: "L (2-3 coding-agent sessions)"
+      constraints_rollout: "No broker administration, topic browsing, publish/subscribe, retained-message retrieval, credential vault, or root/raw-socket dependency. Add only an Internet permission already required by existing tools."
+
+    - id: E02-T16
+      priority: medium
+      status: todo
+      title: "WebSocket handshake and bounded frame probe"
+      source_evidence:
+        - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/httprobe/HttpProbeModels.kt", lines: "15-51", detail: "HTTP Probe models requests/responses but do not represent Upgrade/101 protocol negotiation, frames, close codes, or WebSocket timing." }
+        - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/httprobe/HttpProbeRepositoryImpl.kt", lines: "31-65", detail: "Existing HTTP URL validation and bounded error semantics can inform shared host/input validation, but WebSocket needs a separate protocol adapter." }
+        - { file: "plan/phases/P10-security-tools-depth.yaml", lines: "65-91, 104-112", detail: "P10 introduces OkHttp and typed errors; WebSocket should reuse its client/hostname/TLS policy rather than add a second HTTP stack." }
+        - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/httprobe/HttpProbeViewModel.kt", lines: "23-45, 95-132", detail: "Existing request editor and recent-host pattern can be reused, but credentials/headers must be transient and redacted." }
+      proposed_behavior: |
+        Add a WebSocket Probe for ws:// and wss:// endpoints using the P10 OkHttp
+        engine or an injectable WebSocketTransport. Report DNS/connect/TLS/HTTP 101
+        timing, response headers, selected subprotocol/extensions, close code/reason,
+        and bounded frame events. The user may send one optional text frame (default
+        disabled) and one ping when the selected adapter can observe a real pong; if
+        it cannot, the tool explicitly falls back to handshake-only. It records frame
+        type/size and a redacted/truncated preview only when explicitly requested. Default
+        behavior performs handshake then closes without sending application data.
+      depends_on: [P07-T1, P07-T2, P07-T3, P08-T1, P10-T3, P10-T4]
+      files_seams:
+        create:
+          - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/websocket/WebSocketModels.kt"
+          - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/websocket/WebSocketProbeRepository.kt"
+          - "core-network/src/test/kotlin/net/aieat/netswissknife/core/network/websocket/WebSocketProbeRepositoryTest.kt"
+          - "core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/WebSocketProbeUseCase.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/websocket/WebSocketProbeViewModel.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/websocket/WebSocketProbeScreen.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/di/WebSocketModule.kt"
+        modify:
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/ui/navigation/NavRoutes.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/ui/navigation/MoreToolsSheet.kt"
+          - "app/src/main/res/values/strings.xml"
+      implementation_steps:
+        - "Verify OkHttp version/API selected by P10 and write RED MockWebServer tests for 101 success, redirect/rejection, subprotocol negotiation, TLS failure, ping/pong, close, timeout, and cancellation."
+        - "Validate ws/wss URI, header count/size, frame size, optional message length, and total session budget before opening the socket."
+        - "Strip or warn on Cookie/Authorization in exports; keep the socket callback lifecycle in a repository-owned session and close it in all terminal paths."
+        - "Add a focused screen with handshake summary, protocol chips, bounded event log, and an explicit data-send confirmation."
+      acceptance_criteria:
+        - "Handshake failure, HTTP rejection, TLS failure, protocol timeout, and close-code outcome are distinct typed states."
+        - "The default probe sends no application data and closes cleanly; optional ping/text actions are bounded and visibly user initiated."
+        - "No frame payload or credential is persisted/shared by default; binary frames are represented by type/size only."
+      validation:
+        automated: ["./gradlew :core-network:test --tests '*websocket*' --no-daemon", "./gradlew :core-domain:test --tests '*WebSocket*' --no-daemon", "./gradlew :app:testDebugUnitTest --tests '*WebSocket*' --no-daemon", "instrumented WebSocketProbeScreenTest: idle/handshake/frame/error"]
+        manual: ["Probe a local echo server and a wss endpoint, then compare handshake and ping timing.", "Verify a server sending a large/binary frame is capped and summarized without UI memory growth."]
+      effort: "L (2-3 coding-agent sessions)"
+      constraints_rollout: "No browser-cookie reuse, arbitrary long-lived sockets, file uploads, binary payload display, or WebSocket server. Default session budget is short and cancellation must close the OkHttp socket."
+
+    - id: E02-T17
+      priority: low
+      status: todo
+      title: "System proxy and PAC route tester"
+      source_evidence:
+        - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/platform/LinkInfoProvider.kt", lines: "1-103", detail: "Platform network metadata is already centralized here; proxy/PAC discovery should extend this adapter rather than read hidden APIs in core modules." }
+        - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/di/HttpProbeModule.kt", lines: "1-24", detail: "HTTP transport is injected through app DI, providing the seam for a direct/system-proxy comparison client." }
+        - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/httprobe/HttpProbeRepositoryImpl.kt", lines: "31-65, 67-186", detail: "Existing bounded HTTP probe can supply the one-shot route check after a proxy-aware engine is added by P10." }
+        - { file: "plan/phases/P05-local-network-binding-resilience.yaml", lines: "45-65, 151-258", detail: "P05 defines network selection/binding and VPN awareness; proxy inspection must show route/interface context instead of bypassing the selected network." }
+      proposed_behavior: |
+        Add a Proxy/PAC Tester that reports the public Android proxy configuration for
+        the active Network/LinkProperties: direct, fixed host/port, exclusion list,
+        or PAC URL present. For a user-selected HTTP(S) URL, resolve the route using
+        the platform ProxySelector where available. The user may opt into one bounded
+        HEAD through the selected proxy or separately opt into a direct leg; never
+        auto-bypass a proxy failure and never run the direct leg silently. Display
+        route chosen, proxy connection/response timing, bypass reason, redirects,
+        and whether PAC evaluation is unavailable. Do not implement a guessed PAC
+        interpreter in core; if the platform cannot evaluate a PAC URL, report that
+        limitation and let the user test a fixed proxy explicitly.
+      depends_on: [P05-T1, P05-T2, P07-T2, P07-T3, P08-T1, P10-T3]
+      files_seams:
+        create:
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/platform/ProxyConfigProvider.kt"
+          - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/proxy/ProxyRouteModels.kt"
+          - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/proxy/ProxyRouteAnalyzer.kt"
+          - "core-network/src/test/kotlin/net/aieat/netswissknife/core/network/proxy/ProxyRouteAnalyzerTest.kt"
+          - "core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/ProxyRouteUseCase.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/proxy/ProxyTesterViewModel.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/proxy/ProxyTesterScreen.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/di/ProxyTesterModule.kt"
+        modify:
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/platform/LinkInfoProvider.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/ui/navigation/NavRoutes.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/ui/navigation/MoreToolsSheet.kt"
+          - "app/src/main/res/values/strings.xml"
+      implementation_steps:
+        - "Verify public Android ProxyInfo/LinkProperties/ProxySelector behavior on API 26, current target, Wi-Fi, cellular, VPN, fixed proxy, and PAC configurations before selecting the provider API."
+        - "Write RED pure tests for route selection, no-proxy/direct, exclusion matching, proxy unavailable, PAC-unavailable, and redaction; instrument platform mapping separately."
+        - "Add a proxy-aware HttpEngine factory with per-request connect/read/total budgets; ensure separately consented proxy/direct legs do not reuse a pooled connection and a proxy failure never triggers direct fallback."
+        - "Show the exact route and limitations in UI, require explicit URL submission, and add Settings attribution only for any probe endpoint the user selects."
+      acceptance_criteria:
+        - "The app accurately reports fixed proxy/exclusion configuration and distinguishes 'PAC configured but evaluation unavailable' from 'no proxy'."
+        - "Direct/proxy result differences show status, final URL, timings, and typed route errors without leaking proxy credentials."
+        - "VPN/network changes refresh route context and do not leave a prior proxy result labeled as current."
+      validation:
+        automated: ["./gradlew :core-network:test --tests '*proxy*' --no-daemon", "./gradlew :core-domain:test --tests '*Proxy*' --no-daemon", "./gradlew :app:testDebugUnitTest --tests '*Proxy*' --no-daemon", "instrumented ProxyTesterScreenTest: direct/fixed/PAC-unavailable/network-change"]
+        manual: ["Use an emulator/device fixed HTTP proxy with an exclusion list and verify route selection.", "Use a PAC-configured network and ensure the app states whether Android exposed an evaluated route rather than claiming PAC support."]
+      effort: "L (2-3 coding-agent sessions; platform spike first)"
+      constraints_rollout: "No hidden PAC engine, certificate interception, VPN capture, proxy credential storage, or attempt to change device proxy settings. If platform behavior is inconsistent, ship configuration inspection plus an explicit unavailable state and defer active comparison."
+
+    - id: E02-T18
+      priority: medium
+      status: todo
+      title: "Active captive-portal diagnosis"
+      source_evidence:
+        - { file: "README.md", lines: "3-171", detail: "Existing tools can scan Wi-Fi and query DNS but provide no focused explanation of validated/captive/partial connectivity or login interception." }
+        - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/platform/LinkInfoProvider.kt", lines: "1-103", detail: "NetworkCapabilities/LinkProperties mapping is the platform seam for validated, captive, DNS, transport, and VPN context." }
+        - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/httprobe/HttpProbeRepository.kt", lines: "1-7", detail: "Existing bounded HTTP probe can perform explicit no-cookie 204/redirect checks through an injectable engine." }
+        - { file: "plan/phases/P13-new-tools-wave-1.yaml", lines: "27-75", detail: "P13 Network Info already displays platform captive/validated flags; E02 adds active evidence and explanation, not another passive dashboard." }
+      proposed_behavior: |
+        Add a Captive Portal Check that combines platform capabilities (validated,
+        captive portal, partial connectivity, transport, VPN, metered) with one
+        user-triggered DNS resolution and one or two configurable HTTP checks. The
+        default check uses a documented 204 endpoint selected in Settings; a user
+        may enter an organization endpoint. Do not follow redirects automatically:
+        classify 204/empty, redirect-to-login, HTML interception, DNS failure,
+        TLS failure, timeout, and platform-reported captive states. Show evidence
+        timestamps and a plain-language next action such as "open the system sign-in
+        page" only when the platform exposes a captive portal state; never promise
+        that a 204 proves full internet access.
+      depends_on: [P05-T1, P07-T2, P07-T3, P08-T1, P10-T3, P13-T1]
+      files_seams:
+        create:
+          - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/captiveportal/CaptivePortalModels.kt"
+          - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/captiveportal/CaptivePortalAnalyzer.kt"
+          - "core-network/src/test/kotlin/net/aieat/netswissknife/core/network/captiveportal/CaptivePortalAnalyzerTest.kt"
+          - "core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/CaptivePortalUseCase.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/captiveportal/CaptivePortalViewModel.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/captiveportal/CaptivePortalScreen.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/di/CaptivePortalModule.kt"
+        modify:
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/platform/LinkInfoProvider.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/ui/navigation/NavRoutes.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/ui/navigation/MoreToolsSheet.kt"
+          - "app/src/main/res/values/strings.xml"
+      implementation_steps:
+        - "Verify the selected 204 endpoint's current behavior and attribution before coding; keep endpoints in a single editable provider table and test response fixtures rather than hard-coding a vendor claim."
+        - "Write RED analyzer tests for platform flag combinations, 204, redirect, HTML login, non-2xx, DNS/TLS/timeout, and conflicting platform-vs-active evidence."
+        - "Use P10 HttpEngine with redirects disabled, body cap 8 KiB, no cookies/auth, and a total check budget; capture only status/headers/body classification."
+        - "Add a result card showing platform and active evidence separately, with retry and an explicit external-request disclosure."
+      acceptance_criteria:
+        - "The analyzer never labels a network 'online' solely because DNS or one HTTP endpoint succeeded; it reports conflicting/partial evidence explicitly."
+        - "A login redirect or HTML body is classified as portal/interception without displaying or persisting the full body by default."
+        - "All checks stop on cancellation, and network changes cannot attach a result to the wrong interface."
+      validation:
+        automated: ["./gradlew :core-network:test --tests '*captiveportal*' --no-daemon", "./gradlew :core-domain:test --tests '*CaptivePortal*' --no-daemon", "./gradlew :app:testDebugUnitTest --tests '*CaptivePortal*' --no-daemon", "instrumented CaptivePortalScreenTest: flags/204/login/error"]
+        manual: ["Test a validated home network, a login-required hotspot fixture, and airplane mode; verify evidence layers.", "Change transport/VPN during a check and confirm the finished context identifies the captured network."]
+      effort: "M (1-2 coding-agent sessions)"
+      constraints_rollout: "No automatic login submission, credential capture, forced captive-portal launch, private Android validation endpoint dependence, or claim of internet reachability beyond tested endpoints."
+
+    - id: E02-T19
+      priority: medium
+      status: todo
+      title: "Diagnostics Compare: repeatable before/after experiment bundles"
+      source_evidence:
+        - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/navigation/NavRoutes.kt", lines: "1-84", detail: "All current tools are route-addressable, but there is no shared workflow that captures several tool results under one network context." }
+        - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/ToolHeroHeader.kt", lines: "1-164", detail: "Shared tool UI can host a consistent experiment entry point while individual screens remain focused." }
+        - { file: "core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/PingUseCase.kt", lines: "12-51", detail: "Use cases expose injectable orchestration seams suitable for a bounded bundle runner." }
+        - { file: "core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/DnsLookupUseCase.kt", lines: "1-42", detail: "DNS use case provides a typed lookup seam for a captured target/config." }
+        - { file: "plan/plan.yaml", lines: "1-130", detail: "Existing findings repeatedly show stale context, stop races, and misleading exports; a bundle must preserve captured metadata and partial outcomes." }
+      proposed_behavior: |
+        Add a Diagnostics Compare workflow that lets a user define a bounded plan of
+        existing checks (for example DNS A lookup, Ping, HTTP GET, and TLS inspect),
+        capture a Baseline and a Candidate run, and compare only matching targets,
+        network context, and configuration. Each step has independent loading,
+        cancellation, typed error, and evidence quality; one failure does not erase
+        the others. The bundle stores immutable inputs, tool versions/schema, active
+        network label, monotonic/epoch timing, and redacted outputs locally. A result
+        screen shows changed fields and suggests a next hand-off (for example DNS
+        mismatch -> DNS matrix, latency increase -> traceroute) without asserting a
+        root cause. Export JSON plus a readable report; no cloud upload or automatic
+        recurring monitor.
+      depends_on: [E01-T11, E01-T12, E02-T01, E02-T02, E02-T05, E02-T07, P05-T1, P07-T2, P07-T3, P08-T1, P09-T2, P12-T4]
+      files_seams:
+        create:
+          - "core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/DiagnosticsRunPlan.kt"
+          - "core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/DiagnosticsBundleUseCase.kt"
+          - "core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/DiagnosticsBundleDiff.kt"
+          - "core-domain/src/test/kotlin/net/aieat/netswissknife/core/domain/DiagnosticsBundleUseCaseTest.kt"
+          - "core-domain/src/test/kotlin/net/aieat/netswissknife/core/domain/DiagnosticsBundleDiffTest.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/data/DiagnosticsBundleRepository.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/compare/DiagnosticsCompareViewModel.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/compare/DiagnosticsCompareScreen.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/di/DiagnosticsCompareModule.kt"
+        modify:
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/ui/navigation/NavRoutes.kt"
+          - "app/src/main/kotlin/net/aieat/netswissknife/app/ui/navigation/MoreToolsSheet.kt"
+          - "app/src/main/res/values/strings.xml"
+          - "README.md"
+      implementation_steps:
+        - "Write RED tests for plan validation/caps, baseline/candidate context mismatch, independent step failures, cancellation, deterministic diff ordering, redaction, and schema migration."
+        - "Define a sealed set of allowed step types/configs; do not accept arbitrary code, arbitrary unbounded URLs, or mutable ViewModel references."
+        - "Run steps sequentially by default to keep interpretation and data use predictable; permit bounded parallelism only for independent DNS comparisons with an explicit UI label."
+        - "Add bundle history/delete/export through the P12 stores, with a context card and a result table accessible without relying on charts."
+        - "Add hand-offs using existing navigation arguments, preserving the exact target/config but requiring the user to start the next tool."
+      acceptance_criteria:
+        - "A baseline/candidate bundle can run Ping + DNS + HTTP + TLS and show per-tool success/error plus field-level changes without losing partial results."
+        - "Changing Wi-Fi to cellular, target, resolver, or relevant tool parameters labels comparisons as incomparable/directional rather than a regression."
+        - "Default exports redact credentials, cookies, SecureOn, SNMP secrets, full raw bodies/PEM, and private network identifiers unless the user opts into each category."
+        - "The workflow remains cancellable and stores only completed or explicitly saved partial bundles."
+      validation:
+        automated: ["./gradlew :core-domain:test --tests '*Diagnostics*' --no-daemon", "./gradlew :app:testDebugUnitTest --tests '*Diagnostics*' --no-daemon", "instrumented DiagnosticsCompareScreenTest: plan/baseline/partial/diff/export"]
+        manual: ["Run a baseline on Wi-Fi, change DNS/network conditions, run candidate, and verify the report names changed context and affected fields.", "Cancel midway, reopen the saved partial bundle, and confirm each completed step remains labeled with its capture context."]
+      effort: "L (3-4 coding-agent sessions)"
+      constraints_rollout: "Ship behind a feature flag after core bundle/diff tests. No autonomous diagnosis, cloud telemetry, scheduled checks, arbitrary workflows, or new raw-socket privileges."
+
+  feasibility_privacy_matrix:
+    - id: E02-T15
+      api_feasibility: "Feasible with a pure MQTT 3.1.1/5 codec and injectable blocking TCP/TLS stream; no MQTT dependency is required. Verify packet/property rules against the authoritative OASIS specifications during implementation."
+      permissions: "Existing INTERNET permission; P05 NetworkBinder for local broker targets. No root, VPN, notification, or storage permission."
+      destinations: "Local mDNS/LAN broker by default; public broker only after explicit host entry."
+      data: "CONNECT/CONNACK metadata only; no publish/subscribe/retained payloads. Credentials transient, never history/export/logs."
+    - id: E02-T16
+      api_feasibility: "Feasible if the pinned P10 OkHttp line exposes the needed WebSocket listener/close APIs; run a compile/device spike for ping/pong/manual frame behavior before promising optional frame actions. Fall back to handshake-only if the adapter cannot observe it reliably."
+      permissions: "Existing INTERNET permission; local targets use P05 binding. No root or capture permission."
+      destinations: "User-entered ws/wss endpoint; no automatic public endpoint."
+      data: "Handshake headers and bounded frame metadata; payload previews opt-in and redacted."
+    - id: E02-T17
+      api_feasibility: "Public Android LinkProperties/ProxyInfo/ConnectivityManager and java.net.ProxySelector are the only supported discovery seams. PAC execution is platform-dependent; report configured-but-unevaluated rather than implement hidden/guessed evaluation."
+      permissions: "Existing INTERNET permission for explicit probes; no ability to change system proxy and no credential-storage permission."
+      destinations: "Direct and selected proxy legs are separate, explicit user actions. A proxy failure never triggers an automatic direct retry; direct mode visibly warns it may expose the target/client route."
+      data: "Proxy host/port/PAC URL may be sensitive; redact credentials and avoid persisting route details unless explicitly saved."
+    - id: E02-T18
+      api_feasibility: "NetworkCapabilities captive/validated/partial flags and LinkProperties are public platform APIs; active HTTP/DNS checks use existing P10 engine. Endpoint behavior must be fixture-tested and reverified before shipping."
+      permissions: "Existing INTERNET plus current connectivity access; no location/storage permission beyond the platform fields already gated by the app."
+      destinations: "User-selected or attributed 204/check endpoint; local organization endpoint supported."
+      data: "Status/headers/classification only by default; login HTML/body is bounded and not persisted."
+    - id: E02-T19
+      api_feasibility: "Pure orchestration over existing use cases and E01 report/history contracts; no new provider or protocol dependency."
+      permissions: "Inherits each explicitly selected step; no automatic network permission expansion."
+      destinations: "Only the targets configured in each step; imported profiles never auto-run."
+      data: "Opt-in local bundle, default metadata-only, E01-T12 redaction before share/file export."
+
+  incremental_delivery:
+    stages:
+      - order: 0
+        tasks: [E00-T01, E01-T06]
+        gate: "The LAN confirmed/ambiguous contract and regression fixture pass; E02-T04 consumes this contract and does not reimplement it."
+      - order: 1
+        tasks: [E01-T11, E01-T12, E02-T01, E02-T02, E02-T03, E02-T04]
+        gate: "Run history/export consent, redaction, stop/drain behavior, and core comparison models are verified before any durable E02 result payload is enabled."
+      - order: 2
+        tasks: [E02-T05, E02-T06, E02-T07, E02-T08, E02-T09, E02-T10, E02-T11, E02-T12, E02-T13, E02-T14]
+        gate: "Existing owner phases provide their protocol/platform primitives; each tool ships independently with no global rewrite."
+      - order: 3
+        tasks: [E02-T15, E02-T16, E02-T17, E02-T18]
+        gate: "New-tool feasibility spikes, dependency/API decisions, privacy copy, and offline fixtures pass before navigation entries are enabled."
+      - order: 4
+        tasks: [E02-T19]
+        gate: "Compare workflow runs only after participating result schemas, history consent, redaction, and handoff contracts are stable."
+    feature_flags:
+      - "New screens and durable history integrations remain internal/debug-gated until their focused core/domain/app/instrumented checks pass."
+      - "A disabled optional tool remains absent from navigation and cannot be auto-invoked by imported settings or bundles."
+      - "Flags do not change the E00-T01 default LAN false-positive suppression."
+
+  deferred_unrealistic_scope:
+    - scope: "Raw/SYN/UDP port scanning, packet capture, ARP injection, root-only interfaces, or VPN interception"
+      reason: "Android app permissions/device policy do not provide a stable, safe cross-device contract; current TCP scanner and evidence-aware LAN discovery remain bounded."
+    - scope: "A universal PAC interpreter or silent direct fallback when a proxy fails"
+      reason: "PAC execution and route semantics vary by platform; public APIs can expose configuration/selection but do not justify hidden bypass behavior."
+    - scope: "Captive-portal login automation, credential submission, or universal proof of Internet access"
+      reason: "Would handle user credentials and depends on provider/network-specific login flows; E02 reports evidence and leaves sign-in to the system/user."
+    - scope: "MQTT topic browsing/publishing/subscribing or WebSocket browser/client collections"
+      reason: "Diagnostic handshake scope is safer and testable; application data access belongs to a separate consented product decision."
+    - scope: "Background mDNS/Wi-Fi/throughput monitors, scheduled WOL, or recurring cloud comparisons"
+      reason: "Needs a foreground-service/notification, battery policy, scheduling semantics, and expanded privacy review; all E02 runs stay explicit and bounded."
+    - scope: "Global route maps, RF spectrum measurements, automatic device identity, and universal root-cause diagnosis"
+      reason: "Available observations cannot support those claims consistently across Android OEMs and networks; display provenance and uncertainty instead."
+    - scope: "Cloud synchronization of run history, credentials, raw DNS/HTTP bodies, PEM chains, or packet payloads"
+      reason: "Conflicts with local-first privacy and E01-T11/E01-T12 retention/redaction contracts."
+
+  qa_validation:
+    required_before_task_done:
+      - "Focused pure tests cover normal, boundary, malformed, timeout, cancellation, partial, and incomparable-context cases; use fake clocks/transports and no live provider as a deterministic gate."
+      - "ViewModel tests prove captured input/result generations, duplicate-submit guards, stop/drain semantics, typed errors, and no stale terminal update."
+      - "Instrumented screen tests cover idle/loading/success/partial/error plus compact/large font/accessibility semantics for each new or materially changed flow."
+      - "Run `./gradlew test`, `./gradlew :app:assembleDebug`, `./gradlew :app:lintDebug`, and all three Kover gates sequentially as prescribed by P09; record device/API and whether work was cached."
+      - "Run release-smoke/R8 checks after adding OkHttp or serialization and verify no new secrets/credentials are retained in logs, backups, history, or exports."
+    focused_commands:
+      - "./gradlew :core-network:test --tests '*<task protocol/package>*' --no-daemon --no-parallel"
+      - "./gradlew :core-domain:test --tests '*<task use case>*' --no-daemon --no-parallel"
+      - "./gradlew :app:testDebugUnitTest --tests '*<task ViewModel>*' --no-daemon --no-parallel"
+      - "./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=<fully.qualified.ScreenTest> --no-daemon --no-parallel (replace with an existing class; --tests is for JVM Test tasks, not this instrumented task)"
+    live_validation_limits:
+      - "Provider/device observations are exploratory evidence only; record endpoint, API level, transport, timestamp, and failure conditions."
+      - "No acceptance criterion depends on a public broker, public resolver, Cloudflare throughput, portal endpoint, or carrier behavior being available at test time."
+      - "Network-bound manual checks must state whether traffic is local or external and the exact data sent."
+
+  docs_privacy_sync:
+    - "Update README Features and Available Tools only when each task ships; keep the current 14-tool claim accurate until P13/P14/P15/E02 tools are actually implemented."
+    - "Add per-tool privacy/attribution entries for MQTT/WebSocket/proxy/captive endpoints and the external data fields; local-only tools must say so."
+    - "Update store/help/catalog/navigation strings and German/pseudo-locale resources through P07/E01; never place protocol claims or error text as UI literals."
+    - "Document confirmed/ambiguous LAN semantics, comparison limitations, data budgets, stop behavior, and redaction defaults in help sheets and share reports."
+
+  completion_definition:
+    - "All 19 E02 tasks have status done or dropped with a reason; every done task has source evidence, focused tests, app validation, privacy/route notes, and incremental checkpoint evidence."
+    - "E02 does not close E00/E01/E03 or P01–P15 tasks by implication; each owner records its own acceptance and dependency status."
+    - "No task is considered complete if its provider/API feasibility is unverified, its comparison context is missing, its cancellation cleanup is untested, or its export/history behavior bypasses E01-T11/E01-T12 consent and redaction."
