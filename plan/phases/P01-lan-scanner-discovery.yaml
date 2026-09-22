@@ -8,7 +8,7 @@ expansion_tasks:
   rule: "Coordinate with these expansion tasks; do not duplicate existing scope or block independent regression fixes on optional enhancements. See comprehensive_expansion.regression_delivery for fresh follow-up ownership."
 
 second_pass_follow_up:
-  status: todo
+  status: done
   report: plan/reviews/2026-09-22-second-pass.yaml
   findings: [R2-003, R2-004]
   rule: "Apply report recommendations and regression acceptance before closing the listed follow-ups; historical phase completion does not close new findings."
@@ -26,7 +26,7 @@ phase:
 
 review_follow_up:
   reviewed_on: "2026-09-21"
-  status: todo
+  status: in_progress
   findings: [RBUILD003, RLAN001, RNET001, RNET011]
   reports:
     - plan/reviews/2026-09-21-build.yaml
@@ -37,7 +37,7 @@ review_follow_up:
     finding: RLAN001
     implementation_task: E00-T01
     priority: high
-    status: todo
+    status: in_progress
     supersedes: "Historical REFUSED -> alive design and tests below; phase completion records are historical, not acceptance criteria for this fix."
     requirements:
       - "A failed TCP connection alone must not add a confirmed device or imply the target is blocking traffic. Repeated refusals alone do not establish target presence."

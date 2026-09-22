@@ -41,7 +41,8 @@ TCP port reachability scanning with service identification.
 ### LAN Scanner
 Local network device discovery across IPv4 subnets.
 - CIDR subnet scanning (/16–/30) with automatic current-subnet detection
-- Multi-method presence detection: ICMP, TCP open/reset, NetBIOS NBSTAT, and mDNS reverse lookup; each host shows the method(s) that found it
+- Multi-method presence detection: successful ICMP, completed TCP connections, and correlated NetBIOS NBSTAT or mDNS replies; each confirmed host shows the method(s) that found it
+- Failed connects, timeouts, unreachable routes, and policy failures remain opt-in diagnostics and never inflate the confirmed device count or confirmed-host exports
 - Per-host details: IP, hostname, MAC address, OUI vendor name, open ports, RTT when ICMP answers, and gateway flag from the active default route
 - MAC resolution is best-effort: Android 10+ restricts the ARP source, so the UI explains when a MAC cannot be read
 - Concurrent host probes (1–500) with real-time progress streaming, post-probe ARP enrichment, and final summary

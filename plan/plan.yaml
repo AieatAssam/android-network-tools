@@ -52,8 +52,8 @@ second_pass_review:
     - {"id":"R2-007","priority":"high","kind":"plan_gap","status":"todo","owner":"E01-T11","title":"New history persistence needs an explicit consent, backup and version-compatibility contract"}
     - {"id":"R2-010","priority":"high","kind":"resource_gap","status":"todo","owner":"E03-T05","title":"Topology fan-out and SNMP walks can grow before UI caps take effect"}
     - {"id":"R2-013","priority":"high","kind":"correctness_gap","status":"todo","owner":"E02-T03","title":"Port scan reports one resolved address but sends probes using the hostname again"}
-    - {"id":"R2-003","priority":"medium","kind":"bug","status":"todo","owner":"P01-T3","title":"NBSTAT parser assumes a question section that standard responses omit"}
-    - {"id":"R2-004","priority":"medium","kind":"security_gap","status":"todo","owner":"P01-T3","title":"LAN UDP discovery loses sender provenance and accepts uncorrelated NBSTAT data"}
+    - {"id":"R2-003","priority":"medium","kind":"bug","status":"done","owner":"P01-T3","title":"NBSTAT parser assumes a question section that standard responses omit"}
+    - {"id":"R2-004","priority":"medium","kind":"security_gap","status":"done","owner":"P01-T3","title":"LAN UDP discovery loses sender provenance and accepts uncorrelated NBSTAT data"}
     - {"id":"R2-006","priority":"medium","kind":"bug","status":"todo","owner":"E01-T12","title":"Ping CSV statistics use locale-specific decimal commas as field separators"}
     - {"id":"R2-008","priority":"medium","kind":"plan_gap","status":"todo","owner":"E01-T12","title":"Report privacy and SAF handling have multiple implementation paths without a single contract owner"}
     - {"id":"R2-009","priority":"medium","kind":"isolation_gap","status":"todo","owner":"E03-T03","title":"WHOIS progress is repository-global rather than lookup-scoped"}
@@ -136,7 +136,7 @@ comprehensive_expansion:
     - "Evidence is source-relative to the baseline; proposed behaviors and performance budgets are targets, not claims about current runtime behavior."
     - "Prioritize critical/high correctness and current user pain, then shared foundations and everyday flows, then feature depth and optional new capabilities."
   task_index:
-    - {"id":"E00-T01","priority":"high","status":"todo","file":"plan/expansion/E00-execution-and-plan-refinements.yaml","title":"Fix LAN host-presence confidence and remove unused-address noise"}
+    - {"id":"E00-T01","priority":"high","status":"in_progress","file":"plan/expansion/E00-execution-and-plan-refinements.yaml","title":"Fix LAN host-presence confidence and remove unused-address noise"}
     - {"id":"E00-T02","priority":"high","status":"todo","file":"plan/expansion/E00-execution-and-plan-refinements.yaml","title":"Turn the review ledger into independently closable regression work"}
     - {"id":"E00-T04","priority":"high","status":"todo","file":"plan/expansion/E00-execution-and-plan-refinements.yaml","title":"Implement future-tool correctness refinements within their owning phase slices"}
     - {"id":"E01-T01","priority":"high","status":"todo","file":"plan/expansion/E01-ui-and-user-flows.yaml","title":"Introduce typed destination intents and safe cross-tool handoff arguments"}
@@ -200,7 +200,7 @@ comprehensive_expansion:
       - {"finding":"RBUILD001","owner_task":"P09-T4","follow_up_status":"todo","report":"plan/reviews/2026-09-21-build.yaml"}
       - {"finding":"RBUILD002","owner_task":"P09-T4","follow_up_status":"todo","report":"plan/reviews/2026-09-21-build.yaml"}
       - {"finding":"RBUILD003","owner_task":"P01-T7","follow_up_status":"todo","report":"plan/reviews/2026-09-21-build.yaml"}
-      - {"finding":"RLAN001","owner_task":"E00-T01","follow_up_status":"todo","report":"plan/reviews/2026-09-22-lan-scan-noise.yaml"}
+      - {"finding":"RLAN001","owner_task":"E00-T01","follow_up_status":"in_progress","report":"plan/reviews/2026-09-22-lan-scan-noise.yaml"}
       - {"finding":"RNET001","owner_task":"P01-T4","follow_up_status":"todo","report":"plan/reviews/2026-09-21-network.yaml"}
       - {"finding":"RNET002","owner_task":"P05-T1","follow_up_status":"todo","report":"plan/reviews/2026-09-21-network.yaml"}
       - {"finding":"RNET003","owner_task":"P02-T2","follow_up_status":"todo","report":"plan/reviews/2026-09-21-network.yaml"}
@@ -240,7 +240,7 @@ incremental_review:
     - { area: build-release-plan, file: plan/reviews/2026-09-21-build.yaml }
     - { area: lan-scan-discovery, file: plan/reviews/2026-09-22-lan-scan-noise.yaml }
   prioritized_findings:
-    - { id: RLAN001, severity: high, kind: bug, phase: P01, status: todo, title: "A failed TCP connect is promoted to a live host and floods LAN results with false positives" }
+    - { id: RLAN001, severity: high, kind: bug, phase: P01, status: in_progress, title: "A failed TCP connect is promoted to a live host and floods LAN results with false positives" }
     - { id: RAPP001, severity: medium, kind: bug, phase: P03, status: todo, title: "Wi-Fi scan failures are reported as completed scans" }
     - { id: RAPP002, severity: medium, kind: bug, phase: P05, status: todo, title: "mDNS stop/cancellation does not promptly terminate the socket loop" }
     - { id: RAPP004, severity: medium, kind: bug, phase: P12, status: todo, title: "mDNS packet I/O failures are converted into successful empty scans" }

@@ -12,6 +12,7 @@ import net.aieat.netswissknife.core.domain.LanScanFlowResult
 import net.aieat.netswissknife.core.domain.LanScanParams
 import net.aieat.netswissknife.core.domain.LanScanUseCase
 import net.aieat.netswissknife.core.network.lan.LanHost
+import net.aieat.netswissknife.core.network.lan.LanScanDiagnostic
 import net.aieat.netswissknife.core.network.lan.LanScanSummary
 import net.aieat.netswissknife.core.network.lan.SubnetUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -40,12 +41,15 @@ sealed interface LanScanUiState {
         val hosts: List<LanHost>,
         val scannedCount: Int,
         val totalCount: Int,
+        val uncertainCount: Int = 0,
+        val uncertainDiagnostics: List<LanScanDiagnostic> = emptyList(),
         val progress: Float = if (totalCount > 0) scannedCount.toFloat() / totalCount else 0f,
     ) : LanScanUiState
 
     data class Finished(
         val summary: LanScanSummary,
         val expandedHostIp: String? = null,
+        val showDiagnostics: Boolean = false,
     ) : LanScanUiState
 
     data class Error(val message: String) : LanScanUiState
@@ -162,6 +166,7 @@ class LanScanViewModel @Inject constructor(
     fun startScan() {
         scanJob?.cancel()
         val liveHosts = mutableListOf<LanHost>()
+        val uncertainDiagnostics = mutableListOf<LanScanDiagnostic>()
         scanStartMs = System.currentTimeMillis()
 
         val params = LanScanParams(
@@ -203,15 +208,20 @@ class LanScanViewModel @Inject constructor(
                                 hosts = liveHosts.toList(),
                                 scannedCount = result.scannedCount,
                                 totalCount = result.totalCount,
+                                uncertainCount = result.uncertainCount,
+                                uncertainDiagnostics = uncertainDiagnostics.toList(),
                             )
                         }
 
                         is LanScanFlowResult.ScanProgress -> {
+                            result.diagnostic?.let(uncertainDiagnostics::add)
                             val current = _uiState.value
                             if (current is LanScanUiState.Scanning) {
                                 _uiState.value = current.copy(
                                     scannedCount = result.scannedCount,
                                     totalCount = result.totalCount,
+                                    uncertainCount = result.uncertainCount,
+                                    uncertainDiagnostics = uncertainDiagnostics.toList(),
                                 )
                             }
                         }
@@ -238,10 +248,12 @@ class LanScanViewModel @Inject constructor(
         if (current is LanScanUiState.Scanning) {
             val partial = LanScanSummary(
                 subnet = _subnet.value,
-                totalScanned = current.totalCount,
+                totalScanned = current.scannedCount,
                 aliveHosts = current.hosts.size,
                 scanDurationMs = System.currentTimeMillis() - scanStartMs,
                 hosts = current.hosts,
+                uncertainHosts = current.uncertainDiagnostics,
+                uncertainCount = current.uncertainCount,
             )
             _uiState.value = LanScanUiState.Finished(partial)
         }
@@ -259,6 +271,11 @@ class LanScanViewModel @Inject constructor(
         _uiState.value = current.copy(
             expandedHostIp = if (current.expandedHostIp == ip) null else ip
         )
+    }
+
+    fun onToggleDiagnostics() {
+        val current = _uiState.value as? LanScanUiState.Finished ?: return
+        _uiState.value = current.copy(showDiagnostics = !current.showDiagnostics)
     }
 
     fun onScanPorts(host: String) {

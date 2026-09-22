@@ -127,6 +127,7 @@ import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.core.network.lan.LanHost
 import net.aieat.netswissknife.core.network.lan.LanScanSummary
 import net.aieat.netswissknife.core.network.lan.DiscoveryMethod
+import net.aieat.netswissknife.core.network.lan.LanScanDiagnosticReason
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
@@ -213,12 +214,14 @@ fun LanScreen(
                     is LanScanUiState.Finished -> LanFinishedContent(
                         summary = state.summary,
                         expandedHostIp = state.expandedHostIp,
+                        showDiagnostics = state.showDiagnostics,
                         searchQuery = searchQuery,
                         onSearchQueryChange = viewModel::onSearchQueryChange,
                         onToggleExpand = viewModel::onToggleHostExpanded,
                         onScanPorts = viewModel::onScanPorts,
                         onClear = viewModel::onClear,
                         onRescan = viewModel::startScan,
+                        onToggleDiagnostics = viewModel::onToggleDiagnostics,
                     )
                     is LanScanUiState.Error -> LanErrorContent(
                         message = state.message,
@@ -592,12 +595,14 @@ private fun HostFilterChips(activeFilter: HostFilter, onFilterChange: (HostFilte
 private fun LanFinishedContent(
     summary: LanScanSummary,
     expandedHostIp: String?,
+    showDiagnostics: Boolean,
     searchQuery: String,
     onSearchQueryChange: (String) -> Unit,
     onToggleExpand: (String) -> Unit,
     onScanPorts: (String) -> Unit,
     onClear: () -> Unit,
     onRescan: () -> Unit,
+    onToggleDiagnostics: () -> Unit,
 ) {
     val context = LocalContext.current
     val shareSubject = stringResource(R.string.share_subject_lan, summary.subnet)
@@ -648,6 +653,45 @@ private fun LanFinishedContent(
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                }
+
+                if (summary.uncertainCount > 0) {
+                    TextButton(onClick = onToggleDiagnostics) {
+                        Text(
+                            if (showDiagnostics) {
+                                stringResource(R.string.lan_hide_diagnostics)
+                            } else {
+                                stringResource(R.string.lan_show_diagnostics, summary.uncertainCount)
+                            },
+                        )
+                    }
+                    if (showDiagnostics) {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            summary.uncertainHosts.forEach { diagnostic ->
+                                Text(
+                                    text = stringResource(
+                                        R.string.lan_diagnostic_entry,
+                                        diagnostic.ip,
+                                        stringResource(diagnosticReasonLabel(diagnostic.reason)),
+                                        diagnostic.detail?.let { " ($it)" }.orEmpty(),
+                                    ),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            if (summary.uncertainCount > summary.uncertainHosts.size) {
+                                Text(
+                                    text = stringResource(
+                                        R.string.lan_diagnostics_truncated,
+                                        summary.uncertainHosts.size,
+                                        summary.uncertainCount,
+                                    ),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
                 }
 
                 Row(
@@ -804,6 +848,14 @@ private fun LanFinishedContent(
             }
         }
     }
+}
+
+private fun diagnosticReasonLabel(reason: LanScanDiagnosticReason): Int = when (reason) {
+    LanScanDiagnosticReason.TCP_REFUSED -> R.string.lan_diagnostic_tcp_refused
+    LanScanDiagnosticReason.TCP_TIMED_OUT -> R.string.lan_diagnostic_tcp_timed_out
+    LanScanDiagnosticReason.TCP_UNREACHABLE -> R.string.lan_diagnostic_tcp_unreachable
+    LanScanDiagnosticReason.TCP_POLICY_DENIED -> R.string.lan_diagnostic_tcp_policy_denied
+    LanScanDiagnosticReason.TCP_UNKNOWN_FAILURE -> R.string.lan_diagnostic_tcp_unknown
 }
 
 @Composable
@@ -1368,7 +1420,7 @@ private fun portServiceName(port: Int): String = when (port) {
 
 private fun buildLanShareText(summary: LanScanSummary): String = buildString {
     appendLine("LAN scan – ${summary.subnet}")
-    appendLine("Hosts found: ${summary.aliveHosts} / ${summary.totalScanned}")
+    appendLine("Confirmed hosts: ${summary.aliveHosts} / ${summary.totalScanned}")
     appendLine("Duration: ${summary.scanDurationMs}ms")
     appendLine()
     summary.hosts.forEach { host ->

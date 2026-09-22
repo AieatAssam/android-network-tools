@@ -133,7 +133,7 @@ tasks:
     second_pass_refinements:
       - "R2-003/R2-004 refine positive name evidence: parsing must respect response counts and correlate sender/query/protocol fields. A nonblank uncorrelated UDP name is not sufficient target evidence."
     priority: high
-    status: todo
+    status: in_progress
     refines: [RLAN001, P01]
     depends_on: []
     effort: M
@@ -170,6 +170,48 @@ tasks:
       commands: ["./gradlew :core-network:test --tests '*LanScan*' --tests '*SocketTcpPresenceProbe*' --no-daemon --no-parallel", "./gradlew :app:testDebugUnitTest --tests '*LanScanViewModelTest' --no-daemon --no-parallel"]
     rollout: "Ship as a focused P01 follow-up before optional discovery enhancements. Update README/help to explain confirmed endpoints and incomplete visibility."
     risks: ["Conservative classification may omit closed-port hosts without another signal; expose uncertainty honestly rather than presenting unused IPs as devices."]
+    checkpoint:
+      task_id: E00-T01
+      baseline_or_current_commit: ed2597f
+      status: in_progress
+      files_changed:
+        - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/DiscoveryProbes.kt
+        - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/LanScanRepositoryImpl.kt
+        - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/LanScanDiagnostic.kt
+        - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/PresenceClassifier.kt
+        - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/UdpExchange.kt
+        - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/NetBiosNameProbe.kt
+        - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/MdnsReverseNameProbe.kt
+        - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/UdpExchange.kt
+        - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/LanScanSummary.kt
+        - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/LanScanUpdate.kt
+        - core-network/src/test/kotlin/net/aieat/netswissknife/core/network/lan/LanScanDiscoveryPipelineTest.kt
+        - core-network/src/test/kotlin/net/aieat/netswissknife/core/network/lan/PresenceClassifierTest.kt
+        - core-network/src/test/kotlin/net/aieat/netswissknife/core/network/lan/NetBiosNameProbeTest.kt
+        - core-network/src/test/kotlin/net/aieat/netswissknife/core/network/lan/MdnsReverseNameProbeTest.kt
+        - core-network/src/test/kotlin/net/aieat/netswissknife/core/network/lan/SocketTcpPresenceProbeTest.kt
+        - core-network/src/test/kotlin/net/aieat/netswissknife/core/network/lan/UdpExchangeTest.kt
+        - core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/LanScanFlowResult.kt
+        - core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/LanScanUseCase.kt
+        - app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanViewModel.kt
+        - app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanScreen.kt
+        - app/src/test/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanViewModelTest.kt
+        - app/src/main/res/values/strings.xml
+        - README.md
+      verified_acceptance:
+        - "./gradlew :core-network:test --tests '*LanScan*' --tests '*SocketTcpPresenceProbe*' --tests '*NetBiosNameProbe*' --tests '*MdnsReverseNameProbe*' --tests '*PresenceClassifier*' --tests '*UdpExchange*' --no-daemon --no-parallel — passed."
+        - "./gradlew :app:testDebugUnitTest --tests '*LanScanViewModelTest' --no-daemon --no-parallel — passed."
+        - "Adversarial review found no remaining blocker after the ConnectException provenance fix."
+        - "Fresh QA audit found the core acceptance covered; confirmed topology/export paths consume only confirmed summary hosts."
+        - "ConnectException is unknown rather than definite refusal; cause detail is retained in bounded opt-in diagnostics."
+        - "git diff --check passes."
+      remaining_acceptance:
+        - "Add a Compose/UI test for toggling diagnostics and asserting uncertain entries stay out of topology/share output; the source path is structurally clear but not exercised by UI tests."
+        - "Device-only Wi-Fi/VPN LAN capture and visual Compose verification remain unavailable in this environment."
+        - "Validate with an anonymized real NBSTAT response when one is available."
+      next_action: "Commit the verified E00-T01 slice, then continue the next prioritized plan work; keep E00-T01 in progress pending device-only validation."
+      running_handles: none
+      blockers: none
 
   - id: E00-T02
     title: "Turn the review ledger into independently closable regression work"

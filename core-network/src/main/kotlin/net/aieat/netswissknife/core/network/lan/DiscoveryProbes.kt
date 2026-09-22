@@ -7,6 +7,9 @@ import java.net.InetSocketAddress
 import java.net.NoRouteToHostException
 import java.net.Socket
 import java.net.SocketTimeoutException
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 
 /** Probe used to establish whether an IPv4 host answers ICMP echo. */
 fun interface IcmpProbe {
@@ -19,13 +22,27 @@ fun interface TcpPresenceProbe {
 
 sealed interface TcpPresence {
     data class Open(val port: Int) : TcpPresence
-    data class Refused(val port: Int) : TcpPresence
+    data class Refused(val port: Int, val detail: String? = null) : TcpPresence
+    data class TimedOut(val port: Int, val detail: String? = null) : TcpPresence
+    data class Unreachable(val port: Int, val detail: String? = null) : TcpPresence
+    data class PolicyDenied(val port: Int, val detail: String? = null) : TcpPresence
+    data class UnknownFailure(val port: Int, val detail: String? = null) : TcpPresence
     data object None : TcpPresence
 }
 
 /** Name lookup used for enrichment and, for NetBIOS/mDNS, host presence. */
 fun interface NameProbe {
     suspend fun resolveName(ip: String, timeoutMs: Int): String?
+}
+
+data class LocalProtocolReply(
+    val method: DiscoveryMethod,
+    val name: String,
+)
+
+/** Name probe that can prove target presence only after validating its response correlation. */
+interface PresenceNameProbe : NameProbe {
+    suspend fun probePresence(ip: String, timeoutMs: Int): LocalProtocolReply?
 }
 
 /** Best-effort MAC lookup. [supported] reflects whether the backing source exists. */
@@ -68,6 +85,8 @@ class ReachabilityIcmpProbe : IcmpProbe {
         } else {
             null
         }
+    } catch (cancelled: CancellationException) {
+        throw cancelled
     } catch (_: Exception) {
         null
     }
@@ -76,40 +95,61 @@ class ReachabilityIcmpProbe : IcmpProbe {
 enum class TcpConnectOutcome {
     OPEN,
     REFUSED,
+    TIMED_OUT,
+    UNREACHABLE,
+    POLICY_DENIED,
+    UNKNOWN_FAILURE,
+    /** No usable outcome was available from the connector. */
     NONE,
 }
 
-/** Sequential TCP presence probe. A reset is useful evidence that the host is alive. */
+data class TcpConnectResult(
+    val outcome: TcpConnectOutcome,
+    val detail: String? = null,
+)
+
+/** Sequential TCP presence probe. Only a completed connection is positive evidence. */
 class SocketTcpPresenceProbe(
-    private val connector: (ip: String, port: Int, timeoutMs: Int) -> TcpConnectOutcome = ::connect,
+    private val connector: (ip: String, port: Int, timeoutMs: Int) -> TcpConnectResult = ::connect,
 ) : TcpPresenceProbe {
     override suspend fun probe(ip: String, ports: List<Int>, timeoutMs: Int): TcpPresence {
         val perPortTimeout = timeoutMs.coerceAtMost(400).coerceAtLeast(1)
+        var firstFailure: TcpPresence? = null
         for (port in ports) {
-            when (connector(ip, port, perPortTimeout)) {
+            currentCoroutineContext().ensureActive()
+            val result = connector(ip, port, perPortTimeout)
+            val detail = result.detail?.take(160)
+            when (result.outcome) {
                 TcpConnectOutcome.OPEN -> return TcpPresence.Open(port)
-                TcpConnectOutcome.REFUSED -> return TcpPresence.Refused(port)
+                TcpConnectOutcome.REFUSED -> if (firstFailure == null) firstFailure = TcpPresence.Refused(port, detail)
+                TcpConnectOutcome.TIMED_OUT -> if (firstFailure == null) firstFailure = TcpPresence.TimedOut(port, detail)
+                TcpConnectOutcome.UNREACHABLE -> if (firstFailure == null) firstFailure = TcpPresence.Unreachable(port, detail)
+                TcpConnectOutcome.POLICY_DENIED -> if (firstFailure == null) firstFailure = TcpPresence.PolicyDenied(port, detail)
+                TcpConnectOutcome.UNKNOWN_FAILURE -> if (firstFailure == null) firstFailure = TcpPresence.UnknownFailure(port, detail)
                 TcpConnectOutcome.NONE -> Unit
             }
         }
-        return TcpPresence.None
+        return firstFailure ?: TcpPresence.None
     }
 
     companion object {
-        private fun connect(ip: String, port: Int, timeoutMs: Int): TcpConnectOutcome {
+        private fun connect(ip: String, port: Int, timeoutMs: Int): TcpConnectResult {
             var socket: Socket? = null
             return try {
                 socket = Socket()
                 socket.connect(InetSocketAddress(ip, port), timeoutMs)
-                TcpConnectOutcome.OPEN
-            } catch (_: ConnectException) {
-                TcpConnectOutcome.REFUSED
-            } catch (_: SocketTimeoutException) {
-                TcpConnectOutcome.NONE
-            } catch (_: NoRouteToHostException) {
-                TcpConnectOutcome.NONE
-            } catch (_: IOException) {
-                TcpConnectOutcome.NONE
+                TcpConnectResult(TcpConnectOutcome.OPEN)
+            } catch (error: ConnectException) {
+                // ConnectException alone does not identify who rejected or filtered the path.
+                TcpConnectResult(TcpConnectOutcome.UNKNOWN_FAILURE, error.diagnosticDetail())
+            } catch (error: SocketTimeoutException) {
+                TcpConnectResult(TcpConnectOutcome.TIMED_OUT, error.diagnosticDetail())
+            } catch (error: NoRouteToHostException) {
+                TcpConnectResult(TcpConnectOutcome.UNREACHABLE, error.diagnosticDetail())
+            } catch (error: SecurityException) {
+                TcpConnectResult(TcpConnectOutcome.POLICY_DENIED, error.diagnosticDetail())
+            } catch (error: IOException) {
+                TcpConnectResult(TcpConnectOutcome.UNKNOWN_FAILURE, error.diagnosticDetail())
             } finally {
                 try {
                     socket?.close()
@@ -118,5 +158,19 @@ class SocketTcpPresenceProbe(
                 }
             }
         }
+
+        private fun Throwable.diagnosticDetail(): String =
+            generateSequence(this) { it.cause }
+                .take(3)
+                .joinToString(" <- ") { error ->
+                    buildString {
+                        append(error.javaClass.simpleName)
+                        error.message?.trim()?.takeIf(String::isNotEmpty)?.let {
+                            append(": ")
+                            append(it)
+                        }
+                    }
+                }
+                .take(160)
     }
 }

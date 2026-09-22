@@ -33,7 +33,7 @@ findings:
     implementation_task: E00-T01
     related_phase: P01
     related_findings: [F005]
-    status: todo
+    status: in_progress
 
 coverage:
   inspected:

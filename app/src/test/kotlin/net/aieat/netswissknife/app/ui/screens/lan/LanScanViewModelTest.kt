@@ -14,6 +14,8 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -25,6 +27,8 @@ import net.aieat.netswissknife.app.data.RecentHostsRepository
 import net.aieat.netswissknife.core.domain.LanScanFlowResult
 import net.aieat.netswissknife.core.domain.LanScanUseCase
 import net.aieat.netswissknife.core.network.lan.LanHost
+import net.aieat.netswissknife.core.network.lan.LanScanDiagnostic
+import net.aieat.netswissknife.core.network.lan.LanScanDiagnosticReason
 import net.aieat.netswissknife.core.network.lan.LanScanSummary
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -138,6 +142,38 @@ class LanScanViewModelTest {
                 withTimeout(2000) { viewModel.uiState.first { it is LanScanUiState.Finished } }
             } as LanScanUiState.Finished
             assertEquals(1, state.summary.hosts.size)
+        }
+
+        @Test
+        fun `keeps confirmed and uncertain counts separate through a stopped scan`() = runTest {
+            every { lanScanUseCase(any()) } returns flow {
+                emit(LanScanFlowResult.HostFound(stubHost, scannedCount = 1, totalCount = 10, uncertainCount = 1))
+                emit(
+                    LanScanFlowResult.ScanProgress(
+                        scannedCount = 2,
+                        totalCount = 10,
+                        uncertainCount = 2,
+                        diagnostic = LanScanDiagnostic(
+                            ip = "192.168.1.3",
+                            reason = LanScanDiagnosticReason.TCP_REFUSED,
+                            port = 80,
+                        ),
+                    ),
+                )
+                awaitCancellation()
+            }
+            viewModel.onSubnetChange("192.168.1.0/24")
+            viewModel.startScan()
+            withContext(Dispatchers.Default) {
+                withTimeout(2000) { viewModel.uiState.first { it is LanScanUiState.Scanning && it.scannedCount == 2 } }
+            }
+
+            viewModel.onStopScan()
+            val state = viewModel.uiState.value as LanScanUiState.Finished
+            assertEquals(1, state.summary.aliveHosts)
+            assertEquals(2, state.summary.uncertainCount)
+            assertEquals(2, state.summary.totalScanned)
+            assertEquals("192.168.1.3", state.summary.uncertainHosts.single().ip)
         }
     }
 

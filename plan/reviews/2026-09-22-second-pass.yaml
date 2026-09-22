@@ -39,7 +39,7 @@ findings:
   - id: R2-003
     severity: medium
     kind: bug
-    status: todo
+    status: done
     title: "NBSTAT parser assumes a question section that standard responses omit"
     related_phase: P01
     implementation_task: P01-T3
@@ -54,7 +54,7 @@ findings:
   - id: R2-004
     severity: medium
     kind: security_gap
-    status: todo
+    status: done
     title: "LAN UDP discovery loses sender provenance and accepts uncorrelated NBSTAT data"
     related_phase: P01
     implementation_task: P01-T3

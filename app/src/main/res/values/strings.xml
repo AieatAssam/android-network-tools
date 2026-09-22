@@ -212,13 +212,22 @@
         <item quantity="one">%1$d host found so far</item>
         <item quantity="other">%1$d hosts found so far</item>
     </plurals>
-    <string name="lan_live_hosts_header">Live Hosts</string>
+    <string name="lan_live_hosts_header">Confirmed Hosts</string>
     <string name="lan_hosts_header">Discovered Hosts (%1$d)</string>
     <string name="lan_empty_title">No hosts found</string>
-    <string name="lan_empty_body">No devices responded on this subnet. Verify the network range and try increasing the timeout.</string>
+    <string name="lan_empty_body">No endpoints were confirmed during this scan. Inconclusive probe attempts may be available under diagnostics. Verify the network range and try increasing the timeout.</string>
     <string name="lan_stat_scanned">Scanned</string>
-    <string name="lan_stat_alive">Alive</string>
+    <string name="lan_stat_alive">Confirmed</string>
     <string name="lan_stat_subnet">Subnet</string>
+    <string name="lan_show_diagnostics">Show uncertain probes (%1$d)</string>
+    <string name="lan_hide_diagnostics">Hide uncertain probes</string>
+    <string name="lan_diagnostic_entry">%1$s — %2$s%3$s</string>
+    <string name="lan_diagnostic_tcp_refused">TCP connection refusal reported</string>
+    <string name="lan_diagnostic_tcp_timed_out">TCP probe timed out</string>
+    <string name="lan_diagnostic_tcp_unreachable">TCP route unreachable</string>
+    <string name="lan_diagnostic_tcp_policy_denied">TCP probe denied by policy</string>
+    <string name="lan_diagnostic_tcp_unknown">TCP probe failed (unknown cause)</string>
+    <string name="lan_diagnostics_truncated">Showing %1$d of %2$d uncertain probe details.</string>
     <string name="lan_duration_format">%1$d ms</string>
     <string name="lan_ping_format">%1$d ms</string>
     <string name="lan_unknown_device">Unknown device</string>
@@ -872,9 +881,9 @@
     <!-- LAN Scanner help -->
     <string name="help_lan_title">LAN Scanner</string>
     <string name="help_lan_concept_heading">What is a subnet sweep?</string>
-    <string name="help_lan_concept_body">Devices on your home or office network share a private range of addresses, like 192.168.1.1 through 192.168.1.254. That range is written in CIDR notation as 192.168.1.0/24, where the "/24" says how many addresses are included. The scanner uses ICMP, TCP, and optional local name probes to find devices that answer even when ordinary ping is blocked.</string>
+    <string name="help_lan_concept_body">Devices on your home or office network share a private range of addresses, like 192.168.1.1 through 192.168.1.254. That range is written in CIDR notation as 192.168.1.0/24, where the "/24" says how many addresses are included. The scanner confirms endpoints that answer ICMP, complete a TCP connection, or return a validated local protocol reply. Failed probes remain inconclusive diagnostics.</string>
     <string name="help_lan_what_heading">What it does</string>
-    <string name="help_lan_what_body">Checks every address in a subnet with ICMP and TCP, then uses NetBIOS or mDNS names as additional presence evidence. Responsive hosts are enriched with hostnames, open ports, and a best-effort ARP MAC/vendor lookup.</string>
+    <string name="help_lan_what_body">Checks every address in a subnet with ICMP and TCP, then uses correlated NetBIOS or mDNS replies as additional presence evidence. Confirmed hosts are enriched with hostnames, open ports, and a best-effort ARP MAC/vendor lookup. Refusals, timeouts, and unreachable routes can be viewed separately without affecting the confirmed count.</string>
     <string name="help_lan_params_heading">Key parameters</string>
     <string name="help_lan_results_heading">Reading the results</string>
     <string-array name="help_lan_params_bullets">
@@ -883,7 +892,8 @@
         <item>Concurrency - how many hosts to probe at the same time.</item>
     </string-array>
     <string-array name="help_lan_results_bullets">
-        <item>Discovery chips explain whether ICMP, TCP, NetBIOS, mDNS, or reverse DNS contributed to the result.</item>
+        <item>Discovery chips explain whether ICMP, completed TCP, validated NetBIOS/mDNS, or reverse DNS contributed to the result.</item>
+        <item>Use Show uncertain probes to inspect bounded diagnostics; these entries do not enter the host list, topology, or share export.</item>
         <item>MAC addresses may be unavailable on Android 10 and later because apps cannot read the ARP cache.</item>
         <item>The gateway comes from the active network default route. Tap a host for details or Scan ports.</item>
     </string-array>

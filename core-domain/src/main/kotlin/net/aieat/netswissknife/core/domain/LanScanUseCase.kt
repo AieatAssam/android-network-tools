@@ -55,10 +55,20 @@ class LanScanUseCase(private val repository: LanScanRepository) {
             .map { update ->
                 when (update) {
                     is LanScanUpdate.HostFound ->
-                        LanScanFlowResult.HostFound(update.host, update.scannedCount, update.totalCount)
+                        LanScanFlowResult.HostFound(
+                            update.host,
+                            update.scannedCount,
+                            update.totalCount,
+                            update.uncertainCount,
+                        )
 
                     is LanScanUpdate.ScanProgress ->
-                        LanScanFlowResult.ScanProgress(update.scannedCount, update.totalCount)
+                        LanScanFlowResult.ScanProgress(
+                            update.scannedCount,
+                            update.totalCount,
+                            update.uncertainCount,
+                            update.diagnostic,
+                        )
 
                     is LanScanUpdate.ScanComplete ->
                         LanScanFlowResult.ScanComplete(update.summary)
