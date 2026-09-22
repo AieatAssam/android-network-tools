@@ -436,6 +436,7 @@ tasks:
     kind: actual_gap_plus_refinement
     title: "Unify form validation, normalization, defaults, and advanced-option disclosure"
     refines_findings: [RUI010]
+    note: "The narrow RUI010 outer-whitespace regression was fixed and verified in 83c4e08. E01-T10 remains open for shared form state/components, numeric validation/default consistency, and the other forms listed below."
     source_evidence:
       - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/PingScreen.kt", lines: "350-476,481-600", detail: "Ping combines host input, recent chips, continuous mode, sliders, timeout chips, advanced options, and start/stop controls, but validation and disclosure are screen-local."}
       - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/TracerouteScreen.kt", lines: "321,347-351,462", detail: "The form rejects every space in the raw host string and disables Start, including surrounding whitespace that HostValidator.normalize already trims (RUI010)."}

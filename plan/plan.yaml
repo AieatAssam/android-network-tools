@@ -221,6 +221,7 @@ comprehensive_expansion:
       - {"finding":"RUI007","owner_task":"P11-T2","follow_up_status":"todo","report":"plan/reviews/2026-09-21-ui-domain.yaml"}
       - {"finding":"RUI008","owner_task":"P04-T6","follow_up_status":"todo","report":"plan/reviews/2026-09-21-ui-domain.yaml"}
       - {"finding":"RUI009","owner_task":"P08-T4","follow_up_status":"todo","report":"plan/reviews/2026-09-21-ui-domain.yaml"}
+      - {"finding":"RUI010","owner_task":"E01-T10","follow_up_status":"done","report":"plan/reviews/2026-09-22-release-qa-brief.yaml"}
 
 incremental_review:
   reviewed_on: "2026-09-21"
@@ -263,7 +264,7 @@ incremental_review:
     - { id: RAPP003, severity: medium, kind: gap, phase: P04, status: todo, title: "Native ICMP load failures bypass the advertised reachability fallback" }
     - { id: RNET003, severity: medium, kind: gap, phase: P02, status: todo, title: "Topology parameters omit bounds for hops, timeout, and retries" }
     - { id: RNET006, severity: medium, kind: gap, phase: P10, status: todo, title: "WHOIS cancellation does not bound blocking DNS and socket work" }
-    - { id: RUI010, severity: medium, kind: bug, phase: P08, status: todo, owner: E01-T10, title: "Host fields reject surrounding whitespace even though shared validation trims it" }
+    - { id: RUI010, severity: medium, kind: bug, phase: P08, status: done, owner: E01-T10, title: "Host fields reject surrounding whitespace even though shared validation trims it" }
     - { id: RUI011, severity: medium, kind: gap, phase: P08, status: todo, owner: E01-T07/E01-T09, title: "Traceroute dead-path state lacks verified Ping-style recovery presentation" }
     - { id: RUI012, severity: medium, kind: gap, phase: P08, status: todo, owner: E01-T07/E01-T09, title: "Topology progress message is stored but not shown, and Cancel lacks UI regression coverage" }
     - { id: RNET004, severity: low, kind: bug, phase: P03, status: todo, title: "Wi-Fi unique-network count collapses all hidden APs" }
@@ -425,7 +426,7 @@ phases:
     status: todo
     depends_on: [P07]
     findings: [F024, F030, RUI010, RUI011, RUI012]
-    summary: "Concrete a11y defects (4 sub-48dp buttons, no live regions, nativeCanvas text in Wi-Fi charts) plus 2026-09-22 QA follow-ups for host whitespace, Traceroute recovery, and visible Topology progress."
+    summary: "Concrete a11y defects (4 sub-48dp buttons, no live regions, nativeCanvas text in Wi-Fi charts) plus 2026-09-22 QA follow-ups. RUI010 host whitespace is fixed and tested; Traceroute recovery and visible Topology progress remain open."
 
   - id: P09
     file: plan/phases/P09-quality-gates-and-test-coverage.yaml
@@ -784,3 +785,5 @@ changelog:
     note: "Completed incremental comprehensive plan enrichment from three Luna/xhigh workstreams and primary integration: 53 new execution/UI/tool/engineering tasks, all 14 shipped tools covered, four additional protocol/platform diagnostics plus cross-tool comparison, and corrections to P13-P15 specifications. Routed 28 review findings to owners, synchronized all phase cross-links, and verified 26 YAML files, required task fields, evidence paths, index parity and an acyclic task dependency graph. Implementation tasks remain todo; no production changes."
   - date: "2026-09-22"
     note: "Audited the v2026.09.21.1 release QA brief against latest main and current source. Kept fixed-release items closed; API 36 accessibility/onboarding instrumentation passed. Added RUI010-RUI012 for host whitespace, Traceroute recovery parity, and Topology progress/cancel coverage; routed mDNS ENODEV to existing P05 interface-binding/device checks."
+  - date: "2026-09-22"
+    note: "Closed RUI010 in 83c4e08: Ping and Traceroute forms now use HostValidator normalization for button/IME gating; valid normalized hosts reach use cases and recents, while invalid host input is not persisted by Traceroute. Ping/Traceroute Compose suites passed 10/10 and 7/7; focused ViewModel tests passed. E01-T10 remains open for shared form architecture and other fields."

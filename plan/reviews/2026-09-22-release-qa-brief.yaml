@@ -3,7 +3,7 @@ review:
   status: done
   source: "User-provided Net Swiss Knife QA brief v2026.09.21.1, based on the latest main release."
   baseline_commit: "5e183721e64ce8a8946f1a0b50f52b83544e8898"
-  checked_commit: "990138c77ea1ab33ec5da7f10ad379d2fb838644"
+  checked_commit: "83c4e08a87cc3fd68f8afd0848dd27a618bdddd2"
   environment:
     connected_emulator: "API 36 (Android 16); not the brief's API 33 emulator"
     host_snmpd: "Not available in this audit"
@@ -35,9 +35,9 @@ brief_items:
     evidence: "TracerouteViewModel maps unavailable validated network to Error('No network connection'); TracerouteErrorPanel offers Retry/Clear and unit coverage exists. Dead-path progress and Ping-style offline presentation remain unverified on device."
     route: "E01-T07 and E01-T09; RUI011."
   - id: ISS-20
-    disposition: confirmed_gap
-    evidence: "TracerouteScreen and PingScreen treat any space, including surrounding whitespace, as invalid and disable Start. HostValidator.normalize and the domain use cases already trim surrounding whitespace."
-    route: "E01-T10; RUI010. Preserve rejection of internal hostname spaces."
+    disposition: fixed
+    evidence: "PingScreen and TracerouteScreen gate Start and IME Go with HostValidator.normalize, accepting outer whitespace while rejecting internal spaces. API 36 Compose suites passed Ping 10/10 and Traceroute 7/7. Focused ViewModel tests verify normalized hosts reach use cases/recents; invalid Traceroute hosts are not saved."
+    route: "RUI010 closed by 83c4e08. E01-T10 remains open for broader shared form architecture and other fields."
   - id: ISS-21
     disposition: partial
     evidence: "Topology already exposes Cancel/Reset, sysName/IP labels, a node-details sheet, and a streaming node count. TopologyDiscoveryViewModel stores progressMessage, but TopologyDiscoveryScreen renders only the count; no instrumented Cancel-button assertion exists. Sparse-canvas behavior with the supplied SNMP lab needs device QA."
@@ -58,10 +58,11 @@ findings:
       - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/HostValidator.kt", lines: "99-121", detail: "Shared normalization trims surrounding whitespace before validation." }
       - { file: "core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/TracerouteUseCase.kt", lines: "26-30", detail: "Traceroute domain validation already normalizes its host input." }
     recommended_action: "Use the shared normalized validation result in host forms so surrounding whitespace is accepted/trimmed consistently while internal whitespace remains invalid."
-    validation: "Compose tests cover leading/trailing whitespace in Ping and Traceroute, verify Start is enabled and receives the normalized host, and keep an internal-space case invalid."
+    validation: "Compose tests cover leading/trailing whitespace, enabled Start, internal-space rejection on both button and IME paths; ViewModel tests verify normalized Ping and Traceroute use-case/recents values and invalid Traceroute input is not saved. API 36: Ping 10/10, Traceroute 7/7."
     related_phase: P08
     owner: E01-T10
-    status: todo
+    status: done
+    fixed_in: "83c4e08a87cc3fd68f8afd0848dd27a618bdddd2"
 
   - id: RUI011
     severity: medium

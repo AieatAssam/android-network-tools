@@ -21,11 +21,11 @@ phase:
 review_follow_up:
   reviewed_on: "2026-09-21"
   status: todo
-  findings: [RUI001, RUI003, RUI004, RUI009, RUI010, RUI011, RUI012]
+  findings: [RUI001, RUI003, RUI004, RUI009, RUI011, RUI012]
   reports:
     - plan/reviews/2026-09-21-ui-domain.yaml
     - plan/reviews/2026-09-22-release-qa-brief.yaml
-  note: "New source-review and release-QA follow-ups; preserve historical task completion. See report evidence, recommended_action, and validation before implementation."
+  note: "New source-review and release-QA follow-ups; preserve historical task completion. RUI010 was independently fixed and verified in 83c4e08; remaining findings are open. See report evidence, recommended_action, and validation before implementation."
 
 context:
   problem: |
