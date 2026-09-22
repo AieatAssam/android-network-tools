@@ -172,7 +172,7 @@ tasks:
     risks: ["Conservative classification may omit closed-port hosts without another signal; expose uncertainty honestly rather than presenting unused IPs as devices."]
     checkpoint:
       task_id: E00-T01
-      baseline_or_current_commit: ed2597f
+      baseline_or_current_commit: 5a6a578
       status: in_progress
       files_changed:
         - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/DiscoveryProbes.kt
@@ -196,6 +196,7 @@ tasks:
         - app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanViewModel.kt
         - app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanScreen.kt
         - app/src/test/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanViewModelTest.kt
+        - app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanScreenTest.kt
         - app/src/main/res/values/strings.xml
         - README.md
       verified_acceptance:
@@ -203,13 +204,14 @@ tasks:
         - "./gradlew :app:testDebugUnitTest --tests '*LanScanViewModelTest' --no-daemon --no-parallel — passed."
         - "Adversarial review found no remaining blocker after the ConnectException provenance fix."
         - "Fresh QA audit found the core acceptance covered; confirmed topology/export paths consume only confirmed summary hosts."
+        - "./gradlew :app:connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=net.aieat.netswissknife.app.ui.screens.lan.LanScanScreenTest' --no-daemon --no-parallel — passed on API 36 (5/5), including diagnostics opt-in and unchanged confirmed summary."
+        - "Final adversarial review rechecked NetworkTopologyCard and buildLanShareText use only summary.hosts; direct Wi-Fi/VPN and NBSTAT evidence remains device-only."
         - "ConnectException is unknown rather than definite refusal; cause detail is retained in bounded opt-in diagnostics."
         - "git diff --check passes."
       remaining_acceptance:
-        - "Add a Compose/UI test for toggling diagnostics and asserting uncertain entries stay out of topology/share output; the source path is structurally clear but not exercised by UI tests."
-        - "Device-only Wi-Fi/VPN LAN capture and visual Compose verification remain unavailable in this environment."
+        - "Device-only Wi-Fi/VPN LAN capture remains unavailable in this environment."
         - "Validate with an anonymized real NBSTAT response when one is available."
-      next_action: "Commit the verified E00-T01 slice, then continue the next prioritized plan work; keep E00-T01 in progress pending device-only validation."
+      next_action: "Continue with the confirmed ISS-20/RUI010 whitespace regression; keep E00-T01 in progress pending device-only validation."
       running_handles: none
       blockers: none
 
