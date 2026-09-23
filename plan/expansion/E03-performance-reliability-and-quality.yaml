@@ -368,6 +368,12 @@ tasks:
       report: plan/reviews/2026-09-22-second-pass.yaml
       findings: [R2-010, R2-015]
       rule: "Treat each linked finding as a required independently verified acceptance case; urgent regression slices do not wait for optional task breadth."
+    completed_slices:
+      - finding: R2-010
+        status: done
+        fixed_in: cb121505cab96bd1de4d37f2de30f714e39f665d
+        scope: "Bound topology traversal, streaming SNMP walks and scalar retention; report partial results; cancel pending GETs promptly."
+        validation: "Full core-network tests and app/instrumentation Kotlin compilation pass. R2-015 and the broader scan, UI-state, and export work in E03-T05 remain open, so the parent task stays todo."
     title: "Bound large scans, live UI state, charts, logs, and exports"
     priority: high
     status: todo

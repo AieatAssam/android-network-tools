@@ -143,7 +143,7 @@ findings:
   - id: R2-010
     severity: high
     kind: resource_gap
-    status: todo
+    status: done
     title: "Topology fan-out and SNMP walks can grow before UI caps take effect"
     related_phase: P02
     implementation_task: E03-T05
@@ -152,7 +152,14 @@ findings:
       - { file: core-network/src/main/kotlin/net/aieat/netswissknife/core/network/topology/Snmp4jClientImpl.kt, line: 109, detail: "getSubtree materializes walk events before collectWalkResults builds another map; a UI row cap cannot bound this stage." }
     impact: "A dense or adversarial SNMP graph can consume substantial memory/network work with a small hop depth. Bounded rendering does not make repository collection bounded."
     recommended_action: "Add node/link/pending-queue/per-device-interface/VLAN/walk-entry and byte budgets at producers. Replace full-subtree materialization with a bounded streaming walk seam where needed; stop scheduling and report partial/truncated reasons when caps are reached."
-    validation: "Synthetic high-fan-out graph and large walk fixtures assert caps before materialization, queue deduplication, bounded retained memory, accurate truncation metadata and prompt cancellation. Depth-only tests are insufficient."
+    validation: "Passed `./gradlew :core-network:test --no-daemon --no-parallel` (844 tests, 0 failures/errors, 1 skipped) and `./gradlew :app:compileDebugKotlin :app:compileDebugAndroidTestKotlin --no-daemon --no-parallel`. Focused loopback, repository, and walk-budget suites pass. Synthetic fan-out and exact/over-cap tests verify bounded traversal, retained walk rows/bytes, node/link/queue/interface/VLAN/graph budgets, error metadata, and cancellation including removal of a real pending SNMP4J GET. UI partial-results tests compile; instrumentation was not run on an emulator. QA and adversarial reviews cleared the final diff."
+    fixed_in: "cb121505cab96bd1de4d37f2de30f714e39f665d"
+    completion_evidence:
+      - { file: core-network/src/main/kotlin/net/aieat/netswissknife/core/network/topology/Snmp4jClientImpl.kt, line: 150, detail: "TreeListener streaming retains only values admitted by per-walk/device entry and byte budgets; GET requests are asynchronous and cancellation removes the pending SNMP4J request." }
+      - { file: core-network/src/main/kotlin/net/aieat/netswissknife/core/network/topology/TopologyDiscoveryRepositoryImpl.kt, line: 53, detail: "Node/link/pending target, per-node interface/VLAN, scalar and graph byte limits are enforced before admitting retained results or scheduling more work." }
+      - { file: core-network/src/main/kotlin/net/aieat/netswissknife/core/network/topology/TopologyModels.kt, line: 26, detail: "TopologyResourceLimits validates finite defaults and hard upper bounds; completed graphs carry truncation and SNMP-error metadata." }
+      - { file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/topology/TopologyDiscoveryScreen.kt, line: 485, detail: "The completed topology view shows an accessible partial-results notice when limits truncate results or SNMP requests fail." }
+      - { file: core-network/src/test/kotlin/net/aieat/netswissknife/core/network/topology/Snmp4jClientImplLoopbackTest.kt, line: 179, detail: "Loopback tests verify listener walk caps, final-page retention, and cancellation removing a pending request from SNMP4J's request registry." }
 
   - id: R2-011
     severity: medium
