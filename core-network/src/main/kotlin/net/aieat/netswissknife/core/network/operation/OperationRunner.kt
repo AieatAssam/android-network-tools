@@ -29,6 +29,26 @@ class OperationContext internal constructor(
 
 /** Runs one operation with structured children, a monotonic deadline, and prompt resource closure. */
 object OperationRunner {
+    /**
+     * Runs a nested adapter in the current scope when it shares [session], otherwise starts
+     * the usual one-shot operation. This lets a composite use case share one budget and
+     * resource owner across several repository calls without reattaching the session.
+     */
+    suspend fun <T> runOrJoin(
+        session: OperationSession,
+        block: suspend OperationContext.() -> T,
+    ): T {
+        val context = currentCoroutineContext()
+        if (context[OperationResourcesContext]?.session !== session) return run(session, block)
+
+        context.ensureActive()
+        session.throwIfCancelled()
+        session.budget.throwIfExpired()
+        val result = OperationContext(CoroutineScope(context), session).block()
+        ensureCurrentOperationActive()
+        return result
+    }
+
     @OptIn(InternalCoroutinesApi::class)
     suspend fun <T> run(
         session: OperationSession,

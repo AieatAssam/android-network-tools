@@ -3,6 +3,7 @@ package net.aieat.netswissknife.app.ui.screens.wol
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -12,6 +13,9 @@ import net.aieat.netswissknife.core.domain.WakeOnLanUseCase
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.wol.WolMagicPacket
 import net.aieat.netswissknife.core.network.wol.WolSendReport
+import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationSession
+import net.aieat.netswissknife.core.network.wol.WakeOnLanOperation
 import net.aieat.netswissknife.app.platform.NetworkErrorKind
 import net.aieat.netswissknife.app.platform.NetworkStatus
 import net.aieat.netswissknife.app.platform.NetworkStatusProvider
@@ -49,6 +53,9 @@ class WakeOnLanViewModel @Inject constructor(
     private val _port = MutableStateFlow(DEFAULT_PORT.toString())
     val port: StateFlow<String> = _port.asStateFlow()
 
+    private var operationSession: OperationSession? = null
+    private var sendGeneration = 0L
+
     /** True when the user has typed something that is not a valid MAC yet. */
     val isMacInvalid: Boolean
         get() = _macAddress.value.isNotBlank() && !WolMagicPacket.isValidMac(_macAddress.value)
@@ -80,17 +87,45 @@ class WakeOnLanViewModel @Inject constructor(
             broadcastAddress = _broadcastAddress.value,
             port = _port.value.toIntOrNull() ?: DEFAULT_PORT,
         )
+        operationSession?.cancel(CancellationReason.USER_STOP)
+        val session = WakeOnLanOperation.newSession()
+        val generation = ++sendGeneration
+        operationSession = session
         _uiState.value = WolUiState.Sending
         viewModelScope.launch {
-            _uiState.value = when (val result = wakeOnLan(params)) {
-                is NetworkResult.Success -> WolUiState.Success(result.data)
-                is NetworkResult.Error -> WolUiState.Error(result.message, result.cause.toNetworkErrorKind())
+            try {
+                val result = wakeOnLan(params, session)
+                if (sendGeneration != generation || operationSession !== session) return@launch
+                _uiState.value = when (result) {
+                    is NetworkResult.Success -> WolUiState.Success(result.data)
+                    is NetworkResult.Error -> WolUiState.Error(result.message, result.cause.toNetworkErrorKind())
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } finally {
+                if (operationSession === session) operationSession = null
             }
         }
     }
 
-    fun reset() {
+    fun stopSending() {
+        sendGeneration++
+        operationSession?.cancel(CancellationReason.USER_STOP)
+        operationSession = null
         _uiState.value = WolUiState.Idle
+    }
+
+    fun reset() {
+        sendGeneration++
+        operationSession?.cancel(CancellationReason.USER_STOP)
+        operationSession = null
+        _uiState.value = WolUiState.Idle
+    }
+
+    override fun onCleared() {
+        sendGeneration++
+        operationSession?.cancel(CancellationReason.LIFECYCLE_PAUSE)
+        operationSession = null
     }
 
     companion object {

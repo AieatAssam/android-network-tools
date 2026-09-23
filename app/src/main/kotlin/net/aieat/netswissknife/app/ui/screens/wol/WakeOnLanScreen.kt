@@ -141,7 +141,7 @@ fun WakeOnLanScreen(viewModel: WakeOnLanViewModel = hiltViewModel()) {
             ) { state ->
                 when (state) {
                     is WolUiState.Idle -> Spacer(Modifier.height(0.dp))
-                    is WolUiState.Sending -> WolSendingCard()
+                    is WolUiState.Sending -> WolSendingCard(onCancel = viewModel::stopSending)
                     is WolUiState.Success -> WolSuccessCard(state.report, onSendAgain = viewModel::reset)
                     is WolUiState.Error -> WolErrorCard(state.message, onRetry = viewModel::send)
                 }
@@ -288,7 +288,7 @@ private fun WolInputCard(
 // ── State cards ───────────────────────────────────────────────────────────────
 
 @Composable
-private fun WolSendingCard() {
+private fun WolSendingCard(onCancel: () -> Unit) {
     val sendingLabel = stringResource(R.string.wol_sending)
     ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = AppShapes.large) {
         Row(
@@ -296,7 +296,7 @@ private fun WolSendingCard() {
                 .fillMaxWidth()
                 .padding(AppSpacing.l),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
             CircularProgressIndicator(
                 modifier = Modifier
@@ -309,6 +309,9 @@ private fun WolSendingCard() {
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            TextButton(onClick = onCancel) {
+                Text(stringResource(R.string.cancel))
+            }
         }
     }
 }

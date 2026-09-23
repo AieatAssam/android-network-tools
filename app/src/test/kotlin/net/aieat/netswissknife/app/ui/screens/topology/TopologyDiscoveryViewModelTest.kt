@@ -3,11 +3,15 @@ package net.aieat.netswissknife.app.ui.screens.topology
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
@@ -23,14 +27,25 @@ import net.aieat.netswissknife.core.network.topology.TopologyLink
 import net.aieat.netswissknife.core.network.topology.LinkProtocol
 import net.aieat.netswissknife.core.network.topology.TopologyNode
 import net.aieat.netswissknife.core.network.topology.TopologyParams
+import net.aieat.netswissknife.core.network.topology.SnmpClient
+import net.aieat.netswissknife.core.network.topology.SnmpTarget
+import net.aieat.netswissknife.core.network.topology.SnmpWalkBudget
+import net.aieat.netswissknife.core.network.topology.SnmpWalkResult
+import net.aieat.netswissknife.core.network.topology.TopologyDiscoveryRepositoryImpl
+import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationSession
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.assertNotSame
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @DisplayName("TopologyDiscoveryViewModel")
@@ -98,7 +113,7 @@ class TopologyDiscoveryViewModelTest {
 
         @Test
         fun `accumulates nodes and links while discovering`() = runTest {
-            every { useCase.invoke(params) } returns flowOf(
+            every { useCase.invoke(params, any()) } returns flowOf(
                 TopologyDiscoveryEvent.NodeDiscovered(stubNode),
                 TopologyDiscoveryEvent.LinkDiscovered(stubLink),
                 TopologyDiscoveryEvent.Progress("probing", 1)
@@ -115,7 +130,7 @@ class TopologyDiscoveryViewModelTest {
 
         @Test
         fun `saves the seed only after the first node is discovered`() = runTest {
-            every { useCase.invoke(params) } returns flowOf(
+            every { useCase.invoke(params, any()) } returns flowOf(
                 TopologyDiscoveryEvent.Progress("probing", 0),
                 TopologyDiscoveryEvent.NodeDiscovered(stubNode)
             )
@@ -133,13 +148,13 @@ class TopologyDiscoveryViewModelTest {
         @Test
         fun `normalizes target before probing and saving seed`() = runTest {
             val rawParams = params.copy(targetIp = " 192.168.1.1 ")
-            every { useCase.invoke(params) } returns flowOf(
+            every { useCase.invoke(params, any()) } returns flowOf(
                 TopologyDiscoveryEvent.NodeDiscovered(stubNode)
             )
 
             viewModel.startDiscovery(rawParams)
 
-            coVerify(exactly = 1) { useCase.invoke(params) }
+            coVerify(exactly = 1) { useCase.invoke(params, any()) }
             coVerify(exactly = 1) {
                 recentHostsRepository.addRecent(
                     net.aieat.netswissknife.app.data.AppPreferenceKeys.RECENT_TOPOLOGY_SEEDS,
@@ -151,14 +166,14 @@ class TopologyDiscoveryViewModelTest {
         @Test
         fun `invalid target is passed to domain error path and not saved`() = runTest {
             val invalidParams = params.copy(targetIp = "bad host")
-            every { useCase.invoke(invalidParams) } returns flowOf(
+            every { useCase.invoke(invalidParams, any()) } returns flowOf(
                 TopologyDiscoveryEvent.Error("Target IP or hostname must be valid")
             )
 
             viewModel.startDiscovery(invalidParams)
 
             assertEquals("Target IP or hostname must be valid", (viewModel.uiState.value as TopologyUiState.Failure).message)
-            coVerify(exactly = 1) { useCase.invoke(invalidParams) }
+            coVerify(exactly = 1) { useCase.invoke(invalidParams, any()) }
             coVerify(exactly = 0) {
                 recentHostsRepository.addRecent(
                     net.aieat.netswissknife.app.data.AppPreferenceKeys.RECENT_TOPOLOGY_SEEDS,
@@ -173,7 +188,7 @@ class TopologyDiscoveryViewModelTest {
                 nodes = listOf(stubNode), links = listOf(stubLink),
                 seedIp = "192.168.1.1", queriedAt = 0L
             )
-            every { useCase.invoke(params) } returns flowOf(
+            every { useCase.invoke(params, any()) } returns flowOf(
                 TopologyDiscoveryEvent.Complete(graph)
             )
 
@@ -186,7 +201,7 @@ class TopologyDiscoveryViewModelTest {
 
         @Test
         fun `transitions to Failure on Error`() = runTest {
-            every { useCase.invoke(params) } returns flowOf(
+            every { useCase.invoke(params, any()) } returns flowOf(
                 TopologyDiscoveryEvent.Error("SNMP timeout")
             )
 
@@ -198,7 +213,7 @@ class TopologyDiscoveryViewModelTest {
 
         @Test
         fun `preserves permission denial cause and distinguishes generic topology errors`() = runTest {
-            every { useCase.invoke(params) } returns flowOf(
+            every { useCase.invoke(params, any()) } returns flowOf(
                 TopologyDiscoveryEvent.Error(
                     "permission denied",
                     LocalNetworkPermissionDeniedException(SecurityException("denied")),
@@ -210,7 +225,7 @@ class TopologyDiscoveryViewModelTest {
                 (viewModel.uiState.value as TopologyUiState.Failure).networkErrorKind,
             )
 
-            every { useCase.invoke(params) } returns flowOf(TopologyDiscoveryEvent.Error("timeout"))
+            every { useCase.invoke(params, any()) } returns flowOf(TopologyDiscoveryEvent.Error("timeout"))
             viewModel.startDiscovery(params)
             assertEquals(
                 NetworkErrorKind.GENERAL,
@@ -220,20 +235,20 @@ class TopologyDiscoveryViewModelTest {
 
         @Test
         fun `retries with current parameters only when requested`() = runTest {
-            every { useCase.invoke(params) } returns flowOf(TopologyDiscoveryEvent.Error("timeout"))
+            every { useCase.invoke(params, any()) } returns flowOf(TopologyDiscoveryEvent.Error("timeout"))
             val editedParams = params.copy(
                 targetIp = "192.168.1.2",
                 communityString = "private",
                 maxHops = 5,
             )
-            every { useCase.invoke(editedParams) } returns flowOf(TopologyDiscoveryEvent.Error("timeout"))
+            every { useCase.invoke(editedParams, any()) } returns flowOf(TopologyDiscoveryEvent.Error("timeout"))
 
             viewModel.startDiscovery(params)
-            coVerify(exactly = 1) { useCase.invoke(params) }
+            coVerify(exactly = 1) { useCase.invoke(params, any()) }
 
             viewModel.retryDiscovery(editedParams)
 
-            coVerify(exactly = 1) { useCase.invoke(editedParams) }
+            coVerify(exactly = 1) { useCase.invoke(editedParams, any()) }
         }
     }
 
@@ -249,7 +264,7 @@ class TopologyDiscoveryViewModelTest {
 
         @Test
         fun `selectNode and deselectNode work during Discovering state`() = runTest {
-            every { useCase.invoke(params) } returns flowOf(
+            every { useCase.invoke(params, any()) } returns flowOf(
                 TopologyDiscoveryEvent.NodeDiscovered(stubNode)
             )
             viewModel.startDiscovery(params)
@@ -270,7 +285,7 @@ class TopologyDiscoveryViewModelTest {
                 nodes = listOf(stubNode), links = emptyList(),
                 seedIp = "192.168.1.1", queriedAt = 0L
             )
-            every { useCase.invoke(params) } returns flowOf(TopologyDiscoveryEvent.Complete(graph))
+            every { useCase.invoke(params, any()) } returns flowOf(TopologyDiscoveryEvent.Complete(graph))
             viewModel.startDiscovery(params)
 
             viewModel.selectNode("192.168.1.1")
@@ -289,8 +304,9 @@ class TopologyDiscoveryViewModelTest {
 
         val firstChannel = Channel<TopologyDiscoveryEvent>(Channel.UNLIMITED)
         val secondChannel = Channel<TopologyDiscoveryEvent>(Channel.UNLIMITED)
-        every { useCase.invoke(params) } returnsMany listOf(
-            firstChannel.receiveAsFlow(),
+        val firstCollectorCancelled = CountDownLatch(1)
+        every { useCase.invoke(params, any()) } returnsMany listOf(
+            firstChannel.receiveAsFlow().onCompletion { firstCollectorCancelled.countDown() },
             secondChannel.receiveAsFlow()
         )
 
@@ -299,6 +315,10 @@ class TopologyDiscoveryViewModelTest {
         runCurrent()
 
         viewModel.startDiscovery(params)
+        assertTrue(
+            withContext(Dispatchers.IO) { firstCollectorCancelled.await(2, TimeUnit.SECONDS) },
+            "the prior discovery collector was not cancelled before the test ended",
+        )
         secondChannel.trySend(TopologyDiscoveryEvent.NodeDiscovered(nodeB))
         runCurrent()
 
@@ -314,7 +334,7 @@ class TopologyDiscoveryViewModelTest {
 
     @Test
     fun `reset returns to Idle`() = runTest {
-        every { useCase.invoke(params) } returns flowOf(
+        every { useCase.invoke(params, any()) } returns flowOf(
             TopologyDiscoveryEvent.Error("boom")
         )
         viewModel.startDiscovery(params)
@@ -322,5 +342,56 @@ class TopologyDiscoveryViewModelTest {
         viewModel.reset()
 
         assertTrue(viewModel.uiState.value is TopologyUiState.Idle)
+    }
+
+    @Test
+    fun `reset records user stop and ignores a late completion`() = runTest {
+        val channel = Channel<TopologyDiscoveryEvent>(Channel.UNLIMITED)
+        val sessionSlot = slot<OperationSession>()
+        val cancellationFinished = CountDownLatch(1)
+        every { useCase.invoke(params, capture(sessionSlot)) } returns channel.receiveAsFlow()
+
+        viewModel.startDiscovery(params)
+        runCurrent()
+        sessionSlot.captured.resources.register(AutoCloseable { cancellationFinished.countDown() })
+        viewModel.reset()
+        assertTrue(withContext(Dispatchers.IO) { cancellationFinished.await(2, TimeUnit.SECONDS) })
+        channel.trySend(TopologyDiscoveryEvent.Complete(TopologyGraph(emptyList(), emptyList(), params.targetIp, 0L)))
+        runCurrent()
+
+        assertEquals(CancellationReason.USER_STOP, sessionSlot.captured.cancellationReason)
+        assertTrue(viewModel.uiState.value is TopologyUiState.Idle)
+    }
+
+    @Test
+    fun `reset closes the in-flight SNMP client off the caller thread`() = runTest {
+        val requestStarted = CountDownLatch(1)
+        val clientClosed = CountDownLatch(1)
+        val closeThread = AtomicReference<Thread>()
+        val client = object : SnmpClient {
+            override suspend fun get(target: SnmpTarget, oid: String): String? =
+                suspendCancellableCoroutine { requestStarted.countDown() }
+
+            override suspend fun walk(
+                target: SnmpTarget,
+                oidPrefix: String,
+                budget: SnmpWalkBudget,
+            ): SnmpWalkResult = SnmpWalkResult(emptyMap())
+
+            override fun close() {
+                closeThread.set(Thread.currentThread())
+                clientClosed.countDown()
+            }
+        }
+        val realUseCase = TopologyDiscoveryUseCase(TopologyDiscoveryRepositoryImpl(client))
+        viewModel = TopologyDiscoveryViewModel(realUseCase, recentHostsRepository)
+        val callerThread = Thread.currentThread()
+        viewModel.startDiscovery(params)
+        assertTrue(withContext(Dispatchers.IO) { requestStarted.await(2, TimeUnit.SECONDS) })
+        viewModel.reset()
+
+        assertTrue(viewModel.uiState.value is TopologyUiState.Idle)
+        assertTrue(withContext(Dispatchers.IO) { clientClosed.await(2, TimeUnit.SECONDS) })
+        assertNotSame(callerThread, closeThread.get())
     }
 }

@@ -5,6 +5,8 @@ import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
 import net.aieat.netswissknife.core.network.NetworkResult
+import net.aieat.netswissknife.core.network.operation.OperationBudget
+import net.aieat.netswissknife.core.network.operation.OperationSession
 import net.aieat.netswissknife.core.network.wol.WakeOnLanRepository
 import net.aieat.netswissknife.core.network.wol.WolSendReport
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -27,6 +29,22 @@ class WakeOnLanUseCaseTest {
         assertTrue(result is NetworkResult.Success)
         assertEquals(report, (result as NetworkResult.Success).data)
         coVerify { repository.sendMagicPacket("aa:bb:cc:dd:ee:ff", "255.255.255.255", 9) }
+    }
+
+    @Test
+    fun `forwards caller owned operation session`() = runBlocking {
+        val report = WolSendReport("AA:BB:CC:DD:EE:FF", "255.255.255.255", 9, 3)
+        val session = OperationSession(OperationBudget.start(timeoutMillis = 5_000))
+        coEvery {
+            repository.sendMagicPacket(any(), any(), any(), any(), any())
+        } returns NetworkResult.Success(report)
+
+        val result = useCase(WakeOnLanParams(macAddress = "aa:bb:cc:dd:ee:ff"), session)
+
+        assertEquals(NetworkResult.Success(report), result)
+        coVerify {
+            repository.sendMagicPacket("aa:bb:cc:dd:ee:ff", "255.255.255.255", 9, 3, session)
+        }
     }
 
     @Test

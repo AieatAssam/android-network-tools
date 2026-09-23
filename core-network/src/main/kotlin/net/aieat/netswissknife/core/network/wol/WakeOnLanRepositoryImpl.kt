@@ -3,15 +3,20 @@ package net.aieat.netswissknife.core.network.wol
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import net.aieat.netswissknife.core.network.NetworkResult
+import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationCancellationException
+import net.aieat.netswissknife.core.network.operation.OperationDeadlineExceededException
+import net.aieat.netswissknife.core.network.operation.OperationRunner
+import net.aieat.netswissknife.core.network.operation.OperationSession
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.SocketAddress
+import java.util.concurrent.atomic.AtomicBoolean
 import net.aieat.netswissknife.core.network.net.LocalNetworkPermissionDeniedException
 import net.aieat.netswissknife.core.network.net.NetworkBinder
 import net.aieat.netswissknife.core.network.net.NoOpNetworkBinder
-import net.aieat.netswissknife.core.network.net.newUdpSocket
 
 class WakeOnLanRepositoryImpl(
     private val binder: NetworkBinder = NoOpNetworkBinder,
@@ -23,36 +28,84 @@ class WakeOnLanRepositoryImpl(
         broadcastAddress: String,
         port: Int,
         repeatCount: Int,
-    ): NetworkResult<WolSendReport> = withContext(Dispatchers.IO) {
-        try {
-            val payload = WolMagicPacket.build(macAddress)
-            val address = InetAddress.getByName(broadcastAddress)
-            binder.newUdpSocket(address.hostAddress, socketFactory).use { socket ->
+    ): NetworkResult<WolSendReport> = sendMagicPacket(
+        macAddress,
+        broadcastAddress,
+        port,
+        repeatCount,
+        WakeOnLanOperation.newSession(),
+    )
+
+    override suspend fun sendMagicPacket(
+        macAddress: String,
+        broadcastAddress: String,
+        port: Int,
+        repeatCount: Int,
+        operationSession: OperationSession,
+    ): NetworkResult<WolSendReport> = try {
+        OperationRunner.run(operationSession) {
+            withContext(Dispatchers.IO) {
+                ensureOperationActive()
+                val payload = WolMagicPacket.build(macAddress)
+                // WOL destinations are IPv4 broadcast literals. Parsing octets directly avoids
+                // invoking the system resolver, which can block past operation cancellation.
+                val address = parseIpv4Address(broadcastAddress)
+                ensureOperationActive()
+                val socket = socketFactory()
+                // Own the socket before network binding, local bind, or any send can block.
+                resources.register(SocketLease(socket))
+                if (binder.shouldBind(address.hostAddress)) binder.bind(socket)
+                ensureOperationActive()
                 socket.bind(InetSocketAddress(0))
                 socket.broadcast = true
                 repeat(repeatCount) {
+                    ensureOperationActive()
                     socket.send(DatagramPacket(payload, payload.size, address, port))
                 }
-            }
-            NetworkResult.Success(
+                ensureOperationActive()
                 WolSendReport(
                     macAddress = WolMagicPacket.normalizeMac(macAddress),
                     broadcastAddress = broadcastAddress,
                     port = port,
                     packetsSent = repeatCount,
                 )
-            )
-        } catch (e: IllegalArgumentException) {
-            NetworkResult.Error(e.message ?: "Invalid MAC address", e)
-        } catch (e: LocalNetworkPermissionDeniedException) {
-            NetworkResult.Error("Local network permission denied", e)
-        } catch (e: SecurityException) {
-            NetworkResult.Error(
-                "Local network permission denied",
-                LocalNetworkPermissionDeniedException(e),
-            )
-        } catch (e: Exception) {
-            NetworkResult.Error("Failed to send magic packet: ${e.message}", e)
+            }
+        }.let { NetworkResult.Success(it) }
+    } catch (e: OperationCancellationException) {
+        if (e.reason == CancellationReason.DEADLINE_EXCEEDED) {
+            NetworkResult.Error("Wake-on-LAN send timed out", e)
+        } else {
+            throw e
         }
+    } catch (e: OperationDeadlineExceededException) {
+        NetworkResult.Error("Wake-on-LAN send timed out", e)
+    } catch (e: IllegalArgumentException) {
+        NetworkResult.Error(e.message ?: "Invalid MAC address", e)
+    } catch (e: LocalNetworkPermissionDeniedException) {
+        NetworkResult.Error("Local network permission denied", e)
+    } catch (e: SecurityException) {
+        NetworkResult.Error(
+            "Local network permission denied",
+            LocalNetworkPermissionDeniedException(e),
+        )
+    } catch (e: Exception) {
+        NetworkResult.Error("Failed to send magic packet: ${e.message}", e)
+    }
+
+    private class SocketLease(private val socket: DatagramSocket) : AutoCloseable {
+        private val closed = AtomicBoolean(false)
+
+        override fun close() {
+            if (closed.compareAndSet(false, true)) socket.close()
+        }
+    }
+
+    private fun parseIpv4Address(value: String): InetAddress {
+        val octets = value.split('.', limit = 5)
+        require(octets.size == 4 && octets.all { octet ->
+            octet.isNotEmpty() && octet.all { it in '0'..'9' } &&
+                octet.toIntOrNull()?.let { it in 0..255 } == true
+        }) { "Broadcast address must be an IPv4 address" }
+        return InetAddress.getByAddress(ByteArray(4) { index -> octets[index].toInt().toByte() })
     }
 }

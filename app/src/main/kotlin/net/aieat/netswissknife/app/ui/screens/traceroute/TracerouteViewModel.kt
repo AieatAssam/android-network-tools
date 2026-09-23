@@ -9,13 +9,19 @@ import net.aieat.netswissknife.core.domain.TracerouteFlowResult
 import net.aieat.netswissknife.core.domain.TracerouteParams
 import net.aieat.netswissknife.core.domain.TracerouteUseCase
 import net.aieat.netswissknife.core.network.HostValidator
+import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationSession
 import net.aieat.netswissknife.core.network.traceroute.HopResult
 import net.aieat.netswissknife.core.network.traceroute.HopStatus
+import net.aieat.netswissknife.core.network.traceroute.TracerouteOperation
 import net.aieat.netswissknife.core.network.traceroute.TracerouteProbeType
 import net.aieat.netswissknife.core.network.traceroute.TracerouteResult
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -48,6 +54,9 @@ class TracerouteViewModel @Inject constructor(
 
     companion object {
         private const val NO_NETWORK_CONNECTION = "No network connection"
+        // Resource cleanup may block while cancellation closes native or socket handles.
+        // Keep it off the UI and independent of the ViewModel's clearing scope.
+        private val cancellationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     }
 
     private val _uiState = MutableStateFlow<TracerouteUiState>(TracerouteUiState.Idle)
@@ -77,6 +86,7 @@ class TracerouteViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private var traceJob: Job? = null
+    private var traceSession: OperationSession? = null
     /** Incremented each time a new trace is started; guards against stale emissions. */
     private var traceGeneration = 0
 
@@ -105,7 +115,8 @@ class TracerouteViewModel @Inject constructor(
     }
 
     fun onStop() {
-        traceJob?.cancel()
+        traceGeneration++
+        cancelActiveTrace(CancellationReason.USER_STOP)
         val current = _uiState.value
         if (current is TracerouteUiState.Running && current.hops.isNotEmpty()) {
             _uiState.value = TracerouteUiState.Finished(buildResult(current.host, current.hops))
@@ -115,7 +126,8 @@ class TracerouteViewModel @Inject constructor(
     }
 
     fun onClear() {
-        traceJob?.cancel()
+        traceGeneration++
+        cancelActiveTrace(CancellationReason.USER_STOP)
         _uiState.value = TracerouteUiState.Idle
     }
 
@@ -134,7 +146,8 @@ class TracerouteViewModel @Inject constructor(
     }
 
     fun startTrace() {
-        traceJob?.cancel()
+        val generation = ++traceGeneration
+        cancelActiveTrace(CancellationReason.USER_STOP)
 
         if (!linkInfoProvider.hasValidatedNetwork()) {
             _uiState.value = TracerouteUiState.Error(NO_NETWORK_CONNECTION)
@@ -148,7 +161,8 @@ class TracerouteViewModel @Inject constructor(
                 recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_TRACEROUTE_HOSTS, validatedHost)
             }
         }
-        val generation = ++traceGeneration
+        val session = TracerouteOperation.newSession()
+        traceSession = session
 
         val params = TracerouteParams(
             host          = normalizedHost,
@@ -168,7 +182,7 @@ class TracerouteViewModel @Inject constructor(
 
         traceJob = viewModelScope.launch {
             try {
-                tracerouteUseCase(params).collect { result ->
+                tracerouteUseCase(params, session).collect { result ->
                     // Discard any emission that was dispatched before the cancel took effect.
                     if (traceGeneration != generation) return@collect
                     when (result) {
@@ -206,8 +220,28 @@ class TracerouteViewModel @Inject constructor(
                 if (traceGeneration == generation) {
                     _uiState.value = TracerouteUiState.Error(e.message ?: "Traceroute failed")
                 }
+            } finally {
+                if (traceSession === session) traceSession = null
             }
         }
+    }
+
+    private fun cancelActiveTrace(reason: CancellationReason) {
+        val session = traceSession
+        val job = traceJob
+        traceSession = null
+        traceJob = null
+        if (session != null || job != null) {
+            cancellationScope.launch {
+                session?.cancel(reason)
+                if (job?.isActive == true) job.cancel()
+            }
+        }
+    }
+
+    override fun onCleared() {
+        traceGeneration++
+        cancelActiveTrace(CancellationReason.LIFECYCLE_PAUSE)
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────

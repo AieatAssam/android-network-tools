@@ -2,21 +2,26 @@ package net.aieat.netswissknife.core.network.topology
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.InternalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.job
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.net.NetworkBinder
 import net.aieat.netswissknife.core.network.net.NoOpNetworkBinder
 import net.aieat.netswissknife.core.network.net.containsLocalNetworkPermissionDenied
+import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationBudget
+import net.aieat.netswissknife.core.network.operation.OperationDeadlineExceededException
+import net.aieat.netswissknife.core.network.operation.OperationRequirement
+import net.aieat.netswissknife.core.network.operation.OperationRunner
+import net.aieat.netswissknife.core.network.operation.OperationSession
 import java.util.LinkedList
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
@@ -37,171 +42,187 @@ class TopologyDiscoveryRepositoryImpl(
 
     // Snmp4jClientImpl starts a UDP transport while it is constructed. Keep the
     // factory, discovery calls, and client teardown off Android's main thread.
-    @OptIn(InternalCoroutinesApi::class)
-    override fun discover(params: TopologyParams): Flow<TopologyDiscoveryEvent> = flow {
+    override fun discover(params: TopologyParams): Flow<TopologyDiscoveryEvent> = channelFlow {
+        // Keep session creation inside collection so re-collecting a cold Flow receives a
+        // fresh one-shot session and an independent bounded deadline.
+        discover(params, newSession()).collect { send(it) }
+    }
+
+    override fun discover(
+        params: TopologyParams,
+        session: OperationSession,
+    ): Flow<TopologyDiscoveryEvent> = channelFlow {
         try {
             val normalizedTarget = HostValidator.normalize(params.targetIp) ?: params.targetIp
             val effectiveParams = params.copy(targetIp = normalizedTarget)
-            val snmpClient = CloseOnceSnmpClient(effectiveSnmpClientFactory.create(effectiveParams))
-            val cancellationHandle = currentCoroutineContext().job.invokeOnCompletion(
-                onCancelling = true,
-                invokeImmediately = true
-            ) { cause ->
-                if (cause is CancellationException) snmpClient.close()
-            }
-            try {
-                snmpClient.use {
-                    val visited = mutableSetOf<String>()
-                    val queue = LinkedList<Pair<String, Int>>() // ip to hop depth
-                    queue.add(effectiveParams.targetIp to 0)
-                    val scheduledTargets = mutableSetOf(effectiveParams.targetIp)
+            val graph = OperationRunner.run(session) {
+                currentCoroutineContext().ensureActive()
+                val snmpClient = resources.register(
+                    CloseOnceSnmpClient(effectiveSnmpClientFactory.create(effectiveParams))
+                )
+                val visited = mutableSetOf<String>()
+                val queue = LinkedList<Pair<String, Int>>() // ip to hop depth
+                queue.add(effectiveParams.targetIp to 0)
+                val scheduledTargets = mutableSetOf(effectiveParams.targetIp)
 
-                    val allNodes = mutableListOf<TopologyNode>()
-                    val allLinks = mutableListOf<TopologyLink>()
-                    val truncationReasons = ConcurrentHashMap.newKeySet<TopologyTruncationReason>()
-                    val snmpErrors = AtomicBoolean(false)
-                    val linkBudget = LinkBudget(limits.maxLinks, truncationReasons)
-                    val graphBudget = GraphByteBudget(limits.maxBytesPerGraph)
+                val allNodes = mutableListOf<TopologyNode>()
+                val allLinks = mutableListOf<TopologyLink>()
+                val truncationReasons = ConcurrentHashMap.newKeySet<TopologyTruncationReason>()
+                val snmpErrors = AtomicBoolean(false)
+                val linkBudget = LinkBudget(limits.maxLinks, truncationReasons)
+                val graphBudget = GraphByteBudget(limits.maxBytesPerGraph)
 
-                    while (queue.isNotEmpty()) {
-                        currentCoroutineContext().ensureActive()
-                        if (allNodes.size >= limits.maxNodes) {
-                            truncationReasons.add(TopologyTruncationReason.NODE_LIMIT)
-                            break
-                        }
-                        val (currentIp, currentHop) = queue.poll()
-                        if (currentIp in visited) continue
-                        visited.add(currentIp)
+                while (queue.isNotEmpty()) {
+                    currentCoroutineContext().ensureActive()
+                    if (allNodes.size >= limits.maxNodes) {
+                        truncationReasons.add(TopologyTruncationReason.NODE_LIMIT)
+                        break
+                    }
+                    val (currentIp, currentHop) = queue.poll()
+                    if (currentIp in visited) continue
+                    visited.add(currentIp)
 
-                        emit(TopologyDiscoveryEvent.Progress("Querying $currentIp...", allNodes.size))
+                    send(TopologyDiscoveryEvent.Progress("Querying $currentIp...", allNodes.size))
 
-                        val target = SnmpTarget(ip = currentIp, params = effectiveParams)
-                        val walkBudget = SnmpWalkBudget(limits)
+                    val target = SnmpTarget(ip = currentIp, params = effectiveParams)
+                    val walkBudget = SnmpWalkBudget(limits)
 
-                        val sysDescrAttempt = attemptGet(snmpClient, target, "1.3.6.1.2.1.1.1.0")
-                        val sysNameAttempt = attemptGet(snmpClient, target, "1.3.6.1.2.1.1.5.0")
-                        if (sysDescrAttempt.error != null || sysNameAttempt.error != null) snmpErrors.set(true)
-                        val sysDescr = retainScalar("1.3.6.1.2.1.1.1.0", sysDescrAttempt.value, walkBudget, truncationReasons)
-                        val sysName = retainScalar("1.3.6.1.2.1.1.5.0", sysNameAttempt.value, walkBudget, truncationReasons)
-                        val systemFailure = sysDescrAttempt.error ?: sysNameAttempt.error
-                        if (sysDescr == null && sysName == null && systemFailure != null) {
-                            if (currentIp == effectiveParams.targetIp) {
-                                emit(TopologyDiscoveryEvent.Error(SnmpErrorFormatter.describe(systemFailure), systemFailure))
-                                return@flow
-                            }
-                        }
-                        val sysLocation = retainScalar(
-                            "1.3.6.1.2.1.1.6.0",
-                            safeGet(snmpClient, target, "1.3.6.1.2.1.1.6.0", snmpErrors),
-                            walkBudget,
-                            truncationReasons
-                        )
-                        val sysUpTimeStr = retainScalar(
-                            "1.3.6.1.2.1.1.3.0",
-                            safeGet(snmpClient, target, "1.3.6.1.2.1.1.3.0", snmpErrors),
-                            walkBudget,
-                            truncationReasons
-                        )
-
-                        val snmpReachable = sysDescr != null || sysName != null
-                        val uptimeHuman = sysUpTimeStr?.toLongOrNull()?.let {
-                            TopologyNodeParser.timeticksToHuman(it)
-                        }
-
-                        val vendor = TopologyNodeParser.parseVendor(sysDescr ?: "")
-                        val model = TopologyNodeParser.parseModel(sysDescr, null)
-                        val firmware = TopologyNodeParser.parseFirmwareVersion(sysDescr, null)
-                        val (interfaces, vlans, lldpResult, cdpResult) = coroutineScope {
-                            val interfaces = async { queryInterfaces(snmpClient, target, walkBudget, truncationReasons, snmpErrors) }
-                            val vlans = async { queryVlans(snmpClient, target, walkBudget, truncationReasons, snmpErrors) }
-                            val lldp = async {
-                                queryLldpNeighbours(
-                                    snmpClient, target, currentIp, currentHop, params.maxHops,
-                                    walkBudget, truncationReasons, snmpErrors, linkBudget
-                                )
-                            }
-                            val cdp = async {
-                                queryCdpNeighbours(
-                                    snmpClient, target, currentIp, currentHop, params.maxHops,
-                                    walkBudget, truncationReasons, snmpErrors, linkBudget
-                                )
-                            }
-                            Quadruple(interfaces.await(), vlans.await(), lldp.await(), cdp.await())
-                        }
-                        val (lldpLinks, lldpNeighbourIps) = lldpResult
-                        val (cdpLinks, cdpNeighbourIps) = cdpResult
-
-                        val node = TopologyNode(
-                            ip = currentIp,
-                            sysName = sysName,
-                            sysDescr = sysDescr,
-                            vendor = vendor,
-                            model = model,
-                            firmwareVersion = firmware,
-                            sysLocation = sysLocation,
-                            uptimeHuman = uptimeHuman,
-                            capabilities = inferCapabilities(sysDescr, vendor),
-                            interfaces = interfaces,
-                            vlans = vlans,
-                            snmpReachable = snmpReachable
-                        )
-
-                        if (!graphBudget.tryReserve(node)) {
-                            truncationReasons.add(TopologyTruncationReason.GRAPH_BYTE_LIMIT)
-                            break
-                        }
-                        allNodes.add(node)
-                        emit(TopologyDiscoveryEvent.NodeDiscovered(node))
-
-                        var graphByteLimitReached = false
-                        for (link in lldpLinks + cdpLinks) {
-                            if (!graphBudget.tryReserve(link)) {
-                                truncationReasons.add(TopologyTruncationReason.GRAPH_BYTE_LIMIT)
-                                graphByteLimitReached = true
-                                break
-                            }
-                            allLinks.add(link)
-                            emit(TopologyDiscoveryEvent.LinkDiscovered(link))
-                        }
-                        if (graphByteLimitReached) break
-
-                        (lldpNeighbourIps + cdpNeighbourIps).forEach { neighbourIp ->
-                            if (neighbourIp.isBlank() || neighbourIp in scheduledTargets) return@forEach
-                            if (allNodes.size + queue.size >= limits.maxNodes) {
-                                truncationReasons.add(TopologyTruncationReason.NODE_LIMIT)
-                                return@forEach
-                            }
-                            if (queue.size >= limits.maxPendingTargets) {
-                                truncationReasons.add(TopologyTruncationReason.PENDING_TARGET_LIMIT)
-                                return@forEach
-                            }
-                            scheduledTargets.add(neighbourIp)
-                            queue.add(neighbourIp to currentHop + 1)
+                    val sysDescrAttempt = attemptGet(snmpClient, target, "1.3.6.1.2.1.1.1.0")
+                    val sysNameAttempt = attemptGet(snmpClient, target, "1.3.6.1.2.1.1.5.0")
+                    if (sysDescrAttempt.error != null || sysNameAttempt.error != null) snmpErrors.set(true)
+                    val sysDescr = retainScalar("1.3.6.1.2.1.1.1.0", sysDescrAttempt.value, walkBudget, truncationReasons)
+                    val sysName = retainScalar("1.3.6.1.2.1.1.5.0", sysNameAttempt.value, walkBudget, truncationReasons)
+                    val systemFailure = sysDescrAttempt.error ?: sysNameAttempt.error
+                    if (sysDescr == null && sysName == null && systemFailure != null) {
+                        if (currentIp == effectiveParams.targetIp) {
+                            send(TopologyDiscoveryEvent.Error(SnmpErrorFormatter.describe(systemFailure), systemFailure))
+                            return@run null
                         }
                     }
-
-                    emit(
-                        TopologyDiscoveryEvent.Complete(
-                            TopologyGraph(
-                                nodes = allNodes,
-                                links = allLinks,
-                                seedIp = effectiveParams.targetIp,
-                                queriedAt = System.currentTimeMillis(),
-                                truncationReasons = truncationReasons.toSet(),
-                                hadSnmpErrors = snmpErrors.get()
-                            )
-                        )
+                    val sysLocation = retainScalar(
+                        "1.3.6.1.2.1.1.6.0",
+                        safeGet(snmpClient, target, "1.3.6.1.2.1.1.6.0", snmpErrors),
+                        walkBudget,
+                        truncationReasons
                     )
+                    val sysUpTimeStr = retainScalar(
+                        "1.3.6.1.2.1.1.3.0",
+                        safeGet(snmpClient, target, "1.3.6.1.2.1.1.3.0", snmpErrors),
+                        walkBudget,
+                        truncationReasons
+                    )
+
+                    val snmpReachable = sysDescr != null || sysName != null
+                    val uptimeHuman = sysUpTimeStr?.toLongOrNull()?.let {
+                        TopologyNodeParser.timeticksToHuman(it)
+                    }
+
+                    val vendor = TopologyNodeParser.parseVendor(sysDescr ?: "")
+                    val model = TopologyNodeParser.parseModel(sysDescr, null)
+                    val firmware = TopologyNodeParser.parseFirmwareVersion(sysDescr, null)
+                    val (interfaces, vlans, lldpResult, cdpResult) = coroutineScope {
+                        val interfaces = async { queryInterfaces(snmpClient, target, walkBudget, truncationReasons, snmpErrors) }
+                        val vlans = async { queryVlans(snmpClient, target, walkBudget, truncationReasons, snmpErrors) }
+                        val lldp = async {
+                            queryLldpNeighbours(
+                                snmpClient, target, currentIp, currentHop, params.maxHops,
+                                walkBudget, truncationReasons, snmpErrors, linkBudget
+                            )
+                        }
+                        val cdp = async {
+                            queryCdpNeighbours(
+                                snmpClient, target, currentIp, currentHop, params.maxHops,
+                                walkBudget, truncationReasons, snmpErrors, linkBudget
+                            )
+                        }
+                        Quadruple(interfaces.await(), vlans.await(), lldp.await(), cdp.await())
+                    }
+                    val (lldpLinks, lldpNeighbourIps) = lldpResult
+                    val (cdpLinks, cdpNeighbourIps) = cdpResult
+
+                    val node = TopologyNode(
+                        ip = currentIp,
+                        sysName = sysName,
+                        sysDescr = sysDescr,
+                        vendor = vendor,
+                        model = model,
+                        firmwareVersion = firmware,
+                        sysLocation = sysLocation,
+                        uptimeHuman = uptimeHuman,
+                        capabilities = inferCapabilities(sysDescr, vendor),
+                        interfaces = interfaces,
+                        vlans = vlans,
+                        snmpReachable = snmpReachable
+                    )
+
+                    if (!graphBudget.tryReserve(node)) {
+                        truncationReasons.add(TopologyTruncationReason.GRAPH_BYTE_LIMIT)
+                        break
+                    }
+                    allNodes.add(node)
+                    send(TopologyDiscoveryEvent.NodeDiscovered(node))
+
+                    var graphByteLimitReached = false
+                    for (link in lldpLinks + cdpLinks) {
+                        if (!graphBudget.tryReserve(link)) {
+                            truncationReasons.add(TopologyTruncationReason.GRAPH_BYTE_LIMIT)
+                            graphByteLimitReached = true
+                            break
+                        }
+                        allLinks.add(link)
+                        send(TopologyDiscoveryEvent.LinkDiscovered(link))
+                    }
+                    if (graphByteLimitReached) break
+
+                    (lldpNeighbourIps + cdpNeighbourIps).forEach { neighbourIp ->
+                        if (neighbourIp.isBlank() || neighbourIp in scheduledTargets) return@forEach
+                        if (allNodes.size + queue.size >= limits.maxNodes) {
+                            truncationReasons.add(TopologyTruncationReason.NODE_LIMIT)
+                            return@forEach
+                        }
+                        if (queue.size >= limits.maxPendingTargets) {
+                            truncationReasons.add(TopologyTruncationReason.PENDING_TARGET_LIMIT)
+                            return@forEach
+                        }
+                        scheduledTargets.add(neighbourIp)
+                        queue.add(neighbourIp to currentHop + 1)
+                    }
                 }
-            } finally {
-                cancellationHandle.dispose()
+
+                TopologyGraph(
+                    nodes = allNodes,
+                    links = allLinks,
+                    seedIp = effectiveParams.targetIp,
+                    queriedAt = System.currentTimeMillis(),
+                    truncationReasons = truncationReasons.toSet(),
+                    hadSnmpErrors = snmpErrors.get()
+                )
             }
-        } catch (e: CancellationException) {
-            throw e
+            // OperationRunner closes the registered client before returning; a cleanup error
+            // therefore prevents publication of the terminal Complete event.
+            if (graph != null) send(TopologyDiscoveryEvent.Complete(graph))
         } catch (e: Exception) {
-            emit(TopologyDiscoveryEvent.Error(SnmpErrorFormatter.describe(e), e))
+            if (session.cancellationReason == CancellationReason.DEADLINE_EXCEEDED ||
+                e is OperationDeadlineExceededException
+            ) {
+                send(TopologyDiscoveryEvent.Error("Topology discovery timed out", e))
+            } else {
+                if (e is CancellationException) throw e
+                send(TopologyDiscoveryEvent.Error(SnmpErrorFormatter.describe(e), e))
+            }
         }
     }.flowOn(Dispatchers.IO)
+
+    private fun newSession(): OperationSession = OperationSession(
+        OperationBudget.start(
+            requirement = OperationRequirement.LOCAL_NETWORK,
+            timeoutMillis = DEFAULT_OPERATION_TIMEOUT_MILLIS,
+        )
+    )
+
+    private companion object {
+        const val DEFAULT_OPERATION_TIMEOUT_MILLIS = 120_000L
+    }
 
     private data class GetAttempt(val value: String?, val error: Exception?)
 

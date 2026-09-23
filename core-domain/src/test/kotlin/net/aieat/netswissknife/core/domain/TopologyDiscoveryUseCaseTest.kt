@@ -5,6 +5,9 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import net.aieat.netswissknife.core.network.topology.*
+import net.aieat.netswissknife.core.network.operation.OperationBudget
+import net.aieat.netswissknife.core.network.operation.OperationRequirement
+import net.aieat.netswissknife.core.network.operation.OperationSession
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -46,6 +49,22 @@ class TopologyDiscoveryUseCaseTest {
         verify(exactly = 1) { repository.discover(validParams) }
         assertEquals(1, events.size)
         assertTrue(events[0] is TopologyDiscoveryEvent.Complete)
+    }
+
+    @Test
+    fun `caller-owned operation session is forwarded for valid params`() = runTest {
+        val session = OperationSession(
+            OperationBudget.start(requirement = OperationRequirement.LOCAL_NETWORK)
+        )
+        val complete = TopologyDiscoveryEvent.Complete(
+            TopologyGraph(emptyList(), emptyList(), "192.168.1.1", 0L)
+        )
+        every { repository.discover(validParams, session) } returns flowOf(complete)
+
+        val events = useCase(validParams, session).toList()
+
+        verify(exactly = 1) { repository.discover(validParams, session) }
+        assertEquals(listOf(complete), events)
     }
 
     @Test

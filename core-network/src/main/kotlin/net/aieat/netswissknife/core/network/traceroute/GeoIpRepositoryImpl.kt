@@ -1,10 +1,29 @@
 package net.aieat.netswissknife.core.network.traceroute
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
+import net.aieat.netswissknife.core.network.MonotonicClock
+import net.aieat.netswissknife.core.network.SystemMonotonicClock
+import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationBudget
+import net.aieat.netswissknife.core.network.operation.OperationCancellationException
+import net.aieat.netswissknife.core.network.operation.OperationDeadlineExceededException
+import net.aieat.netswissknife.core.network.operation.OperationRequirement
+import net.aieat.netswissknife.core.network.operation.OperationRunner
+import net.aieat.netswissknife.core.network.operation.OperationSession
+import java.io.ByteArrayOutputStream
 import java.net.HttpURLConnection
 import java.net.URI
+import java.net.URL
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.ConcurrentHashMap
+
+fun interface GeoIpConnectionFactory {
+    fun open(url: URL): HttpURLConnection
+}
 
 /**
  * [GeoIpRepository] that calls the ipinfo.io JSON API (free tier, HTTPS, no API key).
@@ -16,43 +35,150 @@ import java.util.concurrent.ConcurrentHashMap
  * Private / reserved IP ranges are skipped and return null immediately.
  * Results are cached in-memory to avoid repeat calls for the same IP.
  */
-class GeoIpRepositoryImpl(
-    private val baseUrl: String = "https://ipinfo.io"
+class GeoIpRepositoryImpl internal constructor(
+    private val baseUrl: String,
+    private val connectionFactory: GeoIpConnectionFactory,
+    internal var clock: MonotonicClock,
 ) : GeoIpRepository {
+
+    constructor(baseUrl: String = DEFAULT_BASE_URL) : this(
+        baseUrl = baseUrl,
+        connectionFactory = GeoIpConnectionFactory { it.openConnection() as HttpURLConnection },
+        clock = SystemMonotonicClock,
+    )
+
+    internal constructor(
+        baseUrl: String,
+        connectionFactory: GeoIpConnectionFactory,
+    ) : this(baseUrl, connectionFactory, SystemMonotonicClock)
 
     private val cache = ConcurrentHashMap<String, HopGeoLocation?>()
 
     override suspend fun lookup(ip: String): HopGeoLocation? {
+        currentCoroutineContext().ensureActive()
         if (isPrivateOrReserved(ip)) return null
         cache[ip]?.let { return it }
-        // ConcurrentHashMap forbids null values, so cache.getOrPut would throw NPE
-        // whenever fetchGeoIp(ip) fails (timeout, rate limit, bad response) — cache
-        // only successful lookups and recompute on every miss/failure instead.
-        val result = fetchGeoIp(ip)
+        val session = newOperationSession(clock)
+        val result = executeLookup(ip, session, mapDeadlineToNull = true)
+        if (result != null) cache[ip] = result
+        return result
+    }
+
+    override suspend fun lookup(ip: String, operationSession: OperationSession): HopGeoLocation? {
+        currentCoroutineContext().ensureActive()
+        operationSession.cancellationReason?.let { reason ->
+            if (reason == CancellationReason.DEADLINE_EXCEEDED) throw OperationDeadlineExceededException()
+            throw OperationCancellationException(reason)
+        }
+        operationSession.budget.throwIfExpired()
+        if (isPrivateOrReserved(ip)) return null
+        cache[ip]?.let { return it }
+        val result = executeLookup(ip, operationSession, mapDeadlineToNull = false)
         if (result != null) cache[ip] = result
         return result
     }
 
     // ── Network ───────────────────────────────────────────────────────────────
 
-    private suspend fun fetchGeoIp(ip: String): HopGeoLocation? = withContext(Dispatchers.IO) {
-        val conn = URI("$baseUrl/$ip/json").toURL().openConnection() as HttpURLConnection
+    private suspend fun executeLookup(
+        ip: String,
+        session: OperationSession,
+        mapDeadlineToNull: Boolean,
+    ): HopGeoLocation? = withContext(Dispatchers.IO) {
         try {
-            conn.connectTimeout = 5_000
-            conn.readTimeout    = 5_000
-            conn.requestMethod  = "GET"
-            conn.setRequestProperty("Accept", "application/json")
-
-            if (conn.responseCode != 200) return@withContext null
-
-            val body = conn.inputStream.use { it.bufferedReader().readText() }
-            parseIpInfoResponse(ip, body)
+            OperationRunner.runOrJoin(session) { fetchGeoIp(ip) }
+        } catch (cancelled: OperationCancellationException) {
+            if (mapDeadlineToNull && cancelled.reason == CancellationReason.DEADLINE_EXCEEDED) {
+                null
+            } else {
+                throw cancelled
+            }
+        } catch (deadline: OperationDeadlineExceededException) {
+            if (mapDeadlineToNull) null else throw deadline
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (_: Exception) {
             null
-        } finally {
-            conn.disconnect()
         }
     }
+
+    private suspend fun net.aieat.netswissknife.core.network.operation.OperationContext.fetchGeoIp(
+        ip: String,
+    ): HopGeoLocation? {
+        var lease: GeoIpConnectionLease? = null
+        try {
+            ensureOperationActive()
+            val url = URI("$baseUrl/$ip/json").toURL()
+            val connection = connectionFactory.open(url)
+            lease = resources.register(GeoIpConnectionLease(connection))
+            ensureOperationActive()
+            val timeoutMs = budget.remainingTimeoutMillis()
+                .coerceAtMost(REQUEST_TIMEOUT_MS)
+                .coerceAtMost(Int.MAX_VALUE.toLong())
+                .toInt()
+                .coerceAtLeast(1)
+            connection.connectTimeout = timeoutMs
+            connection.readTimeout = timeoutMs
+            connection.requestMethod = "GET"
+            connection.setRequestProperty("Accept", "application/json")
+
+            ensureOperationActive()
+            if (connection.responseCode != HttpURLConnection.HTTP_OK) return null
+            ensureOperationActive()
+
+            val body = connection.inputStream.use {
+                readBoundedBody(it, budget.maxResponseBytes.coerceAtMost(MAX_RESPONSE_BYTES))
+            }
+            ensureOperationActive()
+            return parseIpInfoResponse(ip, body)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (deadline: OperationDeadlineExceededException) {
+            throw deadline
+        } catch (_: Exception) {
+            // A disconnect caused by Stop/deadline can surface as ordinary I/O failure.
+            ensureOperationActive()
+            return null
+        } finally {
+            lease?.let { registered ->
+                if (resources.release(registered)) registered.close()
+            }
+        }
+    }
+
+    private suspend fun net.aieat.netswissknife.core.network.operation.OperationContext.readBoundedBody(
+        input: java.io.InputStream,
+        maxBytes: Long,
+    ): String {
+        val output = ByteArrayOutputStream()
+        val buffer = ByteArray(BODY_BUFFER_BYTES)
+        while (true) {
+            ensureOperationActive()
+            val read = input.read(buffer)
+            ensureOperationActive()
+            if (read < 0) break
+            if (output.size().toLong() + read > maxBytes) return ""
+            output.write(buffer, 0, read)
+        }
+        return output.toString(Charsets.UTF_8.name())
+    }
+
+    private class GeoIpConnectionLease(private val connection: HttpURLConnection) : AutoCloseable {
+        private val closed = AtomicBoolean(false)
+        override fun close() {
+            if (closed.compareAndSet(false, true)) connection.disconnect()
+        }
+    }
+
+    private fun newOperationSession(clock: MonotonicClock): OperationSession = OperationSession(
+        OperationBudget.start(
+            requirement = OperationRequirement.INTERNET,
+            timeoutMillis = REQUEST_TIMEOUT_MS,
+            maxConcurrentProbes = 1,
+            maxResponseBytes = MAX_RESPONSE_BYTES,
+            clock = clock,
+        )
+    )
 
     // ── Parsing ───────────────────────────────────────────────────────────────
 
@@ -213,6 +339,10 @@ class GeoIpRepositoryImpl(
     private fun countryName(code: String): String = COUNTRY_NAMES[code.uppercase()] ?: code
 
     companion object {
+        private const val DEFAULT_BASE_URL = "https://ipinfo.io"
+        private const val REQUEST_TIMEOUT_MS = 5_000L
+        private const val MAX_RESPONSE_BYTES = 65_536L
+        private const val BODY_BUFFER_BYTES = 4_096
         private val COUNTRY_NAMES = mapOf(
             "US" to "United States",  "GB" to "United Kingdom", "DE" to "Germany",
             "FR" to "France",         "JP" to "Japan",          "CN" to "China",

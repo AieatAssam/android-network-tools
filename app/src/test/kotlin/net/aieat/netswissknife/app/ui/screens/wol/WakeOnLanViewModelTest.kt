@@ -3,16 +3,20 @@ package net.aieat.netswissknife.app.ui.screens.wol
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
+import io.mockk.slot
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import net.aieat.netswissknife.app.platform.NetworkErrorKind
 import net.aieat.netswissknife.core.domain.WakeOnLanUseCase
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.net.LocalNetworkPermissionDeniedException
-import net.aieat.netswissknife.app.platform.NetworkErrorKind
+import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationSession
 import net.aieat.netswissknife.core.network.wol.WolSendReport
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -21,6 +25,9 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import kotlin.coroutines.Continuation
+import kotlin.coroutines.resume
+import kotlin.coroutines.suspendCoroutine
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @DisplayName("WakeOnLanViewModel")
@@ -84,18 +91,18 @@ class WakeOnLanViewModelTest {
 
     @Test
     fun `send transitions to Success on use case success`() = runTest {
-        coEvery { useCase(any()) } returns NetworkResult.Success(stubReport)
+        coEvery { useCase(any(), any()) } returns NetworkResult.Success(stubReport)
 
         viewModel.onMacAddressChange("AA:BB:CC:DD:EE:FF")
         viewModel.send()
 
         assertEquals(WolUiState.Success(stubReport), viewModel.uiState.value)
-        coVerify { useCase(any()) }
+        coVerify { useCase(any(), any()) }
     }
 
     @Test
     fun `send transitions to Error on use case failure`() = runTest {
-        coEvery { useCase(any()) } returns NetworkResult.Error("boom")
+        coEvery { useCase(any(), any()) } returns NetworkResult.Error("boom")
 
         viewModel.onMacAddressChange("AA:BB:CC:DD:EE:FF")
         viewModel.send()
@@ -105,7 +112,7 @@ class WakeOnLanViewModelTest {
 
     @Test
     fun `send marks local permission denial distinctly from general failure`() = runTest {
-        coEvery { useCase(any()) } returns NetworkResult.Error(
+        coEvery { useCase(any(), any()) } returns NetworkResult.Error(
             "permission denied",
             LocalNetworkPermissionDeniedException(SecurityException("denied")),
         )
@@ -116,7 +123,7 @@ class WakeOnLanViewModelTest {
         val denied = viewModel.uiState.value as WolUiState.Error
         assertEquals(NetworkErrorKind.LOCAL_NETWORK_PERMISSION_DENIED, denied.networkErrorKind)
 
-        coEvery { useCase(any()) } returns NetworkResult.Error("boom")
+        coEvery { useCase(any(), any()) } returns NetworkResult.Error("boom")
         viewModel.send()
         val generic = viewModel.uiState.value as WolUiState.Error
         assertEquals(NetworkErrorKind.GENERAL, generic.networkErrorKind)
@@ -128,16 +135,46 @@ class WakeOnLanViewModelTest {
         viewModel.send()
 
         assertEquals(WolUiState.Idle, viewModel.uiState.value)
-        coVerify(exactly = 0) { useCase(any()) }
+        coVerify(exactly = 0) { useCase(any(), any()) }
     }
 
     @Test
     fun `reset returns to Idle`() = runTest {
-        coEvery { useCase(any()) } returns NetworkResult.Success(stubReport)
+        coEvery { useCase(any(), any()) } returns NetworkResult.Success(stubReport)
         viewModel.onMacAddressChange("AA:BB:CC:DD:EE:FF")
         viewModel.send()
 
         viewModel.reset()
+
+        assertEquals(WolUiState.Idle, viewModel.uiState.value)
+    }
+
+    @Test
+    fun `stop sending cancels the caller session with user stop reason`() = runTest {
+        val session = slot<OperationSession>()
+        coEvery { useCase(any(), capture(session)) } coAnswers { awaitCancellation() }
+        viewModel.onMacAddressChange("AA:BB:CC:DD:EE:FF")
+
+        viewModel.send()
+        assertEquals(WolUiState.Sending, viewModel.uiState.value)
+        viewModel.stopSending()
+
+        assertEquals(CancellationReason.USER_STOP, session.captured.cancellationReason)
+        assertEquals(WolUiState.Idle, viewModel.uiState.value)
+    }
+
+    @Test
+    fun `late completion after stop cannot restore a stale success`() = runTest {
+        var completion: Continuation<NetworkResult<WolSendReport>>? = null
+        coEvery { useCase(any(), any()) } coAnswers {
+            suspendCoroutine { continuation -> completion = continuation }
+        }
+        viewModel.onMacAddressChange("AA:BB:CC:DD:EE:FF")
+
+        viewModel.send()
+        assertEquals(WolUiState.Sending, viewModel.uiState.value)
+        viewModel.stopSending()
+        completion!!.resume(NetworkResult.Success(stubReport))
 
         assertEquals(WolUiState.Idle, viewModel.uiState.value)
     }

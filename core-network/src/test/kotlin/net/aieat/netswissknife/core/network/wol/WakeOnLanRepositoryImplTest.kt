@@ -6,6 +6,11 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import net.aieat.netswissknife.core.network.NetworkResult
+import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationBudget
+import net.aieat.netswissknife.core.network.operation.OperationCancellationException
+import net.aieat.netswissknife.core.network.operation.OperationRequirement
+import net.aieat.netswissknife.core.network.operation.OperationSession
 import net.aieat.netswissknife.core.network.net.FakeNetworkBinder
 import net.aieat.netswissknife.core.network.net.LocalNetworkPermissionDeniedException
 import net.aieat.netswissknife.core.network.net.NetworkBinder
@@ -16,10 +21,21 @@ import org.junit.jupiter.api.Test
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.SocketAddress
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 class WakeOnLanRepositoryImplTest {
 
     private val repository = WakeOnLanRepositoryImpl()
+
+    @Test
+    fun `operation policy requires local network and has a bounded deadline`() {
+        val session = WakeOnLanOperation.newSession()
+
+        assertEquals(OperationRequirement.LOCAL_NETWORK, session.budget.requirement)
+        assertEquals(WakeOnLanOperation.TIMEOUT_MILLIS, session.budget.deadline.timeoutNanos / 1_000_000)
+    }
 
     @Test
     fun `sends magic packet datagrams that a listener receives`() = runBlocking {
@@ -62,22 +78,37 @@ class WakeOnLanRepositoryImplTest {
     }
 
     @Test
-    fun `returns Error for unresolvable broadcast address`() = runBlocking {
-        val result = repository.sendMagicPacket(
+    fun `rejects hostnames without creating a socket or invoking DNS`() = runBlocking {
+        val socketCreations = AtomicInteger()
+        val repo = WakeOnLanRepositoryImpl(socketFactory = {
+            socketCreations.incrementAndGet()
+            DatagramSocket(null as SocketAddress?)
+        })
+
+        val result = repo.sendMagicPacket(
             macAddress = "01:02:03:04:05:06",
             broadcastAddress = "definitely-not-a-real-host.invalid",
             port = 9,
         )
+
         assertTrue(result is NetworkResult.Error)
+        assertEquals("Broadcast address must be an IPv4 address", (result as NetworkResult.Error).message)
+        assertEquals(0, socketCreations.get())
     }
 
     @Test
     fun `binds a selected local socket before sending the magic packet`() = runBlocking {
         val binder = FakeNetworkBinder(shouldBindResult = true)
         val boundAtSend = mutableListOf<Boolean>()
+        val closes = AtomicInteger()
         val socket = object : DatagramSocket(null as SocketAddress?) {
             override fun send(packet: DatagramPacket) {
                 boundAtSend += binder.boundDatagramSockets.singleOrNull() === this
+            }
+
+            override fun close() {
+                closes.incrementAndGet()
+                super.close()
             }
         }
         val repo = WakeOnLanRepositoryImpl(binder = binder, socketFactory = { socket })
@@ -89,6 +120,72 @@ class WakeOnLanRepositoryImplTest {
         assertEquals(listOf(socket), binder.boundDatagramSockets)
         assertEquals(listOf(false), binder.datagramSocketBoundStatesAtBind)
         assertTrue(socket.isBound)
+        assertEquals(1, closes.get(), "the operation scope must close the socket exactly once")
+    }
+
+    @Test
+    fun `user stop closes a blocked send once and remains typed cancellation`() = runBlocking {
+        val enteredSend = CountDownLatch(1)
+        val releasedByClose = CountDownLatch(1)
+        val closes = AtomicInteger()
+        val socket = object : DatagramSocket(null as SocketAddress?) {
+            override fun send(packet: DatagramPacket) {
+                enteredSend.countDown()
+                check(releasedByClose.await(3, TimeUnit.SECONDS)) { "socket close did not release send" }
+            }
+
+            override fun close() {
+                closes.incrementAndGet()
+                releasedByClose.countDown()
+                super.close()
+            }
+        }
+        val repo = WakeOnLanRepositoryImpl(socketFactory = { socket })
+        val session = OperationSession(OperationBudget.start(timeoutMillis = 5_000))
+        val pending = async {
+            repo.sendMagicPacket("01:02:03:04:05:06", "127.0.0.1", 9, 1, session)
+        }
+
+        assertTrue(withContext(Dispatchers.IO) { enteredSend.await(3, TimeUnit.SECONDS) })
+        session.cancel(CancellationReason.USER_STOP)
+        val failure = runCatching { pending.await() }.exceptionOrNull()
+
+        assertTrue(failure is OperationCancellationException, "expected typed cancellation, got $failure")
+        assertEquals(CancellationReason.USER_STOP, (failure as OperationCancellationException).reason)
+        assertEquals(1, closes.get())
+        assertTrue(releasedByClose.count == 0L)
+    }
+
+    @Test
+    fun `deadline closes blocked send and cannot return late success`() = runBlocking {
+        val enteredSend = CountDownLatch(1)
+        val releasedByClose = CountDownLatch(1)
+        val closes = AtomicInteger()
+        val socket = object : DatagramSocket(null as SocketAddress?) {
+            override fun send(packet: DatagramPacket) {
+                enteredSend.countDown()
+                check(releasedByClose.await(3, TimeUnit.SECONDS)) { "deadline did not close socket" }
+                // Simulate a native send that returns successfully after cancellation closed it.
+            }
+
+            override fun close() {
+                closes.incrementAndGet()
+                releasedByClose.countDown()
+                super.close()
+            }
+        }
+        val repo = WakeOnLanRepositoryImpl(socketFactory = { socket })
+        val session = OperationSession(OperationBudget.start(timeoutMillis = 1_000))
+        val pending = async {
+            repo.sendMagicPacket("01:02:03:04:05:06", "127.0.0.1", 9, 1, session)
+        }
+
+        assertTrue(withContext(Dispatchers.IO) { enteredSend.await(3, TimeUnit.SECONDS) })
+        val result = withTimeout(3_000) { pending.await() }
+
+        assertTrue(result is NetworkResult.Error, "deadline must not return success: $result")
+        assertEquals("Wake-on-LAN send timed out", (result as NetworkResult.Error).message)
+        assertEquals(1, closes.get())
     }
 
     @Test

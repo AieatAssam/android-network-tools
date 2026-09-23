@@ -5,6 +5,8 @@ import net.aieat.netswissknife.core.network.traceroute.HopGeoLocation
 import net.aieat.netswissknife.core.network.traceroute.HopResult
 import net.aieat.netswissknife.core.network.traceroute.HopStatus
 import net.aieat.netswissknife.core.network.traceroute.TracerouteRepository
+import net.aieat.netswissknife.core.network.traceroute.TracerouteOperation
+import net.aieat.netswissknife.core.network.operation.OperationSession
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -96,7 +98,7 @@ class TracerouteUseCaseTest {
 
         @Test
         fun `packetSize 0 (MTU discovery) is accepted`() = runTest {
-            every { tracerouteRepo.trace(any(), any(), any(), any(), any(), any()) } returns flowOf()
+            every { tracerouteRepo.trace(any(), any(), any(), any(), any(), any(), any()) } returns flowOf()
             val results = useCase(TracerouteParams(host = "google.com", packetSize = 0)).toList()
             assertEquals(0, results.size)
         }
@@ -114,9 +116,9 @@ class TracerouteUseCaseTest {
 
         @Test
         fun `valid params emit Hop results`() = runTest {
-            every { tracerouteRepo.trace(any(), any(), any(), any(), any(), any()) } returns flowOf(hop1, hop2)
-            coEvery { geoRepo.lookup("192.168.1.1") } returns null
-            coEvery { geoRepo.lookup("8.8.8.8")     } returns geo
+            every { tracerouteRepo.trace(any(), any(), any(), any(), any(), any(), any()) } returns flowOf(hop1, hop2)
+            coEvery { geoRepo.lookup("192.168.1.1", any()) } returns null
+            coEvery { geoRepo.lookup("8.8.8.8", any())     } returns geo
 
             val results = useCase(TracerouteParams("google.com")).toList()
             assertEquals(2, results.size)
@@ -125,8 +127,8 @@ class TracerouteUseCaseTest {
 
         @Test
         fun `geo location is attached to hop with public IP`() = runTest {
-            every { tracerouteRepo.trace(any(), any(), any(), any(), any(), any()) } returns flowOf(hop2)
-            coEvery { geoRepo.lookup("8.8.8.8") } returns geo
+            every { tracerouteRepo.trace(any(), any(), any(), any(), any(), any(), any()) } returns flowOf(hop2)
+            coEvery { geoRepo.lookup("8.8.8.8", any()) } returns geo
 
             val results = useCase(TracerouteParams("google.com")).toList()
             val hopResult = (results[0] as TracerouteFlowResult.Hop).hop
@@ -134,9 +136,41 @@ class TracerouteUseCaseTest {
         }
 
         @Test
+        fun `one caller session is shared by repository and every hop enrichment`() = runTest {
+            val session = TracerouteOperation.newSession()
+            val observedSessions = mutableListOf<OperationSession>()
+            every { tracerouteRepo.trace(any(), any(), any(), any(), any(), any(), any()) } answers {
+                observedSessions += lastArg<OperationSession>()
+                flowOf(hop1, hop2)
+            }
+            coEvery { geoRepo.lookup(any(), any()) } answers {
+                observedSessions += secondArg<OperationSession>()
+                null
+            }
+
+            useCase(TracerouteParams("google.com"), session).toList()
+
+            assertEquals(listOf(session, session, session), observedSessions)
+        }
+
+        @Test
+        fun `deadline during optional geo enrichment stops the shared trace`() = runTest {
+            every { tracerouteRepo.trace(any(), any(), any(), any(), any(), any(), any()) } returns flowOf(hop2)
+            coEvery { geoRepo.lookup(any(), any()) } throws
+                net.aieat.netswissknife.core.network.operation.OperationDeadlineExceededException()
+
+            val failure = runCatching { useCase(TracerouteParams("google.com")).toList() }.exceptionOrNull()
+
+            assertInstanceOf(
+                net.aieat.netswissknife.core.network.operation.OperationDeadlineExceededException::class.java,
+                failure,
+            )
+        }
+
+        @Test
         fun `timeout hop with null IP gets no geo lookup`() = runTest {
             val timeoutHop = HopResult(1, null, null, null, HopStatus.TIMEOUT)
-            every { tracerouteRepo.trace(any(), any(), any(), any(), any(), any()) } returns flowOf(timeoutHop)
+            every { tracerouteRepo.trace(any(), any(), any(), any(), any(), any(), any()) } returns flowOf(timeoutHop)
 
             val results = useCase(TracerouteParams("google.com")).toList()
             val hopResult = (results[0] as TracerouteFlowResult.Hop).hop
@@ -146,11 +180,11 @@ class TracerouteUseCaseTest {
         @Test
         fun `host is trimmed before passing to repository`() = runTest {
             var capturedHost: String? = null
-            every { tracerouteRepo.trace(any(), any(), any(), any(), any(), any()) } answers {
+            every { tracerouteRepo.trace(any(), any(), any(), any(), any(), any(), any()) } answers {
                 capturedHost = firstArg()
                 flow {}
             }
-            coEvery { geoRepo.lookup(any()) } returns null
+            coEvery { geoRepo.lookup(any(), any()) } returns null
 
             useCase(TracerouteParams("  google.com  ")).toList()
             assertEquals("google.com", capturedHost)
@@ -158,9 +192,9 @@ class TracerouteUseCaseTest {
 
         @Test
         fun `geo lookup failure on one hop does not abort the rest of the trace`() = runTest {
-            every { tracerouteRepo.trace(any(), any(), any(), any(), any(), any()) } returns flowOf(hop1, hop2)
-            coEvery { geoRepo.lookup("192.168.1.1") } throws java.io.IOException("geo service unreachable")
-            coEvery { geoRepo.lookup("8.8.8.8") } returns geo
+            every { tracerouteRepo.trace(any(), any(), any(), any(), any(), any(), any()) } returns flowOf(hop1, hop2)
+            coEvery { geoRepo.lookup("192.168.1.1", any()) } throws java.io.IOException("geo service unreachable")
+            coEvery { geoRepo.lookup("8.8.8.8", any()) } returns geo
 
             val results = useCase(TracerouteParams("google.com")).toList()
 
@@ -173,8 +207,8 @@ class TracerouteUseCaseTest {
 
         @Test
         fun `IPv4 address is accepted as valid host`() = runTest {
-            every { tracerouteRepo.trace(any(), any(), any(), any(), any(), any()) } returns flowOf(hop1)
-            coEvery { geoRepo.lookup(any()) } returns null
+            every { tracerouteRepo.trace(any(), any(), any(), any(), any(), any(), any()) } returns flowOf(hop1)
+            coEvery { geoRepo.lookup(any(), any()) } returns null
 
             val results = useCase(TracerouteParams("8.8.8.8")).toList()
             assert(results[0] is TracerouteFlowResult.Hop)

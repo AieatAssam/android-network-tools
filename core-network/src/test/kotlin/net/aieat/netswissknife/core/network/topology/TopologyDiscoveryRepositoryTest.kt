@@ -2,6 +2,7 @@ package net.aieat.netswissknife.core.network.topology
 
 import io.mockk.*
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
@@ -9,11 +10,20 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withContext
+import net.aieat.netswissknife.core.network.MonotonicClock
 import net.aieat.netswissknife.core.network.net.LocalNetworkPermissionDeniedException
+import net.aieat.netswissknife.core.network.net.containsLocalNetworkPermissionDenied
+import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationBudget
+import net.aieat.netswissknife.core.network.operation.OperationRequirement
+import net.aieat.netswissknife.core.network.operation.OperationSession
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 class TopologyDiscoveryRepositoryTest {
 
@@ -115,7 +125,7 @@ class TopologyDiscoveryRepositoryTest {
         val events = repository.discover(defaultParams).toList()
 
         val error = events.filterIsInstance<TopologyDiscoveryEvent.Error>().single()
-        assertSame(denial, error.cause?.cause)
+        assertTrue(error.cause.containsLocalNetworkPermissionDenied())
         assertTrue(error.message.contains("permission", ignoreCase = true) || error.message.contains("SNMP", ignoreCase = true))
     }
 
@@ -154,6 +164,75 @@ class TopologyDiscoveryRepositoryTest {
 
         repository.discover(defaultParams).toList()
 
+        verify(exactly = 1) { snmpClient.close() }
+    }
+
+    @Test
+    fun `caller stop closes in-flight SNMP client once and never emits Complete`() = runTest {
+        val requestStarted = CompletableDeferred<Unit>()
+        coEvery { snmpClient.get(any(), any()) } coAnswers {
+            requestStarted.complete(Unit)
+            awaitCancellation()
+        }
+        val session = OperationSession(
+            OperationBudget.start(requirement = OperationRequirement.LOCAL_NETWORK)
+        )
+        val events = mutableListOf<TopologyDiscoveryEvent>()
+        val collector = launch { repository.discover(defaultParams, session).collect(events::add) }
+        requestStarted.await()
+
+        session.cancel(CancellationReason.USER_STOP)
+        collector.join()
+
+        assertEquals(CancellationReason.USER_STOP, session.cancellationReason)
+        assertTrue(events.none { it is TopologyDiscoveryEvent.Complete })
+        verify(exactly = 1) { snmpClient.close() }
+    }
+
+    @Test
+    fun `deadline reports timeout and closes client without Complete`() = runTest {
+        val nowNanos = java.util.concurrent.atomic.AtomicLong(0L)
+        val clock = MonotonicClock { nowNanos.get() }
+        val requestStarted = CompletableDeferred<Unit>()
+        val clientClosed = CountDownLatch(1)
+        coEvery { snmpClient.get(any(), any()) } coAnswers {
+            requestStarted.complete(Unit)
+            awaitCancellation()
+        }
+        every { snmpClient.close() } answers { clientClosed.countDown() }
+        val session = OperationSession(
+            OperationBudget.start(
+                requirement = OperationRequirement.LOCAL_NETWORK,
+                timeoutMillis = 1,
+                clock = clock,
+            )
+        )
+        val events = mutableListOf<TopologyDiscoveryEvent>()
+        val collector = launch { repository.discover(defaultParams, session).collect(events::add) }
+        requestStarted.await()
+
+        nowNanos.set(1_000_000L)
+        assertTrue(withContext(Dispatchers.IO) { clientClosed.await(2, TimeUnit.SECONDS) })
+        collector.join()
+
+        assertEquals(CancellationReason.DEADLINE_EXCEEDED, session.cancellationReason)
+        assertTrue(events.any { it is TopologyDiscoveryEvent.Error && it.message.contains("timed out", true) })
+        assertTrue(events.none { it is TopologyDiscoveryEvent.Complete })
+        verify(exactly = 1) { snmpClient.close() }
+    }
+
+    @Test
+    fun `scope cleanup failure is reported and suppresses Complete`() = runTest {
+        coEvery { snmpClient.get(any(), any()) } returns null
+        coEvery { snmpClient.walk(any(), any(), any()) } returns SnmpWalkResult(emptyMap())
+        every { snmpClient.close() } throws IllegalStateException("client close failed")
+
+        val events = repository.discover(defaultParams).toList()
+
+        assertTrue(events.any {
+            it is TopologyDiscoveryEvent.Error && it.cause?.cause?.message == "client close failed"
+        })
+        assertTrue(events.none { it is TopologyDiscoveryEvent.Complete })
         verify(exactly = 1) { snmpClient.close() }
     }
 

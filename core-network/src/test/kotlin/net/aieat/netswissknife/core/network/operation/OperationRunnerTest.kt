@@ -31,6 +31,29 @@ import org.junit.jupiter.api.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class OperationRunnerTest {
     @Test
+    fun `nested adapter joins the active session without closing its resources early`() = runTest {
+        val session = OperationSession(OperationBudget.start(clock = FakeClock()))
+        var closeCount = 0
+
+        val result = OperationRunner.run(session) {
+            val resource = resources.register(AutoCloseable { closeCount++ })
+            val nestedResult = OperationRunner.runOrJoin(session) {
+                assertEquals(session, this.session)
+                assertFalse(resources.isClosed)
+                "nested"
+            }
+            assertEquals("nested", nestedResult)
+            assertEquals(0, closeCount)
+            assertFalse(resources.isClosed)
+            nestedResult
+        }
+
+        assertEquals(1, closeCount)
+        assertTrue(session.resources.isClosed)
+        assertEquals("nested", result)
+    }
+
+    @Test
     fun `deadline closes resources cancels and joins workers without success emission`() = runTest {
         val clock = FakeClock()
         val session = OperationSession(

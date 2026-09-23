@@ -1,13 +1,33 @@
 package net.aieat.netswissknife.core.network.traceroute
 
 import com.sun.net.httpserver.HttpServer
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.test.runTest
+import net.aieat.netswissknife.core.network.MonotonicClock
+import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationBudget
+import net.aieat.netswissknife.core.network.operation.OperationCancellationException
+import net.aieat.netswissknife.core.network.operation.OperationDeadlineExceededException
+import net.aieat.netswissknife.core.network.operation.OperationRequirement
+import net.aieat.netswissknife.core.network.operation.OperationRunner
+import net.aieat.netswissknife.core.network.operation.OperationSession
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import java.io.IOException
+import java.io.InputStream
+import java.net.HttpURLConnection
 import java.net.InetSocketAddress
+import java.net.URL
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 @DisplayName("GeoIpRepositoryImpl")
 class GeoIpRepositoryImplTest {
@@ -79,6 +99,30 @@ class GeoIpRepositoryImplTest {
     }
 
     @Test
+    @DisplayName("multiple hop lookups join one caller-owned operation")
+    fun `multiple lookups share one session`() = runTest {
+        val calls = AtomicInteger()
+        val baseUrl = startServer {
+            calls.incrementAndGet()
+            200 to """{"country":"US","loc":"37.38,-122.08"}"""
+        }
+        val repo = GeoIpRepositoryImpl(baseUrl = baseUrl)
+        val session = newSession()
+
+        val locations = OperationRunner.run(session) {
+            listOf(
+                repo.lookup("8.8.8.8", session),
+                repo.lookup("1.1.1.1", session),
+            )
+        }
+
+        assertEquals(2, locations.size)
+        assertTrue(locations.all { it?.country == "United States" })
+        assertEquals(2, calls.get())
+        assertTrue(session.resources.isClosed)
+    }
+
+    @Test
     @DisplayName("lookup accepts a public response with bogon false")
     fun `lookup accepts explicit false bogon flag`() = runTest {
         val baseUrl = startServer {
@@ -147,5 +191,127 @@ class GeoIpRepositoryImplTest {
         val result = repo.lookup("192.168.1.1")
 
         assertNull(result)
+    }
+
+    @Test
+    @DisplayName("Stop disconnects a blocked GeoIP response and remains typed cancellation")
+    fun `stop closes blocked response once without a late location`() = runTest {
+        val connection = BlockingGeoIpConnection()
+        val repo = GeoIpRepositoryImpl(
+            baseUrl = "https://ipinfo.io",
+            connectionFactory = GeoIpConnectionFactory { connection },
+        )
+        val session = newSession()
+        val lookup = async(Dispatchers.IO) { repo.lookup("8.8.8.8", session) }
+
+        assertTrue(withContext(Dispatchers.IO) { connection.readEntered.await(2, TimeUnit.SECONDS) })
+        session.cancel(CancellationReason.USER_STOP)
+        val failure = runCatching { withTimeoutIo { lookup.await() } }.exceptionOrNull()
+
+        assertTrue(failure is CancellationException)
+        assertEquals(CancellationReason.USER_STOP, session.cancellationReason)
+        assertEquals(1, connection.disconnectCount.get())
+    }
+
+    @Test
+    @DisplayName("deadline checks close-induced I/O before returning optional GeoIP data")
+    fun `expired caller deadline remains typed and closes connection once`() = runTest {
+        val fakeClock = MutableGeoIpClock()
+        val connection = ExpiringGeoIpConnection(fakeClock)
+        val repo = GeoIpRepositoryImpl(
+            baseUrl = "https://ipinfo.io",
+            connectionFactory = GeoIpConnectionFactory { connection },
+            clock = fakeClock,
+        )
+        val session = newSession(clock = fakeClock)
+
+        val failure = runCatching { repo.lookup("8.8.8.8", session) }.exceptionOrNull()
+
+        assertTrue(
+            failure is OperationDeadlineExceededException ||
+                (failure is OperationCancellationException && failure.reason == CancellationReason.DEADLINE_EXCEEDED),
+            "Expected typed deadline, got ${failure?.javaClass?.name}: ${failure?.message}",
+        )
+        assertEquals(1, connection.disconnectCount.get())
+    }
+
+    @Test
+    @DisplayName("lookup rejects a response body beyond its operation byte limit")
+    fun `oversized body is not parsed or cached`() = runTest {
+        val calls = AtomicInteger()
+        val response = """{"city":"${"c".repeat(66_000)}","country":"US","loc":"37.38,-122.08"}"""
+        val baseUrl = startServer {
+            calls.incrementAndGet()
+            200 to response
+        }
+        val repo = GeoIpRepositoryImpl(baseUrl = baseUrl)
+
+        assertNull(repo.lookup("8.8.8.8"))
+        assertNull(repo.lookup("8.8.8.8"))
+        assertEquals(2, calls.get())
+    }
+
+    private fun newSession(
+        clock: MonotonicClock = MonotonicClock { System.nanoTime() },
+        timeoutMillis: Long = 5_000L,
+    ) = OperationSession(
+        OperationBudget.start(
+            requirement = OperationRequirement.INTERNET,
+            timeoutMillis = timeoutMillis,
+            maxConcurrentProbes = 1,
+            maxResponseBytes = 65_536,
+            clock = clock,
+        )
+    )
+
+    private suspend fun <T> withTimeoutIo(block: suspend () -> T): T =
+        kotlinx.coroutines.withTimeout(2_000) { block() }
+
+    private class MutableGeoIpClock : MonotonicClock {
+        @Volatile var nowNanos: Long = 0
+        override fun nowNanos(): Long = nowNanos
+    }
+
+    private open class FakeGeoIpConnection(url: URL) : HttpURLConnection(url) {
+        val disconnectCount = AtomicInteger()
+        override fun connect() = Unit
+        override fun disconnect() { disconnectCount.incrementAndGet() }
+        override fun usingProxy(): Boolean = false
+        override fun getResponseCode(): Int = HTTP_OK
+    }
+
+    private class BlockingGeoIpConnection : FakeGeoIpConnection(URL("https://ipinfo.io/8.8.8.8/json")) {
+        val readEntered = CountDownLatch(1)
+        private val disconnected = CountDownLatch(1)
+        private val response = object : InputStream() {
+            override fun read(): Int {
+                readEntered.countDown()
+                disconnected.await(2, TimeUnit.SECONDS)
+                throw IOException("connection closed while reading")
+            }
+
+            override fun read(bytes: ByteArray, offset: Int, length: Int): Int = read()
+        }
+
+        override fun getInputStream(): InputStream = response
+        override fun disconnect() {
+            super.disconnect()
+            disconnected.countDown()
+        }
+    }
+
+    private class ExpiringGeoIpConnection(
+        private val clock: MutableGeoIpClock,
+    ) : FakeGeoIpConnection(URL("https://ipinfo.io/8.8.8.8/json")) {
+        private val response = object : InputStream() {
+            override fun read(): Int {
+                clock.nowNanos = 5_000_000_000L
+                throw IOException("socket closed at deadline")
+            }
+
+            override fun read(bytes: ByteArray, offset: Int, length: Int): Int = read()
+        }
+
+        override fun getInputStream(): InputStream = response
     }
 }

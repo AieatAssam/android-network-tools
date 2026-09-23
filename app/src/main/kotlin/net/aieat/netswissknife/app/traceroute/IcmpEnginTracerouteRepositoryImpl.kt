@@ -4,9 +4,14 @@ import net.aieat.netswissknife.core.network.traceroute.HopResult
 import net.aieat.netswissknife.core.network.traceroute.HopStatus
 import net.aieat.netswissknife.core.network.traceroute.TracerouteProbeType
 import net.aieat.netswissknife.core.network.traceroute.TracerouteRepository
+import net.aieat.netswissknife.core.network.traceroute.TracerouteOperation
+import net.aieat.netswissknife.core.network.operation.OperationRunner
+import net.aieat.netswissknife.core.network.operation.OperationSession
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
@@ -47,21 +52,42 @@ class IcmpEnginTracerouteRepositoryImpl(
         probesPerHop: Int,
         probeType: TracerouteProbeType,
         packetSize: Int
-    ): Flow<HopResult> {
-        return flow {
+    ): Flow<HopResult> = flow {
+        emitAll(
+            trace(
+                host,
+                maxHops,
+                timeoutMs,
+                probesPerHop,
+                probeType,
+                packetSize,
+                TracerouteOperation.newSession(),
+            )
+        )
+    }.flowOn(Dispatchers.IO)
+
+    override fun trace(
+        host: String,
+        maxHops: Int,
+        timeoutMs: Int,
+        probesPerHop: Int,
+        probeType: TracerouteProbeType,
+        packetSize: Int,
+        operationSession: OperationSession,
+    ): Flow<HopResult> = channelFlow {
+        OperationRunner.runOrJoin(operationSession) {
             val nativeFlow = try {
                 nativeTraceFactory(host, maxHops, timeoutMs, probesPerHop, probeType, packetSize)
             } catch (_: LinkageError) {
                 throw NativeTracerouteUnavailableException()
             }
-            emitAll(
-                nativeFlow.catch { failure ->
+            nativeFlow.catch { failure ->
                     if (failure is LinkageError) throw NativeTracerouteUnavailableException()
                     throw failure
                 }
-            )
-        }.flowOn(Dispatchers.IO)
-    }
+                .collect { hop -> this@channelFlow.send(hop) }
+        }
+    }.flowOn(Dispatchers.IO)
 
 }
 

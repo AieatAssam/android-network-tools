@@ -3,7 +3,13 @@ package net.aieat.netswissknife.core.domain
 import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.traceroute.GeoIpRepository
 import net.aieat.netswissknife.core.network.traceroute.TracerouteRepository
+import net.aieat.netswissknife.core.network.traceroute.TracerouteOperation
+import net.aieat.netswissknife.core.network.operation.OperationCancellationException
+import net.aieat.netswissknife.core.network.operation.OperationDeadlineExceededException
+import net.aieat.netswissknife.core.network.operation.OperationRunner
+import net.aieat.netswissknife.core.network.operation.OperationSession
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.flow
 
 /**
@@ -22,7 +28,19 @@ class TracerouteUseCase(
     private val tracerouteRepository: TracerouteRepository,
     private val geoIpRepository: GeoIpRepository
 ) {
-    operator fun invoke(params: TracerouteParams): Flow<TracerouteFlowResult> {
+    operator fun invoke(params: TracerouteParams): Flow<TracerouteFlowResult> =
+        invokeInternal(params, operationSession = null)
+
+    /** Runs the full trace and GeoIP enrichment under the caller-owned session. */
+    operator fun invoke(
+        params: TracerouteParams,
+        operationSession: OperationSession,
+    ): Flow<TracerouteFlowResult> = invokeInternal(params, operationSession)
+
+    private fun invokeInternal(
+        params: TracerouteParams,
+        operationSession: OperationSession?,
+    ): Flow<TracerouteFlowResult> {
         val trimmedHost = HostValidator.normalize(params.host) ?: params.host.trim()
 
         val errorMessage: String? = when {
@@ -40,31 +58,38 @@ class TracerouteUseCase(
             return flow { emit(TracerouteFlowResult.ValidationError(errorMessage)) }
         }
 
-        return flow {
-            tracerouteRepository.trace(
-                host          = trimmedHost,
-                maxHops       = params.maxHops,
-                timeoutMs     = params.timeoutMs,
-                probesPerHop  = params.probesPerHop,
-                probeType     = params.probeType,
-                packetSize    = params.packetSize
-            ).collect { hop ->
-                val hopIp = hop.ip
-                // Geolocation is decorative enrichment, not the payload: a hop must
-                // still be emitted (with no location) if the geo-IP lookup for it
-                // fails, rather than letting that exception abort the whole trace
-                // and discard every hop already streamed.
-                val enriched = if (hopIp != null) {
-                    val geo = try {
-                        geoIpRepository.lookup(hopIp)
-                    } catch (e: kotlinx.coroutines.CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        null
-                    }
-                    hop.copy(geoLocation = geo)
-                } else hop
-                emit(TracerouteFlowResult.Hop(enriched))
+        return channelFlow {
+            val session = operationSession ?: TracerouteOperation.newSession()
+            OperationRunner.run(session) {
+                tracerouteRepository.trace(
+                    host = trimmedHost,
+                    maxHops = params.maxHops,
+                    timeoutMs = params.timeoutMs,
+                    probesPerHop = params.probesPerHop,
+                    probeType = params.probeType,
+                    packetSize = params.packetSize,
+                    operationSession = session,
+                ).collect { hop ->
+                    val hopIp = hop.ip
+                    // Geolocation is decorative enrichment, not the payload: a hop must
+                    // still be emitted without a location if an ordinary lookup fails.
+                    // Typed cancellation and the shared deadline always stop the operation.
+                    val enriched = if (hopIp != null) {
+                        val geo = try {
+                            geoIpRepository.lookup(hopIp, session)
+                        } catch (cancelled: OperationCancellationException) {
+                            throw cancelled
+                        } catch (deadline: OperationDeadlineExceededException) {
+                            throw deadline
+                        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                            throw cancelled
+                        } catch (_: Exception) {
+                            null
+                        }
+                        hop.copy(geoLocation = geo)
+                    } else hop
+                    this@channelFlow.send(TracerouteFlowResult.Hop(enriched))
+                }
             }
         }
     }
