@@ -10,6 +10,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.Collections
+import java.util.IdentityHashMap
+import java.util.concurrent.atomic.AtomicReference
 
 /** Coroutine scope and shared operation contract made available to one operation body. */
 class OperationContext internal constructor(
@@ -41,6 +44,7 @@ object OperationRunner {
                 operationJob.cancel()
                 throw failure
             }
+            val eagerCloseFailure = AtomicReference<Throwable?>()
             val cancellationCloseHandle = operationJob.invokeOnCompletion(
                 onCancelling = true,
                 invokeImmediately = true,
@@ -55,7 +59,11 @@ object OperationRunner {
                             session.recordCancellationReason(CancellationReason.PARENT_CANCELLED)
                         }
                     }
-                    runCatching { session.resources.close() }
+                    val closeFailure = runCatching { session.resources.close() }.exceptionOrNull()
+                    if (closeFailure != null) {
+                        eagerCloseFailure.compareAndSet(null, closeFailure)
+                        preserveCleanupFailure(cause, closeFailure)
+                    }
                 }
             }
             val deadlineWatcher = launch {
@@ -105,17 +113,20 @@ object OperationRunner {
                         failure
                     }
                 }
+                val observedCloseFailure = eagerCloseFailure.get() ?: closeFailure
                 if (operationJob.isActive) operationJob.complete()
                 session.finish(operationJob)
 
-                if (closeFailure != null) {
+                if (observedCloseFailure != null) {
                     val primary = primaryFailure
-                    if (closeFailure is Error) {
-                        if (primary != null && primary !== closeFailure) closeFailure.addSuppressed(primary)
-                        throw closeFailure
+                    if (observedCloseFailure is Error) {
+                        if (primary != null && primary !== observedCloseFailure &&
+                            observedCloseFailure.suppressed.none { it === primary }
+                        ) observedCloseFailure.addSuppressed(primary)
+                        throw observedCloseFailure
                     }
-                    if (primary == null) throw closeFailure
-                    if (primary !== closeFailure) primary.addSuppressed(closeFailure)
+                    if (primary == null) throw observedCloseFailure
+                    preserveCleanupFailure(primary, observedCloseFailure)
                 }
             }
         }
@@ -151,5 +162,20 @@ object OperationRunner {
             if (remainingNanos == 0L) return
             delay(budget.remainingTimeoutMillis().coerceAtLeast(1L))
         }
+    }
+
+    private fun preserveCleanupFailure(primary: Throwable, cleanupFailure: Throwable) {
+        val seen = Collections.newSetFromMap(IdentityHashMap<Throwable, Boolean>())
+        var deepest = primary
+        seen += deepest
+        while (true) {
+            val cause = deepest.cause ?: break
+            if (!seen.add(cause)) break
+            deepest = cause
+        }
+        val attachmentPoint = deepest
+        if (attachmentPoint !== cleanupFailure &&
+            attachmentPoint.suppressed.none { it === cleanupFailure }
+        ) attachmentPoint.addSuppressed(cleanupFailure)
     }
 }

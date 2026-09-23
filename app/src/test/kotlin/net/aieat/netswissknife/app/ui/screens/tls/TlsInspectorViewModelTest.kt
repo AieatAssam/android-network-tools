@@ -2,11 +2,14 @@ package net.aieat.netswissknife.app.ui.screens.tls
 
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.slot
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.awaitCancellation
+import androidx.lifecycle.ViewModelStore
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -17,6 +20,8 @@ import net.aieat.netswissknife.core.domain.TlsInspectorUseCase
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.tls.TlsCertificate
 import net.aieat.netswissknife.core.network.tls.TlsInspectorResult
+import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationSession
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
@@ -93,7 +98,7 @@ class TlsInspectorViewModelTest {
 
         @Test
         fun `success sets result and clears error`() = runTest {
-            coEvery { useCase(any()) } returns NetworkResult.Success(stubResult)
+            coEvery { useCase(any(), any()) } returns NetworkResult.Success(stubResult)
             viewModel.onHostChange("example.com")
             viewModel.inspect()
             val state = viewModel.uiState.value
@@ -104,7 +109,7 @@ class TlsInspectorViewModelTest {
 
         @Test
         fun `error sets error message and clears result`() = runTest {
-            coEvery { useCase(any()) } returns NetworkResult.Error("connection refused")
+            coEvery { useCase(any(), any()) } returns NetworkResult.Error("connection refused")
             viewModel.onHostChange("badhost")
             viewModel.inspect()
             val state = viewModel.uiState.value
@@ -114,7 +119,7 @@ class TlsInspectorViewModelTest {
 
         @Test
         fun `exception sets actionable error and stops loading`() = runTest {
-            coEvery { useCase(any()) } throws IllegalStateException("handshake failed")
+            coEvery { useCase(any(), any()) } throws IllegalStateException("handshake failed")
             viewModel.onHostChange("example.com")
 
             viewModel.inspect()
@@ -127,7 +132,7 @@ class TlsInspectorViewModelTest {
 
         @Test
         fun `isLoading is false after completion`() = runTest {
-            coEvery { useCase(any()) } returns NetworkResult.Success(stubResult)
+            coEvery { useCase(any(), any()) } returns NetworkResult.Success(stubResult)
             viewModel.onHostChange("example.com")
             viewModel.inspect()
             assertTrue(!viewModel.uiState.value.isLoading)
@@ -143,7 +148,7 @@ class TlsInspectorViewModelTest {
 
     @Test
     fun `addRecent is called on inspect`() = runTest {
-        coEvery { useCase(any()) } returns NetworkResult.Success(stubResult)
+        coEvery { useCase(any(), any()) } returns NetworkResult.Success(stubResult)
         viewModel.onHostChange("example.com")
         viewModel.inspect()
         coVerify { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_TLS_HOSTS, "example.com") }
@@ -151,13 +156,13 @@ class TlsInspectorViewModelTest {
 
     @Test
     fun `inspect normalizes host before calling use case and saving`() = runTest {
-        coEvery { useCase(any()) } returns NetworkResult.Error("test")
+        coEvery { useCase(any(), any()) } returns NetworkResult.Error("test")
         viewModel.onHostChange("  EXAMPLE.COM.  ")
 
         viewModel.inspect()
 
         assertEquals("example.com", viewModel.uiState.value.host)
-        coVerify { useCase(match { it.host == "example.com" }) }
+        coVerify { useCase(match { it.host == "example.com" }, any()) }
         coVerify { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_TLS_HOSTS, "example.com") }
     }
 
@@ -168,7 +173,7 @@ class TlsInspectorViewModelTest {
         viewModel.inspect()
 
         assertEquals("Invalid hostname or IP address", viewModel.uiState.value.error)
-        coVerify(exactly = 0) { useCase(any()) }
+        coVerify(exactly = 0) { useCase(any(), any()) }
         coVerify(exactly = 0) { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_TLS_HOSTS, any()) }
     }
 
@@ -182,7 +187,7 @@ class TlsInspectorViewModelTest {
         assertEquals("Port must be a number from 1 to 65535", viewModel.uiState.value.error)
         assertTrue(!viewModel.uiState.value.isLoading)
         assertNull(viewModel.uiState.value.result)
-        coVerify(exactly = 0) { useCase(any()) }
+        coVerify(exactly = 0) { useCase(any(), any()) }
         coVerify(exactly = 0) { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_TLS_HOSTS, any()) }
     }
 
@@ -194,7 +199,7 @@ class TlsInspectorViewModelTest {
         viewModel.inspect()
 
         assertEquals("Port must be a number from 1 to 65535", viewModel.uiState.value.error)
-        coVerify(exactly = 0) { useCase(any()) }
+        coVerify(exactly = 0) { useCase(any(), any()) }
         coVerify(exactly = 0) { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_TLS_HOSTS, any()) }
     }
 
@@ -206,26 +211,26 @@ class TlsInspectorViewModelTest {
         viewModel.inspect()
 
         assertEquals("Port must be a number from 1 to 65535", viewModel.uiState.value.error)
-        coVerify(exactly = 0) { useCase(any()) }
+        coVerify(exactly = 0) { useCase(any(), any()) }
         coVerify(exactly = 0) { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_TLS_HOSTS, any()) }
     }
 
     @Test
     fun `inspect forwards a valid custom port unchanged`() = runTest {
-        coEvery { useCase(any()) } returns NetworkResult.Success(stubResult)
+        coEvery { useCase(any(), any()) } returns NetworkResult.Success(stubResult)
         viewModel.onHostChange("example.com")
         viewModel.onPortChange("8443")
 
         viewModel.inspect()
 
-        coVerify { useCase(match { it.host == "example.com" && it.port == 8443 }) }
+        coVerify { useCase(match { it.host == "example.com" && it.port == 8443 }, any()) }
         coVerify { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_TLS_HOSTS, "example.com") }
         assertNull(viewModel.uiState.value.error)
     }
 
     @Test
     fun `editing host or port clears the previous result`() = runTest {
-        coEvery { useCase(any()) } returns NetworkResult.Success(stubResult)
+        coEvery { useCase(any(), any()) } returns NetworkResult.Success(stubResult)
         viewModel.onHostChange("example.com")
         viewModel.inspect()
         assertNotNull(viewModel.uiState.value.result)
@@ -239,5 +244,19 @@ class TlsInspectorViewModelTest {
         viewModel.onPortChange("8443")
 
         assertNull(viewModel.uiState.value.result)
+    }
+
+    @Test
+    fun `clearing view model records lifecycle pause on active session`() = runTest {
+        val sessionSlot = slot<OperationSession>()
+        coEvery { useCase(any(), capture(sessionSlot)) } coAnswers { awaitCancellation() }
+        val store = ViewModelStore()
+        store.put("tls-inspector", viewModel)
+        viewModel.onHostChange("example.com")
+
+        viewModel.inspect()
+        store.clear()
+
+        assertEquals(CancellationReason.LIFECYCLE_PAUSE, sessionSlot.captured.cancellationReason)
     }
 }

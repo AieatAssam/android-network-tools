@@ -7,6 +7,7 @@ import kotlinx.coroutines.test.runTest
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.tls.TlsInspectorRepository
 import net.aieat.netswissknife.core.network.tls.TlsInspectorResult
+import net.aieat.netswissknife.core.network.tls.TlsInspectorOperation
 import net.aieat.netswissknife.core.network.tls.TlsCertificate
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -129,6 +130,18 @@ class TlsInspectorUseCaseTest {
             coEvery { repository.inspect(any(), any(), any()) } returns expected
             val actual = useCase(TlsInspectorParams(host = "example.com"))
             assertEquals(expected, actual)
+        }
+
+        @Test
+        fun `caller operation session is forwarded to repository`() = runTest {
+            val expected = NetworkResult.Success(successResult)
+            val session = TlsInspectorOperation.newSession(10_000)
+            coEvery { repository.inspect(any(), any(), any(), any()) } returns expected
+
+            val actual = useCase(TlsInspectorParams(host = "example.com"), session)
+
+            assertEquals(expected, actual)
+            coVerify(exactly = 1) { repository.inspect("example.com", 443, 10_000, session) }
         }
 
         @Test

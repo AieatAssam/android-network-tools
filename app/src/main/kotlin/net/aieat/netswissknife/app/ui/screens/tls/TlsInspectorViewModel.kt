@@ -20,6 +20,9 @@ import net.aieat.netswissknife.core.domain.TlsInspectorUseCase
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.tls.TlsInspectorResult
+import net.aieat.netswissknife.core.network.tls.TlsInspectorOperation
+import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationSession
 import javax.inject.Inject
 
 data class TlsInspectorUiState(
@@ -40,6 +43,14 @@ class TlsInspectorViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(TlsInspectorUiState())
     val uiState: StateFlow<TlsInspectorUiState> = _uiState.asStateFlow()
     val networkStatus: StateFlow<NetworkStatus> = networkStatusProvider.status
+
+    private var operationSession: OperationSession? = null
+
+    init {
+        addCloseable(LIFECYCLE_CLOSEABLE_KEY, AutoCloseable {
+            cancelInspection(CancellationReason.LIFECYCLE_PAUSE)
+        })
+    }
 
     val recentHosts: StateFlow<List<String>> = recentHostsRepository
         .getRecents(AppPreferenceKeys.RECENT_TLS_HOSTS)
@@ -88,6 +99,8 @@ class TlsInspectorViewModel @Inject constructor(
             return
         }
         _uiState.value = state.copy(host = normalizedHost, isLoading = true, error = null, result = null)
+        val session = TlsInspectorOperation.newSession(INSPECTION_TIMEOUT_MS)
+        operationSession = session
         viewModelScope.launch {
             recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_TLS_HOSTS, normalizedHost)
         }
@@ -96,9 +109,9 @@ class TlsInspectorViewModel @Inject constructor(
                 val params = TlsInspectorParams(
                     host      = normalizedHost,
                     port      = port,
-                    timeoutMs = 10_000
+                    timeoutMs = INSPECTION_TIMEOUT_MS
                 )
-                when (val res = useCase(params)) {
+                when (val res = useCase(params, session)) {
                     is NetworkResult.Success -> _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         result    = res.data,
@@ -121,7 +134,25 @@ class TlsInspectorViewModel @Inject constructor(
                     result = null,
                     error = "TLS inspection failed: $detail"
                 )
+            } finally {
+                if (operationSession === session) operationSession = null
             }
         }
+    }
+
+    private fun cancelInspection(reason: CancellationReason) {
+        operationSession?.let { session ->
+            operationSession = null
+            runCatching { session.cancel(reason) }
+        }
+    }
+
+    override fun onCleared() {
+        cancelInspection(CancellationReason.LIFECYCLE_PAUSE)
+    }
+
+    private companion object {
+        const val INSPECTION_TIMEOUT_MS = 10_000
+        const val LIFECYCLE_CLOSEABLE_KEY = "tls_operation_lifecycle"
     }
 }

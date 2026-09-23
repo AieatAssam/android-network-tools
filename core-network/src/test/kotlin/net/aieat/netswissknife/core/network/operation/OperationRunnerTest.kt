@@ -264,11 +264,15 @@ class OperationRunnerTest {
     fun `ordinary operation failure closes resources without inventing a cancellation reason`() = runTest {
         val session = OperationSession(OperationBudget.start(clock = FakeClock()))
         val operationFailure = IOException("scripted network failure")
+        val closeFailure = IOException("scripted resource cleanup failure")
         var closeCount = 0
 
         val surfacedFailure = try {
             OperationRunner.run(session) {
-                resources.register(AutoCloseable { closeCount++ })
+                resources.register(AutoCloseable {
+                    closeCount++
+                    throw closeFailure
+                })
                 throw operationFailure
             }
             null
@@ -277,8 +281,23 @@ class OperationRunnerTest {
         }
 
         assertTrue(surfacedFailure is IOException)
-        assertTrue(checkNotNull(surfacedFailure).failureGraph().any { it === operationFailure })
+        val failureGraph = checkNotNull(surfacedFailure).failureGraph().toList()
+        assertTrue(failureGraph.any { it === operationFailure })
         assertEquals(1, closeCount)
+        assertTrue(session.resources.isClosed)
+        assertTrue(
+            failureGraph.filterIsInstance<ResourceScopeCloseException>().isNotEmpty(),
+            "Failure graph: ${failureGraph.joinToString { failure ->
+                "${failure.javaClass.simpleName}:${failure.message}; suppressed=${failure.suppressed.map { it.message }}"
+            }}; scopeClosed=${session.resources.isClosed}; closeCount=$closeCount",
+        )
+        val cleanupFailure = failureGraph.filterIsInstance<ResourceScopeCloseException>().single()
+        assertEquals(listOf(closeFailure), cleanupFailure.failures)
+        assertEquals(
+            1,
+            failureGraph.count { node -> node.suppressed.any { it === cleanupFailure } },
+            "cleanup failure should attach to one canonical cause only",
+        )
         assertNull(session.cancellationReason)
         assertTrue(session.resources.isClosed)
     }
