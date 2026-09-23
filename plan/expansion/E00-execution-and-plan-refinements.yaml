@@ -211,7 +211,7 @@ tasks:
       remaining_acceptance:
         - "Device-only Wi-Fi/VPN LAN capture remains unavailable in this environment."
         - "Validate with an anonymized real NBSTAT response when one is available."
-      next_action: "Reconcile P02.5's critical/high Dependabot alerts against the plugins-DSL classpath and record a valid disposition before starting another medium follow-up. E00-T01 remains in progress for device-only Wi-Fi/VPN capture and an anonymized real NBSTAT response."
+      next_action: "Keep P02.5 in progress until GitHub refreshes its stale Dependabot alerts against the verified patched Gradle plugin graph, or the alerts have an approved disposition; then resume medium follow-ups. E00-T01 remains in progress for device-only Wi-Fi/VPN capture and an anonymized real NBSTAT response."
       running_handles: none
       blockers: none
 
