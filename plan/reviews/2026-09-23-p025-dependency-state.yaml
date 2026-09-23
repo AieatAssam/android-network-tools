@@ -2,12 +2,16 @@ review:
   id: P02.5-dependency-state
   checked_at: "2026-09-23"
   branch: "plan/comprehensive-review-2026-09-22"
-  commit: "38ba78b6f91c45549d4ffae327b893d2b1a019f1"
+  commit: "ca8b7f8cd7be464db7077e26aa4a2f22e2004bc5"
   status: "open"
   sources:
     alerts_command: "gh api --paginate repos/AieatAssam/android-network-tools/dependabot/alerts"
     sbom_command: "gh api repos/AieatAssam/android-network-tools/dependency-graph/sbom"
+    dependency_submission_runs: "gh api 'repos/AieatAssam/android-network-tools/actions/runs?per_page=30'"
+    dependency_submission_artifact: "gh run download 35601558226 -n dependency-graph_dynamicdependency-graphauto-submission-submit-gradle.json -D /tmp/p025-main-submission"
+    google_maven_metadata: "https://dl.google.com/dl/android/maven2/com/android/tools/build/gradle/maven-metadata.xml"
     gradle_command: "./gradlew help --debug --offline --no-daemon --no-parallel --no-configuration-cache"
+    isolated_settings_plugin_command: "./gradlew -p /tmp/nsk-settings-plugin-isolated-20260923 help --debug --offline --no-daemon --no-parallel --no-configuration-cache"
     runtime_graph_command: "./gradlew :app:dependencies --configuration releaseRuntimeClasspath --no-daemon"
 
 dependabot_alerts:
@@ -31,7 +35,35 @@ github_sbom:
     - "com.android.tools:sdk-common:32.4.1 -> org.bouncycastle:bcprov-jdk18on:1.80.2"
     - "org.apache.commons:commons-compress:1.27.1 -> org.apache.commons:commons-lang3:3.16.0"
     - "org.apache.httpcomponents:httpmime:4.5.6 -> org.apache.httpcomponents:httpclient:4.5.6"
-  interpretation: "The SBOM is freshly generated and still reports vulnerable versions alongside patched versions. Treat these as dependency-submission metadata edges until reconciled against Gradle-selected artifacts; they remain the data GitHub currently uses while six alerts are open."
+  interpretation: "The SBOM is freshly generated and reports vulnerable versions alongside patched versions. The dependency-submission report confirms those old coordinates also occur in the submitted Gradle graph, so they cannot be dismissed as stale alert-only records. The merged report does not identify the configuration selecting each edge; it remains the data GitHub currently uses while six alerts are open."
+
+dependency_submission:
+  default_branch:
+    run_id: 35601558226
+    run_url: "https://github.com/AieatAssam/android-network-tools/actions/runs/35601558226"
+    ref: "refs/heads/main"
+    commit: "5e183721e64ce8a8946f1a0b50f52b83544e8898"
+    generated_at: "2026-09-21T12:48:59Z"
+    manifest: "settings.gradle.kts"
+    resolved_component_count: 415
+    artifact_sha256: "c57002192acc246aab58ed90b13a8bac297ebbea7f7add6344e93cfb1a08cd57"
+  reviewed_branch:
+    run_id: 35809846158
+    run_url: "https://github.com/AieatAssam/android-network-tools/actions/runs/35809846158"
+    ref: "refs/heads/plan/comprehensive-review-2026-09-22"
+    commit: "ca8b7f8cd7be464db7077e26aa4a2f22e2004bc5"
+    artifact_sha256: "5e5e2a66e96030fc5415bb5eb547bcf27ff11da8d5dc77d28c1a1313fcd6d685"
+    note: "The managed submission run accepted this non-default-branch snapshot but did not replace the default-branch results."
+  graph_observations:
+    - "The default-branch report lists AGP 9.4.1 -> sdk-common 32.4.1 and includes both old and patched Bouncy Castle versions on the sdk-common entry; commons-compress likewise lists commons-lang3 3.16.0 and 3.18.0; httpmime 4.5.6 lists httpclient 4.5.6 and 4.5.14."
+    - "The graph is merged across configurations and does not identify the configuration-specific selection reason for each duplicate edge. It is evidence that the submitted build graph still contains the vulnerable coordinates, not proof that they ship in the Android app."
+    - "The upstream Google Maven POM for sdk-common:32.4.1 declares bcpkix-jdk18on:1.80.2 and bcprov-jdk18on:1.80.2; the AGP:9.4.1 POM declares httpmime:4.5.6. These direct metadata declarations explain why root buildscript pins do not remove the old plugin-path coordinates."
+    - "Main and the reviewed branch have identical settings.gradle.kts, build.gradle.kts, version catalog, and wrapper files. Root buildscript pins add patched nodes but do not remove the old nodes from the submitted graph."
+    - "The workflow is GitHub-managed Automatic Dependency Submission for Gradle; the repository CI workflow does not define this submission step."
+  upstream_metadata:
+    sdk_common_pom: "https://dl.google.com/dl/android/maven2/com/android/tools/sdk-common/32.4.1/sdk-common-32.4.1.pom"
+    agp_pom: "https://dl.google.com/dl/android/maven2/com/android/tools/build/gradle/9.4.1/gradle-9.4.1.pom"
+    observed_agp_versions: "Google Maven metadata checked 2026-09-23 lists AGP 9.4.1 and then 9.5.0-alpha01 through 9.5.0-alpha06; no later stable candidate was identified. Do not move to the prerelease line without the plan's stability/compatibility review."
 
 gradle_evidence:
   trace_sha256: "a614de05d4dbc4433112f298bfe9f243d7eb1b5edfd973dbe0c3ae4706908b36"
@@ -43,15 +75,16 @@ gradle_evidence:
     "org.apache.commons:commons-lang3": "3.18.0"
     "org.apache.httpcomponents:httpclient": "4.5.14"
   scope_limitations:
-    - "The help trace records the plugin requests and artifacts loaded during that invocation; it is not a configuration-scoped selection report for the separate settings-plugin classpath."
+    - "A standalone offline resolution of io.github.ben-manes.versions.settings 0.61.0 completed successfully and loaded no alerted vulnerable coordinates (log SHA-256 48afcd35d4eaaa99a574a52ba29d9eaf0a7f10b2ae9e6327e3fc1ae4e49ed47e). This covers that settings plugin only, not the AGP/project plugin graph."
+    - "The full help trace records plugin requests and artifacts loaded during that invocation; it is not a configuration-scoped selection report for the AGP/project plugin graph."
     - "The trace loads org.apache.httpcomponents:httpmime:4.5.6. This is distinct from the httpclient alert, though the fresh SBOM shows the former requesting vulnerable httpclient:4.5.6."
     - "The releaseRuntimeClasspath report excludes the affected packages from the Android runtime; it does not establish the build/settings plugin classpath."
 
 disposition:
   phase_status: "in_progress"
   blockers:
-    - "Produce a settings-scoped dependency report or equivalent evidence for every alerted build/plugin configuration."
-    - "Identify and correct the dependency-submission source/path that continues to emit old requested versions, or obtain explicit, time-bounded approvals for each unresolved alert."
+    - "Remove the vulnerable coordinates from the submitted Gradle build graph when a compatible stable AGP/plugin-stack release is available, or use a verified supported configuration constraint; rerun the default-branch submission and verify its payload no longer contains the old versions."
+    - "Obtain explicit, time-bounded approvals for any unresolved critical/high alert before closing the phase."
   closure_rule: "Do not close P02.5 based only on local artifact-resolution evidence or the expectation of a later rescan."
 
-artifact_note: "The compact evidence and hashes are retained here. Raw Gradle and SBOM JSON payloads were collected under /tmp during this audit and are not committed."
+artifact_note: "Compact evidence, source run IDs, and artifact hashes are retained here. Raw submission JSON and Gradle logs remain under /tmp and are not committed."

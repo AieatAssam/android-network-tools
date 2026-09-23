@@ -70,16 +70,17 @@ findings:
   - id: R2-005
     severity: high
     kind: privacy_gap
-    status: todo
+    status: done
     title: "HTTP recents persist the complete URL before validation, including possible secrets"
     related_phase: P12
     implementation_task: E01-T02
     evidence:
-      - { file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/httprobe/HttpProbeViewModel.kt, line: 100, detail: "send saves state.url.trim() to RECENT_HTTP_HOSTS before the request is validated or executed." }
-      - { file: app/src/main/kotlin/net/aieat/netswissknife/app/data/RecentHostsRepository.kt, line: 23, detail: "The repository stores supplied strings verbatim in DataStore apart from trimming and a five-entry cap." }
+      - { file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/httprobe/HttpProbeViewModel.kt, line: 69, detail: "HTTP recents run one-key migration before emitting any stored values and apply a defensive safe-origin mapping before StateFlow publication." }
+      - { file: app/src/main/kotlin/net/aieat/netswissknife/app/data/RecentHostsRepository.kt, line: 34, detail: "sanitizeRecents transforms, deduplicates and caps a single recent list within one DataStore edit." }
+      - { file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/httprobe/HttpRecentOrigin.kt, line: 12, detail: "Only a valid normalized scheme/host/non-default port are rebuilt; userinfo, path, query and fragment are discarded." }
     impact: "URL userinfo, signed query tokens, fragments and sensitive paths may survive app restarts and appear in recent-input UI without an explicit report-save choice. Backup exclusion does not prevent local retention or screen disclosure."
     recommended_action: "Introduce a tool-aware safe recent-input representation: HTTP defaults to normalized scheme/host/port only, never userinfo or query/fragment secrets. Keep full request only in the transient run. Sanitize existing HTTP recents atomically and disclose the change; do not wipe unrelated preferences."
-    validation: "Submit a synthetic URL containing userinfo, token query, sensitive path and fragment; none survive in persisted recents or recent-input UI. Invalid requests do not persist raw text. Migration preserves safe origin/order while stripping sensitive components."
+    validation: "Focused RecentHostsRepositoryTest, HttpRecentOriginTest and HttpProbeViewModelTest passed (35 tests total), covering atomic legacy migration, unrelated preferences, duplicate origins, canonical removal, origin-only storage on network failure, invalid URL rejection, and safe recent UI state. Separate QA and adversarial reviews found no blocker."
 
   - id: R2-006
     severity: medium

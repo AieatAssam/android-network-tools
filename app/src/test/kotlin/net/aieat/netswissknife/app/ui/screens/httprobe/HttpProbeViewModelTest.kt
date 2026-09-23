@@ -175,11 +175,41 @@ class HttpProbeViewModelTest {
     }
 
     @Test
-    fun `addRecent is called on send`() = runTest {
-        coEvery { useCase(any()) } returns NetworkResult.Success(stubResult)
-        viewModel.onUrlChange("https://example.com")
+    fun `stores only safe origin on send even when request fails`() = runTest {
+        coEvery { useCase(any()) } returns NetworkResult.Error("timeout")
+        viewModel.onUrlChange("https://user:secret@example.com/private?token=sensitive#section")
         viewModel.send()
-        coVerify { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_HTTP_HOSTS, "https://example.com") }
+        coVerify {
+            recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_HTTP_HOSTS, "https://example.com")
+        }
+        assertEquals("timeout", viewModel.uiState.value.error)
+    }
+
+    @Test
+    fun `invalid URL is not stored in recents`() = runTest {
+        coEvery { useCase(any()) } returns NetworkResult.Error("Only HTTP and HTTPS URLs are supported")
+        viewModel.onUrlChange("ftp://user:secret@example.com/private?token=sensitive")
+
+        viewModel.send()
+
+        coVerify(exactly = 0) {
+            recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_HTTP_HOSTS, any())
+        }
+    }
+
+    @Test
+    fun `legacy unsafe recents are sanitized before they reach UI state`() {
+        every { recentHostsRepository.getRecents(AppPreferenceKeys.RECENT_HTTP_HOSTS) } returns flowOf(
+            listOf(
+                "https://user:secret@example.com/private?token=sensitive",
+                "not a URL"
+            )
+        )
+
+        viewModel = HttpProbeViewModel(useCase, recentHostsRepository)
+
+        assertEquals(listOf("https://example.com"), viewModel.recentHosts.value)
+        coVerify { recentHostsRepository.sanitizeRecents(AppPreferenceKeys.RECENT_HTTP_HOSTS, any()) }
     }
 
     @Test

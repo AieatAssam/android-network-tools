@@ -211,7 +211,7 @@ tasks:
       remaining_acceptance:
         - "Device-only Wi-Fi/VPN LAN capture remains unavailable in this environment."
         - "Validate with an anonymized real NBSTAT response when one is available."
-      next_action: "Keep P02.5 in progress until GitHub refreshes its stale Dependabot alerts against the verified patched Gradle plugin graph, or the alerts have an approved disposition; then resume medium follow-ups. E00-T01 remains in progress for device-only Wi-Fi/VPN capture and an anonymized real NBSTAT response."
+      next_action: "Keep P02.5 in progress: the default-branch dependency submission contains vulnerable AGP/plugin-transitive coordinates, while the merged report does not prove app-runtime inclusion. Track a compatible stable plugin-stack remedy and verify the next default-branch payload, or obtain approved time-bounded dispositions; continue ready high-priority code fixes and defer medium follow-ups until the critical gate is resolved. E00-T01 remains in progress for device-only Wi-Fi/VPN capture and an anonymized real NBSTAT response."
       running_handles: none
       blockers: none
 

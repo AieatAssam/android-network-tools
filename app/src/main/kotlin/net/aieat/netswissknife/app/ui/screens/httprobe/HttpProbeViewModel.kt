@@ -9,6 +9,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -63,8 +67,18 @@ class HttpProbeViewModel @Inject constructor(
 
     private var activeReplayDecision: ActiveReplayDecision? = null
 
-    val recentHosts: StateFlow<List<String>> = recentHostsRepository
-        .getRecents(AppPreferenceKeys.RECENT_HTTP_HOSTS)
+    val recentHosts: StateFlow<List<String>> = flow {
+        recentHostsRepository.sanitizeRecents(
+            AppPreferenceKeys.RECENT_HTTP_HOSTS,
+            ::safeHttpRecentOrigin
+        )
+        emitAll(recentHostsRepository.getRecents(AppPreferenceKeys.RECENT_HTTP_HOSTS))
+    }
+        .map { entries -> entries.mapNotNull(::safeHttpRecentOrigin).distinct().take(5) }
+        .catch { error ->
+            if (error is CancellationException) throw error
+            emit(emptyList())
+        }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     fun onUrlChange(url: String) = _uiState.update { it.copy(url = url) }
@@ -124,8 +138,10 @@ class HttpProbeViewModel @Inject constructor(
         val state = _uiState.value
         if (state.url.isBlank() || state.isLoading) return
 
-        viewModelScope.launch {
-            recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_HTTP_HOSTS, state.url.trim())
+        safeHttpRecentOrigin(state.url)?.let { safeOrigin ->
+            viewModelScope.launch {
+                recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_HTTP_HOSTS, safeOrigin)
+            }
         }
         _uiState.update { it.copy(isLoading = true, result = null, error = null, selectedTab = 0) }
         val runId = UUID.randomUUID().toString()
