@@ -30,7 +30,8 @@ findings:
     recommended_action: "Capture EXTRA_RESULTS_UPDATED in the awaiter outcome (and distinguish rejected, completed, and failed requests); only report a successful refresh when the broadcast confirms updated results, while retaining the prior cache with an explicit failure/stale status otherwise."
     validation: "Add JVM decision tests for updated=false and instrumented tests that dispatch SCAN_RESULTS_AVAILABLE_ACTION with EXTRA_RESULTS_UPDATED=false/true, asserting the repository/UI state and stale indicator differ."
     related_phase: P03
-    status: todo
+    status: done
+    resolution: "The awaiter now distinguishes UPDATED, NOT_UPDATED, TIMED_OUT, REJECTED, FAILED, and PERMISSION_DENIED outcomes, reading EXTRA_RESULTS_UPDATED and treating a missing extra as false. The repository estimates sample time from ScanResult age (and leaves it unknown for an empty failed refresh); the ViewModel retains the prior sample, timestamp, age progression, and selected AP on unsuccessful refreshes. The screen labels cached/failure states, offers permission retry, and stops auto-refresh on permission loss. ScanFreshnessTest and WifiScanViewModelTest pass; API 36 ScanRequestAwaiterTest passed 3/3 and WifiScanScreenTest passed 12/12. QA and adversarial re-reviews found no remaining blocker."
 
   - id: RAPP002
     severity: medium

@@ -21,12 +21,12 @@ phase:
 
 review_follow_up:
   reviewed_on: "2026-09-21"
-  status: in_progress
+  status: done
   findings: [RAPP001, RNET004]
   reports:
     - plan/reviews/2026-09-21-app.yaml
     - plan/reviews/2026-09-21-network.yaml
-  note: "RNET009 is closed with conservative capability parsing, unknown-security UI, focused JVM tests, and API 36 Compose verification. RAPP001 and RNET004 remain open; preserve historical task completion."
+  note: "RNET009, RAPP001, and RNET004 are closed with conservative capability parsing, explicit scan-request outcomes, logical network counts, focused JVM tests, API 36 receiver/Compose verification, and independent QA/adversarial review. Preserve historical task completion."
 
 context:
   problem: |

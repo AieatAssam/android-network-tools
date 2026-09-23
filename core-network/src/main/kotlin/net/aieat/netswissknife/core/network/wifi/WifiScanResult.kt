@@ -10,7 +10,7 @@ data class WifiScanResult(
     val channels: List<WifiChannelInfo>,
     /** Live info about the currently associated network; null if not connected to Wi-Fi. */
     val connectedNetwork: WifiConnectionInfo?,
-    /** Wall-clock time when the scan completed (System.currentTimeMillis()). */
+    /** Estimated wall-clock time of the newest scan sample, or 0 when unavailable. */
     val scanTimestampMs: Long,
     /** Whether Wi-Fi is currently enabled on the device. */
     val isWifiEnabled: Boolean,
@@ -18,8 +18,10 @@ data class WifiScanResult(
     val isFresh: Boolean = true,
     /** Age of the newest scan result, measured from elapsed realtime, or null if unknown. */
     val scanAgeMs: Long? = null,
-    /** Whether Android rejected the requested scan because of platform throttling. */
-    val throttled: Boolean = false,
+    /** Elapsed realtime when this cached sample's age was calculated. */
+    val cacheReadElapsedRealtimeMs: Long = 0L,
+    /** Outcome of the latest request to refresh Android's scan cache. */
+    val refreshStatus: WifiScanRefreshStatus = WifiScanRefreshStatus.NOT_REQUESTED,
     /** Whether Location Services were enabled when this result was read. */
     val locationEnabled: Boolean = true
 ) {
@@ -34,9 +36,13 @@ data class WifiScanResult(
     val detectedBands: List<WifiBand> get() =
         byBand.keys.sortedBy { it.ordinal }
 
-    /** Total number of unique SSIDs (networks, not BSSIDs). */
+    /**
+     * Number of logical network rows: visible SSID/security groups plus each hidden AP.
+     * Multiple BSSIDs for one visible SSID/security pair count once; the same SSID with
+     * different security counts separately.
+     */
     val uniqueNetworkCount: Int get() =
-        accessPoints.map { it.ssid }.toSet().size
+        networks.size
 
     /** Channel with the highest congestion score, or null if no channels. */
     val busiestChannel: WifiChannelInfo? get() =

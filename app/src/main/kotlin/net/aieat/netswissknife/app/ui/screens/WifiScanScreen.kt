@@ -265,6 +265,7 @@ fun WifiScanScreen(
                     refreshIntervalMs   = refreshIntervalMs,
                     expandedNetworks    = expandedNetworks,
                     onScan              = { viewModel.startScan() },
+                    onRequestPermission = { permissionLauncher.launch(requiredPermissions) },
                     onRefreshInterval   = { viewModel.setRefreshInterval(it) },
                     onBandFilter        = { viewModel.setBandFilter(it) },
                     onSortOrder         = { viewModel.setSortOrder(it) },
@@ -397,6 +398,7 @@ fun WifiScanScreen(
     refreshIntervalMs: Long?,
     expandedNetworks: Set<String>,
     onScan: () -> Unit,
+    onRequestPermission: () -> Unit,
     onRefreshInterval: (Long?) -> Unit,
     onBandFilter: (WifiBand?) -> Unit,
     onSortOrder: (ApSortOrder) -> Unit,
@@ -424,7 +426,7 @@ fun WifiScanScreen(
             )
         }
 
-        item { WifiScanFreshnessStatus(state.result) }
+        item { WifiScanFreshnessStatus(state.result, onRequestPermission) }
 
         state.result.connectedNetwork?.let { connectionInfo ->
             item { WifiConnectedNetworkCard(connectionInfo) }
@@ -565,10 +567,15 @@ fun WifiScanScreen(
                 }
                 Spacer(Modifier.height(4.dp))
                 val time = remember(result.scanTimestampMs) {
-                    SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(result.scanTimestampMs))
+                    if (result.scanTimestampMs > 0L) {
+                        SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(result.scanTimestampMs))
+                    } else {
+                        null
+                    }
                 }
                 Text(
-                    "${result.networks.size} SSIDs · ${result.accessPoints.size} APs · $time",
+                    listOfNotNull("${result.networks.size} SSIDs · ${result.accessPoints.size} APs", time)
+                        .joinToString(" · "),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
                 )

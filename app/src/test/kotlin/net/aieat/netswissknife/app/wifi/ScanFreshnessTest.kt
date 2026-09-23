@@ -1,34 +1,77 @@
 package net.aieat.netswissknife.app.wifi
 
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertFalse
-import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import net.aieat.netswissknife.core.network.wifi.WifiScanRefreshStatus
 
 class ScanFreshnessTest {
 
     @Test
-    fun `a rejected scan request is reported as throttled without waiting`() {
+    fun `a rejected request is distinguished without waiting`() {
         val outcome = decideOutcome(startScanReturned = false, broadcastArrived = false)
 
-        assertTrue(outcome.throttled)
-        assertFalse(outcome.broadcastArrived)
+        assertEquals(WifiScanRefreshStatus.REJECTED, outcome.status)
     }
 
     @Test
-    fun `a completed scan request is not throttled`() {
+    fun `an updated completion is successful`() {
+        val outcome = decideOutcome(
+            startScanReturned = true,
+            broadcastArrived = true,
+            resultsUpdated = true
+        )
+
+        assertEquals(WifiScanRefreshStatus.UPDATED, outcome.status)
+    }
+
+    @Test
+    fun `a completion with a false or missing updated extra preserves cached status`() {
         val outcome = decideOutcome(startScanReturned = true, broadcastArrived = true)
 
-        assertFalse(outcome.throttled)
-        assertTrue(outcome.broadcastArrived)
+        assertEquals(WifiScanRefreshStatus.NOT_UPDATED, outcome.status)
     }
 
     @Test
-    fun `a timed out scan is not confused with platform throttling`() {
+    fun `an accepted request without its completion broadcast times out`() {
         val outcome = decideOutcome(startScanReturned = true, broadcastArrived = false)
 
-        assertFalse(outcome.throttled)
-        assertFalse(outcome.broadcastArrived)
+        assertEquals(WifiScanRefreshStatus.TIMED_OUT, outcome.status)
+    }
+
+    @Test
+    fun `cache read timestamp reflects the sample age`() {
+        assertEquals(
+            58_000L,
+            estimateScanSampleTimeMs(
+                nowWallClockMs = 100_000L,
+                scanAgeMs = 42_000L,
+                refreshStatus = WifiScanRefreshStatus.TIMED_OUT
+            )
+        )
+    }
+
+    @Test
+    fun `empty confirmed update uses its completion time`() {
+        assertEquals(
+            100_000L,
+            estimateScanSampleTimeMs(
+                nowWallClockMs = 100_000L,
+                scanAgeMs = null,
+                refreshStatus = WifiScanRefreshStatus.UPDATED
+            )
+        )
+    }
+
+    @Test
+    fun `empty failed refresh has no invented sample timestamp`() {
+        assertEquals(
+            0L,
+            estimateScanSampleTimeMs(
+                nowWallClockMs = 100_000L,
+                scanAgeMs = null,
+                refreshStatus = WifiScanRefreshStatus.TIMED_OUT
+            )
+        )
     }
 
     @Test

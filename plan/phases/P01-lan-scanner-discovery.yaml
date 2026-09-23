@@ -32,7 +32,7 @@ review_follow_up:
     - plan/reviews/2026-09-21-build.yaml
     - plan/reviews/2026-09-21-network.yaml
     - plan/reviews/2026-09-22-lan-scan-noise.yaml
-  note: "New source-review follow-ups; preserve historical task completion. RLAN001 is closed with confirmed-host-only results and focused tests; E00-T01 remains in progress for device-only Wi-Fi/VPN and real NBSTAT observations. RBUILD003, RNET001, and RNET011 remain open."
+  note: "New source-review follow-ups; preserve historical task completion. RLAN001 and RNET001 are closed with focused regressions and independent QA/adversarial review; E00-T01 remains in progress for device-only Wi-Fi/VPN and real NBSTAT observations. RBUILD003 and RNET011 remain open."
   discovery_policy_override:
     finding: RLAN001
     implementation_task: E00-T01

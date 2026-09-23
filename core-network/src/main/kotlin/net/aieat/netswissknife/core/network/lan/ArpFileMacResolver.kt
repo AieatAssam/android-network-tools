@@ -7,14 +7,23 @@ class ArpFileMacResolver(
     private val reader: () -> String = { File("/proc/net/arp").readText() },
 ) : MacResolver {
 
-    private val table: String by lazy {
-        runCatching { reader() }.getOrDefault("")
+    private val table: ArpTableSnapshot by lazy {
+        readSnapshot()
     }
 
     override val supported: Boolean
-        get() = table.isNotBlank()
+        get() = table.supported
 
-    override suspend fun resolve(ip: String): String? = parseArpTable(table)[ip]
+    override suspend fun resolve(ip: String): String? = table.resolve(ip)
+
+    /** Captures the current kernel table once for the post-probe enrichment pass. */
+    override fun snapshot(): MacResolver = readSnapshot()
+
+    private fun readSnapshot(): ArpTableSnapshot = try {
+        ArpTableSnapshot(content = reader(), supported = true)
+    } catch (_: Exception) {
+        ArpTableSnapshot(content = "", supported = false)
+    }
 
     companion object {
         /** Parses Linux /proc/net/arp and ignores incomplete entries. */
@@ -35,5 +44,11 @@ class ArpFileMacResolver(
                 }
                 .toMap()
         }
+    }
+
+    private class ArpTableSnapshot(content: String, override val supported: Boolean) : MacResolver {
+        private val entries = parseArpTable(content)
+
+        override suspend fun resolve(ip: String): String? = entries[ip]
     }
 }

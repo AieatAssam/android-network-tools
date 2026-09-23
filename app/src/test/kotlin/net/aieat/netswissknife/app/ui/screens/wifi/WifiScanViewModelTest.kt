@@ -23,6 +23,7 @@ import net.aieat.netswissknife.core.network.wifi.WifiAccessPoint
 import net.aieat.netswissknife.core.network.wifi.WifiBand
 import net.aieat.netswissknife.core.network.wifi.WifiChannelInfo
 import net.aieat.netswissknife.core.network.wifi.WifiScanResult
+import net.aieat.netswissknife.core.network.wifi.WifiScanRefreshStatus
 import net.aieat.netswissknife.core.network.wifi.WifiSecurity
 import net.aieat.netswissknife.core.network.wifi.WifiStandard
 import org.junit.jupiter.api.AfterEach
@@ -78,8 +79,9 @@ class WifiScanViewModelTest {
         vararg aps: WifiAccessPoint,
         wifiEnabled: Boolean = true,
         locationEnabled: Boolean = true,
-        throttled: Boolean = false,
-        scanAgeMs: Long? = null
+        refreshStatus: WifiScanRefreshStatus = WifiScanRefreshStatus.NOT_REQUESTED,
+        scanAgeMs: Long? = null,
+        cacheReadElapsedRealtimeMs: Long = 0L
     ) = WifiScanResult(
         accessPoints = aps.toList(),
         channels = emptyList<WifiChannelInfo>(),
@@ -88,7 +90,8 @@ class WifiScanViewModelTest {
         isWifiEnabled = wifiEnabled,
         isFresh = scanAgeMs == null || scanAgeMs <= 15_000L,
         scanAgeMs = scanAgeMs,
-        throttled = throttled,
+        cacheReadElapsedRealtimeMs = cacheReadElapsedRealtimeMs,
+        refreshStatus = refreshStatus,
         locationEnabled = locationEnabled
     )
 
@@ -164,6 +167,22 @@ class WifiScanViewModelTest {
         assertTrue(viewModel.uiState.value is WifiScanUiState.NoPermission)
     }
 
+    @Test
+    fun `denied permission retry retains the last successful scan`() = runTest(testDispatcher) {
+        val previous = stubResult(stubAp()).copy(scanTimestampMs = System.currentTimeMillis() - 42_000L)
+        coEvery { wifiScanUseCase(trigger = true) } returns previous
+        viewModel.startScan()
+        runCurrent()
+
+        viewModel.onPermissionDenied()
+
+        val state = viewModel.uiState.value as WifiScanUiState.Success
+        assertEquals(previous.accessPoints, state.result.accessPoints)
+        assertEquals(WifiScanRefreshStatus.PERMISSION_DENIED, state.refreshStatus)
+        assertTrue(state.result.scanAgeMs!! >= 42_000L)
+        assertTrue(!viewModel.autoRefresh.value)
+    }
+
     @Nested
     @DisplayName("startScan")
     inner class StartScan {
@@ -204,17 +223,48 @@ class WifiScanViewModelTest {
         }
 
         @Test
-        fun `Success exposes freshness and throttle state`() = runTest(testDispatcher) {
+        fun `Success exposes freshness and rejected refresh status`() = runTest(testDispatcher) {
             coEvery { wifiScanUseCase(trigger = true) } returns
-                stubResult(stubAp(), throttled = true, scanAgeMs = 42_000L)
+                stubResult(stubAp(), refreshStatus = WifiScanRefreshStatus.REJECTED, scanAgeMs = 42_000L)
 
             viewModel.startScan()
             runCurrent()
 
             val state = viewModel.uiState.value as WifiScanUiState.Success
-            assertTrue(state.throttled)
+            assertEquals(WifiScanRefreshStatus.REJECTED, state.refreshStatus)
             assertEquals(42_000L, state.scanAgeMs)
             assertTrue(!state.isFresh)
+            viewModel.stopAutoRefresh()
+        }
+
+        @Test
+        fun `failed refresh retains the prior data and sample timestamp`() = runTest(testDispatcher) {
+            val ap = stubAp()
+            val previous = stubResult(
+                ap,
+                scanAgeMs = 42_000L,
+                cacheReadElapsedRealtimeMs = 100_000L
+            ).copy(scanTimestampMs = 123_000L)
+            coEvery { wifiScanUseCase(trigger = true) } returns previous
+            viewModel.startScan()
+            runCurrent()
+            viewModel.stopAutoRefresh()
+            viewModel.selectAccessPoint(ap)
+
+            coEvery { wifiScanUseCase(trigger = true) } returns stubResult(
+                refreshStatus = WifiScanRefreshStatus.TIMED_OUT,
+                cacheReadElapsedRealtimeMs = 105_000L
+            )
+            viewModel.startScan(silent = true)
+            runCurrent()
+
+            val state = viewModel.uiState.value as WifiScanUiState.Success
+            assertEquals(listOf("AA:BB:CC:DD:EE:01"), state.result.accessPoints.map { it.bssid })
+            assertEquals(123_000L, state.result.scanTimestampMs)
+            assertEquals(47_000L, state.result.scanAgeMs)
+            assertEquals(ap, state.selectedAp)
+            assertNull(viewModel.apDisappearedEvent.value)
+            assertEquals(WifiScanRefreshStatus.TIMED_OUT, state.refreshStatus)
             viewModel.stopAutoRefresh()
         }
 
@@ -247,6 +297,54 @@ class WifiScanViewModelTest {
 
             val state = viewModel.uiState.value as WifiScanUiState.Error
             assertEquals("boom", state.message)
+        }
+
+        @Test
+        fun `exception after a success keeps cached data with a failed refresh status`() = runTest(testDispatcher) {
+            val previous = stubResult(stubAp()).copy(
+                scanTimestampMs = System.currentTimeMillis() - 42_000L,
+                scanAgeMs = 42_000L
+            )
+            coEvery { wifiScanUseCase(trigger = true) } returns previous
+            viewModel.startScan()
+            runCurrent()
+            viewModel.stopAutoRefresh()
+
+            coEvery { wifiScanUseCase(trigger = true) } throws RuntimeException("boom")
+            viewModel.startScan(silent = true)
+            runCurrent()
+
+            val state = viewModel.uiState.value as WifiScanUiState.Success
+            assertEquals(previous.accessPoints, state.result.accessPoints)
+            assertEquals(previous.scanTimestampMs, state.result.scanTimestampMs)
+            assertEquals(WifiScanRefreshStatus.FAILED, state.refreshStatus)
+            assertTrue(state.result.scanAgeMs!! >= 42_000L)
+            assertTrue(!state.result.isFresh)
+            viewModel.stopAutoRefresh()
+        }
+
+        @Test
+        fun `permission revoked after a success keeps data and reports permission failure`() = runTest(testDispatcher) {
+            val previous = stubResult(stubAp()).copy(
+                scanTimestampMs = System.currentTimeMillis() - 42_000L,
+                scanAgeMs = 42_000L
+            )
+            coEvery { wifiScanUseCase(trigger = true) } returns previous
+            viewModel.startScan()
+            runCurrent()
+
+            coEvery { wifiScanUseCase(trigger = true) } throws SecurityException("denied")
+            viewModel.startScan(silent = true)
+            runCurrent()
+
+            val state = viewModel.uiState.value as WifiScanUiState.Success
+            assertEquals(previous.accessPoints, state.result.accessPoints)
+            assertEquals(previous.scanTimestampMs, state.result.scanTimestampMs)
+            assertEquals(WifiScanRefreshStatus.PERMISSION_DENIED, state.refreshStatus)
+            assertTrue(state.result.scanAgeMs!! >= 42_000L)
+            assertTrue(!state.result.isFresh)
+            assertTrue(!viewModel.autoRefresh.value)
+            viewModel.stopAutoRefresh()
         }
     }
 

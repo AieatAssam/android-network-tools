@@ -23,6 +23,7 @@ import net.aieat.netswissknife.core.network.wifi.WifiConnectionInfo
 import net.aieat.netswissknife.core.network.wifi.WifiScanRepository
 import net.aieat.netswissknife.core.network.wifi.WifiScanResult
 import net.aieat.netswissknife.core.network.wifi.WifiScanFreshness
+import net.aieat.netswissknife.core.network.wifi.WifiScanRefreshStatus
 import net.aieat.netswissknife.core.network.wifi.WifiSecurity
 import net.aieat.netswissknife.core.network.wifi.WifiStandard
 import kotlinx.coroutines.Dispatchers
@@ -75,20 +76,28 @@ class WifiScanRepositoryImpl(private val context: Context) : WifiScanRepository 
             .sortedByDescending { it.rssi }
 
         val channels = buildChannelInfo(accessPoints)
+        val cacheReadElapsedRealtimeMs = SystemClock.elapsedRealtime()
         val freshness = WifiScanFreshness.compute(
             newestTimestampUs = rawResults.maxOfOrNull { it.timestamp },
-            nowElapsedMs = SystemClock.elapsedRealtime()
+            nowElapsedMs = cacheReadElapsedRealtimeMs
+        )
+        val refreshStatus = requestOutcome?.status ?: WifiScanRefreshStatus.NOT_REQUESTED
+        val sampledAtMs = estimateScanSampleTimeMs(
+            nowWallClockMs = System.currentTimeMillis(),
+            scanAgeMs = freshness.ageMs,
+            refreshStatus = refreshStatus
         )
 
         WifiScanResult(
             accessPoints = accessPoints,
             channels = channels,
             connectedNetwork = connectedInfo,
-            scanTimestampMs = System.currentTimeMillis(),
+            scanTimestampMs = sampledAtMs,
             isWifiEnabled = wifiManager.isWifiEnabled,
             isFresh = freshness.isFresh,
             scanAgeMs = freshness.ageMs,
-            throttled = requestOutcome?.throttled == true,
+            cacheReadElapsedRealtimeMs = cacheReadElapsedRealtimeMs,
+            refreshStatus = refreshStatus,
             locationEnabled = locationEnabled
         )
     }

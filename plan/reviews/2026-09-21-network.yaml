@@ -33,7 +33,8 @@ findings:
     recommended_action: "Make ArpFileMacResolver parse a fresh reader result per scan/final pass, or defer all MAC resolution until workers finish and inject a scan-scoped immutable ARP snapshot."
     validation: "Add a deterministic test whose reader returns an initial table on the first call and a larger table on the second call; use two hosts with staggered probe completion and assert both final MACs are present."
     related_phase: P01
-    status: todo
+    status: done
+    resolution: "MacResolver now exposes a fresh scan-scoped snapshot. A readable final ARP table replaces or clears each worker mapping; unreadable snapshots or per-host lookups retain the worker result, cancellation still propagates, and source support distinguishes a readable empty file from a read failure. Regressions cover a late ARP entry after staggered probes, changed MAC across scans, unreadable snapshot, final lookup failure, and snapshot-creation failure with bounded reads. Focused resolver and LAN repository tests passed; QA/adversarial reviews found no remaining blocker."
   - id: RNET002
     severity: medium
     kind: bug
@@ -90,7 +91,8 @@ findings:
     recommended_action: "Derive the count from networks.size (or the same visible SSID/security plus hidden-BSSID identity used by WifiNetworkGrouper)."
     validation: "Construct a WifiScanResult with two hidden APs and assert uniqueNetworkCount equals networks.size while visible same-SSID BSSIDs remain grouped."
     related_phase: P03
-    status: todo
+    status: done
+    resolution: "uniqueNetworkCount now matches networks.size: visible SSID/security groups count once and each hidden AP is a separate logical row. KDoc and tests cover two hidden BSSIDs, same/different security grouping, and empty input. Focused WifiScanResultTest passed; the full core-network suite passed."
   - id: RNET005
     severity: medium
     kind: bug

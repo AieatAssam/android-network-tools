@@ -165,24 +165,52 @@ class LanScanRepositoryImpl(
             uncertainTotal = uncertainCount
         }
 
-        // A second read is useful on API levels where the first read happened before ARP
-        // resolution. The injected resolver makes this behavior deterministic in tests.
-        if (effectiveMacResolver.supported) {
+        // ARP may have been read during concurrent enrichment, or during an earlier scan,
+        // before this scan populated the kernel cache. A readable final snapshot is the
+        // authoritative MAC view for this scan, including clearing stale prior mappings.
+        val scanMacResolver = try {
+            effectiveMacResolver.snapshot()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            null
+        }
+        val freshSnapshotSupported = try {
+            scanMacResolver?.supported == true
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            false
+        }
+        if (freshSnapshotSupported && scanMacResolver != null) {
             for (index in aliveHosts.indices) {
                 currentCoroutineContext().ensureActive()
                 val host = aliveHosts[index]
-                if (host.macAddress == null) {
-                    val mac = effectiveMacResolver.resolve(host.ip)
-                    if (mac != null) {
-                        aliveHosts[index] = host.copy(
-                            macAddress = mac,
-                            vendor = OuiDatabase.lookup(mac),
-                            macSource = MacSource.ARP,
-                        )
-                    }
+                val mac = try {
+                    scanMacResolver.resolve(host.ip)
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    // A failed final lookup must not erase a mapping already found by a
+                    // worker; continue completing the scan with that best-effort value.
+                    continue
                 }
+                aliveHosts[index] = host.copy(
+                    macAddress = mac,
+                    vendor = mac?.let(OuiDatabase::lookup),
+                    macSource = if (mac == null) MacSource.NONE else MacSource.ARP,
+                )
             }
         }
+
+        val cachedResolverSupported = try {
+            effectiveMacResolver.supported
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            false
+        }
+        val macResolutionSupported = freshSnapshotSupported || cachedResolverSupported
 
         val hosts = aliveHosts.sortedBy { SubnetUtils.parseIpToLong(it.ip) }
         emit(
@@ -193,7 +221,7 @@ class LanScanRepositoryImpl(
                     aliveHosts = hosts.size,
                     scanDurationMs = clock.elapsedMillisSince(startTime),
                     hosts = hosts,
-                    macResolutionSupported = effectiveMacResolver.supported,
+                    macResolutionSupported = macResolutionSupported,
                     uncertainHosts = uncertainDiagnostics,
                     uncertainCount = uncertainTotal,
                 ),

@@ -25,6 +25,7 @@ import net.aieat.netswissknife.app.ui.theme.NetSwissKnifeTheme
 import net.aieat.netswissknife.core.network.wifi.WifiAccessPoint
 import net.aieat.netswissknife.core.network.wifi.WifiConnectionInfo
 import net.aieat.netswissknife.core.network.wifi.WifiScanResult
+import net.aieat.netswissknife.core.network.wifi.WifiScanRefreshStatus
 import net.aieat.netswissknife.core.network.wifi.WifiSecurity
 import net.aieat.netswissknife.core.network.wifi.WifiStandard
 import org.junit.Before
@@ -148,7 +149,7 @@ class WifiScanScreenTest {
     }
 
     @Test
-    fun throttledSuccessState_showsAgeAndThrottleLabel() {
+    fun timedOutSuccessState_showsCachedResultsAndAge() {
         val result = WifiScanResult(
             accessPoints = listOf(fakeAp("HomeNet", "AA:AA:AA:AA:AA:01", -50)),
             channels = emptyList(),
@@ -157,7 +158,7 @@ class WifiScanScreenTest {
             isWifiEnabled = true,
             isFresh = false,
             scanAgeMs = 42_000L,
-            throttled = true
+            refreshStatus = WifiScanRefreshStatus.TIMED_OUT
         )
         composeRule.setContent {
             NetSwissKnifeTheme {
@@ -165,9 +166,27 @@ class WifiScanScreenTest {
             }
         }
         composeRule.mainClock.advanceTimeBy(1_000L)
-        composeRule.onNodeWithText(context.getString(R.string.wifi_scan_throttled)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.wifi_scan_timed_out)).assertIsDisplayed()
         composeRule.onNodeWithText(
             context.resources.getQuantityString(R.plurals.wifi_results_age, 42, 42)
+        ).assertIsDisplayed()
+    }
+
+    @Test
+    fun permissionDeniedCachedState_offersPermissionRequest() {
+        val result = successState(
+            listOf(fakeAp("HomeNet", "AA:AA:AA:AA:AA:01", -50))
+        ).result.copy(refreshStatus = WifiScanRefreshStatus.PERMISSION_DENIED)
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                WifiScanScreen(viewModel = fakeViewModel(WifiScanUiState.Success(result)))
+            }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        composeRule.onNodeWithText(context.getString(R.string.wifi_grant_permission)).assertIsDisplayed()
+        composeRule.onNodeWithText(
+            context.getString(R.string.wifi_scan_permission_denied_cached)
         ).assertIsDisplayed()
     }
 

@@ -321,7 +321,11 @@
         <item quantity="other">Updated %1$d seconds ago</item>
     </plurals>
     <string name="wifi_results_age_unknown">Result age unavailable</string>
-    <string name="wifi_scan_throttled">Scan throttled by Android</string>
+    <string name="wifi_scan_not_updated">Scan completed without new results</string>
+    <string name="wifi_scan_timed_out">Scan timed out; showing cached results</string>
+    <string name="wifi_scan_rejected">Android rejected the scan request</string>
+    <string name="wifi_scan_failed_cached">Scan failed; showing cached results</string>
+    <string name="wifi_scan_permission_denied_cached">Scan permission unavailable; showing cached results</string>
     <string name="wifi_connected_badge">Connected</string>
     <string name="wifi_hidden_badge">Hidden</string>
     <string name="wifi_detail_band">Band</string>

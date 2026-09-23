@@ -49,6 +49,9 @@ interface PresenceNameProbe : NameProbe {
 interface MacResolver {
     val supported: Boolean
     suspend fun resolve(ip: String): String?
+
+    /** Returns a resolver view for a completed scan, refreshing sources that cache data. */
+    fun snapshot(): MacResolver = this
 }
 
 /** Network-level protocol that led to host discovery. */

@@ -185,6 +185,155 @@ class LanScanRepositoryImplTest {
                 .host
             assertTrue(host.vendor == null)
         }
+
+        @Test
+        fun `final ARP snapshot enriches staggered hosts with bounded reads`() = runTest {
+            val initialTable = """
+                IP address       HW type Flags HW address            Mask     Device
+                192.168.1.1      0x1     0x2   aa:bb:cc:dd:ee:01     *        wlan0
+            """.trimIndent()
+            val completedTable = initialTable + """
+
+                192.168.1.2      0x1     0x2   aa:bb:cc:dd:ee:02     *        wlan0
+            """.trimIndent()
+            val firstProbeRead = CountDownLatch(1)
+            var arpReads = 0
+            val repo = LanScanRepositoryImpl(
+                hostChecker = { ip, _ ->
+                    if (ip == "192.168.1.2") {
+                        assertTrue(firstProbeRead.await(10, TimeUnit.SECONDS))
+                    }
+                    5L
+                },
+                arpTableReader = {
+                    arpReads++
+                    if (arpReads == 1) {
+                        firstProbeRead.countDown()
+                        initialTable
+                    } else {
+                        completedTable
+                    }
+                },
+                portChecker = noOpenPortsChecker,
+            )
+
+            val summary = repo.scan(subnet24, 1000, concurrency = 2)
+                .filterIsInstance<LanScanUpdate.ScanComplete>()
+                .first()
+                .summary
+
+            assertEquals(
+                mapOf(
+                    "192.168.1.1" to "AA:BB:CC:DD:EE:01",
+                    "192.168.1.2" to "AA:BB:CC:DD:EE:02",
+                ),
+                summary.hosts.associate { it.ip to it.macAddress },
+            )
+            assertTrue(summary.macResolutionSupported)
+            assertEquals(2, arpReads)
+        }
+
+        @Test
+        fun `fresh snapshot replaces a MAC retained from an earlier scan`() = runTest {
+            fun table(mac: String) = """
+                IP address       HW type Flags HW address            Mask     Device
+                192.168.1.1      0x1     0x2   $mac     *        wlan0
+            """.trimIndent()
+            val snapshots = listOf(
+                table("B8:27:EB:12:34:56"), // resolver's long-lived worker cache
+                table("B8:27:EB:12:34:56"), // first scan's final snapshot
+                table("3C:5A:B4:12:34:56"), // second scan observes a changed mapping
+            )
+            var reads = 0
+            val repo = makeRepo(
+                hostChecker = allAliveChecker,
+                arpReader = { snapshots[reads++] },
+            )
+            val request = LanScanRequest(subnet24)
+
+            suspend fun scanOnce() = repo.scan(request)
+                .filterIsInstance<LanScanUpdate.ScanComplete>()
+                .first()
+                .summary
+
+            assertEquals("B8:27:EB:12:34:56", scanOnce().hosts.first().macAddress)
+            val second = scanOnce()
+
+            assertEquals("3C:5A:B4:12:34:56", second.hosts.first().macAddress)
+            assertEquals(3, reads)
+            assertTrue(second.macResolutionSupported)
+        }
+
+        @Test
+        fun `failed fresh read retains worker MAC and source support`() = runTest {
+            val initialTable = """
+                IP address       HW type Flags HW address            Mask     Device
+                192.168.1.1      0x1     0x2   B8:27:EB:12:34:56     *        wlan0
+            """.trimIndent()
+            var reads = 0
+            val repo = makeRepo(
+                hostChecker = singleAliveChecker,
+                arpReader = {
+                    if (reads++ == 0) initialTable else error("/proc/net/arp unavailable")
+                },
+            )
+
+            val summary = repo.scan(subnet24, 1000, concurrency = 2)
+                .filterIsInstance<LanScanUpdate.ScanComplete>()
+                .first()
+                .summary
+
+            assertEquals("B8:27:EB:12:34:56", summary.hosts.single().macAddress)
+            assertTrue(summary.macResolutionSupported)
+            assertEquals(2, reads)
+        }
+
+        @Test
+        fun `final lookup failure retains worker MAC and completes scan`() = runTest {
+            var calls = 0
+            val resolver = object : MacResolver {
+                override val supported = true
+                override suspend fun resolve(ip: String): String? {
+                    calls++
+                    return if (calls == 1) "AA:BB:CC:DD:EE:FF" else error("lookup failed")
+                }
+            }
+            val repo = LanScanRepositoryImpl(
+                hostChecker = singleAliveChecker,
+                macResolver = resolver,
+                portChecker = noOpenPortsChecker,
+            )
+
+            val summary = repo.scan(subnet24, 1000, concurrency = 2)
+                .filterIsInstance<LanScanUpdate.ScanComplete>()
+                .first()
+                .summary
+
+            assertEquals("AA:BB:CC:DD:EE:FF", summary.hosts.single().macAddress)
+            assertTrue(summary.macResolutionSupported)
+        }
+
+        @Test
+        fun `snapshot creation failure retains worker MAC and completes scan`() = runTest {
+            val resolver = object : MacResolver {
+                override val supported = true
+                override suspend fun resolve(ip: String): String? = "AA:BB:CC:DD:EE:FF"
+                override fun snapshot(): MacResolver = error("snapshot failed")
+            }
+            val repo = LanScanRepositoryImpl(
+                hostChecker = singleAliveChecker,
+                macResolver = resolver,
+                portChecker = noOpenPortsChecker,
+            )
+
+            val summary = repo.scan(subnet24, 1000, concurrency = 2)
+                .filterIsInstance<LanScanUpdate.ScanComplete>()
+                .first()
+                .summary
+
+            assertEquals("AA:BB:CC:DD:EE:FF", summary.hosts.single().macAddress)
+            assertTrue(summary.macResolutionSupported)
+        }
     }
 
     @Nested

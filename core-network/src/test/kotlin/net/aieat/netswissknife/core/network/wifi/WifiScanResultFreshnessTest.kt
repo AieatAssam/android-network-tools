@@ -18,7 +18,7 @@ class WifiScanResultFreshnessTest {
         )
 
         assertTrue(result.isFresh)
-        assertFalse(result.throttled)
+        assertEquals(WifiScanRefreshStatus.NOT_REQUESTED, result.refreshStatus)
         assertTrue(result.locationEnabled)
         assertEquals(null, result.scanAgeMs)
     }

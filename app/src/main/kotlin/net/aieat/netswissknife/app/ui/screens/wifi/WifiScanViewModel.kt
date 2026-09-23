@@ -23,6 +23,8 @@ import net.aieat.netswissknife.core.network.wifi.WifiAccessPoint
 import net.aieat.netswissknife.core.network.wifi.WifiBand
 import net.aieat.netswissknife.core.network.wifi.WifiNetwork
 import net.aieat.netswissknife.core.network.wifi.WifiScanResult
+import net.aieat.netswissknife.core.network.wifi.WifiScanRefreshStatus
+import net.aieat.netswissknife.core.network.wifi.WifiScanFreshness
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.R
 import javax.inject.Inject
@@ -66,7 +68,7 @@ sealed interface WifiScanUiState {
     ) : WifiScanUiState {
         val isFresh: Boolean get() = result.isFresh
         val scanAgeMs: Long? get() = result.scanAgeMs
-        val throttled: Boolean get() = result.throttled
+        val refreshStatus: WifiScanRefreshStatus get() = result.refreshStatus
 
         val filteredAccessPoints: List<WifiAccessPoint> get() {
             val base = if (bandFilter == null) result.accessPoints
@@ -167,7 +169,14 @@ class WifiScanViewModel @Inject constructor(
 
     /** Called by the screen when permission is denied. */
     fun onPermissionDenied() {
-        _uiState.value = WifiScanUiState.NoPermission
+        stopAutoRefresh()
+        val previous = _uiState.value as? WifiScanUiState.Success
+        _uiState.value = previous?.copy(
+            result = cachedResultAfterFailure(
+                previous.result,
+                WifiScanRefreshStatus.PERMISSION_DENIED
+            )
+        ) ?: WifiScanUiState.NoPermission
     }
 
     /**
@@ -188,19 +197,39 @@ class WifiScanViewModel @Inject constructor(
                 } else if (!result.isWifiEnabled) {
                     _uiState.value = WifiScanUiState.WifiDisabled
                 } else {
+                    val visibleResult = if (
+                        prev != null && result.refreshStatus in FAILED_REFRESH_STATUSES
+                    ) {
+                        // A non-updated cache read must not replace the last sample or
+                        // make it look as though its timestamp belongs to this request.
+                        val ageMs = prev.result.scanAgeMs?.let { previousAge ->
+                            previousAge + (result.cacheReadElapsedRealtimeMs -
+                                prev.result.cacheReadElapsedRealtimeMs).coerceAtLeast(0L)
+                        }
+                        prev.result.copy(
+                            refreshStatus = result.refreshStatus,
+                            scanAgeMs = ageMs,
+                            isFresh = ageMs?.let { it <= 15_000L } ?: false,
+                            cacheReadElapsedRealtimeMs = result.cacheReadElapsedRealtimeMs
+                        )
+                    } else {
+                        result
+                    }
                     // Keep the detail sheet open if the AP is still present in the new scan;
                     // otherwise let the user know it dropped out rather than closing silently.
+                    // On failed refreshes visibleResult is the last confirmed sample, so
+                    // transient empty cache reads cannot dismiss the selected AP.
                     val stillPresentAp = prev?.selectedAp?.let { prevAp ->
-                        result.accessPoints.find { it.bssid == prevAp.bssid }
+                        visibleResult.accessPoints.find { it.bssid == prevAp.bssid }
                     }
                     if (prev?.selectedAp != null && stillPresentAp == null) {
                         _apDisappearedEvent.value = ApDisappearedEvent()
                     }
                     _uiState.value = WifiScanUiState.Success(
-                        result = result,
+                        result = visibleResult,
                         bandFilter = prev?.bandFilter
-                            ?.takeIf { it in result.detectedBands }
-                            ?: result.detectedBands.firstOrNull(),
+                            ?.takeIf { it in visibleResult.detectedBands }
+                            ?: visibleResult.detectedBands.firstOrNull(),
                         sortOrder = prev?.sortOrder ?: ApSortOrder.SIGNAL,
                         selectedAp = stillPresentAp,
                         frozenOrder = prev?.frozenOrder
@@ -213,9 +242,17 @@ class WifiScanViewModel @Inject constructor(
             } catch (e: WifiNotSupportedException) {
                 _uiState.value = WifiScanUiState.NotSupported
             } catch (e: SecurityException) {
-                _uiState.value = WifiScanUiState.NoPermission
+                stopAutoRefresh()
+                _uiState.value = prev?.copy(
+                    result = cachedResultAfterFailure(
+                        prev.result,
+                        WifiScanRefreshStatus.PERMISSION_DENIED
+                    )
+                ) ?: WifiScanUiState.NoPermission
             } catch (e: Exception) {
-                _uiState.value = WifiScanUiState.Error(e.message ?: "Unknown error")
+                _uiState.value = prev?.copy(
+                    result = cachedResultAfterFailure(prev.result, WifiScanRefreshStatus.FAILED)
+                ) ?: WifiScanUiState.Error(e.message ?: "Unknown error")
             }
         }
     }
@@ -322,12 +359,35 @@ class WifiScanViewModel @Inject constructor(
         if (shouldScan) startScan()
     }
 
+    private fun cachedResultAfterFailure(
+        result: WifiScanResult,
+        status: WifiScanRefreshStatus
+    ): WifiScanResult {
+        val ageMs = if (result.scanTimestampMs > 0L) {
+            (System.currentTimeMillis() - result.scanTimestampMs).coerceAtLeast(0L)
+        } else {
+            result.scanAgeMs
+        }
+        return result.copy(
+            refreshStatus = status,
+            scanAgeMs = ageMs,
+            isFresh = ageMs?.let { it <= WifiScanFreshness.FRESHNESS_THRESHOLD_MS } ?: false
+        )
+    }
+
     override fun onCleared() {
         stopAutoRefresh()
         scanJob?.cancel()
     }
 
     companion object {
+        private val FAILED_REFRESH_STATUSES = setOf(
+            WifiScanRefreshStatus.NOT_UPDATED,
+            WifiScanRefreshStatus.TIMED_OUT,
+            WifiScanRefreshStatus.REJECTED,
+            WifiScanRefreshStatus.FAILED,
+            WifiScanRefreshStatus.PERMISSION_DENIED
+        )
         const val DEFAULT_REFRESH_INTERVAL_MS = 30_000L
         const val DISABLED_REFRESH_INTERVAL_MS = -1L
         val REFRESH_INTERVAL_OPTIONS = setOf(15_000L, DEFAULT_REFRESH_INTERVAL_MS, 60_000L)

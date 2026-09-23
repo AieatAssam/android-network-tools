@@ -6,25 +6,27 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.net.wifi.WifiManager
 import androidx.core.content.ContextCompat
+import net.aieat.netswissknife.core.network.wifi.WifiScanRefreshStatus
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.resume
 
 /** Outcome of one platform scan request. */
-data class ScanRequestOutcome(
-    val startScanReturned: Boolean,
-    val broadcastArrived: Boolean
-) {
-    /** Android returns false when the request is rejected, including throttling. */
-    val throttled: Boolean get() = !startScanReturned
-}
+data class ScanRequestOutcome(val status: WifiScanRefreshStatus)
 
 /** Pure decision function used by the Android adapter and JVM tests. */
-fun decideOutcome(startScanReturned: Boolean, broadcastArrived: Boolean): ScanRequestOutcome =
-    ScanRequestOutcome(
-        startScanReturned = startScanReturned,
-        broadcastArrived = broadcastArrived
-    )
+fun decideOutcome(
+    startScanReturned: Boolean,
+    broadcastArrived: Boolean,
+    resultsUpdated: Boolean = false
+): ScanRequestOutcome = ScanRequestOutcome(
+    status = when {
+        !startScanReturned -> WifiScanRefreshStatus.REJECTED
+        !broadcastArrived -> WifiScanRefreshStatus.TIMED_OUT
+        resultsUpdated -> WifiScanRefreshStatus.UPDATED
+        else -> WifiScanRefreshStatus.NOT_UPDATED
+    }
+)
 
 /**
  * Starts one foreground Wi-Fi scan and waits for the platform completion event.
@@ -33,13 +35,23 @@ fun decideOutcome(startScanReturned: Boolean, broadcastArrived: Boolean): ScanRe
  */
 class ScanRequestAwaiter(
     private val context: Context,
-    private val wifiManager: WifiManager
+    private val wifiManager: WifiManager,
+    private val registerReceiver: (BroadcastReceiver, IntentFilter) -> Unit = { scanReceiver, filter ->
+        ContextCompat.registerReceiver(
+            context,
+            scanReceiver,
+            filter,
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
+    },
+    private val unregisterReceiver: (BroadcastReceiver) -> Unit = { context.unregisterReceiver(it) }
 ) {
 
     @Suppress("DEPRECATION")
     suspend fun requestAndAwait(timeoutMs: Long): ScanRequestOutcome {
         var startScanReturned = false
         var broadcastArrived = false
+        var resultsUpdated = false
         var receiver: BroadcastReceiver? = null
         var receiverRegistered = false
 
@@ -50,15 +62,17 @@ class ScanRequestAwaiter(
                         override fun onReceive(receiverContext: Context?, intent: Intent?) {
                             if (intent?.action != WifiManager.SCAN_RESULTS_AVAILABLE_ACTION) return
                             broadcastArrived = true
+                            resultsUpdated = intent.getBooleanExtra(
+                                WifiManager.EXTRA_RESULTS_UPDATED,
+                                false
+                            )
                             if (continuation.isActive) continuation.resume(Unit)
                         }
                     }
                     receiver = scanReceiver
-                    ContextCompat.registerReceiver(
-                        context,
+                    registerReceiver(
                         scanReceiver,
-                        IntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION),
-                        ContextCompat.RECEIVER_NOT_EXPORTED
+                        IntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION)
                     )
                     receiverRegistered = true
                     continuation.invokeOnCancellation {
@@ -79,12 +93,12 @@ class ScanRequestAwaiter(
             receiverRegistered = false
         }
 
-        return decideOutcome(startScanReturned, broadcastArrived)
+        return decideOutcome(startScanReturned, broadcastArrived, resultsUpdated)
     }
 
     private fun unregisterQuietly(receiver: BroadcastReceiver) {
         try {
-            context.unregisterReceiver(receiver)
+            unregisterReceiver(receiver)
         } catch (_: IllegalArgumentException) {
             // The receiver may already have been removed by cancellation cleanup.
         }
