@@ -1,6 +1,9 @@
 package net.aieat.netswissknife.core.network.whois
 
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.suspendCancellableCoroutine
+import net.aieat.netswissknife.core.network.operation.OperationResourcesContext
+import net.aieat.netswissknife.core.network.operation.ResourceScope
 import java.io.InputStreamReader
 import java.net.InetAddress
 import java.net.InetSocketAddress
@@ -57,77 +60,82 @@ internal object WhoisBlockingTransport {
         timeoutMs: Int,
         resolver: WhoisHostResolver,
         socketFactory: WhoisSocketFactory,
-        isDisallowedAddress: (InetAddress) -> Boolean
-    ): Pair<Long, String> = suspendCancellableCoroutine { continuation ->
-        val cancelled = AtomicBoolean(false)
-        val activeSocket = AtomicReference<Socket?>(null)
-        val task = FutureTask<Unit> {
-            var result: Pair<Long, String>? = null
-            try {
-                val startedAt = System.nanoTime()
-                val address = resolver.resolve(host)
-                checkNotCancelled(cancelled)
-                if (isDisallowedAddress(address)) {
-                    throw java.io.IOException("Refused to connect to non-public WHOIS referral address: $host")
-                }
+        isDisallowedAddress: (InetAddress) -> Boolean,
+        executor: ThreadPoolExecutor = workers,
+    ): Pair<Long, String> {
+        val resources = currentCoroutineContext()[OperationResourcesContext]?.resources
+        return suspendCancellableCoroutine { continuation ->
+            val cancelled = AtomicBoolean(false)
+            val activeSocket = AtomicReference<SocketLease?>(null)
+            val task = FutureTask<Unit> {
+                var result: Pair<Long, String>? = null
+                try {
+                    val startedAt = System.nanoTime()
+                    val address = resolver.resolve(host)
+                    checkNotCancelled(cancelled)
+                    if (isDisallowedAddress(address)) {
+                        throw java.io.IOException("Refused to connect to non-public WHOIS referral address: $host")
+                    }
 
-                val socket = socketFactory.create()
-                activeSocket.set(socket)
-                if (cancelled.get()) closeQuietly(socket)
-                checkNotCancelled(cancelled)
+                    val socket = socketFactory.create()
+                    val lease = SocketLease(socket)
+                    resources?.register(lease)
+                    activeSocket.set(lease)
+                    checkNotCancelled(cancelled)
 
-                socket.use {
                     socket.connect(InetSocketAddress(address, port), timeoutMs)
                     checkNotCancelled(cancelled)
                     socket.soTimeout = timeoutMs
                     socket.getOutputStream().write("$query\r\n".toByteArray(Charsets.UTF_8))
                     // SO_TIMEOUT bounds idle reads; the repository's total deadline
                     // additionally bounds a peer that trickles bytes indefinitely.
-                    val response = InputStreamReader(socket.getInputStream(), Charsets.UTF_8)
-                        .buffered()
-                        .use { reader ->
-                            val buffer = CharArray(RESPONSE_CHUNK_SIZE)
-                            val text = StringBuilder()
-                            var totalRead = 0
-                            while (true) {
-                                checkNotCancelled(cancelled)
-                                val count = reader.read(buffer)
-                                if (count == -1) break
-                                totalRead += count
-                                if (totalRead > MAX_RESPONSE_BYTES) {
-                                    throw java.io.IOException("WHOIS response exceeded $MAX_RESPONSE_BYTES bytes")
-                                }
-                                text.append(buffer, 0, count)
-                            }
-                            text.toString()
+                    val reader = InputStreamReader(socket.getInputStream(), Charsets.UTF_8).buffered()
+                    val buffer = CharArray(RESPONSE_CHUNK_SIZE)
+                    val text = StringBuilder()
+                    var totalRead = 0
+                    while (true) {
+                        checkNotCancelled(cancelled)
+                        val count = reader.read(buffer)
+                        if (count == -1) break
+                        totalRead += count
+                        if (totalRead > MAX_RESPONSE_BYTES) {
+                            throw java.io.IOException("WHOIS response exceeded $MAX_RESPONSE_BYTES bytes")
                         }
-                    result = Pair((System.nanoTime() - startedAt) / 1_000_000L, response)
+                        text.append(buffer, 0, count)
+                    }
+                    result = Pair((System.nanoTime() - startedAt) / 1_000_000L, text.toString())
+                } catch (failure: Throwable) {
+                    if (continuation.isActive) continuation.resumeWithException(failure)
+                } finally {
+                    closeWorkerOwned(activeSocket.getAndSet(null), resources)
                 }
-            } catch (failure: Throwable) {
-                if (continuation.isActive) continuation.resumeWithException(failure)
-            } finally {
-                activeSocket.getAndSet(null)?.let(::closeQuietly)
+                result?.let { if (continuation.isActive) continuation.resume(it) }
             }
-            result?.let { if (continuation.isActive) continuation.resume(it) }
-        }
 
-        continuation.invokeOnCancellation {
-            cancelled.set(true)
-            activeSocket.getAndSet(null)?.let(::closeQuietly)
-            task.cancel(true)
-            workers.remove(task)
-        }
-
-        if (continuation.isActive) {
-            try {
-                workers.execute(task)
-            } catch (rejected: java.util.concurrent.RejectedExecutionException) {
-                if (continuation.isActive) continuation.resumeWithException(rejected)
+            continuation.invokeOnCancellation {
+                cancelled.set(true)
+                closeWorkerOwned(activeSocket.getAndSet(null), resources)
+                task.cancel(true)
+                executor.remove(task)
             }
-        } else {
-            cancelled.set(true)
-        }
 
+            if (continuation.isActive) {
+                try {
+                    executor.execute(task)
+                } catch (rejected: java.util.concurrent.RejectedExecutionException) {
+                    if (continuation.isActive) continuation.resumeWithException(rejected)
+                }
+                // Cancellation can win after invokeOnCancellation's remove() and before
+                // execute() enqueues the task. Recheck after submission to close that gap.
+                if (cancelled.get()) {
+                    task.cancel(true)
+                    executor.remove(task)
+                }
+            } else {
+                cancelled.set(true)
+            }
+
+        }
     }
 
     private fun checkNotCancelled(cancelled: AtomicBoolean) {
@@ -136,11 +144,24 @@ internal object WhoisBlockingTransport {
         }
     }
 
-    private fun closeQuietly(socket: Socket) {
-        try {
-            socket.close()
-        } catch (_: Exception) {
-            // Cancellation/cleanup is best effort; the active operation is already ending.
+    private fun closeWorkerOwned(lease: SocketLease?, resources: ResourceScope?) {
+        if (lease == null) return
+        // If release loses to scope closure, ResourceScope owns the close. This prevents
+        // cancellation callback, operation cleanup, and worker finally from competing.
+        if (resources == null || resources.release(lease)) lease.close()
+    }
+
+    private class SocketLease(private val socket: Socket) : AutoCloseable {
+        private val closed = AtomicBoolean(false)
+
+        override fun close() {
+            if (!closed.compareAndSet(false, true)) return
+            try {
+                socket.close()
+            } catch (_: Exception) {
+                // Cancellation/cleanup is best effort; the active operation is already ending.
+            }
         }
     }
+
 }

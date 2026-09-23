@@ -1,20 +1,28 @@
 package net.aieat.netswissknife.core.network.whois
 
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.CancellationException
+import net.aieat.netswissknife.core.network.MonotonicClock
+import net.aieat.netswissknife.core.network.SystemMonotonicClock
+import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationBudget
+import net.aieat.netswissknife.core.network.operation.OperationCancellationException
+import net.aieat.netswissknife.core.network.operation.OperationDeadlineExceededException
+import net.aieat.netswissknife.core.network.operation.OperationRequirement
+import net.aieat.netswissknife.core.network.operation.OperationRunner
+import net.aieat.netswissknife.core.network.operation.OperationSession
+import net.aieat.netswissknife.core.network.operation.ensureCurrentOperationActive
 import net.aieat.netswissknife.core.network.NetworkResult
 import java.net.Socket
 
-private class WhoisDeadlineExceededException : CancellationException("WHOIS lookup exceeded its total deadline")
-
-class WhoisRepositoryImpl(
+class WhoisRepositoryImpl @JvmOverloads constructor(
     private val resolver: WhoisHostResolver = InetAddressWhoisHostResolver,
-    private val socketFactory: WhoisSocketFactory = WhoisSocketFactory { Socket() }
+    private val socketFactory: WhoisSocketFactory = WhoisSocketFactory { Socket() },
+    private val clock: MonotonicClock = SystemMonotonicClock,
 ) : WhoisRepository {
 
     private val _hopProgress = MutableSharedFlow<WhoisHop>(extraBufferCapacity = 16)
@@ -25,24 +33,43 @@ class WhoisRepositoryImpl(
         if (timeoutMs < 500) return NetworkResult.Error("Timeout must be between 500 ms and 30 000 ms")
         if (timeoutMs > 30_000) return NetworkResult.Error("Timeout must be between 500 ms and 30 000 ms")
 
+        val session = OperationSession(
+            OperationBudget.start(
+                requirement = OperationRequirement.INTERNET,
+                timeoutMillis = timeoutMs * MAX_HOPS.toLong(),
+                maxConcurrentProbes = 1,
+                maxResponseBytes = MAX_RESPONSE_BYTES.toLong(),
+                clock = clock,
+            )
+        )
         return try {
             // A chain contains at most three hops. Keep each socket operation bounded
-            // by timeoutMs and cap the whole lookup at three such timeouts. The
-            // timeoutOrNull scope consumes only its own deadline; parent cancellation
-            // (including an outer TimeoutCancellationException) still propagates.
-            withTimeoutOrNull(timeoutMs * MAX_HOPS.toLong()) {
+            // by timeoutMs and cap the whole lookup at three such timeouts. OperationRunner
+            // shares this monotonic total deadline and preserves parent cancellation.
+            OperationRunner.run(session) {
                 withContext(Dispatchers.IO) {
                     val start = System.nanoTime()
                     val queryType = WhoisQueryTypeDetector.detect(query)
                     when (queryType) {
-                        WhoisQueryType.DOMAIN -> performDomainLookup(query, timeoutMs, start)
+                        WhoisQueryType.DOMAIN -> performDomainLookup(query, timeoutMs, start, session.budget)
                         WhoisQueryType.IPV4, WhoisQueryType.IPV6, WhoisQueryType.ASN ->
-                            performIpAsnLookup(query, queryType, timeoutMs, start)
+                            performIpAsnLookup(query, queryType, timeoutMs, start, session.budget)
                     }
                 }
-            } ?: NetworkResult.Error("WHOIS lookup exceeded its total deadline")
-        } catch (e: WhoisDeadlineExceededException) {
+            }
+        } catch (e: OperationDeadlineExceededException) {
             NetworkResult.Error("WHOIS lookup exceeded its total deadline", e)
+        } catch (e: OperationCancellationException) {
+            if (e.reason == CancellationReason.DEADLINE_EXCEEDED) {
+                NetworkResult.Error("WHOIS lookup exceeded its total deadline", e)
+            } else if (e.reason == CancellationReason.PARENT_CANCELLED && e.cause is CancellationException) {
+                // OperationRunner records cancellation from a blocking adapter as a
+                // parent reason; retain the adapter's original cancellation contract.
+                val originalCancellation = e.cause as CancellationException
+                throw originalCancellation
+            } else {
+                throw e
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -53,7 +80,8 @@ class WhoisRepositoryImpl(
     private suspend fun performDomainLookup(
         domain: String,
         timeoutMs: Int,
-        overallStart: Long
+        overallStart: Long,
+        budget: OperationBudget,
     ): NetworkResult<WhoisResult> {
         // Strip subdomains — WHOIS registries only know about the registrable domain (eTLD+1)
         val registrableDomain = extractRegistrableDomain(domain)
@@ -61,8 +89,10 @@ class WhoisRepositoryImpl(
 
         // Hop 1 — IANA
         val ianaHop = try {
-            queryServer(IANA_SERVER, registrableDomain, timeoutMs, overallStart)
+            queryServer(IANA_SERVER, registrableDomain, timeoutMs, budget)
         } catch (e: CancellationException) {
+            throw e
+        } catch (e: OperationDeadlineExceededException) {
             throw e
         } catch (e: Exception) {
             return NetworkResult.Error("IANA lookup failed: ${e.message}", e)
@@ -75,6 +105,7 @@ class WhoisRepositoryImpl(
             referral = ianaReferral
         )
         hops.add(hop1)
+        ensureCurrentOperationActive()
         _hopProgress.emit(hop1)
 
         // Hop 2 — TLD Registry
@@ -83,8 +114,10 @@ class WhoisRepositoryImpl(
             ?: return buildDomainResult(domain, WhoisQueryType.DOMAIN, hops, overallStart)
 
         val registryHop = try {
-            queryServer(registryHost, registrableDomain, timeoutMs, overallStart)
+            queryServer(registryHost, registrableDomain, timeoutMs, budget)
         } catch (e: CancellationException) {
+            throw e
+        } catch (e: OperationDeadlineExceededException) {
             throw e
         } catch (e: Exception) {
             return buildDomainResult(domain, WhoisQueryType.DOMAIN, hops, overallStart)
@@ -97,13 +130,16 @@ class WhoisRepositoryImpl(
             referral = registrarWhoisServer
         )
         hops.add(hop2)
+        ensureCurrentOperationActive()
         _hopProgress.emit(hop2)
 
         // Hop 3 — Registrar
         if (registrarWhoisServer != null) {
             val registrarHop = try {
-                queryServer(registrarWhoisServer, registrableDomain, timeoutMs, overallStart)
+                queryServer(registrarWhoisServer, registrableDomain, timeoutMs, budget)
             } catch (e: CancellationException) {
+                throw e
+            } catch (e: OperationDeadlineExceededException) {
                 throw e
             } catch (e: Exception) {
                 val failedHop = WhoisHop(
@@ -114,6 +150,7 @@ class WhoisRepositoryImpl(
                     error = e.message ?: "Connection failed"
                 )
                 hops.add(failedHop)
+                ensureCurrentOperationActive()
                 _hopProgress.emit(failedHop)
                 return buildDomainResult(domain, WhoisQueryType.DOMAIN, hops, overallStart)
             }
@@ -124,6 +161,7 @@ class WhoisRepositoryImpl(
                 referral = null
             )
             hops.add(hop3)
+            ensureCurrentOperationActive()
             _hopProgress.emit(hop3)
         }
 
@@ -134,14 +172,17 @@ class WhoisRepositoryImpl(
         query: String,
         queryType: WhoisQueryType,
         timeoutMs: Int,
-        overallStart: Long
+        overallStart: Long,
+        budget: OperationBudget,
     ): NetworkResult<WhoisResult> {
         val hops = mutableListOf<WhoisHop>()
 
         // Hop 1 — ARIN
         val arinHop = try {
-            queryServer(ARIN_SERVER, query, timeoutMs, overallStart)
+            queryServer(ARIN_SERVER, query, timeoutMs, budget)
         } catch (e: CancellationException) {
+            throw e
+        } catch (e: OperationDeadlineExceededException) {
             throw e
         } catch (e: Exception) {
             return NetworkResult.Error("ARIN lookup failed: ${e.message}", e)
@@ -154,13 +195,16 @@ class WhoisRepositoryImpl(
             referral = referral
         )
         hops.add(hop1)
+        ensureCurrentOperationActive()
         _hopProgress.emit(hop1)
 
         // Hop 2 — Referred RIR (if any)
         if (referral != null && referral != ARIN_SERVER) {
             val referralHop = try {
-                queryServer(referral, query, timeoutMs, overallStart)
+                queryServer(referral, query, timeoutMs, budget)
             } catch (e: CancellationException) {
+                throw e
+            } catch (e: OperationDeadlineExceededException) {
                 throw e
             } catch (e: Exception) {
                 return buildIpResult(query, queryType, hops, overallStart)
@@ -172,6 +216,7 @@ class WhoisRepositoryImpl(
                 referral = null
             )
             hops.add(hop2)
+            ensureCurrentOperationActive()
             _hopProgress.emit(hop2)
         }
 
@@ -197,12 +242,12 @@ class WhoisRepositoryImpl(
         host: String,
         query: String,
         timeoutMs: Int,
-        overallStartNanos: Long
+        budget: OperationBudget,
     ): Pair<Long, String> {
-        val totalNanos = timeoutMs * MAX_HOPS.toLong() * 1_000_000L
-        val remainingNanos = totalNanos - (System.nanoTime() - overallStartNanos)
-        if (remainingNanos <= 0L) throw WhoisDeadlineExceededException()
+        val remainingNanos = budget.remainingNanos()
+        if (remainingNanos <= 0L) throw OperationDeadlineExceededException()
         val remainingMs = ((remainingNanos + 999_999L) / 1_000_000L).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+        ensureCurrentOperationActive()
         return WhoisBlockingTransport.query(
             host = host,
             query = query,
