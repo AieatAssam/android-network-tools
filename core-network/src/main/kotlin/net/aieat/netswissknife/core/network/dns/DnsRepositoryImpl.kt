@@ -3,6 +3,7 @@ package net.aieat.netswissknife.core.network.dns
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.NetworkResult
 import org.xbill.DNS.DClass
 import org.xbill.DNS.ExtendedResolver
@@ -16,7 +17,9 @@ import org.xbill.DNS.SimpleResolver
 import org.xbill.DNS.Type
 import java.net.Inet6Address
 import java.net.InetAddress
+import java.net.IDN
 import java.time.Duration
+import java.util.Locale
 import java.util.concurrent.CompletionStage
 import java.util.concurrent.Executor
 
@@ -37,24 +40,87 @@ class DnsRepositoryImpl(
     companion object {
         private val TIMEOUT = Duration.ofSeconds(8)
         private val IPV4_REGEX = Regex("""^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$""")
+        private val IPV4_SHAPE_REGEX = Regex("""^\d+\.\d+\.\d+\.\d+$""")
+        private val ASCII_HOST_LABEL = Regex("""^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$""")
+        private val ASCII_OWNER_LABEL = Regex("""^_[a-z0-9](?:[a-z0-9-]{0,60}[a-z0-9])?$""")
 
         internal fun normalizeDomain(domain: String, recordType: DnsRecordType): String {
-            val stripped = domain.trimEnd('.')
+            val separatorNormalized = domain.trim()
+                .replace('\u3002', '.')
+                .replace('\uFF0E', '.')
+                .replace('\uFF61', '.')
+            val stripped = when {
+                separatorNormalized.endsWith('.') -> separatorNormalized.dropLast(1)
+                else -> separatorNormalized
+            }
+            require(stripped.isNotEmpty()) { "Domain name must not be empty" }
+            require(!stripped.startsWith('.') && !stripped.endsWith('.') && !stripped.contains("..")) {
+                "Domain name contains an empty label or repeated root dot"
+            }
+
             if (recordType == DnsRecordType.PTR) {
                 val ipv4Match = IPV4_REGEX.matchEntire(stripped)
                 if (ipv4Match != null) {
+                    require(HostValidator.isValidIpv4(stripped)) { "Invalid IPv4 address" }
                     val (a, b, c, d) = ipv4Match.destructured
                     return "$d.$c.$b.$a.in-addr.arpa."
                 }
+                require(!IPV4_SHAPE_REGEX.matches(stripped)) { "Invalid IPv4 address" }
                 if (stripped.contains(':')) {
-                    val reversed = reverseIPv6(stripped)
-                    if (reversed != null) return reversed
+                    return reverseIPv6(stripped)
+                        ?: throw IllegalArgumentException("Invalid IPv6 address")
                 }
-                if (stripped.endsWith(".in-addr.arpa") || stripped.endsWith(".ip6.arpa")) {
-                    return "$stripped."
+                val lowerCase = stripped.lowercase(Locale.ROOT)
+                if (lowerCase.endsWith(".in-addr.arpa") || lowerCase.endsWith(".ip6.arpa")) {
+                    return "$lowerCase."
+                }
+            } else {
+                require(!stripped.contains(':')) { "IPv6 literals are only valid for PTR lookups" }
+            }
+
+            return toAsciiDnsName(stripped)
+        }
+
+        /**
+         * Encodes U-labels with Java's IDNA profile, matching HostValidator's
+         * existing IDN.toASCII compatibility policy. Leading-underscore DNS
+         * owner labels (for SRV/TXT queries) are preserved after narrow ASCII
+         * validation because they are not host labels.
+         */
+        private fun toAsciiDnsName(domain: String): String {
+            val labels = domain.split('.')
+            val asciiLabels = labels.map { label ->
+                if (label.startsWith('_')) {
+                    require(ASCII_OWNER_LABEL.matches(label.lowercase(Locale.ROOT))) {
+                        "Invalid underscore DNS owner label"
+                    }
+                    label.lowercase(Locale.ROOT)
+                } else {
+                    val ascii = try {
+                        IDN.toASCII(label, IDN.ALLOW_UNASSIGNED).lowercase(Locale.ROOT)
+                    } catch (e: IllegalArgumentException) {
+                        throw IllegalArgumentException("Invalid internationalized domain label", e)
+                    }
+                    require(ASCII_HOST_LABEL.matches(ascii)) {
+                        "Invalid internationalized domain label"
+                    }
+                    if (ascii.startsWith("xn--")) {
+                        val unicode = IDN.toUnicode(ascii, IDN.ALLOW_UNASSIGNED)
+                        require(unicode != ascii &&
+                            IDN.toASCII(unicode, IDN.ALLOW_UNASSIGNED).equals(ascii, ignoreCase = true)
+                        ) {
+                            "Invalid punycode DNS label"
+                        }
+                    }
+                    ascii
                 }
             }
-            return "$stripped."
+            val asciiName = asciiLabels.joinToString(".")
+            val wireLength = asciiLabels.sumOf { it.length + 1 } + 1 // label lengths plus root octet
+            require(asciiName.length <= 253 && wireLength <= 255) {
+                "Domain name is too long after IDNA encoding"
+            }
+            return "$asciiName."
         }
 
         private fun reverseIPv6(ip: String): String? = try {
@@ -90,9 +156,14 @@ class DnsRepositoryImpl(
             )
         }
 
+        val normalizedDomain = try {
+            normalizeDomain(domain, recordType)
+        } catch (e: IllegalArgumentException) {
+            return@withContext NetworkResult.Error("Invalid DNS domain name: ${e.message}", e)
+        }
+
         val startNs = System.nanoTime()
         try {
-            val normalizedDomain = normalizeDomain(domain, recordType)
             val queryName = Name.fromString(normalizedDomain)
             val queryRecord = Record.newRecord(queryName, recordType.dnsTypeInt, DClass.IN)
             val queryMessage = Message.newQuery(queryRecord)

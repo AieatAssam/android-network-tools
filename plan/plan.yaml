@@ -205,7 +205,7 @@ comprehensive_expansion:
       - {"finding":"RNET002","owner_task":"P05-T1","follow_up_status":"todo","report":"plan/reviews/2026-09-21-network.yaml"}
       - {"finding":"RNET003","owner_task":"P02-T2","follow_up_status":"todo","report":"plan/reviews/2026-09-21-network.yaml"}
       - {"finding":"RNET004","owner_task":"P03-T1","follow_up_status":"todo","report":"plan/reviews/2026-09-21-network.yaml"}
-      - {"finding":"RNET005","owner_task":"P04-T5","follow_up_status":"todo","report":"plan/reviews/2026-09-21-network.yaml"}
+      - {"finding":"RNET005","owner_task":"P04-T5","follow_up_status":"done","report":"plan/reviews/2026-09-21-network.yaml"}
       - {"finding":"RNET006","owner_task":"P10-T5","follow_up_status":"todo","report":"plan/reviews/2026-09-21-network.yaml"}
       - {"finding":"RNET007","owner_task":"P11-T2","follow_up_status":"todo","report":"plan/reviews/2026-09-21-network.yaml"}
       - {"finding":"RNET008","owner_task":"P11-T3","follow_up_status":"todo","report":"plan/reviews/2026-09-21-network.yaml"}
@@ -252,7 +252,7 @@ incremental_review:
     - { id: RBUILD002, severity: medium, kind: bug, phase: P09, status: todo, title: "Daily release version allocation can reuse an existing version" }
     - { id: RNET001, severity: medium, kind: bug, phase: P01, status: todo, title: "ARP enrichment snapshots the cache before all probes finish" }
     - { id: RNET002, severity: medium, kind: bug, phase: P05, status: todo, title: "Both platform and fallback subnet detection silently clamp the real prefix length" }
-    - { id: RNET005, severity: medium, kind: bug, phase: P04, status: todo, title: "DNS lookup does not normalize Unicode domains to IDNA" }
+    - { id: RNET005, severity: medium, kind: bug, phase: P04, status: done, title: "DNS lookup does not normalize Unicode domains to IDNA" }
     - { id: RNET009, severity: medium, kind: bug, phase: P03, status: todo, title: "Unknown Wi-Fi capabilities are classified as open networks" }
     - { id: RNET011, severity: medium, kind: bug, phase: P01, status: todo, title: "LAN enrichment can swallow cancellation from injected suspend probes" }
     - { id: RUI001, severity: medium, kind: bug, phase: P08, status: todo, title: "mDNS user cancellation is surfaced as a discovery error" }
@@ -301,8 +301,8 @@ incremental_review:
       state: still_open
       note: "Backup exclusions still cover the whole preferences DataStore; selectively preserving non-sensitive settings remains a P12 opportunity."
     - finding: F025
-      state: related_gap
-      note: "HostValidator normalization is implemented, but the DNS query path bypasses it; RNET005 captures the remaining internationalized-domain defect."
+      state: resolved
+      note: "HostValidator accepts IDNs and trailing-dot FQDNs, and RNET005 now normalizes DNS query names to validated ASCII IDNA before resolver construction."
     - finding: F038
       state: still_open
       note: "Platform adapter, socket lifecycle, and logger/crash test seams remain useful P09 investments; existing tests passed but leave these gaps."
@@ -795,3 +795,5 @@ changelog:
     note: "Closed RUI011 as a stale/unverified behavior gap after confirming the existing offline Error, no-route completion, Retry/Clear actions, and zero-hop Running progress/Stop state. Focused TracerouteViewModelTest passed; API 36 TracerouteScreenTest passed 9/9 and adversarial review found no test overclaim. Keep real API 33 airplane/dead-route validation in the release QA manual check."
   - date: "2026-09-23"
     note: "Rechecked remaining release-brief items: ISS-05 merged Home/More button semantics and ISS-06 onboarding Skip dismissal remain covered by NavigationAccessibilityTest. ISS-22 setup exceptions reach a dismissible error card, but packet-I/O exceptions can be swallowed into an empty scan; retained its existing P05 device/interface checks and RAPP004 route without adding a duplicate finding."
+  - date: "2026-09-23"
+    note: "Closed RNET005: DNS names now normalize Unicode labels with Java IDNA, validate punycode/label/name lengths, preserve PTR and SRV-owner handling, and reject malformed names before resolver creation. Resolver-capture tests for A/AAAA/SRV and malformed input passed; QA and adversarial reviews found no remaining blockers."

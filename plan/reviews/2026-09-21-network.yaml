@@ -96,21 +96,18 @@ findings:
     kind: bug
     title: "DNS lookup does not normalize Unicode domains to IDNA"
     evidence:
-      - file: "core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/DnsLookupUseCase.kt"
-        line: 21
-        detail: "The DNS use case only trims and length-checks the user domain before delegating, so valid Unicode hostnames such as bücher.de reach the network repository unchanged."
       - file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/dns/DnsRepositoryImpl.kt"
-        line: 41
-        detail: "normalizeDomain only removes a trailing root dot and handles PTR reversal; non-PTR labels are not passed through IDN.toASCII."
-      - file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/dns/DnsRepositoryImpl.kt"
-        line: 96
-        detail: "Name.fromString receives the unconverted Unicode domain; dnsjava 3.6.5 represents bücher.de as a backslash-escaped high-byte label rather than xn--bcher-kva.de."
+        lines: "47-81, 90-123, 151-181"
+        detail: "DNS input is normalized to ASCII IDNA before Name.fromString; invalid labels and malformed punycode return a validation error before resolver construction."
+      - file: "core-network/src/test/kotlin/net/aieat/netswissknife/core/network/dns/DnsRepositoryImplTest.kt"
+        lines: "247-312"
+        detail: "Resolver-capture tests verify A, AAAA, and SRV wire names, while malformed Unicode and A-label inputs assert no resolver is created."
     impact: "DNS lookups for internationalized domains can query a different invalid wire name and return an error or no records even though the same hostname is valid under IDNA. This also makes DNS behavior inconsistent with HostValidator.normalize, which already returns the ASCII form."
     recommended_action: "Normalize non-literal DNS names with IDN.toASCII (per label, preserving leading underscore service labels and PTR conversion) before constructing dnsjava Name; return a clear validation error for invalid IDNA input."
-    validation: "Add A/AAAA/SRV tests for bücher.de and an IDN service target, asserting the resolver receives xn--bcher-kva.de. and that malformed Unicode is rejected without a network call."
+    validation: "Passed ./gradlew :core-network:test --tests '*DnsRepositoryImplTest' --no-daemon --no-parallel. Resolver capture verifies A/AAAA bücher.de -> xn--bcher-kva.de. and SRV _http._tcp.bücher.de -> _http._tcp.xn--bcher-kva.de.; malformed Unicode, repeated/empty labels, overlong labels, and invalid punycode return validation errors with zero resolver-factory calls. Independent QA and adversarial reviews found no remaining blockers."
     related_phase: P04
     related_findings: [F025]
-    status: todo
+    status: done
   - id: RNET006
     severity: medium
     kind: gap
