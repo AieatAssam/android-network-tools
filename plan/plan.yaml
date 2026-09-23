@@ -211,7 +211,7 @@ comprehensive_expansion:
       - {"finding":"RNET008","owner_task":"P11-T3","follow_up_status":"todo","report":"plan/reviews/2026-09-21-network.yaml"}
       - {"finding":"RNET009","owner_task":"P03-T1","follow_up_status":"done","report":"plan/reviews/2026-09-21-network.yaml"}
       - {"finding":"RNET010","owner_task":"P12-T3","follow_up_status":"todo","report":"plan/reviews/2026-09-21-network.yaml"}
-      - {"finding":"RNET011","owner_task":"P01-T4","follow_up_status":"todo","report":"plan/reviews/2026-09-21-network.yaml"}
+      - {"finding":"RNET011","owner_task":"P01-T4","follow_up_status":"done","report":"plan/reviews/2026-09-21-network.yaml"}
       - {"finding":"RUI001","owner_task":"P12-T1","follow_up_status":"todo","report":"plan/reviews/2026-09-21-ui-domain.yaml"}
       - {"finding":"RUI002","owner_task":"P11-T3","follow_up_status":"todo","report":"plan/reviews/2026-09-21-ui-domain.yaml"}
       - {"finding":"RUI003","owner_task":"P04-T4","follow_up_status":"todo","report":"plan/reviews/2026-09-21-ui-domain.yaml"}
@@ -254,7 +254,7 @@ incremental_review:
     - { id: RNET002, severity: medium, kind: bug, phase: P05, status: todo, title: "Both platform and fallback subnet detection silently clamp the real prefix length" }
     - { id: RNET005, severity: medium, kind: bug, phase: P04, status: done, title: "DNS lookup does not normalize Unicode domains to IDNA" }
     - { id: RNET009, severity: medium, kind: bug, phase: P03, status: done, title: "Unknown Wi-Fi capabilities are classified as open networks" }
-    - { id: RNET011, severity: medium, kind: bug, phase: P01, status: todo, title: "LAN enrichment can swallow cancellation from injected suspend probes" }
+    - { id: RNET011, severity: medium, kind: bug, phase: P01, status: done, title: "LAN enrichment can swallow cancellation from injected suspend probes" }
     - { id: RUI001, severity: medium, kind: bug, phase: P08, status: todo, title: "mDNS user cancellation is surfaced as a discovery error" }
     - { id: RUI002, severity: medium, kind: bug, phase: P11, status: todo, title: "Stopping a port scan loses resolved IP and reports zero duration" }
     - { id: RUI003, severity: medium, kind: bug, phase: P08, status: todo, title: "Ping count settings and the Ping slider disagree on the supported range" }
@@ -815,3 +815,5 @@ changelog:
     note: "Completed R2-005: HTTP recents now persist a validated origin without credentials, path, query or fragment; startup atomically sanitizes legacy HTTP entries and preserves unrelated preferences. Focused repository/normalizer/ViewModel tests passed, including canonical removal after migration; separate QA and adversarial reviews found no blocker. P02.5 remains open because the default-branch managed dependency graph contains vulnerable AGP/plugin transitives; the retained audit distinguishes build-graph exposure from app runtime and records the stable upgrade/submission gate."
   - date: "2026-09-23"
     note: "Closed RAPP001, RNET001, and RNET004 after current-source revalidation. Wi-Fi scan outcomes now reflect EXTRA_RESULTS_UPDATED, timeout/rejection/error, preserve cached samples with explicit state and permission retry, and use the sample timestamp; network counts now match logical grouping. LAN MAC enrichment now uses a fresh authoritative per-scan ARP snapshot and preserves worker data on snapshot/read failures. App/core-network JVM suites passed; API 36 ScanRequestAwaiterTest passed 3/3 and WifiScanScreenTest passed 12/12; QA and adversarial reviews found no blocker. P01/E00-T01 stays in progress for device-only Wi-Fi/VPN and real NBSTAT checks; RNET011/RBUILD003 and the P02.5 dependency-submission gate remain open."
+  - date: "2026-09-23"
+    note: "Closed RNET011 after adding cancellation regressions for NameProbe.resolveName and MacResolver.resolve, including a gated two-worker test proving cancellation prevents the sibling from starting another quick-port check. The focused 13-test LAN discovery pipeline suite passed, and independent QA/adversarial reviews found no coverage gap. P01 remains in progress for RBUILD003 and E00-T01 device-only Wi-Fi/VPN and real NBSTAT checks."

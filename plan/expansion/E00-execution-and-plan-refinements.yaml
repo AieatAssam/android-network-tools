@@ -211,7 +211,7 @@ tasks:
       remaining_acceptance:
         - "Device-only Wi-Fi/VPN LAN capture remains unavailable in this environment."
         - "Validate with an anonymized real NBSTAT response when one is available."
-      next_action: "Keep P02.5 in progress: the default-branch dependency submission contains vulnerable AGP/plugin-transitive coordinates, while the merged report does not identify the selecting configuration. Verify the plugin-classpath constraint candidate against a new default-branch submission, or obtain approved time-bounded dispositions. The user-directed RAPP001/RNET001/RNET004 regression follow-ups are now closed; E00-T01 remains in progress for device-only Wi-Fi/VPN capture and an anonymized real NBSTAT response, while RNET011 and RBUILD003 remain open."
+      next_action: "Keep P02.5 in progress: the default-branch dependency submission contains vulnerable AGP/plugin-transitive coordinates, while the merged report does not identify the selecting configuration. Verify the plugin-classpath constraint candidate against a new default-branch submission, or obtain approved time-bounded dispositions. The user-directed RAPP001/RNET001/RNET004 regression follow-ups and RNET011 are now closed; E00-T01 remains in progress for device-only Wi-Fi/VPN capture and an anonymized real NBSTAT response, while RBUILD003 remains open."
       running_handles: none
       blockers: none
 

@@ -220,6 +220,7 @@ findings:
         detail: "MAC enrichment also catches cancellation from MacResolver.resolve, after which the worker proceeds to synchronous QUICK_PORTS checks."
     impact: "A cancelled scan can continue best-effort enrichment instead of promptly unwinding; with the default ten sequential port checks per host, cancellation latency can grow while workers occupy IO threads and emit no useful result."
     recommended_action: "Handle expected probe failures with a CancellationException-preserving helper (or explicit catch/rethrow) and make synchronous enrichment interruptible or cancellation-aware before continuing to the next host."
-    validation: "Inject suspend NameProbe and MacResolver implementations that throw CancellationException at each enrichment stage; collect the flow in a cancelled Job and assert prompt cancellation, no later port checks, and no completion event."
+    validation: "Inject suspend NameProbe.resolveName and MacResolver.resolve implementations that throw CancellationException; collect the flow and assert cancellation, no later port checks, and no completion event. Include a gated two-worker case proving a sibling stops before starting its next quick-port check."
     related_phase: P01
-    status: todo
+    status: done
+    resolution: "Enrichment now rethrows CancellationException from name and MAC resolution. Regression tests cover each source, zero subsequent port checks, no ScanComplete, and a gated concurrency=2 sibling that exits its first synchronous check after scan cancellation without starting another. LanScanDiscoveryPipelineTest passed all 13 tests; independent QA and adversarial reviews cleared the final test coverage."

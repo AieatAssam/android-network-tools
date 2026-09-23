@@ -1,6 +1,8 @@
 package net.aieat.netswissknife.core.network.lan
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.toList
@@ -9,6 +11,10 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
 
 class LanScanDiscoveryPipelineTest {
     @Test
@@ -129,6 +135,118 @@ class LanScanDiscoveryPipelineTest {
             wasCancelled = true
         }
         assertTrue(wasCancelled)
+    }
+
+    @Test
+    fun `cancellation from enrichment name resolution stops port checks and completion`() = runTest {
+        val portChecks = AtomicInteger()
+        val updates = mutableListOf<LanScanUpdate>()
+        val scan = LanScanRepositoryImpl(
+            icmpProbe = IcmpProbe { ip, _ -> if (ip == "192.168.1.1") 3L else null },
+            tcpProbe = TcpPresenceProbe { _, _, _ -> TcpPresence.None },
+            nameProbes = listOf(NameProbe { _, _ -> throw CancellationException("name lookup cancelled") }),
+            macResolver = object : MacResolver {
+                override val supported = false
+                override suspend fun resolve(ip: String): String? = null
+            },
+            portChecker = { _, _, _ -> portChecks.incrementAndGet(); false },
+        )
+
+        var wasCancelled = false
+        try {
+            scan.scan(LanScanRequest("192.168.1.0/30", concurrency = 1)).toList(updates)
+        } catch (_: CancellationException) {
+            wasCancelled = true
+        }
+
+        assertTrue(wasCancelled)
+        assertEquals(0, portChecks.get())
+        assertFalse(updates.any { it is LanScanUpdate.ScanComplete })
+    }
+
+    @Test
+    fun `cancellation from MAC enrichment stops port checks and completion`() = runTest {
+        val portChecks = AtomicInteger()
+        val updates = mutableListOf<LanScanUpdate>()
+        val scan = LanScanRepositoryImpl(
+            icmpProbe = IcmpProbe { ip, _ -> if (ip == "192.168.1.1") 3L else null },
+            tcpProbe = TcpPresenceProbe { _, _, _ -> TcpPresence.None },
+            nameProbes = emptyList(),
+            macResolver = object : MacResolver {
+                override val supported = true
+                override suspend fun resolve(ip: String): String? {
+                    throw CancellationException("MAC lookup cancelled")
+                }
+            },
+            portChecker = { _, _, _ -> portChecks.incrementAndGet(); false },
+        )
+
+        var wasCancelled = false
+        try {
+            scan.scan(LanScanRequest("192.168.1.0/30", concurrency = 1)).toList(updates)
+        } catch (_: CancellationException) {
+            wasCancelled = true
+        }
+
+        assertTrue(wasCancelled)
+        assertEquals(0, portChecks.get())
+        assertFalse(updates.any { it is LanScanUpdate.ScanComplete })
+    }
+
+    @Test
+    fun `enrichment cancellation prevents sibling from starting later port checks`() = runTest {
+        val siblingFirstPortStarted = CountDownLatch(1)
+        val siblingJob = AtomicReference<Job?>()
+        val siblingPortChecks = AtomicInteger()
+        val updates = mutableListOf<LanScanUpdate>()
+        val scan = LanScanRepositoryImpl(
+            icmpProbe = IcmpProbe { ip, _ ->
+                if (ip == "192.168.1.2") {
+                    siblingJob.set(currentCoroutineContext()[Job])
+                }
+                3L
+            },
+            tcpProbe = TcpPresenceProbe { _, _, _ -> TcpPresence.None },
+            nameProbes = emptyList(),
+            macResolver = object : MacResolver {
+                override val supported = false
+                override suspend fun resolve(ip: String): String? {
+                    if (ip == "192.168.1.1") {
+                        check(siblingFirstPortStarted.await(5, TimeUnit.SECONDS)) {
+                            "Sibling did not enter its first port check"
+                        }
+                        throw CancellationException("MAC lookup cancelled")
+                    }
+                    return null
+                }
+            },
+            portChecker = { ip, _, _ ->
+                if (ip == "192.168.1.2") {
+                    siblingPortChecks.incrementAndGet()
+                    if (siblingFirstPortStarted.count == 1L) {
+                        siblingFirstPortStarted.countDown()
+                        val worker = checkNotNull(siblingJob.get())
+                        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+                        while (worker.isActive && System.nanoTime() < deadline) {
+                            Thread.sleep(1)
+                        }
+                        check(!worker.isActive) { "Sibling worker did not observe scan cancellation" }
+                    }
+                }
+                false
+            },
+        )
+
+        var wasCancelled = false
+        try {
+            scan.scan(LanScanRequest("192.168.1.0/30", concurrency = 2)).toList(updates)
+        } catch (_: CancellationException) {
+            wasCancelled = true
+        }
+
+        assertTrue(wasCancelled)
+        assertEquals(1, siblingPortChecks.get())
+        assertFalse(updates.any { it is LanScanUpdate.ScanComplete })
     }
 
     @Test
