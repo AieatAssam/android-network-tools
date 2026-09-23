@@ -3,6 +3,7 @@ package net.aieat.netswissknife.app.mdns
 import android.content.Context
 import android.net.wifi.WifiManager
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.InternalCoroutinesApi
 import kotlinx.coroutines.currentCoroutineContext
@@ -23,6 +24,7 @@ import org.xbill.DNS.SRVRecord
 import org.xbill.DNS.Section
 import org.xbill.DNS.TXTRecord
 import org.xbill.DNS.Type
+import java.io.IOException
 import java.net.DatagramPacket
 import java.net.InetAddress
 import java.net.InetSocketAddress
@@ -47,6 +49,18 @@ internal interface MdnsSocket {
     fun receive(packet: DatagramPacket)
     fun close()
 }
+
+internal enum class MdnsIoOperation { SEND_QUERY, RECEIVE_PACKET }
+
+/** A packet transport failure; socket timeouts are expected during quiet discovery. */
+internal class MdnsPacketIoException(
+    val operation: MdnsIoOperation,
+    cause: Exception
+) : IOException(
+    "mDNS ${if (operation == MdnsIoOperation.SEND_QUERY) "query send" else "packet receive"} failed" +
+        (cause.message?.let { ": $it" } ?: ""),
+    cause
+)
 
 private class PlatformMdnsSocket(private val socket: MulticastSocket) : MdnsSocket {
     override var reuseAddress: Boolean
@@ -269,12 +283,19 @@ class MdnsRepositoryImpl @Inject constructor(
         }
     }.flowOn(Dispatchers.IO)
 
-    private fun sendQuery(socket: MdnsSocket, address: InetSocketAddress, name: String, type: Int) {
+    private suspend fun sendQuery(socket: MdnsSocket, address: InetSocketAddress, name: String, type: Int) {
         try {
             val bytes = MdnsPacketParser.buildMdnsQuery(name, type)
             val packet = DatagramPacket(bytes, bytes.size, address)
             socket.send(packet)
-        } catch (_: Exception) {}
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // A socket can report a generic I/O failure when cancellation closes it. Preserve
+            // cancellation in that race instead of turning Stop into a discovery error.
+            currentCoroutineContext().ensureActive()
+            throw MdnsPacketIoException(MdnsIoOperation.SEND_QUERY, e)
+        }
     }
 
     private suspend fun receivePacket(socket: MdnsSocket): ByteArray? {
@@ -285,9 +306,11 @@ class MdnsRepositoryImpl @Inject constructor(
             buf.copyOf(packet.length)
         } catch (_: SocketTimeoutException) {
             null
-        } catch (_: Exception) {
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
             currentCoroutineContext().ensureActive()
-            null
+            throw MdnsPacketIoException(MdnsIoOperation.RECEIVE_PACKET, e)
         }
     }
 

@@ -9,32 +9,78 @@ import java.net.NetworkInterface
  */
 object SubnetUtils {
 
+    internal data class InterfaceAddressCandidate(
+        val address: String,
+        val prefixLength: Int,
+        val interfaceName: String,
+        val interfaceIsLoopback: Boolean,
+        val interfaceIsUp: Boolean,
+        val interfaceIsVirtual: Boolean,
+        val addressIsLoopback: Boolean,
+    )
+
     /**
      * Attempts to detect the connected subnet from active network interfaces.
      * Returns CIDR notation like "192.168.1.0/24", or null if unavailable.
      */
-    fun getCurrentSubnet(): String? = try {
-        val interfaces = NetworkInterface.getNetworkInterfaces()?.toList() ?: emptyList()
-        interfaces
-            .asSequence()
-            .filter { !it.isLoopback && it.isUp && !it.isVirtual }
-            .filter { iface ->
-                val name = iface.displayName.lowercase()
+    fun getCurrentSubnet(): String? = getCurrentSubnet(::platformInterfaceAddressCandidates)
+
+    /** Injectable interface-address source used to verify detection and prefix forwarding. */
+    internal fun getCurrentSubnet(
+        interfaceAddressesProvider: () -> Sequence<InterfaceAddressCandidate>,
+    ): String? = try {
+        interfaceAddressesProvider()
+            .filter { !it.interfaceIsLoopback && it.interfaceIsUp && !it.interfaceIsVirtual }
+            .filter { candidate ->
+                val name = candidate.interfaceName.lowercase()
                 !name.contains("dummy") && !name.contains("tun") && !name.contains("p2p")
             }
-            .flatMap { iface -> iface.interfaceAddresses.asSequence().map { iface to it } }
-            .firstOrNull { (_, addr) ->
-                addr.address is Inet4Address && !addr.address.isLoopbackAddress
-            }
-            ?.let { (_, ifaceAddr) ->
-                val ip = ifaceAddr.address as Inet4Address
-                // Enforce a minimum prefix of /16 and maximum of /30
-                val prefixLen = ifaceAddr.networkPrefixLength.toInt().coerceIn(16, 30)
-                val networkIp = networkAddress(ip, prefixLen)
-                "$networkIp/$prefixLen"
-            }
+            .filter { !it.addressIsLoopback }
+            .mapNotNull { candidate -> cidrOf(candidate.address, candidate.prefixLength) }
+            .firstOrNull()
     } catch (_: Exception) {
         null
+    }
+
+    private fun platformInterfaceAddressCandidates(): Sequence<InterfaceAddressCandidate> = sequence {
+        val interfaces = NetworkInterface.getNetworkInterfaces() ?: return@sequence
+        while (interfaces.hasMoreElements()) {
+            val iface = interfaces.nextElement()
+            val eligible = runCatching {
+                val name = iface.displayName.lowercase()
+                !iface.isLoopback && iface.isUp && !iface.isVirtual &&
+                    !name.contains("dummy") && !name.contains("tun") && !name.contains("p2p")
+            }
+                .getOrDefault(false)
+            if (!eligible) continue
+
+            val addresses = runCatching { iface.interfaceAddresses }.getOrNull() ?: continue
+            for (ifaceAddr in addresses) {
+                val address = ifaceAddr.address as? Inet4Address ?: continue
+                yield(
+                    InterfaceAddressCandidate(
+                        address = address.hostAddress,
+                        prefixLength = ifaceAddr.networkPrefixLength.toInt(),
+                        interfaceName = iface.displayName,
+                        interfaceIsLoopback = false,
+                        interfaceIsUp = true,
+                        interfaceIsVirtual = false,
+                        addressIsLoopback = address.isLoopbackAddress,
+                    ),
+                )
+            }
+        }
+    }
+
+    /** Normalizes an interface address without changing its platform-provided prefix. */
+    internal fun cidrOf(address: String, prefixLength: Int): String? {
+        if (prefixLength !in 0..32) return null
+        return try {
+            val ip = parseIpToLong(address)
+            "${longToIp(ip and maskForPrefix(prefixLength))}/$prefixLength"
+        } catch (_: IllegalArgumentException) {
+            null
+        }
     }
 
     /**
@@ -101,12 +147,6 @@ object SubnetUtils {
     }
 
     // ── Internal helpers ─────────────────────────────────────────────────────
-
-    private fun networkAddress(addr: Inet4Address, prefixLen: Int): String {
-        val ipLong = parseIpToLong(addr.hostAddress!!)
-        val mask = maskForPrefix(prefixLen)
-        return longToIp(ipLong and mask)
-    }
 
     internal fun parseIpToLong(ip: String): Long {
         val parts = ip.split(".")

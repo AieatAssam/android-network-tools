@@ -23,18 +23,20 @@ object LinkInfoMapper {
         capabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
 
     fun cidrOf(address: String, prefixLength: Int): String? {
-        val octets = address.split('.').mapNotNull(String::toIntOrNull)
-        if (octets.size != 4 || octets.any { it !in 0..255 }) return null
-        val prefix = prefixLength.coerceIn(16, 30)
-        val value = octets.fold(0L) { acc, octet -> (acc shl 8) or octet.toLong() }
-        val mask = (0xFFFFFFFFL shl (32 - prefix)) and 0xFFFFFFFFL
+        if (prefixLength !in 0..32) return null
+        val octets = address.split('.')
+        if (octets.size != 4) return null
+        val parsedOctets = octets.map { it.toIntOrNull() ?: return null }
+        if (parsedOctets.any { it !in 0..255 }) return null
+        val value = parsedOctets.fold(0L) { acc, octet -> (acc shl 8) or octet.toLong() }
+        val mask = if (prefixLength == 0) 0L else (0xFFFFFFFFL shl (32 - prefixLength)) and 0xFFFFFFFFL
         val network = value and mask
         return listOf(
             (network ushr 24) and 0xFF,
             (network ushr 16) and 0xFF,
             (network ushr 8) and 0xFF,
             network and 0xFF,
-        ).joinToString(".") + "/$prefix"
+        ).joinToString(".") + "/$prefixLength"
     }
 
     fun defaultGateway(routes: List<Pair<String, String?>>): String? = routes

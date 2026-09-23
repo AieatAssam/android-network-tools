@@ -60,6 +60,26 @@ class TopologyDiscoveryUseCaseTest {
     }
 
     @Test
+    fun `out of range resource params emit Error without calling repository`() = runTest {
+        val invalidParams = listOf(
+            validParams.copy(maxHops = TopologyParamsValidator.MIN_MAX_HOPS - 1),
+            validParams.copy(maxHops = TopologyParamsValidator.MAX_MAX_HOPS + 1),
+            validParams.copy(timeoutMs = TopologyParamsValidator.MIN_TIMEOUT_MS - 1),
+            validParams.copy(timeoutMs = TopologyParamsValidator.MAX_TIMEOUT_MS + 1),
+            validParams.copy(retries = TopologyParamsValidator.MIN_RETRIES - 1),
+            validParams.copy(retries = TopologyParamsValidator.MAX_RETRIES + 1)
+        )
+
+        for (params in invalidParams) {
+            val events = useCase(params).toList()
+            assertEquals(1, events.size)
+            assertTrue(events.single() is TopologyDiscoveryEvent.Error)
+        }
+
+        verify(exactly = 0) { repository.discover(any()) }
+    }
+
+    @Test
     fun `invoke can be called using operator syntax`() = runTest {
         val mockGraph = TopologyGraph(
             nodes = emptyList(),

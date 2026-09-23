@@ -56,7 +56,8 @@ findings:
     recommended_action: "Preserve valid platform prefixes (0..32), then apply an explicit product scan-size guard at the call site; if large networks are unsupported, return a clear limitation instead of changing the CIDR."
     validation: "Add tests around an injectable interface-address seam for /8, /16, /30, /31, and /32, asserting exact CIDR preservation or an explicit rejection policy."
     related_phase: P05
-    status: todo
+    status: done
+    resolution: "Both CIDR detection paths now preserve and normalize the actual platform prefix across /0..32. The fallback enumerates interfaces lazily in original order, filters each interface before reading its addresses, skips malformed candidates, and stops at the first valid IPv4 subnet. Focused tests cover /0, /8, /16, /30, /31, /32, excluded interfaces, lazy short-circuiting, and invalid-candidate recovery; LinkInfoProviderTest and LanScanUseCaseTest verify the platform mapper and explicit /16–/30 scan-size rejection. QA and adversarial re-reviews found no blocker."
   - id: RNET003
     severity: medium
     kind: gap
@@ -75,7 +76,8 @@ findings:
     recommended_action: "Define and validate finite ranges for maxHops, timeoutMs, and retries at the core boundary, with constants shared by UI/use-case validation and tests."
     validation: "Add boundary tests for zero, negative, and above-limit values and assert repository discovery is not called for invalid parameter sets."
     related_phase: P02
-    status: todo
+    status: done
+    resolution: "TopologyParamsValidator now bounds hops to 1..10, timeout to 500..30,000 ms, and retries to 0..5; the UI hop slider shares the validator limits. Boundary and extreme-value tests cover the validator, and TopologyDiscoveryUseCaseTest confirms invalid resource parameters emit Error without calling the repository. Core-network, core-domain, and app focused suites passed; QA and adversarial reviews found no blocker."
   - id: RNET004
     severity: low
     kind: bug

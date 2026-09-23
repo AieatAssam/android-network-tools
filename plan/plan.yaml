@@ -196,14 +196,14 @@ comprehensive_expansion:
       - {"finding":"RAPP001","owner_task":"P03-T2","follow_up_status":"done","report":"plan/reviews/2026-09-21-app.yaml"}
       - {"finding":"RAPP002","owner_task":"P05-T4","follow_up_status":"done","report":"plan/reviews/2026-09-21-app.yaml"}
       - {"finding":"RAPP003","owner_task":"P04-T3","follow_up_status":"todo","report":"plan/reviews/2026-09-21-app.yaml"}
-      - {"finding":"RAPP004","owner_task":"P12-T1","follow_up_status":"todo","report":"plan/reviews/2026-09-21-app.yaml"}
+      - {"finding":"RAPP004","owner_task":"P12-T1","follow_up_status":"done","report":"plan/reviews/2026-09-21-app.yaml"}
       - {"finding":"RBUILD001","owner_task":"P09-T4","follow_up_status":"todo","report":"plan/reviews/2026-09-21-build.yaml"}
       - {"finding":"RBUILD002","owner_task":"P09-T4","follow_up_status":"todo","report":"plan/reviews/2026-09-21-build.yaml"}
       - {"finding":"RBUILD003","owner_task":"P01-T7","follow_up_status":"done","report":"plan/reviews/2026-09-21-build.yaml"}
       - {"finding":"RLAN001","owner_task":"E00-T01","follow_up_status":"done","report":"plan/reviews/2026-09-22-lan-scan-noise.yaml"}
       - {"finding":"RNET001","owner_task":"P01-T4","follow_up_status":"done","report":"plan/reviews/2026-09-21-network.yaml"}
-      - {"finding":"RNET002","owner_task":"P05-T1","follow_up_status":"todo","report":"plan/reviews/2026-09-21-network.yaml"}
-      - {"finding":"RNET003","owner_task":"P02-T2","follow_up_status":"todo","report":"plan/reviews/2026-09-21-network.yaml"}
+      - {"finding":"RNET002","owner_task":"P05-T1","follow_up_status":"done","report":"plan/reviews/2026-09-21-network.yaml"}
+      - {"finding":"RNET003","owner_task":"P02-T2","follow_up_status":"done","report":"plan/reviews/2026-09-21-network.yaml"}
       - {"finding":"RNET004","owner_task":"P03-T1","follow_up_status":"done","report":"plan/reviews/2026-09-21-network.yaml"}
       - {"finding":"RNET005","owner_task":"P04-T5","follow_up_status":"done","report":"plan/reviews/2026-09-21-network.yaml"}
       - {"finding":"RNET006","owner_task":"P10-T5","follow_up_status":"todo","report":"plan/reviews/2026-09-21-network.yaml"}
@@ -233,8 +233,8 @@ incremental_review:
   reviewer_reasoning_effort: xhigh
   method: "Parallel source review; findings saved in small verified batches before final consolidation. Existing F001-F041 remain historical baseline findings."
   priority_order: [critical, high, medium, low]
-  recommended_first_followups: [RAPP004, RNET002]
-  first_followups_rationale: "RAPP002 cancellation and RNET009 Wi-Fi security classification are closed with focused tests. P02.5 remains the highest-severity open gate because the default-branch submission contains vulnerable AGP/plugin-transitive coordinates; continue this build-graph remediation alongside ready high-priority code fixes, while deferring medium follow-ups until the critical dependency gate has a verified fix or approved disposition. RAPP004 and RNET002 remain next; RLAN001's device-only Wi-Fi/VPN and NBSTAT observations remain tracked under E00-T01."
+  recommended_first_followups: [RAPP003, RNET006]
+  first_followups_rationale: "RAPP004, RNET002, and RNET003 are closed with focused regressions. P02.5 remains the highest-severity open gate because the current dependency submission still contains vulnerable AGP/plugin-transitive coordinates and no later stable AGP candidate is available; continue that remediation when a supported path appears, alongside ready code work. RAPP003 and RNET006 are the next medium follow-ups; RLAN001's device-only Wi-Fi/VPN and NBSTAT observations remain tracked under E00-T01."
   execution_guidance: "Merge these findings with open phase work by severity; existing unresolved critical/high findings retain precedence. Address confirmed bugs before optional feature waves P13-P15. Follow each finding's related_phase and validation, including follow-ups to historically completed phases."
   reports:
     - { area: core-network, file: plan/reviews/2026-09-21-network.yaml }
@@ -247,11 +247,11 @@ incremental_review:
     - { id: RLAN001, severity: high, kind: bug, phase: P01, status: done, title: "A failed TCP connect is promoted to a live host and floods LAN results with false positives" }
     - { id: RAPP001, severity: medium, kind: bug, phase: P03, status: done, title: "Wi-Fi scan failures are reported as completed scans" }
     - { id: RAPP002, severity: medium, kind: bug, phase: P05, status: done, title: "mDNS stop/cancellation does not promptly terminate the socket loop" }
-    - { id: RAPP004, severity: medium, kind: bug, phase: P12, status: todo, title: "mDNS packet I/O failures are converted into successful empty scans" }
+    - { id: RAPP004, severity: medium, kind: bug, phase: P12, status: done, title: "mDNS packet I/O failures are converted into successful empty scans" }
     - { id: RBUILD001, severity: medium, kind: bug, phase: P09, status: todo, title: "Release SNMP retention gate succeeds when only one required class survives" }
     - { id: RBUILD002, severity: medium, kind: bug, phase: P09, status: todo, title: "Daily release version allocation can reuse an existing version" }
     - { id: RNET001, severity: medium, kind: bug, phase: P01, status: done, title: "ARP enrichment snapshots the cache before all probes finish" }
-    - { id: RNET002, severity: medium, kind: bug, phase: P05, status: todo, title: "Both platform and fallback subnet detection silently clamp the real prefix length" }
+    - { id: RNET002, severity: medium, kind: bug, phase: P05, status: done, title: "Both platform and fallback subnet detection silently clamp the real prefix length" }
     - { id: RNET005, severity: medium, kind: bug, phase: P04, status: done, title: "DNS lookup does not normalize Unicode domains to IDNA" }
     - { id: RNET009, severity: medium, kind: bug, phase: P03, status: done, title: "Unknown Wi-Fi capabilities are classified as open networks" }
     - { id: RNET011, severity: medium, kind: bug, phase: P01, status: done, title: "LAN enrichment can swallow cancellation from injected suspend probes" }
@@ -264,7 +264,7 @@ incremental_review:
     - { id: RUI008, severity: medium, kind: bug, phase: P04, status: done, title: "DNS IME submission can overlap lookups and attach recents to the wrong edit" }
     - { id: RUI009, severity: medium, kind: bug, phase: P08, status: todo, title: "Port scanner cannot represent the configured concurrency maximum" }
     - { id: RAPP003, severity: medium, kind: gap, phase: P04, status: todo, title: "Native ICMP load failures bypass the advertised reachability fallback" }
-    - { id: RNET003, severity: medium, kind: gap, phase: P02, status: todo, title: "Topology parameters omit bounds for hops, timeout, and retries" }
+    - { id: RNET003, severity: medium, kind: gap, phase: P02, status: done, title: "Topology parameters omit bounds for hops, timeout, and retries" }
     - { id: RNET006, severity: medium, kind: gap, phase: P10, status: todo, title: "WHOIS cancellation does not bound blocking DNS and socket work" }
     - { id: RUI010, severity: medium, kind: bug, phase: P08, status: done, owner: E01-T10, title: "Host fields reject surrounding whitespace even though shared validation trims it" }
     - { id: RUI011, severity: medium, kind: gap, phase: P08, status: done, owner: E01-T07/E01-T09, title: "Traceroute dead-path state lacks verified Ping-style recovery presentation" }
@@ -819,3 +819,5 @@ changelog:
     note: "Closed RNET011 after adding cancellation regressions for NameProbe.resolveName and MacResolver.resolve, including a gated two-worker test proving cancellation prevents the sibling from starting another quick-port check. The focused 13-test LAN discovery pipeline suite passed, and independent QA/adversarial reviews found no coverage gap. P01 remains in progress for RBUILD003 and E00-T01 device-only Wi-Fi/VPN and real NBSTAT checks."
   - date: "2026-09-23"
     note: "Closed RBUILD003 after making OUI refresh fail closed across the required MA-L/MA-M/MA-S feeds and publish atomically, then teaching OuiDatabase to load 6/7/9-digit prefixes with strict complete-MAC normalization and longest-prefix lookup. Thirteen Python updater tests, py_compile, and the full core-network suite passed; QA and adversarial reviews cleared the final diff. P01 regression follow-ups are complete; E00-T01 retains device-only Wi-Fi/VPN and real NBSTAT checks."
+  - date: "2026-09-23"
+    note: "Closed RAPP004, RNET002, and RNET003. mDNS now propagates typed send/receive failures while preserving quiet timeouts and cancellation; a PTR-driven test covers follow-up send failure. Both subnet detectors preserve valid /0–/32 prefixes, lazily choose the first valid interface address, and leave /16–/30 scan limits as explicit validation. Topology hops/timeout/retries now have shared finite bounds, and the use case rejects invalid values before repository calls. Focused core-network, core-domain, and app unit tests passed; independent QA/adversarial reviews found no blocker. Fresh P02.5 recheck still finds six open Dependabot alerts and the same vulnerable coordinates in the current-branch submission; no later stable AGP is available, so P02.5 remains open."

@@ -88,3 +88,19 @@ disposition:
   closure_rule: "Do not close P02.5 based only on local artifact-resolution evidence or the expectation of a later rescan."
 
 artifact_note: "Compact evidence, source run IDs, and artifact hashes are retained here. Raw submission JSON and Gradle logs remain under /tmp and are not committed."
+
+latest_recheck:
+  checked_at: "2026-09-23"
+  current_branch_submission:
+    run_id: 35823761425
+    ref: "refs/heads/plan/comprehensive-review-2026-09-22"
+    commit: "68494d6"
+    artifact_sha256: "604a6eaee098bbe8bed97b3e6756434332bd2dc9796f365b445e58acd03dbe33"
+    result: "Still contains sdk-common 32.4.1 -> Bouncy Castle 1.80.2, commons-compress 1.27.1 -> Commons Lang 3.16.0, and httpmime 4.5.6 -> HttpClient 4.5.6."
+  default_branch:
+    ref: "refs/heads/main"
+    commit: "5e183721e64ce8a8946f1a0b50f52b83544e8898"
+  github_sbom_generated_at: "2026-09-23T05:47:39Z"
+  dependabot_open_alerts: [1, 2, 5, 6, 8, 9]
+  newest_stable_agp: "9.4.1"
+  outcome: "The current source still does not remove vulnerable coordinates from the submitted plugin graph. No later stable AGP release is available to test; keep P02.5 open and recheck the next stable plugin-stack candidate against a new default-branch dependency submission, or obtain explicit time-bounded dispositions."

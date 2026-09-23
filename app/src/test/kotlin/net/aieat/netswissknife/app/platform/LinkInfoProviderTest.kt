@@ -48,9 +48,19 @@ class LinkInfoProviderTest {
     }
 
     @Test
-    fun `prefix is constrained to supported scanner range`() {
-        assertEquals("192.168.0.0/16", LinkInfoMapper.cidrOf("192.168.1.37", 8))
-        assertEquals("192.168.1.36/30", LinkInfoMapper.cidrOf("192.168.1.37", 32))
+    fun `CIDR mapping preserves platform prefixes`() {
+        assertEquals("0.0.0.0/0", LinkInfoMapper.cidrOf("192.168.1.37", 0))
+        assertEquals("192.0.0.0/8", LinkInfoMapper.cidrOf("192.168.1.37", 8))
+        assertEquals("192.168.0.0/16", LinkInfoMapper.cidrOf("192.168.1.37", 16))
+        assertEquals("192.168.1.36/30", LinkInfoMapper.cidrOf("192.168.1.37", 30))
+        assertEquals("192.168.1.36/31", LinkInfoMapper.cidrOf("192.168.1.37", 31))
+        assertEquals("192.168.1.37/32", LinkInfoMapper.cidrOf("192.168.1.37", 32))
+    }
+
+    @Test
+    fun `CIDR mapping rejects invalid prefixes`() {
+        assertNull(LinkInfoMapper.cidrOf("192.168.1.37", -1))
+        assertNull(LinkInfoMapper.cidrOf("192.168.1.37", 33))
     }
 
     @Test

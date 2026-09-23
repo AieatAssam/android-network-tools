@@ -2,6 +2,8 @@ package net.aieat.netswissknife.core.network.topology
 
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 class TopologyParamsValidationTest {
 
@@ -84,6 +86,50 @@ class TopologyParamsValidationTest {
             )
         )
         assertTrue(result.isValid)
+    }
+
+    @Test
+    fun `accepts topology resource bounds including no SNMP retries`() {
+        val minimums = validV2cParams().copy(
+            maxHops = TopologyParamsValidator.MIN_MAX_HOPS,
+            timeoutMs = TopologyParamsValidator.MIN_TIMEOUT_MS,
+            retries = TopologyParamsValidator.MIN_RETRIES
+        )
+        val maximums = validV2cParams().copy(
+            maxHops = TopologyParamsValidator.MAX_MAX_HOPS,
+            timeoutMs = TopologyParamsValidator.MAX_TIMEOUT_MS,
+            retries = TopologyParamsValidator.MAX_RETRIES
+        )
+
+        assertTrue(TopologyParamsValidator.validate(minimums).isValid)
+        assertTrue(TopologyParamsValidator.validate(maximums).isValid)
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = [0, -1, 11, Int.MIN_VALUE, Int.MAX_VALUE])
+    fun `rejects maxHops outside supported range`(maxHops: Int) {
+        val result = TopologyParamsValidator.validate(validV2cParams().copy(maxHops = maxHops))
+
+        assertFalse(result.isValid)
+        assertTrue(result.errors.any { it.contains("Max hops") })
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = [0, -1, 499, 30_001, Int.MIN_VALUE, Int.MAX_VALUE])
+    fun `rejects timeout outside supported range`(timeoutMs: Int) {
+        val result = TopologyParamsValidator.validate(validV2cParams().copy(timeoutMs = timeoutMs))
+
+        assertFalse(result.isValid)
+        assertTrue(result.errors.any { it.contains("Timeout") })
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = [-1, 6, Int.MIN_VALUE, Int.MAX_VALUE])
+    fun `rejects retries outside supported range`(retries: Int) {
+        val result = TopologyParamsValidator.validate(validV2cParams().copy(retries = retries))
+
+        assertFalse(result.isValid)
+        assertTrue(result.errors.any { it.contains("Retries") })
     }
 
     @Test

@@ -387,8 +387,10 @@ private fun TopologyScreenContent(
                             Slider(
                                 value = maxHops,
                                 onValueChange = { maxHops = it },
-                                valueRange = 1f..10f,
-                                steps = 8,
+                                valueRange = TopologyParamsValidator.MIN_MAX_HOPS.toFloat()..
+                                    TopologyParamsValidator.MAX_MAX_HOPS.toFloat(),
+                                steps = TopologyParamsValidator.MAX_MAX_HOPS -
+                                    TopologyParamsValidator.MIN_MAX_HOPS - 1,
                                 modifier = Modifier.fillMaxWidth()
                             )
 

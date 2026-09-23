@@ -31,7 +31,7 @@ review_follow_up:
   reports:
     - plan/reviews/2026-09-21-app.yaml
     - plan/reviews/2026-09-21-network.yaml
-  note: "New source-review follow-ups; preserve historical task completion. See report evidence, recommended_action, and validation before implementation."
+  note: "New source-review follow-ups; preserve historical task completion. RAPP004 is closed by propagated typed mDNS packet-I/O failures; RNET010 remains open. See the report and regression_delivery ledger for current status."
 
 context:
   problem: |

@@ -5,6 +5,13 @@ import net.aieat.netswissknife.core.network.HostValidator
 data class ValidationResult(val isValid: Boolean, val errors: List<String>)
 
 object TopologyParamsValidator {
+    const val MIN_MAX_HOPS = 1
+    const val MAX_MAX_HOPS = 10
+    const val MIN_TIMEOUT_MS = 500
+    const val MAX_TIMEOUT_MS = 30_000
+    const val MIN_RETRIES = 0
+    const val MAX_RETRIES = 5
+
     private val numericDottedTarget = Regex("^\\d+(?:\\.\\d+)+$")
     private val malformedIpv4LikeTarget = Regex("^\\d{1,3}(?:\\.\\d{1,3}){2}\\.[A-Za-z]$")
 
@@ -15,6 +22,16 @@ object TopologyParamsValidator {
             errors.add("Target IP or hostname must not be blank")
         } else if (!isValidTarget(params.targetIp)) {
             errors.add("Target IP or hostname must be valid")
+        }
+
+        if (params.maxHops !in MIN_MAX_HOPS..MAX_MAX_HOPS) {
+            errors.add("Max hops must be between $MIN_MAX_HOPS and $MAX_MAX_HOPS")
+        }
+        if (params.timeoutMs !in MIN_TIMEOUT_MS..MAX_TIMEOUT_MS) {
+            errors.add("Timeout must be between $MIN_TIMEOUT_MS ms and $MAX_TIMEOUT_MS ms")
+        }
+        if (params.retries !in MIN_RETRIES..MAX_RETRIES) {
+            errors.add("Retries must be between $MIN_RETRIES and $MAX_RETRIES")
         }
 
         when (params.snmpVersion) {

@@ -101,7 +101,8 @@ findings:
     recommended_action: "Return/propagate typed send and receive outcomes; distinguish expected SocketTimeoutException from I/O/security failures, and emit an error update or fail the flow when queries cannot be sent or the socket becomes unusable."
     validation: "Inject a socket abstraction in tests and exercise send failure, receive IOException, and normal timeout separately; assert only normal timeout emits DiscoveryComplete while I/O failure reaches the UI error state."
     related_phase: P12
-    status: todo
+    status: done
+    resolution: "mDNS query-send and packet-receive failures now propagate as typed MdnsPacketIoException values; only SocketTimeoutException remains a normal quiet-network outcome. The ViewModel's existing error state presents transport failures instead of a successful empty result, while cancellation is rethrown and socket/multicast-lock cleanup remains in finally paths. Tests cover initial and PTR-triggered follow-up send failure, receive failure in the ViewModel, normal timeout completion, and cancellation cleanup. Focused MdnsRepositoryImplIoTest and MdnsRepositoryImplCancellationTest passed; independent QA and adversarial reviews found no blocker."
 
 coverage:
   reviewed:
