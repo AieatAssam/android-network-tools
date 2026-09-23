@@ -13,7 +13,7 @@ phase:
   id: E03
   title: "Performance, reliability, lifecycle safety, and reproducible quality"
   priority: high
-  status: todo
+  status: in_progress
   estimated_effort: "XL (8-12 agent sessions; execute as small PR-sized task series)"
   depends_on: []
   related_phases: [P05, P09, P12, P01, P03, P04, P07, P10, P11]
@@ -175,7 +175,7 @@ tasks:
   - id: E03-T01
     title: "Introduce one bounded operation, deadline, and resource-scope contract"
     priority: high
-    status: todo
+    status: in_progress
     source_evidence:
       - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanViewModel.kt", lines: "162-231", why: "Per-tool Job and mutable collection have no common deadline or close hook." }
       - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/portscan/PortScanRepositoryImpl.kt", lines: "104-151", why: "Worker channels are bounded, but blocking checker calls are not governed by an operation budget." }
