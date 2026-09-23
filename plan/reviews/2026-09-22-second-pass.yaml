@@ -99,7 +99,7 @@ findings:
   - id: R2-007
     severity: high
     kind: plan_gap
-    status: todo
+    status: done
     title: "New history persistence needs an explicit consent, backup and version-compatibility contract"
     related_phase: P12
     implementation_task: E01-T11
@@ -109,7 +109,13 @@ findings:
       - { file: app/src/main/res/xml/data_extraction_rules.xml, line: 3, detail: "Cloud/device-transfer rules must explicitly cover newly introduced sensitive durable paths." }
     impact: "A literal implementation can begin retaining network identifiers automatically or back up new report files while claiming a local-only history policy. Unsupported future reports can be misread as valid current results."
     recommended_action: "Default new history to off for new/upgraded installs until an explicit mode selection. Define off/metadata-only/explicit-report modes, schema compatibility and exact private storage paths; gate durable rollout on E03-T11 backup/migration verification. Existing recents remain a separate feature."
-    validation: "Test install/upgrade/mode changes, retention and clear-all; backup/restore excludes report/history payloads; prior versions migrate, unknown future versions remain unsupported and deletable without being executed or shown as live. Explain that externally saved/shared copies cannot be revoked."
+    validation: "The E01-T11 contract defines an allowlist/disclosure matrix for every initial history tool and gates later tools on the same review; a versioned noBackupFilesDir consent record separate from P12 stores; numeric retention/storage caps and deterministic whole-entry eviction; size-checked unknown-version handling; field-preview/cancel behavior; E01-T12's typed result-payload redaction gate; and an E03-T11 backup/restore acceptance gate. It specifies credential-bearing input/result fixtures and consent recovery tests. Strict SnakeYAML 2.5 validation passed for all 29 plan files and `git diff --check` passed. Separate QA and adversarial reviews cleared the final contract. This closes the plan gap only: E01-T11/E03-T11 remain open for implementation, and saved_report remains gated on E01-T12."
+    completion_evidence:
+      - { file: plan/expansion/E01-ui-and-user-flows.yaml, line: 500, detail: "E01-T11 now defines consent modes, default-off upgrade behavior, durable fail-closed purge semantics, exact disclosure, and per-tool input allowlists." }
+      - { file: plan/expansion/E01-ui-and-user-flows.yaml, line: 528, detail: "Saved payloads are limited to the typed/versioned E01-T12 redaction contract; raw results, bodies, headers, peer strings, banners, exceptions, and toString output are forbidden." }
+      - { file: plan/expansion/E01-ui-and-user-flows.yaml, line: 530, detail: "History and consent use noBackupFilesDir with bounded/versioned entries, 100-entry/5-MiB/20-MiB caps, and an E03-T11 rollout gate." }
+      - { file: plan/expansion/E03-performance-reliability-and-quality.yaml, line: 671, detail: "E03-T11 now owns confirming history and consent remain outside P12 DataStores and excluded from backup/restore." }
+    limitations: "This closes the design gap only. E01-T11 and E03-T11 remain todo until implementation, migration/backup, privacy, and UI tests pass; saved_report stays disabled until E01-T12's typed redaction work ships."
 
   - id: R2-008
     severity: medium

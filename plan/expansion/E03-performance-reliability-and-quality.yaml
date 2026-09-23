@@ -668,7 +668,7 @@ tasks:
     implementation_steps:
       - "Add RED migration tests for first install, old single-store upgrade, already-migrated rerun, unknown keys, corrupt bytes, interrupted DataMigration, read-only destination, downgrade, and duplicate recents."
       - "Implement coordinated DataMigration/serialization for the P12 split with per-store durable writes and a completion marker; retain the old source until every new store is verified durable, then mark complete. Do not hand-edit/rename an active DataStore file or assume multiple files commit atomically on Android."
-      - "Update legacy and API 31+ backup rules after the split; add an allowlist test that enumerates settings keys and an explicit denylist test for recents/logs/cache/session files."
+      - "Update legacy and API 31+ backup rules after the split; add an allowlist test that enumerates settings keys and an explicit denylist test for recents/logs/cache/session files. Run-history entries, saved reports, and the versioned consent record belong under noBackupFilesDir and must stay outside app_settings/app_recents; verify this with backup/restore smoke tests. If a future path moves into a backed-up domain, add explicit legacy and API 31+ exclusions before enabling writes."
       - "Add emulator backup/restore smoke using `bmgr` with a disposable debug package; verify theme/pins survive and recents/network artifacts do not. Do not use deprecated `adb backup`."
       - "Version settings export/import separately from backup; reject malformed JSON and out-of-range values with typed errors, preserve unknown future keys, and record migration/export version in provenance only."
     files_or_seams:
@@ -679,7 +679,7 @@ tasks:
       - "app/src/androidTest/.../data/BackupRestoreSmokeTest.kt"
     acceptance_criteria:
       - "Migration is idempotent and crash-safe per store: every injected failure leaves valid old data and/or valid independently committed new stores with no completion marker; incomplete new stores are ignored and a rerun converges without duplicate recents. The implementation does not claim impossible all-files atomicity."
-      - "Backup allowlist retains only documented non-sensitive settings; tests prove recent hosts/subnets, logs, cached responses, session exports, and credentials are absent from cloud/device-transfer rules."
+      - "Backup allowlist retains only documented non-sensitive settings; tests prove recent hosts/subnets, logs, cached responses, session exports, run-history records, saved reports, history consent, and credentials are absent from cloud/device-transfer results. Run history/consent remain in noBackupFilesDir and cannot restore an opt-in."
       - "An emulator `bmgr` upgrade/restore preserves theme/pins/defaults and drops recents/network artifacts; the command/output is recorded in the implementation report."
       - "Export/import round-trip preserves supported settings, rejects malformed/range-invalid data, ignores unknown fields, and reports schema version without embedding secrets or raw network history."
     validation:

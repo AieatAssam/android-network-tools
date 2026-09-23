@@ -492,6 +492,47 @@ tasks:
       - "Default new run history to off on install/upgrade. Offer explicit off, metadata-only and saved-report modes; show retained identifiers and retention limits before consent. Existing recent inputs are separate. Never persist credentials in any mode."
       - "Home/More expose recent runs separately from recent inputs; a history detail screen can reopen the result, rerun the input, compare two compatible runs, export, or delete."
       - "A rerun always revalidates current settings/network and never treats an old result as current; saved results display their age and stale limitations."
+    completed_slices:
+      - finding: R2-007
+        status: done
+        scope: "Specify safe consent, input/result redaction, no-backup storage, bounded retention, unknown-version behavior, interrupted purge recovery and implementation/verification ownership."
+        validation: "Separate QA and adversarial reviews cleared the plan contract; strict SnakeYAML 2.5 validation passed for all 29 plan files. E01-T11 remains todo for the actual history implementation."
+    privacy_and_storage_contract:
+      consent:
+        default: off
+        upgrade: "An install or upgrade with no prior explicit history choice remains off. Preserve an existing explicit choice only when its consent record is present and valid."
+        record: "Store context.noBackupFilesDir/run-history/consent-v1.json, never app_settings or app_recents. Require schemaVersion, mode, explicitChoice=true, disclosureRevision, updatedAt and purgePending; an unsupported/malformed schema, invalid record, or obsolete disclosureRevision immediately fails closed to Off, writes a valid Off record with purgePending=true when possible, then starts an idempotent purge of entry/report files (not the consent file). Do not display history or allow re-opt-in until purge completes; retry it before use after interruption, then clear purgePending. If an invalid-record repair write or purge fails, remain Off and locked. Do not claim a multi-file atomic transaction."
+        modes:
+          - { mode: off, behavior: "Store no run history; confirming a switch to Off pauses writes/hides history in-process, then persists Off with purgePending=true before idempotently purging entry/report files; clear the marker after purge. On restart, retry a pending purge before any history display or opt-in. Acknowledge Off only after the consent write succeeds; if it fails, show the transition as failed (not Off), require retry, and explain the prior durable mode remains in effect after restart. Cancelling confirmation leaves the current mode unchanged." }
+          - { mode: metadata_only, behavior: "Store only the bounded metadata fields listed above; never store raw result payloads." }
+          - { mode: saved_report, behavior: "Store metadata as in metadata_only; a per-run Save action opens a preview of every field and identifier, then writes the redacted result only after confirmation. Cancel writes nothing; unsaved run payloads remain memory-only." }
+        disclosure: "Before opt-in, list every stored metadata category: tool/display label, per-tool allowlisted normalized input fields, status/timestamps/duration, and coarse transport plus validated/metered booleans. Also disclose that payload is stored only after per-run Save, the default 30-day retention with 7/30/90-day choices, a 100-entry cap, 5 MiB maximum for a complete entry including metadata/envelope/optional payload, 20 MiB aggregate across all entries, oldest-entry eviction, and that exported/shared copies cannot be revoked."
+      input_redaction:
+        owner: E01-T11
+        rule: "Build persisted inputs from per-tool allowlisted, validated fields; never persist a raw input string. Apply the same filter to metadata and saved-report envelopes. Omit an input when no safe canonical representation exists."
+        display_label: "Derive display labels only from the same allowlisted/redacted fields; never copy a free-form input string or unreviewed server-provided label."
+        initial_tool_allowlist:
+          - { tool: ping, fields: "Validated normalized destination hostname/IP; omit all other input text." }
+          - { tool: dns, fields: "Normalized query name and record type; omit credentials and arbitrary resolver labels." }
+          - { tool: ports, fields: "Validated normalized destination plus selected named profile or bounded explicit port set; omit unrelated text." }
+          - { tool: lan, fields: "Validated CIDR only; omit interface names, SSID/BSSID and raw form text." }
+          - { tool: http, fields: "Scheme + normalized host + non-default port only; remove userinfo, path, query, and fragment." }
+          - { tool: tls, fields: "Validated normalized hostname/IP and port only; omit credentials and arbitrary form text." }
+        later_tool_examples:
+          - "Traceroute and WHOIS: validated normalized hostname/IP or query name only; omit any credential-like field."
+          - "Topology/SNMP: target hostname/IP only; never store community strings, usernames, auth/privacy keys, or passphrases."
+          - "Wake-on-LAN: destination MAC and selected broadcast target only; never store SecureOn bytes."
+        expansion_rule: "No later tool may write history until its complete allowlist, disclosure fields, sensitivity fixtures, and disclosureRevision update are reviewed and shipped together."
+        validation: "For every supported tool, fixture inputs containing URL credentials/query tokens, SNMP community/auth secrets, SecureOn bytes, and other credential-like values; assert none appear in persisted metadata or saved-report envelopes."
+      network_context: "Automatic metadata may record only coarse transport type and validated/metered booleans. Never persist SSID, BSSID, interface names, local addresses, or other network identifiers in metadata. A saved-report preview lists each diagnostic target/network identifier that would be retained; secrets remain redacted in every mode and cannot be opted back in."
+      saved_report_payload: "Persist only E01-T12's typed, versioned report document after its field-level redaction contract is implemented and tested. Never serialize a result/ViewModel wholesale or use raw response bodies, headers, peer strings, banners, exception text, or toString output. E01-T12 owns per-tool result allowlists and golden redaction fixtures; E01-T11 adds history-specific tests proving malicious credential/token fixtures are absent after serialization and that the preview matches the exact persisted document. Keep saved_report disabled until this dependency is satisfied; metadata_only remains subject to the input/network rules above."
+      storage:
+        directory: "context.noBackupFilesDir/run-history/v1/"
+        source: "https://developer.android.com/identity/data/autobackup"
+        rules: "Keep entries, saved reports, and consent-v1.json in app-private no-backup storage, separate from both P12 DataStores. Android's noBackupFilesDir exclusion is the primary backup invariant; if any future path moves into a backed-up domain, add an explicit deny rule to legacy and API 31+ backup configuration before enabling writes."
+        schema: "Every entry carries a schemaVersion. Migrate supported older versions with tested, idempotent migrations. Check on-disk file size against the 5 MiB complete-entry limit before parsing. Unknown newer versions remain preserved but are marked unsupported using only a bounded, size-checked envelope; expose no untrusted metadata and allow only deletion. Count unsupported entries toward count/byte caps. Never render, compare, rerun, execute, or export their payloads."
+        limits: "Expire entries after the selected 7/30/90-day period (30 days by default). Enforce 100 total entries including unsupported versions, 5 MiB per complete entry including envelope/metadata/optional payload, and 20 MiB aggregate across every entry. On overflow, remove oldest whole entries until within caps; reject an oversized entry before writing and never expose a partial entry. Show these exact limits and eviction behavior before opt-in and in Settings. Never write credentials or tokens in any mode."
+      rollout_gate: "Do not persist history until E03-T11 verifies migration, crash recovery, that entries/reports/consent remain in noBackupFilesDir and outside app_settings/app_recents, and legacy/API 31+ backup/restore behavior with an emulator smoke test."
     depends_on: [E01-T02, E01-T07, E03-T03, P12-T4, E03-T11]
     files_and_seams:
       create: ["app/src/main/kotlin/net/aieat/netswissknife/app/data/RunHistoryEntry.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/data/RunHistoryRepository.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/history/RunHistoryScreen.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/history/RunHistoryViewModel.kt", "app/src/test/kotlin/net/aieat/netswissknife/app/data/RunHistoryRepositoryTest.kt", "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/screens/history/RunHistoryScreenTest.kt"]
@@ -505,8 +546,10 @@ tasks:
       - "Process death/restart can reopen metadata and explicitly saved reports without presenting them as live."
       - "Clear-one, clear-tool, clear-all, retention change, and deletion of a corrupted entry are safe and confirmed."
       - "History never stores passwords or tokens. Raw diagnostic payloads require a separate explicit report-save choice, with secret redaction regardless of that choice."
+      - "The per-run save preview lists every retained field and identifier; cancellation writes neither an entry nor payload, and tests cover both preview visibility and cancel behavior."
+      - "Missing/stale/unsupported consent stays Off; an interrupted purge retries before history can reappear, and a failed Off-record write is reported as an unsuccessful transition without claiming the durable mode changed."
     validation:
-      automated: ["Repository migration/size/privacy tests", "ViewModel tests for rerun vs reopen", "instrumented history navigation and delete/empty tests"]
+      automated: ["Repository consent migration/size/privacy tests for every initial tool input allowlist, invalid consent, failed Off-record writes and interrupted-purge restart", "Typed-report redaction fixtures reject response-body/header, DNS TXT, banner, exception-message and credential-token secrets", "ViewModel tests for rerun vs reopen", "save-preview field disclosure and cancel-with-no-write tests", "instrumented history navigation and delete/empty tests"]
       manual: ["Create runs offline/online, kill and relaunch, change network, reopen an old result, and verify age/limitations are visible."]
     risks_constraints:
       - "Coordinate storage ownership with P12 DataStore split/backup policy; run payloads may require private files rather than Preferences."
