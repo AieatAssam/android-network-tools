@@ -12,6 +12,11 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
+import net.aieat.netswissknife.app.platform.NetworkErrorKind
+import net.aieat.netswissknife.app.platform.NetworkStatus
+import net.aieat.netswissknife.app.platform.NetworkStatusProvider
+import net.aieat.netswissknife.app.platform.NoOpNetworkStatusProvider
+import net.aieat.netswissknife.app.platform.toNetworkErrorKind
 import net.aieat.netswissknife.core.domain.TopologyDiscoveryUseCase
 import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.topology.*
@@ -30,14 +35,20 @@ sealed class TopologyUiState {
         val graph: TopologyGraph,
         val selectedNodeIp: String?
     ) : TopologyUiState()
-    data class Failure(val message: String) : TopologyUiState()
+    data class Failure(
+        val message: String,
+        val networkErrorKind: NetworkErrorKind = NetworkErrorKind.GENERAL,
+    ) : TopologyUiState()
 }
 
 @HiltViewModel
 class TopologyDiscoveryViewModel @Inject constructor(
     private val useCase: TopologyDiscoveryUseCase,
-    private val recentHostsRepository: RecentHostsRepository
+    private val recentHostsRepository: RecentHostsRepository,
+    networkStatusProvider: NetworkStatusProvider = NoOpNetworkStatusProvider,
 ) : ViewModel() {
+
+    val networkStatus: StateFlow<NetworkStatus> = networkStatusProvider.status
 
     private val _uiState = MutableStateFlow<TopologyUiState>(TopologyUiState.Idle)
     val uiState: StateFlow<TopologyUiState> = _uiState.asStateFlow()
@@ -104,7 +115,10 @@ class TopologyDiscoveryViewModel @Inject constructor(
                         _uiState.value = TopologyUiState.Done(graph = event.graph, selectedNodeIp = null)
                     }
                     is TopologyDiscoveryEvent.Error -> {
-                        _uiState.value = TopologyUiState.Failure(event.message)
+                        _uiState.value = TopologyUiState.Failure(
+                            event.message,
+                            event.cause.toNetworkErrorKind(),
+                        )
                     }
                 }
             }
@@ -145,5 +159,10 @@ class TopologyDiscoveryViewModel @Inject constructor(
         discoveryJob?.cancel()
         discoveryJob = null
         _uiState.value = TopologyUiState.Idle
+    }
+
+    /** Runs the current form parameters only after an explicit retry action. */
+    fun retryDiscovery(params: TopologyParams) {
+        startDiscovery(params)
     }
 }

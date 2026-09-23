@@ -70,6 +70,9 @@ import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
+import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
+import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
+import net.aieat.netswissknife.app.platform.NetworkErrorKind
 import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.ui.theme.AppShapes
@@ -85,6 +88,7 @@ fun WakeOnLanScreen(viewModel: WakeOnLanViewModel = hiltViewModel()) {
     LaunchedEffect(Unit) { requestLocalNetworkPermission() }
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val networkStatus by viewModel.networkStatus.collectAsStateWithLifecycle()
     val macAddress by viewModel.macAddress.collectAsStateWithLifecycle()
     val broadcastAddress by viewModel.broadcastAddress.collectAsStateWithLifecycle()
     val port by viewModel.port.collectAsStateWithLifecycle()
@@ -110,6 +114,13 @@ fun WakeOnLanScreen(viewModel: WakeOnLanViewModel = hiltViewModel()) {
                 subtitle = stringResource(R.string.wol_screen_subtitle),
                 icon = Icons.Default.PowerSettingsNew,
                 onHelpClick = { showHelp = true },
+            )
+
+            NetworkStatusBanner(
+                status = networkStatus,
+                scope = NetworkStatusScope.LOCAL_NETWORK,
+                permissionDenied = (uiState as? WolUiState.Error)?.networkErrorKind == NetworkErrorKind.LOCAL_NETWORK_PERMISSION_DENIED,
+                onGrantPermission = requestLocalNetworkPermission,
             )
 
             WolInputCard(

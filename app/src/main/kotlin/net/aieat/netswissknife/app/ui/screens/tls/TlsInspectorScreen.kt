@@ -75,6 +75,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
+import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
+import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
 import net.aieat.netswissknife.app.ui.components.ToolErrorCard
 import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.ui.theme.AppMotion
@@ -98,6 +100,7 @@ import java.util.concurrent.TimeUnit
 @Composable
 fun TlsInspectorScreen(viewModel: TlsInspectorViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val networkStatus by viewModel.networkStatus.collectAsStateWithLifecycle()
     val recentHosts by viewModel.recentHosts.collectAsStateWithLifecycle()
 
     var visible by remember { mutableStateOf(false) }
@@ -124,7 +127,12 @@ fun TlsInspectorScreen(viewModel: TlsInspectorViewModel = hiltViewModel()) {
             )
         ) {
             // Header
-            item { TlsHeaderCard(onHelpClick = { showHelp = true }) }
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    TlsHeaderCard(onHelpClick = { showHelp = true })
+                    NetworkStatusBanner(networkStatus, scope = NetworkStatusScope.INTERNET)
+                }
+            }
 
             // Input section
             item {

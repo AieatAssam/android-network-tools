@@ -90,6 +90,8 @@ import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
+import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
+import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.util.formatBytes
 import net.aieat.netswissknife.app.util.shareText
@@ -107,6 +109,7 @@ private const val GAUGE_MAX_MBPS = 1_000.0
 @Composable
 fun SpeedTestScreen(viewModel: SpeedTestViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val networkStatus by viewModel.networkStatus.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     var visible by remember { mutableStateOf(false) }
@@ -131,7 +134,12 @@ fun SpeedTestScreen(viewModel: SpeedTestViewModel = hiltViewModel()) {
             verticalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp)
         ) {
-            item { SpeedTestHeaderCard(onHelpClick = { showHelp = true }) }
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    SpeedTestHeaderCard(onHelpClick = { showHelp = true })
+                    NetworkStatusBanner(networkStatus, scope = NetworkStatusScope.INTERNET)
+                }
+            }
 
             item {
                 val shareSubject = stringResource(R.string.share_subject_speedtest, "results")

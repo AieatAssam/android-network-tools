@@ -12,6 +12,9 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
+import net.aieat.netswissknife.app.platform.NetworkStatus
+import net.aieat.netswissknife.app.platform.NetworkStatusProvider
+import net.aieat.netswissknife.app.platform.NoOpNetworkStatusProvider
 import net.aieat.netswissknife.core.domain.TlsInspectorParams
 import net.aieat.netswissknife.core.domain.TlsInspectorUseCase
 import net.aieat.netswissknife.core.network.NetworkResult
@@ -30,11 +33,13 @@ data class TlsInspectorUiState(
 @HiltViewModel
 class TlsInspectorViewModel @Inject constructor(
     private val useCase: TlsInspectorUseCase,
-    private val recentHostsRepository: RecentHostsRepository
+    private val recentHostsRepository: RecentHostsRepository,
+    private val networkStatusProvider: NetworkStatusProvider = NoOpNetworkStatusProvider,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(TlsInspectorUiState())
     val uiState: StateFlow<TlsInspectorUiState> = _uiState.asStateFlow()
+    val networkStatus: StateFlow<NetworkStatus> = networkStatusProvider.status
 
     val recentHosts: StateFlow<List<String>> = recentHostsRepository
         .getRecents(AppPreferenceKeys.RECENT_TLS_HOSTS)

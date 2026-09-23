@@ -24,6 +24,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
+import net.aieat.netswissknife.app.platform.NetworkErrorKind
+import net.aieat.netswissknife.core.network.net.LocalNetworkPermissionDeniedException
 import net.aieat.netswissknife.core.domain.LanScanFlowResult
 import net.aieat.netswissknife.core.domain.LanScanUseCase
 import net.aieat.netswissknife.core.network.lan.LanHost
@@ -128,6 +130,25 @@ class LanScanViewModelTest {
             }
             assertTrue(state is LanScanUiState.Error)
             assertEquals("invalid subnet", (state as LanScanUiState.Error).message)
+        }
+
+        @Test
+        fun `marks thrown local permission denial distinctly from generic scan errors`() = runTest {
+            every { lanScanUseCase(any()) } returns flow {
+                throw LocalNetworkPermissionDeniedException(SecurityException("denied"))
+            }
+            viewModel.startScan()
+            val denied = withContext(Dispatchers.Default) {
+                withTimeout(2_000) { viewModel.uiState.first { it is LanScanUiState.Error } }
+            } as LanScanUiState.Error
+            assertEquals(NetworkErrorKind.LOCAL_NETWORK_PERMISSION_DENIED, denied.networkErrorKind)
+
+            every { lanScanUseCase(any()) } returns flow { throw IllegalStateException("timeout") }
+            viewModel.startScan()
+            val generic = withContext(Dispatchers.Default) {
+                withTimeout(2_000) { viewModel.uiState.first { it is LanScanUiState.Error } }
+            } as LanScanUiState.Error
+            assertEquals(NetworkErrorKind.GENERAL, generic.networkErrorKind)
         }
 
         @Test

@@ -7,6 +7,11 @@ import androidx.lifecycle.viewModelScope
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
 import net.aieat.netswissknife.app.platform.LinkInfoProvider
+import net.aieat.netswissknife.app.platform.NetworkErrorKind
+import net.aieat.netswissknife.app.platform.NetworkStatus
+import net.aieat.netswissknife.app.platform.NetworkStatusProvider
+import net.aieat.netswissknife.app.platform.NoOpNetworkStatusProvider
+import net.aieat.netswissknife.app.platform.toNetworkErrorKind
 import net.aieat.netswissknife.app.util.AppLogger
 import net.aieat.netswissknife.core.domain.LanScanFlowResult
 import net.aieat.netswissknife.core.domain.LanScanParams
@@ -52,7 +57,10 @@ sealed interface LanScanUiState {
         val showDiagnostics: Boolean = false,
     ) : LanScanUiState
 
-    data class Error(val message: String) : LanScanUiState
+    data class Error(
+        val message: String,
+        val networkErrorKind: NetworkErrorKind = NetworkErrorKind.GENERAL,
+    ) : LanScanUiState
 }
 
 sealed interface LanNavEvent {
@@ -65,7 +73,10 @@ class LanScanViewModel @Inject constructor(
     private val dataStore: DataStore<Preferences>,
     private val recentHostsRepository: RecentHostsRepository,
     private val linkInfoProvider: LinkInfoProvider? = null,
+    networkStatusProvider: NetworkStatusProvider = NoOpNetworkStatusProvider,
 ) : ViewModel() {
+
+    val networkStatus: StateFlow<NetworkStatus> = networkStatusProvider.status
 
     private val _uiState = MutableStateFlow<LanScanUiState>(LanScanUiState.Idle)
     val uiState: StateFlow<LanScanUiState> = _uiState.asStateFlow()
@@ -236,7 +247,10 @@ class LanScanViewModel @Inject constructor(
                 throw e
             } catch (e: Exception) {
                 AppLogger.e(TAG, "startScan: unexpected exception during scan", e)
-                _uiState.value = LanScanUiState.Error("Scan failed: ${e.message ?: "Unknown error"}")
+                _uiState.value = LanScanUiState.Error(
+                    "Scan failed: ${e.message ?: "Unknown error"}",
+                    e.toNetworkErrorKind(),
+                )
             }
         }
     }

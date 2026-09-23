@@ -96,6 +96,9 @@ import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.theme.AppShapes
 import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
+import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
+import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
+import net.aieat.netswissknife.app.platform.NetworkErrorKind
 import net.aieat.netswissknife.core.network.mdns.DiscoveredService
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -105,6 +108,7 @@ fun MdnsDiscoveryScreen(viewModel: MdnsDiscoveryViewModel = hiltViewModel()) {
     LaunchedEffect(Unit) { requestLocalNetworkPermission() }
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val networkStatus by viewModel.networkStatus.collectAsStateWithLifecycle()
 
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
@@ -126,6 +130,13 @@ fun MdnsDiscoveryScreen(viewModel: MdnsDiscoveryViewModel = hiltViewModel()) {
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             HeroCard(uiState, onHelpClick = { showHelp = true })
+
+            NetworkStatusBanner(
+                status = networkStatus,
+                scope = NetworkStatusScope.LOCAL_NETWORK,
+                permissionDenied = uiState.networkErrorKind == NetworkErrorKind.LOCAL_NETWORK_PERMISSION_DENIED,
+                onGrantPermission = requestLocalNetworkPermission,
+            )
 
             ControlRow(
                 isScanning = uiState.isScanning,

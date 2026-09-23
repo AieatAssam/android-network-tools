@@ -10,6 +10,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import net.aieat.netswissknife.core.domain.SpeedTestUseCase
+import net.aieat.netswissknife.app.platform.NetworkStatus
+import net.aieat.netswissknife.app.platform.NetworkStatusProvider
+import net.aieat.netswissknife.app.platform.NoOpNetworkStatusProvider
 import net.aieat.netswissknife.core.network.speedtest.LatencySample
 import net.aieat.netswissknife.core.network.speedtest.LatencyStats
 import net.aieat.netswissknife.core.network.speedtest.SpeedTestEvent
@@ -35,11 +38,13 @@ sealed interface SpeedTestUiState {
 
 @HiltViewModel
 class SpeedTestViewModel @Inject constructor(
-    private val speedTestUseCase: SpeedTestUseCase
+    private val speedTestUseCase: SpeedTestUseCase,
+    private val networkStatusProvider: NetworkStatusProvider = NoOpNetworkStatusProvider,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<SpeedTestUiState>(SpeedTestUiState.Idle)
     val uiState: StateFlow<SpeedTestUiState> = _uiState.asStateFlow()
+    val networkStatus: StateFlow<NetworkStatus> = networkStatusProvider.status
 
     private var testJob: Job? = null
 

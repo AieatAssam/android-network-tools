@@ -1190,4 +1190,11 @@
     <string name="security_rating_fail">Fail</string>
     <string name="security_rating_info">Info</string>
 
+    <!-- Network state and local-network permission -->
+    <string name="network_banner_no_internet">No internet connection. This tool may not reach public hosts.</string>
+    <string name="network_banner_no_local">No Wi-Fi or Ethernet network. LAN tools need a local network.</string>
+    <string name="network_banner_vpn_info">VPN active. LAN traffic is sent directly over Wi-Fi or Ethernet.</string>
+    <string name="network_error_local_permission">Local network permission was denied. Grant access, then retry.</string>
+    <string name="network_action_grant_permission">Grant</string>
+
 </resources>

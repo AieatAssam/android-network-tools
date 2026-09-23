@@ -19,11 +19,11 @@ import javax.inject.Singleton
 @Singleton
 class ConnectivityObserver(
     private val connectivityManager: ConnectivityManager,
-) {
+) : NetworkStatusProvider {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     @SuppressLint("MissingPermission")
-    val status: StateFlow<NetworkStatus> = callbackFlow {
+    override val status: StateFlow<NetworkStatus> = callbackFlow {
         val publish = { trySend(readStatus()) }
         val defaultCallback = object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) { publish() }
@@ -62,7 +62,7 @@ class ConnectivityObserver(
             if (defaultRegistered) runCatching { connectivityManager.unregisterNetworkCallback(defaultCallback) }
             if (vpnRegistered) runCatching { connectivityManager.unregisterNetworkCallback(vpnCallback) }
         }
-    }.stateIn(scope, SharingStarted.Eagerly, NetworkStatus())
+    }.stateIn(scope, SharingStarted.Eagerly, readStatus())
 
     @SuppressLint("MissingPermission")
     @Suppress("DEPRECATION")

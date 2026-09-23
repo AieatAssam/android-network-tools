@@ -21,6 +21,9 @@ import kotlinx.coroutines.launch
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
 import net.aieat.netswissknife.app.platform.LinkInfoProvider
+import net.aieat.netswissknife.app.platform.NetworkStatus
+import net.aieat.netswissknife.app.platform.NetworkStatusProvider
+import net.aieat.netswissknife.app.platform.NoOpNetworkStatusProvider
 import net.aieat.netswissknife.core.domain.ContinuousPingParams
 import net.aieat.netswissknife.core.domain.ContinuousPingUseCase
 import net.aieat.netswissknife.core.domain.PingFlowResult
@@ -118,6 +121,7 @@ class PingViewModel @Inject constructor(
     private val dataStore: DataStore<Preferences>,
     private val recentHostsRepository: RecentHostsRepository,
     private val linkInfoProvider: LinkInfoProvider = LinkInfoProvider { true },
+    private val networkStatusProvider: NetworkStatusProvider = NoOpNetworkStatusProvider,
 ) : ViewModel() {
 
     companion object {
@@ -127,6 +131,7 @@ class PingViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow<PingUiState>(PingUiState.Idle)
     val uiState: StateFlow<PingUiState> = _uiState.asStateFlow()
+    val networkStatus: StateFlow<NetworkStatus> = networkStatusProvider.status
 
     // ── Form field state ─────────────────────────────────────────────────────
 

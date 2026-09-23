@@ -13,6 +13,11 @@ import kotlinx.coroutines.launch
 import net.aieat.netswissknife.core.domain.MdnsDiscoveryUseCase
 import net.aieat.netswissknife.core.network.mdns.DiscoveredService
 import net.aieat.netswissknife.core.network.mdns.MdnsUpdate
+import net.aieat.netswissknife.app.platform.NetworkErrorKind
+import net.aieat.netswissknife.app.platform.NetworkStatus
+import net.aieat.netswissknife.app.platform.NetworkStatusProvider
+import net.aieat.netswissknife.app.platform.NoOpNetworkStatusProvider
+import net.aieat.netswissknife.app.platform.toNetworkErrorKind
 import javax.inject.Inject
 
 data class MdnsDiscoveryUiState(
@@ -22,13 +27,17 @@ data class MdnsDiscoveryUiState(
     val error: String? = null,
     val elapsedMs: Long = 0,
     val totalFound: Int = 0,
-    val scanComplete: Boolean = false
+    val scanComplete: Boolean = false,
+    val networkErrorKind: NetworkErrorKind = NetworkErrorKind.GENERAL,
 )
 
 @HiltViewModel
 class MdnsDiscoveryViewModel @Inject constructor(
-    private val useCase: MdnsDiscoveryUseCase
+    private val useCase: MdnsDiscoveryUseCase,
+    networkStatusProvider: NetworkStatusProvider = NoOpNetworkStatusProvider,
 ) : ViewModel() {
+
+    val networkStatus: StateFlow<NetworkStatus> = networkStatusProvider.status
 
     private val _uiState = MutableStateFlow(MdnsDiscoveryUiState())
     val uiState: StateFlow<MdnsDiscoveryUiState> = _uiState
@@ -79,7 +88,11 @@ class MdnsDiscoveryViewModel @Inject constructor(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _uiState.update { it.copy(isScanning = false, error = e.message ?: "Discovery failed") }
+                _uiState.update { it.copy(
+                    isScanning = false,
+                    error = e.message ?: "Discovery failed",
+                    networkErrorKind = e.toNetworkErrorKind(),
+                ) }
                 stopTimer()
             }
         }

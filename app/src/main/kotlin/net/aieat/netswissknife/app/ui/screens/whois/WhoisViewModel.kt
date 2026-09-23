@@ -13,6 +13,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
+import net.aieat.netswissknife.app.platform.NetworkStatus
+import net.aieat.netswissknife.app.platform.NetworkStatusProvider
+import net.aieat.netswissknife.app.platform.NoOpNetworkStatusProvider
 import net.aieat.netswissknife.core.domain.WhoisLookupUseCase
 import net.aieat.netswissknife.core.domain.WhoisParams
 import net.aieat.netswissknife.core.network.NetworkResult
@@ -43,11 +46,13 @@ data class WhoisUiState(
 @HiltViewModel
 class WhoisViewModel @Inject constructor(
     private val whoisLookupUseCase: WhoisLookupUseCase,
-    private val recentHostsRepository: RecentHostsRepository
+    private val recentHostsRepository: RecentHostsRepository,
+    private val networkStatusProvider: NetworkStatusProvider = NoOpNetworkStatusProvider,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(WhoisUiState())
     val uiState: StateFlow<WhoisUiState> = _uiState.asStateFlow()
+    val networkStatus: StateFlow<NetworkStatus> = networkStatusProvider.status
 
     val recentHosts: StateFlow<List<String>> = recentHostsRepository
         .getRecents(AppPreferenceKeys.RECENT_WHOIS_HOSTS)

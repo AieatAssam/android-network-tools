@@ -12,19 +12,30 @@ import net.aieat.netswissknife.core.domain.WakeOnLanUseCase
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.wol.WolMagicPacket
 import net.aieat.netswissknife.core.network.wol.WolSendReport
+import net.aieat.netswissknife.app.platform.NetworkErrorKind
+import net.aieat.netswissknife.app.platform.NetworkStatus
+import net.aieat.netswissknife.app.platform.NetworkStatusProvider
+import net.aieat.netswissknife.app.platform.NoOpNetworkStatusProvider
+import net.aieat.netswissknife.app.platform.toNetworkErrorKind
 import javax.inject.Inject
 
 sealed interface WolUiState {
     data object Idle : WolUiState
     data object Sending : WolUiState
     data class Success(val report: WolSendReport) : WolUiState
-    data class Error(val message: String) : WolUiState
+    data class Error(
+        val message: String,
+        val networkErrorKind: NetworkErrorKind = NetworkErrorKind.GENERAL,
+    ) : WolUiState
 }
 
 @HiltViewModel
 class WakeOnLanViewModel @Inject constructor(
     private val wakeOnLan: WakeOnLanUseCase,
+    networkStatusProvider: NetworkStatusProvider = NoOpNetworkStatusProvider,
 ) : ViewModel() {
+
+    val networkStatus: StateFlow<NetworkStatus> = networkStatusProvider.status
 
     private val _uiState = MutableStateFlow<WolUiState>(WolUiState.Idle)
     val uiState: StateFlow<WolUiState> = _uiState.asStateFlow()
@@ -73,7 +84,7 @@ class WakeOnLanViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = when (val result = wakeOnLan(params)) {
                 is NetworkResult.Success -> WolUiState.Success(result.data)
-                is NetworkResult.Error -> WolUiState.Error(result.message)
+                is NetworkResult.Error -> WolUiState.Error(result.message, result.cause.toNetworkErrorKind())
             }
         }
     }

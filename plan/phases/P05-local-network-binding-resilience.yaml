@@ -250,37 +250,56 @@ tasks:
       - "Injected ENODEV cleanup and dismissible-error coverage pass; API 33 ENODEV reproduction and physical Wi-Fi interface/discovery remain release-device checks recorded in plan/reviews/2026-09-23-release-qa-brief.yaml."
 
   - id: P05-T5
-    title: "UI: NetworkStatusBanner + LNP error mapping on LAN tools"
-    status: todo
+    title: "UI: connectivity banners and typed local-network permission handling"
+    status: in_progress
     depends_on: [P05-T3]
+    files_to_modify:
+      - app/src/main/kotlin/net/aieat/netswissknife/app/platform/NetworkStatusProvider.kt
+      - app/src/main/kotlin/net/aieat/netswissknife/app/platform/ConnectivityObserver.kt
+      - app/src/main/kotlin/net/aieat/netswissknife/app/di/NetworkModule.kt
+      - app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/NetworkStatusBanner.kt
+      - app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/{lan/LanScanScreen,mdns/MdnsDiscoveryScreen,wol/WakeOnLanScreen,topology/TopologyDiscoveryScreen,PingScreen,DnsScreen,httprobe/HttpProbeScreen,tls/TlsInspectorScreen,whois/WhoisScreen,speedtest/SpeedTestScreen}.kt
+      - app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/*/*ViewModel.kt
+      - app/src/main/res/values/strings.xml
+      - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/net/LocalNetworkPermissionDeniedException.kt
+      - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/topology/{TopologyDiscoveryEvents,TopologyDiscoveryRepositoryImpl}.kt
+      - app/src/test/kotlin/net/aieat/netswissknife/app/platform/NetworkStatusProviderTest.kt
+      - app/src/test/kotlin/net/aieat/netswissknife/app/ui/screens/{lan/LanScanViewModelTest,mdns/MdnsDiscoveryViewModelTest,wol/WakeOnLanViewModelTest,topology/TopologyDiscoveryViewModelTest,speedtest/SpeedTestViewModelTest}.kt
+      - app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/components/NetworkStatusBannerTest.kt
     tdd:
       red:
         tests:
-          - "LanScanViewModelTest: use case throws LocalNetworkPermissionDeniedException -> Error state with kind PermissionDenied (typed enum on the state, string resolved in UI)"
-          - "WakeOnLanViewModelTest / MdnsDiscoveryViewModelTest / TopologyDiscoveryViewModelTest: same mapping"
-          - "Instrumented (LanScanScreenTest): banner text visible when status.hasLocalNetwork=false (fake ConnectivityObserver via Hilt test module or constructor param on the screen)"
-        run: "./gradlew :app:testDebugUnitTest --no-daemon"
-        expect: "RED"
+          - "LAN/mDNS/WOL/Topology ViewModel tests classify direct or wrapped LocalNetworkPermissionDeniedException separately from generic errors; topology events retain causes through failed GETs and walks."
+          - "NetworkStatusBannerTest verifies relevant-scope visibility, no-local-before-VPN priority, healthy hidden state, localized permission text, and Grant callback."
+          - "NetworkStatusProviderTest verifies cause-chain classification; SpeedTestViewModelTest verifies provider state remains live."
+        run: "./gradlew :core-network:test --tests '*LocalNetworkPermissionDeniedExceptionTest' --tests '*TopologyDiscoveryRepositoryTest' :app:testDebugUnitTest --no-daemon --no-parallel"
+        expect: "RED before cause classification and banner wiring; PASS after implementation"
       green:
         steps:
-          - "ViewModels expose `networkStatus` (from observer) and typed error kinds."
+          - "ViewModels expose `networkStatus` (from observer) and typed error kinds; ConnectivityObserver seeds state synchronously from the current network snapshot to avoid a false-offline startup flash."
           - "NetworkStatusBanner composable: ElevatedCard, AnimatedVisibility, icon + text, tokens secondaryContainer/errorContainer; strings network_banner_no_internet, network_banner_no_local, network_banner_vpn_info, network_error_local_permission + action 'Grant'."
-          - "Place banner under ToolHeroHeader on LAN, mDNS, WOL, Topology (local), Ping/DNS/HTTP/TLS/WHOIS/Speed (internet)."
-        run: "./gradlew :app:testDebugUnitTest :app:assembleDebug --no-daemon"
+          - "Place local-network status beneath the header on LAN, mDNS, WOL, and Topology; place internet status on Ping, DNS, HTTP, TLS, WHOIS, and Speed Test."
+          - "Preserve LocalNetworkPermissionDeniedException through topology GET and walk failures; Grant requests permission without auto-retrying. Retry/Scan remains a separate explicit action and Topology Retry uses the current form values."
+        run: "./gradlew :core-network:test --tests '*LocalNetworkPermissionDeniedExceptionTest' --tests '*TopologyDiscoveryRepositoryTest' :app:testDebugUnitTest :app:assembleDebug --no-daemon --no-parallel"
         expect: "PASS"
-    acceptance_criteria: ["Banner respects CLAUDE.md UI rules; no literals."]
+    acceptance_criteria:
+      - "The four local-network screens and six internet-tool screens render banners with the correct scope; offline state takes precedence over VPN information, and healthy state is hidden."
+      - "Permission causes survive wrappers and topology's per-request handling; affected local-tool states expose a localized Grant card, and the user retries explicitly after granting."
+      - "Banner/error copy is resource-backed and follows CLAUDE.md Compose and accessibility rules; focused unit tests and banner instrumentation pass."
+    environment_follow_up: "NetworkStatusBannerTest compiles, but connected execution is pending: the API 36 dev36 emulator repeatedly ANR'd in system_server and PackageManager during adb install/instrumentation on 2026-09-23. Rerun on a responsive API 33/API 36 device before release."
 
   - id: P05-T6
     title: "Docs"
-    status: todo
+    status: done
     depends_on: [P05-T5]
     steps:
-      - "README: new subsection 'Networking behaviour' (LAN tools bind to Wi-Fi/Ethernet even with a VPN; status banners; Android 16 local network permission)."
-      - "PRIVACY_POLICY.md permissions table: NEARBY_WIFI_DEVICES also used for local network access on Android 16+."
+      - "README: add 'Networking behavior' with subnet-aware Wi-Fi/Ethernet binding, banners, mDNS fallback, and the Android 16 local-network permission flow."
+      - "PRIVACY_POLICY.md permissions table: NEARBY_WIFI_DEVICES also gates local-network access on Android 16+ when Local Network Protections are enabled."
 
 qa_validation:
   automated:
     - "./gradlew test --no-daemon; koverVerify x3; lintDebug"
+    - "API 36 NetworkStatusBannerTest connected run is pending after the dev36 emulator's PackageManager/system_server ANRs; test source compiled successfully."
   manual_device:
     - "VPN OFF: LAN scan, mDNS, WOL, topology, LAN port scan behave as before."
     - "mDNS: API 33 emulator with no usable Wi-Fi interface shows graceful ENODEV failure; physical Wi-Fi confirms the active interface is selected and discovery remains usable."

@@ -34,6 +34,10 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HeroTitleText
+import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
+import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
+import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
+import net.aieat.netswissknife.app.platform.NetworkErrorKind
 import net.aieat.netswissknife.app.ui.components.RecentHostsRow
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.ui.theme.AppShapes
@@ -45,7 +49,10 @@ import kotlin.math.*
 fun TopologyDiscoveryScreen(
     viewModel: TopologyDiscoveryViewModel = hiltViewModel()
 ) {
+    val requestLocalNetworkPermission = rememberLocalNetworkPermissionRequester()
+    LaunchedEffect(Unit) { requestLocalNetworkPermission() }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val networkStatus by viewModel.networkStatus.collectAsStateWithLifecycle()
     val recentSeeds by viewModel.recentSeeds.collectAsStateWithLifecycle()
 
     var visible by remember { mutableStateOf(false) }
@@ -58,6 +65,8 @@ fun TopologyDiscoveryScreen(
     ) {
         TopologyScreenContent(
             uiState = uiState,
+            networkStatus = networkStatus,
+            onGrantPermission = requestLocalNetworkPermission,
             recentSeeds = recentSeeds,
             onStartDiscovery = { params -> viewModel.startDiscovery(params) },
             onRemoveRecentSeed = { seed -> viewModel.removeRecentSeed(seed) },
@@ -65,6 +74,7 @@ fun TopologyDiscoveryScreen(
             onSelectNode = { ip -> viewModel.selectNode(ip) },
             onDeselectNode = { viewModel.deselectNode() },
             onReset = { viewModel.reset() },
+            onRetryDiscovery = { params -> viewModel.retryDiscovery(params) },
             onHelpClick = { showHelp = true }
         )
     }
@@ -96,6 +106,8 @@ fun TopologyDiscoveryScreen(
 @Composable
 private fun TopologyScreenContent(
     uiState: TopologyUiState,
+    networkStatus: net.aieat.netswissknife.app.platform.NetworkStatus,
+    onGrantPermission: () -> Unit,
     recentSeeds: List<String>,
     onStartDiscovery: (TopologyParams) -> Unit,
     onRemoveRecentSeed: (String) -> Unit,
@@ -103,6 +115,7 @@ private fun TopologyScreenContent(
     onSelectNode: (String) -> Unit,
     onDeselectNode: () -> Unit,
     onReset: () -> Unit,
+    onRetryDiscovery: (TopologyParams) -> Unit,
     onHelpClick: () -> Unit = {}
 ) {
     var targetIp by remember { mutableStateOf("") }
@@ -122,6 +135,22 @@ private fun TopologyScreenContent(
     val isDiscovering = uiState is TopologyUiState.Discovering
     val normalizedTargetIp = HostValidator.normalize(targetIp)
     val isTargetIpInvalid = targetIp.isNotBlank() && normalizedTargetIp == null
+    val canStartDiscovery = !isDiscovering && normalizedTargetIp != null &&
+        !(v3PrivProto != V3PrivProtocol.NONE && v3AuthProto == V3AuthProtocol.NONE)
+
+    fun currentTopologyParams() = TopologyParams(
+        targetIp = normalizedTargetIp ?: targetIp,
+        snmpVersion = snmpVersion,
+        communityString = community,
+        v3Username = v3Username.ifBlank { null },
+        v3AuthPassword = v3AuthPassword.ifBlank { null },
+        v3PrivPassword = v3PrivPassword.ifBlank { null },
+        v3AuthProtocol = v3AuthProto,
+        v3PrivProtocol = v3PrivProto,
+        maxHops = maxHops.toInt(),
+        timeoutMs = 3000,
+        retries = 1,
+    )
 
     val selectedNode = when (uiState) {
         is TopologyUiState.Discovering -> uiState.nodes.find { it.ip == uiState.selectedNodeIp }
@@ -186,6 +215,14 @@ private fun TopologyScreenContent(
                 }
             }
         }
+
+        NetworkStatusBanner(
+            status = networkStatus,
+            scope = NetworkStatusScope.LOCAL_NETWORK,
+            permissionDenied = (uiState as? TopologyUiState.Failure)?.networkErrorKind == NetworkErrorKind.LOCAL_NETWORK_PERMISSION_DENIED,
+            onGrantPermission = onGrantPermission,
+            modifier = Modifier.padding(horizontal = 16.dp),
+        )
 
         // ── SNMP config card ──────────────────────────────────────────────────
         ElevatedCard(
@@ -398,26 +435,11 @@ private fun TopologyScreenContent(
 
                             Button(
                                 onClick = {
-                                    onStartDiscovery(
-                                        TopologyParams(
-                                            targetIp = normalizedTargetIp ?: targetIp,
-                                            snmpVersion = snmpVersion,
-                                            communityString = community,
-                                            v3Username = v3Username.ifBlank { null },
-                                            v3AuthPassword = v3AuthPassword.ifBlank { null },
-                                            v3PrivPassword = v3PrivPassword.ifBlank { null },
-                                            v3AuthProtocol = v3AuthProto,
-                                            v3PrivProtocol = v3PrivProto,
-                                            maxHops = maxHops.toInt(),
-                                            timeoutMs = 3000,
-                                            retries = 1
-                                        )
-                                    )
+                                    onStartDiscovery(currentTopologyParams())
                                     configExpanded = false
                                 },
                                 modifier = Modifier.fillMaxWidth(),
-                                enabled = !isDiscovering && normalizedTargetIp != null &&
-                                    !(v3PrivProto != V3PrivProtocol.NONE && v3AuthProto == V3AuthProtocol.NONE)
+                                enabled = canStartDiscovery
                             ) {
                                 if (isDiscovering) {
                                     CircularProgressIndicator(
@@ -530,7 +552,11 @@ private fun TopologyScreenContent(
                         is TopologyUiState.Failure -> {
                             ErrorContent(
                                 message = state.message,
-                                onRetry = onReset
+                                retryEnabled = canStartDiscovery,
+                                onRetry = {
+                                    onRetryDiscovery(currentTopologyParams())
+                                    configExpanded = false
+                                }
                             )
                         }
                     }
@@ -670,7 +696,7 @@ private fun IdleContent() {
 }
 
 @Composable
-private fun ErrorContent(message: String, onRetry: () -> Unit) {
+private fun ErrorContent(message: String, retryEnabled: Boolean, onRetry: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -713,6 +739,7 @@ private fun ErrorContent(message: String, onRetry: () -> Unit) {
                 Spacer(modifier = Modifier.height(16.dp))
                 Button(
                     onClick = onRetry,
+                    enabled = retryEnabled,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.error
                     )

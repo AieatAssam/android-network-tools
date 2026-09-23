@@ -4,11 +4,16 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import net.aieat.netswissknife.app.platform.NetworkStatus
+import net.aieat.netswissknife.app.platform.NetworkStatusProvider
+import net.aieat.netswissknife.app.platform.Transport
 import net.aieat.netswissknife.core.domain.SpeedTestUseCase
 import net.aieat.netswissknife.core.network.speedtest.LatencySample
 import net.aieat.netswissknife.core.network.speedtest.LatencyStats
@@ -59,6 +64,19 @@ class SpeedTestViewModelTest {
         @Test
         fun `starts Idle`() {
             assertTrue(viewModel.uiState.value is SpeedTestUiState.Idle)
+        }
+
+        @Test
+        fun `exposes live network status from provider`() {
+            val statusFlow = MutableStateFlow(NetworkStatus(hasInternet = true, transport = Transport.WIFI))
+            val provider = object : NetworkStatusProvider {
+                override val status = statusFlow.asStateFlow()
+            }
+            val vm = SpeedTestViewModel(useCase, provider)
+
+            assertEquals(NetworkStatus(hasInternet = true, transport = Transport.WIFI), vm.networkStatus.value)
+            statusFlow.value = NetworkStatus(hasInternet = false)
+            assertEquals(NetworkStatus(hasInternet = false), vm.networkStatus.value)
         }
     }
 

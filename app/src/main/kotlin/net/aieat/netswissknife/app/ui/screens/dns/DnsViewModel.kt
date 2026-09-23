@@ -5,6 +5,9 @@ import androidx.lifecycle.viewModelScope
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
 import net.aieat.netswissknife.app.util.SystemDnsAddressProvider
+import net.aieat.netswissknife.app.platform.NetworkStatus
+import net.aieat.netswissknife.app.platform.NetworkStatusProvider
+import net.aieat.netswissknife.app.platform.NoOpNetworkStatusProvider
 import net.aieat.netswissknife.core.domain.DnsLookupParams
 import net.aieat.netswissknife.core.domain.DnsLookupUseCase
 import net.aieat.netswissknife.core.network.NetworkResult
@@ -38,11 +41,13 @@ sealed interface DnsUiState {
 class DnsViewModel @Inject constructor(
     private val dnsLookupUseCase: DnsLookupUseCase,
     private val systemDnsAddressProvider: SystemDnsAddressProvider,
-    private val recentHostsRepository: RecentHostsRepository
+    private val recentHostsRepository: RecentHostsRepository,
+    private val networkStatusProvider: NetworkStatusProvider = NoOpNetworkStatusProvider,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<DnsUiState>(DnsUiState.Idle)
     val uiState: StateFlow<DnsUiState> = _uiState.asStateFlow()
+    val networkStatus: StateFlow<NetworkStatus> = networkStatusProvider.status
     private var lookupJob: Job? = null
     private var lookupGeneration = 0L
 

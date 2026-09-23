@@ -16,6 +16,7 @@ import kotlinx.coroutines.sync.withPermit
 import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.net.NetworkBinder
 import net.aieat.netswissknife.core.network.net.NoOpNetworkBinder
+import net.aieat.netswissknife.core.network.net.containsLocalNetworkPermissionDenied
 import java.util.LinkedList
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
@@ -85,7 +86,7 @@ class TopologyDiscoveryRepositoryImpl(
                         val systemFailure = sysDescrAttempt.error ?: sysNameAttempt.error
                         if (sysDescr == null && sysName == null && systemFailure != null) {
                             if (currentIp == effectiveParams.targetIp) {
-                                emit(TopologyDiscoveryEvent.Error(SnmpErrorFormatter.describe(systemFailure)))
+                                emit(TopologyDiscoveryEvent.Error(SnmpErrorFormatter.describe(systemFailure), systemFailure))
                                 return@flow
                             }
                         }
@@ -198,7 +199,7 @@ class TopologyDiscoveryRepositoryImpl(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            emit(TopologyDiscoveryEvent.Error(SnmpErrorFormatter.describe(e)))
+            emit(TopologyDiscoveryEvent.Error(SnmpErrorFormatter.describe(e), e))
         }
     }.flowOn(Dispatchers.IO)
 
@@ -210,6 +211,7 @@ class TopologyDiscoveryRepositoryImpl(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
+            if (e.containsLocalNetworkPermissionDenied()) throw e
             GetAttempt(null, e)
         }
 
@@ -262,7 +264,8 @@ class TopologyDiscoveryRepositoryImpl(
                 result.entries
             } catch (e: CancellationException) {
                 throw e
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                if (e.containsLocalNetworkPermissionDenied()) throw e
                 snmpErrors.set(true)
                 emptyMap()
             }

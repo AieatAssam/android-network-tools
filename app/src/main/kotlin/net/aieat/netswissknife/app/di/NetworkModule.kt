@@ -9,6 +9,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import net.aieat.netswissknife.app.platform.AndroidNetworkBinder
 import net.aieat.netswissknife.app.platform.ConnectivityObserver
+import net.aieat.netswissknife.app.platform.NetworkStatusProvider
 import net.aieat.netswissknife.core.network.net.NetworkBinder
 import javax.inject.Singleton
 
@@ -29,4 +30,8 @@ object NetworkModule {
     @Singleton
     fun provideConnectivityObserver(connectivityManager: ConnectivityManager): ConnectivityObserver =
         ConnectivityObserver(connectivityManager)
+
+    @Provides
+    @Singleton
+    fun provideNetworkStatusProvider(observer: ConnectivityObserver): NetworkStatusProvider = observer
 }

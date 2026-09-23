@@ -17,6 +17,8 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import net.aieat.netswissknife.core.domain.MdnsDiscoveryUseCase
+import net.aieat.netswissknife.core.network.net.LocalNetworkPermissionDeniedException
+import net.aieat.netswissknife.app.platform.NetworkErrorKind
 import net.aieat.netswissknife.core.network.mdns.DiscoveredService
 import net.aieat.netswissknife.core.network.mdns.MdnsUpdate
 import org.junit.jupiter.api.AfterEach
@@ -85,6 +87,20 @@ class MdnsDiscoveryViewModelTest {
             viewModel.startScan()
 
             assertTrue(viewModel.uiState.value.isScanning)
+        }
+
+        @Test
+        fun `marks permission denial distinctly and keeps generic discovery errors general`() = runTest {
+            every { useCase(any()) } returns flow { throw LocalNetworkPermissionDeniedException(SecurityException("denied")) }
+
+            viewModel.startScan()
+
+            assertEquals(NetworkErrorKind.LOCAL_NETWORK_PERMISSION_DENIED, viewModel.uiState.value.networkErrorKind)
+
+            viewModel.reset()
+            every { useCase(any()) } returns flow { throw IllegalStateException("timeout") }
+            viewModel.startScan()
+            assertEquals(NetworkErrorKind.GENERAL, viewModel.uiState.value.networkErrorKind)
         }
 
         @Test

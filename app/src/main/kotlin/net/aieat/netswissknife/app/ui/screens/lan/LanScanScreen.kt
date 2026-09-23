@@ -123,6 +123,9 @@ import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.RecentHostsRow
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
+import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
+import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
+import net.aieat.netswissknife.app.platform.NetworkErrorKind
 import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.core.network.lan.LanHost
 import net.aieat.netswissknife.core.network.lan.LanScanSummary
@@ -150,6 +153,7 @@ fun LanScreen(
     }
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val networkStatus by viewModel.networkStatus.collectAsStateWithLifecycle()
     val subnet by viewModel.subnet.collectAsStateWithLifecycle()
     val timeoutMs by viewModel.timeoutMs.collectAsStateWithLifecycle()
     val concurrency by viewModel.concurrency.collectAsStateWithLifecycle()
@@ -181,6 +185,13 @@ fun LanScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             LanHeaderCard(onHelpClick = { showHelp = true })
+
+            NetworkStatusBanner(
+                status = networkStatus,
+                scope = NetworkStatusScope.LOCAL_NETWORK,
+                permissionDenied = (uiState as? LanScanUiState.Error)?.networkErrorKind == NetworkErrorKind.LOCAL_NETWORK_PERMISSION_DENIED,
+                onGrantPermission = requestLocalNetworkPermission,
+            )
 
             LanInputCard(
                 subnet = subnet,

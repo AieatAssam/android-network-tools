@@ -104,6 +104,8 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
+import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
+import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
 import net.aieat.netswissknife.app.ui.components.ToolErrorCard
 import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.R
@@ -142,6 +144,7 @@ object DnsScreenTestTags {
 @Composable
 fun DnsScreen(viewModel: DnsViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val networkStatus by viewModel.networkStatus.collectAsStateWithLifecycle()
     val domain by viewModel.domain.collectAsStateWithLifecycle()
     val recordType by viewModel.recordType.collectAsStateWithLifecycle()
     val selectedServer by viewModel.selectedServer.collectAsStateWithLifecycle()
@@ -173,7 +176,12 @@ fun DnsScreen(viewModel: DnsViewModel = hiltViewModel()) {
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-            item { DnsHeroHeader(onHelpClick = { showHelp = true }) }
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    DnsHeroHeader(onHelpClick = { showHelp = true })
+                    NetworkStatusBanner(networkStatus, scope = NetworkStatusScope.INTERNET)
+                }
+            }
 
             item {
                 DnsInputCard(

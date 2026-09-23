@@ -98,6 +98,8 @@ import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.RecentHostsRow
+import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
+import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
 import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.core.network.whois.WhoisQueryType
@@ -113,6 +115,7 @@ import java.util.concurrent.TimeUnit
 @Composable
 fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val networkStatus by viewModel.networkStatus.collectAsStateWithLifecycle()
     val recentHosts by viewModel.recentHosts.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
@@ -140,6 +143,7 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
         ) {
             // ── Hero header ────────────────────────────────────────────────────
             WhoisHeroHeader(onHelpClick = { showHelp = true })
+            NetworkStatusBanner(networkStatus, scope = NetworkStatusScope.INTERNET)
 
             // ── Input card ─────────────────────────────────────────────────────
             ElevatedCard(modifier = Modifier.fillMaxWidth()) {

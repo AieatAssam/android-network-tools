@@ -11,6 +11,8 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import net.aieat.netswissknife.core.domain.WakeOnLanUseCase
 import net.aieat.netswissknife.core.network.NetworkResult
+import net.aieat.netswissknife.core.network.net.LocalNetworkPermissionDeniedException
+import net.aieat.netswissknife.app.platform.NetworkErrorKind
 import net.aieat.netswissknife.core.network.wol.WolSendReport
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -99,6 +101,25 @@ class WakeOnLanViewModelTest {
         viewModel.send()
 
         assertEquals(WolUiState.Error("boom"), viewModel.uiState.value)
+    }
+
+    @Test
+    fun `send marks local permission denial distinctly from general failure`() = runTest {
+        coEvery { useCase(any()) } returns NetworkResult.Error(
+            "permission denied",
+            LocalNetworkPermissionDeniedException(SecurityException("denied")),
+        )
+
+        viewModel.onMacAddressChange("AA:BB:CC:DD:EE:FF")
+        viewModel.send()
+
+        val denied = viewModel.uiState.value as WolUiState.Error
+        assertEquals(NetworkErrorKind.LOCAL_NETWORK_PERMISSION_DENIED, denied.networkErrorKind)
+
+        coEvery { useCase(any()) } returns NetworkResult.Error("boom")
+        viewModel.send()
+        val generic = viewModel.uiState.value as WolUiState.Error
+        assertEquals(NetworkErrorKind.GENERAL, generic.networkErrorKind)
     }
 
     @Test

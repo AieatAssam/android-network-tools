@@ -9,6 +9,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
+import net.aieat.netswissknife.core.network.net.LocalNetworkPermissionDeniedException
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -104,6 +105,31 @@ class TopologyDiscoveryRepositoryTest {
         val errors = events.filterIsInstance<TopologyDiscoveryEvent.Error>()
         assertEquals(1, errors.size)
         assertTrue(errors.single().message.contains("timeout", ignoreCase = true))
+    }
+
+    @Test
+    fun `permission denial during seed system query is preserved in error event`() = runTest {
+        val denial = LocalNetworkPermissionDeniedException(SecurityException("local network restricted"))
+        coEvery { snmpClient.get(any(), "1.3.6.1.2.1.1.1.0") } throws IllegalStateException("SNMP request failed", denial)
+
+        val events = repository.discover(defaultParams).toList()
+
+        val error = events.filterIsInstance<TopologyDiscoveryEvent.Error>().single()
+        assertSame(denial, error.cause?.cause)
+        assertTrue(error.message.contains("permission", ignoreCase = true) || error.message.contains("SNMP", ignoreCase = true))
+    }
+
+    @Test
+    fun `permission denial during a walk is not swallowed as an empty topology`() = runTest {
+        coEvery { snmpClient.get(any(), any()) } returns null
+        val denial = LocalNetworkPermissionDeniedException(SecurityException("local network restricted"))
+        coEvery { snmpClient.walk(any(), any(), any()) } throws denial
+
+        val events = repository.discover(defaultParams).toList()
+
+        val error = events.filterIsInstance<TopologyDiscoveryEvent.Error>().single()
+        assertSame(denial, error.cause)
+        assertTrue(events.none { it is TopologyDiscoveryEvent.Complete })
     }
 
     @Test

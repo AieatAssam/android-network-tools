@@ -151,6 +151,12 @@ Wake sleeping or powered-down machines on the local network with a UDP magic pac
 - Sends 3 duplicate packets per request for reliability over lossy UDP
 - Success card confirms target MAC, broadcast address, port, and packet count; in-app help explains BIOS/OS requirements
 
+## Networking behavior
+
+LAN-directed sockets use the selected Wi-Fi or Ethernet network when the destination is within that network's subnet. This lets local discovery and device queries reach the LAN when a VPN is active; destinations outside the local subnet continue to use Android's normal route. mDNS joins the selected interface and can use an ephemeral query port when port 5353 is unavailable.
+
+Tool screens show a status banner when internet access or a local Wi-Fi/Ethernet network is unavailable. LAN tools also explain when a VPN is active. On Android 16 (API 36) and newer, Android's Local Network Protections can require `NEARBY_WIFI_DEVICES` access before local-network operations. If access is denied, the tool shows a Grant action; grant access and retry the operation explicitly.
+
 ---
 
 ## Module Layout

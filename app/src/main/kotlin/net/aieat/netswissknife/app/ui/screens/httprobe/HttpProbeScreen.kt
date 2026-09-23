@@ -94,6 +94,8 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
+import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
+import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
 import net.aieat.netswissknife.app.ui.components.ToolErrorCard
 import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.ui.theme.AppMotion
@@ -135,6 +137,7 @@ object HttpProbeScreenTestTags {
 @Composable
 fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val networkStatus by viewModel.networkStatus.collectAsStateWithLifecycle()
     val recentHosts by viewModel.recentHosts.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
@@ -159,7 +162,12 @@ fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
                 horizontal = 16.dp, vertical = 16.dp
             )
         ) {
-            item { HttpProbeHeaderCard(onHelpClick = { showHelp = true }) }
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    HttpProbeHeaderCard(onHelpClick = { showHelp = true })
+                    NetworkStatusBanner(networkStatus, scope = NetworkStatusScope.INTERNET)
+                }
+            }
 
             item {
                 HttpProbeInputCard(

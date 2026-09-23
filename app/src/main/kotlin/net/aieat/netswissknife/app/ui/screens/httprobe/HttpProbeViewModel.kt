@@ -18,6 +18,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
+import net.aieat.netswissknife.app.platform.NetworkStatus
+import net.aieat.netswissknife.app.platform.NetworkStatusProvider
+import net.aieat.netswissknife.app.platform.NoOpNetworkStatusProvider
 import net.aieat.netswissknife.core.domain.HttpProbeParams
 import net.aieat.netswissknife.core.domain.HttpProbeUseCase
 import net.aieat.netswissknife.core.network.NetworkResult
@@ -54,11 +57,13 @@ data class HttpProbeUiState(
 @HiltViewModel
 class HttpProbeViewModel @Inject constructor(
     private val useCase: HttpProbeUseCase,
-    private val recentHostsRepository: RecentHostsRepository
+    private val recentHostsRepository: RecentHostsRepository,
+    private val networkStatusProvider: NetworkStatusProvider = NoOpNetworkStatusProvider,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HttpProbeUiState())
     val uiState: StateFlow<HttpProbeUiState> = _uiState.asStateFlow()
+    val networkStatus: StateFlow<NetworkStatus> = networkStatusProvider.status
     private data class ActiveReplayDecision(
         val runId: String,
         val approvalId: String,

@@ -119,6 +119,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
+import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
+import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
 import net.aieat.netswissknife.app.ui.components.ToolErrorCard
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
 import net.aieat.netswissknife.app.ui.components.ToolStopButton
@@ -153,6 +155,7 @@ fun PingScreen(
     LaunchedEffect(Unit) { requestLocalNetworkPermission() }
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val networkStatus by viewModel.networkStatus.collectAsStateWithLifecycle()
     val host by viewModel.host.collectAsStateWithLifecycle()
     val count by viewModel.count.collectAsStateWithLifecycle()
     val timeoutMs by viewModel.timeoutMs.collectAsStateWithLifecycle()
@@ -198,7 +201,10 @@ fun PingScreen(
         ) {
             // ── Hero header ─────────────────────────────────────────────────
             item {
-                PingHeroHeader(onHelpClick = { showHelp = true })
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    PingHeroHeader(onHelpClick = { showHelp = true })
+                    NetworkStatusBanner(networkStatus, scope = NetworkStatusScope.INTERNET)
+                }
             }
 
             // ── Input card ──────────────────────────────────────────────────

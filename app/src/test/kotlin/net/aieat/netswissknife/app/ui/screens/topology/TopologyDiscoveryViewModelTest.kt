@@ -14,6 +14,8 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import net.aieat.netswissknife.app.data.RecentHostsRepository
+import net.aieat.netswissknife.app.platform.NetworkErrorKind
+import net.aieat.netswissknife.core.network.net.LocalNetworkPermissionDeniedException
 import net.aieat.netswissknife.core.domain.TopologyDiscoveryUseCase
 import net.aieat.netswissknife.core.network.topology.TopologyDiscoveryEvent
 import net.aieat.netswissknife.core.network.topology.TopologyGraph
@@ -192,6 +194,46 @@ class TopologyDiscoveryViewModelTest {
 
             val state = viewModel.uiState.value as TopologyUiState.Failure
             assertEquals("SNMP timeout", state.message)
+        }
+
+        @Test
+        fun `preserves permission denial cause and distinguishes generic topology errors`() = runTest {
+            every { useCase.invoke(params) } returns flowOf(
+                TopologyDiscoveryEvent.Error(
+                    "permission denied",
+                    LocalNetworkPermissionDeniedException(SecurityException("denied")),
+                )
+            )
+            viewModel.startDiscovery(params)
+            assertEquals(
+                NetworkErrorKind.LOCAL_NETWORK_PERMISSION_DENIED,
+                (viewModel.uiState.value as TopologyUiState.Failure).networkErrorKind,
+            )
+
+            every { useCase.invoke(params) } returns flowOf(TopologyDiscoveryEvent.Error("timeout"))
+            viewModel.startDiscovery(params)
+            assertEquals(
+                NetworkErrorKind.GENERAL,
+                (viewModel.uiState.value as TopologyUiState.Failure).networkErrorKind,
+            )
+        }
+
+        @Test
+        fun `retries with current parameters only when requested`() = runTest {
+            every { useCase.invoke(params) } returns flowOf(TopologyDiscoveryEvent.Error("timeout"))
+            val editedParams = params.copy(
+                targetIp = "192.168.1.2",
+                communityString = "private",
+                maxHops = 5,
+            )
+            every { useCase.invoke(editedParams) } returns flowOf(TopologyDiscoveryEvent.Error("timeout"))
+
+            viewModel.startDiscovery(params)
+            coVerify(exactly = 1) { useCase.invoke(params) }
+
+            viewModel.retryDiscovery(editedParams)
+
+            coVerify(exactly = 1) { useCase.invoke(editedParams) }
         }
     }
 
