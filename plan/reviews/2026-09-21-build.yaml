@@ -19,7 +19,8 @@ findings:
     validation: "Feed complete, USM-only, and each single-class-missing fixture into the assertion. Only the complete fixture must pass."
     related_phase: P09
     related_findings: [F014]
-    status: todo
+    status: done
+    resolution: "The release check captures apkanalyzer output with --defined-only and validates actual `C d` class rows, not references or method/field signatures. It checks AuthSHA, PrivAES128, and USM independently and reports each missing class. Complete, missing-class, referenced-only, member-signature, and longer-name fixtures are covered by committed tests."
 
   - id: RBUILD002
     severity: medium
@@ -36,7 +37,8 @@ findings:
     recommended_action: "Serialize publishing, fail closed on lookup errors, inspect all relevant tags/releases, and allocate a checked monotonic unused suffix from the maximum. Explicitly handle artifact-only dispatches and validate versionCode bounds."
     validation: "Check sparse suffixes [1,3], concurrent allocations, API failure, artifact-only builds, and more than one page of releases. No already-published tag or versionCode may be allocated."
     related_phase: P09
-    status: todo
+    status: done
+    resolution: "Auto-generated dispatches query all pages of exact-date Git tags and all GitHub Release tag names, fail closed on API/parse errors, allocate max suffix + 1, and atomically create the actual version tag before building. The tag reserves the versionCode and pins the release to the workflow SHA, including create_github_release=false runs; failures leave a gap while that reservation remains. Push overrides are strictly validated, reject names already used by a GitHub Release, and updated tags are rejected. Manual and tag-triggered publishing share a queued, non-cancelling concurrency group; the tag SHA is checked before artifact upload and again before publication, and the final publication check rejects an existing Release identity."
 
   - id: RBUILD003
     severity: low
@@ -55,10 +57,16 @@ findings:
 
 coverage:
   inspected: [".github/workflows/ci.yml", ".github/workflows/release.yml", "app/build.gradle.kts", "build.gradle.kts", "settings.gradle.kts", "tools/oui/update_oui.py", "plan/plan.yaml"]
-  limitations: ["GitHub workflows were not executed; findings concern locally verifiable workflow logic."]
+  limitations:
+    - "GitHub workflows were not executed; findings concern locally verifiable workflow logic."
+    - "Remote tag SHA checks catch moved/deleted tags before artifact upload and again before release publication, but external force-updates after a check still require immutable v* tag rules to eliminate fully. A Release created externally after the final existence lookup can still race the publication action."
+    - "Deleting an artifact-only reservation tag, or deleting both a published version's tag and Release, erases the history the allocator queries; preventing reuse would require a durable version ledger or immutable tag rules."
 
 validation_performed:
-  - "Locally passed a USM-only fixture through the workflow's exact grep expression; it exits 0 despite missing AuthSHA and PrivAES128."
+  - "Reproduced the original retention-gate defect: its USM-only fixture exited 0 despite missing AuthSHA and PrivAES128."
   - "Reproduced the release-count allocation: existing suffixes 1 and 3 have count 2, so the current expression allocates 3 again."
   - "Fresh core-network, core-domain, and app JVM test tasks passed: 1218 reported cases, 1 skipped, 0 failures/errors."
   - "Revalidated existing F014, F020, and F021 and corrected the P09 context; no duplicate findings added for those existing work items."
+  - "Release versioning tests passed: sparse suffixes [1,3] allocate 4; artifact-only tags and releases whose Git tags were deleted still advance the next allocation; pushed overrides cannot reuse an existing Release identity; malformed/out-of-range suffixes, invalid calendar dates, suffixes above 99, and versionCodes above 2,100,000,000 fail."
+  - "APK class-gate tests cover complete, single-class-missing, referenced-only, method/field-signature, nested-class, and longer-name fixtures. Only exact defined class rows pass."
+  - "Release workflow uses gh api --paginate for matching refs and release names, creates the version tag atomically, checks its remote SHA before artifact upload and again before publication, and rejects a Release identity found immediately before the release action. GitHub Actions was not executed live; external force-updates after a check, external Release creation after the final lookup, and deletion of reservation history still require immutable tag protection or a durable external ledger to eliminate fully."

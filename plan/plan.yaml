@@ -197,8 +197,8 @@ comprehensive_expansion:
       - {"finding":"RAPP002","owner_task":"P05-T4","follow_up_status":"done","report":"plan/reviews/2026-09-21-app.yaml"}
       - {"finding":"RAPP003","owner_task":"P04-T3","follow_up_status":"done","report":"plan/reviews/2026-09-21-app.yaml"}
       - {"finding":"RAPP004","owner_task":"P12-T1","follow_up_status":"done","report":"plan/reviews/2026-09-21-app.yaml"}
-      - {"finding":"RBUILD001","owner_task":"P09-T4","follow_up_status":"todo","report":"plan/reviews/2026-09-21-build.yaml"}
-      - {"finding":"RBUILD002","owner_task":"P09-T4","follow_up_status":"todo","report":"plan/reviews/2026-09-21-build.yaml"}
+      - {"finding":"RBUILD001","owner_task":"P09-T4","follow_up_status":"done","report":"plan/reviews/2026-09-21-build.yaml"}
+      - {"finding":"RBUILD002","owner_task":"P09-T4","follow_up_status":"done","report":"plan/reviews/2026-09-21-build.yaml"}
       - {"finding":"RBUILD003","owner_task":"P01-T7","follow_up_status":"done","report":"plan/reviews/2026-09-21-build.yaml"}
       - {"finding":"RLAN001","owner_task":"E00-T01","follow_up_status":"done","report":"plan/reviews/2026-09-22-lan-scan-noise.yaml"}
       - {"finding":"RNET001","owner_task":"P01-T4","follow_up_status":"done","report":"plan/reviews/2026-09-21-network.yaml"}
@@ -233,8 +233,8 @@ incremental_review:
   reviewer_reasoning_effort: xhigh
   method: "Parallel source review; findings saved in small verified batches before final consolidation. Existing F001-F041 remain historical baseline findings."
   priority_order: [critical, high, medium, low]
-  recommended_first_followups: [RBUILD001, RBUILD002]
-  first_followups_rationale: "RAPP003, RAPP004, RNET002, RNET003, RNET006, and RNET007 are closed with focused regressions. P02.5 remains the highest-severity open gate because the current dependency submission still contains vulnerable AGP/plugin-transitive coordinates and no later stable AGP candidate is available; continue that remediation when a supported path appears, alongside ready code work. RBUILD001 and RBUILD002 are the next medium follow-ups; RLAN001's device-only Wi-Fi/VPN and NBSTAT observations remain tracked under E00-T01."
+  recommended_first_followups: [RUI002, RUI003, RUI004]
+  first_followups_rationale: "RAPP003, RAPP004, RNET002, RNET003, RNET006, RNET007, RBUILD001, and RBUILD002 are closed with focused regressions. P02.5 remains the highest-severity open gate because the current dependency submission still contains vulnerable AGP/plugin-transitive coordinates and no later stable AGP candidate is available; continue that remediation when a supported path appears, alongside ready code work. The next ready medium code follow-ups are RUI002-RUI004; RLAN001's device-only Wi-Fi/VPN and NBSTAT observations remain tracked under E00-T01."
   execution_guidance: "Merge these findings with open phase work by severity; existing unresolved critical/high findings retain precedence. Address confirmed bugs before optional feature waves P13-P15. Follow each finding's related_phase and validation, including follow-ups to historically completed phases."
   reports:
     - { area: core-network, file: plan/reviews/2026-09-21-network.yaml }
@@ -243,13 +243,14 @@ incremental_review:
     - { area: build-release-plan, file: plan/reviews/2026-09-21-build.yaml }
     - { area: lan-scan-discovery, file: plan/reviews/2026-09-22-lan-scan-noise.yaml }
     - { area: release-qa-brief, file: plan/reviews/2026-09-22-release-qa-brief.yaml }
+    - { area: release-qa-brief-current-source, file: plan/reviews/2026-09-23-release-qa-brief.yaml }
   prioritized_findings:
     - { id: RLAN001, severity: high, kind: bug, phase: P01, status: done, title: "A failed TCP connect is promoted to a live host and floods LAN results with false positives" }
     - { id: RAPP001, severity: medium, kind: bug, phase: P03, status: done, title: "Wi-Fi scan failures are reported as completed scans" }
     - { id: RAPP002, severity: medium, kind: bug, phase: P05, status: done, title: "mDNS stop/cancellation does not promptly terminate the socket loop" }
     - { id: RAPP004, severity: medium, kind: bug, phase: P12, status: done, title: "mDNS packet I/O failures are converted into successful empty scans" }
-    - { id: RBUILD001, severity: medium, kind: bug, phase: P09, status: todo, title: "Release SNMP retention gate succeeds when only one required class survives" }
-    - { id: RBUILD002, severity: medium, kind: bug, phase: P09, status: todo, title: "Daily release version allocation can reuse an existing version" }
+    - { id: RBUILD001, severity: medium, kind: bug, phase: P09, status: done, title: "Release SNMP retention gate succeeds when only one required class survives" }
+    - { id: RBUILD002, severity: medium, kind: bug, phase: P09, status: done, title: "Daily release version allocation can reuse an existing version" }
     - { id: RNET001, severity: medium, kind: bug, phase: P01, status: done, title: "ARP enrichment snapshots the cache before all probes finish" }
     - { id: RNET002, severity: medium, kind: bug, phase: P05, status: done, title: "Both platform and fallback subnet detection silently clamp the real prefix length" }
     - { id: RNET005, severity: medium, kind: bug, phase: P04, status: done, title: "DNS lookup does not normalize Unicode domains to IDNA" }
@@ -284,7 +285,7 @@ incremental_review:
   baseline_revalidation:
     - finding: F014
       state: partially_resolved
-      note: "SNMP4J keep rules and a release-workflow check now exist; a PR release build is still absent and RBUILD001 identifies a defect in the retention assertion."
+      note: "SNMP4J keep rules and a release-workflow check now exist; RBUILD001 closed the defective assertion with defined-only, per-class checks. A PR release build and manual SNMPv3 functional check remain separate validation."
     - finding: F020
       state: still_open
       note: "The Kover allowlist now contains five classes including LinkInfoMapper; ViewModels and most platform/data logic remain outside the gate."
@@ -823,3 +824,5 @@ changelog:
     note: "Closed RAPP004, RNET002, and RNET003. mDNS now propagates typed send/receive failures while preserving quiet timeouts and cancellation; a PTR-driven test covers follow-up send failure. Both subnet detectors preserve valid /0–/32 prefixes, lazily choose the first valid interface address, and leave /16–/30 scan limits as explicit validation. Topology hops/timeout/retries now have shared finite bounds, and the use case rejects invalid values before repository calls. Focused core-network, core-domain, and app unit tests passed; independent QA/adversarial reviews found no blocker. Fresh P02.5 recheck still finds six open Dependabot alerts and the same vulnerable coordinates in the current-branch submission; no later stable AGP is available, so P02.5 remains open."
   - date: "2026-09-23"
     note: "Closed RAPP003, RNET006, and RNET007 after independent QA/adversarial review. Native ICMP linkage failures now fall back to Reachability for Ping, degrade LAN ICMP to an unavailable observation, and surface a typed Traceroute error while preserving downstream errors and cancellation. WHOIS closes active sockets, uses bounded workers and monotonic total deadlines, and accurately documents that an OS resolver may retain a worker if it ignores interruption. GeoIP bogon detection checks only a root-level boolean true and ignores nested/escaped text. Full :core-network:test passed 895 tests (1 skipped); full :app:testDebugUnitTest passed 314 tests; 0 failures/errors. P02.5 remains the highest-severity open gate; RBUILD001/RBUILD002 are the next medium follow-ups."
+  - date: "2026-09-23"
+    note: "Closed RBUILD001/RBUILD002 after changing the APK gate to require all three defined SNMP4J class rows and replacing release-count versioning with checked max-suffix allocation over paginated Git tags and Release names. Auto builds atomically create the version tag before building, share a queued non-cancelling concurrency group, and check the remote tag SHA before artifact upload and again before publication; the final publication step also rejects an existing Release identity. Artifact-only runs intentionally leave a tag reservation. Updated push tags and pushed overrides that reuse an existing GitHub Release identity are rejected. Ten versioning tests and four APK-class parser tests passed; no live GitHub Actions run was performed. The v2026.09.21.1 QA brief was rechecked against current source: ISS-05/06/20 are covered, while ISS-17/21/22 retain the documented API 33 or physical-device checks. See plan/reviews/2026-09-23-release-qa-brief.yaml. P02.5 remains the highest-severity gate; RUI002-RUI004 are the next ready medium code follow-ups."

@@ -3,14 +3,21 @@ name: Release – Package & Publish
 on:
   push:
     tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+.[0-9]+'   # e.g. v2026.03.21.1 (override)
+      - 'v[0-9][0-9][0-9][0-9].[0-9][0-9].[0-9][0-9].[0-9]*'   # e.g. v2026.03.21.1 (override)
   workflow_dispatch:
     inputs:
       create_github_release:
-        description: 'Create a GitHub Release?'
+        description: 'Create a GitHub Release? False still reserves a version tag for the uploaded artifacts.'
         required: false
         default: 'true'
         type: boolean
+
+# A version tag is created atomically before each generated build. This reserves
+# its versionCode even for artifact-only runs or builds that later fail.
+concurrency:
+  group: ${{ github.workflow }}-release
+  queue: max
+  cancel-in-progress: false
 
 jobs:
   build-and-publish:
@@ -56,35 +63,57 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if [[ "${{ github.event_name }}" == "push" ]]; then
+            if [[ "${{ github.event.created }}" != "true" ]]; then
+              echo "::error::Refusing to rebuild updated release tag '$GITHUB_REF_NAME'; release tags must be immutable"
+              exit 1
+            fi
             # Tag-based override: strip leading 'v'
             VERSION="${GITHUB_REF_NAME#v}"
+            RELEASE_TAGS="$RUNNER_TEMP/release-tags.txt"
+            if ! gh api --paginate --jq '.[].tag_name' \
+              "repos/$GITHUB_REPOSITORY/releases?per_page=100" > "$RELEASE_TAGS"; then
+              echo "::error::Could not read all published release tags; refusing to reuse a version"
+              exit 1
+            fi
+            if ! VERSION_DATA=$(python3 tools/release/versioning.py validate \
+              "$VERSION" --release-tags "$RELEASE_TAGS"); then
+              echo "::error::Release tag '$GITHUB_REF_NAME' must be a valid YYYY.MM.DD.N version with N from 1 to 99 and must not reuse an existing GitHub Release tag"
+              exit 1
+            fi
+            printf '%s\n' "$VERSION_DATA" >> "$GITHUB_OUTPUT"
           else
             # Auto-generate: YYYY.MM.DD.N
             DATE=$(date -u +%Y.%m.%d)
-            DATE_COMPACT=$(date -u +%Y%m%d)
+            RELEASE_REFS="$RUNNER_TEMP/release-version-tags.txt"
+            RELEASE_TAGS="$RUNNER_TEMP/release-tags.txt"
+            if ! gh api --paginate --jq '.[].ref' \
+              "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/v${DATE}." > "$RELEASE_REFS"; then
+              echo "::error::Could not read all release tags for $DATE; refusing to reuse a version"
+              exit 1
+            fi
+            if ! gh api --paginate --jq '.[].tag_name' \
+              "repos/$GITHUB_REPOSITORY/releases?per_page=100" > "$RELEASE_TAGS"; then
+              echo "::error::Could not read all published release tags; refusing to reuse a version"
+              exit 1
+            fi
+            if ! VERSION_DATA=$(python3 tools/release/versioning.py allocate \
+              --date "$DATE" --release-refs "$RELEASE_REFS" --release-tags "$RELEASE_TAGS"); then
+              echo "::error::Could not allocate a safe release version for $DATE"
+              exit 1
+            fi
+            VERSION=$(sed -n 's/^name=//p' <<< "$VERSION_DATA")
 
-            # Count existing releases for today to get the next daily increment
-            EXISTING=$(gh release list \
-              --repo "$GITHUB_REPOSITORY" \
-              --limit 100 \
-              --json tagName \
-              --jq "[.[].tagName | select(startswith(\"v${DATE}\"))] | length" \
-              2>/dev/null || echo "0")
-            # Sanitise: ensure it is a plain integer
-            EXISTING=$(echo "$EXISTING" | tr -cd '0-9')
-            DAILY_NUM=$(( ${EXISTING:-0} + 1 ))
-
-            VERSION="${DATE}.${DAILY_NUM}"
+            # Creating the actual version tag is the atomic reservation. It
+            # prevents a concurrently pushed override from claiming the same
+            # version and pins the release tag to this build's SHA.
+            if ! gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
+              -f "ref=refs/tags/v$VERSION" -f "sha=$GITHUB_SHA" >/dev/null; then
+              echo "::error::Could not create version tag v$VERSION; it may have been claimed concurrently"
+              exit 1
+            fi
+            printf '%s\n' "$VERSION_DATA" >> "$GITHUB_OUTPUT"
           fi
-
-          # Parse components for versionCode
-          # VERSION is e.g. 2026.03.21.1
-          DATE_COMPACT=$(echo "$VERSION" | sed 's/\.\([0-9]*\)$//; s/\.//g')
-          DAILY_NUM=$(echo "$VERSION" | grep -oE '[0-9]+$')
-          VERSION_CODE=$(( DATE_COMPACT * 100 + DAILY_NUM ))
-
-          echo "name=${VERSION}"        >> "$GITHUB_OUTPUT"
-          echo "code=${VERSION_CODE}"   >> "$GITHUB_OUTPUT"
+          VERSION_CODE=$(sed -n 's/^code=//p' <<< "$VERSION_DATA")
           echo "Generated version: ${VERSION} (code: ${VERSION_CODE})"
 
       # ── 5. Unit tests ─────────────────────────────────────────────────────
@@ -170,8 +199,8 @@ jobs:
             exit 1
           fi
           echo "Using apkanalyzer: $APK_ANALYZER"
-          "$APK_ANALYZER" dex packages "$APK" \
-            | grep -E 'org\.snmp4j\.security\.(AuthSHA|PrivAES128|USM)\b'
+          "$APK_ANALYZER" dex packages --defined-only "$APK" > "$RUNNER_TEMP/apk-packages.txt"
+          python3 tools/release/check_snmp_classes.py "$RUNNER_TEMP/apk-packages.txt"
 
       # ── 9. Build release AAB ──────────────────────────────────────────────
       - name: Build signed release AAB
@@ -242,6 +271,25 @@ jobs:
               >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Verify release tag before artifact upload
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.name }}
+        run: |
+          TAG_REF="refs/tags/v${RELEASE_VERSION}"
+          if ! REMOTE_TAGS=$(git ls-remote origin "$TAG_REF" "${TAG_REF}^{}"); then
+            echo "::error::Could not verify release tag $TAG_REF"
+            exit 1
+          fi
+          TAG_SHA=$(printf '%s\n' "$REMOTE_TAGS" | awk \
+            -v ref="$TAG_REF" -v peeled="${TAG_REF}^{}" \
+            '$2 == peeled { print $1; found = 1; exit } \
+             $2 == ref { candidate = $1 } \
+             END { if (!found) print candidate }')
+          if [ "$TAG_SHA" != "$GITHUB_SHA" ]; then
+            echo "::error::Release tag $TAG_REF no longer points to this build commit"
+            exit 1
+          fi
+
       # ── 11. Upload artefacts to workflow run ──────────────────────────────
       - name: Upload APK artefact
         uses: actions/upload-artifact@v7
@@ -310,6 +358,37 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       # ── 13. Create GitHub Release ──────────────────────────────────────────
+      - name: Verify release tag still points to this build
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.name }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG_REF="refs/tags/v${RELEASE_VERSION}"
+          if ! REMOTE_TAGS=$(git ls-remote origin "$TAG_REF" "${TAG_REF}^{}"); then
+            echo "::error::Could not verify release tag $TAG_REF"
+            exit 1
+          fi
+          TAG_SHA=$(printf '%s\n' "$REMOTE_TAGS" | awk \
+            -v ref="$TAG_REF" -v peeled="${TAG_REF}^{}" \
+            '$2 == peeled { print $1; found = 1; exit } \
+             $2 == ref { candidate = $1 } \
+             END { if (!found) print candidate }')
+          if [ "$TAG_SHA" != "$GITHUB_SHA" ]; then
+            echo "::error::Release tag $TAG_REF no longer points to this build commit"
+            exit 1
+          fi
+          RELEASE_TAGS="$RUNNER_TEMP/pre-publication-release-tags.txt"
+          if ! gh api --paginate --jq '.[].tag_name' \
+            "repos/$GITHUB_REPOSITORY/releases?per_page=100" > "$RELEASE_TAGS"; then
+            echo "::error::Could not read published release tags before publication"
+            exit 1
+          fi
+          if ! python3 tools/release/versioning.py validate \
+            "$RELEASE_VERSION" --release-tags "$RELEASE_TAGS" >/dev/null; then
+            echo "::error::A GitHub Release already uses tag v${RELEASE_VERSION}; refusing to update it"
+            exit 1
+          fi
+
       - name: Create GitHub Release
         if: >
           github.event_name == 'push' ||

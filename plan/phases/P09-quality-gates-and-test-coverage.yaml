@@ -28,11 +28,11 @@ phase:
 
 review_follow_up:
   reviewed_on: "2026-09-21"
-  status: todo
+  status: done
   findings: [RBUILD001, RBUILD002]
   reports:
     - plan/reviews/2026-09-21-build.yaml
-  note: "New source-review follow-ups; preserve historical task completion. See report evidence, recommended_action, and validation before implementation."
+  note: "Both release-workflow follow-ups are closed with focused version-allocation tests and exact defined-class APK fixtures. The workflow itself still needs a live dispatch/release run; fixed release claims are not a substitute for that operational check."
 
 context:
   problem: |

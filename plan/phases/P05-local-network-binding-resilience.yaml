@@ -21,12 +21,12 @@ phase:
 
 review_follow_up:
   reviewed_on: "2026-09-21"
-  status: in_progress
+  status: done
   findings: [RNET002]
   reports:
     - plan/reviews/2026-09-21-app.yaml
     - plan/reviews/2026-09-21-network.yaml
-  note: "RAPP002 is closed by the cancellation-focused implementation and test recorded in its source-review entry. RNET002 remains open; preserve historical task completion."
+  note: "RAPP002, RAPP004, and RNET002 are closed in their source-review entries. The phase remains open for its broader network-binding goals and the API 33/physical-Wi-Fi mDNS interface checks from the release QA brief."
 
 context:
   problem: |
