@@ -31,7 +31,7 @@ import androidx.compose.ui.unit.dp
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.platform.NetworkStatus
 
-enum class NetworkStatusScope { INTERNET, LOCAL_NETWORK }
+enum class NetworkStatusScope { INTERNET, LOCAL_NETWORK, ANY_NETWORK }
 
 /** Shows only connectivity states that can change how the current tool reaches its target. */
 @Composable
@@ -45,6 +45,9 @@ fun NetworkStatusBanner(
     val statusMessage = when {
         scope == NetworkStatusScope.INTERNET && !status.hasInternet -> R.string.network_banner_no_internet
         scope == NetworkStatusScope.LOCAL_NETWORK && !status.hasLocalNetwork -> R.string.network_banner_no_local
+        scope == NetworkStatusScope.ANY_NETWORK &&
+            !status.hasInternet && !status.hasLocalNetwork && !status.vpnActive ->
+            R.string.network_banner_no_network
         scope == NetworkStatusScope.LOCAL_NETWORK && status.vpnActive -> R.string.network_banner_vpn_info
         else -> null
     }

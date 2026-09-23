@@ -6,6 +6,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import net.aieat.netswissknife.core.network.operation.OperationSession
 
 /** Reachability fallback used when the platform ICMP socket is unavailable. */
 class ReachabilityPingEngine(
@@ -14,13 +15,20 @@ class ReachabilityPingEngine(
     override val kind: PingEngineKind = PingEngineKind.REACHABILITY
     override val isAvailable: Boolean = true
 
-    override fun ping(request: PingRequest): Flow<PingPacketResult> = flow {
+    override fun ping(request: PingRequest): Flow<PingPacketResult> = pingInternal(request, session = null)
+
+    override fun ping(request: PingRequest, session: OperationSession): Flow<PingPacketResult> =
+        pingInternal(request, session)
+
+    private fun pingInternal(request: PingRequest, session: OperationSession?): Flow<PingPacketResult> = flow {
         var sequence = 1
         while (request.count == 0 || sequence <= request.count) {
             val ip = request.resolvedIp ?: request.host
             val startedNs = System.nanoTime()
             val packet = try {
-                val result = checker(ip, request.timeoutMs)
+                val result = if (session == null) checker(ip, request.timeoutMs) else {
+                    PingBlockingCallExecutor.run(session) { checker(ip, request.timeoutMs) }
+                }
                 val measuredMs = (System.nanoTime() - startedNs) / 1_000_000L
                 val elapsedMs = result.rtTimeMs.coerceAtLeast(measuredMs)
                 val status = when {

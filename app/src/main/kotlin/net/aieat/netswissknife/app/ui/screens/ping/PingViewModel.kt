@@ -33,11 +33,15 @@ import net.aieat.netswissknife.core.domain.PingParams
 import net.aieat.netswissknife.core.domain.PingSessionLogger
 import net.aieat.netswissknife.core.domain.PingUseCase
 import net.aieat.netswissknife.core.network.ping.PingPacketResult
+import net.aieat.netswissknife.core.network.ping.PingRequest
 import net.aieat.netswissknife.core.network.ping.PingResult
 import net.aieat.netswissknife.core.network.ping.PingStats
 import net.aieat.netswissknife.core.network.ping.PingStatus
 import net.aieat.netswissknife.core.network.ping.PingEngineKind
 import net.aieat.netswissknife.core.network.HostValidator
+import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationSession
+import net.aieat.netswissknife.core.network.ping.PingOperation
 import java.io.File
 import javax.inject.Inject
 
@@ -100,7 +104,8 @@ internal class ContinuousPingLogWriter(
 
 private class ContinuousPingSession(
     val file: File,
-    val logWriter: ContinuousPingLogWriter
+    val logWriter: ContinuousPingLogWriter,
+    val operationSession: OperationSession,
 ) {
     var producerJob: Job? = null
     var stopRequested: Boolean = false
@@ -174,6 +179,7 @@ class PingViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private var pingJob: Job? = null
+    private var pingOperationSession: OperationSession? = null
     private var continuousSession: ContinuousPingSession? = null
     private val retiringSessions = mutableSetOf<ContinuousPingSession>()
 
@@ -215,6 +221,8 @@ class PingViewModel @Inject constructor(
     }
 
     fun onClearResults() {
+        pingOperationSession?.cancel(CancellationReason.USER_STOP)
+        pingOperationSession = null
         pingJob?.cancel()
         pingJob = null
         discardContinuousSession()
@@ -223,24 +231,13 @@ class PingViewModel @Inject constructor(
 
     fun onStop() {
         val current = _uiState.value
-        val session = continuousSession
-        if (current is PingUiState.Running && current.isContinuous && session != null) {
-            if (session.stopRequested) return
-            session.stopRequested = true
-            val producer = session.producerJob
-            producer?.cancel()
-            if (pingJob === producer) pingJob = null
-            viewModelScope.launch {
-                producer?.join()
-                val logAvailable = session.logWriter.closeAndJoin()
-                val latest = _uiState.value
-                if (continuousSession === session && latest is PingUiState.Running && latest.isContinuous) {
-                    finalizeContinuousSession(latest, session, logAvailable)
-                }
-            }
+        if (current is PingUiState.Running && current.isContinuous) {
+            stopContinuousPing(CancellationReason.USER_STOP)
             return
         }
 
+        pingOperationSession?.cancel(CancellationReason.USER_STOP)
+        pingOperationSession = null
         pingJob?.cancel()
         pingJob = null
         if (current is PingUiState.Running) {
@@ -257,7 +254,7 @@ class PingViewModel @Inject constructor(
     fun onLifecycleStop() {
         val current = _uiState.value
         if (current is PingUiState.Running && current.isContinuous) {
-            onStop()
+            stopContinuousPing(CancellationReason.LIFECYCLE_PAUSE)
         }
     }
 
@@ -282,6 +279,8 @@ class PingViewModel @Inject constructor(
     // ── Normal (bounded) ping ────────────────────────────────────────────────
 
     private fun startNormalPing() {
+        pingOperationSession?.cancel(CancellationReason.USER_STOP)
+        pingOperationSession = null
         pingJob?.cancel()
         pingJob = null
         discardContinuousSession()
@@ -304,12 +303,23 @@ class PingViewModel @Inject constructor(
             host = trimmedHost, packets = emptyList(), totalCount = params.count
         )
 
+        val operationSession = PingOperation.newSession(
+            PingRequest(
+                host = trimmedHost,
+                count = params.count,
+                timeoutMs = params.timeoutMs,
+                intervalMs = params.intervalMs,
+                payloadBytes = params.payloadBytes,
+                ttl = params.ttl,
+            )
+        )
+        pingOperationSession = operationSession
         pingJob = viewModelScope.launch {
             val accumulated = mutableListOf<PingPacketResult>()
             var savedToRecents = false
 
             try {
-                pingUseCase(params).collect { result ->
+                pingUseCase(params, operationSession).collect { result ->
                     when (result) {
                         is PingFlowResult.ValidationError -> {
                             _uiState.value = PingUiState.Error(result.message)
@@ -342,6 +352,8 @@ class PingViewModel @Inject constructor(
                 throw e
             } catch (e: Exception) {
                 _uiState.value = PingUiState.Error(e.message ?: "Ping failed")
+            } finally {
+                if (pingOperationSession === operationSession) pingOperationSession = null
             }
         }
     }
@@ -349,6 +361,8 @@ class PingViewModel @Inject constructor(
     // ── Continuous ping ──────────────────────────────────────────────────────
 
     private fun startContinuousPing() {
+        pingOperationSession?.cancel(CancellationReason.USER_STOP)
+        pingOperationSession = null
         pingJob?.cancel()
         pingJob = null
         discardContinuousSession()
@@ -369,13 +383,24 @@ class PingViewModel @Inject constructor(
 
         val logFile = sessionLogFileFactory()
         val logger = PingSessionLogger(logFile)
+        val operationSession = PingOperation.newSession(
+            PingRequest(
+                host = trimmedHost,
+                count = 0,
+                timeoutMs = params.timeoutMs,
+                intervalMs = params.intervalMs,
+                payloadBytes = params.payloadBytes,
+                ttl = params.ttl,
+            )
+        )
         val session = ContinuousPingSession(
             file = logFile,
             logWriter = ContinuousPingLogWriter(
                 scope = viewModelScope,
                 logger = logger,
                 appendPacket = sessionLogAppendHook
-            )
+            ),
+            operationSession = operationSession,
         )
         continuousSession = session
 
@@ -390,7 +415,7 @@ class PingViewModel @Inject constructor(
             var savedToRecents = false
 
             try {
-                continuousPingUseCase(params).collect { result ->
+                continuousPingUseCase(params, operationSession).collect { result ->
                     when (result) {
                         is PingFlowResult.ValidationError -> {
                             throw ContinuousPingValidationException(result.message)
@@ -470,6 +495,7 @@ class PingViewModel @Inject constructor(
         session.stopRequested = true
         retiringSessions += session
         val producer = session.producerJob
+        session.operationSession.cancel(CancellationReason.USER_STOP)
         producer?.cancel()
         viewModelScope.launch {
             try {
@@ -483,14 +509,37 @@ class PingViewModel @Inject constructor(
     }
 
     override fun onCleared() {
+        pingOperationSession?.cancel(CancellationReason.LIFECYCLE_PAUSE)
+        pingOperationSession = null
         val sessions = retiringSessions.toList() + listOfNotNull(continuousSession)
         continuousSession = null
         sessions.forEach { session ->
+            session.operationSession.cancel(CancellationReason.LIFECYCLE_PAUSE)
             session.producerJob?.cancel()
             session.logWriter.cancel()
             session.file.delete()
         }
         retiringSessions.clear()
+    }
+
+    private fun stopContinuousPing(reason: CancellationReason) {
+        val current = _uiState.value
+        val session = continuousSession
+        if (current !is PingUiState.Running || !current.isContinuous || session == null) return
+        if (session.stopRequested) return
+        session.stopRequested = true
+        val producer = session.producerJob
+        session.operationSession.cancel(reason)
+        producer?.cancel()
+        if (pingJob === producer) pingJob = null
+        viewModelScope.launch {
+            producer?.join()
+            val logAvailable = session.logWriter.closeAndJoin()
+            val latest = _uiState.value
+            if (continuousSession === session && latest is PingUiState.Running && latest.isContinuous) {
+                finalizeContinuousSession(latest, session, logAvailable)
+            }
+        }
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────

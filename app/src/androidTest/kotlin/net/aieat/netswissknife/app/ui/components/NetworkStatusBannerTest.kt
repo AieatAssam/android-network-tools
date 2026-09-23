@@ -81,6 +81,21 @@ class NetworkStatusBannerTest {
     }
 
     @Test
+    fun anyNetworkScope_doesNotWarnWhenVpnIsActive() {
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                NetworkStatusBanner(
+                    status = NetworkStatus(hasInternet = false, hasLocalNetwork = false, vpnActive = true),
+                    scope = NetworkStatusScope.ANY_NETWORK,
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag(STATUS_BANNER_TEST_TAG).assertDoesNotExist()
+        composeRule.onNodeWithText(context.getString(R.string.network_banner_no_network)).assertDoesNotExist()
+    }
+
+    @Test
     fun permissionError_showsLocalizedGrantActionAndInvokesIt() {
         var grants = 0
         composeRule.setContent {

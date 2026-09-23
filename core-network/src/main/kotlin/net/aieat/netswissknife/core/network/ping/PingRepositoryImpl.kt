@@ -1,19 +1,21 @@
 package net.aieat.netswissknife.core.network.ping
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.Dispatchers
 import net.aieat.netswissknife.core.network.HostResolver
 import net.aieat.netswissknife.core.network.InetAddressHostResolver
+import net.aieat.netswissknife.core.network.operation.OperationRunner
+import net.aieat.netswissknife.core.network.operation.OperationSession
+import net.aieat.netswissknife.core.network.operation.ensureCurrentOperationActive
 import java.net.UnknownHostException
 
 /**
@@ -41,40 +43,74 @@ class PingRepositoryImpl(
     @Deprecated("Use ping(PingRequest)")
     override fun ping(host: String, count: Int, timeoutMs: Int): Flow<PingPacketResult> {
         val legacyChecker = checker
-        if (legacyChecker == null) return ping(PingRequest(host, count = count, timeoutMs = timeoutMs))
-        return legacyFlow(PingRequest(host, count = count, timeoutMs = timeoutMs), legacyChecker)
+        val request = PingRequest(host, count = count, timeoutMs = timeoutMs)
+        if (legacyChecker == null) return ping(request)
+        return legacyFlow(request, legacyChecker)
     }
 
     /** Legacy adapter retained for callers compiled against the old API. */
     @Deprecated("Use continuousPing(PingRequest)")
     override fun continuousPing(host: String, timeoutMs: Int): Flow<PingPacketResult> {
         val legacyChecker = checker
-        if (legacyChecker == null) return continuousPing(PingRequest(host, count = 0, timeoutMs = timeoutMs))
-        return legacyFlow(PingRequest(host, count = 0, timeoutMs = timeoutMs), legacyChecker)
+        val request = PingRequest(host, count = 0, timeoutMs = timeoutMs)
+        if (legacyChecker == null) return continuousPing(request)
+        return legacyFlow(request, legacyChecker)
     }
 
     override fun ping(request: PingRequest): Flow<PingPacketResult> =
         runSession(request.copy(count = request.count.coerceAtLeast(1)))
 
-    override fun continuousPing(request: PingRequest): Flow<PingPacketResult> = runSession(request.copy(count = 0))
+    override fun ping(request: PingRequest, session: OperationSession): Flow<PingPacketResult> =
+        runSession(request.copy(count = request.count.coerceAtLeast(1)), session)
+
+    override fun continuousPing(request: PingRequest): Flow<PingPacketResult> =
+        runSession(request.copy(count = 0))
+
+    override fun continuousPing(request: PingRequest, session: OperationSession): Flow<PingPacketResult> =
+        runSession(request.copy(count = 0), session)
 
     private fun legacyFlow(
         request: PingRequest,
         legacyChecker: (String, Int) -> ReachabilityResult
-    ): Flow<PingPacketResult> = ReachabilityPingEngine(legacyChecker).ping(
-        request.copy(intervalMs = delayBetweenProbesMs.coerceAtLeast(0L).coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
-    ).let { upstream ->
-        kotlinx.coroutines.flow.flow {
-            upstream.collect { emit(it.copy(engine = PingEngineKind.REACHABILITY)) }
+    ): Flow<PingPacketResult> {
+        val configuredRequest = request.copy(
+            intervalMs = delayBetweenProbesMs.coerceAtLeast(0L).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+        )
+        return withOperationSession(configuredRequest, suppliedSession = null) { session ->
+            ReachabilityPingEngine(legacyChecker).ping(configuredRequest, session)
+                .let { upstream ->
+                    kotlinx.coroutines.flow.flow {
+                        upstream.collect { emit(it.copy(engine = PingEngineKind.REACHABILITY)) }
+                    }
+                }
         }
     }
 
-    private fun runSession(request: PingRequest): Flow<PingPacketResult> =
-        if (request.count == 0) runContinuousSession(request) else runBoundedSession(request)
+    private fun runSession(request: PingRequest, session: OperationSession? = null): Flow<PingPacketResult> =
+        withOperationSession(request, session) { operationSession ->
+            if (request.count == 0) runContinuousSession(request, operationSession)
+            else runBoundedSession(request, operationSession)
+        }
 
-    private fun runBoundedSession(request: PingRequest): Flow<PingPacketResult> = flow {
+    private fun withOperationSession(
+        request: PingRequest,
+        suppliedSession: OperationSession?,
+        source: (OperationSession) -> Flow<PingPacketResult>,
+    ): Flow<PingPacketResult> = channelFlow {
+        val session = suppliedSession ?: PingOperation.newSession(request)
+        OperationRunner.runOrJoin(session) {
+            source(session).collect { packet ->
+                ensureCurrentOperationActive()
+                send(packet)
+            }
+        }
+    }.flowOn(Dispatchers.IO)
+
+    private fun runBoundedSession(request: PingRequest, session: OperationSession): Flow<PingPacketResult> = flow {
         val resolvedIp = try {
-            request.resolvedIp ?: resolver.resolve(request.host)
+            request.resolvedIp ?: PingBlockingCallExecutor.run(session) { resolver.resolve(request.host) }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: UnknownHostException) {
             emit(
                 PingPacketResult(
@@ -112,7 +148,7 @@ class PingRepositoryImpl(
             var emittedUsablePacket = false
             var lastSequence = 0
             try {
-                engine.ping(resolvedRequest).collect { packet ->
+                engine.ping(resolvedRequest, session).collect { packet ->
                     lastSequence = packet.sequence
                     if (packet.status == PingStatus.ERROR && !emittedUsablePacket) {
                         packet.errorMessage?.takeIf { it.isNotBlank() }?.let(failureMessages::add)
@@ -137,9 +173,9 @@ class PingRepositoryImpl(
             }
         }
         emit(errorPacket(resolvedRequest, allEnginesFailedMessage(failureMessages)))
-    }.flowOn(Dispatchers.IO)
+    }
 
-    private fun runContinuousSession(request: PingRequest): Flow<PingPacketResult> = flow {
+    private fun runContinuousSession(request: PingRequest, session: OperationSession): Flow<PingPacketResult> = flow {
         val candidates = configuredEngines
         if (candidates.none { it.isAvailable }) {
             emit(errorPacket(request, "No ping engine is available"))
@@ -150,7 +186,7 @@ class PingRepositoryImpl(
         var sequence = 1
         while (true) {
             val resolvedIp = try {
-                request.resolvedIp ?: resolver.resolve(request.host)
+                request.resolvedIp ?: PingBlockingCallExecutor.run(session) { resolver.resolve(request.host) }
             } catch (e: UnknownHostException) {
                 emit(errorPacket(request, e.message ?: "Unknown host: ${request.host}", sequence))
                 sequence++
@@ -180,7 +216,7 @@ class PingRepositoryImpl(
             for (engine in enginesToTry) {
                 var usablePacket: PingPacketResult? = null
                 try {
-                    engine.ping(probeRequest).collect { packet ->
+                    engine.ping(probeRequest, session).collect { packet ->
                         if (packet.status == PingStatus.ERROR && usablePacket == null) {
                             packet.errorMessage?.takeIf { it.isNotBlank() }?.let(failureMessages::add)
                             throw EngineUnavailableException(packet.errorMessage)
@@ -218,7 +254,7 @@ class PingRepositoryImpl(
             sequence++
             delay(request.intervalMs.toLong().coerceAtLeast(0L))
         }
-    }.flowOn(Dispatchers.IO)
+    }
 
     private fun errorPacket(request: PingRequest, message: String, sequence: Int = 1) = PingPacketResult(
         sequence = sequence,

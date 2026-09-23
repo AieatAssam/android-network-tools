@@ -6,8 +6,15 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import me.impa.icmpenguin.ProbeResult
 import me.impa.icmpenguin.ping.Pinger
+import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationCancellationException
+import net.aieat.netswissknife.core.network.operation.OperationDeadlineExceededException
+import net.aieat.netswissknife.core.network.operation.OperationSession
 import net.aieat.netswissknife.core.network.ping.PingEngine
 import net.aieat.netswissknife.core.network.ping.PingEngineKind
 import net.aieat.netswissknife.core.network.ping.PingPacketResult
@@ -115,6 +122,56 @@ class IcmpenguinPingEngine(
             }
             .collect { result -> emit(IcmpenguinResultMapper.toPacket(request.host, result)) }
     }.flowOn(Dispatchers.IO)
+
+    /**
+     * Operation-aware adapter. icmpenguin's Pinger owns its ProbeManager inside the
+     * `ping()` flow (the library closes that manager in a `use` block), so cancellation
+     * of this collection is the supported way to close the native handle. Registering
+     * the collection job with the operation scope also covers scope closure racing with
+     * normal completion.
+     */
+    override fun ping(request: PingRequest, session: OperationSession): Flow<PingPacketResult> = flow {
+        val collectionLease = NativeCollectionLease(checkNotNull(currentCoroutineContext()[Job]))
+        session.resources.register(collectionLease)
+        try {
+            ensureOperationActive(session)
+            val nativeFlow = try {
+                nativeProbeFactory(request)
+            } catch (failure: LinkageError) {
+                nativeUnavailable = true
+                flowOf(linkageFailureProbe(request, failure))
+            }
+            nativeFlow
+                .catch { failure ->
+                    if (failure !is LinkageError) throw failure
+                    ensureOperationActive(session)
+                    nativeUnavailable = true
+                    emit(linkageFailureProbe(request, failure))
+                }
+                .collect { result ->
+                    ensureOperationActive(session)
+                    emit(IcmpenguinResultMapper.toPacket(request.host, result))
+                }
+        } finally {
+            session.resources.release(collectionLease)
+        }
+    }.flowOn(Dispatchers.IO)
+}
+
+private class NativeCollectionLease(private val collectionJob: Job) : AutoCloseable {
+    override fun close() {
+        collectionJob.cancel(OperationCancellationException(CancellationReason.PARENT_CANCELLED))
+    }
+}
+
+private suspend fun ensureOperationActive(session: OperationSession) {
+    currentCoroutineContext().ensureActive()
+    when (val reason = session.cancellationReason) {
+        null -> Unit
+        CancellationReason.DEADLINE_EXCEEDED -> throw OperationDeadlineExceededException()
+        else -> throw OperationCancellationException(reason)
+    }
+    session.budget.throwIfExpired()
 }
 
 private fun linkageFailureProbe(request: PingRequest, failure: LinkageError) = IcmpProbe.Error(

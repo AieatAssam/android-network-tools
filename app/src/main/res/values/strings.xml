@@ -1192,6 +1192,7 @@
 
     <!-- Network state and local-network permission -->
     <string name="network_banner_no_internet">No internet connection. This tool may not reach public hosts.</string>
+    <string name="network_banner_no_network">No network connection. Connect to Wi-Fi, Ethernet, or the internet to run this tool.</string>
     <string name="network_banner_no_local">No Wi-Fi or Ethernet network. LAN tools need a local network.</string>
     <string name="network_banner_vpn_info">VPN active. LAN traffic is sent directly over Wi-Fi or Ethernet.</string>
     <string name="network_error_local_permission">Local network permission was denied. Grant access, then retry.</string>

@@ -8,6 +8,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.CompletableDeferred
@@ -34,6 +35,8 @@ import net.aieat.netswissknife.core.domain.PingUseCase
 import net.aieat.netswissknife.core.domain.PingSessionLogger
 import net.aieat.netswissknife.core.network.ping.PingPacketResult
 import net.aieat.netswissknife.core.network.ping.PingStatus
+import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationSession
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -63,6 +66,13 @@ class PingViewModelTest {
 
     private suspend fun awaitError(): PingUiState.Error =
         viewModel.uiState.first { it is PingUiState.Error } as PingUiState.Error
+
+    private fun neverEndingFlow(count: Int = 3) = flow {
+        repeat(count) { i ->
+            emit(PingFlowResult.Packet(successPacket.copy(sequence = i + 1)))
+        }
+        suspendCancellableCoroutine<Nothing> { }
+    }
 
     private val successPacket = PingPacketResult(
         sequence = 1, host = "example.com", status = PingStatus.SUCCESS, rtTimeMs = 15L
@@ -166,7 +176,7 @@ class PingViewModelTest {
 
         @Test
         fun `transitions to Finished after all packets`() = runTest {
-            coEvery { pingUseCase(any()) } returns flowOf(
+            coEvery { pingUseCase(any(), any()) } returns flowOf(
                 PingFlowResult.Packet(successPacket),
                 PingFlowResult.Packet(successPacket.copy(sequence = 2))
             )
@@ -179,7 +189,7 @@ class PingViewModelTest {
 
         @Test
         fun `Finished state has null sessionLogFile in normal mode`() = runTest {
-            coEvery { pingUseCase(any()) } returns flowOf(PingFlowResult.Packet(successPacket))
+            coEvery { pingUseCase(any(), any()) } returns flowOf(PingFlowResult.Packet(successPacket))
             viewModel.onHostChange("example.com")
             viewModel.startPing()
             val state = viewModel.uiState.value as PingUiState.Finished
@@ -188,18 +198,18 @@ class PingViewModelTest {
 
         @Test
         fun `passes a count of 100 to the ping use case`() = runTest {
-            coEvery { pingUseCase(any()) } returns flowOf(PingFlowResult.Packet(successPacket))
+            coEvery { pingUseCase(any(), any()) } returns flowOf(PingFlowResult.Packet(successPacket))
             viewModel.onHostChange("example.com")
             viewModel.onCountChange(100)
 
             viewModel.startPing()
 
-            coVerify(exactly = 1) { pingUseCase(match { it.count == 100 }) }
+            coVerify(exactly = 1) { pingUseCase(match { it.count == 100 }, any()) }
         }
 
         @Test
         fun `passes displayed advanced option values to the ping use case`() = runTest {
-            coEvery { pingUseCase(any()) } returns flowOf(PingFlowResult.Packet(successPacket))
+            coEvery { pingUseCase(any(), any()) } returns flowOf(PingFlowResult.Packet(successPacket))
             viewModel.onHostChange("example.com")
             viewModel.onPayloadSizeChange(512)
             viewModel.onTtlChange(128)
@@ -210,13 +220,13 @@ class PingViewModelTest {
             coVerify(exactly = 1) {
                 pingUseCase(match {
                     it.payloadBytes == 512 && it.ttl == 128 && it.intervalMs == 2_500
-                })
+                }, any())
             }
         }
 
         @Test
         fun `transitions to Error on ValidationError`() = runTest {
-            coEvery { pingUseCase(any()) } returns flowOf(PingFlowResult.ValidationError("invalid host"))
+            coEvery { pingUseCase(any(), any()) } returns flowOf(PingFlowResult.ValidationError("invalid host"))
             viewModel.onHostChange("")
             viewModel.startPing()
             val state = viewModel.uiState.value
@@ -226,7 +236,7 @@ class PingViewModelTest {
 
         @Test
         fun `transitions to Error when flow completes with no packets`() = runTest {
-            coEvery { pingUseCase(any()) } returns flowOf()
+            coEvery { pingUseCase(any(), any()) } returns flowOf()
             viewModel.onHostChange("unreachable.host")
             viewModel.startPing()
             assertTrue(viewModel.uiState.value is PingUiState.Error)
@@ -240,12 +250,12 @@ class PingViewModelTest {
             viewModel.startPing()
 
             assertEquals(PingUiState.Error("No network connection"), viewModel.uiState.value)
-            coVerify(exactly = 0) { pingUseCase(any()) }
+            coVerify(exactly = 0) { pingUseCase(any(), any()) }
         }
 
         @Test
         fun `probe exception is exposed as an error`() = runTest {
-            coEvery { pingUseCase(any()) } throws IllegalStateException("socket closed")
+            coEvery { pingUseCase(any(), any()) } throws IllegalStateException("socket closed")
             viewModel.onHostChange("example.com")
 
             viewModel.startPing()
@@ -262,7 +272,8 @@ class PingViewModelTest {
 
         @Test
         fun `onStop with collected packets moves to Finished`() = runTest {
-            coEvery { pingUseCase(any()) } returns flow {
+            val sessionSlot = slot<OperationSession>()
+            coEvery { pingUseCase(any(), capture(sessionSlot)) } returns flow {
                 emit(PingFlowResult.Packet(successPacket))
                 suspendCancellableCoroutine<Nothing> { }
             }
@@ -270,11 +281,12 @@ class PingViewModelTest {
             viewModel.startPing()
             viewModel.onStop()
             assertTrue(viewModel.uiState.value is PingUiState.Finished)
+            assertEquals(CancellationReason.USER_STOP, sessionSlot.captured.cancellationReason)
         }
 
         @Test
         fun `onClearResults resets to Idle`() = runTest {
-            coEvery { pingUseCase(any()) } returns flowOf(PingFlowResult.Packet(successPacket))
+            coEvery { pingUseCase(any(), any()) } returns flowOf(PingFlowResult.Packet(successPacket))
             viewModel.onHostChange("example.com")
             viewModel.startPing()
             viewModel.onClearResults()
@@ -283,7 +295,7 @@ class PingViewModelTest {
 
         @Test
         fun `onLifecycleStop does NOT stop a normal ping`() = runTest {
-            coEvery { pingUseCase(any()) } returns flow {
+            coEvery { pingUseCase(any(), any()) } returns flow {
                 emit(PingFlowResult.Packet(successPacket))
                 kotlinx.coroutines.delay(10_000L)
             }
@@ -295,6 +307,19 @@ class PingViewModelTest {
             assertTrue(viewModel.uiState.value is PingUiState.Running)
             assertFalse((viewModel.uiState.value as PingUiState.Running).isContinuous)
         }
+
+        @Test
+        fun `onLifecycleStop cancels the caller-owned continuous session`() = runTest {
+            val sessionSlot = slot<OperationSession>()
+            coEvery { continuousPingUseCase(any(), capture(sessionSlot)) } returns neverEndingFlow()
+            viewModel.onHostChange("example.com")
+            viewModel.onToggleContinuous(true)
+
+            viewModel.startPing()
+            viewModel.onLifecycleStop()
+
+            assertEquals(CancellationReason.LIFECYCLE_PAUSE, sessionSlot.captured.cancellationReason)
+        }
     }
 
     // ── Continuous ping ───────────────────────────────────────────────────────
@@ -302,15 +327,6 @@ class PingViewModelTest {
     @Nested
     @DisplayName("continuous ping")
     inner class ContinuousPing {
-
-        // Emits `count` packets immediately then suspends until cancelled, simulating an
-        // ongoing session without advancing virtual time (avoids advanceUntilIdle loops).
-        private fun neverEndingFlow(count: Int = 3) = flow {
-            repeat(count) { i ->
-                emit(PingFlowResult.Packet(successPacket.copy(sequence = i + 1)))
-            }
-            suspendCancellableCoroutine<Nothing> { }
-        }
 
         @Test
         fun `bounded log queue backpressures and close drains every packet in order`() = runTest {
@@ -438,7 +454,7 @@ class PingViewModelTest {
 
         @Test
         fun `Running state has isContinuous true`() = runTest {
-            coEvery { continuousPingUseCase(any()) } returns neverEndingFlow()
+            coEvery { continuousPingUseCase(any(), any()) } returns neverEndingFlow()
             viewModel.startPing()
             val state = viewModel.uiState.value
             assertTrue(state is PingUiState.Running)
@@ -447,7 +463,7 @@ class PingViewModelTest {
 
         @Test
         fun `pingsSent increments with each packet`() = runTest {
-            coEvery { continuousPingUseCase(any()) } returns neverEndingFlow()
+            coEvery { continuousPingUseCase(any(), any()) } returns neverEndingFlow()
             viewModel.startPing()
             val state = viewModel.uiState.value as PingUiState.Running
             assertTrue(state.pingsSent > 0)
@@ -455,7 +471,7 @@ class PingViewModelTest {
 
         @Test
         fun `rolling window is capped at 100 packets`() = runTest {
-            coEvery { continuousPingUseCase(any()) } returns flow {
+            coEvery { continuousPingUseCase(any(), any()) } returns flow {
                 repeat(150) { i -> emit(PingFlowResult.Packet(successPacket.copy(sequence = i + 1))) }
             }
             viewModel.startPing()
@@ -470,7 +486,7 @@ class PingViewModelTest {
 
         @Test
         fun `onStop transitions continuous session to Finished`() = runTest {
-            coEvery { continuousPingUseCase(any()) } returns neverEndingFlow()
+            coEvery { continuousPingUseCase(any(), any()) } returns neverEndingFlow()
             viewModel.startPing()
             viewModel.onStop()
             assertTrue(awaitFinished().result.packets.isNotEmpty())
@@ -478,7 +494,7 @@ class PingViewModelTest {
 
         @Test
         fun `Finished after continuous has non-null sessionLogFile`() = runTest {
-            coEvery { continuousPingUseCase(any()) } returns neverEndingFlow()
+            coEvery { continuousPingUseCase(any(), any()) } returns neverEndingFlow()
             viewModel.startPing()
             viewModel.onStop()
             val state = awaitFinished()
@@ -497,7 +513,7 @@ class PingViewModelTest {
                 }
                 logger.append(sequence, packet)
             }
-            coEvery { continuousPingUseCase(any()) } returns flow {
+            coEvery { continuousPingUseCase(any(), any()) } returns flow {
                 repeat(3) { i -> emit(PingFlowResult.Packet(successPacket.copy(sequence = i + 1))) }
                 allPacketsEmitted.complete(Unit)
                 suspendCancellableCoroutine<Nothing> { }
@@ -529,7 +545,7 @@ class PingViewModelTest {
                 }
                 logger.append(sequence, packet)
             }
-            coEvery { continuousPingUseCase(any()) } returns flow {
+            coEvery { continuousPingUseCase(any(), any()) } returns flow {
                 repeat(3) { i -> emit(PingFlowResult.Packet(successPacket.copy(sequence = i + 1))) }
             }
 
@@ -549,7 +565,7 @@ class PingViewModelTest {
         fun `stopping with no packets removes the empty session file`() = runTest {
             val logFile = java.io.File.createTempFile("ping_empty_test_", ".csv")
             viewModel.sessionLogFileFactory = { logFile }
-            coEvery { continuousPingUseCase(any()) } returns flow {
+            coEvery { continuousPingUseCase(any(), any()) } returns flow {
                 suspendCancellableCoroutine<Nothing> { }
             }
 
@@ -563,7 +579,7 @@ class PingViewModelTest {
 
         @Test
         fun `onLifecycleStop stops continuous ping`() = runTest {
-            coEvery { continuousPingUseCase(any()) } returns neverEndingFlow()
+            coEvery { continuousPingUseCase(any(), any()) } returns neverEndingFlow()
             viewModel.startPing()
             assertTrue(viewModel.uiState.value is PingUiState.Running)
             viewModel.onLifecycleStop()
@@ -572,7 +588,7 @@ class PingViewModelTest {
 
         @Test
         fun `onLifecycleStop is idempotent - safe to call twice`() = runTest {
-            coEvery { continuousPingUseCase(any()) } returns neverEndingFlow()
+            coEvery { continuousPingUseCase(any(), any()) } returns neverEndingFlow()
             viewModel.startPing()
             viewModel.onLifecycleStop()
             viewModel.onLifecycleStop() // second call — must not crash or change state
@@ -585,7 +601,7 @@ class PingViewModelTest {
         fun `ValidationError clears session file and shows Error state`() = runTest {
             val logFile = java.io.File.createTempFile("ping_validation_test_", ".csv")
             viewModel.sessionLogFileFactory = { logFile }
-            coEvery { continuousPingUseCase(any()) } returns flowOf(
+            coEvery { continuousPingUseCase(any(), any()) } returns flowOf(
                 PingFlowResult.ValidationError("invalid")
             )
             viewModel.startPing()
@@ -600,12 +616,12 @@ class PingViewModelTest {
             viewModel.startPing()
 
             assertEquals(PingUiState.Error("No network connection"), viewModel.uiState.value)
-            coVerify(exactly = 0) { continuousPingUseCase(any()) }
+            coVerify(exactly = 0) { continuousPingUseCase(any(), any()) }
         }
 
         @Test
         fun `continuous probe exception is exposed as an error`() = runTest {
-            coEvery { continuousPingUseCase(any()) } throws IllegalStateException("socket closed")
+            coEvery { continuousPingUseCase(any(), any()) } throws IllegalStateException("socket closed")
 
             viewModel.startPing()
 
@@ -614,14 +630,14 @@ class PingViewModelTest {
 
         @Test
         fun `starting new continuous session deletes previous log file`() = runTest {
-            coEvery { continuousPingUseCase(any()) } returns neverEndingFlow()
+            coEvery { continuousPingUseCase(any(), any()) } returns neverEndingFlow()
             viewModel.startPing()
             viewModel.onStop()
             val firstFile = awaitFinished().sessionLogFile
             assertNotNull(firstFile)
 
             // Start a second session
-            coEvery { continuousPingUseCase(any()) } returns neverEndingFlow()
+            coEvery { continuousPingUseCase(any(), any()) } returns neverEndingFlow()
             viewModel.startPing()
             // The first file should have been deleted
             assertTrue(firstFile?.exists() == false)
@@ -629,7 +645,7 @@ class PingViewModelTest {
 
         @Test
         fun `onClearResults resets to Idle and cleans up file`() = runTest {
-            coEvery { continuousPingUseCase(any()) } returns neverEndingFlow()
+            coEvery { continuousPingUseCase(any(), any()) } returns neverEndingFlow()
             viewModel.startPing()
             viewModel.onStop()
             val logFile = awaitFinished().sessionLogFile
@@ -640,14 +656,14 @@ class PingViewModelTest {
 
         @Test
         fun `addRecent is called on first continuous packet`() = runTest {
-            coEvery { continuousPingUseCase(any()) } returns neverEndingFlow()
+            coEvery { continuousPingUseCase(any(), any()) } returns neverEndingFlow()
             viewModel.startPing()
             coVerify { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_PING_HOSTS, "example.com") }
         }
 
         @Test
         fun `continuous ping normalizes host before displaying and storing it`() = runTest {
-            coEvery { continuousPingUseCase(any()) } returns flowOf(
+            coEvery { continuousPingUseCase(any(), any()) } returns flowOf(
                 PingFlowResult.Packet(successPacket)
             )
             viewModel.onHostChange("  EXAMPLE.COM.  ")
@@ -655,7 +671,7 @@ class PingViewModelTest {
             viewModel.startPing()
 
             coVerify {
-                continuousPingUseCase(match { it.host == "example.com" })
+                continuousPingUseCase(match { it.host == "example.com" }, any())
             }
             coVerify {
                 recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_PING_HOSTS, "example.com")
@@ -673,7 +689,7 @@ class PingViewModelTest {
         @Test
         fun `addRecent is called on first valid packet`() = runTest {
             val packet = PingPacketResult(sequence = 1, host = "example.com", status = PingStatus.SUCCESS, rtTimeMs = 10L)
-            coEvery { pingUseCase(any()) } returns flowOf(PingFlowResult.Packet(packet))
+            coEvery { pingUseCase(any(), any()) } returns flowOf(PingFlowResult.Packet(packet))
             viewModel.onHostChange("example.com")
             viewModel.startPing()
             coVerify { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_PING_HOSTS, "example.com") }
@@ -681,12 +697,12 @@ class PingViewModelTest {
 
         @Test
         fun `normal ping normalizes host before probing displaying and storing it`() = runTest {
-            coEvery { pingUseCase(any()) } returns flowOf(PingFlowResult.Packet(successPacket))
+            coEvery { pingUseCase(any(), any()) } returns flowOf(PingFlowResult.Packet(successPacket))
             viewModel.onHostChange("  EXAMPLE.COM.  ")
 
             viewModel.startPing()
 
-            coVerify { pingUseCase(match { it.host == "example.com" }) }
+            coVerify { pingUseCase(match { it.host == "example.com" }, any()) }
             coVerify {
                 recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_PING_HOSTS, "example.com")
             }
@@ -695,7 +711,7 @@ class PingViewModelTest {
 
         @Test
         fun `addRecent is NOT called when ValidationError fires`() = runTest {
-            coEvery { pingUseCase(any()) } returns flowOf(PingFlowResult.ValidationError("bad host"))
+            coEvery { pingUseCase(any(), any()) } returns flowOf(PingFlowResult.ValidationError("bad host"))
             viewModel.onHostChange("bad!!host")
             viewModel.startPing()
             coVerify(exactly = 0) { recentHostsRepository.addRecent(any(), any()) }

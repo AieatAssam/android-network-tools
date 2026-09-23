@@ -1,9 +1,12 @@
 package net.aieat.netswissknife.core.network.operation
 
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.InternalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
@@ -79,10 +82,16 @@ object OperationRunner {
                             session.recordCancellationReason(CancellationReason.PARENT_CANCELLED)
                         }
                     }
-                    val closeFailure = runCatching { session.resources.close() }.exceptionOrNull()
-                    if (closeFailure != null) {
-                        eagerCloseFailure.compareAndSet(null, closeFailure)
-                        preserveCleanupFailure(cause, closeFailure)
+                    // Job cancellation handlers run synchronously on the thread that requested
+                    // cancellation. Resource close methods may block (for example, while a
+                    // native transport is shutting down), so start eager cleanup on an
+                    // independent process-lifetime IO scope instead of blocking that caller.
+                    OperationCleanupScope.scope.launch {
+                        val closeFailure = runCatching { session.resources.close() }.exceptionOrNull()
+                        if (closeFailure != null) {
+                            eagerCloseFailure.compareAndSet(null, closeFailure)
+                            preserveCleanupFailure(cause, closeFailure)
+                        }
                     }
                 }
             }
@@ -111,12 +120,11 @@ object OperationRunner {
                     }
                     is OperationCancellationException -> {
                         val winningReason = session.recordCancellationReason(failure.reason)
-                        if (winningReason == failure.reason) failure
-                        else OperationCancellationException(winningReason, failure)
+                        winningReason.toTerminalFailure(failure)
                     }
                     is kotlinx.coroutines.CancellationException -> {
                         val winningReason = session.recordCancellationReason(CancellationReason.PARENT_CANCELLED)
-                        OperationCancellationException(winningReason, failure)
+                        winningReason.toTerminalFailure(failure)
                     }
                     else -> failure
                 }
@@ -125,7 +133,7 @@ object OperationRunner {
             } finally {
                 deadlineWatcher.cancel()
                 cancellationCloseHandle.dispose()
-                val closeFailure = withContext(NonCancellable) {
+                val closeFailure = withContext(NonCancellable + Dispatchers.IO) {
                     try {
                         session.resources.close()
                         null
@@ -156,7 +164,7 @@ object OperationRunner {
     internal suspend fun completeDeadline(
         session: OperationSession,
         operationJob: Job,
-    ): OperationDeadlineExceededException? = withContext(NonCancellable) {
+    ): OperationDeadlineExceededException? = withContext(NonCancellable + Dispatchers.IO) {
         val winningReason = session.recordCancellationReason(CancellationReason.DEADLINE_EXCEEDED)
         if (winningReason != CancellationReason.DEADLINE_EXCEEDED) return@withContext null
         operationJob.cancel(
@@ -177,6 +185,9 @@ object OperationRunner {
     }
 
     private suspend fun awaitDeadline(budget: OperationBudget) {
+        if (!budget.hasDeadline) {
+            awaitCancellation()
+        }
         while (true) {
             val remainingNanos = budget.remainingNanos()
             if (remainingNanos == 0L) return
@@ -198,4 +209,16 @@ object OperationRunner {
             attachmentPoint.suppressed.none { it === cleanupFailure }
         ) attachmentPoint.addSuppressed(cleanupFailure)
     }
+
+    private fun CancellationReason.toTerminalFailure(cause: Throwable): Throwable =
+        if (this == CancellationReason.DEADLINE_EXCEEDED) {
+            OperationDeadlineExceededException().also { it.initCause(cause) }
+        } else {
+            OperationCancellationException(this, cause)
+        }
+}
+
+/** Eager cancellation cleanup must outlive the cancelling operation and its caller. */
+private object OperationCleanupScope {
+    val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 }

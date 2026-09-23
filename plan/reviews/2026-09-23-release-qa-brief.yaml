@@ -2,8 +2,8 @@ review:
   area: release-qa-brief
   status: audited
   source: "User-provided Net Swiss Knife QA brief v2026.09.21.1 (API 33, host snmpd at 10.0.2.2)."
-checked_commit: "c68ec97"
-checked_scope: "Source and tests at c68ec97 plus the working-tree changes recorded in this review."
+  checked_commit: "7106a5bafa21bf0b30b91afb98470d8d10b184c8"
+  checked_scope: "Baseline source at 7106a5b plus current worktree source and tests; implementation details are cross-referenced to the E03 and dependency-gate review artifacts."
   branch: "plan/comprehensive-review-2026-09-22"
   release_metadata:
     app: "Net Swiss Knife"
@@ -16,7 +16,7 @@ checked_scope: "Source and tests at c68ec97 plus the working-tree changes record
     suggested_order: [ISS-20, ISS-21, ISS-17, ISS-05, ISS-06]
     environment_non_goals: "Emulator public ICMP/DNS flakiness is an error-UX check; live Cloudflare success is not required on the target AVD."
   environment:
-    connected_emulator: "API 36 / Android 16; not the requested API 33 emulator"
+    connected_emulator: "None remains connected. A software-rendered API 36 dev36 AVD booted, but PackageManager stalled while installing the test APK; the run was stopped before instrumentation started and the AVD was shut down. No API 33 AVD is available."
     host_snmpd: "Not available; no local snmpd process or SNMP lab endpoint verified"
     physical_wifi: "Not available"
   fixed_items_rechecked: [ISS-01, ISS-02, ISS-03, ISS-04, ISS-08, ISS-09, ISS-15, SNMP-threading]
@@ -43,8 +43,8 @@ checked_scope: "Source and tests at c68ec97 plus the working-tree changes record
     - id: ISS-04
       classification: source_and_unit_test_present_ui_error_rendering_test_present
       evidence:
-        - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/ping/PingViewModel.kt", lines: "126-128,276-303", detail: "Offline guard emits `PingUiState.Error(\"No network connection\")` before starting the probe." }
-        - { file: "app/src/test/kotlin/net/aieat/netswissknife/app/ui/screens/ping/PingViewModelTest.kt", lines: "235-244", detail: "Unit test checks offline error state and verifies the Ping use case is not invoked." }
+        - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/ping/PingViewModel.kt", lines: "281-303", detail: "Offline guard emits `PingUiState.Error(\"No network connection\")` before starting the probe." }
+        - { file: "app/src/test/kotlin/net/aieat/netswissknife/app/ui/screens/ping/PingViewModelTest.kt", lines: "246-254,613-622", detail: "Unit tests check offline normal/continuous error states and verify the probe/session is not started." }
         - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/PingScreen.kt", lines: "236-260", detail: "Error state is rendered in the results panel; the input header also renders the internet NetworkStatusBanner." }
         - { file: "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/screens/PingScreenTest.kt", lines: "79-108", detail: "Compose tests cover rendering error title/message and empty-detail fallback using a fake ViewModel." }
       limitation: "The ViewModel offline unit test and generic Compose error rendering are covered; airplane-mode UI behavior was not separately exercised on API 33."
@@ -83,26 +83,28 @@ checked_scope: "Source and tests at c68ec97 plus the working-tree changes record
 
 items:
   - id: ISS-05
-    classification: already_fixed_in_source
+    classification: merged_card_semantics_implemented_device_validation_open
     evidence:
       - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/HomeScreen.kt", lines: "262-269", detail: "Clickable ElevatedCard merges descendants and sets Role.Button, so the title is part of the card's merged action semantics." }
       - { file: "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/NavigationAccessibilityTest.kt", lines: "43-67,84-112", detail: "Home and More tests assert each tool label is displayed, clickable, and has button role." }
-    needed_validation: "NavigationAccessibilityTest passed on API 36, asserting merged card labels expose button/click semantics. Verify TalkBack traversal/activation on the API 33 release target; that manual accessibility check remains open."
+    needed_validation: "Compose tests assert that merged card labels expose button/click semantics, but the fresh API 36 instrumentation attempt stopped before test execution. Verify TalkBack traversal/activation on the API 33 release target; both runtime checks remain open."
 
   - id: ISS-17
-    classification: implementation_present_device_validation_open
+    classification: implementation_present_fresh_instrumentation_blocked_device_validation_open
     evidence:
-      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/traceroute/TracerouteViewModel.kt", lines: "117-124,148-187,203-225", detail: "Offline state becomes Error('No network connection'); trace enters Running immediately; each trace uses an operation session; generation checks reject stale emissions; empty completion and ordinary exceptions become visible errors." }
-      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/TracerouteScreen.kt", lines: "168-225,1337-1355", detail: "The screen renders Running/Error states; Error panel exposes Retry and Clear." }
-      - { file: "app/src/test/kotlin/net/aieat/netswissknife/app/ui/screens/traceroute/TracerouteViewModelTest.kt", lines: "98-119", detail: "Unit coverage asserts offline and empty-route states." }
-    needed_validation: "TracerouteScreenTest passed on API 36 for offline/error and Retry/Clear UI paths. On API 33, test airplane mode and a dead/ICMP-blocked target; confirm progress/Stop is visible promptly without scrolling. Initial-viewport target-device behavior remains unproven."
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/traceroute/TracerouteViewModel.kt", lines: "151-169,183-229", detail: "Offline state becomes Error('No network connection'); preflight permits Internet, local-network, or VPN status; trace enters Running immediately, owns an operation session, rejects stale emissions, and reports empty completion or ordinary errors." }
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/TracerouteScreen.kt", lines: "171-204,1346-1368", detail: "The NetworkStatusBanner is placed immediately below the hero, and the Error panel exposes Retry and Clear." }
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/NetworkStatusBanner.kt", lines: "45-53", detail: "ANY_NETWORK shows offline status only when Internet, local-network, and VPN states are all false." }
+      - { file: "app/src/test/kotlin/net/aieat/netswissknife/app/ui/screens/traceroute/TracerouteViewModelTest.kt", lines: "118-152,202-218", detail: "Unit coverage asserts offline rejection, local-only and VPN-only eligibility, and stale-emission invalidation after an offline restart." }
+      - { file: "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/screens/TracerouteScreenTest.kt", lines: "196-244", detail: "Compose coverage asserts offline error copy, Retry/Clear callbacks, and the connectivity banner." }
+    needed_validation: "The fresh API 36 connected instrumentation batch compiled but stopped during APK install before tests started. Run TracerouteScreenTest on API 36 and the reported airplane-mode/dead-or-ICMP-blocked target scenario on API 33; confirm progress/Stop is visible promptly without scrolling. Initial-viewport target-device behavior remains open."
 
   - id: ISS-06
-    classification: already_fixed_in_source_device_verification_open
+    classification: skip_callback_covered_integrated_dismissal_verification_open
     evidence:
       - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/onboarding/OnboardingSheet.kt", lines: "93-96", detail: "The top-right Skip action invokes onDismiss directly from the Welcome sheet (the resource key retains its older 'don't show again' name)." }
       - { file: "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/NavigationAccessibilityTest.kt", lines: "114-130", detail: "Onboarding test clicks the action and asserts the dismiss callback fired." }
-    needed_validation: "NavigationAccessibilityTest passed on API 36 and confirms Skip invokes dismissal. No API 33 release-target run was available."
+    needed_validation: "The Compose test asserts that Skip invokes the dismissal callback, but the fresh API 36 instrumentation attempt stopped before test execution. Verify the integrated Welcome sheet disappears on the release target; no API 33 run was available."
 
   - id: ISS-20
     classification: already_fixed_in_source
@@ -111,30 +113,30 @@ items:
       - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/TracerouteScreen.kt", lines: "321-324,350-353", detail: "Traceroute derives validity and Start enablement from HostValidator.normalize(host), and reports the invalid-host message only when normalization fails." }
       - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/traceroute/TracerouteViewModel.kt", lines: "148-174", detail: "The ViewModel normalizes accepted hosts and forwards the normalized host to the use case." }
       - { file: "core-network/src/test/kotlin/net/aieat/netswissknife/core/network/HostValidatorTest.kt", lines: "35-41", detail: "Tests surrounding whitespace normalization and rejection of internal spaces." }
-    needed_validation: "HostValidatorTest and PingScreenTest on API 36 cover trimming outer whitespace and rejecting embedded spaces; TracerouteScreenTest also passed on API 36. Trailing whitespace is normalized and Start remains usable, rather than rejected as the stale brief wording suggests."
+    needed_validation: "HostValidatorTest covers outer-whitespace trimming and malformed embedded spaces; TracerouteScreenTest asserts an internal-space host is invalid/disabled and a separately defined outer-whitespace case remains startable. Ping, Port Scan, TLS, Topology, Traceroute, and HTTP recent-host paths use the shared normalizer. The fresh API 36 instrumentation attempt stopped before the screen tests ran. Trailing whitespace is normalized and Start remains usable, rather than rejected as the stale brief wording suggests."
 
   - id: ISS-21
-    classification: partially_fixed_live_snmp_and_canvas_usability_unverified
+    classification: ui_features_present_live_snmp_and_canvas_usability_unverified
     evidence:
       - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/topology/TopologyDiscoveryScreen.kt", lines: "435-445", detail: "Cancel stays visible while discovery runs, outside collapsed configuration fields." }
       - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/topology/TopologyDiscoveryViewModel.kt", lines: "76-103,128-160,195-235", detail: "Discovery owns a bounded LOCAL_NETWORK session; state carries progress and node count; reset/lifecycle cancellation closes the session asynchronously off the UI thread." }
-      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/topology/TopologyDiscoveryScreen.kt", lines: "475-482,904-925,541-553,966-1015", detail: "Progress badge is rendered; canvas labels nodes with sysName or IP; selected nodes open a details sheet." }
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/topology/TopologyDiscoveryScreen.kt", lines: "457-468,484-503,755-790,935-945,991-1015", detail: "Cancel stays available, progress and node counts render, and canvas labels use sysName or IP; selected nodes open a details sheet." }
       - { file: "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/screens/topology/TopologyDiscoveryScreenTest.kt", lines: "85-156", detail: "Compose tests cover progress text/count accumulation and Cancel invoking reset; test uses a fake ViewModel." }
-    needed_validation: "TopologyDiscoveryScreenTest passed on API 36 for progress, Cancel/reset, labels, and node details. Run live SNMP discovery against 10.0.2.2/community public/v2c and cancel during an actual query; assess sparse graph layout, labels/hit areas, and details-sheet usability on API 33. The host snmpd/lab endpoint was unavailable here."
+    needed_validation: "Compose coverage exists for progress, Cancel/reset, labels, and node details, but the fresh API 36 instrumentation attempt stopped before test execution. Run live SNMP discovery against 10.0.2.2/community public/v2c and cancel during an actual query; assess sparse graph layout, labels/hit areas, and details-sheet usability on API 33. The host snmpd/lab endpoint was unavailable here."
 
   - id: ISS-22
-    classification: graceful_error_covered_device_interface_check_open
+    classification: graceful_error_source_and_unit_covered_instrumentation_and_device_check_open
     evidence:
-      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/mdns/MdnsDiscoveryViewModel.kt", lines: "79-93", detail: "Non-cancellation discovery exceptions are surfaced as an error and stop the scan; cancellation is kept separate." }
-      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/mdns/MdnsDiscoveryScreen.kt", lines: "138-157,401-422", detail: "Error state renders an error card with Dismiss/reset." }
-      - { file: "app/src/test/kotlin/net/aieat/netswissknife/app/mdns/MdnsRepositoryImplCancellationTest.kt", lines: "36-57,153-165", detail: "Injected joinGroup ENODEV propagates with resource cleanup." }
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/mdns/MdnsDiscoveryViewModel.kt", lines: "108-119", detail: "Non-cancellation discovery exceptions are surfaced as an error and stop the scan; cancellation is kept separate." }
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/mdns/MdnsDiscoveryScreen.kt", lines: "412-433", detail: "Error state renders the error, message, and Dismiss/reset action." }
+      - { file: "app/src/test/kotlin/net/aieat/netswissknife/app/mdns/MdnsRepositoryImplCancellationTest.kt", lines: "44-69", detail: "Injected socket setup ENODEV propagates with socket/multicast-lock cleanup." }
       - { file: "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/screens/mdns/MdnsDiscoveryScreenTest.kt", lines: "140-160", detail: "Compose coverage displays ENODEV text and the Dismiss action." }
-    needed_validation: "MdnsDiscoveryScreenTest passed on API 36 with injected ENODEV text and Dismiss behavior. Verify ENODEV on API 33 without a usable Wi-Fi interface, then verify discovery over physical wlan0/local Wi-Fi. No API 33 emulator or physical Wi-Fi device was available."
+    needed_validation: "Compose coverage exists for injected ENODEV text and Dismiss behavior, but the fresh API 36 instrumentation attempt stopped before test execution. Verify ENODEV on API 33 without a usable Wi-Fi interface, then verify discovery over physical wlan0/local Wi-Fi. No API 33 emulator or physical Wi-Fi device was available."
 
 api36_instrumentation:
-  status: passed
-  device: "API 36 / Android 16 emulator"
-  classes:
+  status: latest_attempt_blocked_before_test_execution
+  device: "Software-rendered API 36 / Android 16 dev36 AVD; shut down after the install stall"
+  previously_recorded_passes:
     - net.aieat.netswissknife.app.ui.screens.PingScreenTest
     - net.aieat.netswissknife.app.ui.screens.PortsScreenTest
     - net.aieat.netswissknife.app.ui.screens.settings.SettingsScreenTest
@@ -143,15 +145,20 @@ api36_instrumentation:
     - net.aieat.netswissknife.app.ui.screens.topology.TopologyDiscoveryScreenTest
     - net.aieat.netswissknife.app.ui.screens.mdns.MdnsDiscoveryScreenTest
     - net.aieat.netswissknife.app.ui.screens.tls.TlsInspectorScreenTest
-  note: "Each class was run in a focused connectedDebugAndroidTest invocation. These tests exercise UI/fake-ViewModel paths; they do not replace API 33, TalkBack, host snmpd, or physical WLAN checks."
+  latest_attempt:
+    command: "./gradlew :app:connectedDebugAndroidTest --no-daemon --no-parallel --console=plain"
+    runner_argument: "class=net.aieat.netswissknife.app.ui.screens.TracerouteScreenTest,net.aieat.netswissknife.app.ui.components.NetworkStatusBannerTest,net.aieat.netswissknife.app.ui.NavigationAccessibilityTest,net.aieat.netswissknife.app.ui.screens.PingScreenTest,net.aieat.netswissknife.app.ui.screens.topology.TopologyDiscoveryScreenTest,net.aieat.netswissknife.app.ui.screens.mdns.MdnsDiscoveryScreenTest,net.aieat.netswissknife.app.ui.screens.settings.SettingsScreenTest,net.aieat.netswissknife.app.ui.screens.tls.TlsInspectorScreenTest,net.aieat.netswissknife.app.ui.screens.PortsScreenTest"
+    attempted_classes: [TracerouteScreenTest, NetworkStatusBannerTest, NavigationAccessibilityTest, PingScreenTest, TopologyDiscoveryScreenTest, MdnsDiscoveryScreenTest, SettingsScreenTest, TlsInspectorScreenTest, PortsScreenTest]
+    outcome: "AndroidTest sources compiled and Gradle began connectedDebugAndroidTest on dev36, but ADB install of app-debug.apk remained blocked in PackageManager for over two minutes amid system_server PackageManager contention/slow-operation logs. No instrumentation test started. Gradle was interrupted and the emulator was shut down with `adb emu kill`."
+  note: "Previously recorded API 36 passes are historical and do not validate the latest Traceroute/banner/Ping source changes. UI tests use fake ViewModels; successful UI instrumentation still does not replace API 33, TalkBack, host snmpd, or physical WLAN checks."
 
 unit_validation:
   command: "./gradlew :core-network:test :core-domain:test :app:testDebugUnitTest --no-daemon --no-parallel"
   status: passed
-  results: { core_network: 998, core_network_skipped: 1, core_domain: 180, app: 366, failures: 0, errors: 0 }
+  results: { core_network: 1005, core_network_skipped: 1, core_domain: 182, app: 373, failures: 0, errors: 0 }
 
 brief_accuracy:
   - "ISS-21's listed features (Cancel, progress, sysName/IP labels, and node-details sheet) exist in current source. The remaining concrete question is live SNMP cancellation and usability of sparse graph layouts, not missing feature implementation as stated."
   - "The report's API 33 observations cannot be reproduced with the connected API 36 emulator. Emulator public ICMP/DNS instability is appropriately treated as a non-goal; test error and recovery UX instead."
-  - "The supplied release version identifies a release under test; it is not evidence that every reported issue still exists at checked commit 51a78264cc5d6e813970e8b81c83eecbb2814942 or the current reviewed worktree."
+  - "The supplied release version identifies a release under test; it is not evidence that every reported issue still exists at checked baseline commit 7106a5bafa21bf0b30b91afb98470d8d10b184c8 or the current reviewed worktree."
   - "The brief's do-not-reopen list was checked against current source/tests and has no observed regression. SNMP background dispatch is source-confirmed, while responsiveness/no-ANR remains a live runtime claim that this environment could not measure."

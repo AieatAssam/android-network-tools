@@ -107,6 +107,25 @@ class OperationBudgetTest {
         assertTrue(first.remainingNanos() > 0)
     }
 
+    @Test
+    fun `unbounded budget keeps resource limits without expiring`() {
+        val clock = FakeClock(0)
+        val budget = OperationBudget.startUnbounded(
+            requirement = OperationRequirement.ANY_NETWORK,
+            maxConcurrentProbes = 1,
+            clock = clock,
+        )
+
+        assertFalse(budget.hasDeadline)
+        assertEquals(Long.MAX_VALUE, budget.remainingNanos())
+        assertEquals(Long.MAX_VALUE, budget.remainingTimeoutMillis())
+        assertEquals(1, budget.maxConcurrentProbes)
+
+        clock.advanceBy(Long.MAX_VALUE / 2)
+        budget.throwIfExpired()
+        assertEquals(Long.MAX_VALUE, budget.remainingNanos())
+    }
+
     private class FakeClock(startAtNanos: Long) : MonotonicClock {
         private var now = startAtNanos
 

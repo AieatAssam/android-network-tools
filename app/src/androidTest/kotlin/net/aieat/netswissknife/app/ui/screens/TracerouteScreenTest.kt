@@ -20,6 +20,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.platform.NetworkStatus
 import net.aieat.netswissknife.app.ui.screens.traceroute.TracerouteUiState
 import net.aieat.netswissknife.app.ui.screens.traceroute.TracerouteViewModel
 import net.aieat.netswissknife.app.ui.theme.NetSwissKnifeTheme
@@ -227,6 +228,23 @@ class TracerouteScreenTest {
     }
 
     @Test
+    fun offlineNetworkStatus_showsConnectivityBanner() {
+        val viewModel = fakeViewModel(networkStatus = NetworkStatus())
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                TracerouteScreen(viewModel = viewModel)
+            }
+        }
+
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        composeRule.mainClock.autoAdvance = true
+        composeRule
+            .onNodeWithText(context.getString(R.string.network_banner_no_network))
+            .assertIsDisplayed()
+        composeRule.mainClock.autoAdvance = false
+    }
+
+    @Test
     fun probeTypeChip_selectingUdp_notifiesViewModel() {
         val viewModel = fakeViewModel(TracerouteUiState.Idle)
         composeRule.setContent {
@@ -296,7 +314,8 @@ class TracerouteScreenTest {
     private fun fakeViewModel(
         state: TracerouteUiState? = null,
         flow: MutableStateFlow<TracerouteUiState>? = null,
-        host: String = ""
+        host: String = "",
+        networkStatus: NetworkStatus = NetworkStatus(hasInternet = true, hasLocalNetwork = true),
     ): TracerouteViewModel {
         val viewModel = mockk<TracerouteViewModel>(relaxed = true)
         every { viewModel.uiState } returns (flow ?: MutableStateFlow(state ?: TracerouteUiState.Idle))
@@ -307,6 +326,7 @@ class TracerouteScreenTest {
         every { viewModel.probeType } returns MutableStateFlow(TracerouteProbeType.ICMP)
         every { viewModel.packetSize } returns MutableStateFlow(56)
         every { viewModel.recentHosts } returns MutableStateFlow(emptyList())
+        every { viewModel.networkStatus } returns MutableStateFlow(networkStatus)
         return viewModel
     }
 }

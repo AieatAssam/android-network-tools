@@ -27,6 +27,7 @@ import net.aieat.netswissknife.core.network.operation.OperationCancellationExcep
 import net.aieat.netswissknife.core.network.operation.OperationDeadlineExceededException
 import net.aieat.netswissknife.core.network.operation.OperationRunner
 import net.aieat.netswissknife.core.network.operation.OperationSession
+import net.aieat.netswissknife.core.network.operation.ResourceScopeCloseException
 import net.aieat.netswissknife.core.network.operation.ResourceScopeClosedException
 import org.xbill.DNS.ARecord
 import org.xbill.DNS.AAAARecord
@@ -174,7 +175,7 @@ class MdnsRepositoryImpl @Inject constructor(
             if (operationSession.cancellationReason != net.aieat.netswissknife.core.network.operation.CancellationReason.DEADLINE_EXCEEDED) {
                 throw deadline
             }
-            if (deadline.hasSuppressedFailures()) throw deadline
+            if (deadline.hasCleanupFailures()) throw deadline
             observedTotal.get()
         } catch (cancelled: OperationCancellationException) {
             // A blocking socket call may surface the deadline watcher as job cancellation.
@@ -184,7 +185,7 @@ class MdnsRepositoryImpl @Inject constructor(
             ) {
                 throw cancelled
             }
-            if (cancelled.hasSuppressedFailures()) throw cancelled
+            if (cancelled.hasCleanupFailures()) throw cancelled
             observedTotal.get()
         }
         // Publish terminal success only after OperationRunner has closed the group,
@@ -484,6 +485,7 @@ class MdnsRepositoryImpl @Inject constructor(
 
 }
 
-/** Finds cleanup failures even when coroutine cancellation wraps the runner's deadline error. */
-private fun Throwable.hasSuppressedFailures(): Boolean =
-    suppressed.isNotEmpty() || cause?.hasSuppressedFailures() == true
+/** Finds close failures even when cancellation wraps the runner's deadline error. */
+private fun Throwable.hasCleanupFailures(): Boolean =
+    this is ResourceScopeCloseException || this is Error ||
+        suppressed.any { it.hasCleanupFailures() } || cause?.hasCleanupFailures() == true

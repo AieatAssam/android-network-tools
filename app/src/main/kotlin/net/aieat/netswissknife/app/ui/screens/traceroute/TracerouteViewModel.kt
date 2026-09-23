@@ -4,7 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
-import net.aieat.netswissknife.app.platform.LinkInfoProvider
+import net.aieat.netswissknife.app.platform.NetworkStatus
+import net.aieat.netswissknife.app.platform.NetworkStatusProvider
+import net.aieat.netswissknife.app.platform.NoOpNetworkStatusProvider
 import net.aieat.netswissknife.core.domain.TracerouteFlowResult
 import net.aieat.netswissknife.core.domain.TracerouteParams
 import net.aieat.netswissknife.core.domain.TracerouteUseCase
@@ -49,7 +51,7 @@ sealed interface TracerouteUiState {
 class TracerouteViewModel @Inject constructor(
     private val tracerouteUseCase: TracerouteUseCase,
     private val recentHostsRepository: RecentHostsRepository,
-    private val linkInfoProvider: LinkInfoProvider = LinkInfoProvider { true },
+    private val networkStatusProvider: NetworkStatusProvider = NoOpNetworkStatusProvider,
 ) : ViewModel() {
 
     companion object {
@@ -61,6 +63,7 @@ class TracerouteViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow<TracerouteUiState>(TracerouteUiState.Idle)
     val uiState: StateFlow<TracerouteUiState> = _uiState.asStateFlow()
+    val networkStatus: StateFlow<NetworkStatus> = networkStatusProvider.status
 
     private val _host         = MutableStateFlow("")
     val host: StateFlow<String> = _host.asStateFlow()
@@ -149,7 +152,8 @@ class TracerouteViewModel @Inject constructor(
         val generation = ++traceGeneration
         cancelActiveTrace(CancellationReason.USER_STOP)
 
-        if (!linkInfoProvider.hasValidatedNetwork()) {
+        val status = networkStatus.value
+        if (!status.hasInternet && !status.hasLocalNetwork && !status.vpnActive) {
             _uiState.value = TracerouteUiState.Error(NO_NETWORK_CONNECTION)
             return
         }

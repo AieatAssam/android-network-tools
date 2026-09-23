@@ -92,6 +92,8 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
+import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
+import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
 import net.aieat.netswissknife.app.ui.components.ToolErrorCard
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
 import net.aieat.netswissknife.app.ui.components.ToolStopButton
@@ -144,6 +146,7 @@ fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
     LaunchedEffect(Unit) { requestLocalNetworkPermission() }
 
     val uiState      by viewModel.uiState.collectAsStateWithLifecycle()
+    val networkStatus by viewModel.networkStatus.collectAsStateWithLifecycle()
     val host         by viewModel.host.collectAsStateWithLifecycle()
     val maxHops      by viewModel.maxHops.collectAsStateWithLifecycle()
     val timeoutMs    by viewModel.timeoutMs.collectAsStateWithLifecycle()
@@ -170,7 +173,12 @@ fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
         contentPadding    = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-            item { TracerouteHeroHeader(onHelpClick = { showHelp = true }) }
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    TracerouteHeroHeader(onHelpClick = { showHelp = true })
+                    NetworkStatusBanner(networkStatus, scope = NetworkStatusScope.ANY_NETWORK)
+                }
+            }
 
             item {
                 TracerouteInputCard(

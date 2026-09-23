@@ -9,17 +9,20 @@ class OperationBudget private constructor(
     val operationId: OperationId,
     val requirement: OperationRequirement,
     val deadline: OperationDeadline,
+    val hasDeadline: Boolean,
     val maxConcurrentProbes: Int,
     val maxResponseBytes: Long,
     val maxExportBytes: Long,
 ) {
-    fun remainingNanos(): Long = deadline.remainingNanos()
+    fun remainingNanos(): Long = if (hasDeadline) deadline.remainingNanos() else Long.MAX_VALUE
 
     /** Returns a ceiling so a positive sub-millisecond budget never becomes a zero timeout. */
-    fun remainingTimeoutMillis(): Long = deadline.remainingTimeoutMillis()
+    fun remainingTimeoutMillis(): Long = if (hasDeadline) deadline.remainingTimeoutMillis() else Long.MAX_VALUE
 
     /** Throws when the shared deadline has elapsed; callers should check around blocking work. */
-    fun throwIfExpired() = deadline.throwIfExpired()
+    fun throwIfExpired() {
+        if (hasDeadline) deadline.throwIfExpired()
+    }
 
     companion object {
         const val DEFAULT_INTERACTIVE_TIMEOUT_MILLIS = 120_000L
@@ -54,6 +57,39 @@ class OperationBudget private constructor(
                     timeoutNanos = timeoutNanos,
                     clock = clock,
                 ),
+                hasDeadline = true,
+                maxConcurrentProbes = maxConcurrentProbes,
+                maxResponseBytes = maxResponseBytes,
+                maxExportBytes = maxExportBytes,
+            )
+        }
+
+        /**
+         * Creates an operation with bounded resources but no time deadline. This is reserved
+         * for user-owned continuous sessions whose documented stop condition is explicit
+         * cancellation, not an arbitrary duration.
+         */
+        fun startUnbounded(
+            operationId: OperationId = OperationId.create(),
+            requirement: OperationRequirement = OperationRequirement.ANY_NETWORK,
+            maxConcurrentProbes: Int = DEFAULT_MAX_CONCURRENT_PROBES,
+            maxResponseBytes: Long = DEFAULT_MAX_RESPONSE_BYTES,
+            maxExportBytes: Long = DEFAULT_MAX_EXPORT_BYTES,
+            clock: MonotonicClock = SystemMonotonicClock,
+        ): OperationBudget {
+            require(maxConcurrentProbes > 0) { "Probe concurrency must be positive" }
+            require(maxResponseBytes > 0) { "Maximum response bytes must be positive" }
+            require(maxExportBytes > 0) { "Maximum export bytes must be positive" }
+
+            return OperationBudget(
+                operationId = operationId,
+                requirement = requirement,
+                deadline = OperationDeadline(
+                    startedAtNanos = clock.nowNanos(),
+                    timeoutNanos = Long.MAX_VALUE,
+                    clock = clock,
+                ),
+                hasDeadline = false,
                 maxConcurrentProbes = maxConcurrentProbes,
                 maxResponseBytes = maxResponseBytes,
                 maxExportBytes = maxExportBytes,

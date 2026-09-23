@@ -5,6 +5,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.Collections
 import java.util.IdentityHashMap
+import java.util.concurrent.CountDownLatch
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -20,6 +21,7 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withContext
 import net.aieat.netswissknife.core.network.testkit.FakeClock
 import net.aieat.netswissknife.core.network.testkit.ScriptedSocket
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -62,6 +64,8 @@ class OperationRunnerTest {
         val sockets = List(3) { ScriptedSocket() }
         val closeFailure = IllegalStateException("scripted close failure")
         val workersFinished = java.util.concurrent.CountDownLatch(2)
+        val resourcesClosed = CountDownLatch(1)
+        val operationCompleted = CountDownLatch(1)
         val collectedEvents = CopyOnWriteArrayList<String>()
         val deadlineFailures = CopyOnWriteArrayList<Throwable>()
 
@@ -69,6 +73,7 @@ class OperationRunnerTest {
             flow {
                 emit("started")
                 OperationRunner.run(session) {
+                    resources.register(AutoCloseable { resourcesClosed.countDown() })
                     resources.register(AutoCloseable { throw closeFailure })
                     resources.register(AutoCloseable { session.cancel(CancellationReason.USER_STOP) })
                     sockets.forEach(resources::register)
@@ -94,6 +99,7 @@ class OperationRunnerTest {
                 ) "deadline" else "unexpected"
             }.collect(collectedEvents::add)
         }
+        operation.invokeOnCompletion { operationCompleted.countDown() }
 
         runCurrent()
         sockets.take(2).forEach { socket ->
@@ -102,9 +108,14 @@ class OperationRunnerTest {
 
         clock.advanceBy(100_000_000L)
         advanceTimeBy(100)
+        assertTrue(withContext(Dispatchers.IO) { resourcesClosed.await(5, TimeUnit.SECONDS) })
+        runCatching { withContext(Dispatchers.IO) { session.resources.close() } }
         runCurrent()
-
-        withTimeout(1_000) { operation.join() }
+        assertTrue(
+            withContext(Dispatchers.IO) { operationCompleted.await(5, TimeUnit.SECONDS) },
+            "operation did not finish after deadline cleanup",
+        )
+        runCurrent()
 
         assertEquals(CancellationReason.DEADLINE_EXCEEDED, session.cancellationReason)
         assertEquals(0L, workersFinished.count)
@@ -124,12 +135,22 @@ class OperationRunnerTest {
     fun `explicit cancellation closes blocking resources and preserves first reason`() = runTest {
         val session = OperationSession(OperationBudget.start(timeoutMillis = 10_000, clock = FakeClock()))
         val socket = ScriptedSocket()
+        val callerThread = Thread.currentThread()
+        val closeStarted = CountDownLatch(1)
+        val allowCloseToFinish = CountDownLatch(1)
+        val operationCompleted = CountDownLatch(1)
+        var closeThread: Thread? = null
         val events = CopyOnWriteArrayList<String>()
         val operation = backgroundScope.launch {
             flow {
                 emit("started")
                 OperationRunner.run(session) {
-                    resources.register(socket)
+                    resources.register(AutoCloseable {
+                        closeThread = Thread.currentThread()
+                        closeStarted.countDown()
+                        allowCloseToFinish.await(5, TimeUnit.SECONDS)
+                        socket.close()
+                    })
                     val operationContext = this
                     launch(Dispatchers.IO) {
                         socket.getInputStream().read()
@@ -142,17 +163,22 @@ class OperationRunnerTest {
             }.catch { events += "caught:${it::class.simpleName}" }
                 .collect(events::add)
         }
+        operation.invokeOnCompletion { operationCompleted.countDown() }
 
         runCurrent()
         assertTrue(socket.awaitBlockingRead(5, TimeUnit.SECONDS), "worker did not block in read")
         session.cancel(CancellationReason.USER_STOP)
         session.cancel(CancellationReason.NETWORK_LOST)
+        assertTrue(closeStarted.await(5, TimeUnit.SECONDS), "cleanup did not start")
+        assertTrue(closeThread !== callerThread, "cancellation closed the resource on its caller")
+        allowCloseToFinish.countDown()
+        withContext(Dispatchers.IO) { session.resources.close() }
         runCurrent()
-        try {
-            withTimeout(1_000) { operation.join() }
-        } finally {
-            if (!socket.isClosed) socket.close()
-        }
+        assertTrue(
+            withContext(Dispatchers.IO) { operationCompleted.await(5, TimeUnit.SECONDS) },
+            "operation did not finish after cleanup completed",
+        )
+        runCurrent()
 
         assertEquals(CancellationReason.USER_STOP, session.cancellationReason)
         assertTrue(socket.isClosed)
@@ -186,7 +212,9 @@ class OperationRunnerTest {
         clock.advanceBy(100_000_000L)
         advanceTimeBy(100)
         runCurrent()
-        withTimeout(1_000) { operation.join() }
+        withContext(Dispatchers.IO) { session.resources.close() }
+        runCurrent()
+        operation.join()
 
         assertEquals(CancellationReason.USER_STOP, session.cancellationReason)
         assertEquals(listOf("started"), events)
@@ -211,9 +239,18 @@ class OperationRunnerTest {
         val clock = FakeClock()
         val session = OperationSession(OperationBudget.start(timeoutMillis = 100, clock = clock))
         val socket = ScriptedSocket()
+        val callerThread = Thread.currentThread()
+        val closeStarted = CountDownLatch(1)
+        val allowCloseToFinish = CountDownLatch(1)
+        var closeThread: Thread? = null
         val operation = backgroundScope.launch {
             OperationRunner.run(session) {
-                resources.register(socket)
+                resources.register(AutoCloseable {
+                    closeThread = Thread.currentThread()
+                    closeStarted.countDown()
+                    allowCloseToFinish.await(5, TimeUnit.SECONDS)
+                    socket.close()
+                })
                 launch(Dispatchers.IO) { socket.getInputStream().read() }
                 awaitCancellation()
             }
@@ -222,8 +259,12 @@ class OperationRunnerTest {
         runCurrent()
         assertTrue(socket.awaitBlockingRead(5, TimeUnit.SECONDS), "worker did not block in read")
         operation.cancel(CancellationException("owner stopped"))
+        assertTrue(closeStarted.await(5, TimeUnit.SECONDS), "cleanup did not start")
+        assertTrue(closeThread !== callerThread, "parent cancellation closed the resource on its caller")
+        allowCloseToFinish.countDown()
         clock.advanceBy(100_000_000L)
         advanceTimeBy(100)
+        withContext(Dispatchers.IO) { session.resources.close() }
         runCurrent()
         operation.join()
 
@@ -231,6 +272,23 @@ class OperationRunnerTest {
         assertTrue(socket.isClosed)
         assertEquals(1, socket.closeCallCount)
         assertTrue(operation.isCancelled)
+    }
+
+    @Test
+    fun `unbounded operation waits for cancellation without a deadline timer`() = runTest {
+        val session = OperationSession(OperationBudget.startUnbounded(clock = FakeClock()))
+        val operation = backgroundScope.launch {
+            OperationRunner.run(session) { awaitCancellation() }
+        }
+
+        runCurrent()
+        assertTrue(operation.isActive)
+        session.cancel(CancellationReason.USER_STOP)
+        runCurrent()
+        withTimeout(1_000) { operation.join() }
+
+        assertEquals(CancellationReason.USER_STOP, session.cancellationReason)
+        assertTrue(session.resources.isClosed)
     }
 
     @Test

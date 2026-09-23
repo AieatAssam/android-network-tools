@@ -1,9 +1,18 @@
 package net.aieat.netswissknife.core.network.ping
 
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
+import net.aieat.netswissknife.core.network.HostResolver
+import net.aieat.netswissknife.core.network.operation.CancellationReason
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
@@ -11,6 +20,8 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @DisplayName("PingRepositoryImpl")
@@ -208,5 +219,44 @@ class PingRepositoryImplTest {
                 .toList()
             assertTrue(packets.all { it.host == "example.com" })
         }
+    }
+
+    @Test
+    fun `caller session cancellation interrupts blocking reachability without a late packet`() = runTest {
+        val checkerStarted = CountDownLatch(1)
+        val checkerInterrupted = CountDownLatch(1)
+        val neverReleased = CountDownLatch(1)
+        val collectorFinished = CountDownLatch(1)
+        val checker: (String, Int) -> ReachabilityResult = { _, _ ->
+            checkerStarted.countDown()
+            try {
+                neverReleased.await()
+                ReachabilityResult(reachable = true, rtTimeMs = 1)
+            } catch (interrupted: InterruptedException) {
+                checkerInterrupted.countDown()
+                throw IllegalStateException("reachability interrupted", interrupted)
+            }
+        }
+        val resolver = HostResolver { "192.0.2.1" }
+        val repository = PingRepositoryImpl(checker = checker, resolver = resolver)
+        val session = PingOperation.newSession()
+        val packets = mutableListOf<PingPacketResult>()
+        val collector = CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {
+            try {
+                repository.ping(PingRequest("host.test", count = 1, timeoutMs = 1_000), session)
+                    .collect(packets::add)
+            } finally {
+                collectorFinished.countDown()
+            }
+        }
+
+        assertTrue(withContext(Dispatchers.IO) { checkerStarted.await(2, TimeUnit.SECONDS) })
+        session.cancel(CancellationReason.USER_STOP)
+        assertTrue(withContext(Dispatchers.IO) { collectorFinished.await(2, TimeUnit.SECONDS) })
+        collector.join()
+
+        assertTrue(withContext(Dispatchers.IO) { checkerInterrupted.await(2, TimeUnit.SECONDS) })
+        assertTrue(session.resources.isClosed)
+        assertTrue(packets.isEmpty())
     }
 }

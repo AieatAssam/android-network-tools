@@ -3,6 +3,8 @@ package net.aieat.netswissknife.core.domain
 import net.aieat.netswissknife.core.network.ping.PingPacketResult
 import net.aieat.netswissknife.core.network.ping.PingRepository
 import net.aieat.netswissknife.core.network.ping.PingStatus
+import net.aieat.netswissknife.core.network.ping.PingRequest
+import net.aieat.netswissknife.core.network.ping.PingOperation
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -171,6 +173,34 @@ class PingUseCaseTest {
             every { repository.ping(any(), any(), any()) } returns successFlow(100)
             val results = useCase(PingParams(host = "8.8.8.8", count = 100)).toList()
             assertTrue(results.none { it.isError })
+        }
+
+        @Test
+        fun `caller operation session is forwarded with all request options`() = runTest {
+            val session = PingOperation.newSession()
+            every { repository.ping(any<PingRequest>(), session) } returns successFlow()
+
+            useCase(
+                PingParams(
+                    host = "8.8.8.8",
+                    count = 3,
+                    timeoutMs = 5_000,
+                    intervalMs = 2_500,
+                    payloadBytes = 512,
+                    ttl = 128,
+                ),
+                session,
+            ).toList()
+
+            verify {
+                repository.ping(
+                    match {
+                        it.host == "8.8.8.8" && it.count == 3 && it.timeoutMs == 5_000 &&
+                            it.intervalMs == 2_500 && it.payloadBytes == 512 && it.ttl == 128
+                    },
+                    session,
+                )
+            }
         }
     }
 }

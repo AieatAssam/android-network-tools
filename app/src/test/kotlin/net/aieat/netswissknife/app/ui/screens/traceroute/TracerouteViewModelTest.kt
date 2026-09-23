@@ -6,6 +6,7 @@ import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.onCompletion
@@ -18,7 +19,8 @@ import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withContext
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
-import net.aieat.netswissknife.app.platform.LinkInfoProvider
+import net.aieat.netswissknife.app.platform.NetworkStatus
+import net.aieat.netswissknife.app.platform.NetworkStatusProvider
 import net.aieat.netswissknife.core.domain.TracerouteFlowResult
 import net.aieat.netswissknife.core.domain.TracerouteUseCase
 import net.aieat.netswissknife.core.network.traceroute.HopResult
@@ -43,7 +45,7 @@ class TracerouteViewModelTest {
     private lateinit var tracerouteUseCase: TracerouteUseCase
     private lateinit var recentHostsRepository: RecentHostsRepository
     private lateinit var viewModel: TracerouteViewModel
-    private var networkAvailable = true
+    private val networkStatus = MutableStateFlow(NetworkStatus(hasInternet = true, hasLocalNetwork = true))
 
     private val stubHop = HopResult(
         hopNumber = 1,
@@ -63,7 +65,7 @@ class TracerouteViewModelTest {
         viewModel = TracerouteViewModel(
             tracerouteUseCase,
             recentHostsRepository,
-            LinkInfoProvider { networkAvailable },
+            object : NetworkStatusProvider { override val status = networkStatus },
         )
     }
 
@@ -115,7 +117,7 @@ class TracerouteViewModelTest {
 
         @Test
         fun `offline trace fails before invoking the probe`() = runTest {
-            networkAvailable = false
+            networkStatus.value = NetworkStatus()
             viewModel.onHostChange("example.com")
 
             viewModel.startTrace()
@@ -123,6 +125,30 @@ class TracerouteViewModelTest {
             assertEquals(TracerouteUiState.Error("No network connection"), viewModel.uiState.value)
             coVerify(exactly = 0) { recentHostsRepository.addRecent(any(), any()) }
             io.mockk.verify(exactly = 0) { tracerouteUseCase(any(), any()) }
+        }
+
+        @Test
+        fun `local network without validated internet can start a trace`() = runTest {
+            networkStatus.value = NetworkStatus(hasInternet = false, hasLocalNetwork = true)
+            every { tracerouteUseCase(any(), any()) } returns flowOf(TracerouteFlowResult.Hop(stubHop))
+            viewModel.onHostChange("192.168.1.1")
+
+            viewModel.startTrace()
+
+            assertTrue(viewModel.uiState.value is TracerouteUiState.Finished)
+            io.mockk.verify(exactly = 1) { tracerouteUseCase(match { it.host == "192.168.1.1" }, any()) }
+        }
+
+        @Test
+        fun `vpn only connectivity can start a trace`() = runTest {
+            networkStatus.value = NetworkStatus(hasInternet = false, hasLocalNetwork = false, vpnActive = true)
+            every { tracerouteUseCase(any(), any()) } returns flowOf(TracerouteFlowResult.Hop(stubHop))
+            viewModel.onHostChange("internal.example")
+
+            viewModel.startTrace()
+
+            assertTrue(viewModel.uiState.value is TracerouteUiState.Finished)
+            io.mockk.verify(exactly = 1) { tracerouteUseCase(match { it.host == "internal.example" }, any()) }
         }
 
         @Test
@@ -183,7 +209,7 @@ class TracerouteViewModelTest {
             viewModel.onHostChange("example.com")
             viewModel.startTrace()
 
-            networkAvailable = false
+            networkStatus.value = NetworkStatus()
             viewModel.startTrace()
             firstChannel.trySend(TracerouteFlowResult.Hop(stubHop.copy(ip = "203.0.113.1")))
             runCurrent()
