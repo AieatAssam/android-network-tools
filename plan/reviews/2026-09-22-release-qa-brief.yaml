@@ -3,7 +3,7 @@ review:
   status: done
   source: "User-provided Net Swiss Knife QA brief v2026.09.21.1, based on the latest main release."
   baseline_commit: "5e183721e64ce8a8946f1a0b50f52b83544e8898"
-  checked_commit: "8b41d203cf345921837eb8803d245ad32ab04681"
+  checked_commit: "2db99f14152d08a069409b36785689f6c65d47db"
   environment:
     connected_emulator: "API 36 (Android 16); not the brief's API 33 emulator"
     host_snmpd: "Not available in this audit"
@@ -44,8 +44,8 @@ brief_items:
     route: "E01-T07/E01-T09 and existing P02 topology ownership; RUI012."
   - id: ISS-22
     disposition: tracked_device_check
-    evidence: "mDNS setup exceptions reach the error state and the screen shows a failure card with Dismiss. MdnsRepositoryImpl still owns fixed-port/interface setup, already covered by P05-T4; API 33 emulator ENODEV and a real Wi-Fi interface have not been tested here."
-    route: "P05-T4/P05-T5; do not add a duplicate mDNS finding."
+    evidence: "Socket setup failures such as joinGroup ENODEV propagate through MdnsDiscoveryViewModel into the dismissible error card, with socket and multicast-lock cleanup. MdnsRepositoryImpl still binds port 5353 without selecting the active Wi-Fi interface. Its broad sendQuery/receivePacket catches can also turn packet-I/O failures into a successful empty scan, already tracked by RAPP004. API 33 ENODEV and physical Wi-Fi checks were unavailable."
+    route: "P05-T4/P05-T5 for interface and fixed-port behavior; RAPP004 for swallowed packet-I/O failures. Do not add a duplicate mDNS finding."
 
 findings:
   - id: RUI010
@@ -97,4 +97,4 @@ manual_checks:
   - "API 33 emulator in airplane mode and on a dead/ICMP-blocked route: verify the Running state stays visibly stoppable, offline/no-route states preserve the input, and Retry/Clear remain actionable."
   - "API 33 emulator with host snmpd at 10.0.2.2/community public/v2c: assess topology progress and sparse-canvas usability; emulator public ICMP/DNS success is not a requirement."
   - "API 33 emulator without a usable Wi-Fi interface: mDNS ENODEV must remain a clear failure with Dismiss, not a successful empty scan."
-  - "Physical Wi-Fi device: verify mDNS uses the active local interface (often wlan0) and retains graceful error handling."
+  - "Physical Wi-Fi device: verify mDNS uses the active local interface (often wlan0), discovers a known service, and handles port-5353 conflicts gracefully."
