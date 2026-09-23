@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.emptyPreferences
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
@@ -151,5 +152,28 @@ class PortScanViewModelTest {
         viewModel.onHostChange("example.com")
         viewModel.startScan()
         coVerify { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_PORTS_HOSTS, "example.com") }
+    }
+
+    @Test
+    fun `startScan normalizes host before probing and saving`() = runTest {
+        every { portScanUseCase(any()) } returns flowOf(PortScanFlowResult.ValidationError("test"))
+        viewModel.onHostChange("  Example.COM.  ")
+
+        viewModel.startScan()
+
+        assertEquals("example.com", viewModel.host.value)
+        verify { portScanUseCase(match { it.host == "example.com" }) }
+        coVerify { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_PORTS_HOSTS, "example.com") }
+    }
+
+    @Test
+    fun `invalid internal whitespace is not saved to recents`() = runTest {
+        every { portScanUseCase(any()) } returns flowOf(PortScanFlowResult.ValidationError("invalid host"))
+        viewModel.onHostChange("bad host")
+
+        viewModel.startScan()
+
+        verify { portScanUseCase(match { it.host == "bad host" }) }
+        coVerify(exactly = 0) { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_PORTS_HOSTS, any()) }
     }
 }

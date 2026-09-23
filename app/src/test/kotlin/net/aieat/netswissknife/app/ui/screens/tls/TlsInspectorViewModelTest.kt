@@ -148,4 +148,27 @@ class TlsInspectorViewModelTest {
         viewModel.inspect()
         coVerify { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_TLS_HOSTS, "example.com") }
     }
+
+    @Test
+    fun `inspect normalizes host before calling use case and saving`() = runTest {
+        coEvery { useCase(any()) } returns NetworkResult.Error("test")
+        viewModel.onHostChange("  EXAMPLE.COM.  ")
+
+        viewModel.inspect()
+
+        assertEquals("example.com", viewModel.uiState.value.host)
+        coVerify { useCase(match { it.host == "example.com" }) }
+        coVerify { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_TLS_HOSTS, "example.com") }
+    }
+
+    @Test
+    fun `inspect rejects internal whitespace without saving or probing`() = runTest {
+        viewModel.onHostChange("bad host")
+
+        viewModel.inspect()
+
+        assertEquals("Invalid hostname or IP address", viewModel.uiState.value.error)
+        coVerify(exactly = 0) { useCase(any()) }
+        coVerify(exactly = 0) { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_TLS_HOSTS, any()) }
+    }
 }

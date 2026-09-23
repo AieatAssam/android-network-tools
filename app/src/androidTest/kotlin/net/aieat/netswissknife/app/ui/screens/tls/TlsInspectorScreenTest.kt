@@ -96,6 +96,41 @@ class TlsInspectorScreenTest {
     }
 
     @Test
+    fun hostWithOuterWhitespace_remainsInspectable() {
+        val viewModel = fakeViewModel(TlsInspectorUiState(host = "  example.com  "))
+        composeRule.setContent {
+            NetSwissKnifeTheme { TlsInspectorScreen(viewModel = viewModel) }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        composeRule.onNodeWithText(context.getString(R.string.tls_inspect_button))
+            .performScrollTo()
+            .assertIsEnabled()
+            .performClick()
+        verify(exactly = 1) { viewModel.inspect() }
+    }
+
+    @Test
+    fun hostWithInternalSpace_showsValidationAndBlocksInspect() {
+        val viewModel = fakeViewModel(TlsInspectorUiState())
+        composeRule.setContent {
+            NetSwissKnifeTheme { TlsInspectorScreen(viewModel = viewModel) }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        composeRule.onNodeWithText(context.getString(R.string.tls_host_label))
+            .performTextInput("bad host")
+        composeRule.mainClock.advanceTimeBy(200L)
+
+        composeRule.onNodeWithText(context.getString(R.string.error_invalid_host))
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.tls_inspect_button))
+            .performScrollTo()
+            .assertIsNotEnabled()
+        verify(exactly = 0) { viewModel.inspect() }
+    }
+
+    @Test
     fun loadingState_showsInspectingIndicator() {
         composeRule.setContent {
             NetSwissKnifeTheme {

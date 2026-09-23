@@ -11,6 +11,7 @@ import net.aieat.netswissknife.core.domain.PortScanFlowResult
 import net.aieat.netswissknife.core.domain.PortScanParams
 import net.aieat.netswissknife.core.domain.PortScanPreset
 import net.aieat.netswissknife.core.domain.PortScanUseCase
+import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.portscan.PortScanResult
 import net.aieat.netswissknife.core.network.portscan.PortScanSummary
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -138,13 +139,18 @@ class PortScanViewModel @Inject constructor(
 
     fun startScan() {
         scanJob?.cancel()
-        viewModelScope.launch {
-            recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_PORTS_HOSTS, _host.value)
+        val normalizedHost = HostValidator.normalize(_host.value)
+        val hostForScan = normalizedHost ?: _host.value.trim()
+        if (normalizedHost != null) {
+            _host.value = normalizedHost
+            viewModelScope.launch {
+                recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_PORTS_HOSTS, normalizedHost)
+            }
         }
         val liveResults = mutableListOf<PortScanResult>()
 
         val params = PortScanParams(
-            host = _host.value,
+            host = hostForScan,
             preset = _selectedPreset.value,
             startPort = _startPort.value.toIntOrNull() ?: 1,
             endPort = _endPort.value.toIntOrNull() ?: 1024,

@@ -85,6 +85,7 @@ import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
 import net.aieat.netswissknife.app.ui.theme.StatusBlue
 import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.app.ui.theme.StatusGood
+import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.tls.TlsCertificate
 import net.aieat.netswissknife.core.network.tls.TlsInspectorResult
 import java.time.Instant
@@ -226,6 +227,8 @@ private fun TlsInputSection(
     onClearRecentHosts: () -> Unit
 ) {
     val focusManager = LocalFocusManager.current
+    val normalizedHost = HostValidator.normalize(host)
+    val isHostInvalid = host.isNotBlank() && normalizedHost == null
 
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -249,6 +252,10 @@ private fun TlsInputSection(
                         }
                     }
                 },
+                isError       = isHostInvalid,
+                supportingText = if (isHostInvalid) {
+                    { Text(stringResource(R.string.error_invalid_host)) }
+                } else null,
                 singleLine    = true,
                 modifier      = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(
@@ -278,7 +285,7 @@ private fun TlsInputSection(
                 keyboardActions = KeyboardActions(
                     onDone = {
                         focusManager.clearFocus()
-                        if (host.isNotBlank()) onInspect()
+                        if (!isLoading && normalizedHost != null) onInspect()
                     }
                 )
             )
@@ -289,7 +296,7 @@ private fun TlsInputSection(
                     focusManager.clearFocus()
                     onInspect()
                 },
-                enabled   = host.isNotBlank() && !isLoading,
+                enabled   = normalizedHost != null && !isLoading,
                 modifier  = Modifier.fillMaxWidth()
             ) {
                 if (isLoading) {

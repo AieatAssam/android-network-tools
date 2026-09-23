@@ -3,6 +3,8 @@ package net.aieat.netswissknife.app.ui.screens
 import android.Manifest
 import android.os.Build
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
@@ -11,7 +13,9 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.rule.GrantPermissionRule
@@ -178,7 +182,46 @@ class PortsScreenTest {
         io.mockk.verify(exactly = 1) { viewModel.startScan() }
     }
 
+    @Test
+    fun hostWithOuterWhitespace_remainsStartable() {
+        val viewModel = fakePortScanViewModel(host = "  example.com  ")
+        composeRule.setContent {
+            NetSwissKnifeTheme { PortsScreen(viewModel = viewModel) }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        composeRule.onNodeWithTag(PortsScreenTestTags.SCAN_BUTTON)
+            .performScrollTo()
+            .assertIsEnabled()
+            .performClick()
+
+        io.mockk.verify(exactly = 1) { viewModel.startScan() }
+    }
+
+    @Test
+    fun hostWithInternalSpace_showsValidationAndBlocksButtonAndIme() {
+        val viewModel = fakePortScanViewModel()
+        composeRule.setContent {
+            NetSwissKnifeTheme { PortsScreen(viewModel = viewModel) }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        composeRule.onNodeWithText(context.getString(R.string.ports_host_label))
+            .performTextInput("bad host")
+        composeRule.mainClock.advanceTimeBy(200L)
+
+        composeRule.onNodeWithText(context.getString(R.string.error_invalid_host))
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule.onNodeWithTag(PortsScreenTestTags.SCAN_BUTTON)
+            .performScrollTo()
+            .assertIsNotEnabled()
+        composeRule.onNodeWithText("bad host").performImeAction()
+
+        io.mockk.verify(exactly = 0) { viewModel.startScan() }
+    }
+
     private fun fakePortScanViewModel(
+        host: String = "",
         concurrency: Int = 50,
         state: PortScanUiState = PortScanUiState.Idle,
         selectedPreset: PortScanPreset = PortScanPreset.COMMON,
@@ -186,8 +229,10 @@ class PortsScreenTest {
         endPort: String = "1024"
     ): PortScanViewModel {
         val viewModel = mockk<PortScanViewModel>(relaxed = true)
+        val hostFlow = MutableStateFlow(host)
         every { viewModel.uiState } returns MutableStateFlow(state)
-        every { viewModel.host } returns MutableStateFlow("")
+        every { viewModel.host } returns hostFlow
+        every { viewModel.onHostChange(any()) } answers { hostFlow.value = firstArg() }
         every { viewModel.selectedPreset } returns MutableStateFlow(selectedPreset)
         every { viewModel.startPort } returns MutableStateFlow(startPort)
         every { viewModel.endPort } returns MutableStateFlow(endPort)

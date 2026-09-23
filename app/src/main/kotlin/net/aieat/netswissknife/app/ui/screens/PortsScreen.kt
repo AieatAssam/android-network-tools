@@ -119,6 +119,7 @@ import net.aieat.netswissknife.app.ui.screens.portscan.PortScanUiState
 import net.aieat.netswissknife.app.ui.screens.portscan.PortScanViewModel
 import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.core.domain.PortScanPreset
+import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.portscan.PortScanResult
 import net.aieat.netswissknife.core.network.portscan.PortScanSummary
 import net.aieat.netswissknife.core.network.portscan.PortStatus
@@ -375,6 +376,9 @@ private fun PortScanInputCard(
     onRemoveRecentHost: (String) -> Unit,
     onClearRecentHosts: () -> Unit
 ) {
+    val normalizedHost = HostValidator.normalize(host)
+    val isHostInvalid = host.isNotBlank() && normalizedHost == null
+
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -396,7 +400,13 @@ private fun PortScanInputCard(
                 },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = { onStartScan() }),
+                keyboardActions = KeyboardActions(onDone = {
+                    if (!isScanning && normalizedHost != null) onStartScan()
+                }),
+                isError = isHostInvalid,
+                supportingText = if (isHostInvalid) {
+                    { Text(stringResource(R.string.error_invalid_host)) }
+                } else null,
                 modifier = Modifier.fillMaxWidth()
             )
 
@@ -575,7 +585,7 @@ private fun PortScanInputCard(
                 } else {
                     Button(
                         onClick = hapticAction(onStartScan),
-                        enabled = host.isNotBlank() && customRangeValid,
+                        enabled = normalizedHost != null && customRangeValid,
                         modifier = Modifier
                             .weight(1f)
                             .testTag(PortsScreenTestTags.SCAN_BUTTON)

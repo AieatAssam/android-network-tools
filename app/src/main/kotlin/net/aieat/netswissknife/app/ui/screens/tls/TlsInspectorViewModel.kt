@@ -15,6 +15,7 @@ import net.aieat.netswissknife.app.data.RecentHostsRepository
 import net.aieat.netswissknife.core.domain.TlsInspectorParams
 import net.aieat.netswissknife.core.domain.TlsInspectorUseCase
 import net.aieat.netswissknife.core.network.NetworkResult
+import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.tls.TlsInspectorResult
 import javax.inject.Inject
 
@@ -61,14 +62,23 @@ class TlsInspectorViewModel @Inject constructor(
 
     fun inspect() {
         val state = _uiState.value
-        viewModelScope.launch {
-            recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_TLS_HOSTS, state.host)
+        val normalizedHost = HostValidator.normalize(state.host)
+        if (normalizedHost == null) {
+            _uiState.value = state.copy(
+                isLoading = false,
+                result = null,
+                error = if (state.host.isBlank()) "Host must not be blank" else "Invalid hostname or IP address"
+            )
+            return
         }
-        _uiState.value = state.copy(isLoading = true, error = null, result = null)
+        _uiState.value = state.copy(host = normalizedHost, isLoading = true, error = null, result = null)
+        viewModelScope.launch {
+            recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_TLS_HOSTS, normalizedHost)
+        }
         viewModelScope.launch {
             try {
                 val params = TlsInspectorParams(
-                    host      = state.host,
+                    host      = normalizedHost,
                     port      = state.port.toIntOrNull() ?: 443,
                     timeoutMs = 10_000
                 )
