@@ -3,7 +3,7 @@ review:
   status: done
   source: "User-provided Net Swiss Knife QA brief v2026.09.21.1, based on the latest main release."
   baseline_commit: "5e183721e64ce8a8946f1a0b50f52b83544e8898"
-  checked_commit: "b922fad138c389be8553a658c66edde2257155c7"
+  checked_commit: "ae16f23601eb829d0c220aa11bf1f5bebca74a74"
   environment:
     connected_emulator: "API 36 (Android 16); not the brief's API 33 emulator"
     host_snmpd: "Not available in this audit"
@@ -32,37 +32,40 @@ brief_items:
     route: "No new implementation task."
   - id: ISS-17
     disposition: partial
-    evidence: "The code-level recovery path already exists: offline input maps to Error('No network connection'), the shared error card offers Retry/Clear, an empty completed trace reports 'No route found', and a no-response Running state exposes progress plus Stop. Focused ViewModel tests passed, and the API 36 TracerouteScreenTest suite passed 9/9. The tests prove the running panel can be found/reached, but do not prove it appears in the initial viewport without scrolling after Start. Real API 33 dead-route/ICMP and initial-viewport checks remain device-only."
+    evidence: "The code-level recovery path maps offline input to Error('No network connection'), offers Retry/Clear, reports 'No route found' for an empty completed trace, and exposes progress plus Stop while waiting for hops. Focused ViewModel tests and API 36 TracerouteScreenTest passed (9/9). UI tests scroll to the running panel, so initial-viewport visibility after Start is not proven. Real API 33 dead-route/ICMP and initial-viewport checks remain device-only."
     route: "RUI011 code-level verification is complete; retain the API 33 dead-route/device check under E01-T07/E01-T09."
   - id: ISS-20
     disposition: fixed
-    evidence: "PingScreen and TracerouteScreen gate Start and IME Go with HostValidator.normalize, accepting outer whitespace while rejecting internal spaces. API 36 Compose suites passed Ping 10/10 and Traceroute 7/7. Focused ViewModel tests verify normalized hosts reach use cases/recents; invalid Traceroute hosts are not saved."
-    route: "RUI010 closed by 83c4e08. E01-T10 remains open for broader shared form architecture and other fields."
+    evidence: "Ping, Traceroute, Ports, TLS, and Topology host forms gate their primary action using HostValidator.normalize, accepting surrounding whitespace while rejecting internal spaces. ViewModels pass normalized targets to use cases and store normalized recents; invalid host values are not saved. API 36 Compose suites passed for Ping, Traceroute (9/9), Ports (8/8), TLS (7/7), and Topology (11/11); the full app unit suite passed 291 tests."
+    route: "RUI010 closed by ae16f236. E01-T10 remains open for broader shared form architecture."
   - id: ISS-21
     disposition: partial
-    evidence: "Topology now renders progressMessage alongside its streaming node count, and Cancel remains visible after Discover collapses the config card. API 36 TopologyDiscoveryScreenTest passed 7/7, including visible progress updates and a real UI start-then-cancel flow. Existing sysName/IP labels and node-details sheet remain; sparse-canvas behavior with the supplied API 33 SNMP lab still needs device QA."
+    evidence: "Topology renders progressMessage alongside its streaming node count, keeps Cancel visible after Discover collapses the config card, labels nodes with sysName/IP, and provides a node-details sheet. API 36 TopologyDiscoveryScreenTest passed 11/11, including progress updates and the start/cancel UI flow. The screen test uses a fake ViewModel; sparse-canvas usability and cancellation during the supplied API 33 SNMP lab still need device QA."
     route: "E01-T07/E01-T09 and existing P02 topology ownership; RUI012."
   - id: ISS-22
     disposition: tracked_device_check
-    evidence: "Socket setup failures such as joinGroup ENODEV propagate through MdnsDiscoveryViewModel into the dismissible error card, with socket and multicast-lock cleanup. MdnsRepositoryImpl still binds port 5353 without selecting the active Wi-Fi interface. Its broad sendQuery/receivePacket catches can also turn packet-I/O failures into a successful empty scan, already tracked by RAPP004. API 33 ENODEV and physical Wi-Fi checks were unavailable."
+    evidence: "A repository regression injects joinGroup 'setsockopt failed: ENODEV' and verifies propagation plus socket/multicast-lock cleanup; the API 36 mDNS screen suite passed 6/6, including error display and Dismiss. MdnsRepositoryImpl still binds port 5353 without selecting the active Wi-Fi interface. Its broad sendQuery/receivePacket catches can also turn packet-I/O failures into a successful empty scan, already tracked by RAPP004. API 33 ENODEV and physical Wi-Fi checks were unavailable."
     route: "P05-T4/P05-T5 for interface and fixed-port behavior; RAPP004 for swallowed packet-I/O failures. Do not add a duplicate mDNS finding."
 
 findings:
   - id: RUI010
     severity: medium
     kind: bug
-    title: "Host fields reject surrounding whitespace even though shared validation trims it"
+    title: "Host fields handled whitespace and normalization inconsistently"
     evidence:
       - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/TracerouteScreen.kt", lines: "321,347-351,462", detail: "Any space marks the host invalid and disables Start, including a trailing space." }
       - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/PingScreen.kt", lines: "350,469", detail: "Ping uses the same contains-space UI check." }
       - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/HostValidator.kt", lines: "99-121", detail: "Shared normalization trims surrounding whitespace before validation." }
       - { file: "core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/TracerouteUseCase.kt", lines: "26-30", detail: "Traceroute domain validation already normalizes its host input." }
-    recommended_action: "Use the shared normalized validation result in host forms so surrounding whitespace is accepted/trimmed consistently while internal whitespace remains invalid."
-    validation: "Compose tests cover leading/trailing whitespace, enabled Start, internal-space rejection on both button and IME paths; ViewModel tests verify normalized Ping and Traceroute use-case/recents values and invalid Traceroute input is not saved. API 36: Ping 10/10, Traceroute 7/7."
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/PortsScreen.kt", lines: "379-410,585", detail: "Port Scan now gates Scan/IME actions with normalized host validation." }
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/tls/TlsInspectorScreen.kt", lines: "227-296", detail: "TLS Inspect/IME actions use normalized host validation and invalid-host feedback." }
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/topology/TopologyDiscoveryScreen.kt", lines: "120-126,220-228,398-417", detail: "Topology gates Discover, reports invalid hosts, and submits the normalized target." }
+    recommended_action: "Use shared normalized validation at host-form and ViewModel boundaries, and persist only normalized values in recent-host lists."
+    validation: "Compose tests cover surrounding-whitespace acceptance and internal-space rejection for Ping, Traceroute, Ports, TLS, and Topology. ViewModel tests verify normalized probe parameters/recents and no recent persistence for invalid hosts. API 36: Traceroute 9/9, Ports 8/8, TLS 7/7, Topology 11/11; Ping Compose suite passed. The full app unit suite passed 291 tests."
     related_phase: P08
     owner: E01-T10
     status: done
-    fixed_in: "83c4e08a87cc3fd68f8afd0848dd27a618bdddd2"
+    fixed_in: "ae16f23601eb829d0c220aa11bf1f5bebca74a74"
 
   - id: RUI011
     severity: medium
@@ -88,7 +91,7 @@ findings:
       - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/topology/TopologyDiscoveryScreen.kt", lines: "427-438,467-475,697-735", detail: "Cancel is outside the collapsible config fields, and ScanningBadge renders the current progress message next to the node count." }
       - { file: "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/screens/topology/TopologyDiscoveryScreenTest.kt", lines: "82-114,117-153", detail: "Compose coverage asserts progress-message updates and starts discovery through the UI before checking Cancel remains visible and invokes reset." }
     recommended_action: "Render concise current progress alongside the count and add a deterministic screen test proving Cancel invokes reset; keep existing node labels and detail sheet."
-    validation: "API 36 TopologyDiscoveryScreenTest passed 7/7, asserting progress-message updates and the start/collapse/Cancel/reset UI flow; existing tests cover the node detail sheet. Adversarial review found no blocker. The 10.0.2.2/public/v2c sparse-canvas check remains an API 33 device-only follow-up."
+    validation: "API 36 TopologyDiscoveryScreenTest passed 11/11, asserting progress-message updates, whitespace validation, and the start/collapse/Cancel/reset UI flow; existing tests cover the node detail sheet. The screen test uses a fake ViewModel and does not prove live SNMP cancellation or canvas hit-testing. The 10.0.2.2/public/v2c sparse-canvas check remains an API 33 device-only follow-up."
     related_phase: P08
     owner: E01-T07/E01-T09
     status: done
