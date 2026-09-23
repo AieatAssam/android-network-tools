@@ -219,7 +219,7 @@ comprehensive_expansion:
       - {"finding":"RUI005","owner_task":"P04-T4","follow_up_status":"done","report":"plan/reviews/2026-09-21-ui-domain.yaml"}
       - {"finding":"RUI006","owner_task":"P10-T2","follow_up_status":"todo","report":"plan/reviews/2026-09-21-ui-domain.yaml"}
       - {"finding":"RUI007","owner_task":"P11-T2","follow_up_status":"todo","report":"plan/reviews/2026-09-21-ui-domain.yaml"}
-      - {"finding":"RUI008","owner_task":"P04-T6","follow_up_status":"todo","report":"plan/reviews/2026-09-21-ui-domain.yaml"}
+      - {"finding":"RUI008","owner_task":"P04-T6","follow_up_status":"done","report":"plan/reviews/2026-09-21-ui-domain.yaml"}
       - {"finding":"RUI009","owner_task":"P08-T4","follow_up_status":"todo","report":"plan/reviews/2026-09-21-ui-domain.yaml"}
       - {"finding":"RUI010","owner_task":"E01-T10","follow_up_status":"done","report":"plan/reviews/2026-09-22-release-qa-brief.yaml"}
       - {"finding":"RUI011","owner_task":"E01-T07/E01-T09","follow_up_status":"done","report":"plan/reviews/2026-09-22-release-qa-brief.yaml"}
@@ -233,8 +233,8 @@ incremental_review:
   reviewer_reasoning_effort: xhigh
   method: "Parallel source review; findings saved in small verified batches before final consolidation. Existing F001-F041 remain historical baseline findings."
   priority_order: [critical, high, medium, low]
-  recommended_first_followups: [RLAN001, RUI008, RAPP002, RAPP004, RNET009]
-  first_followups_rationale: "Prioritize the LAN false-positive regression first, then the remaining DNS submission race, mDNS stop/I/O reporting, and misleading Wi-Fi security classification. Existing unresolved critical/high findings still come first."
+  recommended_first_followups: [RLAN001, RAPP002, RAPP004, RNET009]
+  first_followups_rationale: "Prioritize the LAN false-positive regression first, then mDNS stop/I/O reporting and misleading Wi-Fi security classification. The DNS submission race is closed. Existing unresolved critical/high findings still come first."
   execution_guidance: "Merge these findings with open phase work by severity; existing unresolved critical/high findings retain precedence. Address confirmed bugs before optional feature waves P13-P15. Follow each finding's related_phase and validation, including follow-ups to historically completed phases."
   reports:
     - { area: core-network, file: plan/reviews/2026-09-21-network.yaml }
@@ -261,7 +261,7 @@ incremental_review:
     - { id: RUI004, severity: medium, kind: bug, phase: P08, status: todo, title: "Ping advanced controls can display stale values after recreation" }
     - { id: RUI005, severity: medium, kind: bug, phase: P04, status: done, title: "Stopping continuous ping can publish a CSV before its writer drains" }
     - { id: RUI006, severity: medium, kind: bug, phase: P10, status: todo, title: "TLS inspection silently substitutes port 443 for invalid port text" }
-    - { id: RUI008, severity: medium, kind: bug, phase: P04, status: todo, title: "DNS IME submission can overlap lookups and attach recents to the wrong edit" }
+    - { id: RUI008, severity: medium, kind: bug, phase: P04, status: done, title: "DNS IME submission can overlap lookups and attach recents to the wrong edit" }
     - { id: RUI009, severity: medium, kind: bug, phase: P08, status: todo, title: "Port scanner cannot represent the configured concurrency maximum" }
     - { id: RAPP003, severity: medium, kind: gap, phase: P04, status: todo, title: "Native ICMP load failures bypass the advertised reachability fallback" }
     - { id: RNET003, severity: medium, kind: gap, phase: P02, status: todo, title: "Topology parameters omit bounds for hops, timeout, and retries" }
@@ -799,3 +799,5 @@ changelog:
     note: "Closed RNET005: DNS names now normalize Unicode labels with Java IDNA, validate punycode/label/name lengths, preserve PTR and SRV-owner handling, and reject malformed names before resolver creation. Resolver-capture tests for A/AAAA/SRV and malformed input passed; QA and adversarial reviews found no remaining blockers."
   - date: "2026-09-23"
     note: "Closed RUI005: each continuous Ping session now owns an independent IO writer; Stop and natural completion join the producer, drain the writer, and only then expose the CSV. Clear/restart and error paths invalidate and clean up per-session files. PingViewModelTest passed 37/37, including blocked-writer Stop/natural completion, zero-packet deletion, and validation-error cleanup; QA and adversarial reviews found no closure blocker."
+  - date: "2026-09-23"
+    note: "Closed RUI008: DNS lookups are single-flight with synchronous Loading, clear invalidates/cancels the active generation, and recents use captured request parameters. Query controls lock while loading and IME Search is guarded; recent-store failures do not replace the lookup result. DnsViewModelTest passed 16/16; DnsScreenTest passed 7/7 on API 36. QA and adversarial reviews found no blocker."

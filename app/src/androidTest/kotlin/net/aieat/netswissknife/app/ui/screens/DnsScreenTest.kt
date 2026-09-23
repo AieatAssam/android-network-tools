@@ -1,6 +1,7 @@
 package net.aieat.netswissknife.app.ui.screens
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
@@ -8,6 +9,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.assertCountEquals
@@ -15,6 +17,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.screens.dns.DnsUiState
@@ -114,6 +117,41 @@ class DnsScreenTest {
     }
 
     @Test
+    fun loadingState_disablesDomainInputAndDoesNotStartAnotherLookup() {
+        val viewModel = fakeDnsViewModel(
+            DnsUiState.Loading,
+            domainValue = "query.example",
+            recentHostsValue = listOf("recent.example")
+        )
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                DnsScreen(viewModel = viewModel)
+            }
+        }
+
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        composeRule.onNodeWithTag(DnsScreenTestTags.DOMAIN_INPUT).assertIsNotEnabled()
+        composeRule.onNodeWithText("recent.example").assertIsNotEnabled()
+
+        verify(exactly = 0) { viewModel.performLookup() }
+    }
+
+    @Test
+    fun idleState_searchImeStartsLookup() {
+        val viewModel = fakeDnsViewModel(DnsUiState.Idle, domainValue = "query.example")
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                DnsScreen(viewModel = viewModel)
+            }
+        }
+
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        composeRule.onNodeWithTag(DnsScreenTestTags.DOMAIN_INPUT).performImeAction()
+
+        verify(exactly = 1) { viewModel.performLookup() }
+    }
+
+    @Test
     fun successState_displaysRecordsAndSummary() {
         val result = DnsResult(
             domain = "example.com",
@@ -168,15 +206,17 @@ class DnsScreenTest {
     private fun fakeDnsViewModel(
         state: DnsUiState,
         selectedServer: DnsServer = DnsServer.System(),
-        customServerAddress: String = ""
+        customServerAddress: String = "",
+        domainValue: String = "",
+        recentHostsValue: List<String> = emptyList()
     ): DnsViewModel {
         val viewModel = mockk<DnsViewModel>(relaxed = true)
         every { viewModel.uiState } returns MutableStateFlow(state)
-        every { viewModel.domain } returns MutableStateFlow("")
+        every { viewModel.domain } returns MutableStateFlow(domainValue)
         every { viewModel.recordType } returns MutableStateFlow(DnsRecordType.A)
         every { viewModel.selectedServer } returns MutableStateFlow(selectedServer)
         every { viewModel.customServerAddress } returns MutableStateFlow(customServerAddress)
-        every { viewModel.recentHosts } returns MutableStateFlow(emptyList())
+        every { viewModel.recentHosts } returns MutableStateFlow(recentHostsValue)
         return viewModel
     }
 }

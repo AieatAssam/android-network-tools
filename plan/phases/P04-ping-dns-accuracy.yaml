@@ -34,7 +34,7 @@ review_follow_up:
     - plan/reviews/2026-09-21-app.yaml
     - plan/reviews/2026-09-21-network.yaml
     - plan/reviews/2026-09-21-ui-domain.yaml
-  note: "New source-review follow-ups; preserve historical task completion. RNET005 and RUI005 are closed with resolver-capture/malformed-input and blocked-writer regression coverage; RAPP003 and RUI008 remain open. See report evidence, recommended_action, and validation for each finding."
+  note: "New source-review follow-ups; preserve historical task completion. RNET005, RUI005, and RUI008 are closed with resolver-capture/malformed-input, blocked-writer, and DNS single-flight/captured-recents regression coverage; RAPP003 remains open. See report evidence, recommended_action, and validation for each finding."
 
 context:
   problem: |

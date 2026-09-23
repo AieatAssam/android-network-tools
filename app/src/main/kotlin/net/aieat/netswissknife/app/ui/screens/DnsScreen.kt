@@ -130,6 +130,7 @@ import net.aieat.netswissknife.core.network.dns.DnsServer
  */
 object DnsScreenTestTags {
     const val CONTENT_LIST = "dns_content_list"
+    const val DOMAIN_INPUT = "dns_domain_input"
     const val RECORD_TYPE_CHIPS = "dns_record_type_chips"
     const val RECORD_TYPE_SCROLL_HINT = "dns_record_type_scroll_hint"
 
@@ -332,7 +333,7 @@ private fun DnsInputCard(
                     )
                 },
                 trailingIcon = {
-                    if (domain.isNotEmpty()) {
+                    if (domain.isNotEmpty() && !isLoading) {
                         IconButton(onClick = { onDomainChange("") }) {
                             Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.clear))
                         }
@@ -344,9 +345,12 @@ private fun DnsInputCard(
                     imeAction = ImeAction.Search
                 ),
                 keyboardActions = KeyboardActions(
-                    onSearch = { onLookup() }
+                    onSearch = {
+                        if (!isLoading && domain.isNotBlank()) onLookup()
+                    }
                 ),
-                modifier = Modifier.fillMaxWidth(),
+                enabled = !isLoading,
+                modifier = Modifier.fillMaxWidth().testTag(DnsScreenTestTags.DOMAIN_INPUT),
                 shape = AppShapes.medium
             )
 
@@ -354,7 +358,8 @@ private fun DnsInputCard(
                 recentHosts = recentHosts,
                 onHostSelected = onDomainChange,
                 onRemoveHost = onRemoveRecentHost,
-                onClearAll = onClearRecentHosts
+                onClearAll = onClearRecentHosts,
+                selectionEnabled = !isLoading
             )
 
             // Record type selector
@@ -366,7 +371,8 @@ private fun DnsInputCard(
                 )
                 RecordTypeChips(
                     selected = recordType,
-                    onSelect = onRecordTypeChange
+                    onSelect = onRecordTypeChange,
+                    enabled = !isLoading
                 )
                 // Description of selected record type
                 RecordTypeDescription(recordType = recordType)
@@ -378,7 +384,8 @@ private fun DnsInputCard(
                     selectedServer = selectedServer,
                     customServerAddress = customServerAddress,
                     onServerChange = onServerChange,
-                    onCustomAddressChange = onCustomServerAddressChange
+                    onCustomAddressChange = onCustomServerAddressChange,
+                    enabled = !isLoading
                 )
             }
 
@@ -426,7 +433,8 @@ private fun DnsInputCard(
 @Composable
 private fun RecordTypeChips(
     selected: DnsRecordType,
-    onSelect: (DnsRecordType) -> Unit
+    onSelect: (DnsRecordType) -> Unit,
+    enabled: Boolean
 ) {
     val scrollState = rememberScrollState()
 
@@ -445,6 +453,7 @@ private fun RecordTypeChips(
                 val isSelected = type == selected
                 FilterChip(
                     selected = isSelected,
+                    enabled = enabled,
                     onClick = { onSelect(type) },
                     label = {
                         Text(
@@ -533,7 +542,8 @@ private fun DnsServerSelector(
     selectedServer: DnsServer,
     customServerAddress: String,
     onServerChange: (DnsServer) -> Unit,
-    onCustomAddressChange: (String) -> Unit
+    onCustomAddressChange: (String) -> Unit,
+    enabled: Boolean
 ) {
     var expanded by remember { mutableStateOf(false) }
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -550,7 +560,7 @@ private fun DnsServerSelector(
 
     ExposedDropdownMenuBox(
         expanded = expanded,
-        onExpandedChange = { expanded = it }
+        onExpandedChange = { if (enabled) expanded = it }
     ) {
         OutlinedTextField(
             value = fieldValue,
@@ -571,6 +581,7 @@ private fun DnsServerSelector(
                 ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
             },
             isError = isCustomInvalid,
+            enabled = enabled,
             supportingText = if (isCustomInvalid) {
                 { Text(stringResource(R.string.dns_custom_server_invalid)) }
             } else null,
@@ -578,7 +589,7 @@ private fun DnsServerSelector(
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
             modifier = Modifier
                 .fillMaxWidth()
-                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable, enabled = true),
+                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable, enabled = enabled),
             shape = AppShapes.medium,
             colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors()
         )
@@ -609,6 +620,7 @@ private fun DnsServerSelector(
                             )
                         }
                     },
+                    enabled = enabled,
                     onClick = {
                         onServerChange(server)
                         expanded = false
@@ -629,6 +641,7 @@ private fun DnsServerSelector(
                                 else MaterialTheme.colorScheme.onSurface
                     )
                 },
+                enabled = enabled,
                 onClick = {
                     onCustomAddressChange("")
                     expanded = false

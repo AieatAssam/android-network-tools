@@ -33,6 +33,7 @@ fun RecentHostsRow(
     onHostSelected: (String) -> Unit,
     onRemoveHost: (String) -> Unit,
     onClearAll: () -> Unit,
+    selectionEnabled: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     AnimatedVisibility(
@@ -59,6 +60,7 @@ fun RecentHostsRow(
                 items(recentHosts, key = { it }) { host ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         SuggestionChip(
+                            enabled = selectionEnabled,
                             onClick = { onHostSelected(host) },
                             label = {
                                 Text(

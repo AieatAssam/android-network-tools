@@ -159,21 +159,21 @@ findings:
     evidence:
       - file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/DnsScreen.kt
         line: 347
-        detail: "The domain field's IME Search action calls onLookup() without checking the Loading state; unlike the button, the keyboard path remains active while a request is in flight."
+        detail: "The IME Search action now checks Loading/nonblank input; while a lookup runs, domain editing/clear, recent-host selection, record-type chips, and DNS-server controls are disabled."
       - file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/dns/DnsViewModel.kt
-        line: 113
-        detail: "performLookup() has no in-flight guard or request Job cancellation and launches a new viewModelScope coroutine for every invocation, so overlapping requests can both update _uiState."
+        line: 122
+        detail: "performLookup() returns while Loading, sets Loading synchronously before starting its lazy job, and tracks a generation so a cleared request cannot publish stale state."
       - file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/dns/DnsViewModel.kt
-        line: 155
-        detail: "After the captured params complete, addRecentIfInputWasValid() reads the mutable current _domain rather than params.domain; editing the field while DNS is pending can persist a different host than the one queried."
+        line: 181
+        detail: "addRecentIfInputWasValid(params) uses the captured request domain and server, so recents cannot be attributed to a later field edit."
       - file: app/src/test/kotlin/net/aieat/netswissknife/app/ui/screens/dns/DnsViewModelTest.kt
-        line: 167
-        detail: "Existing tests cover single-request success/error transitions but do not control two deferred requests completing out of order or edit the domain while a request is suspended."
+        line: 224
+        detail: "Deferred-request tests verify duplicate submits are ignored, captured input supplies recents, and a cleared request completing after a newer request cannot overwrite its result."
     impact: "A quick keyboard repeat can leave the screen showing an older DNS answer after a newer query, while recent history can contain an unqueried edit; users may trust the displayed answer as belonging to the visible domain."
-    recommended_action: "Keep a lookup Job and cancel/ignore stale generations, gate every submit path (including IME) while loading, and add recents from the captured normalized input only after that request completes."
-    validation: "Use a deferred fake use case for domains A and B, submit A then B (including the IME path), complete B before A, and assert only B remains visible and recent history contains the queried values rather than an intermediate edit."
+    recommended_action: "Enforce single-flight by entering Loading synchronously and ignoring duplicate submits; invalidate/cancel the active generation on clear, gate IME and query controls while loading, and persist recents from captured request parameters."
+    validation: "With a deferred A lookup, edit the ViewModel input and submit again; assert one use-case call, result A, recent A, and no recent for the edit. Then clear a deferred A, start and complete B, release A late, and assert B remains visible and A is not added to recents. Compose tests verify idle IME Search submits, while Loading disables the query controls and blocks another lookup."
     related_phase: P04
-    status: todo
+    status: done
 
   - id: RUI009
     severity: medium

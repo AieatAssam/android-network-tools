@@ -12,6 +12,9 @@ import net.aieat.netswissknife.core.network.dns.DnsRecordType
 import net.aieat.netswissknife.core.network.dns.DnsResult
 import net.aieat.netswissknife.core.network.dns.DnsServer
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -40,6 +43,8 @@ class DnsViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow<DnsUiState>(DnsUiState.Idle)
     val uiState: StateFlow<DnsUiState> = _uiState.asStateFlow()
+    private var lookupJob: Job? = null
+    private var lookupGeneration = 0L
 
     // ── Form field state ─────────────────────────────────────────────────────
 
@@ -86,6 +91,9 @@ class DnsViewModel @Inject constructor(
     }
 
     fun onClearResults() {
+        lookupGeneration++
+        lookupJob?.cancel()
+        lookupJob = null
         _uiState.value = DnsUiState.Idle
     }
 
@@ -94,6 +102,7 @@ class DnsViewModel @Inject constructor(
     }
 
     fun onUseCloudflare() {
+        if (_uiState.value is DnsUiState.Loading) return
         _selectedServer.value = DnsServer.Cloudflare
         performLookup()
     }
@@ -111,6 +120,8 @@ class DnsViewModel @Inject constructor(
     }
 
     fun performLookup() {
+        if (_uiState.value is DnsUiState.Loading) return
+
         val server = when (val s = _selectedServer.value) {
             is DnsServer.Custom -> DnsServer.Custom(_customServerAddress.value)
             is DnsServer.System -> {
@@ -133,31 +144,51 @@ class DnsViewModel @Inject constructor(
             server = server
         )
 
-        viewModelScope.launch {
-            _uiState.value = DnsUiState.Loading
-            _uiState.value = when (val result = dnsLookupUseCase(params)) {
-                is NetworkResult.Success -> {
-                    addRecentIfInputWasValid(server)
-                    DnsUiState.Success(result.data)
+        val requestGeneration = ++lookupGeneration
+        _uiState.value = DnsUiState.Loading
+        lookupJob?.cancel()
+        val job = viewModelScope.launch(start = CoroutineStart.LAZY) {
+            try {
+                val result = dnsLookupUseCase(params)
+                if (requestGeneration != lookupGeneration) return@launch
+
+                try {
+                    addRecentIfInputWasValid(params)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    // Recents are best-effort and must not replace the DNS result.
                 }
-                is NetworkResult.Error   -> {
-                    addRecentIfInputWasValid(server)
-                    DnsUiState.Error(
+                if (requestGeneration != lookupGeneration) return@launch
+
+                val canFallbackToCloudflare =
+                    (params.server as? DnsServer.System)?.serverAddresses?.isEmpty() == true
+                _uiState.value = when (result) {
+                    is NetworkResult.Success -> DnsUiState.Success(result.data)
+                    is NetworkResult.Error -> DnsUiState.Error(
                         message = result.message,
-                        canFallbackToCloudflare = server is DnsServer.System && server.serverAddresses.isEmpty()
+                        canFallbackToCloudflare = canFallbackToCloudflare
                     )
                 }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                if (requestGeneration == lookupGeneration) {
+                    _uiState.value = DnsUiState.Error(e.message ?: "DNS lookup failed")
+                }
+            } finally {
+                if (requestGeneration == lookupGeneration) lookupJob = null
             }
         }
+        lookupJob = job
+        job.start()
     }
 
-    private fun addRecentIfInputWasValid(server: DnsServer) {
-        val domain = _domain.value.trim()
-        val customValid = (server as? DnsServer.Custom)?.address?.isNotBlank() ?: true
+    private suspend fun addRecentIfInputWasValid(params: DnsLookupParams) {
+        val domain = params.domain.trim()
+        val customValid = (params.server as? DnsServer.Custom)?.address?.isNotBlank() ?: true
         if (domain.isNotBlank() && domain.length <= 253 && customValid) {
-            viewModelScope.launch {
-                recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_DNS_HOSTS, domain)
-            }
+            recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_DNS_HOSTS, domain)
         }
     }
 }

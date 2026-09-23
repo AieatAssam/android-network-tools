@@ -5,6 +5,8 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -30,6 +32,8 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
+import kotlin.coroutines.resume
+import kotlin.coroutines.suspendCoroutine
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @DisplayName("DnsViewModel")
@@ -200,6 +204,84 @@ class DnsViewModelTest {
                 net.aieat.netswissknife.app.data.AppPreferenceKeys.RECENT_DNS_HOSTS,
                 "example.com"
             ) }
+        }
+
+        @Test
+        fun `recent persistence failure does not replace successful DNS result`() = runTest {
+            coEvery { useCase(any()) } returns NetworkResult.Success(stubResult)
+            coEvery {
+                recentHostsRepository.addRecent(any(), any())
+            } throws IllegalStateException("recent store unavailable")
+            viewModel.onDomainChange("example.com")
+
+            viewModel.performLookup()
+
+            val state = viewModel.uiState.value
+            assertTrue(state is DnsUiState.Success)
+            assertEquals(stubResult, (state as DnsUiState.Success).result)
+        }
+
+        @Test
+        fun `duplicate submit while loading is ignored and recent host uses captured input`() = runTest {
+            val answer = CompletableDeferred<NetworkResult<DnsResult>>()
+            coEvery { useCase(any()) } coAnswers { answer.await() }
+            viewModel.onDomainChange("queried.example")
+
+            viewModel.performLookup()
+
+            assertTrue(viewModel.uiState.value is DnsUiState.Loading)
+            viewModel.onDomainChange("edited.example")
+            viewModel.performLookup()
+            coVerify(exactly = 1) { useCase(any()) }
+
+            answer.complete(NetworkResult.Success(stubResult.copy(domain = "queried.example")))
+            val success = viewModel.uiState.first { it is DnsUiState.Success } as DnsUiState.Success
+            assertEquals("queried.example", success.result.domain)
+            coVerify(exactly = 1) {
+                recentHostsRepository.addRecent(
+                    net.aieat.netswissknife.app.data.AppPreferenceKeys.RECENT_DNS_HOSTS,
+                    "queried.example"
+                )
+            }
+            coVerify(exactly = 0) {
+                recentHostsRepository.addRecent(
+                    net.aieat.netswissknife.app.data.AppPreferenceKeys.RECENT_DNS_HOSTS,
+                    "edited.example"
+                )
+            }
+        }
+
+        @Test
+        fun `late completion from cleared request cannot replace a newer result`() = runTest {
+            var completeFirst: ((NetworkResult<DnsResult>) -> Unit)? = null
+            coEvery { useCase(match { it.domain == "first.example" }) } coAnswers {
+                suspendCoroutine { continuation ->
+                    completeFirst = { result -> continuation.resume(result) }
+                }
+            }
+            coEvery { useCase(match { it.domain == "second.example" }) } returns
+                NetworkResult.Success(stubResult.copy(domain = "second.example"))
+
+            viewModel.onDomainChange("first.example")
+            viewModel.performLookup()
+            viewModel.onClearResults()
+            assertTrue(viewModel.uiState.value is DnsUiState.Idle)
+
+            viewModel.onDomainChange("second.example")
+            viewModel.performLookup()
+            val latest = viewModel.uiState.first { it is DnsUiState.Success } as DnsUiState.Success
+            assertEquals("second.example", latest.result.domain)
+
+            runCatching {
+                completeFirst!!(NetworkResult.Success(stubResult.copy(domain = "first.example")))
+            }
+            assertEquals(latest, viewModel.uiState.value)
+            coVerify(exactly = 0) {
+                recentHostsRepository.addRecent(
+                    net.aieat.netswissknife.app.data.AppPreferenceKeys.RECENT_DNS_HOSTS,
+                    "first.example"
+                )
+            }
         }
     }
 }
