@@ -21,11 +21,7 @@ class OperationContext internal constructor(
     val cancellationReason: CancellationReason? get() = session.cancellationReason
 
     /** Checks coroutine cancellation, the shared cancellation reason, and the monotonic deadline. */
-    suspend fun ensureOperationActive() {
-        currentCoroutineContext().ensureActive()
-        session.throwIfCancelled()
-        budget.throwIfExpired()
-    }
+    suspend fun ensureOperationActive() = ensureCurrentOperationActive()
 }
 
 /** Runs one operation with structured children, a monotonic deadline, and prompt resource closure. */
@@ -70,7 +66,7 @@ object OperationRunner {
 
             var primaryFailure: Throwable? = null
             try {
-                withContext(operationJob) {
+                withContext(operationJob + OperationResourcesContext(session)) {
                     currentCoroutineContext().ensureActive()
                     session.budget.throwIfExpired()
                     OperationContext(this, session).block()

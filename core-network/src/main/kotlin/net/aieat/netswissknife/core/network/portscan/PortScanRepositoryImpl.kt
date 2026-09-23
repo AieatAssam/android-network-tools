@@ -152,7 +152,6 @@ class PortScanRepositoryImpl(
             }
             ensureOperationActive()
             val resolvedIp = resolvedAddress.hostAddress
-            send(PortScanUpdate.Started(resolvedIp = resolvedIp, totalCount = ports.size))
 
             // A bounded work queue keeps very large scans from launching one
             // coroutine per port, while the bounded result queue provides
@@ -177,6 +176,9 @@ class PortScanRepositoryImpl(
                 val socketSlots = List(workerCount) {
                     resources.register(ActivePortScanSocket())
                 }
+                // Publish Started only after operation-owned worker slots are registered. A
+                // first()-only collector may cancel as soon as it sees this event.
+                send(PortScanUpdate.Started(resolvedIp = resolvedIp, totalCount = ports.size))
                 val workers = socketSlots.map { socketSlot ->
                     launch(Dispatchers.IO) {
                         val effectiveChecker = checker ?: defaultChecker(

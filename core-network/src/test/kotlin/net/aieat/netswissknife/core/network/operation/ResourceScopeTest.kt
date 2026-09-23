@@ -62,6 +62,49 @@ class ResourceScopeTest {
     }
 
     @Test
+    fun `release transfers ownership out of an open scope`() {
+        val scope = ResourceScope()
+        var closeCount = 0
+        val resource = AutoCloseable { closeCount++ }
+        scope.register(resource)
+
+        assertTrue(scope.release(resource))
+        resource.close()
+        scope.close()
+
+        assertEquals(1, closeCount)
+    }
+
+    @Test
+    fun `release during closing leaves cleanup with the scope`() {
+        val scope = ResourceScope()
+        val closeStarted = CountDownLatch(1)
+        val allowClose = CountDownLatch(1)
+        val executor = Executors.newSingleThreadExecutor()
+        var closeCount = 0
+        val resource = AutoCloseable {
+            closeStarted.countDown()
+            check(allowClose.await(5, TimeUnit.SECONDS))
+            closeCount++
+        }
+        scope.register(resource)
+
+        try {
+            val closeTask = executor.submit { scope.close() }
+            assertTrue(closeStarted.await(5, TimeUnit.SECONDS))
+            assertFalse(scope.release(resource))
+            allowClose.countDown()
+            closeTask.get(5, TimeUnit.SECONDS)
+
+            assertEquals(1, closeCount)
+        } finally {
+            allowClose.countDown()
+            executor.shutdownNow()
+            assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS))
+        }
+    }
+
+    @Test
     fun `registration during closing closes late resource immediately`() {
         val scope = ResourceScope()
         val closeStarted = CountDownLatch(1)

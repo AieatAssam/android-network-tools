@@ -9,11 +9,13 @@ import java.net.Socket
 import java.net.SocketTimeoutException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.ensureActive
 import net.aieat.netswissknife.core.network.net.LocalNetworkPermissionDeniedException
 import net.aieat.netswissknife.core.network.net.NetworkBinder
 import net.aieat.netswissknife.core.network.net.NoOpNetworkBinder
 import net.aieat.netswissknife.core.network.net.newTcpSocket
+import net.aieat.netswissknife.core.network.operation.OperationResourcesContext
+import net.aieat.netswissknife.core.network.operation.ResourceScope
+import net.aieat.netswissknife.core.network.operation.ensureCurrentOperationActive
 
 /** Probe used to establish whether an IPv4 host answers ICMP echo. */
 fun interface IcmpProbe {
@@ -123,11 +125,13 @@ class SocketTcpPresenceProbe(
 ) : TcpPresenceProbe {
     override suspend fun probe(ip: String, ports: List<Int>, timeoutMs: Int): TcpPresence {
         val perPortTimeout = timeoutMs.coerceAtMost(400).coerceAtLeast(1)
+        val resources = currentCoroutineContext()[OperationResourcesContext]?.resources
         var firstFailure: TcpPresence? = null
         for (port in ports) {
-            currentCoroutineContext().ensureActive()
+            ensureCurrentOperationActive()
             val result = connector?.invoke(ip, port, perPortTimeout)
-                ?: connect(ip, port, perPortTimeout, binder, socketFactory)
+                ?: connect(ip, port, perPortTimeout, binder, socketFactory, resources)
+            ensureCurrentOperationActive()
             val detail = result.detail?.take(160)
             when (result.outcome) {
                 TcpConnectOutcome.OPEN -> return TcpPresence.Open(port)
@@ -149,10 +153,16 @@ class SocketTcpPresenceProbe(
             timeoutMs: Int,
             binder: NetworkBinder,
             socketFactory: () -> Socket,
+            resources: ResourceScope?,
         ): TcpConnectResult {
             var socket: Socket? = null
             return try {
-                socket = binder.newTcpSocket(ip, socketFactory)
+                socket = binder.newTcpSocket(ip) {
+                    socketFactory().also { created ->
+                        socket = created
+                        resources?.register(created)
+                    }
+                }
                 socket.connect(InetSocketAddress(ip, port), timeoutMs)
                 TcpConnectResult(TcpConnectOutcome.OPEN)
             } catch (error: ConnectException) {
@@ -167,10 +177,13 @@ class SocketTcpPresenceProbe(
             } catch (error: IOException) {
                 TcpConnectResult(TcpConnectOutcome.UNKNOWN_FAILURE, error.diagnosticDetail())
             } finally {
-                try {
-                    socket?.close()
-                } catch (_: IOException) {
-                    // Best effort close.
+                val socketToClose = socket
+                if (socketToClose != null && (resources == null || resources.release(socketToClose))) {
+                    try {
+                        socketToClose.close()
+                    } catch (_: IOException) {
+                        // Best effort close.
+                    }
                 }
             }
         }

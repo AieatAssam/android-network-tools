@@ -40,6 +40,19 @@ class ResourceScope : AutoCloseable {
     }
 
     /**
+     * Transfers a previously registered resource back to its caller while the scope is open.
+     * Returns false once scope closure owns cleanup; the caller must not close it in that case.
+     */
+    fun release(resource: AutoCloseable): Boolean = synchronized(lock) {
+        if (state != State.OPEN) return@synchronized false
+        val index = resources.indexOfFirst { it === resource }
+        if (index < 0) false else {
+            resources.removeAt(index)
+            true
+        }
+    }
+
+    /**
      * Closes every owned resource in LIFO order. Concurrent callers wait for cleanup. If a
      * close action fails, all other actions still run and the failures are reported together.
      */

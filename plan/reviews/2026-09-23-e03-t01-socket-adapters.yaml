@@ -1,0 +1,31 @@
+review:
+  area: E03-T01 operation resource-scope adapters
+  status: implementation_slice_verified
+  date: 2026-09-23
+  branch: plan/comprehensive-review-2026-09-22
+  prior_portscan_commits: [6b705a3, ece00a1]
+
+scope:
+  - "Port Scan closes active sockets on cancellation and emits Started only after worker socket slots are registered, so a first()-only collector cannot cancel midway through setup."
+  - "LAN Scan owns default TCP presence, TCP enrichment, and correlated UDP sockets through one per-collection OperationSession; resources are released after each probe or closed on cancellation."
+  - "Probe-local CancellationException cancels the operation owner so the resource-close callback runs before sibling workers are joined."
+  - "Reverse-DNS enrichment uses a per-call timeout and a finite two-worker/four-queue executor; timeout and cancellation remove queued tasks and request worker interruption."
+  - "Progress/completion remains guarded by operation cancellation; no ScanComplete is emitted after cancellation."
+
+validation:
+  command: "./gradlew :core-network:test :core-domain:test :app:testDebugUnitTest --no-daemon --no-parallel"
+  status: passed
+  result: "core-network, core-domain, and app unit suites completed with zero failures after moving Port Scan Started behind resource registration."
+  additional: "git diff --check passed."
+
+reviewers:
+  qa: "Cleared the LAN sibling-cancellation path, reverse-DNS worker cancellation/enqueue race, and Port Scan Started ordering."
+  adversarial: "Cleared the same paths after fixes; no remaining blocker in socket ownership, cancellation propagation, queue shutdown, or event ordering."
+
+limits:
+  - "InetAddress.isReachable and platform address resolution do not expose closeable handles. The ICMP call receives its per-host timeout and checks cancellation after return; a platform implementation may still overrun that timeout."
+  - "A native reverse-DNS resolver may ignore thread interruption. Caller cancellation returns promptly, while the fixed executor bounds residual resolver work to two workers and four queued requests; excess lookups return no name."
+  - "API 33 SNMP lab, TalkBack, and physical-Wi-Fi checks from the supplied release QA brief remain device-only; see 2026-09-23-release-qa-brief.yaml."
+
+phase_disposition:
+  E03-T01: "in_progress; Port Scan and LAN Scan socket adapters are validated, while the remaining tool adapters and phase-wide gates remain open."

@@ -7,11 +7,13 @@ import java.net.SocketTimeoutException
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.ensureActive
 import net.aieat.netswissknife.core.network.net.LocalNetworkPermissionDeniedException
 import net.aieat.netswissknife.core.network.net.NetworkBinder
 import net.aieat.netswissknife.core.network.net.NoOpNetworkBinder
 import net.aieat.netswissknife.core.network.net.newUdpSocket
+import net.aieat.netswissknife.core.network.operation.OperationResourcesContext
+import net.aieat.netswissknife.core.network.operation.ResourceScope
+import net.aieat.netswissknife.core.network.operation.ensureCurrentOperationActive
 
 /** Small injectable UDP seam shared by LAN discovery protocols. */
 fun interface UdpExchange {
@@ -62,7 +64,7 @@ internal class NetworkBoundUdpExchange(
 
     override fun exchange(ip: String, port: Int, payload: ByteArray, timeoutMs: Int): ByteArray? {
         return try {
-            openSocket(ip).use { socket ->
+            openSocket(ip, null).use { socket ->
                 socket.soTimeout = timeoutMs.coerceAtLeast(1)
                 socket.send(DatagramPacket(payload, payload.size, InetSocketAddress(ip, port)))
                 val responseBuffer = ByteArray(4096)
@@ -84,13 +86,17 @@ internal class NetworkBoundUdpExchange(
         timeoutMs: Int,
         accepts: (CorrelatedUdpReply) -> Boolean,
     ): CorrelatedUdpReply? {
+        ensureCurrentOperationActive()
         val deadlineNanos = System.nanoTime() + timeoutMs.coerceAtLeast(1) * 1_000_000L
+        val resources = currentCoroutineContext()[OperationResourcesContext]?.resources
         return try {
-            openSocket(ip).use { socket ->
+            val socket = openSocket(ip, resources)
+            try {
                 socket.send(DatagramPacket(payload, payload.size, InetSocketAddress(ip, port)))
+                ensureCurrentOperationActive()
                 val responseBuffer = ByteArray(4096)
                 while (true) {
-                    currentCoroutineContext().ensureActive()
+                    ensureCurrentOperationActive()
                     val remainingNanos = deadlineNanos - System.nanoTime()
                     if (remainingNanos <= 0L) return null
                     // Poll at most every 100 ms so cancellation closes the socket promptly.
@@ -107,11 +113,13 @@ internal class NetworkBoundUdpExchange(
                         sourcePort = response.port,
                         payload = response.data.copyOf(response.length),
                     )
-                    currentCoroutineContext().ensureActive()
+                    ensureCurrentOperationActive()
                     if (accepts(candidate)) return candidate
                 }
                 @Suppress("UNREACHABLE_CODE")
                 null
+            } finally {
+                closeOrRelease(socket, resources)
             }
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -124,17 +132,35 @@ internal class NetworkBoundUdpExchange(
         }
     }
 
-    private fun openSocket(ip: String): DatagramSocket {
-        val socket = binder.newUdpSocket(ip, socketFactory, bindMulticastDestinations)
+    private fun openSocket(ip: String, resources: ResourceScope?): DatagramSocket {
+        var socket: DatagramSocket? = null
+        val boundSocket = try {
+            binder.newUdpSocket(ip, {
+                socketFactory().also { created ->
+                    socket = created
+                    resources?.register(created)
+                }
+            }, bindMulticastDestinations)
+        } catch (failure: Throwable) {
+            val created = socket
+            if (created != null && (resources == null || resources.release(created))) {
+                runCatching { created.close() }
+            }
+            throw failure
+        }
         try {
-            socket.bind(InetSocketAddress(0))
+            boundSocket.bind(InetSocketAddress(0))
         } catch (error: SecurityException) {
-            socket.close()
+            closeOrRelease(boundSocket, resources)
             throw LocalNetworkPermissionDeniedException(error)
         } catch (error: Exception) {
-            socket.close()
+            closeOrRelease(boundSocket, resources)
             throw error
         }
-        return socket
+        return boundSocket
+    }
+
+    private fun closeOrRelease(socket: DatagramSocket, resources: ResourceScope?) {
+        if (resources == null || resources.release(socket)) socket.close()
     }
 }

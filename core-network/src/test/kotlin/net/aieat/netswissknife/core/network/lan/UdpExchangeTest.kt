@@ -6,9 +6,13 @@ import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import net.aieat.netswissknife.core.network.net.FakeNetworkBinder
 import net.aieat.netswissknife.core.network.net.LocalNetworkPermissionDeniedException
 import net.aieat.netswissknife.core.network.net.NetworkBinder
+import net.aieat.netswissknife.core.network.operation.OperationBudget
+import net.aieat.netswissknife.core.network.operation.OperationRunner
+import net.aieat.netswissknife.core.network.operation.OperationSession
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -20,6 +24,57 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
 class UdpExchangeTest {
+    @Test
+    fun `operation cancellation closes a blocked correlated UDP receive`() = runTest {
+        val receiveStarted = CountDownLatch(1)
+        val closedSignal = CountDownLatch(1)
+        val socket = object : DatagramSocket(null as java.net.SocketAddress?) {
+            override fun bind(address: java.net.SocketAddress?) = Unit
+            override fun send(packet: DatagramPacket) = Unit
+            override fun receive(packet: DatagramPacket) {
+                receiveStarted.countDown()
+                try {
+                    closedSignal.await()
+                } catch (interrupted: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    throw SocketException("receive interrupted").also { it.initCause(interrupted) }
+                }
+                throw SocketException("socket closed during receive")
+            }
+
+            override fun close() {
+                super.close()
+                closedSignal.countDown()
+            }
+        }
+        val session = OperationSession(OperationBudget.start(timeoutMillis = 10_000))
+        val exchange = NetworkBoundUdpExchange(
+            binder = FakeNetworkBinder(shouldBindResult = false),
+            socketFactory = { socket },
+            bindMulticastDestinations = true,
+        )
+        val operation = backgroundScope.launch(Dispatchers.IO) {
+            OperationRunner.run(session) {
+                exchange.exchangeCorrelated(
+                    ip = "224.0.0.251",
+                    port = 5353,
+                    payload = byteArrayOf(0x01),
+                    timeoutMs = 5_000,
+                    accepts = { true },
+                )
+                ensureOperationActive()
+            }
+        }
+
+        assertTrue(withContext(Dispatchers.IO) { receiveStarted.await(5, TimeUnit.SECONDS) })
+        withContext(Dispatchers.Default) {
+            withTimeout(2_000) { operation.cancelAndJoin() }
+        }
+
+        assertTrue(socket.isClosed, "operation cancellation must close the datagram socket")
+        assertTrue(session.resources.isClosed)
+    }
+
     @Test
     fun `LAN UDP exchange binds multicast probes to the selected network`() = runTest {
         val binder = FakeNetworkBinder(shouldBindResult = false)

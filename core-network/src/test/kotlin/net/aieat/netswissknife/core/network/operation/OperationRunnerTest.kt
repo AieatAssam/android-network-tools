@@ -12,6 +12,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flow
@@ -318,6 +319,21 @@ class OperationRunnerTest {
         }
 
         assertTrue(failure is IllegalStateException)
+        assertTrue(session.resources.isClosed)
+    }
+
+    @Test
+    fun `runner exposes its resource scope through child coroutine context`() = runTest {
+        val session = OperationSession(OperationBudget.start(clock = FakeClock()))
+        var workerScope: ResourceScope? = null
+
+        OperationRunner.run(session) {
+            launch {
+                workerScope = checkNotNull(currentCoroutineContext()[OperationResourcesContext]).resources
+            }.join()
+        }
+
+        assertEquals(session.resources, workerScope)
         assertTrue(session.resources.isClosed)
     }
 

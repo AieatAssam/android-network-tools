@@ -1,17 +1,15 @@
 package net.aieat.netswissknife.core.network.lan
 
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.isActive
 import net.aieat.netswissknife.core.network.MonotonicClock
 import net.aieat.netswissknife.core.network.SystemMonotonicClock
@@ -20,6 +18,14 @@ import net.aieat.netswissknife.core.network.net.LocalNetworkPermissionDeniedExce
 import net.aieat.netswissknife.core.network.net.NetworkBinder
 import net.aieat.netswissknife.core.network.net.NoOpNetworkBinder
 import net.aieat.netswissknife.core.network.net.newTcpSocket
+import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationBudget
+import net.aieat.netswissknife.core.network.operation.OperationRequirement
+import net.aieat.netswissknife.core.network.operation.OperationResourcesContext
+import net.aieat.netswissknife.core.network.operation.OperationRunner
+import net.aieat.netswissknife.core.network.operation.OperationSession
+import net.aieat.netswissknife.core.network.operation.ResourceScope
+import net.aieat.netswissknife.core.network.operation.ensureCurrentOperationActive
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.Socket
@@ -55,7 +61,7 @@ class LanScanRepositoryImpl(
         binder = binder,
         socketFactory = socketFactory,
     )
-    private val effectivePortChecker: PortChecker = portChecker ?: createPortChecker(binder, socketFactory)
+    private val effectivePortChecker: PortChecker? = portChecker
     private val effectiveNameProbes: List<NameProbe> = nameProbes ?: run {
         val udpExchange = DefaultUdpExchange.withBinder(binder)
         listOf(
@@ -71,11 +77,20 @@ class LanScanRepositoryImpl(
     companion object {
         private const val MAX_DIAGNOSTIC_DETAILS = 100
 
-        private fun createPortChecker(binder: NetworkBinder, socketFactory: () -> Socket): PortChecker =
+        private fun createPortChecker(
+            binder: NetworkBinder,
+            socketFactory: () -> Socket,
+            resources: ResourceScope?,
+        ): PortChecker =
             { ip, port, timeoutMs ->
                 var socket: Socket? = null
                 try {
-                    socket = binder.newTcpSocket(ip, socketFactory)
+                    socket = binder.newTcpSocket(ip) {
+                        socketFactory().also { created ->
+                            socket = created
+                            resources?.register(created)
+                        }
+                    }
                     socket.connect(InetSocketAddress(ip, port), timeoutMs.coerceAtMost(500))
                     true
                 } catch (error: SecurityException) {
@@ -85,7 +100,13 @@ class LanScanRepositoryImpl(
                 } catch (_: Exception) {
                     false
                 } finally {
-                    runCatching { socket?.close() }
+                    val socketToClose = socket
+                    if (
+                        socketToClose != null &&
+                        (resources == null || resources.release(socketToClose))
+                    ) {
+                        runCatching { socketToClose.close() }
+                    }
                 }
             }
 
@@ -120,146 +141,162 @@ class LanScanRepositoryImpl(
         }
     }
 
-    override fun scan(request: LanScanRequest): Flow<LanScanUpdate> = flow {
+    override fun scan(request: LanScanRequest): Flow<LanScanUpdate> = channelFlow {
         val startTime = clock.nowNanos()
-        val ips = SubnetUtils.parseSubnet(request.subnet)
-        val totalCount = ips.size
-        val aliveHosts = mutableListOf<LanHost>()
-        var uncertainDiagnostics: List<LanScanDiagnostic> = emptyList()
-        var uncertainTotal = 0
         val effectiveConcurrency = request.concurrency.coerceIn(1, 500)
-
-        data class CompletedHost(
-            val host: LanHost?,
-            val diagnostic: LanScanDiagnostic?,
+        val session = OperationSession(
+            OperationBudget.start(
+                requirement = OperationRequirement.LOCAL_NETWORK,
+                maxConcurrentProbes = effectiveConcurrency,
+                clock = clock,
+            )
         )
+        var completedSummary: LanScanSummary? = null
 
-        coroutineScope {
-            val scanJob = currentCoroutineContext()[Job] ?: error("Scan coroutine has no Job")
-            val pending = Channel<String>(capacity = effectiveConcurrency)
-            val completed = Channel<CompletedHost>(capacity = effectiveConcurrency)
-            val producer = launch {
-                try {
-                    for (ip in ips) pending.send(ip)
-                } finally {
-                    pending.close()
-                }
-            }
-            val workers = List(minOf(effectiveConcurrency, ips.size)) {
-                launch(Dispatchers.IO) {
+        OperationRunner.run(session) {
+            val ips = SubnetUtils.parseSubnet(request.subnet)
+            val totalCount = ips.size
+            val aliveHosts = mutableListOf<LanHost>()
+            var uncertainDiagnostics: List<LanScanDiagnostic> = emptyList()
+            var uncertainTotal = 0
+
+            data class CompletedHost(
+                val host: LanHost?,
+                val diagnostic: LanScanDiagnostic?,
+            )
+
+            coroutineScope {
+                val pending = Channel<String>(capacity = effectiveConcurrency)
+                val completed = Channel<CompletedHost>(capacity = effectiveConcurrency)
+                val producer = launch {
                     try {
-                        for (ip in pending) {
-                            currentCoroutineContext().ensureActive()
-                            val result = discoverHost(ip, request)
-                            completed.send(CompletedHost(result.host, result.diagnostic))
+                        for (ip in ips) {
+                            ensureOperationActive()
+                            pending.send(ip)
                         }
+                    } finally {
+                        pending.close()
+                    }
+                }
+                val workers = List(minOf(effectiveConcurrency, ips.size)) {
+                    launch(Dispatchers.IO) {
+                        try {
+                            for (ip in pending) {
+                                ensureOperationActive()
+                                val result = discoverHost(ip, request)
+                                ensureOperationActive()
+                                completed.send(CompletedHost(result.host, result.diagnostic))
+                            }
+                        } catch (cancelled: CancellationException) {
+                            // A probe that independently throws CancellationException must stop
+                            // the owning operation so its cancellation hook closes sibling sockets.
+                            // Caller cancellation already cancels this worker and the operation.
+                            if (currentCoroutineContext().isActive) {
+                                session.cancel(CancellationReason.PARENT_CANCELLED)
+                            }
+                            throw cancelled
+                        }
+                    }
+                }
+                launch {
+                    producer.join()
+                    workers.joinAll()
+                    completed.close()
+                }
+
+                var scannedCount = 0
+                val uncertainHosts = mutableListOf<LanScanDiagnostic>()
+                var uncertainCount = 0
+                for (completedHost in completed) {
+                    ensureOperationActive()
+                    scannedCount++
+                    var diagnosticForUpdate: LanScanDiagnostic? = null
+                    completedHost.diagnostic?.let {
+                        uncertainCount++
+                        if (uncertainHosts.size < MAX_DIAGNOSTIC_DETAILS) {
+                            uncertainHosts += it
+                            diagnosticForUpdate = it
+                        }
+                    }
+                    completedHost.host?.let {
+                        aliveHosts += it
+                        send(LanScanUpdate.HostFound(it, scannedCount, totalCount, uncertainCount))
+                    } ?: send(
+                        LanScanUpdate.ScanProgress(
+                            scannedCount = scannedCount,
+                            totalCount = totalCount,
+                            uncertainCount = uncertainCount,
+                            diagnostic = diagnosticForUpdate,
+                        ),
+                    )
+                }
+
+                // Keep this local until ScanComplete so uncertain observations never enter hosts.
+                uncertainDiagnostics = uncertainHosts.toList()
+                uncertainTotal = uncertainCount
+            }
+
+            // ARP may have been read during concurrent enrichment, or during an earlier scan,
+            // before this scan populated the kernel cache. A readable final snapshot is the
+            // authoritative MAC view for this scan, including clearing stale prior mappings.
+            val scanMacResolver = try {
+                effectiveMacResolver.snapshot()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                null
+            }
+            val freshSnapshotSupported = try {
+                scanMacResolver?.supported == true
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                false
+            }
+            if (freshSnapshotSupported && scanMacResolver != null) {
+                for (index in aliveHosts.indices) {
+                    ensureOperationActive()
+                    val host = aliveHosts[index]
+                    val mac = try {
+                        scanMacResolver.resolve(host.ip)
                     } catch (cancelled: CancellationException) {
-                        // A probe that independently throws CancellationException must stop
-                        // the whole scan; cancellation caused by the caller is already active.
-                        if (currentCoroutineContext().isActive) scanJob.cancel(cancelled)
                         throw cancelled
+                    } catch (_: Exception) {
+                        // A failed final lookup must not erase a mapping already found by a
+                        // worker; continue completing the scan with that best-effort value.
+                        continue
                     }
+                    ensureOperationActive()
+                    aliveHosts[index] = host.copy(
+                        macAddress = mac,
+                        vendor = mac?.let(OuiDatabase::lookup),
+                        macSource = if (mac == null) MacSource.NONE else MacSource.ARP,
+                    )
                 }
             }
-            launch {
-                producer.join()
-                workers.joinAll()
-                completed.close()
+
+            val cachedResolverSupported = try {
+                effectiveMacResolver.supported
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                false
             }
+            val macResolutionSupported = freshSnapshotSupported || cachedResolverSupported
 
-            var scannedCount = 0
-            val uncertainHosts = mutableListOf<LanScanDiagnostic>()
-            var uncertainCount = 0
-            for (completedHost in completed) {
-                scannedCount++
-                var diagnosticForUpdate: LanScanDiagnostic? = null
-                completedHost.diagnostic?.let {
-                    uncertainCount++
-                    if (uncertainHosts.size < MAX_DIAGNOSTIC_DETAILS) {
-                        uncertainHosts += it
-                        diagnosticForUpdate = it
-                    }
-                }
-                completedHost.host?.let {
-                    aliveHosts += it
-                    emit(LanScanUpdate.HostFound(it, scannedCount, totalCount, uncertainCount))
-                } ?: emit(
-                    LanScanUpdate.ScanProgress(
-                        scannedCount = scannedCount,
-                        totalCount = totalCount,
-                        uncertainCount = uncertainCount,
-                        diagnostic = diagnosticForUpdate,
-                    ),
-                )
-            }
-
-            // Keep this local until ScanComplete so uncertain observations never enter hosts.
-            uncertainDiagnostics = uncertainHosts.toList()
-            uncertainTotal = uncertainCount
+            val hosts = aliveHosts.sortedBy { SubnetUtils.parseIpToLong(it.ip) }
+            completedSummary = LanScanSummary(
+                subnet = request.subnet,
+                totalScanned = totalCount,
+                aliveHosts = hosts.size,
+                scanDurationMs = clock.elapsedMillisSince(startTime),
+                hosts = hosts,
+                macResolutionSupported = macResolutionSupported,
+                uncertainHosts = uncertainDiagnostics,
+                uncertainCount = uncertainTotal,
+            )
         }
-
-        // ARP may have been read during concurrent enrichment, or during an earlier scan,
-        // before this scan populated the kernel cache. A readable final snapshot is the
-        // authoritative MAC view for this scan, including clearing stale prior mappings.
-        val scanMacResolver = try {
-            effectiveMacResolver.snapshot()
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (_: Exception) {
-            null
-        }
-        val freshSnapshotSupported = try {
-            scanMacResolver?.supported == true
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (_: Exception) {
-            false
-        }
-        if (freshSnapshotSupported && scanMacResolver != null) {
-            for (index in aliveHosts.indices) {
-                currentCoroutineContext().ensureActive()
-                val host = aliveHosts[index]
-                val mac = try {
-                    scanMacResolver.resolve(host.ip)
-                } catch (cancelled: CancellationException) {
-                    throw cancelled
-                } catch (_: Exception) {
-                    // A failed final lookup must not erase a mapping already found by a
-                    // worker; continue completing the scan with that best-effort value.
-                    continue
-                }
-                aliveHosts[index] = host.copy(
-                    macAddress = mac,
-                    vendor = mac?.let(OuiDatabase::lookup),
-                    macSource = if (mac == null) MacSource.NONE else MacSource.ARP,
-                )
-            }
-        }
-
-        val cachedResolverSupported = try {
-            effectiveMacResolver.supported
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (_: Exception) {
-            false
-        }
-        val macResolutionSupported = freshSnapshotSupported || cachedResolverSupported
-
-        val hosts = aliveHosts.sortedBy { SubnetUtils.parseIpToLong(it.ip) }
-        emit(
-            LanScanUpdate.ScanComplete(
-                LanScanSummary(
-                    subnet = request.subnet,
-                    totalScanned = totalCount,
-                    aliveHosts = hosts.size,
-                    scanDurationMs = clock.elapsedMillisSince(startTime),
-                    hosts = hosts,
-                    macResolutionSupported = macResolutionSupported,
-                    uncertainHosts = uncertainDiagnostics,
-                    uncertainCount = uncertainTotal,
-                ),
-            ),
-        )
+        send(LanScanUpdate.ScanComplete(checkNotNull(completedSummary)))
     }.flowOn(Dispatchers.IO)
 
     private data class Presence(
@@ -274,9 +311,13 @@ class LanScanRepositoryImpl(
     )
 
     private suspend fun discoverHost(ip: String, request: LanScanRequest): DiscoveryResult {
+        ensureCurrentOperationActive()
         val result = discoverPresence(ip, request)
+        ensureCurrentOperationActive()
         val presence = result.presence ?: return DiscoveryResult(null, result.diagnostic)
-        return DiscoveryResult(enrich(ip, presence, request), null)
+        val host = enrich(ip, presence, request)
+        ensureCurrentOperationActive()
+        return DiscoveryResult(host, null)
     }
 
     private data class PresenceResult(
@@ -286,6 +327,7 @@ class LanScanRepositoryImpl(
 
     private suspend fun discoverPresence(ip: String, request: LanScanRequest): PresenceResult {
         val icmpRtt = effectiveIcmpProbe.echo(ip, request.timeoutMs)
+        ensureCurrentOperationActive()
         if (icmpRtt != null) {
             return PresenceResult(
                 presenceFromEvidence(listOf(PresenceEvidence.IcmpEcho(icmpRtt))),
@@ -297,6 +339,7 @@ class LanScanRepositoryImpl(
         if (hostChecker != null) return PresenceResult(null)
 
         val tcp = effectiveTcpProbe.probe(ip, request.presencePorts, request.timeoutMs)
+        ensureCurrentOperationActive()
         when (tcp) {
             is TcpPresence.Open -> {
                 return PresenceResult(
@@ -331,6 +374,7 @@ class LanScanRepositoryImpl(
                 } catch (_: Exception) {
                     null
                 }
+                ensureCurrentOperationActive()
                 if (reply != null) {
                     return PresenceResult(
                         presenceFromEvidence(
@@ -355,6 +399,7 @@ class LanScanRepositoryImpl(
     }
 
     private suspend fun enrich(ip: String, presence: Presence, request: LanScanRequest): LanHost {
+        ensureCurrentOperationActive()
         var hostname: String? = presence.presenceName ?: if (hostChecker != null) {
             runCatching {
                 InetAddress.getByName(ip).canonicalHostName.takeUnless { it == ip }
@@ -362,6 +407,7 @@ class LanScanRepositoryImpl(
         } else {
             var resolved: String? = null
             for (probe in effectiveNameProbes.filterNot { it is PresenceNameProbe }) {
+                ensureCurrentOperationActive()
                 resolved = try {
                     probe.resolveName(ip, request.timeoutMs)
                 } catch (cancelled: CancellationException) {
@@ -371,6 +417,7 @@ class LanScanRepositoryImpl(
                 } catch (_: Exception) {
                     null
                 }
+                ensureCurrentOperationActive()
                 if (!resolved.isNullOrBlank()) {
                     if (probe is ReverseDnsNameProbe) presence.methods += DiscoveryMethod.RDNS
                     break
@@ -380,6 +427,7 @@ class LanScanRepositoryImpl(
         }
         hostname = hostname?.takeIf { it.isNotBlank() } ?: presence.presenceName
 
+        ensureCurrentOperationActive()
         val mac = try {
             effectiveMacResolver.resolve(ip)
         } catch (cancelled: CancellationException) {
@@ -387,10 +435,14 @@ class LanScanRepositoryImpl(
         } catch (_: Exception) {
             null
         }
+        ensureCurrentOperationActive()
         val openPorts = mutableListOf<Int>()
+        val resources = currentCoroutineContext()[OperationResourcesContext]?.resources
+        val portChecker = effectivePortChecker ?: createPortChecker(binder, socketFactory, resources)
         for (port in QUICK_PORTS) {
-            currentCoroutineContext().ensureActive()
-            if (effectivePortChecker(ip, port, request.timeoutMs)) openPorts += port
+            ensureCurrentOperationActive()
+            if (portChecker(ip, port, request.timeoutMs)) openPorts += port
+            ensureCurrentOperationActive()
         }
         return LanHost(
             ip = ip,
