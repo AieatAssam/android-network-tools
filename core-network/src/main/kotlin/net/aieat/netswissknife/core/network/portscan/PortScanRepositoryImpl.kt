@@ -1,13 +1,17 @@
 package net.aieat.netswissknife.core.network.portscan
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
+import java.io.IOException
 import java.net.ConnectException
 import java.net.InetAddress
 import java.net.InetSocketAddress
@@ -18,7 +22,7 @@ import net.aieat.netswissknife.core.network.SystemMonotonicClock
 import net.aieat.netswissknife.core.network.elapsedMillisSince
 
 /** Functional type for a single TCP port probe. Injected for testability. */
-typealias PortConnectChecker = (host: String, port: Int) -> PortConnectResult
+typealias PortConnectChecker = (address: InetAddress, port: Int) -> PortConnectResult
 
 /** Raw result of a single TCP connection attempt. */
 data class PortConnectResult(
@@ -40,6 +44,7 @@ data class PortConnectResult(
 class PortScanRepositoryImpl(
     private val checker: PortConnectChecker? = null,
     private val clock: MonotonicClock = SystemMonotonicClock,
+    private val hostResolver: (String) -> InetAddress = InetAddress::getByName,
 ) : PortScanRepository {
 
     companion object {
@@ -49,12 +54,12 @@ class PortScanRepositoryImpl(
         fun defaultChecker(
             timeoutMs: Int,
             clock: MonotonicClock = SystemMonotonicClock,
-        ): PortConnectChecker = { host, port ->
+        ): PortConnectChecker = { address, port ->
             val start = clock.nowNanos()
             var socket: Socket? = null
             try {
                 socket = Socket()
-                socket.connect(InetSocketAddress(host, port), timeoutMs)
+                socket.connect(InetSocketAddress(address, port), timeoutMs)
                 val responseTime = clock.elapsedMillisSince(start)
 
                 // Attempt banner grab for open port (short read)
@@ -89,10 +94,16 @@ class PortScanRepositoryImpl(
         val startTime = clock.nowNanos()
         val results = mutableListOf<PortScanResult>()
 
-        // Resolve host IP once for the summary
-        val resolvedIp: String? = try {
-            InetAddress.getByName(host).hostAddress
-        } catch (_: Exception) { null }
+        currentCoroutineContext().ensureActive()
+        val resolvedAddress = try {
+            hostResolver(host)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            throw PortScanHostResolutionException(host, error)
+        }
+        currentCoroutineContext().ensureActive()
+        val resolvedIp = resolvedAddress.hostAddress
 
         val effectiveConcurrency = concurrency.coerceIn(1, 500)
 
@@ -115,7 +126,7 @@ class PortScanRepositoryImpl(
             val workers = List(workerCount) {
                 launch(Dispatchers.IO) {
                     for (port in pending) {
-                        val connectResult = effectiveChecker(host, port)
+                        val connectResult = effectiveChecker(resolvedAddress, port)
                         val portInfo = WellKnownPorts.getInfo(port)
                         completed.send(
                             PortScanResult(
@@ -164,3 +175,6 @@ class PortScanRepositoryImpl(
         emit(PortScanUpdate.Complete(summary))
     }.flowOn(Dispatchers.IO)
 }
+
+class PortScanHostResolutionException(host: String, cause: Throwable) :
+    IOException("Could not resolve port scan target '$host'", cause)

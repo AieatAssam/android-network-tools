@@ -27,7 +27,12 @@ class PortScanUseCaseTest {
     }
 
     private fun makeUseCase(checker: PortConnectChecker = openChecker): PortScanUseCase =
-        PortScanUseCase(PortScanRepositoryImpl(checker = checker))
+        PortScanUseCase(
+            PortScanRepositoryImpl(
+                checker = checker,
+                hostResolver = { java.net.InetAddress.getByName("203.0.113.8") }
+            )
+        )
 
     @Nested
     @DisplayName("host validation")

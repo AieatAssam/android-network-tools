@@ -7,12 +7,15 @@ import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
+import java.util.Collections
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @DisplayName("PortScanRepositoryImpl")
@@ -36,6 +39,11 @@ class PortScanRepositoryImplTest {
         PortConnectResult(status = PortStatus.OPEN, responseTimeMs = 10L, banner = banner)
     }
 
+    private fun testRepository(checker: PortConnectChecker) = PortScanRepositoryImpl(
+        checker = checker,
+        hostResolver = { java.net.InetAddress.getByAddress(byteArrayOf(192.toByte(), 0, 2, 10)) }
+    )
+
     // ── Emission count ─────────────────────────────────────────────────────────
 
     @Nested
@@ -44,7 +52,7 @@ class PortScanRepositoryImplTest {
 
         @Test
         fun `emits one PortResult per port plus one Complete`() = runTest {
-            val repo = PortScanRepositoryImpl(checker = openChecker())
+            val repo = testRepository(checker = openChecker())
             val ports = listOf(80, 443, 8080)
             val updates = repo.scan("example.com", ports, timeoutMs = 1000, concurrency = 10).toList()
             val portResults = updates.filterIsInstance<PortScanUpdate.PortResult>()
@@ -55,14 +63,14 @@ class PortScanRepositoryImplTest {
 
         @Test
         fun `complete is the last event`() = runTest {
-            val repo = PortScanRepositoryImpl(checker = openChecker())
+            val repo = testRepository(checker = openChecker())
             val updates = repo.scan("host", listOf(22, 80), timeoutMs = 1000, concurrency = 10).toList()
             assertTrue(updates.last() is PortScanUpdate.Complete)
         }
 
         @Test
         fun `scanning empty port list emits only Complete`() = runTest {
-            val repo = PortScanRepositoryImpl(checker = openChecker())
+            val repo = testRepository(checker = openChecker())
             val updates = repo.scan("host", emptyList(), timeoutMs = 1000, concurrency = 10).toList()
             assertEquals(1, updates.size)
             assertTrue(updates.first() is PortScanUpdate.Complete)
@@ -77,7 +85,7 @@ class PortScanRepositoryImplTest {
 
         @Test
         fun `open checker produces OPEN status`() = runTest {
-            val repo = PortScanRepositoryImpl(checker = openChecker())
+            val repo = testRepository(checker = openChecker())
             val updates = repo.scan("host", listOf(80), timeoutMs = 1000, concurrency = 10).toList()
             val result = (updates.first() as PortScanUpdate.PortResult).result
             assertEquals(PortStatus.OPEN, result.status)
@@ -85,7 +93,7 @@ class PortScanRepositoryImplTest {
 
         @Test
         fun `closed checker produces CLOSED status`() = runTest {
-            val repo = PortScanRepositoryImpl(checker = closedChecker())
+            val repo = testRepository(checker = closedChecker())
             val updates = repo.scan("host", listOf(80), timeoutMs = 1000, concurrency = 10).toList()
             val result = (updates.first() as PortScanUpdate.PortResult).result
             assertEquals(PortStatus.CLOSED, result.status)
@@ -93,7 +101,7 @@ class PortScanRepositoryImplTest {
 
         @Test
         fun `filtered checker produces FILTERED status`() = runTest {
-            val repo = PortScanRepositoryImpl(checker = filteredChecker())
+            val repo = testRepository(checker = filteredChecker())
             val updates = repo.scan("host", listOf(80), timeoutMs = 1000, concurrency = 10).toList()
             val result = (updates.first() as PortScanUpdate.PortResult).result
             assertEquals(PortStatus.FILTERED, result.status)
@@ -108,7 +116,7 @@ class PortScanRepositoryImplTest {
 
         @Test
         fun `port 80 resolves to HTTP`() = runTest {
-            val repo = PortScanRepositoryImpl(checker = openChecker())
+            val repo = testRepository(checker = openChecker())
             val updates = repo.scan("host", listOf(80), timeoutMs = 1000, concurrency = 10).toList()
             val result = (updates.first() as PortScanUpdate.PortResult).result
             assertEquals("HTTP", result.serviceName)
@@ -116,7 +124,7 @@ class PortScanRepositoryImplTest {
 
         @Test
         fun `port 443 resolves to HTTPS`() = runTest {
-            val repo = PortScanRepositoryImpl(checker = openChecker())
+            val repo = testRepository(checker = openChecker())
             val updates = repo.scan("host", listOf(443), timeoutMs = 1000, concurrency = 10).toList()
             val result = (updates.first() as PortScanUpdate.PortResult).result
             assertEquals("HTTPS", result.serviceName)
@@ -124,7 +132,7 @@ class PortScanRepositoryImplTest {
 
         @Test
         fun `port 22 resolves to SSH`() = runTest {
-            val repo = PortScanRepositoryImpl(checker = openChecker())
+            val repo = testRepository(checker = openChecker())
             val updates = repo.scan("host", listOf(22), timeoutMs = 1000, concurrency = 10).toList()
             val result = (updates.first() as PortScanUpdate.PortResult).result
             assertEquals("SSH", result.serviceName)
@@ -132,7 +140,7 @@ class PortScanRepositoryImplTest {
 
         @Test
         fun `unknown port has non-null service name fallback`() = runTest {
-            val repo = PortScanRepositoryImpl(checker = openChecker())
+            val repo = testRepository(checker = openChecker())
             val updates = repo.scan("host", listOf(12345), timeoutMs = 1000, concurrency = 10).toList()
             val result = (updates.first() as PortScanUpdate.PortResult).result
             assertNotNull(result.serviceName)
@@ -147,7 +155,7 @@ class PortScanRepositoryImplTest {
 
         @Test
         fun `banner from checker is propagated to result`() = runTest {
-            val repo = PortScanRepositoryImpl(checker = bannerChecker("SSH-2.0-OpenSSH_9.0"))
+            val repo = testRepository(checker = bannerChecker("SSH-2.0-OpenSSH_9.0"))
             val updates = repo.scan("host", listOf(22), timeoutMs = 1000, concurrency = 10).toList()
             val result = (updates.first() as PortScanUpdate.PortResult).result
             assertEquals("SSH-2.0-OpenSSH_9.0", result.banner)
@@ -155,7 +163,7 @@ class PortScanRepositoryImplTest {
 
         @Test
         fun `null banner is preserved`() = runTest {
-            val repo = PortScanRepositoryImpl(checker = openChecker())
+            val repo = testRepository(checker = openChecker())
             val updates = repo.scan("host", listOf(80), timeoutMs = 1000, concurrency = 10).toList()
             val result = (updates.first() as PortScanUpdate.PortResult).result
             assertTrue(result.banner == null)
@@ -184,7 +192,7 @@ class PortScanRepositoryImplTest {
                 }
                 PortConnectResult(PortStatus.OPEN, 1L, null)
             }
-            val repo = PortScanRepositoryImpl(checker = checker)
+            val repo = testRepository(checker = checker)
 
             val results = repo.scan("host", listOf(80, 443), 1000, concurrency = 2)
                 .filterIsInstance<PortScanUpdate.PortResult>()
@@ -197,7 +205,7 @@ class PortScanRepositoryImplTest {
 
         @Test
         fun `scannedCount increments per emission`() = runTest {
-            val repo = PortScanRepositoryImpl(checker = openChecker())
+            val repo = testRepository(checker = openChecker())
             val ports = listOf(80, 443, 8080)
             val portResults = repo.scan("host", ports, timeoutMs = 1000, concurrency = 10)
                 .filterIsInstance<PortScanUpdate.PortResult>()
@@ -208,7 +216,7 @@ class PortScanRepositoryImplTest {
 
         @Test
         fun `totalCount matches port list size`() = runTest {
-            val repo = PortScanRepositoryImpl(checker = openChecker())
+            val repo = testRepository(checker = openChecker())
             val ports = listOf(80, 443, 8080)
             val portResults = repo.scan("host", ports, timeoutMs = 1000, concurrency = 10)
                 .filterIsInstance<PortScanUpdate.PortResult>()
@@ -218,6 +226,82 @@ class PortScanRepositoryImplTest {
     }
 
     // ── Summary ────────────────────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("resolved endpoint")
+    inner class ResolvedEndpoint {
+
+        @Test
+        fun `resolves hostname once and probes the same IPv4 address in the summary`() = runTest {
+            val resolveCount = AtomicInteger()
+            val selectedAddress = java.net.InetAddress.getByAddress(byteArrayOf(192.toByte(), 0, 2, 44))
+            val probeAddresses = Collections.synchronizedList(mutableListOf<java.net.InetAddress>())
+            val checker: PortConnectChecker = { address, _ ->
+                probeAddresses.add(address)
+                PortConnectResult(PortStatus.OPEN, 1L, null)
+            }
+            val repo = PortScanRepositoryImpl(
+                checker = checker,
+                hostResolver = {
+                    if (resolveCount.incrementAndGet() == 1) selectedAddress
+                    else java.net.InetAddress.getByAddress(byteArrayOf(192.toByte(), 0, 2, 45))
+                }
+            )
+
+            val updates = repo.scan("router.example", listOf(80, 443, 8080), 1000, concurrency = 3).toList()
+            val summary = updates.filterIsInstance<PortScanUpdate.Complete>().single().summary
+
+            assertEquals(1, resolveCount.get())
+            assertEquals(3, probeAddresses.size)
+            assertTrue(probeAddresses.all { it === selectedAddress })
+            assertEquals("router.example", summary.host)
+            assertEquals(selectedAddress.hostAddress, summary.resolvedIp)
+        }
+
+        @Test
+        fun `passes a selected IPv6 address unchanged to every probe`() = runTest {
+            val selectedAddress = java.net.InetAddress.getByName("2001:db8::42")
+            val probeAddresses = Collections.synchronizedList(mutableListOf<java.net.InetAddress>())
+            val repo = PortScanRepositoryImpl(
+                checker = { address, _ ->
+                    probeAddresses.add(address)
+                    PortConnectResult(PortStatus.OPEN, 1L, null)
+                },
+                hostResolver = { selectedAddress }
+            )
+
+            val summary = repo.scan("v6.example", listOf(22, 443), 1000, concurrency = 2)
+                .filterIsInstance<PortScanUpdate.Complete>()
+                .toList()
+                .single()
+                .summary
+
+            assertEquals(2, probeAddresses.size)
+            assertTrue(probeAddresses.all { it === selectedAddress })
+            assertEquals(selectedAddress.hostAddress, summary.resolvedIp)
+        }
+
+        @Test
+        fun `resolution failure stops before invoking any port checker`() = runTest {
+            val probeCount = AtomicInteger()
+            val repo = PortScanRepositoryImpl(
+                checker = { _, _ ->
+                    probeCount.incrementAndGet()
+                    PortConnectResult(PortStatus.OPEN, 1L, null)
+                },
+                hostResolver = { throw java.net.UnknownHostException("no DNS answer") }
+            )
+
+            val error = assertThrows(PortScanHostResolutionException::class.java) {
+                kotlinx.coroutines.runBlocking {
+                    repo.scan("missing.example", listOf(80), 1000, concurrency = 1).toList()
+                }
+            }
+
+            assertTrue(error.message!!.contains("missing.example"))
+            assertEquals(0, probeCount.get())
+        }
+    }
 
     @Nested
     @DisplayName("scan summary")
@@ -231,7 +315,7 @@ class PortScanRepositoryImplTest {
                 if (port % 2 == 0) PortConnectResult(PortStatus.OPEN, 5L, null)
                 else PortConnectResult(PortStatus.CLOSED, 1L, null)
             }
-            val repo = PortScanRepositoryImpl(checker = alternating)
+            val repo = testRepository(checker = alternating)
             val ports = listOf(80, 443, 8080, 8443)
             val complete = repo.scan("host", ports, timeoutMs = 1000, concurrency = 10)
                 .filterIsInstance<PortScanUpdate.Complete>()
@@ -243,7 +327,7 @@ class PortScanRepositoryImplTest {
 
         @Test
         fun `summary host matches input host`() = runTest {
-            val repo = PortScanRepositoryImpl(checker = openChecker())
+            val repo = testRepository(checker = openChecker())
             val complete = repo.scan("example.com", listOf(80), timeoutMs = 1000, concurrency = 10)
                 .filterIsInstance<PortScanUpdate.Complete>()
                 .toList()
@@ -253,7 +337,7 @@ class PortScanRepositoryImplTest {
 
         @Test
         fun `summary scannedPorts matches input ports`() = runTest {
-            val repo = PortScanRepositoryImpl(checker = openChecker())
+            val repo = testRepository(checker = openChecker())
             val ports = listOf(22, 80, 443)
             val complete = repo.scan("host", ports, timeoutMs = 1000, concurrency = 10)
                 .filterIsInstance<PortScanUpdate.Complete>()
@@ -264,7 +348,7 @@ class PortScanRepositoryImplTest {
 
         @Test
         fun `summary results count matches port list size`() = runTest {
-            val repo = PortScanRepositoryImpl(checker = openChecker())
+            val repo = testRepository(checker = openChecker())
             val ports = listOf(22, 80, 443)
             val complete = repo.scan("host", ports, timeoutMs = 1000, concurrency = 10)
                 .filterIsInstance<PortScanUpdate.Complete>()
