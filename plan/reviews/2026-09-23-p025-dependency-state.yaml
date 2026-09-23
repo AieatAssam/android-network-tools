@@ -1,9 +1,10 @@
 review:
   id: P02.5-dependency-state
-  checked_at: "2026-09-23"
+  checked_at: "2026-09-23T22:37:21Z"
   branch: "plan/comprehensive-review-2026-09-22"
-  commit: "ca8b7f8cd7be464db7077e26aa4a2f22e2004bc5"
+  commit: "7106a5bafa21bf0b30b91afb98470d8d10b184c8"
   status: "open"
+  worktree_delta: "Uncommitted app/build.gradle.kts constraints for :app:androidLintTool; this source change has not yet been submitted to GitHub."
   sources:
     alerts_command: "gh api --paginate repos/AieatAssam/android-network-tools/dependabot/alerts"
     sbom_command: "gh api repos/AieatAssam/android-network-tools/dependency-graph/sbom"
@@ -30,12 +31,12 @@ github_sbom:
     "org.bouncycastle:bcpkix-jdk18on": ["1.80.2", "1.85"]
     "org.apache.commons:commons-lang3": ["3.16.0", "3.18.0"]
     "org.apache.httpcomponents:httpclient": ["4.5.6", "4.5.14"]
-  vulnerable_metadata_edges:
+  reported_dependency_edges:
     - "com.android.tools:sdk-common:32.4.1 -> org.bouncycastle:bcpkix-jdk18on:1.80.2"
     - "com.android.tools:sdk-common:32.4.1 -> org.bouncycastle:bcprov-jdk18on:1.80.2"
     - "org.apache.commons:commons-compress:1.27.1 -> org.apache.commons:commons-lang3:3.16.0"
     - "org.apache.httpcomponents:httpmime:4.5.6 -> org.apache.httpcomponents:httpclient:4.5.6"
-  interpretation: "The SBOM is freshly generated and reports vulnerable versions alongside patched versions. The dependency-submission report confirms those old coordinates also occur in the submitted Gradle graph, so they cannot be dismissed as stale alert-only records. The merged report does not identify the configuration selecting each edge; it remains the data GitHub currently uses while six alerts are open."
+  interpretation: "This repository dependency-graph SBOM is not a release APK SBOM. It reports old and patched build coordinates but does not itself preserve configuration selection details. The later configuration-scoped Gradle report below proves the old versions were selected by :app:androidLintTool before the app-level constraints; they are build-time exposure, not evidence that they ship in releaseRuntimeClasspath."
 
 dependency_submission:
   default_branch:
@@ -56,9 +57,9 @@ dependency_submission:
     note: "The managed submission run accepted this non-default-branch snapshot but did not replace the default-branch results."
   graph_observations:
     - "The default-branch report lists AGP 9.4.1 -> sdk-common 32.4.1 and includes both old and patched Bouncy Castle versions on the sdk-common entry; commons-compress likewise lists commons-lang3 3.16.0 and 3.18.0; httpmime 4.5.6 lists httpclient 4.5.6 and 4.5.14."
-    - "The graph is merged across configurations and does not identify the configuration-specific selection reason for each duplicate edge. It is evidence that the submitted build graph still contains the vulnerable coordinates, not proof that they ship in the Android app."
-    - "The upstream Google Maven POM for sdk-common:32.4.1 declares bcpkix-jdk18on:1.80.2 and bcprov-jdk18on:1.80.2; the AGP:9.4.1 POM declares httpmime:4.5.6. These direct metadata declarations explain why root buildscript pins do not remove the old plugin-path coordinates."
-    - "Main and the reviewed branch have identical settings.gradle.kts, build.gradle.kts, version catalog, and wrapper files. Root buildscript pins add patched nodes but do not remove the old nodes from the submitted graph."
+    - "The GitHub submission aggregates Gradle configurations and does not report each selected configuration in its compact payload. Do not infer that an old coordinate is merely an upstream request edge from this payload alone."
+    - "The upstream Google Maven POM for sdk-common:32.4.1 requests bcpkix-jdk18on:1.80.2 and bcprov-jdk18on:1.80.2; the AGP:9.4.1 graph also requests old Commons Lang and HttpClient through sdk-common/commons-compress/httpmime. The root :classpath conflict-resolves these requests to patched versions, but :app:androidLintTool is an independent configuration and selected the old versions before the app-level constraints."
+    - "The latest default-branch submission still describes the source before the app-level constraints. The latest reviewed-branch submission also predates those constraints; the checked-in post-constraint source has not yet generated a GitHub submission."
     - "The workflow is GitHub-managed Automatic Dependency Submission for Gradle; the repository CI workflow does not define this submission step."
   upstream_metadata:
     sdk_common_pom: "https://dl.google.com/dl/android/maven2/com/android/tools/sdk-common/32.4.1/sdk-common-32.4.1.pom"
@@ -76,9 +77,9 @@ gradle_evidence:
     "org.apache.httpcomponents:httpclient": "4.5.14"
   scope_limitations:
     - "A standalone offline resolution of io.github.ben-manes.versions.settings 0.61.0 completed successfully and loaded no alerted vulnerable coordinates (log SHA-256 48afcd35d4eaaa99a574a52ba29d9eaf0a7f10b2ae9e6327e3fc1ae4e49ed47e). This covers that settings plugin only, not the AGP/project plugin graph."
-    - "The full help trace records plugin requests and artifacts loaded during that invocation; it is not a configuration-scoped selection report for the AGP/project plugin graph."
-    - "The trace loads org.apache.httpcomponents:httpmime:4.5.6. This is distinct from the httpclient alert, though the fresh SBOM shows the former requesting vulnerable httpclient:4.5.6."
-    - "The releaseRuntimeClasspath report excludes the affected packages from the Android runtime; it does not establish the build/settings plugin classpath."
+    - "The full help trace and root buildEnvironment show patched artifacts on the root classpath, but neither is a substitute for resolving every project configuration."
+    - "The app androidLintTool configuration selected vulnerable build-only versions before the new constraints; post-change dependencyInsight proves selection of patched versions there."
+    - "The releaseRuntimeClasspath report excludes the affected packages from Android runtime. The constraints are attached only to androidLintTool and add no runtime dependencies."
 
 disposition:
   phase_status: "in_progress"
@@ -90,20 +91,84 @@ disposition:
 artifact_note: "Compact evidence, source run IDs, and artifact hashes are retained here. Raw submission JSON and Gradle logs remain under /tmp and are not committed."
 
 latest_recheck:
-  checked_at: "2026-09-23"
+  checked_at: "2026-09-23T22:34:40Z"
   current_branch_submission:
-    run_id: 35823761425
+    run_id: 35925554802
     ref: "refs/heads/plan/comprehensive-review-2026-09-22"
-    commit: "68494d6"
-    artifact_sha256: "604a6eaee098bbe8bed97b3e6756434332bd2dc9796f365b445e58acd03dbe33"
-    result: "Still contains sdk-common 32.4.1 -> Bouncy Castle 1.80.2, commons-compress 1.27.1 -> Commons Lang 3.16.0, and httpmime 4.5.6 -> HttpClient 4.5.6."
+    commit: "7106a5bafa21bf0b30b91afb98470d8d10b184c8"
+    generated_at: "2026-09-23T21:58:04Z"
+    artifact_sha256: "8a84c301c2c0dc0ba13823258076f2aab6c8a4bb90ffefed347f8791d3b42f04"
+    result: "Predates app-level constraints and contains the old and patched coordinates in the aggregate graph. The latest source change has not yet been submitted."
   default_branch:
     ref: "refs/heads/main"
     commit: "5e183721e64ce8a8946f1a0b50f52b83544e8898"
-  github_sbom_generated_at: "2026-09-23T05:47:39Z"
+    latest_submission_run_id: 35601558226
+    latest_submission_generated_at: "2026-09-21T12:48:59Z"
+  github_sbom_generated_at: "2026-09-23T22:34:40Z"
+  github_sbom_sha256: "0d6127935bdc437f842f2fc4d833a00562e508ac0295b4932b13e00e5a03e48a"
+  github_sbom_reported_versions:
+    "org.bouncycastle:bcprov-jdk18on": ["1.80.2", "1.85"]
+    "org.bouncycastle:bcpkix-jdk18on": ["1.80.2", "1.85"]
+    "org.apache.commons:commons-lang3": ["3.16.0", "3.18.0"]
+    "org.apache.httpcomponents:httpclient": ["4.5.6", "4.5.14"]
   dependabot_open_alerts: [1, 2, 5, 6, 8, 9]
   newest_stable_agp: "9.4.1"
-  outcome: "The current source still does not remove vulnerable coordinates from the submitted plugin graph. No later stable AGP release is available to test; keep P02.5 open and recheck the next stable plugin-stack candidate against a new default-branch dependency submission, or obtain explicit time-bounded dispositions."
+  outcome: "Six alerts remain open. The live GitHub graph predates the local constraints; keep P02.5 open until the post-constraint main-branch submission clears the old versions or approved time-bounded dispositions are recorded."
+
+configuration_scoped_remediation:
+  checked_at: "2026-09-23T22:37:21Z"
+  source_commit: "7106a5bafa21bf0b30b91afb98470d8d10b184c8"
+  local_changes:
+    file: "app/build.gradle.kts"
+    scope: ":app:androidLintTool only"
+    reason: "Pre-change resolution found vulnerable versions in the AGP lint-tool configuration, while root :classpath already selected patched versions. Constraints avoid adding implementation/runtime dependencies."
+    coordinates:
+      - "org.bouncycastle:bcpkix-jdk18on:1.85"
+      - "org.bouncycastle:bcprov-jdk18on:1.85"
+      - "org.apache.commons:commons-lang3:3.18.0"
+      - "org.apache.httpcomponents:httpclient:4.5.14"
+  dependency_graph_plugin:
+    version: "1.5.0"
+    init_script_sha256: "2aee7c3529fc5b9b40f59b838a2ba66e97ef97bcb69cc253bd7453c356865338"
+    init_script: |
+      initscript {
+          repositories { gradlePluginPortal() }
+          dependencies {
+              classpath "org.gradle:github-dependency-graph-gradle-plugin:1.5.0"
+          }
+      }
+      apply plugin: org.gradle.dependencygraph.simple.SimpleDependencyGraphPlugin
+    command: "DEPENDENCY_GRAPH_REPORT_DIR=/tmp/p025-simple-report ./gradlew -I /tmp/p025-simple.init.gradle --dependency-verification=off --no-configuration-cache --no-configure-on-demand --no-daemon --no-parallel --console=plain :ForceDependencyResolutionPlugin_resolveAllDependencies"
+    result: "BUILD SUCCESSFUL. Pre-change dependency-resolution.json resolved patched versions on root :classpath and vulnerable 1.80.2/3.16.0/4.5.6 versions only in :app:androidLintTool among the alert coordinates. JDOM 2.0.6.1, jose4j 0.9.6, and KGP 2.4.20 resolved on root :classpath."
+    dependency_resolution_sha256: "63a7d196d63ecbc4eba4b8c64fd434d59c07a550fc1d1b853d189bd0357f459c"
+    dependency_graph_sha256: "d2bc47295a7f32cdc03f9249330f141265d4b5fb057921308f713236688b1ff1"
+  post_constraint_verification:
+    android_lint_tool_command: "./gradlew :app:dependencies --configuration androidLintTool --no-daemon --no-parallel --no-configuration-cache --console=plain"
+    android_lint_tool_output_sha256: "00c6657499a8441e2a51fcc078450d725c7d862c5b45a04c9faa205af70a7c76"
+    dependency_insight_commands:
+      - command: "./gradlew :app:dependencyInsight --configuration androidLintTool --dependency org.bouncycastle --no-daemon --no-parallel --no-configuration-cache --console=plain"
+        result: "bcprov and bcpkix 1.85 selected by constraint; old 1.80.2 requests resolve to 1.85. BUILD SUCCESSFUL."
+        output_sha256: "ea820d78f471d028f6bfd9831adaff1d2e264e7dbd2ec0d50a011a9a10b38454"
+      - command: "./gradlew :app:dependencyInsight --configuration androidLintTool --dependency org.apache.commons:commons-lang3 --no-daemon --no-parallel --no-configuration-cache --console=plain"
+        result: "commons-lang3 3.18.0 selected by constraint; old 3.16.0 request resolves to 3.18.0. BUILD SUCCESSFUL."
+        output_sha256: "67727332c983376cb9b2bb5253265ba2f9287dc5d2c2e22f6038d3cf47cee81b"
+      - command: "./gradlew :app:dependencyInsight --configuration androidLintTool --dependency org.apache.httpcomponents:httpclient --no-daemon --no-parallel --no-configuration-cache --console=plain"
+        result: "httpclient 4.5.14 selected by constraint; old 4.5.6 request resolves to 4.5.14. BUILD SUCCESSFUL."
+        output_sha256: "e0276a4b95c628f93839e8e3c6c60d6793c1034c800cfefd8f8a64ff8e210bca"
+    runtime_command: "./gradlew :app:dependencies --configuration releaseRuntimeClasspath --no-daemon --no-parallel --no-configuration-cache --console=plain"
+    runtime_result: "BUILD SUCCESSFUL; no affected package coordinate appears."
+    runtime_output_sha256: "1b55a4977027441dd970e2162b768628501f6a076abde53495db173120417cca"
+    build_command: "./gradlew :app:assembleDebug :app:assembleRelease --no-daemon --no-parallel --no-configuration-cache --console=plain"
+    build_result: "BUILD SUCCESSFUL in 6m. Debug APK SHA-256 6790229712f16222c87264d50da5f62cff80d7113c096fa14d333408005f1670; unsigned release APK SHA-256 144e9886a008a45fd07a8d18c52e297f3bb66935a3aff95406e468a7736393b6. Release lintVital passed. R8 emitted existing dnsjava service-provider reference warnings."
+    lint_command: "./gradlew :app:lintDebug :app:assembleDebug :app:assembleRelease --no-daemon --no-parallel --console=plain"
+    lint_result: "Initial BUILD FAILED at :app:lintAnalyzeDebug after 9m26. AGP Lint crashed while analyzing app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/ping/PingViewModel.kt: androidx.annotation.experimental.lint.ExperimentalDetector reported `Unexpected owner function: null` in Kotlin FIR analysis. This is retained as historical transient failure; a later clean :app:lintDebug rerun passed with zero errors after the Ping edit stabilized."
+    lint_problem_report_path: "build/reports/problems/problems-report.html"
+    lint_problem_report_sha256: "b6ae604a9d2f6a33c070d0cb4a195a6a4a95905054f0d7d54d6c25e4dd27a08"
+    lint_crash_log_path: "/home/dev/.gradle/daemon/9.7.1/daemon-2935701.out.log"
+    lint_crash_log_sha256: "caed86d3850340e59424c55402cc9f2fcb50d55d56340f6318a0cd05c297bb2a"
+    lint_crash_evidence: "The daemon log reports ExperimentalDetector.visitClass after Kotlin FIR symbol-light-class method enumeration: KaFirKotlinPropertyKtParameterBasedSymbol.<init> -> KaFirKotlinPropertySymbol.create -> VariableSymbolBuilder.buildPropertySymbol/buildVariableSymbol -> FirClassDeclaredMemberScopeImpl.processPropertiesByName -> SymbolLightClassForClassOrObject.getOwnMethods -> ExperimentalDetector.visitClass. This identifies class property/method enumeration but not the particular PingViewModel member that triggers the null owner function. The changed OperationSession constructor/property and session lifecycle methods are plausible inputs to the changed class shape, but the stack does not establish any one as causal; no immediate offending construct is identified."
+    resolution_warnings: "No new dependency-resolution warnings. Gradle emits the existing experimental android.disallowKotlinSourceSets=false warning; Kotlin emits unrelated unnecessary-safe-call warnings in IcmpenguinPingEngine.kt during compilation."
+    phase_disposition: "in_progress: local build-configuration exposure is constrained and local lint/build gates now pass, but six GitHub alerts remain open and the updated source has not been represented by a clean default-branch dependency submission."
 
 toolchain_recheck:
   checked_at: "2026-09-23"
@@ -119,3 +184,15 @@ toolchain_recheck:
     - "https://kotlinlang.org/docs/whatsnew2420.html"
     - "https://github.com/google/ksp/releases/tag/2.3.12"
   conclusion: "Do not move the production stack to the 9.5 alpha solely to silence the remaining alerts. No stable upgrade path is presently available; continue evidence-driven dependency-submission/selection analysis or obtain explicit time-bounded dispositions."
+
+verification_rerun:
+  checked_date: "2026-09-23"
+  command_results:
+    lint_debug: "./gradlew :app:lintDebug --no-daemon --no-parallel --console=plain — BUILD SUCCESSFUL in 3m39; zero lint errors. The earlier ExperimentalDetector/Kotlin FIR crash did not recur."
+    full_jvm: "./gradlew :core-network:test :core-domain:test :app:testDebugUnitTest --no-daemon --no-parallel --console=plain — passed: core-network 1005 tests (1 skipped), core-domain 182, app 373; zero failures/errors."
+    kover: "./gradlew :core-network:koverVerify :core-domain:koverVerify :app:koverVerify --no-daemon --no-parallel --console=plain — BUILD SUCCESSFUL; all three module coverage gates passed."
+    assembly: "./gradlew :app:assembleDebug :app:assembleRelease --no-daemon --no-parallel --console=plain — BUILD SUCCESSFUL in 6m11; release lintVital passed. Existing dnsjava service-provider warnings appeared during R8."
+  artifacts:
+    debug_apk_sha256: "cde425a3ee3c055ea5f3651c480471a320671544c0fe9d7b32047b48d3dd81d7"
+    unsigned_release_apk_sha256: "11bf0459aa314266ad2316e04f29ea9494f0d5a3791176c64c1c4e7747eed229"
+  remaining_gate: "The local JVM, Kover, lint, and build gates pass. Six Dependabot alerts and a clean default-branch dependency submission are still required before P02.5 can close."
