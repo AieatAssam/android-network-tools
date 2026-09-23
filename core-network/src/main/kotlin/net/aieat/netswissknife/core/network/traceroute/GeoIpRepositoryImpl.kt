@@ -57,8 +57,10 @@ class GeoIpRepositoryImpl(
     // ── Parsing ───────────────────────────────────────────────────────────────
 
     private fun parseIpInfoResponse(ip: String, json: String): HopGeoLocation? {
-        // Bogon check – ipinfo returns {"bogon":true} for private addresses
-        if (json.contains("\"bogon\"")) return null
+        // ipinfo may include `bogon: false` for public addresses. Only a root
+        // JSON boolean true marks the response as a bogon; nested keys and text
+        // inside strings are unrelated metadata.
+        if (hasRootBooleanTrue(json, "bogon")) return null
 
         val city    = extractString(json, "city")    ?: ""
         val country = extractString(json, "country") ?: return null
@@ -88,6 +90,107 @@ class GeoIpRepositoryImpl(
 
     private fun extractString(json: String, key: String): String? {
         return Regex("\"$key\"\\s*:\\s*\"([^\"]+)\"").find(json)?.groupValues?.get(1)
+    }
+
+    /**
+     * Checks a top-level boolean field without matching nested or quoted text.
+     * Invalid or non-boolean field values are treated as absent for this check.
+     */
+    private fun hasRootBooleanTrue(json: String, expectedKey: String): Boolean {
+        var index = 0
+
+        fun skipWhitespace() {
+            while (index < json.length && json[index].isWhitespace()) index++
+        }
+
+        fun readString(): String? {
+            if (index >= json.length || json[index] != '"') return null
+            index++
+            val value = StringBuilder()
+            while (index < json.length) {
+                val char = json[index++]
+                when {
+                    char == '"' -> return value.toString()
+                    char == '\\' -> {
+                        if (index >= json.length) return null
+                        when (val escaped = json[index++]) {
+                            '"', '\\', '/' -> value.append(escaped)
+                            'b' -> value.append('\b')
+                            'f' -> value.append('\u000c')
+                            'n' -> value.append('\n')
+                            'r' -> value.append('\r')
+                            't' -> value.append('\t')
+                            'u' -> {
+                                if (index + 4 > json.length) return null
+                                val codeUnit = json.substring(index, index + 4).toIntOrNull(16) ?: return null
+                                value.append(codeUnit.toChar())
+                                index += 4
+                            }
+                            else -> return null
+                        }
+                    }
+                    else -> value.append(char)
+                }
+            }
+            return null
+        }
+
+        fun skipValue(): Boolean {
+            skipWhitespace()
+            if (index >= json.length) return false
+            if (json[index] == '"') return readString() != null
+            if (json[index] == '{' || json[index] == '[') {
+                var depth = 0
+                var inString = false
+                var escaped = false
+                while (index < json.length) {
+                    val char = json[index++]
+                    if (inString) {
+                        if (escaped) escaped = false
+                        else when (char) {
+                            '\\' -> escaped = true
+                            '"' -> inString = false
+                        }
+                    } else when (char) {
+                        '"' -> inString = true
+                        '{', '[' -> depth++
+                        '}', ']' -> {
+                            depth--
+                            if (depth == 0) return true
+                            if (depth < 0) return false
+                        }
+                    }
+                }
+                return false
+            }
+            val start = index
+            while (index < json.length && json[index] !in ",}" && !json[index].isWhitespace()) index++
+            return index > start
+        }
+
+        skipWhitespace()
+        if (index >= json.length || json[index++] != '{') return false
+        while (true) {
+            skipWhitespace()
+            if (index >= json.length || json[index] == '}') return false
+            val key = readString() ?: return false
+            skipWhitespace()
+            if (index >= json.length || json[index++] != ':') return false
+            skipWhitespace()
+            if (key == expectedKey && json.startsWith("true", index)) {
+                val end = index + "true".length
+                var delimiter = end
+                while (delimiter < json.length && json[delimiter].isWhitespace()) delimiter++
+                if (delimiter < json.length && json[delimiter] in ",}") return true
+            }
+            if (!skipValue()) return false
+            skipWhitespace()
+            when {
+                index < json.length && json[index] == ',' -> index++
+                index < json.length && json[index] == '}' -> return false
+                else -> return false
+            }
+        }
     }
 
     // ── Private IP detection ──────────────────────────────────────────────────

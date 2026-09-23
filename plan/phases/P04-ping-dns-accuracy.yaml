@@ -28,13 +28,13 @@ phase:
 
 review_follow_up:
   reviewed_on: "2026-09-21"
-  status: todo
+  status: done
   findings: [RAPP003, RNET005, RUI005, RUI008]
   reports:
     - plan/reviews/2026-09-21-app.yaml
     - plan/reviews/2026-09-21-network.yaml
     - plan/reviews/2026-09-21-ui-domain.yaml
-  note: "New source-review follow-ups; preserve historical task completion. RNET005, RUI005, and RUI008 are closed with resolver-capture/malformed-input, blocked-writer, and DNS single-flight/captured-recents regression coverage; RAPP003 remains open. See report evidence, recommended_action, and validation for each finding."
+  note: "New source-review follow-ups; preserve historical task completion. RAPP003, RNET005, RUI005, and RUI008 are closed with native-linkage fallback/cancellation, resolver-capture/malformed-input, blocked-writer, and DNS single-flight/captured-recents regression coverage. The API/ABI matrix smoke check remains a broader P09 follow-up. See report evidence, recommended_action, and validation for each finding."
 
 context:
   problem: |

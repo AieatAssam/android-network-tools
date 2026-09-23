@@ -195,7 +195,7 @@ comprehensive_expansion:
     entries:
       - {"finding":"RAPP001","owner_task":"P03-T2","follow_up_status":"done","report":"plan/reviews/2026-09-21-app.yaml"}
       - {"finding":"RAPP002","owner_task":"P05-T4","follow_up_status":"done","report":"plan/reviews/2026-09-21-app.yaml"}
-      - {"finding":"RAPP003","owner_task":"P04-T3","follow_up_status":"todo","report":"plan/reviews/2026-09-21-app.yaml"}
+      - {"finding":"RAPP003","owner_task":"P04-T3","follow_up_status":"done","report":"plan/reviews/2026-09-21-app.yaml"}
       - {"finding":"RAPP004","owner_task":"P12-T1","follow_up_status":"done","report":"plan/reviews/2026-09-21-app.yaml"}
       - {"finding":"RBUILD001","owner_task":"P09-T4","follow_up_status":"todo","report":"plan/reviews/2026-09-21-build.yaml"}
       - {"finding":"RBUILD002","owner_task":"P09-T4","follow_up_status":"todo","report":"plan/reviews/2026-09-21-build.yaml"}
@@ -206,8 +206,8 @@ comprehensive_expansion:
       - {"finding":"RNET003","owner_task":"P02-T2","follow_up_status":"done","report":"plan/reviews/2026-09-21-network.yaml"}
       - {"finding":"RNET004","owner_task":"P03-T1","follow_up_status":"done","report":"plan/reviews/2026-09-21-network.yaml"}
       - {"finding":"RNET005","owner_task":"P04-T5","follow_up_status":"done","report":"plan/reviews/2026-09-21-network.yaml"}
-      - {"finding":"RNET006","owner_task":"P10-T5","follow_up_status":"todo","report":"plan/reviews/2026-09-21-network.yaml"}
-      - {"finding":"RNET007","owner_task":"P11-T2","follow_up_status":"todo","report":"plan/reviews/2026-09-21-network.yaml"}
+      - {"finding":"RNET006","owner_task":"P10-T5","follow_up_status":"done","report":"plan/reviews/2026-09-21-network.yaml"}
+      - {"finding":"RNET007","owner_task":"P11-T2","follow_up_status":"done","report":"plan/reviews/2026-09-21-network.yaml"}
       - {"finding":"RNET008","owner_task":"P11-T3","follow_up_status":"todo","report":"plan/reviews/2026-09-21-network.yaml"}
       - {"finding":"RNET009","owner_task":"P03-T1","follow_up_status":"done","report":"plan/reviews/2026-09-21-network.yaml"}
       - {"finding":"RNET010","owner_task":"P12-T3","follow_up_status":"todo","report":"plan/reviews/2026-09-21-network.yaml"}
@@ -233,8 +233,8 @@ incremental_review:
   reviewer_reasoning_effort: xhigh
   method: "Parallel source review; findings saved in small verified batches before final consolidation. Existing F001-F041 remain historical baseline findings."
   priority_order: [critical, high, medium, low]
-  recommended_first_followups: [RAPP003, RNET006]
-  first_followups_rationale: "RAPP004, RNET002, and RNET003 are closed with focused regressions. P02.5 remains the highest-severity open gate because the current dependency submission still contains vulnerable AGP/plugin-transitive coordinates and no later stable AGP candidate is available; continue that remediation when a supported path appears, alongside ready code work. RAPP003 and RNET006 are the next medium follow-ups; RLAN001's device-only Wi-Fi/VPN and NBSTAT observations remain tracked under E00-T01."
+  recommended_first_followups: [RBUILD001, RBUILD002]
+  first_followups_rationale: "RAPP003, RAPP004, RNET002, RNET003, RNET006, and RNET007 are closed with focused regressions. P02.5 remains the highest-severity open gate because the current dependency submission still contains vulnerable AGP/plugin-transitive coordinates and no later stable AGP candidate is available; continue that remediation when a supported path appears, alongside ready code work. RBUILD001 and RBUILD002 are the next medium follow-ups; RLAN001's device-only Wi-Fi/VPN and NBSTAT observations remain tracked under E00-T01."
   execution_guidance: "Merge these findings with open phase work by severity; existing unresolved critical/high findings retain precedence. Address confirmed bugs before optional feature waves P13-P15. Follow each finding's related_phase and validation, including follow-ups to historically completed phases."
   reports:
     - { area: core-network, file: plan/reviews/2026-09-21-network.yaml }
@@ -263,14 +263,14 @@ incremental_review:
     - { id: RUI006, severity: medium, kind: bug, phase: P10, status: todo, title: "TLS inspection silently substitutes port 443 for invalid port text" }
     - { id: RUI008, severity: medium, kind: bug, phase: P04, status: done, title: "DNS IME submission can overlap lookups and attach recents to the wrong edit" }
     - { id: RUI009, severity: medium, kind: bug, phase: P08, status: todo, title: "Port scanner cannot represent the configured concurrency maximum" }
-    - { id: RAPP003, severity: medium, kind: gap, phase: P04, status: todo, title: "Native ICMP load failures bypass the advertised reachability fallback" }
+    - { id: RAPP003, severity: medium, kind: gap, phase: P04, status: done, title: "Native ICMP load failures bypass the advertised reachability fallback" }
     - { id: RNET003, severity: medium, kind: gap, phase: P02, status: done, title: "Topology parameters omit bounds for hops, timeout, and retries" }
-    - { id: RNET006, severity: medium, kind: gap, phase: P10, status: todo, title: "WHOIS cancellation does not bound blocking DNS and socket work" }
+    - { id: RNET006, severity: medium, kind: gap, phase: P10, status: done, title: "WHOIS cancellation does not bound blocking DNS and socket work" }
     - { id: RUI010, severity: medium, kind: bug, phase: P08, status: done, owner: E01-T10, title: "Host fields reject surrounding whitespace even though shared validation trims it" }
     - { id: RUI011, severity: medium, kind: gap, phase: P08, status: done, owner: E01-T07/E01-T09, title: "Traceroute dead-path state lacks verified Ping-style recovery presentation" }
     - { id: RUI012, severity: medium, kind: gap, phase: P08, status: done, owner: E01-T07/E01-T09, title: "Topology progress message is stored but not shown, and Cancel lacks UI regression coverage" }
     - { id: RNET004, severity: low, kind: bug, phase: P03, status: done, title: "Wi-Fi unique-network count disagrees with logical network grouping" }
-    - { id: RNET007, severity: low, kind: bug, phase: P11, status: todo, title: "GeoIP bogon detection rejects explicit false values" }
+    - { id: RNET007, severity: low, kind: bug, phase: P11, status: done, title: "GeoIP bogon detection rejects explicit false values" }
     - { id: RUI007, severity: low, kind: bug, phase: P11, status: todo, title: "Stopped traceroute results discard elapsed-time metadata" }
     - { id: RBUILD003, severity: low, kind: gap, phase: P01, status: done, title: "OUI refresh can replace a complete registry with a partial download" }
     - { id: RNET010, severity: low, kind: gap, phase: P12, status: todo, title: "Subnet calculator has no RFC 3021 point-to-point /31 mode" }
@@ -821,3 +821,5 @@ changelog:
     note: "Closed RBUILD003 after making OUI refresh fail closed across the required MA-L/MA-M/MA-S feeds and publish atomically, then teaching OuiDatabase to load 6/7/9-digit prefixes with strict complete-MAC normalization and longest-prefix lookup. Thirteen Python updater tests, py_compile, and the full core-network suite passed; QA and adversarial reviews cleared the final diff. P01 regression follow-ups are complete; E00-T01 retains device-only Wi-Fi/VPN and real NBSTAT checks."
   - date: "2026-09-23"
     note: "Closed RAPP004, RNET002, and RNET003. mDNS now propagates typed send/receive failures while preserving quiet timeouts and cancellation; a PTR-driven test covers follow-up send failure. Both subnet detectors preserve valid /0–/32 prefixes, lazily choose the first valid interface address, and leave /16–/30 scan limits as explicit validation. Topology hops/timeout/retries now have shared finite bounds, and the use case rejects invalid values before repository calls. Focused core-network, core-domain, and app unit tests passed; independent QA/adversarial reviews found no blocker. Fresh P02.5 recheck still finds six open Dependabot alerts and the same vulnerable coordinates in the current-branch submission; no later stable AGP is available, so P02.5 remains open."
+  - date: "2026-09-23"
+    note: "Closed RAPP003, RNET006, and RNET007 after independent QA/adversarial review. Native ICMP linkage failures now fall back to Reachability for Ping, degrade LAN ICMP to an unavailable observation, and surface a typed Traceroute error while preserving downstream errors and cancellation. WHOIS closes active sockets, uses bounded workers and monotonic total deadlines, and accurately documents that an OS resolver may retain a worker if it ignores interruption. GeoIP bogon detection checks only a root-level boolean true and ignores nested/escaped text. Full :core-network:test passed 895 tests (1 skipped); full :app:testDebugUnitTest passed 314 tests; 0 failures/errors. P02.5 remains the highest-severity open gate; RBUILD001/RBUILD002 are the next medium follow-ups."

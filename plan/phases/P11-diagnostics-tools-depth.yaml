@@ -26,12 +26,12 @@ phase:
 
 review_follow_up:
   reviewed_on: "2026-09-21"
-  status: todo
+  status: in_progress
   findings: [RNET007, RNET008, RUI002, RUI007]
   reports:
     - plan/reviews/2026-09-21-network.yaml
     - plan/reviews/2026-09-21-ui-domain.yaml
-  note: "New source-review follow-ups; preserve historical task completion. See report evidence, recommended_action, and validation before implementation."
+  note: "RNET007 is closed: bogon detection now checks only a root boolean true and preserves explicit false/missing responses. RNET008, RUI002, and RUI007 remain open. See report evidence, recommended_action, and validation."
 
 context:
   problem: |
@@ -47,7 +47,8 @@ context:
         probesPerHop up to 5; no min/avg/max per hop.
       - Reverse DNS runs inline in map{} per hop (blocking up to seconds); GeoIP lookups run
         sequentially in TracerouteUseCase -> hops appear slowly.
-      - GeoIpRepositoryImpl: single unauthenticated ipinfo.io provider, regex JSON parsing, private
+      - GeoIpRepositoryImpl: single unauthenticated ipinfo.io provider, regex extraction for
+        most JSON fields (RNET007's root bogon check is now escape-aware), private
         range check misses CGNAT 100.64/10, 192.0.0/24, 192.0.2/24, 198.18/15, 198.51.100/24,
         203.0.113/24, 224/4; IPv6 hops never geolocated; COUNTRY_NAMES map hand-maintained (50).
     Port Scanner

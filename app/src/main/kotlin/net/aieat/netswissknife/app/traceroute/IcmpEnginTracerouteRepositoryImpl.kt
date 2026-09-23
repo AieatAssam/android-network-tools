@@ -6,6 +6,7 @@ import net.aieat.netswissknife.core.network.traceroute.TracerouteProbeType
 import net.aieat.netswissknife.core.network.traceroute.TracerouteRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
@@ -28,7 +29,16 @@ import java.net.InetAddress
  * [me.impa.icmpenguin.trace.HopStatus] per TTL level. We map each to our own [HopResult]
  * and enrich it with a reverse-DNS hostname lookup on the IO dispatcher.
  */
-class IcmpEnginTracerouteRepositoryImpl : TracerouteRepository {
+class IcmpEnginTracerouteRepositoryImpl(
+    private val nativeTraceFactory: (
+        String,
+        Int,
+        Int,
+        Int,
+        TracerouteProbeType,
+        Int,
+    ) -> Flow<HopResult> = ::nativeTrace,
+) : TracerouteRepository {
 
     override fun trace(
         host: String,
@@ -38,60 +48,74 @@ class IcmpEnginTracerouteRepositoryImpl : TracerouteRepository {
         probeType: TracerouteProbeType,
         packetSize: Int
     ): Flow<HopResult> {
-        val icmpProbeType = when (probeType) {
-            TracerouteProbeType.ICMP -> ProbeType.ICMP
-            TracerouteProbeType.UDP  -> ProbeType.UDP
-        }
-
-        val probeSize = if (packetSize == 0) {
-            ProbeSize.MtuDiscovery
-        } else {
-            ProbeSize.Static(packetSize)
-        }
-
         return flow {
-            // Keep construction inside the IO-bound flow as well as trace execution.
-            // Native tracer setup may allocate sockets before the first hop is emitted.
-            val tracer = SimpleTracer(
-                host          = host,
-                probeType     = icmpProbeType,
-                timeout       = timeoutMs,
-                maxHops       = maxHops,
-                probesPerHop  = probesPerHop,
-                concurrency   = minOf(probesPerHop, 5),
-                portStrategy  = PortStrategy.Sequential(),
-                probeSize     = probeSize
-            )
-
+            val nativeFlow = try {
+                nativeTraceFactory(host, maxHops, timeoutMs, probesPerHop, probeType, packetSize)
+            } catch (_: LinkageError) {
+                throw NativeTracerouteUnavailableException()
+            }
             emitAll(
-                tracer.trace().map { icmpHop ->
-                    val ip = icmpHop.ips.firstOrNull()
-                    val rttMs = icmpHop.probes
-                        .filterIsInstance<Response.Success>()
-                        .firstOrNull()
-                        ?.timeUsec
-                        ?.let { it.toLong() / 1_000L }
-
-                    val status = if (ip != null) HopStatus.SUCCESS else HopStatus.TIMEOUT
-                    val hostname = if (ip != null) resolveHostname(ip) else null
-
-                    HopResult(
-                        hopNumber = icmpHop.num,
-                        ip        = ip,
-                        hostname  = hostname,
-                        rtTimeMs  = rttMs,
-                        status    = status
-                    )
+                nativeFlow.catch { failure ->
+                    if (failure is LinkageError) throw NativeTracerouteUnavailableException()
+                    throw failure
                 }
             )
         }.flowOn(Dispatchers.IO)
     }
 
-    private fun resolveHostname(ip: String): String? = try {
-        val addr = InetAddress.getByName(ip)
-        val canonical = addr.canonicalHostName
-        if (canonical == ip) null else canonical
-    } catch (_: Exception) {
-        null
+}
+
+private fun nativeTrace(
+    host: String,
+    maxHops: Int,
+    timeoutMs: Int,
+    probesPerHop: Int,
+    probeType: TracerouteProbeType,
+    packetSize: Int,
+): Flow<HopResult> {
+    val icmpProbeType = when (probeType) {
+        TracerouteProbeType.ICMP -> ProbeType.ICMP
+        TracerouteProbeType.UDP -> ProbeType.UDP
+    }
+    val probeSize = if (packetSize == 0) ProbeSize.MtuDiscovery else ProbeSize.Static(packetSize)
+    val tracer = SimpleTracer(
+        host = host,
+        probeType = icmpProbeType,
+        timeout = timeoutMs,
+        maxHops = maxHops,
+        probesPerHop = probesPerHop,
+        concurrency = minOf(probesPerHop, 5),
+        portStrategy = PortStrategy.Sequential(),
+        probeSize = probeSize,
+    )
+    return tracer.trace().map { icmpHop ->
+        val ip = icmpHop.ips.firstOrNull()
+        val rttMs = icmpHop.probes
+            .filterIsInstance<Response.Success>()
+            .firstOrNull()
+            ?.timeUsec
+            ?.let { it.toLong() / 1_000L }
+        val status = if (ip != null) HopStatus.SUCCESS else HopStatus.TIMEOUT
+        val hostname = if (ip != null) resolveHostname(ip) else null
+        HopResult(
+            hopNumber = icmpHop.num,
+            ip = ip,
+            hostname = hostname,
+            rtTimeMs = rttMs,
+            status = status,
+        )
     }
 }
+
+private fun resolveHostname(ip: String): String? = try {
+    val addr = InetAddress.getByName(ip)
+    val canonical = addr.canonicalHostName
+    if (canonical == ip) null else canonical
+} catch (_: Exception) {
+    null
+}
+
+/** A stable, user-displayable failure when the optional JNI traceroute engine cannot load. */
+class NativeTracerouteUnavailableException : Exception(
+    "Native traceroute engine is unavailable on this device."
+)

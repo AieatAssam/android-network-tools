@@ -140,8 +140,8 @@ class PingRepositoryImpl(
     }.flowOn(Dispatchers.IO)
 
     private fun runContinuousSession(request: PingRequest): Flow<PingPacketResult> = flow {
-        val candidates = configuredEngines.filter { it.isAvailable }
-        if (candidates.isEmpty()) {
+        val candidates = configuredEngines
+        if (candidates.none { it.isAvailable }) {
             emit(errorPacket(request, "No ping engine is available"))
             return@flow
         }
@@ -165,9 +165,13 @@ class PingRepositoryImpl(
             }
 
             val probeRequest = request.copy(resolvedIp = resolvedIp, count = 1)
+            // Availability can change after an engine reports a native linkage failure.
+            // Recheck every probe so a continuous session does not keep retrying an
+            // engine that already declared itself unavailable.
+            val availableCandidates = candidates.filter { it.isAvailable }
             val enginesToTry = buildList {
-                selectedEngine?.let(::add)
-                candidates.filter { it != selectedEngine }.forEach(::add)
+                selectedEngine?.takeIf { it.isAvailable }?.let(::add)
+                availableCandidates.filter { it != selectedEngine }.forEach(::add)
             }
             var selectedPacket: PingPacketResult? = null
             var engineForPacket: PingEngine? = null

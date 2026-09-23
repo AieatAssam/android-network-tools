@@ -1,15 +1,21 @@
 package net.aieat.netswissknife.core.network.whois
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import net.aieat.netswissknife.core.network.NetworkResult
-import java.io.InputStreamReader
 import java.net.Socket
 
-class WhoisRepositoryImpl : WhoisRepository {
+private class WhoisDeadlineExceededException : CancellationException("WHOIS lookup exceeded its total deadline")
+
+class WhoisRepositoryImpl(
+    private val resolver: WhoisHostResolver = InetAddressWhoisHostResolver,
+    private val socketFactory: WhoisSocketFactory = WhoisSocketFactory { Socket() }
+) : WhoisRepository {
 
     private val _hopProgress = MutableSharedFlow<WhoisHop>(extraBufferCapacity = 16)
     override val hopProgress: SharedFlow<WhoisHop> = _hopProgress.asSharedFlow()
@@ -19,19 +25,28 @@ class WhoisRepositoryImpl : WhoisRepository {
         if (timeoutMs < 500) return NetworkResult.Error("Timeout must be between 500 ms and 30 000 ms")
         if (timeoutMs > 30_000) return NetworkResult.Error("Timeout must be between 500 ms and 30 000 ms")
 
-        return withContext(Dispatchers.IO) {
-            val start = System.currentTimeMillis()
-            try {
-                val queryType = WhoisQueryTypeDetector.detect(query)
-                val result = when (queryType) {
-                    WhoisQueryType.DOMAIN -> performDomainLookup(query, timeoutMs, start)
-                    WhoisQueryType.IPV4, WhoisQueryType.IPV6, WhoisQueryType.ASN ->
-                        performIpAsnLookup(query, queryType, timeoutMs, start)
+        return try {
+            // A chain contains at most three hops. Keep each socket operation bounded
+            // by timeoutMs and cap the whole lookup at three such timeouts. The
+            // timeoutOrNull scope consumes only its own deadline; parent cancellation
+            // (including an outer TimeoutCancellationException) still propagates.
+            withTimeoutOrNull(timeoutMs * MAX_HOPS.toLong()) {
+                withContext(Dispatchers.IO) {
+                    val start = System.nanoTime()
+                    val queryType = WhoisQueryTypeDetector.detect(query)
+                    when (queryType) {
+                        WhoisQueryType.DOMAIN -> performDomainLookup(query, timeoutMs, start)
+                        WhoisQueryType.IPV4, WhoisQueryType.IPV6, WhoisQueryType.ASN ->
+                            performIpAsnLookup(query, queryType, timeoutMs, start)
+                    }
                 }
-                result
-            } catch (e: Exception) {
-                NetworkResult.Error(e.message ?: "WHOIS lookup failed", e)
-            }
+            } ?: NetworkResult.Error("WHOIS lookup exceeded its total deadline")
+        } catch (e: WhoisDeadlineExceededException) {
+            NetworkResult.Error("WHOIS lookup exceeded its total deadline", e)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            NetworkResult.Error(e.message ?: "WHOIS lookup failed", e)
         }
     }
 
@@ -46,7 +61,9 @@ class WhoisRepositoryImpl : WhoisRepository {
 
         // Hop 1 — IANA
         val ianaHop = try {
-            queryServer(IANA_SERVER, registrableDomain, timeoutMs)
+            queryServer(IANA_SERVER, registrableDomain, timeoutMs, overallStart)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             return NetworkResult.Error("IANA lookup failed: ${e.message}", e)
         }
@@ -66,7 +83,9 @@ class WhoisRepositoryImpl : WhoisRepository {
             ?: return buildDomainResult(domain, WhoisQueryType.DOMAIN, hops, overallStart)
 
         val registryHop = try {
-            queryServer(registryHost, registrableDomain, timeoutMs)
+            queryServer(registryHost, registrableDomain, timeoutMs, overallStart)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             return buildDomainResult(domain, WhoisQueryType.DOMAIN, hops, overallStart)
         }
@@ -83,7 +102,9 @@ class WhoisRepositoryImpl : WhoisRepository {
         // Hop 3 — Registrar
         if (registrarWhoisServer != null) {
             val registrarHop = try {
-                queryServer(registrarWhoisServer, registrableDomain, timeoutMs)
+                queryServer(registrarWhoisServer, registrableDomain, timeoutMs, overallStart)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 val failedHop = WhoisHop(
                     server = WhoisServer(registrarWhoisServer, WhoisServerRole.REGISTRAR),
@@ -119,7 +140,9 @@ class WhoisRepositoryImpl : WhoisRepository {
 
         // Hop 1 — ARIN
         val arinHop = try {
-            queryServer(ARIN_SERVER, query, timeoutMs)
+            queryServer(ARIN_SERVER, query, timeoutMs, overallStart)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             return NetworkResult.Error("ARIN lookup failed: ${e.message}", e)
         }
@@ -136,7 +159,9 @@ class WhoisRepositoryImpl : WhoisRepository {
         // Hop 2 — Referred RIR (if any)
         if (referral != null && referral != ARIN_SERVER) {
             val referralHop = try {
-                queryServer(referral, query, timeoutMs)
+                queryServer(referral, query, timeoutMs, overallStart)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 return buildIpResult(query, queryType, hops, overallStart)
             }
@@ -168,42 +193,25 @@ class WhoisRepositoryImpl : WhoisRepository {
             address.isAnyLocalAddress ||
             address.isMulticastAddress
 
-    private fun queryServer(host: String, query: String, timeoutMs: Int): Pair<Long, String> {
-        val start = System.currentTimeMillis()
-        val resolved = java.net.InetAddress.getByName(host)
-        if (isDisallowedReferralAddress(resolved)) {
-            throw java.io.IOException("Refused to connect to non-public WHOIS referral address: $host")
-        }
-        val socket = Socket()
-        try {
-            socket.connect(java.net.InetSocketAddress(resolved, WHOIS_PORT), timeoutMs)
-            socket.soTimeout = timeoutMs
-            socket.getOutputStream().write("$query\r\n".toByteArray(Charsets.UTF_8))
-            // A malicious or misbehaving WHOIS server could otherwise stream data
-            // indefinitely (soTimeout only bounds idle time between reads, not total
-            // bytes) and exhaust device memory; no real WHOIS response is anywhere
-            // near this size.
-            val response = InputStreamReader(socket.getInputStream(), Charsets.UTF_8)
-                .buffered()
-                .use { reader ->
-                    val buffer = CharArray(READ_CHUNK_SIZE)
-                    val sb = StringBuilder()
-                    var totalRead = 0
-                    while (true) {
-                        val read = reader.read(buffer)
-                        if (read == -1) break
-                        totalRead += read
-                        if (totalRead > MAX_RESPONSE_BYTES) {
-                            throw java.io.IOException("WHOIS response exceeded ${MAX_RESPONSE_BYTES} bytes")
-                        }
-                        sb.append(buffer, 0, read)
-                    }
-                    sb.toString()
-                }
-            return Pair(System.currentTimeMillis() - start, response)
-        } finally {
-            try { socket.close() } catch (_: Exception) {}
-        }
+    private suspend fun queryServer(
+        host: String,
+        query: String,
+        timeoutMs: Int,
+        overallStartNanos: Long
+    ): Pair<Long, String> {
+        val totalNanos = timeoutMs * MAX_HOPS.toLong() * 1_000_000L
+        val remainingNanos = totalNanos - (System.nanoTime() - overallStartNanos)
+        if (remainingNanos <= 0L) throw WhoisDeadlineExceededException()
+        val remainingMs = ((remainingNanos + 999_999L) / 1_000_000L).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+        return WhoisBlockingTransport.query(
+            host = host,
+            query = query,
+            port = WHOIS_PORT,
+            timeoutMs = minOf(timeoutMs, remainingMs),
+            resolver = resolver,
+            socketFactory = socketFactory,
+            isDisallowedAddress = ::isDisallowedReferralAddress
+        )
     }
 
     private fun buildDomainResult(
@@ -234,7 +242,7 @@ class WhoisRepositoryImpl : WhoisRepository {
                 netRange = null,
                 orgName = null,
                 country = null,
-                totalQueryTimeMs = System.currentTimeMillis() - overallStart
+                totalQueryTimeMs = (System.nanoTime() - overallStart) / 1_000_000L
             )
         )
     }
@@ -267,7 +275,7 @@ class WhoisRepositoryImpl : WhoisRepository {
                 netRange = p.parseNetRange(lastResponse),
                 orgName = p.parseOrgName(lastResponse),
                 country = p.parseCountry(lastResponse),
-                totalQueryTimeMs = System.currentTimeMillis() - overallStart
+                totalQueryTimeMs = (System.nanoTime() - overallStart) / 1_000_000L
             )
         )
     }
@@ -303,9 +311,9 @@ class WhoisRepositoryImpl : WhoisRepository {
 
     companion object {
         private const val WHOIS_PORT = 43
+        private const val MAX_HOPS = 3
         private const val IANA_SERVER = "whois.iana.org"
         private const val ARIN_SERVER = "whois.arin.net"
-        private const val READ_CHUNK_SIZE = 8192
         internal const val MAX_RESPONSE_BYTES = 1_048_576
 
         private val COMPOUND_TLDS = setOf(

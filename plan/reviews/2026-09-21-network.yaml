@@ -128,9 +128,10 @@ findings:
         detail: "The configured timeout is applied to connect and socket idle reads, but a cancelled coroutine has no direct path to stop an in-flight hop before that timeout."
     impact: "Cancelling a WHOIS request can leave a blocking resolver/socket operation occupying an IO worker until timeout; the broad catch also obscures cancellation intent inside the repository even though withContext may re-check cancellation at its return boundary. Repeated retries can consume threads and delay UI teardown."
     recommended_action: "Rethrow kotlinx.coroutines.CancellationException before the generic error handler and run blocking DNS/socket work through a cancellation-aware bridge that closes the socket on cancellation; retain connect/read and total-operation deadlines."
-    validation: "Use a controllable server that blocks during connect and response read, cancel the lookup in each state, assert the Job cancels promptly, no NetworkResult.Error is emitted for cancellation, and the socket is closed."
+    validation: "Passed ./gradlew :core-network:test --no-daemon (895 tests, 1 skipped, 0 failures/errors). Deterministic resolver/connect/read cancellation tests assert prompt Job cancellation, no NetworkResult.Error, and socket closure; the suite also checks cancellation propagation from the resolver seam. Independent QA and adversarial reviews found no blocker. A platform resolver that ignores interruption can still occupy one bounded worker until OS DNS returns; cancellation returns promptly."
     related_phase: P10
-    status: todo
+    status: done
+    resolution: "WHOIS now rethrows cancellation through every referral hop, runs blocking DNS/socket calls on a bounded two-thread executor with a finite queue, closes active sockets when cancelled, and applies per-operation plus monotonic total deadlines. The implementation documents the platform-DNS limitation: cancellation returns promptly, but a resolver that ignores interruption may occupy a bounded worker until it returns. The full core-network suite passed 895 tests with one skipped; independent QA/adversarial reviews found no blocker."
   - id: RNET007
     severity: low
     kind: bug
@@ -144,9 +145,10 @@ findings:
         detail: "The successful-response test omits a bogon field, so an explicit \"bogon\":false response is not covered."
     impact: "If the provider includes the standard bogon flag with false for a public address, valid country/city coordinates are discarded and the traceroute loses optional location enrichment."
     recommended_action: "Parse bogon as a boolean and short-circuit only when its value is true; use a structured JSON parser or a strict field matcher rather than key-presence matching."
-    validation: "Serve successful responses with bogon:false and bogon:true and assert the first parses while the second returns null; retain coverage for absent bogon."
+    validation: "Passed ./gradlew :core-network:test --no-daemon (895 tests, 1 skipped, 0 failures/errors). Fixtures cover root bogon true/false/absent, escaped bogon:true text, and a nested bogon key; public location fields remain parsed. Independent QA and adversarial re-reviews found no blocker."
     related_phase: P11
-    status: todo
+    status: done
+    resolution: "GeoIP now checks only a root-level JSON boolean bogon:true, using a scanner that respects string escapes and skips nested objects/arrays. Explicit false and missing values preserve valid location results. The full core-network suite passed 895 tests with one skipped; QA and adversarial reviews found no blocker."
   - id: RNET008
     severity: low
     kind: opportunity

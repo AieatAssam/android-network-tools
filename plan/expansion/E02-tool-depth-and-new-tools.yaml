@@ -480,7 +480,7 @@ expansion:
       title: "WHOIS/RDAP registration snapshots and deadline diff"
       source_evidence:
         - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/whois/WhoisModels.kt", lines: "3-43", detail: "WhoisResult already contains registration, expiry, update, status, DNSSEC, network, and hop fields but no source protocol, confidence, or snapshot identity." }
-        - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/whois/WhoisRepositoryImpl.kt", lines: "17-35, 171-207", detail: "Current lookups use blocking referral sockets and wall-clock durations; RNET006 and P10 own cancellation/monotonic timing repairs." }
+        - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/whois/WhoisRepositoryImpl.kt", lines: "25-35, 193-216", detail: "RNET006/P10 now provide monotonic durations, cancellation-aware bounded DNS/socket workers, socket closure, and total deadlines. E02-T09 adds RDAP/source identity and registration snapshots; the bounded platform-DNS interruption limitation remains documented." }
         - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/whois/WhoisViewModel.kt", lines: "34-47, 79-137", detail: "ViewModel has progress/result jobs and raw-response display, a natural seam for protocol/source labels and saved snapshots." }
         - { file: "plan/phases/P10-security-tools-depth.yaml", lines: "53-61, 113-118, 204-226", detail: "P10 adds RDAP-first/fallback and public suffix parsing; E02 consumes that normalized result and adds longitudinal interpretation." }
       proposed_behavior: |

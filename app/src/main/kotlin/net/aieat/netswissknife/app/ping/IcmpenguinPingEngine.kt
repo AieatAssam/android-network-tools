@@ -1,7 +1,9 @@
 package net.aieat.netswissknife.app.ping
 
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.Dispatchers
 import me.impa.icmpenguin.ProbeResult
@@ -86,25 +88,54 @@ object IcmpenguinResultMapper {
     }
 }
 
-class IcmpenguinPingEngine : PingEngine {
+class IcmpenguinPingEngine(
+    private val nativeProbeFactory: (PingRequest) -> Flow<IcmpProbe> = ::nativeProbeFlow,
+) : PingEngine {
     override val kind: PingEngineKind = PingEngineKind.ICMP
-    override val isAvailable: Boolean = true
+    @Volatile
+    private var nativeUnavailable = false
+
+    override val isAvailable: Boolean
+        get() = !nativeUnavailable
 
     override fun ping(request: PingRequest): Flow<PingPacketResult> = flow {
-        val pinger = Pinger(
-            host = request.resolvedIp ?: request.host,
-            ttl = request.ttl,
-            timeout = request.timeoutMs,
-            maxPingCount = if (request.count == 0) Pinger.INFINITE else request.count,
-            interval = request.intervalMs,
-            probeSize = request.payloadBytes,
-            pattern = null,
-            sourceIp = ""
-        )
-        pinger.ping().collect { result ->
-            emit(IcmpenguinResultMapper.toPacket(request.host, result.toMirror()))
+        val nativeFlow = try {
+            nativeProbeFactory(request)
+        } catch (failure: LinkageError) {
+            nativeUnavailable = true
+            flowOf(linkageFailureProbe(request, failure))
         }
+        nativeFlow
+            .catch { failure ->
+                if (failure !is LinkageError) throw failure
+                // This catch is upstream of our collector emission: only failures from
+                // native flow execution are considered engine loading failures.
+                nativeUnavailable = true
+                emit(linkageFailureProbe(request, failure))
+            }
+            .collect { result -> emit(IcmpenguinResultMapper.toPacket(request.host, result)) }
     }.flowOn(Dispatchers.IO)
+}
+
+private fun linkageFailureProbe(request: PingRequest, failure: LinkageError) = IcmpProbe.Error(
+    sequence = 1,
+    remote = request.resolvedIp ?: request.host,
+    probeSize = request.payloadBytes,
+    message = "Native ICMP engine is unavailable: ${failure.message ?: failure.javaClass.simpleName}",
+)
+
+private fun nativeProbeFlow(request: PingRequest): Flow<IcmpProbe> = flow {
+    val pinger = Pinger(
+        host = request.resolvedIp ?: request.host,
+        ttl = request.ttl,
+        timeout = request.timeoutMs,
+        maxPingCount = if (request.count == 0) Pinger.INFINITE else request.count,
+        interval = request.intervalMs,
+        probeSize = request.payloadBytes,
+        pattern = null,
+        sourceIp = ""
+    )
+    pinger.ping().collect { result -> emit(result.toMirror()) }
 }
 
 private fun ProbeResult.toMirror(): IcmpProbe = when (this) {

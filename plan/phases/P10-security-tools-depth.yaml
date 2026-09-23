@@ -26,12 +26,12 @@ phase:
 
 review_follow_up:
   reviewed_on: "2026-09-21"
-  status: todo
+  status: in_progress
   findings: [RNET006, RUI006]
   reports:
     - plan/reviews/2026-09-21-network.yaml
     - plan/reviews/2026-09-21-ui-domain.yaml
-  note: "New source-review follow-ups; preserve historical task completion. See report evidence, recommended_action, and validation before implementation."
+  note: "RNET006 is closed: WHOIS cancellation closes active sockets, bounds blocking workers and total operation time, and preserves cancellation; platform DNS may still occupy one bounded worker if the OS resolver ignores interruption. RUI006 remains open. See report evidence, recommended_action, and validation."
 
 context:
   problem: |
@@ -50,10 +50,11 @@ context:
       - HttpSecurityAnalyzer rates HSTS/CSP PASS for any non-blank value; no Set-Cookie flags check.
       - No cURL export; body is raw text (no JSON validity/pretty-print).
     WHOIS
-      - Durations via System.currentTimeMillis (MonotonicClock exists).
       - No RDAP (RFC 7480-7484) – the modern, structured, HTTPS-based registry protocol; many TLDs
         now rate-limit or redact port-43 WHOIS.
       - extractRegistrableDomain uses a 30-entry compound TLD list; TLD_FALLBACK 11 entries.
+      - RNET006 cancellation and monotonic-duration repair is complete; blocking transport runs
+        on a bounded worker pool and documents the platform DNS interruption limitation.
   evidence:
     - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/tls/TlsInspectorRepositoryImpl.kt", lines: "139-205" }
     - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/tls/TlsCertificateParser.kt", lines: "26-27, 82-117" }

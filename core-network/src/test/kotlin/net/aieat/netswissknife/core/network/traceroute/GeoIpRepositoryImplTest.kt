@@ -79,6 +79,67 @@ class GeoIpRepositoryImplTest {
     }
 
     @Test
+    @DisplayName("lookup accepts a public response with bogon false")
+    fun `lookup accepts explicit false bogon flag`() = runTest {
+        val baseUrl = startServer {
+            200 to """{"ip":"8.8.8.8","city":"Mountain View","country":"US","loc":"37.38,-122.08","org":"AS15169 Google LLC","bogon":false}"""
+        }
+        val repo = GeoIpRepositoryImpl(baseUrl = baseUrl)
+
+        val result = repo.lookup("8.8.8.8")
+
+        assertEquals("United States", result?.country)
+        assertEquals("Mountain View", result?.city)
+    }
+
+    @Test
+    @DisplayName("lookup returns null when bogon is explicitly true")
+    fun `lookup rejects explicit true bogon flag`() = runTest {
+        val baseUrl = startServer {
+            200 to """{"ip":"8.8.8.8","country":"US","loc":"37.38,-122.08","bogon":true}"""
+        }
+        val repo = GeoIpRepositoryImpl(baseUrl = baseUrl)
+
+        assertNull(repo.lookup("8.8.8.8"))
+    }
+
+    @Test
+    @DisplayName("lookup accepts a response with no bogon field")
+    fun `lookup accepts missing bogon flag`() = runTest {
+        val baseUrl = startServer {
+            200 to """{"ip":"8.8.8.8","country":"US","loc":"37.38,-122.08"}"""
+        }
+        val repo = GeoIpRepositoryImpl(baseUrl = baseUrl)
+
+        assertEquals("United States", repo.lookup("8.8.8.8")?.country)
+    }
+
+    @Test
+    @DisplayName("lookup ignores bogon text inside an escaped JSON string")
+    fun `lookup ignores bogon text inside string`() = runTest {
+        val baseUrl = startServer {
+            200 to """{"ip":"8.8.8.8","city":"Mountain View","note":"text says \"bogon\":true","country":"US","loc":"37.38,-122.08"}"""
+        }
+        val repo = GeoIpRepositoryImpl(baseUrl = baseUrl)
+
+        val result = repo.lookup("8.8.8.8")
+
+        assertEquals("United States", result?.country)
+        assertEquals("Mountain View", result?.city)
+    }
+
+    @Test
+    @DisplayName("lookup ignores a nested bogon field")
+    fun `lookup ignores nested bogon flag`() = runTest {
+        val baseUrl = startServer {
+            200 to """{"ip":"8.8.8.8","meta":{"bogon":true},"country":"US","loc":"37.38,-122.08"}"""
+        }
+        val repo = GeoIpRepositoryImpl(baseUrl = baseUrl)
+
+        assertEquals("United States", repo.lookup("8.8.8.8")?.country)
+    }
+
+    @Test
     @DisplayName("lookup returns null immediately for private IPs without contacting the server")
     fun `lookup short-circuits for private IPs`() = runTest {
         val repo = GeoIpRepositoryImpl(baseUrl = "http://127.0.0.1:1")

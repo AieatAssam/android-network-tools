@@ -76,9 +76,10 @@ findings:
         detail: "Traceroute also constructs the same native engine without catching linkage failures, leaving a device/ABI load failure to propagate out of the network operation."
     impact: "If a device has an unsupported ABI, damaged native extraction, or a native loader failure, ping can bypass its Reachability fallback and LAN/traceroute can fail catastrophically. The hard-coded availability flag also makes the UI report ICMP as available when it is not; this is conditional on such a loader failure because the shipped AAR currently contains the four common Android ABIs."
     recommended_action: "Probe/load the native capability lazily and cache the result, treat LinkageError as engine unavailability, and preserve a Reachability fallback for ping; return a user-visible, typed traceroute/LAN error when no native path exists."
-    validation: "Add adapter-factory tests that inject a throwing native constructor/flow and assert ping selects Reachability; add tests for LAN/traceroute linkage failures and an ABI smoke test on every supported architecture."
+    validation: "Passed ./gradlew :app:testDebugUnitTest --no-daemon (314 tests, 0 failures/errors). Regressions cover synchronous factory and flow-collection linkage failures, Reachability fallback, continuous-session availability caching, LAN fallback, traceroute's typed error, downstream collector errors, and cancellation. Independent QA and adversarial re-reviews found no blocker. ABI smoke tests and unsupported-device verification remain device/build-matrix follow-ups."
     related_phase: P04
-    status: todo
+    status: done
+    resolution: "Native linkage failures now disable the Ping engine and produce an unavailable result that lets PingRepositoryImpl select Reachability; continuous sessions recheck current engine availability. LAN treats native failure as an unavailable ICMP observation and preserves other probes/cancellation. Traceroute reports NativeTracerouteUnavailableException for native failures while preserving downstream errors and cancellation. The full app unit suite passed 314 tests; the full core-network suite passed 895 tests with one skipped. QA and adversarial review cleared the final diff."
 
   - id: RAPP004
     severity: medium

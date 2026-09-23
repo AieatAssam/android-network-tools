@@ -97,6 +97,43 @@ class PingRepositoryEngineFallbackTest {
     }
 
     @Test
+    fun `continuous session stops retrying an engine after it becomes unavailable`() = runTest {
+        var nativeAvailable = true
+        var nativeCalls = 0
+        var fallbackCalls = 0
+        val native = object : PingEngine {
+            override val kind = PingEngineKind.ICMP
+            override val isAvailable: Boolean get() = nativeAvailable
+
+            override fun ping(request: PingRequest): Flow<PingPacketResult> = flow {
+                nativeCalls++
+                nativeAvailable = false
+                emit(PingPacketResult(1, request.host, null, PingStatus.ERROR, "native unavailable"))
+            }
+        }
+        val fallback = fakeEngine(PingEngineKind.REACHABILITY) { request ->
+            flow {
+                fallbackCalls++
+                emit(PingPacketResult(1, request.host, 4, PingStatus.SUCCESS))
+            }
+        }
+        val repository = PingRepositoryImpl(
+            engines = listOf(native, fallback),
+            resolver = HostResolver { "192.0.2.10" },
+            delayBetweenProbesMs = 0,
+        )
+
+        val packets = repository.continuousPing(
+            PingRequest("example.com", count = 0, timeoutMs = 100, intervalMs = 0)
+        ).take(2).toList()
+
+        assertEquals(2, packets.size)
+        assertEquals(1, nativeCalls)
+        assertTrue(fallbackCalls >= packets.size)
+        assertTrue(packets.all { it.status == PingStatus.SUCCESS && it.engine == PingEngineKind.REACHABILITY })
+    }
+
+    @Test
     fun `all engine errors retain actionable failure details`() = runTest {
         val icmpFailure = fakeEngine(PingEngineKind.ICMP) {
             flowOf(PingPacketResult(1, "example.com", null, PingStatus.ERROR, "ICMP unavailable"))
