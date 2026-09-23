@@ -12,7 +12,12 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import net.aieat.netswissknife.core.domain.MdnsDiscoveryUseCase
 import net.aieat.netswissknife.core.network.mdns.DiscoveredService
+import net.aieat.netswissknife.core.network.mdns.MdnsOperation
 import net.aieat.netswissknife.core.network.mdns.MdnsUpdate
+import net.aieat.netswissknife.core.network.SystemMonotonicClock
+import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationCancellationException
+import net.aieat.netswissknife.core.network.operation.OperationSession
 import net.aieat.netswissknife.app.platform.NetworkErrorKind
 import net.aieat.netswissknife.app.platform.NetworkStatus
 import net.aieat.netswissknife.app.platform.NetworkStatusProvider
@@ -44,24 +49,39 @@ class MdnsDiscoveryViewModel @Inject constructor(
 
     private var scanJob: Job? = null
     private var timerJob: Job? = null
+    private var operationSession: OperationSession? = null
+
+    init {
+        // ViewModel closes registered resources before cancelling viewModelScope. Record the
+        // lifecycle reason at that boundary so the operation owner sees it before parent cancel.
+        addCloseable(LIFECYCLE_CLOSEABLE_KEY, AutoCloseable {
+            cancelScan(CancellationReason.LIFECYCLE_PAUSE)
+            stopTimer()
+        })
+    }
 
     fun startScan(timeoutMs: Long = 5_000L) {
         if (_uiState.value.isScanning) return
 
+        val scanWindowMs = MdnsOperation.clampScanDuration(timeoutMs)
+        val session = MdnsOperation.newSession(timeoutMs = scanWindowMs)
+        operationSession = session
+
         _uiState.value = MdnsDiscoveryUiState(isScanning = true)
 
-        val startTime = System.currentTimeMillis()
+        val startTime = SystemMonotonicClock.nowNanos()
 
         timerJob = viewModelScope.launch {
             while (true) {
                 delay(100)
-                _uiState.update { it.copy(elapsedMs = System.currentTimeMillis() - startTime) }
+                val elapsedMs = ((SystemMonotonicClock.nowNanos() - startTime).coerceAtLeast(0L) / 1_000_000L)
+                _uiState.update { it.copy(elapsedMs = elapsedMs) }
             }
         }
 
         scanJob = viewModelScope.launch {
             try {
-                useCase(timeoutMs).collect { update ->
+                useCase(scanWindowMs, session).collect { update ->
                     when (update) {
                         is MdnsUpdate.ServiceFound -> {
                             _uiState.update { state ->
@@ -94,15 +114,26 @@ class MdnsDiscoveryViewModel @Inject constructor(
                     networkErrorKind = e.toNetworkErrorKind(),
                 ) }
                 stopTimer()
+            } finally {
+                if (operationSession === session) operationSession = null
+                if (!_uiState.value.isScanning) stopTimer()
             }
         }
     }
 
     fun stopScan() {
-        scanJob?.cancel()
-        scanJob = null
+        cancelScan(CancellationReason.USER_STOP)
         stopTimer()
         _uiState.update { it.copy(isScanning = false) }
+    }
+
+    private fun cancelScan(reason: CancellationReason) {
+        operationSession?.let { session ->
+            operationSession = null
+            runCatching { session.cancel(reason) }
+        }
+        scanJob?.cancel(OperationCancellationException(reason))
+        scanJob = null
     }
 
     fun reset() {
@@ -116,6 +147,11 @@ class MdnsDiscoveryViewModel @Inject constructor(
     }
 
     override fun onCleared() {
-        stopScan()
+        cancelScan(CancellationReason.LIFECYCLE_PAUSE)
+        stopTimer()
+    }
+
+    private companion object {
+        const val LIFECYCLE_CLOSEABLE_KEY = "mdns_operation_lifecycle"
     }
 }

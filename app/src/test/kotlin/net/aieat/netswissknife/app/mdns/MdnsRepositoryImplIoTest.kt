@@ -18,9 +18,11 @@ import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withTimeout
 import net.aieat.netswissknife.app.ui.screens.mdns.MdnsDiscoveryViewModel
 import net.aieat.netswissknife.core.domain.MdnsDiscoveryUseCase
+import net.aieat.netswissknife.core.network.mdns.MdnsOperation
 import net.aieat.netswissknife.core.network.mdns.MdnsUpdate
 import net.aieat.netswissknife.core.network.net.NetworkBinder
 import net.aieat.netswissknife.core.network.net.NoOpNetworkBinder
+import net.aieat.netswissknife.core.network.MonotonicClock
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -38,6 +40,7 @@ import java.net.SocketException
 import java.net.SocketTimeoutException
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.Collections
 import io.mockk.just
 import io.mockk.Runs
 import io.mockk.verify
@@ -117,13 +120,12 @@ class MdnsRepositoryImplIoTest {
         val receiveCount = AtomicInteger()
         val fixture = fixture(receive = {
             receiveCount.incrementAndGet()
-            Thread.sleep(5)
             throw SocketTimeoutException("quiet network")
         })
 
         val updates = fixture.repository.discover(timeoutMs = 20).toList()
 
-        assertTrue(receiveCount.get() > 0)
+        assertEquals(20, receiveCount.get())
         assertEquals(1, updates.count { it is MdnsUpdate.DiscoveryComplete })
         assertEquals(0, (updates.last() as MdnsUpdate.DiscoveryComplete).totalFound)
         assertTrue(fixture.socket.closed.get())
@@ -137,7 +139,6 @@ class MdnsRepositoryImplIoTest {
                 if (address.port == 5353) throw SocketException("Address already in use")
             },
             receive = {
-                Thread.sleep(5)
                 throw SocketTimeoutException("quiet network")
             }
         )
@@ -164,36 +165,113 @@ class MdnsRepositoryImplIoTest {
         verify(exactly = 1) { binder.bind(any<java.net.DatagramSocket>()) }
     }
 
+    @Test
+    fun `natural completion cleans resources before terminal event`() = runBlocking {
+        val fixture = fixture()
+        val operationSession = MdnsOperation.newSession(fixture.clock)
+        val updates = mutableListOf<MdnsUpdate>()
+        fixture.repository.discover(3L, operationSession).collect { update ->
+            if (update is MdnsUpdate.DiscoveryComplete) {
+                assertEquals(listOf("leave", "socket-close", "lock-release"), fixture.cleanupOrder)
+            }
+            updates += update
+        }
+
+        assertEquals(1, updates.count { it is MdnsUpdate.DiscoveryComplete })
+        assertEquals(listOf("leave", "socket-close", "lock-release"), fixture.cleanupOrder)
+        assertEquals(1, fixture.socket.leaveCount.get())
+        assertEquals(1, fixture.socket.closeCount.get())
+        assertEquals(1, fixture.lock.releaseCount.get())
+        assertEquals(3, fixture.socket.receiveCount.get())
+        assertEquals(0, (updates.last() as MdnsUpdate.DiscoveryComplete).totalFound)
+    }
+
+    @Test
+    fun `legacy cold flow creates a fresh session for each collection`() = runBlocking {
+        val context = mockk<Context>()
+        val wifiManager = mockk<WifiManager>()
+        every { context.getSystemService(Context.WIFI_SERVICE) } returns wifiManager
+        val clock = FakeClock()
+        val sockets = mutableListOf<ScriptedMdnsSocket>()
+        val repository = MdnsRepositoryImpl(context).apply {
+            monotonicClock = clock
+            socketFactory = {
+                ScriptedMdnsSocket(
+                    {},
+                    {},
+                    { throw SocketTimeoutException("quiet network") },
+                    clock,
+                    Collections.synchronizedList(mutableListOf()),
+                ).also(sockets::add)
+            }
+            multicastLockFactory = { TrackingLock() }
+        }
+        // Give the operation watcher room to observe this short fake-clock scan's natural
+        // completion; the lower clamp itself is covered by MdnsOperationTest.
+        val coldFlow = repository.discover(timeoutMs = 20L)
+
+        coldFlow.toList()
+        coldFlow.toList()
+
+        assertEquals(2, sockets.size)
+        assertTrue(sockets.all { it.closed.get() })
+        assertEquals(listOf(1, 1), sockets.map { it.closeCount.get() })
+    }
+
+    @Test
+    fun `monotonic scan window is deterministic across nano time wrap`() = runBlocking {
+        val clock = FakeClock(Long.MAX_VALUE - 2_000_000L)
+        val receiveCount = AtomicInteger()
+        val fixture = fixture(clock = clock, receive = {
+            receiveCount.incrementAndGet()
+            throw SocketTimeoutException("quiet network")
+        })
+
+        fixture.repository.discover(timeoutMs = 5L).toList()
+
+        assertEquals(5, receiveCount.get(), "deadline must use monotonic elapsed time across signed wrap")
+    }
+
     private fun fixture(
         send: () -> Unit = {},
         bind: (InetSocketAddress) -> Unit = {},
         receive: (DatagramPacket) -> Unit = { throw SocketTimeoutException("quiet network") },
         networkBinder: NetworkBinder = NoOpNetworkBinder,
+        clock: FakeClock = FakeClock(),
     ): Fixture {
         val context = mockk<Context>()
         val wifiManager = mockk<WifiManager>()
         every { context.getSystemService(Context.WIFI_SERVICE) } returns wifiManager
-        val socket = ScriptedMdnsSocket(send, bind, receive)
-        val lock = TrackingLock()
+        val cleanupOrder = Collections.synchronizedList(mutableListOf<String>())
+        val socket = ScriptedMdnsSocket(send, bind, receive, clock, cleanupOrder)
+        val lock = TrackingLock(cleanupOrder)
         val repository = MdnsRepositoryImpl(context, networkBinder).apply {
+            monotonicClock = clock
             socketFactory = { socket }
             multicastLockFactory = { lock }
         }
-        return Fixture(repository, socket, lock)
+        return Fixture(repository, socket, lock, clock, cleanupOrder)
     }
 
     private data class Fixture(
         val repository: MdnsRepositoryImpl,
         val socket: ScriptedMdnsSocket,
-        val lock: TrackingLock
+        val lock: TrackingLock,
+        val clock: FakeClock,
+        val cleanupOrder: MutableList<String>,
     )
 
     private class ScriptedMdnsSocket(
         private val sendAction: () -> Unit,
         private val bindAction: (InetSocketAddress) -> Unit,
-        private val receiveAction: (DatagramPacket) -> Unit
+        private val receiveAction: (DatagramPacket) -> Unit,
+        private val clock: FakeClock,
+        private val cleanupOrder: MutableList<String>,
     ) : MdnsSocket {
         val closed = AtomicBoolean(false)
+        val closeCount = AtomicInteger()
+        val leaveCount = AtomicInteger()
+        val receiveCount = AtomicInteger()
         val bindPorts = mutableListOf<Int>()
         val sentQueries = mutableListOf<ByteArray>()
         val setupOrder = mutableListOf<String>()
@@ -219,13 +297,29 @@ class MdnsRepositoryImplIoTest {
             setupOrder += "join"
             joinedInterface = networkInterface
         }
-        override fun leaveGroup(address: InetAddress) = Unit
+        override fun leaveGroup(address: InetAddress) {
+            leaveCount.incrementAndGet()
+            cleanupOrder += "leave"
+        }
         override fun send(packet: DatagramPacket) {
             sendAction()
             sentQueries += packet.data.copyOfRange(packet.offset, packet.offset + packet.length)
         }
-        override fun receive(packet: DatagramPacket) = receiveAction(packet)
-        override fun close() { closed.set(true) }
+        override fun leaveGroup(address: InetSocketAddress, networkInterface: java.net.NetworkInterface?) =
+            leaveGroup(address.address)
+        override fun receive(packet: DatagramPacket) {
+            receiveCount.incrementAndGet()
+            try {
+                receiveAction(packet)
+            } finally {
+                clock.advanceBy(1_000_000L)
+            }
+        }
+        override fun close() {
+            closeCount.incrementAndGet()
+            closed.set(true)
+            cleanupOrder += "socket-close"
+        }
     }
 
     private fun questionClass(packet: ByteArray): Int =
@@ -240,15 +334,32 @@ class MdnsRepositoryImplIoTest {
         }.toWire()
     }
 
-    private class TrackingLock : MdnsMulticastLock {
+    private class TrackingLock(
+        private val cleanupOrder: MutableList<String> = Collections.synchronizedList(mutableListOf())
+    ) : MdnsMulticastLock {
         private val held = AtomicBoolean(false)
         val released = AtomicBoolean(false)
+        val releaseCount = AtomicInteger()
         override fun setReferenceCounted(value: Boolean) = Unit
         override fun acquire() { held.set(true) }
         override val isHeld: Boolean get() = held.get()
         override fun release() {
+            releaseCount.incrementAndGet()
             released.set(true)
             held.set(false)
+            cleanupOrder += "lock-release"
+        }
+    }
+
+    private class FakeClock(initialNanos: Long = 0L) : MonotonicClock {
+        var nowNanos: Long = initialNanos
+            private set
+
+        override fun nowNanos(): Long = nowNanos
+
+        fun advanceBy(deltaNanos: Long) {
+            require(deltaNanos >= 0L)
+            nowNanos += deltaNanos
         }
     }
 }

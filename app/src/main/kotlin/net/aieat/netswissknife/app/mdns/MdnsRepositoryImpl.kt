@@ -5,14 +5,16 @@ import android.net.wifi.WifiManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.InternalCoroutinesApi
 import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.FlowCollector
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.job
+import net.aieat.netswissknife.core.network.MonotonicClock
+import net.aieat.netswissknife.core.network.SystemMonotonicClock
+import net.aieat.netswissknife.core.network.mdns.MdnsOperation
 import net.aieat.netswissknife.core.network.mdns.MdnsDiscoverySession
 import net.aieat.netswissknife.core.network.mdns.MdnsPacketParser
 import net.aieat.netswissknife.core.network.mdns.MdnsQueryType
@@ -22,6 +24,12 @@ import net.aieat.netswissknife.core.network.mdns.MdnsUpdate
 import net.aieat.netswissknife.core.network.net.LocalNetworkPermissionDeniedException
 import net.aieat.netswissknife.core.network.net.NetworkBinder
 import net.aieat.netswissknife.core.network.net.NoOpNetworkBinder
+import net.aieat.netswissknife.core.network.operation.OperationContext
+import net.aieat.netswissknife.core.network.operation.OperationCancellationException
+import net.aieat.netswissknife.core.network.operation.OperationDeadlineExceededException
+import net.aieat.netswissknife.core.network.operation.OperationRunner
+import net.aieat.netswissknife.core.network.operation.OperationSession
+import net.aieat.netswissknife.core.network.operation.ResourceScopeClosedException
 import org.xbill.DNS.ARecord
 import org.xbill.DNS.AAAARecord
 import org.xbill.DNS.PTRRecord
@@ -37,6 +45,8 @@ import java.net.MulticastSocket
 import java.net.NetworkInterface
 import java.net.SocketException
 import java.net.SocketTimeoutException
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 
 internal interface MdnsMulticastLock {
@@ -136,151 +146,291 @@ class MdnsRepositoryImpl @Inject constructor(
             override fun release() = lock.release()
         }
     }
+    internal var monotonicClock: MonotonicClock = SystemMonotonicClock
 
     companion object {
         private const val MDNS_PORT = 5353
         private const val MDNS_GROUP = "224.0.0.251"
         private const val META_QUERY = "_services._dns-sd._udp.local."
-        private const val BUFFER_SIZE = 65536
+        private const val BUFFER_SIZE = MdnsOperation.RECEIVE_BUFFER_SIZE_BYTES
         private const val SOCKET_TIMEOUT_MS = 500
         private const val REQUERY_INTERVAL_MS = 1_500L
+        private const val NANOS_PER_MILLISECOND = 1_000_000L
     }
 
-    @OptIn(InternalCoroutinesApi::class)
     override fun discover(timeoutMs: Long): Flow<MdnsUpdate> = flow {
-        val wifiManager = context.getSystemService(Context.WIFI_SERVICE) as WifiManager
-        val multicastLock = multicastLockFactory(wifiManager)
+        val scanWindowMs = MdnsOperation.clampScanDuration(timeoutMs)
+        emitAll(discover(scanWindowMs, MdnsOperation.newSession(timeoutMs = scanWindowMs, clock = monotonicClock)))
+    }
 
-        try {
-            multicastLock.setReferenceCounted(false)
-            multicastLock.acquire()
-
-            val socket = socketFactory()
-            // DatagramSocket.receive is blocking and does not observe coroutine cancellation.
-            // Close it as soon as the collecting job enters cancellation so the receive returns
-            // immediately; final cleanup below still owns group leave and lock release.
-            val cancellationHandle = currentCoroutineContext().job.invokeOnCompletion(
-                onCancelling = true,
-                invokeImmediately = true
-            ) { cause -> if (cause is kotlinx.coroutines.CancellationException) socket.close() }
-            var multicastGroup: InetSocketAddress? = null
-            var multicastInterface: NetworkInterface? = null
-            try {
-                socket.reuseAddress = true
-                socket.bindToNetwork(networkBinder)
-                multicastInterface = networkBinder.localInterface()
-                socket.networkInterface = multicastInterface
-                var useUnicastResponse = false
-                try {
-                    socket.bind(InetSocketAddress(MDNS_PORT))
-                } catch (error: SocketException) {
-                    if (error.isDeviceUnavailable()) throw error
-                    socket.bind(InetSocketAddress(0))
-                    useUnicastResponse = true
-                }
-
-                val multicastAddress = InetSocketAddress(MDNS_GROUP, MDNS_PORT)
-                multicastGroup = multicastAddress
-
-                socket.joinGroup(multicastAddress, multicastInterface)
-                socket.soTimeout = SOCKET_TIMEOUT_MS
-
-                // Send the meta-query to enumerate all service types
-                sendQuery(socket, multicastAddress, META_QUERY, Type.PTR, useUnicastResponse)
-
-                val startTime = System.currentTimeMillis()
-                val session = MdnsDiscoverySession()
-                var lastRequery = 0L
-
-                while (System.currentTimeMillis() - startTime < timeoutMs) {
-                    currentCoroutineContext().ensureActive()
-                    val now = System.currentTimeMillis()
-                    if (now - lastRequery > REQUERY_INTERVAL_MS && session.serviceTypes.isNotEmpty()) {
-                        for (type in session.serviceTypes) {
-                            sendQuery(socket, multicastAddress, "$type.local.", Type.PTR, useUnicastResponse)
-                        }
-                        lastRequery = now
-                    }
-
-                    val packet = receivePacket(socket) ?: continue
-                    currentCoroutineContext().ensureActive()
-                    val message = MdnsPacketParser.parsePacket(packet) ?: continue
-
-                    val allSections = listOf(Section.ANSWER, Section.AUTHORITY, Section.ADDITIONAL)
-                    val records = mutableListOf<MdnsSessionRecord>()
-
-                    for (section in allSections) {
-                        for (record in message.getSection(section)) {
-                            when (record.type) {
-                                Type.PTR -> {
-                                    val ptr = record as PTRRecord
-                                    records += MdnsSessionRecord.Ptr(record.name.toString(), ptr.target.toString())
-                                }
-
-                                Type.SRV -> {
-                                    val srv = record as SRVRecord
-                                    records += MdnsSessionRecord.Srv(
-                                        record.name.toString(), srv.target.toString(), srv.port
-                                    )
-                                }
-
-                                Type.TXT -> {
-                                    val txt = record as TXTRecord
-                                    @Suppress("UNCHECKED_CAST")
-                                    val strings = txt.strings as List<String>
-                                    records += MdnsSessionRecord.Txt(record.name.toString(), strings)
-                                }
-
-                                Type.A -> {
-                                    val a = record as ARecord
-                                    val ip = a.address.hostAddress ?: continue
-                                    records += MdnsSessionRecord.Address(record.name.toString(), ip)
-                                }
-
-                                Type.AAAA -> {
-                                    val aaaa = record as AAAARecord
-                                    val ip = aaaa.address.hostAddress ?: continue
-                                    records += MdnsSessionRecord.Address(record.name.toString(), ip)
-                                }
-                            }
-                        }
-                    }
-
-                    val result = session.process(records)
-                    for (query in result.queries) {
-                        sendQuery(
-                            socket,
-                            multicastAddress,
-                            query.name,
-                            query.type.toDnsType(),
-                            useUnicastResponse,
-                        )
-                    }
-                    for (service in result.services) {
-                        currentCoroutineContext().ensureActive()
-                        emit(MdnsUpdate.ServiceFound(service))
-                    }
-                }
-
-                // Keep hostname-bearing partials that never became fully ready visible at scan end.
-                for (service in session.finish()) {
-                    currentCoroutineContext().ensureActive()
-                    emit(MdnsUpdate.ServiceFound(service))
-                }
-
-                currentCoroutineContext().ensureActive()
-                emit(MdnsUpdate.DiscoveryComplete(session.totalFound))
-            } finally {
-                try { multicastGroup?.let { socket.leaveGroup(it, multicastInterface) } } catch (_: Exception) {}
-                socket.close()
-                cancellationHandle.dispose()
+    override fun discover(timeoutMs: Long, operationSession: OperationSession): Flow<MdnsUpdate> = flow {
+        val scanWindowMs = MdnsOperation.clampScanDuration(timeoutMs)
+        val observedTotal = AtomicInteger(0)
+        val totalFound = try {
+            OperationRunner.run(operationSession) {
+                runDiscovery(scanWindowMs, this@flow, observedTotal::set)
             }
-        } finally {
-            if (multicastLock.isHeld) multicastLock.release()
+        } catch (deadline: OperationDeadlineExceededException) {
+            // A requested scan-window deadline is normal completion for this bounded scan. The
+            // runner has already closed all resources before surfacing this expected deadline.
+            if (operationSession.cancellationReason != net.aieat.netswissknife.core.network.operation.CancellationReason.DEADLINE_EXCEEDED) {
+                throw deadline
+            }
+            if (deadline.hasSuppressedFailures()) throw deadline
+            observedTotal.get()
+        } catch (cancelled: OperationCancellationException) {
+            // A blocking socket call may surface the deadline watcher as job cancellation.
+            // Treat only the scan's own expected deadline as normal completion.
+            if (cancelled.reason != net.aieat.netswissknife.core.network.operation.CancellationReason.DEADLINE_EXCEEDED ||
+                operationSession.cancellationReason != net.aieat.netswissknife.core.network.operation.CancellationReason.DEADLINE_EXCEEDED
+            ) {
+                throw cancelled
+            }
+            if (cancelled.hasSuppressedFailures()) throw cancelled
+            observedTotal.get()
         }
+        // Publish terminal success only after OperationRunner has closed the group,
+        // socket, and multicast lock successfully.
+        emit(MdnsUpdate.DiscoveryComplete(totalFound))
     }.flowOn(Dispatchers.IO)
 
-    private suspend fun sendQuery(
+    private suspend fun OperationContext.runDiscovery(
+        scanWindowMs: Long,
+        collector: FlowCollector<MdnsUpdate>,
+        updateTotalFound: (Int) -> Unit,
+    ): Int {
+        // The requested scan duration includes lock/socket setup and the initial query.
+        val startNanos = monotonicClock.nowNanos()
+        var greatestElapsedNanos = 0L
+        fun elapsedMillis(): Long {
+            val observed = (monotonicClock.nowNanos() - startNanos).coerceAtLeast(0L)
+            if (observed > greatestElapsedNanos) greatestElapsedNanos = observed
+            return greatestElapsedNanos / NANOS_PER_MILLISECOND
+        }
+
+        val wifiManager = context.getSystemService(Context.WIFI_SERVICE) as WifiManager
+        val multicastLock = multicastLockFactory(wifiManager)
+        val lockLease = registerResource(MulticastLockLease(multicastLock))
+        lockLease.acquire()
+        ensureOperationActive()
+
+        val mdnsSocket = socketFactory()
+        val socketLease = registerResource(MdnsSocketLease(mdnsSocket))
+
+        mdnsSocket.reuseAddress = true
+        mdnsSocket.bindToNetwork(networkBinder)
+        val multicastInterface = networkBinder.localInterface()
+        mdnsSocket.networkInterface = multicastInterface
+        ensureOperationActive()
+
+        var useUnicastResponse = false
+        try {
+            mdnsSocket.bind(InetSocketAddress(MDNS_PORT))
+        } catch (error: SocketException) {
+            if (error.isDeviceUnavailable()) throw error
+            mdnsSocket.bind(InetSocketAddress(0))
+            useUnicastResponse = true
+        }
+
+        val multicastAddress = InetSocketAddress(MDNS_GROUP, MDNS_PORT)
+        val membershipLease = registerResource(
+            MulticastMembershipLease(
+                socketLease,
+                multicastAddress,
+                multicastInterface,
+                isCancellation = { cancellationReason != null },
+            )
+        )
+        membershipLease.join()
+        ensureOperationActive()
+        mdnsSocket.soTimeout = SOCKET_TIMEOUT_MS
+
+        if (elapsedMillis() < scanWindowMs) {
+            sendQuery(mdnsSocket, multicastAddress, META_QUERY, Type.PTR, useUnicastResponse)
+        }
+
+        val discovery = MdnsDiscoverySession()
+        var lastRequeryMs = 0L
+        while (true) {
+            ensureOperationActive()
+            val nowMs = elapsedMillis()
+            val remainingMs = scanWindowMs - nowMs
+            if (remainingMs <= 0L) break
+
+            mdnsSocket.soTimeout = minOf(SOCKET_TIMEOUT_MS.toLong(), remainingMs)
+                .coerceAtLeast(1L)
+                .toInt()
+
+            if (nowMs - lastRequeryMs > REQUERY_INTERVAL_MS && discovery.serviceTypes.isNotEmpty()) {
+                for (type in discovery.serviceTypes) {
+                    sendQuery(mdnsSocket, multicastAddress, "$type.local.", Type.PTR, useUnicastResponse)
+                }
+                lastRequeryMs = nowMs
+            }
+
+            val packet = receivePacket(mdnsSocket) ?: continue
+            ensureOperationActive()
+            val message = MdnsPacketParser.parsePacket(packet) ?: continue
+
+            val allSections = listOf(Section.ANSWER, Section.AUTHORITY, Section.ADDITIONAL)
+            val records = mutableListOf<MdnsSessionRecord>()
+            for (section in allSections) {
+                for (record in message.getSection(section)) {
+                    when (record.type) {
+                        Type.PTR -> {
+                            val ptr = record as PTRRecord
+                            records += MdnsSessionRecord.Ptr(record.name.toString(), ptr.target.toString())
+                        }
+                        Type.SRV -> {
+                            val srv = record as SRVRecord
+                            records += MdnsSessionRecord.Srv(
+                                record.name.toString(), srv.target.toString(), srv.port
+                            )
+                        }
+                        Type.TXT -> {
+                            val txt = record as TXTRecord
+                            @Suppress("UNCHECKED_CAST")
+                            val strings = txt.strings as List<String>
+                            records += MdnsSessionRecord.Txt(record.name.toString(), strings)
+                        }
+                        Type.A -> {
+                            val a = record as ARecord
+                            val ip = a.address.hostAddress ?: continue
+                            records += MdnsSessionRecord.Address(record.name.toString(), ip)
+                        }
+                        Type.AAAA -> {
+                            val aaaa = record as AAAARecord
+                            val ip = aaaa.address.hostAddress ?: continue
+                            records += MdnsSessionRecord.Address(record.name.toString(), ip)
+                        }
+                    }
+                }
+            }
+
+            val result = discovery.process(records)
+            updateTotalFound(discovery.totalFound)
+            for (query in result.queries) {
+                sendQuery(
+                    mdnsSocket,
+                    multicastAddress,
+                    query.name,
+                    query.type.toDnsType(),
+                    useUnicastResponse,
+                )
+            }
+            for (service in result.services) {
+                ensureOperationActive()
+                collector.emit(MdnsUpdate.ServiceFound(service))
+            }
+        }
+
+        for (service in discovery.finish()) {
+            ensureOperationActive()
+            collector.emit(MdnsUpdate.ServiceFound(service))
+        }
+        updateTotalFound(discovery.totalFound)
+        ensureOperationActive()
+        return discovery.totalFound
+    }
+
+    private suspend fun <T : AutoCloseable> OperationContext.registerResource(resource: T): T =
+        try {
+            resources.register(resource)
+        } catch (closed: ResourceScopeClosedException) {
+            // Late registration closes the resource immediately; preserve the winning operation
+            // cancellation rather than surfacing the scope's closed-state exception.
+            ensureOperationActive()
+            throw closed
+        }
+
+    private class MulticastLockLease(private val lock: MdnsMulticastLock) : AutoCloseable {
+        private var closed = false
+
+        @Synchronized
+        fun acquire() {
+            if (closed) throw CancellationException("mDNS operation already stopped")
+            lock.setReferenceCounted(false)
+            lock.acquire()
+        }
+
+        @Synchronized
+        override fun close() {
+            if (closed) return
+            closed = true
+            if (lock.isHeld) lock.release()
+        }
+    }
+
+    private class MdnsSocketLease(private val socket: MdnsSocket) : AutoCloseable {
+        private val closed = AtomicBoolean(false)
+
+        override fun close() {
+            if (closed.compareAndSet(false, true)) socket.close()
+        }
+
+        fun joinGroup(address: InetSocketAddress, networkInterface: NetworkInterface?) =
+            socket.joinGroup(address, networkInterface)
+
+        fun leaveGroup(address: InetSocketAddress, networkInterface: NetworkInterface?) =
+            socket.leaveGroup(address, networkInterface)
+    }
+
+    private class MulticastMembershipLease(
+        private val socket: MdnsSocketLease,
+        private val address: InetSocketAddress,
+        private val networkInterface: NetworkInterface?,
+        private val isCancellation: () -> Boolean,
+    ) : AutoCloseable {
+        private val lock = Any()
+        private var closed = false
+        private var joining = false
+        private var joined = false
+
+        fun join() {
+            synchronized(lock) {
+                if (closed) throw CancellationException("mDNS operation already stopped")
+                joining = true
+            }
+            var joinSucceeded = false
+            try {
+                socket.joinGroup(address, networkInterface)
+                joinSucceeded = true
+            } finally {
+                val leaveLateMembership = synchronized(lock) {
+                    joining = false
+                    joined = joinSucceeded && !closed
+                    joinSucceeded && closed && !isCancellation()
+                }
+                // Cancellation closes the socket to break a blocking join. If the platform call
+                // reports success after that close, still attempt to drop the late membership.
+                if (leaveLateMembership) {
+                    runCatching { socket.leaveGroup(address, networkInterface) }
+                }
+            }
+        }
+
+        override fun close() {
+            val (closeSocket, leaveGroup) = synchronized(lock) {
+                if (closed) return
+                closed = true
+                val cancelled = isCancellation()
+                val shouldLeave = joined && !joining && !cancelled
+                joined = false
+                (joining || cancelled) to shouldLeave
+            }
+            if (leaveGroup) {
+                socket.leaveGroup(address, networkInterface)
+            }
+            if (closeSocket) {
+                // Do not wait for joinGroup here: socket close is what releases a blocking join.
+                // During cancellation socket close also drops membership without a platform
+                // leaveGroup call on the cancelling thread.
+                socket.close()
+            }
+        }
+    }
+
+    private suspend fun OperationContext.sendQuery(
         socket: MdnsSocket,
         address: InetSocketAddress,
         name: String,
@@ -288,15 +438,17 @@ class MdnsRepositoryImpl @Inject constructor(
         unicastResponse: Boolean,
     ) {
         try {
+            ensureOperationActive()
             val bytes = MdnsPacketParser.buildMdnsQuery(name, type, unicastResponse)
             val packet = DatagramPacket(bytes, bytes.size, address)
+            ensureOperationActive()
             socket.send(packet)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             // A socket can report a generic I/O failure when cancellation closes it. Preserve
             // cancellation in that race instead of turning Stop into a discovery error.
-            currentCoroutineContext().ensureActive()
+            ensureOperationActive()
             throw MdnsPacketIoException(MdnsIoOperation.SEND_QUERY, e)
         }
     }
@@ -328,4 +480,9 @@ class MdnsRepositoryImpl @Inject constructor(
     private fun SocketException.isDeviceUnavailable(): Boolean =
         message.orEmpty().contains("ENODEV", ignoreCase = true) ||
             message.orEmpty().contains("no such device", ignoreCase = true)
+
 }
+
+/** Finds cleanup failures even when coroutine cancellation wraps the runner's deadline error. */
+private fun Throwable.hasSuppressedFailures(): Boolean =
+    suppressed.isNotEmpty() || cause?.hasSuppressedFailures() == true

@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import net.aieat.netswissknife.core.network.mdns.DiscoveredService
 import net.aieat.netswissknife.core.network.mdns.MdnsRepository
+import net.aieat.netswissknife.core.network.mdns.MdnsOperation
 import net.aieat.netswissknife.core.network.mdns.MdnsUpdate
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertInstanceOf
@@ -60,5 +61,15 @@ class MdnsDiscoveryUseCaseTest {
         useCase(3_000L).toList()
 
         verify { repository.discover(3_000L) }
+    }
+
+    @Test
+    fun `passes caller operation session through to repository`() = runTest {
+        val session = MdnsOperation.newSession()
+        every { repository.discover(3_000L, session) } returns flowOf(MdnsUpdate.DiscoveryComplete(0))
+
+        useCase(3_000L, session).toList()
+
+        verify { repository.discover(3_000L, session) }
     }
 }
