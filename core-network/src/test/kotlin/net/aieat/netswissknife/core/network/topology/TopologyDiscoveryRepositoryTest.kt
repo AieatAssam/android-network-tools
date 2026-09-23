@@ -1,9 +1,14 @@
 package net.aieat.netswissknife.core.network.topology
 
 import io.mockk.*
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -37,7 +42,7 @@ class TopologyDiscoveryRepositoryTest {
         coEvery { snmpClient.get(any(), "1.3.6.1.2.1.1.6.0") } returns "Server Room"
         coEvery { snmpClient.get(any(), "1.3.6.1.2.1.1.3.0") } returns "36000"
         // No LLDP/CDP neighbours (empty walks for everything)
-        coEvery { snmpClient.walk(any(), any()) } returns emptyMap()
+        coEvery { snmpClient.walk(any(), any(), any()) } returns SnmpWalkResult(emptyMap())
 
         val events = repository.discover(defaultParams).toList()
 
@@ -74,8 +79,8 @@ class TopologyDiscoveryRepositoryTest {
             "1.0.8802.1.1.2.1.4.2.1.4.0.2.1.1.4.192.168.1.3" to "1"
         )
         // Return empty for all walks by default, LLDP data for the specific prefix
-        coEvery { snmpClient.walk(any(), any()) } returns emptyMap()
-        coEvery { snmpClient.walk(any(), "1.0.8802.1.1.2.1.4") } returns lldpData
+        coEvery { snmpClient.walk(any(), any(), any()) } returns SnmpWalkResult(emptyMap())
+        coEvery { snmpClient.walk(any(), "1.0.8802.1.1.2.1.4", any()) } returns SnmpWalkResult(lldpData)
 
         val events = repository.discover(defaultParams.copy(maxHops = 1)).toList()
 
@@ -92,7 +97,7 @@ class TopologyDiscoveryRepositoryTest {
     @Test
     fun `SNMP timeout reports an actionable failure`() = runTest {
         coEvery { snmpClient.get(any(), any()) } throws java.net.SocketTimeoutException("timeout")
-        coEvery { snmpClient.walk(any(), any()) } returns emptyMap()
+        coEvery { snmpClient.walk(any(), any(), any()) } returns SnmpWalkResult(emptyMap())
 
         val events = repository.discover(defaultParams).toList()
 
@@ -108,7 +113,7 @@ class TopologyDiscoveryRepositoryTest {
         coEvery { snmpClient.get(any(), "1.3.6.1.2.1.1.5.0") } returns "seed"
         coEvery { snmpClient.get(any(), "1.3.6.1.2.1.1.6.0") } returns null
         coEvery { snmpClient.get(any(), "1.3.6.1.2.1.1.3.0") } returns "100"
-        coEvery { snmpClient.walk(any(), any()) } returns emptyMap()
+        coEvery { snmpClient.walk(any(), any(), any()) } returns SnmpWalkResult(emptyMap())
 
         val events = repository.discover(defaultParams.copy(maxHops = 0)).toList()
         val nodeEvents = events.filterIsInstance<TopologyDiscoveryEvent.NodeDiscovered>()
@@ -119,7 +124,7 @@ class TopologyDiscoveryRepositoryTest {
     @Test
     fun `client is closed after discovery completes`() = runTest {
         coEvery { snmpClient.get(any(), any()) } returns null
-        coEvery { snmpClient.walk(any(), any()) } returns emptyMap()
+        coEvery { snmpClient.walk(any(), any(), any()) } returns SnmpWalkResult(emptyMap())
 
         repository.discover(defaultParams).toList()
 
@@ -132,16 +137,16 @@ class TopologyDiscoveryRepositoryTest {
         coEvery { snmpClient.get(any(), "1.3.6.1.2.1.1.5.0") } returns "seed-switch"
         coEvery { snmpClient.get(any(), "1.3.6.1.2.1.1.6.0") } returns null
         coEvery { snmpClient.get(any(), "1.3.6.1.2.1.1.3.0") } returns "100"
-        coEvery { snmpClient.walk(any(), any()) } returns emptyMap()
-        coEvery { snmpClient.walk(any(), "1.3.6.1.4.1.9.9.23.1.2.1") } returns mapOf(
+        coEvery { snmpClient.walk(any(), any(), any()) } returns SnmpWalkResult(emptyMap())
+        coEvery { snmpClient.walk(any(), "1.3.6.1.4.1.9.9.23.1.2.1", any()) } returns SnmpWalkResult(mapOf(
             "1.3.6.1.4.1.9.9.23.1.2.1.1.3.1.1" to "1",
             "1.3.6.1.4.1.9.9.23.1.2.1.1.4.1.1" to "c0:a8:01:03",
             "1.3.6.1.4.1.9.9.23.1.2.1.1.6.1.1" to "edge-switch",
             "1.3.6.1.4.1.9.9.23.1.2.1.1.7.1.1" to "Gi1/0/3"
-        )
+        ))
         coEvery {
-            snmpClient.walk(match { it.ip == "192.168.1.3" }, "1.3.6.1.4.1.9.9.23.1.2.1")
-        } returns emptyMap()
+            snmpClient.walk(match { it.ip == "192.168.1.3" }, "1.3.6.1.4.1.9.9.23.1.2.1", any())
+        } returns SnmpWalkResult(emptyMap())
 
         val events = repository.discover(defaultParams.copy(maxHops = 1)).toList()
         val links = events.filterIsInstance<TopologyDiscoveryEvent.LinkDiscovered>().map { it.link }
@@ -157,12 +162,12 @@ class TopologyDiscoveryRepositoryTest {
         coEvery { snmpClient.get(any(), any()) } returns null
         val activeWalks = AtomicInteger(0)
         val maximumConcurrentWalks = AtomicInteger(0)
-        coEvery { snmpClient.walk(any(), any()) } coAnswers {
+        coEvery { snmpClient.walk(any(), any(), any()) } coAnswers {
             val active = activeWalks.incrementAndGet()
             maximumConcurrentWalks.updateAndGet { current -> maxOf(current, active) }
             delay(25)
             activeWalks.decrementAndGet()
-            emptyMap()
+            SnmpWalkResult(emptyMap())
         }
 
         repository.discover(defaultParams.copy(maxHops = 0)).toList()
@@ -177,7 +182,7 @@ class TopologyDiscoveryRepositoryTest {
         var factoryThreadId: Long? = null
         val factoryClient = mockk<SnmpClient>(relaxed = true)
         coEvery { factoryClient.get(any(), any()) } returns null
-        coEvery { factoryClient.walk(any(), any()) } returns emptyMap()
+        coEvery { factoryClient.walk(any(), any(), any()) } returns SnmpWalkResult(emptyMap())
         val factoryRepository = TopologyDiscoveryRepositoryImpl(SnmpClientFactory {
             factoryThreadId = Thread.currentThread().id
             factoryClient
@@ -187,5 +192,235 @@ class TopologyDiscoveryRepositoryTest {
 
         assertNotNull(factoryThreadId)
         assertNotEquals(collectingThreadId, factoryThreadId)
+    }
+
+    @Test
+    fun `high fan out deduplicates pending targets and reports the queue cap`() = runTest {
+        val limits = TopologyResourceLimits(maxNodes = 32, maxLinks = 32, maxPendingTargets = 2)
+        val boundedRepository = TopologyDiscoveryRepositoryImpl(snmpClient, limits)
+        val seedIp = defaultParams.targetIp
+        val cdpOid = "1.3.6.1.4.1.9.9.23.1.2.1"
+        val neighbours = cdpNeighbours((20..27).toList())
+
+        coEvery { snmpClient.get(any(), "1.3.6.1.2.1.1.1.0") } returns "Cisco switch"
+        coEvery { snmpClient.get(any(), "1.3.6.1.2.1.1.5.0") } returns "seed"
+        coEvery { snmpClient.get(any(), "1.3.6.1.2.1.1.6.0") } returns null
+        coEvery { snmpClient.get(any(), "1.3.6.1.2.1.1.3.0") } returns null
+        coEvery { snmpClient.walk(any(), any(), any()) } coAnswers {
+            val target = firstArg<SnmpTarget>()
+            val oid = secondArg<String>()
+            SnmpWalkResult(if (target.ip == seedIp && oid == cdpOid) neighbours else emptyMap())
+        }
+
+        val events = boundedRepository.discover(defaultParams).toList()
+        val graph = events.filterIsInstance<TopologyDiscoveryEvent.Complete>().single().graph
+
+        assertEquals(3, graph.nodes.size)
+        assertEquals(8, graph.links.size)
+        assertTrue(TopologyTruncationReason.PENDING_TARGET_LIMIT in graph.truncationReasons)
+        coVerify(exactly = 1) {
+            snmpClient.get(match { it.ip == "192.168.1.20" }, "1.3.6.1.2.1.1.1.0")
+        }
+    }
+
+    @Test
+    fun `interface and vlan lists are capped before attaching them to the node`() = runTest {
+        val limits = TopologyResourceLimits(maxInterfacesPerNode = 1, maxVlansPerNode = 1)
+        val boundedRepository = TopologyDiscoveryRepositoryImpl(snmpClient, limits)
+        val interfacePrefix = "1.3.6.1.2.1.2.2.1.2"
+        val vlanPrefix = "1.3.6.1.4.1.9.9.46.1.3.1.1.4"
+
+        coEvery { snmpClient.get(any(), any()) } returns null
+        coEvery { snmpClient.walk(any(), any(), any()) } coAnswers {
+            val oid = secondArg<String>()
+            val values = when (oid) {
+                interfacePrefix -> mapOf("$interfacePrefix.1" to "eth0", "$interfacePrefix.2" to "eth1")
+                vlanPrefix -> mapOf("$vlanPrefix.1" to "users", "$vlanPrefix.2" to "voice")
+                else -> emptyMap()
+            }
+            SnmpWalkResult(values)
+        }
+
+        val graph = boundedRepository.discover(defaultParams.copy(maxHops = 0))
+            .toList().filterIsInstance<TopologyDiscoveryEvent.Complete>().single().graph
+
+        assertEquals(1, graph.nodes.single().interfaces.size)
+        assertEquals(1, graph.nodes.single().vlans.size)
+        assertTrue(TopologyTruncationReason.INTERFACE_LIMIT in graph.truncationReasons)
+        assertTrue(TopologyTruncationReason.VLAN_LIMIT in graph.truncationReasons)
+    }
+
+    @Test
+    fun `walk truncation metadata reaches the completed graph`() = runTest {
+        coEvery { snmpClient.get(any(), any()) } returns null
+        coEvery { snmpClient.walk(any(), any(), any()) } returns SnmpWalkResult(
+            entries = emptyMap(),
+            truncationReasons = setOf(TopologyTruncationReason.WALK_BYTE_LIMIT)
+        )
+
+        val graph = repository.discover(defaultParams.copy(maxHops = 0))
+            .toList().filterIsInstance<TopologyDiscoveryEvent.Complete>().single().graph
+
+        assertTrue(TopologyTruncationReason.WALK_BYTE_LIMIT in graph.truncationReasons)
+    }
+
+    @Test
+    fun `thrown walk errors are represented in the completed graph`() = runTest {
+        coEvery { snmpClient.get(any(), any()) } returns null
+        coEvery { snmpClient.walk(any(), any(), any()) } throws java.net.SocketTimeoutException("timeout")
+
+        val graph = repository.discover(defaultParams.copy(maxHops = 0))
+            .toList().filterIsInstance<TopologyDiscoveryEvent.Complete>().single().graph
+
+        assertTrue(graph.hadSnmpErrors)
+        assertTrue(graph.truncationReasons.isEmpty())
+    }
+
+    @Test
+    fun `graph byte budget accepts exact node estimate and rejects one byte less`() = runTest {
+        coEvery { snmpClient.get(any(), any()) } returns null
+        coEvery { snmpClient.walk(any(), any(), any()) } returns SnmpWalkResult(emptyMap())
+        val node = repository.discover(defaultParams.copy(maxHops = 0))
+            .toList().filterIsInstance<TopologyDiscoveryEvent.Complete>().single().graph.nodes.single()
+        val exactBytes = TopologyDiscoveryRepositoryImpl.GraphByteBudget.estimateBytes(node).toInt()
+
+        assertTrue(TopologyDiscoveryRepositoryImpl.GraphByteBudget(exactBytes).tryReserve(node))
+        assertFalse(TopologyDiscoveryRepositoryImpl.GraphByteBudget(exactBytes - 1).tryReserve(node))
+
+        val boundedRepository = TopologyDiscoveryRepositoryImpl(
+            snmpClient,
+            TopologyResourceLimits(maxBytesPerGraph = exactBytes - 1)
+        )
+        val partialGraph = boundedRepository.discover(defaultParams.copy(maxHops = 0))
+            .toList().filterIsInstance<TopologyDiscoveryEvent.Complete>().single().graph
+        assertTrue(partialGraph.nodes.isEmpty())
+        assertTrue(TopologyTruncationReason.GRAPH_BYTE_LIMIT in partialGraph.truncationReasons)
+    }
+
+    @Test
+    fun `oversized system strings are capped before being retained in the graph`() = runTest {
+        val boundedRepository = TopologyDiscoveryRepositoryImpl(
+            snmpClient,
+            TopologyResourceLimits(maxValueChars = 4)
+        )
+        coEvery { snmpClient.get(any(), "1.3.6.1.2.1.1.1.0") } returns "Cisco switch description"
+        coEvery { snmpClient.get(any(), "1.3.6.1.2.1.1.5.0") } returns "core"
+        coEvery { snmpClient.walk(any(), any(), any()) } returns SnmpWalkResult(emptyMap())
+
+        val graph = boundedRepository.discover(defaultParams.copy(maxHops = 0))
+            .toList().filterIsInstance<TopologyDiscoveryEvent.Complete>().single().graph
+
+        assertEquals("Cisc", graph.nodes.single().sysDescr)
+        assertTrue(TopologyTruncationReason.SCALAR_VALUE_LIMIT in graph.truncationReasons)
+    }
+
+    @Test
+    fun `node cap is quiet at exact capacity and reported only when a target is rejected`() = runTest {
+        val limits = TopologyResourceLimits(maxNodes = 1)
+        val exactGraph = discoverWithCdp(limits, emptyMap(), maxHops = 1)
+        val partialGraph = discoverWithCdp(limits, cdpNeighbours(listOf(20)), maxHops = 1)
+
+        assertEquals(1, exactGraph.nodes.size)
+        assertFalse(TopologyTruncationReason.NODE_LIMIT in exactGraph.truncationReasons)
+        assertEquals(1, partialGraph.nodes.size)
+        assertTrue(TopologyTruncationReason.NODE_LIMIT in partialGraph.truncationReasons)
+    }
+
+    @Test
+    fun `link cap is quiet at exact capacity and reported when another link is rejected`() = runTest {
+        val limits = TopologyResourceLimits(maxLinks = 1)
+        val exactGraph = discoverWithCdp(limits, cdpNeighbours(listOf(20)))
+        val partialGraph = discoverWithCdp(limits, cdpNeighbours(listOf(20, 21)))
+
+        assertEquals(1, exactGraph.links.size)
+        assertFalse(TopologyTruncationReason.LINK_LIMIT in exactGraph.truncationReasons)
+        assertEquals(1, partialGraph.links.size)
+        assertTrue(TopologyTruncationReason.LINK_LIMIT in partialGraph.truncationReasons)
+    }
+
+    @Test
+    fun `cancelling an active discovery closes its SNMP client without a terminal event`() =
+        kotlinx.coroutines.runBlocking {
+        val walkStarted = CompletableDeferred<Unit>()
+        coEvery { snmpClient.get(any(), any()) } returns null
+        coEvery { snmpClient.walk(any(), any(), any()) } coAnswers {
+            walkStarted.complete(Unit)
+            awaitCancellation()
+        }
+        val events = java.util.concurrent.ConcurrentLinkedQueue<TopologyDiscoveryEvent>()
+
+        val job = launch {
+            repository.discover(defaultParams).collect(events::add)
+        }
+        withTimeout(2_000) { walkStarted.await() }
+        withTimeout(2_000) { job.cancelAndJoin() }
+
+        verify(exactly = 1) { snmpClient.close() }
+        assertFalse(events.any { it is TopologyDiscoveryEvent.Complete || it is TopologyDiscoveryEvent.Error })
+    }
+
+    @Test
+    fun `cancellation closes the client while a blocking GET is in progress`() = kotlinx.coroutines.runBlocking {
+        val getStarted = CompletableDeferred<Unit>()
+        val releaseGet = java.util.concurrent.CountDownLatch(1)
+        val closeCount = AtomicInteger()
+        val blockingClient = object : SnmpClient {
+            override suspend fun get(target: SnmpTarget, oid: String): String? {
+                getStarted.complete(Unit)
+                releaseGet.await()
+                return null
+            }
+
+            override suspend fun walk(
+                target: SnmpTarget,
+                oidPrefix: String,
+                budget: SnmpWalkBudget
+            ) = SnmpWalkResult(emptyMap())
+
+            override fun close() {
+                closeCount.incrementAndGet()
+                releaseGet.countDown()
+            }
+        }
+        val events = java.util.concurrent.ConcurrentLinkedQueue<TopologyDiscoveryEvent>()
+        val blockingRepository = TopologyDiscoveryRepositoryImpl(blockingClient)
+        val job = launch { blockingRepository.discover(defaultParams).collect(events::add) }
+
+        withTimeout(2_000) { getStarted.await() }
+        withTimeout(2_000) { job.cancelAndJoin() }
+
+        assertEquals(1, closeCount.get())
+        assertFalse(events.any { it is TopologyDiscoveryEvent.Complete || it is TopologyDiscoveryEvent.Error })
+    }
+
+    private fun cdpNeighbours(indices: List<Int>): Map<String, String> = buildMap {
+        val prefix = "1.3.6.1.4.1.9.9.23.1.2.1.1"
+        indices.forEach { lastOctet ->
+            val neighborIndex = lastOctet.toString()
+            put("$prefix.4.1.$neighborIndex", "192.168.1.$lastOctet")
+            put("$prefix.6.1.$neighborIndex", "edge-$lastOctet")
+        }
+    }
+
+    private suspend fun discoverWithCdp(
+        limits: TopologyResourceLimits,
+        neighbours: Map<String, String>,
+        maxHops: Int = 0
+    ): TopologyGraph {
+        val client = mockk<SnmpClient>(relaxed = true)
+        coEvery { client.get(any(), any()) } returns null
+        coEvery { client.walk(any(), any(), any()) } coAnswers {
+            if (secondArg<String>() == "1.3.6.1.4.1.9.9.23.1.2.1") {
+                SnmpWalkResult(neighbours)
+            } else {
+                SnmpWalkResult(emptyMap())
+            }
+        }
+        return TopologyDiscoveryRepositoryImpl(client, limits)
+            .discover(defaultParams.copy(maxHops = maxHops))
+            .toList()
+            .filterIsInstance<TopologyDiscoveryEvent.Complete>()
+            .single()
+            .graph
     }
 }

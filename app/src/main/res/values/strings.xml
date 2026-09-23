@@ -462,6 +462,7 @@
     <string name="topology_node_detail_neighbours">Neighbours</string>
     <string name="topology_error_retry">Retry</string>
     <string name="topology_fit_button_cd">Fit graph to screen</string>
+    <string name="topology_partial_results">Partial results. Some details were omitted because of resource limits or SNMP errors.</string>
     <string name="topology_vlan_label">%1$d: %2$s</string>
 
     <!-- TLS Inspector Screen -->

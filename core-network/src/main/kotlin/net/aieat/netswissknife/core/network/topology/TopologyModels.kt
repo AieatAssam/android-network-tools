@@ -7,6 +7,46 @@ enum class DeviceCapability { ROUTER, SWITCH, AP, PHONE, OTHER }
 enum class InterfaceStatus { UP, DOWN, UNKNOWN }
 enum class LinkProtocol { LLDP, CDP }
 
+enum class TopologyTruncationReason {
+    NODE_LIMIT,
+    LINK_LIMIT,
+    PENDING_TARGET_LIMIT,
+    INTERFACE_LIMIT,
+    VLAN_LIMIT,
+    WALK_ENTRY_LIMIT,
+    WALK_BYTE_LIMIT,
+    WALK_VALUE_LIMIT,
+    SCALAR_VALUE_LIMIT,
+    DEVICE_ENTRY_LIMIT,
+    DEVICE_BYTE_LIMIT,
+    GRAPH_BYTE_LIMIT
+}
+
+/** Resource ceilings enforced while discovery is producing results. */
+data class TopologyResourceLimits(
+    val maxNodes: Int = 256,
+    val maxLinks: Int = 512,
+    val maxPendingTargets: Int = 128,
+    val maxInterfacesPerNode: Int = 512,
+    val maxVlansPerNode: Int = 512,
+    val maxEntriesPerWalk: Int = 2_048,
+    val maxBytesPerWalk: Int = 256 * 1024,
+    val maxEntriesPerDevice: Int = 8_192,
+    val maxBytesPerDevice: Int = 1024 * 1024,
+    val maxBytesPerGraph: Int = 8 * 1024 * 1024,
+    val maxValueChars: Int = 4_096,
+    val maxRepetitions: Int = 10
+) {
+    init {
+        require(maxNodes in 1..512 && maxLinks in 1..2_048 && maxPendingTargets in 1..256)
+        require(maxInterfacesPerNode in 1..4_096 && maxVlansPerNode in 1..4_096)
+        require(maxEntriesPerWalk in 1..4_096 && maxBytesPerWalk in 1..1024 * 1024)
+        require(maxEntriesPerDevice in 1..16_384 && maxBytesPerDevice in 1..2 * 1024 * 1024)
+        require(maxBytesPerGraph in 1..16 * 1024 * 1024)
+        require(maxValueChars in 1..4_096 && maxRepetitions in 1..25)
+    }
+}
+
 data class TopologyParams(
     val targetIp: String,
     val snmpVersion: SnmpVersion = SnmpVersion.V2C,
@@ -59,5 +99,7 @@ data class TopologyGraph(
     val nodes: List<TopologyNode>,
     val links: List<TopologyLink>,
     val seedIp: String,
-    val queriedAt: Long
+    val queriedAt: Long,
+    val truncationReasons: Set<TopologyTruncationReason> = emptySet(),
+    val hadSnmpErrors: Boolean = false
 )

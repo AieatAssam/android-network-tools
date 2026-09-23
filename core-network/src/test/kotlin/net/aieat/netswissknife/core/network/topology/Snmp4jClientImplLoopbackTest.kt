@@ -1,11 +1,19 @@
 package net.aieat.netswissknife.core.network.topology
 
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.withTimeout
 import org.snmp4j.CommandResponder
 import org.snmp4j.CommandResponderEvent
 import org.snmp4j.MessageDispatcherImpl
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.snmp4j.PDU
 import org.snmp4j.ScopedPDU
@@ -26,8 +34,17 @@ import org.snmp4j.security.PrivAES256
 import org.snmp4j.security.PrivDES
 import org.snmp4j.smi.Address
 import org.snmp4j.smi.OctetString
+import org.snmp4j.smi.OID
+import org.snmp4j.smi.Null
+import org.snmp4j.smi.VariableBinding
 import org.snmp4j.smi.UdpAddress
 import org.snmp4j.transport.DefaultUdpTransportMapping
+import java.net.DatagramPacket
+import java.net.DatagramSocket
+import java.net.InetAddress
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 class Snmp4jClientImplLoopbackTest {
 
@@ -70,6 +87,135 @@ class Snmp4jClientImplLoopbackTest {
                 }
                 assertEquals(true, error.message!!.contains("community string"))
                 assertEquals(true, error.message!!.contains("127.0.0.1:$port"))
+            }
+        }
+    }
+
+    @Test
+    fun `v2c walk stops at its streaming row budget and reports truncation`() = runTest {
+        val params = TopologyParams(
+            targetIp = "127.0.0.1",
+            snmpVersion = SnmpVersion.V2C,
+            communityString = "public",
+            timeoutMs = 1_000,
+            retries = 0
+        )
+        val limits = TopologyResourceLimits(maxEntriesPerWalk = 3, maxBytesPerWalk = 16_384)
+        val bulkRequests = AtomicInteger()
+
+        withResponder(params, walkRowCount = 100, onBulkRequest = { bulkRequests.incrementAndGet() }) { port ->
+            Snmp4jClientImpl(params).use { client ->
+                val result = client.walk(
+                    SnmpTarget("127.0.0.1", port, params),
+                    "1.3.6.1.2.1.1.1",
+                    SnmpWalkBudget(limits)
+                )
+
+                assertEquals(3, result.entries.size)
+                assertEquals(setOf(TopologyTruncationReason.WALK_ENTRY_LIMIT), result.truncationReasons)
+                assertEquals(1, bulkRequests.get())
+            }
+        }
+    }
+
+    @Test
+    fun `v2c walk retains terminal page rows without claiming truncation`() = runTest {
+        val params = TopologyParams(
+            targetIp = "127.0.0.1",
+            snmpVersion = SnmpVersion.V2C,
+            timeoutMs = 1_000,
+            retries = 0
+        )
+        val bulkRequests = AtomicInteger()
+        val limits = TopologyResourceLimits(maxEntriesPerWalk = 10, maxBytesPerWalk = 16_384)
+
+        withResponder(params, walkRowCount = 3, onBulkRequest = { bulkRequests.incrementAndGet() }) { port ->
+            Snmp4jClientImpl(params).use { client ->
+                val result = client.walk(
+                    SnmpTarget("127.0.0.1", port, params),
+                    "1.3.6.1.2.1.1.1",
+                    SnmpWalkBudget(limits)
+                )
+
+                assertEquals(3, result.entries.size)
+                assertEquals(setOf(
+                    "1.3.6.1.2.1.1.1.1",
+                    "1.3.6.1.2.1.1.1.2",
+                    "1.3.6.1.2.1.1.1.3"
+                ), result.entries.keys)
+                assertTrue(result.truncationReasons.isEmpty())
+                assertEquals(1, bulkRequests.get())
+            }
+        }
+    }
+
+    @Test
+    fun `v2c walk cancellation returns without waiting for the SNMP timeout`() = runTest {
+        val params = TopologyParams(
+            targetIp = "192.0.2.1",
+            snmpVersion = SnmpVersion.V2C,
+            timeoutMs = 30_000,
+            retries = 0
+        )
+        val client = Snmp4jClientImpl(params)
+        try {
+            assertThrows(TimeoutCancellationException::class.java) {
+                kotlinx.coroutines.runBlocking {
+                    withTimeout(100) {
+                        client.walk(
+                            SnmpTarget(params.targetIp, params = params),
+                            "1.3.6.1.2.1.1.1",
+                            SnmpWalkBudget(TopologyResourceLimits())
+                        )
+                    }
+                }
+            }
+        } finally {
+            client.close()
+        }
+    }
+
+    @Test
+    fun `v2c GET cancellation promptly cancels its pending SNMP request`() = kotlinx.coroutines.runBlocking {
+        val params = TopologyParams(
+            targetIp = "127.0.0.1",
+            snmpVersion = SnmpVersion.V2C,
+            communityString = "public",
+            timeoutMs = 30_000,
+            retries = 0
+        )
+        DatagramSocket(0, InetAddress.getByName("127.0.0.1")).use { silentAgent ->
+            val requestReceived = CountDownLatch(1)
+            val receiveThread = Thread {
+                try {
+                    val bytes = ByteArray(65_535)
+                    silentAgent.receive(DatagramPacket(bytes, bytes.size))
+                    requestReceived.countDown()
+                } catch (_: Exception) {
+                    // Closing the socket after the assertion releases this thread.
+                }
+            }.apply { isDaemon = true; start() }
+            val client = Snmp4jClientImpl(params)
+            val requestScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+            val request = requestScope.async {
+                client.get(SnmpTarget("127.0.0.1", silentAgent.localPort, params), sysDescrOid)
+            }
+
+            try {
+                assertTrue(requestReceived.await(2, TimeUnit.SECONDS), "SNMP GET should reach the silent agent")
+                assertEquals(1, client.pendingAsyncRequestCount)
+                request.cancel()
+                val cancelledPromptly = withTimeout(2_000) {
+                    request.join()
+                    request.isCancelled
+                }
+                assertTrue(cancelledPromptly, "cancel should remove the pending SNMP request without its 30s timeout")
+                assertEquals(0, client.pendingAsyncRequestCount)
+            } finally {
+                client.close()
+                requestScope.cancel()
+                silentAgent.close()
+                receiveThread.join(1_000)
             }
         }
     }
@@ -133,6 +279,8 @@ class Snmp4jClientImplLoopbackTest {
     private suspend fun withResponder(
         params: TopologyParams,
         responderCommunity: String = params.communityString,
+        walkRowCount: Int = 0,
+        onBulkRequest: (() -> Unit)? = null,
         block: suspend (port: Int) -> Unit
     ) {
         SecurityProtocols.getInstance().apply {
@@ -168,6 +316,7 @@ class Snmp4jClientImplLoopbackTest {
                 responderEngineId
             )
         }
+        var nextWalkRow = 1
         responder.addCommandResponder(object : CommandResponder {
             override fun <A : Address> processPdu(event: CommandResponderEvent<A>) {
                 if (params.snmpVersion != SnmpVersion.V3 &&
@@ -183,8 +332,29 @@ class Snmp4jClientImplLoopbackTest {
                 response.setType(PDU.RESPONSE)
                 response.setErrorStatus(PDU.noError)
                 response.setErrorIndex(0)
-                response.getAll().forEach { binding ->
-                    binding.setVariable(OctetString("loopback-agent"))
+                if (walkRowCount > 0 && event.getPDU().type == PDU.GETBULK) {
+                    onBulkRequest?.invoke()
+                    response.clear()
+                    response.requestID = event.getPDU().requestID
+                    repeat(event.getPDU().maxRepetitions) {
+                        if (nextWalkRow <= walkRowCount) {
+                            response.add(
+                                VariableBinding(
+                                    OID("1.3.6.1.2.1.1.1.$nextWalkRow"),
+                                    OctetString("row-$nextWalkRow")
+                                )
+                            )
+                            nextWalkRow++
+                        } else {
+                            response.add(
+                                VariableBinding(OID("1.3.6.1.2.1.2.0"), Null.endOfMibView)
+                            )
+                        }
+                    }
+                } else {
+                    response.getAll().forEach { binding ->
+                        binding.setVariable(OctetString("loopback-agent"))
+                    }
                 }
                 event.getMessageDispatcher().returnResponsePdu(
                     event.getMessageProcessingModel(),

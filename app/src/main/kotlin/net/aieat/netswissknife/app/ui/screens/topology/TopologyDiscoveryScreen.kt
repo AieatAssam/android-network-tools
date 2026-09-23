@@ -482,6 +482,28 @@ private fun TopologyScreenContent(
                                     selectedNodeIp = state.selectedNodeIp,
                                     onNodeTap = onSelectNode
                                 )
+                                if (state.graph.truncationReasons.isNotEmpty() || state.graph.hadSnmpErrors) {
+                                    Surface(
+                                        modifier = Modifier
+                                            .align(Alignment.TopStart)
+                                            .padding(12.dp),
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = MaterialTheme.colorScheme.tertiaryContainer,
+                                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(Icons.Default.Info, contentDescription = null, modifier = Modifier.size(18.dp))
+                                            Spacer(Modifier.width(8.dp))
+                                            Text(
+                                                text = stringResource(R.string.topology_partial_results),
+                                                style = MaterialTheme.typography.bodySmall
+                                            )
+                                        }
+                                    }
+                                }
                                 FloatingActionButton(
                                     onClick = { },
                                     modifier = Modifier

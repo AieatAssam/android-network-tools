@@ -1,6 +1,8 @@
 package net.aieat.netswissknife.core.network.topology
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.InternalCoroutinesApi
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import org.snmp4j.CommunityTarget
 import org.snmp4j.PDU
@@ -25,11 +27,15 @@ import org.snmp4j.smi.Null
 import org.snmp4j.smi.OID
 import org.snmp4j.smi.OctetString
 import org.snmp4j.ScopedPDU
+import org.snmp4j.event.ResponseEvent
+import org.snmp4j.event.ResponseListener
 import org.snmp4j.smi.UdpAddress
 import org.snmp4j.smi.VariableBinding
 import org.snmp4j.transport.DefaultUdpTransportMapping
 import org.snmp4j.util.DefaultPDUFactory
 import org.snmp4j.util.TreeUtils
+import org.snmp4j.util.TreeEvent
+import org.snmp4j.util.TreeListener
 import java.net.InetAddress
 import java.util.concurrent.ConcurrentHashMap
 
@@ -48,7 +54,10 @@ class Snmp4jClientImpl(
     private val snmp = Snmp(transport)
     private val targetCache = ConcurrentHashMap<String, Target<*>>()
     private val authoritativeEngineIdCache = ConcurrentHashMap<String, ByteArray>()
+    @Volatile
     private var closed = false
+
+    internal val pendingAsyncRequestCount: Int get() = snmp.pendingAsyncRequestCount
 
     init {
         if (sessionParams.snmpVersion == SnmpVersion.V3) {
@@ -60,8 +69,9 @@ class Snmp4jClientImpl(
         transport.listen()
     }
 
-    override suspend fun get(target: SnmpTarget, oid: String): String? =
-        withContext(Dispatchers.IO) {
+    @OptIn(InternalCoroutinesApi::class)
+    override suspend fun get(target: SnmpTarget, oid: String): String? {
+        val (snmpTarget, pdu) = withContext(Dispatchers.IO) {
             check(!closed) { "SNMP client is closed" }
             val pdu = (if (sessionParams.snmpVersion == SnmpVersion.V3) ScopedPDU() else PDU()).apply {
                 type = PDU.GET
@@ -73,43 +83,109 @@ class Snmp4jClientImpl(
                 throw SnmpRequestException.unresolved(target, error)
             }
             ensureAuthoritativeEngineId(target)
-            val responseEvent = snmp.get(pdu, snmpTarget)
-            val response = responseEvent.response
-                ?: throw SnmpRequestException.noResponse(
-                    target = target,
-                    operation = "GET",
-                    oid = oid,
-                    timeoutMs = sessionParams.timeoutMs,
-                    cause = responseEvent.error
-                )
-            if (response.errorStatus != PDU.noError) {
-                throw SnmpRequestException.responseError(
-                    target = target,
-                    operation = "GET",
-                    oid = oid,
-                    status = response.errorStatusText,
-                    index = response.errorIndex
-                )
-            }
-            val variable = response.getVariable(OID(oid)) ?: return@withContext null
-            if (variable is Null) null else variable.toString()
+            snmpTarget to pdu
         }
 
-    override suspend fun walk(target: SnmpTarget, oidPrefix: String): Map<String, String> =
-        withContext(Dispatchers.IO) {
+        return suspendCancellableCoroutine { continuation ->
+            val requestLock = Any()
+            var requestSubmitted = false
+            val listener = object : ResponseListener {
+                override fun <A : org.snmp4j.smi.Address> onResponse(event: ResponseEvent<A>) {
+                    try {
+                        val value = parseGetResponse(target, oid, event)
+                        val token = continuation.tryResume(value) ?: return
+                        continuation.completeResume(token)
+                    } catch (error: Exception) {
+                        val token = continuation.tryResumeWithException(error) ?: return
+                        continuation.completeResume(token)
+                    }
+                }
+            }
+
+            continuation.invokeOnCancellation {
+                synchronized(requestLock) {
+                    if (requestSubmitted) snmp.cancel(pdu, listener)
+                }
+            }
+            synchronized(requestLock) {
+                if (!continuation.isActive) return@suspendCancellableCoroutine
+                try {
+                    snmp.get(pdu, snmpTarget, null, listener)
+                    requestSubmitted = true
+                } catch (error: Exception) {
+                    val token = continuation.tryResumeWithException(error) ?: return@suspendCancellableCoroutine
+                    continuation.completeResume(token)
+                }
+            }
+        }
+    }
+
+    private fun parseGetResponse(
+        target: SnmpTarget,
+        oid: String,
+        responseEvent: ResponseEvent<*>
+    ): String? {
+        val response = responseEvent.response
+            ?: throw SnmpRequestException.noResponse(
+                target = target,
+                operation = "GET",
+                oid = oid,
+                timeoutMs = sessionParams.timeoutMs,
+                cause = responseEvent.error
+            )
+        if (response.errorStatus != PDU.noError) {
+            throw SnmpRequestException.responseError(
+                target = target,
+                operation = "GET",
+                oid = oid,
+                status = response.errorStatusText,
+                index = response.errorIndex
+            )
+        }
+        val variable = response.getVariable(OID(oid)) ?: return null
+        return if (variable is Null) null else variable.toString()
+    }
+
+    @OptIn(InternalCoroutinesApi::class)
+    override suspend fun walk(
+        target: SnmpTarget,
+        oidPrefix: String,
+        budget: SnmpWalkBudget
+    ): SnmpWalkResult {
+        val (snmpTarget, treeUtils) = withContext(Dispatchers.IO) {
             check(!closed) { "SNMP client is closed" }
-            val results = linkedMapOf<String, String>()
             val treeUtils = TreeUtils(snmp, DefaultPDUFactory())
+            treeUtils.maxRepetitions = budget.maxRepetitions
             val snmpTarget = try {
                 targetFor(target)
             } catch (error: Exception) {
                 throw SnmpRequestException.unresolved(target, error)
             }
             ensureAuthoritativeEngineId(target)
-            val events = treeUtils.getSubtree(snmpTarget, OID(oidPrefix))
-            results.putAll(collectWalkResults(events))
-            results
+            snmpTarget to treeUtils
         }
+
+        return suspendCancellableCoroutine { continuation ->
+            val collector = BoundedSnmpWalkCollector(budget, oidPrefix)
+            val listener = object : TreeListener {
+                override fun next(event: TreeEvent): Boolean = collector.next(event)
+
+                override fun finished(event: TreeEvent) {
+                    collector.finished(event)
+                    val token = continuation.tryResume(collector.result()) ?: return
+                    continuation.completeResume(token)
+                }
+
+                override fun isFinished(): Boolean = collector.isFinished() || !continuation.isActive
+            }
+
+            try {
+                treeUtils.getSubtree(snmpTarget, OID(oidPrefix), null, listener)
+            } catch (error: Exception) {
+                if (continuation.isActive) continuation.resumeWith(Result.failure(error))
+            }
+        }
+    }
 
     override fun close() {
         if (closed) return
@@ -214,14 +290,61 @@ class Snmp4jClientImpl(
     }
 }
 
-internal fun collectWalkResults(events: List<org.snmp4j.util.TreeEvent>?): Map<String, String> {
-    val results = linkedMapOf<String, String>()
-    for (event in events.orEmpty()) {
-        if (event.isError) break
-        event.variableBindings?.forEach { variableBinding ->
-            val value = variableBinding.variable
-            if (value !is Null) results[variableBinding.oid.toString()] = value.toString()
+internal class BoundedSnmpWalkCollector(
+    private val budget: SnmpWalkBudget,
+    private val rootOidPrefix: String? = null
+) : TreeListener {
+    private val results = linkedMapOf<String, String>()
+    private val truncationReasons = mutableSetOf<TopologyTruncationReason>()
+    private var walkBytes = 0
+    private var completed = false
+    private var stoppedByLimit = false
+    private var hadError = false
+
+    override fun next(event: TreeEvent): Boolean = collect(event)
+
+    private fun collect(event: TreeEvent): Boolean {
+        if (event.isError) {
+            hadError = true
+            return false
         }
+        for (binding in event.variableBindings.orEmpty()) {
+            if (binding.variable is Null) continue
+            val oid = binding.oid.toString()
+            if (!isWithinRoot(oid)) continue
+            if (oid in results) continue
+            val value = binding.variable.toString()
+            when (val reservation = budget.tryReserve(oid, value, results.size, walkBytes)) {
+                is SnmpWalkBudget.Reservation.Accepted -> {
+                    results[oid] = value
+                    walkBytes += reservation.bytes
+                }
+                is SnmpWalkBudget.Reservation.Rejected -> {
+                    truncationReasons += reservation.reason
+                    stoppedByLimit = true
+                    completed = true
+                    return false
+                }
+            }
+        }
+        return true
     }
-    return results
+
+    override fun finished(event: TreeEvent) {
+        if (!stoppedByLimit) collect(event)
+        completed = true
+    }
+
+    override fun isFinished(): Boolean = completed
+
+    fun result(): SnmpWalkResult = SnmpWalkResult(
+        entries = results.toMap(),
+        truncationReasons = truncationReasons.toSet(),
+        hadError = hadError
+    )
+
+    private fun isWithinRoot(oid: String): Boolean {
+        val prefix = rootOidPrefix ?: return true
+        return oid == prefix || oid.startsWith("$prefix.")
+    }
 }

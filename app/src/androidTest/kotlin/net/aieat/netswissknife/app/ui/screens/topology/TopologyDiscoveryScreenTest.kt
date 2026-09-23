@@ -19,6 +19,7 @@ import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.theme.NetSwissKnifeTheme
 import net.aieat.netswissknife.core.network.topology.TopologyGraph
 import net.aieat.netswissknife.core.network.topology.TopologyNode
+import net.aieat.netswissknife.core.network.topology.TopologyTruncationReason
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -226,6 +227,48 @@ class TopologyDiscoveryScreenTest {
         composeRule
             .onNodeWithText(context.getString(R.string.topology_node_detail_system), ignoreCase = true)
             .performScrollTo()
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun doneState_truncatedGraph_showsPartialResultsNotice() {
+        val graph = TopologyGraph(
+            nodes = listOf(fakeNode("10.0.0.1", "core-switch")),
+            links = emptyList(),
+            seedIp = "10.0.0.1",
+            queriedAt = 0L,
+            truncationReasons = setOf(TopologyTruncationReason.LINK_LIMIT)
+        )
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                TopologyDiscoveryScreen(viewModel = fakeViewModel(TopologyUiState.Done(graph, selectedNodeIp = null)))
+            }
+        }
+        composeRule.mainClock.advanceTimeBy(500L)
+
+        composeRule
+            .onNodeWithText(context.getString(R.string.topology_partial_results))
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun doneState_walkErrors_showPartialResultsNotice() {
+        val graph = TopologyGraph(
+            nodes = listOf(fakeNode("10.0.0.1", "core-switch")),
+            links = emptyList(),
+            seedIp = "10.0.0.1",
+            queriedAt = 0L,
+            hadSnmpErrors = true
+        )
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                TopologyDiscoveryScreen(viewModel = fakeViewModel(TopologyUiState.Done(graph, selectedNodeIp = null)))
+            }
+        }
+        composeRule.mainClock.advanceTimeBy(500L)
+
+        composeRule
+            .onNodeWithText(context.getString(R.string.topology_partial_results))
             .assertIsDisplayed()
     }
 
