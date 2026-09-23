@@ -3,17 +3,17 @@ package net.aieat.netswissknife.core.network.lan
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelAndJoin
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeout
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 class UdpExchangeTest {
     @Test
@@ -46,11 +46,11 @@ class UdpExchangeTest {
     fun `correlated receive observes cancellation before its deadline`() = runTest {
         DatagramSocket(0, InetAddress.getByName("127.0.0.1")).use { server ->
             server.soTimeout = 2_000
-            val requestReceived = CompletableDeferred<Unit>()
+            val requestReceived = CountDownLatch(1)
             val receiver = launch(Dispatchers.IO) {
                 val request = DatagramPacket(ByteArray(8), 8)
                 server.receive(request)
-                requestReceived.complete(Unit)
+                requestReceived.countDown()
             }
             val exchange = async(Dispatchers.IO) {
                 DefaultUdpExchange.exchangeCorrelated(
@@ -62,7 +62,7 @@ class UdpExchangeTest {
                 )
             }
 
-            withTimeout(2_000) { requestReceived.await() }
+            assertTrue(requestReceived.await(2, TimeUnit.SECONDS))
             exchange.cancelAndJoin()
             receiver.cancelAndJoin()
             assertTrue(exchange.isCancelled)
