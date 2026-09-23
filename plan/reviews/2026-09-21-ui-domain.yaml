@@ -92,22 +92,25 @@ findings:
     title: "Stopping continuous ping can publish a CSV before its writer drains"
     evidence:
       - file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/ping/PingViewModel.kt
-        line: 139
-        detail: "onStop() cancels pingJob and immediately calls finalizeContinuousSession() for a continuous run. The session logger and its Channel consumer are children launched inside that same pingJob."
+        lines: "39-82, 206-223"
+        detail: "ContinuousPingLogWriter now runs independently; onStop cancels and joins the packet producer, then closes and joins the writer before publishing Finished."
       - file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/ping/PingViewModel.kt
-        line: 279
-        detail: "Each packet is enqueued with trySend() into an UNLIMITED channel, while the IO writer appends asynchronously. Cancellation closes the writer's parent before queued entries are guaranteed to be processed."
+        lines: "400-420, 428-475"
+        detail: "Natural completion also drains before finalization. Clear, restart, validation/error, and ViewModel teardown invalidate the old session and clean up its file after the writer is stopped or drained."
       - file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/ping/PingViewModel.kt
-        line: 336
-        detail: "finalizeContinuousSession() exposes the temp file in Finished.sessionLogFile immediately after cancellation, without joining a writer job or waiting for logger.flush/drain."
+        lines: "428-445"
+        detail: "Finished.sessionLogFile is exposed only after writer completion; empty or unavailable logs are deleted and are not shareable."
+      - file: app/src/test/kotlin/net/aieat/netswissknife/app/ui/screens/ping/PingViewModelTest.kt
+        lines: "339-412, 434-450"
+        detail: "Blocked-writer tests verify Stop and natural completion wait for all queued sequence rows, zero-packet Stop deletes the file, and validation errors delete their file."
       - file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/PingScreen.kt
         line: 795
         detail: "The Share action reads Finished.sessionLogFile directly and shares any non-empty text, so it can observe a truncated CSV after Stop."
     impact: "A user stopping a continuous ping can receive a partial or header-only export even though the on-screen packet window contains more observations; lost rows make exported diagnostics unreliable."
     recommended_action: "Give the writer an independently managed job, stop packet production first, close the channel, await writer completion, then expose Finished.sessionLogFile; alternatively make finalization suspend until the logger drains. Add a deterministic test with a blocked writer and queued packets."
-    validation: "Stop after multiple packets with a controlled writer/channel, await the Finished state, and assert the shared CSV contains every packet sequence emitted before Stop; also cover zero-packet cleanup."
+    validation: "Passed ./gradlew :app:testDebugUnitTest --tests '*PingViewModelTest' --no-daemon --no-parallel (37 tests, 0 failures/errors). Blocked-writer tests cover Stop and natural completion with three queued packets and verify CSV sequences 1-3 before Finished; zero-packet and validation-error cleanup are asserted. Independent QA and adversarial reviews found no closure blocker."
     related_phase: P04
-    status: todo
+    status: done
 
   - id: RUI006
     severity: medium

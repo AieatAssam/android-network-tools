@@ -10,8 +10,10 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.job
 import kotlinx.coroutines.runBlocking
@@ -51,6 +53,12 @@ class PingViewModelTest {
     private lateinit var recentHostsRepository: RecentHostsRepository
     private lateinit var viewModel: PingViewModel
     private var networkAvailable = true
+
+    private suspend fun awaitFinished(): PingUiState.Finished =
+        viewModel.uiState.first { it is PingUiState.Finished } as PingUiState.Finished
+
+    private suspend fun awaitError(): PingUiState.Error =
+        viewModel.uiState.first { it is PingUiState.Error } as PingUiState.Error
 
     private val successPacket = PingPacketResult(
         sequence = 1, host = "example.com", status = PingStatus.SUCCESS, rtTimeMs = 15L
@@ -315,7 +323,7 @@ class PingViewModelTest {
             coEvery { continuousPingUseCase(any()) } returns neverEndingFlow()
             viewModel.startPing()
             viewModel.onStop()
-            assertTrue(viewModel.uiState.value is PingUiState.Finished)
+            assertTrue(awaitFinished().result.packets.isNotEmpty())
         }
 
         @Test
@@ -323,8 +331,84 @@ class PingViewModelTest {
             coEvery { continuousPingUseCase(any()) } returns neverEndingFlow()
             viewModel.startPing()
             viewModel.onStop()
-            val state = viewModel.uiState.value as PingUiState.Finished
+            val state = awaitFinished()
             assertNotNull(state.sessionLogFile)
+        }
+
+        @Test
+        fun `stop waits for the writer to drain every queued CSV row`() = runTest {
+            val appendStarted = CompletableDeferred<Unit>()
+            val releaseAppend = CompletableDeferred<Unit>()
+            val allPacketsEmitted = CompletableDeferred<Unit>()
+            viewModel.sessionLogAppendHook = { logger, sequence, packet ->
+                if (sequence == 1) {
+                    appendStarted.complete(Unit)
+                    releaseAppend.await()
+                }
+                logger.append(sequence, packet)
+            }
+            coEvery { continuousPingUseCase(any()) } returns flow {
+                repeat(3) { i -> emit(PingFlowResult.Packet(successPacket.copy(sequence = i + 1))) }
+                allPacketsEmitted.complete(Unit)
+                suspendCancellableCoroutine<Nothing> { }
+            }
+
+            viewModel.startPing()
+            appendStarted.await()
+            allPacketsEmitted.await()
+            assertEquals(3, (viewModel.uiState.value as PingUiState.Running).pingsSent)
+
+            viewModel.onStop()
+
+            assertTrue(viewModel.uiState.value is PingUiState.Running)
+            releaseAppend.complete(Unit)
+            val finished = awaitFinished()
+            val csvLines = finished.sessionLogFile!!.readLines()
+            assertEquals("seq,timestamp_ms,latency_ms,status,ttl,bytes", csvLines.first())
+            assertEquals(listOf("1", "2", "3"), csvLines.drop(1).map { it.substringBefore(',') })
+        }
+
+        @Test
+        fun `natural completion waits for CSV writes before publishing Finished`() = runTest {
+            val appendStarted = CompletableDeferred<Unit>()
+            val releaseAppend = CompletableDeferred<Unit>()
+            viewModel.sessionLogAppendHook = { logger, sequence, packet ->
+                if (sequence == 1) {
+                    appendStarted.complete(Unit)
+                    releaseAppend.await()
+                }
+                logger.append(sequence, packet)
+            }
+            coEvery { continuousPingUseCase(any()) } returns flow {
+                repeat(3) { i -> emit(PingFlowResult.Packet(successPacket.copy(sequence = i + 1))) }
+            }
+
+            viewModel.startPing()
+            appendStarted.await()
+            assertTrue(viewModel.uiState.value is PingUiState.Running)
+
+            releaseAppend.complete(Unit)
+            val finished = awaitFinished()
+            assertEquals(
+                listOf("1", "2", "3"),
+                finished.sessionLogFile!!.readLines().drop(1).map { it.substringBefore(',') }
+            )
+        }
+
+        @Test
+        fun `stopping with no packets removes the empty session file`() = runTest {
+            val logFile = java.io.File.createTempFile("ping_empty_test_", ".csv")
+            viewModel.sessionLogFileFactory = { logFile }
+            coEvery { continuousPingUseCase(any()) } returns flow {
+                suspendCancellableCoroutine<Nothing> { }
+            }
+
+            viewModel.startPing()
+            viewModel.onStop()
+
+            val finished = awaitFinished()
+            assertNull(finished.sessionLogFile)
+            assertFalse(logFile.exists())
         }
 
         @Test
@@ -333,7 +417,7 @@ class PingViewModelTest {
             viewModel.startPing()
             assertTrue(viewModel.uiState.value is PingUiState.Running)
             viewModel.onLifecycleStop()
-            assertTrue(viewModel.uiState.value is PingUiState.Finished)
+            assertTrue(awaitFinished().result.packets.isNotEmpty())
         }
 
         @Test
@@ -341,18 +425,22 @@ class PingViewModelTest {
             coEvery { continuousPingUseCase(any()) } returns neverEndingFlow()
             viewModel.startPing()
             viewModel.onLifecycleStop()
-            val stateAfterFirst = viewModel.uiState.value
             viewModel.onLifecycleStop() // second call — must not crash or change state
-            assertEquals(stateAfterFirst, viewModel.uiState.value)
+            val finished = awaitFinished()
+            viewModel.onLifecycleStop()
+            assertEquals(finished, viewModel.uiState.value)
         }
 
         @Test
         fun `ValidationError clears session file and shows Error state`() = runTest {
+            val logFile = java.io.File.createTempFile("ping_validation_test_", ".csv")
+            viewModel.sessionLogFileFactory = { logFile }
             coEvery { continuousPingUseCase(any()) } returns flowOf(
                 PingFlowResult.ValidationError("invalid")
             )
             viewModel.startPing()
-            assertTrue(viewModel.uiState.value is PingUiState.Error)
+            assertEquals("invalid", awaitError().message)
+            assertFalse(logFile.exists())
         }
 
         @Test
@@ -371,7 +459,7 @@ class PingViewModelTest {
 
             viewModel.startPing()
 
-            assertEquals(PingUiState.Error("socket closed"), viewModel.uiState.value)
+            assertEquals("socket closed", awaitError().message)
         }
 
         @Test
@@ -379,7 +467,7 @@ class PingViewModelTest {
             coEvery { continuousPingUseCase(any()) } returns neverEndingFlow()
             viewModel.startPing()
             viewModel.onStop()
-            val firstFile = (viewModel.uiState.value as PingUiState.Finished).sessionLogFile
+            val firstFile = awaitFinished().sessionLogFile
             assertNotNull(firstFile)
 
             // Start a second session
@@ -394,7 +482,7 @@ class PingViewModelTest {
             coEvery { continuousPingUseCase(any()) } returns neverEndingFlow()
             viewModel.startPing()
             viewModel.onStop()
-            val logFile = (viewModel.uiState.value as PingUiState.Finished).sessionLogFile
+            val logFile = awaitFinished().sessionLogFile
             viewModel.onClearResults()
             assertTrue(viewModel.uiState.value is PingUiState.Idle)
             assertTrue(logFile?.exists() == false)
@@ -422,7 +510,7 @@ class PingViewModelTest {
             coVerify {
                 recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_PING_HOSTS, "example.com")
             }
-            assertEquals("example.com", (viewModel.uiState.value as PingUiState.Finished).result.host)
+            assertEquals("example.com", awaitFinished().result.host)
         }
     }
 

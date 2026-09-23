@@ -5,6 +5,9 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -32,6 +35,63 @@ import net.aieat.netswissknife.core.network.ping.PingEngineKind
 import net.aieat.netswissknife.core.network.HostValidator
 import java.io.File
 import javax.inject.Inject
+
+internal class ContinuousPingLogWriter(
+    scope: CoroutineScope,
+    private val logger: PingSessionLogger,
+    private val appendPacket: suspend (PingSessionLogger, Int, PingPacketResult) -> Unit
+) {
+    private val packets = Channel<Pair<Int, PingPacketResult>>(Channel.UNLIMITED)
+
+    @Volatile
+    private var initializationFailed = false
+
+    private val writerJob = scope.launch(Dispatchers.IO) {
+        try {
+            logger.init()
+            for ((sequence, packet) in packets) {
+                try {
+                    appendPacket(logger, sequence, packet)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    // Logging is best-effort; the live ping results remain available.
+                }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            initializationFailed = true
+            packets.close()
+        }
+    }
+
+    fun append(sequence: Int, packet: PingPacketResult) {
+        packets.trySend(sequence to packet)
+    }
+
+    suspend fun closeAndJoin(): Boolean {
+        packets.close()
+        writerJob.join()
+        return !initializationFailed && !writerJob.isCancelled
+    }
+
+    fun cancel() {
+        packets.cancel()
+        writerJob.cancel()
+    }
+}
+
+private class ContinuousPingSession(
+    val file: File,
+    val logWriter: ContinuousPingLogWriter
+) {
+    var producerJob: Job? = null
+    var stopRequested: Boolean = false
+}
+
+private class ContinuousPingValidationException(val validationMessage: String) :
+    RuntimeException(validationMessage)
 
 /** All possible states for the Ping UI. */
 sealed interface PingUiState {
@@ -96,7 +156,14 @@ class PingViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private var pingJob: Job? = null
-    private var sessionLogFile: File? = null
+    private var continuousSession: ContinuousPingSession? = null
+    private val retiringSessions = mutableSetOf<ContinuousPingSession>()
+
+    internal var sessionLogFileFactory: () -> File = {
+        File.createTempFile("ping_session_", ".csv")
+    }
+    internal var sessionLogAppendHook: suspend (PingSessionLogger, Int, PingPacketResult) -> Unit =
+        { logger, sequence, packet -> logger.append(sequence, packet) }
 
     init {
         viewModelScope.launch {
@@ -132,18 +199,34 @@ class PingViewModel @Inject constructor(
     fun onClearResults() {
         pingJob?.cancel()
         pingJob = null
-        cleanupSessionFile()
+        discardContinuousSession()
         _uiState.value = PingUiState.Idle
     }
 
     fun onStop() {
+        val current = _uiState.value
+        val session = continuousSession
+        if (current is PingUiState.Running && current.isContinuous && session != null) {
+            if (session.stopRequested) return
+            session.stopRequested = true
+            val producer = session.producerJob
+            producer?.cancel()
+            if (pingJob === producer) pingJob = null
+            viewModelScope.launch {
+                producer?.join()
+                val logAvailable = session.logWriter.closeAndJoin()
+                val latest = _uiState.value
+                if (continuousSession === session && latest is PingUiState.Running && latest.isContinuous) {
+                    finalizeContinuousSession(latest, session, logAvailable)
+                }
+            }
+            return
+        }
+
         pingJob?.cancel()
         pingJob = null
-        val current = _uiState.value
         if (current is PingUiState.Running) {
-            if (current.isContinuous) {
-                finalizeContinuousSession(current)
-            } else if (current.packets.isNotEmpty()) {
+            if (current.packets.isNotEmpty()) {
                 _uiState.value = PingUiState.Finished(
                     buildResult(current.host, current.packets, current.totalCount)
                 )
@@ -182,6 +265,8 @@ class PingViewModel @Inject constructor(
 
     private fun startNormalPing() {
         pingJob?.cancel()
+        pingJob = null
+        discardContinuousSession()
 
         if (!linkInfoProvider.hasValidatedNetwork()) {
             _uiState.value = PingUiState.Error(NO_NETWORK_CONNECTION)
@@ -247,7 +332,8 @@ class PingViewModel @Inject constructor(
 
     private fun startContinuousPing() {
         pingJob?.cancel()
-        cleanupSessionFile()
+        pingJob = null
+        discardContinuousSession()
 
         if (!linkInfoProvider.hasValidatedNetwork()) {
             _uiState.value = PingUiState.Error(NO_NETWORK_CONNECTION)
@@ -263,26 +349,24 @@ class PingViewModel @Inject constructor(
             ttl = _ttl.value
         )
 
-        val logFile = File.createTempFile("ping_session_", ".csv")
-        sessionLogFile = logFile
+        val logFile = sessionLogFileFactory()
         val logger = PingSessionLogger(logFile)
+        val session = ContinuousPingSession(
+            file = logFile,
+            logWriter = ContinuousPingLogWriter(
+                scope = viewModelScope,
+                logger = logger,
+                appendPacket = sessionLogAppendHook
+            )
+        )
+        continuousSession = session
 
         _uiState.value = PingUiState.Running(
             host = trimmedHost, packets = emptyList(), totalCount = 0,
             isContinuous = true, pingsSent = 0
         )
 
-        pingJob = viewModelScope.launch {
-            // File writes are dispatched to IO via a channel so the collect loop
-            // is never blocked on disk. The channel is cancelled with the pingJob.
-            val logChannel = Channel<Pair<Int, PingPacketResult>>(Channel.UNLIMITED)
-            launch(Dispatchers.IO) {
-                logger.init()
-                for ((seq, packet) in logChannel) {
-                    runCatching { logger.append(seq, packet) }
-                }
-            }
-
+        val producer = viewModelScope.launch(start = CoroutineStart.LAZY) {
             val window = ArrayDeque<PingPacketResult>(ROLLING_WINDOW)
             var seq = 0
             var savedToRecents = false
@@ -291,10 +375,7 @@ class PingViewModel @Inject constructor(
                 continuousPingUseCase(params).collect { result ->
                     when (result) {
                         is PingFlowResult.ValidationError -> {
-                            logChannel.close()
-                            cleanupSessionFile()
-                            _uiState.value = PingUiState.Error(result.message)
-                            return@collect
+                            throw ContinuousPingValidationException(result.message)
                         }
                         is PingFlowResult.Packet -> {
                             seq++
@@ -302,7 +383,7 @@ class PingViewModel @Inject constructor(
                                 savedToRecents = true
                                 recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_PING_HOSTS, trimmedHost)
                             }
-                            logChannel.trySend(Pair(seq, result.packet))
+                            session.logWriter.append(seq, result.packet)
                             if (window.size >= ROLLING_WINDOW) window.removeFirst()
                             window.addLast(result.packet)
                             _uiState.value = PingUiState.Running(
@@ -316,42 +397,82 @@ class PingViewModel @Inject constructor(
                     }
                 }
 
-                logChannel.close()
+                val logAvailable = session.logWriter.closeAndJoin()
                 val current = _uiState.value
-                if (current is PingUiState.Running && current.isContinuous) {
-                    finalizeContinuousSession(current)
+                if (continuousSession === session && current is PingUiState.Running && current.isContinuous) {
+                    finalizeContinuousSession(current, session, logAvailable)
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
-                logChannel.close()
                 throw e
+            } catch (e: ContinuousPingValidationException) {
+                session.logWriter.closeAndJoin()
+                if (continuousSession === session) {
+                    continuousSession = null
+                    session.file.delete()
+                    _uiState.value = PingUiState.Error(e.validationMessage)
+                }
             } catch (e: Exception) {
-                logChannel.close()
-                cleanupSessionFile()
-                _uiState.value = PingUiState.Error(e.message ?: "Ping failed")
+                session.logWriter.closeAndJoin()
+                if (continuousSession === session) {
+                    continuousSession = null
+                    session.file.delete()
+                    _uiState.value = PingUiState.Error(e.message ?: "Ping failed")
+                }
             }
         }
+        session.producerJob = producer
+        pingJob = producer
+        producer.start()
     }
 
-    private fun finalizeContinuousSession(current: PingUiState.Running) {
-        val file = sessionLogFile
+    private fun finalizeContinuousSession(
+        current: PingUiState.Running,
+        session: ContinuousPingSession,
+        logAvailable: Boolean
+    ) {
+        if (continuousSession !== session) return
         val pingsSent = current.pingsSent
         val result = buildResult(current.host, current.packets, pingsSent)
+        val logFile = session.file.takeIf { pingsSent > 0 && logAvailable }
         _uiState.value = PingUiState.Finished(
             result = result,
-            sessionLogFile = if (pingsSent > 0) file else null
+            sessionLogFile = logFile
         )
-        if (pingsSent == 0) cleanupSessionFile()
+        if (logFile == null) {
+            continuousSession = null
+            session.file.delete()
+        }
     }
 
     // ── Cleanup ──────────────────────────────────────────────────────────────
 
-    private fun cleanupSessionFile() {
-        sessionLogFile?.delete()
-        sessionLogFile = null
+    private fun discardContinuousSession() {
+        val session = continuousSession ?: return
+        continuousSession = null
+        session.stopRequested = true
+        retiringSessions += session
+        val producer = session.producerJob
+        producer?.cancel()
+        viewModelScope.launch {
+            try {
+                producer?.join()
+                session.logWriter.closeAndJoin()
+            } finally {
+                session.file.delete()
+                retiringSessions.remove(session)
+            }
+        }
     }
 
     override fun onCleared() {
-        cleanupSessionFile()
+        val sessions = retiringSessions.toList() + listOfNotNull(continuousSession)
+        continuousSession = null
+        sessions.forEach { session ->
+            session.producerJob?.cancel()
+            session.logWriter.cancel()
+            session.file.delete()
+        }
+        retiringSessions.clear()
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
