@@ -19,6 +19,8 @@ import kotlinx.coroutines.withTimeout
 import net.aieat.netswissknife.app.ui.screens.mdns.MdnsDiscoveryViewModel
 import net.aieat.netswissknife.core.domain.MdnsDiscoveryUseCase
 import net.aieat.netswissknife.core.network.mdns.MdnsUpdate
+import net.aieat.netswissknife.core.network.net.NetworkBinder
+import net.aieat.netswissknife.core.network.net.NoOpNetworkBinder
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -32,9 +34,13 @@ import java.io.IOException
 import java.net.DatagramPacket
 import java.net.InetAddress
 import java.net.InetSocketAddress
+import java.net.SocketException
 import java.net.SocketTimeoutException
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import io.mockk.just
+import io.mockk.Runs
+import io.mockk.verify
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class MdnsRepositoryImplIoTest {
@@ -124,16 +130,52 @@ class MdnsRepositoryImplIoTest {
         assertTrue(fixture.lock.released.get())
     }
 
+    @Test
+    fun `busy multicast port falls back to ephemeral port and sends QU queries`() = runBlocking {
+        val fixture = fixture(
+            bind = { address ->
+                if (address.port == 5353) throw SocketException("Address already in use")
+            },
+            receive = {
+                Thread.sleep(5)
+                throw SocketTimeoutException("quiet network")
+            }
+        )
+
+        fixture.repository.discover(timeoutMs = 20).toList()
+
+        assertEquals(listOf(5353, 0), fixture.socket.bindPorts)
+        assertTrue(fixture.socket.sentQueries.isNotEmpty())
+        assertTrue(fixture.socket.sentQueries.all { questionClass(it) == 0x8001 })
+    }
+
+    @Test
+    fun `selected network is bound before local port and multicast membership`() = runBlocking {
+        val binder = mockk<NetworkBinder>()
+        val selectedInterface = mockk<java.net.NetworkInterface>()
+        every { binder.localInterface() } returns selectedInterface
+        every { binder.bind(any<java.net.DatagramSocket>()) } just Runs
+        val fixture = fixture(networkBinder = binder)
+
+        fixture.repository.discover(timeoutMs = 10).toList()
+
+        assertEquals(listOf("network", "interface", "bind", "join"), fixture.socket.setupOrder)
+        assertEquals(selectedInterface, fixture.socket.joinedInterface)
+        verify(exactly = 1) { binder.bind(any<java.net.DatagramSocket>()) }
+    }
+
     private fun fixture(
         send: () -> Unit = {},
-        receive: (DatagramPacket) -> Unit = { throw SocketTimeoutException("quiet network") }
+        bind: (InetSocketAddress) -> Unit = {},
+        receive: (DatagramPacket) -> Unit = { throw SocketTimeoutException("quiet network") },
+        networkBinder: NetworkBinder = NoOpNetworkBinder,
     ): Fixture {
         val context = mockk<Context>()
         val wifiManager = mockk<WifiManager>()
         every { context.getSystemService(Context.WIFI_SERVICE) } returns wifiManager
-        val socket = ScriptedMdnsSocket(send, receive)
+        val socket = ScriptedMdnsSocket(send, bind, receive)
         val lock = TrackingLock()
-        val repository = MdnsRepositoryImpl(context).apply {
+        val repository = MdnsRepositoryImpl(context, networkBinder).apply {
             socketFactory = { socket }
             multicastLockFactory = { lock }
         }
@@ -148,18 +190,47 @@ class MdnsRepositoryImplIoTest {
 
     private class ScriptedMdnsSocket(
         private val sendAction: () -> Unit,
+        private val bindAction: (InetSocketAddress) -> Unit,
         private val receiveAction: (DatagramPacket) -> Unit
     ) : MdnsSocket {
         val closed = AtomicBoolean(false)
+        val bindPorts = mutableListOf<Int>()
+        val sentQueries = mutableListOf<ByteArray>()
+        val setupOrder = mutableListOf<String>()
+        var joinedInterface: java.net.NetworkInterface? = null
         override var reuseAddress: Boolean = false
         override var soTimeout: Int = 0
-        override fun bind(address: InetSocketAddress) = Unit
+        override var networkInterface: java.net.NetworkInterface? = null
+            set(value) {
+                field = value
+                setupOrder += "interface"
+            }
+        override fun bindToNetwork(binder: NetworkBinder) {
+            setupOrder += "network"
+            binder.bind(mockk<java.net.DatagramSocket>())
+        }
+        override fun bind(address: InetSocketAddress) {
+            setupOrder += "bind"
+            bindPorts += address.port
+            bindAction(address)
+        }
         override fun joinGroup(address: InetAddress) = Unit
+        override fun joinGroup(address: InetSocketAddress, networkInterface: java.net.NetworkInterface?) {
+            setupOrder += "join"
+            joinedInterface = networkInterface
+        }
         override fun leaveGroup(address: InetAddress) = Unit
-        override fun send(packet: DatagramPacket) = sendAction()
+        override fun send(packet: DatagramPacket) {
+            sendAction()
+            sentQueries += packet.data.copyOfRange(packet.offset, packet.offset + packet.length)
+        }
         override fun receive(packet: DatagramPacket) = receiveAction(packet)
         override fun close() { closed.set(true) }
     }
+
+    private fun questionClass(packet: ByteArray): Int =
+        ((packet[packet.lastIndex - 1].toInt() and 0xFF) shl 8) or
+            (packet[packet.lastIndex].toInt() and 0xFF)
 
     private fun serviceTypeResponse(): ByteArray {
         val owner = Name.fromString("_services._dns-sd._udp.local.")

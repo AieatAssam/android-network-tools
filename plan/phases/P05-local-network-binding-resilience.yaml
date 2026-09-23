@@ -223,27 +223,31 @@ tasks:
 
   - id: P05-T4
     title: "mDNS: interface binding + ephemeral-port fallback with QU queries"
-    status: todo
+    status: done
     depends_on: [P05-T3]
     tdd:
       red:
-        test_file: core-network/src/test/kotlin/net/aieat/netswissknife/core/network/mdns/MdnsPacketParserTest.kt
+        test_files:
+          - core-network/src/test/kotlin/net/aieat/netswissknife/core/network/mdns/MdnsPacketParserTest.kt
+          - core-network/src/test/kotlin/net/aieat/netswissknife/core/network/mdns/MdnsDiscoverySessionTest.kt
         tests:
           - "buildMdnsQuery(name, type, unicastResponse=true) sets the top bit of QCLASS (0x8001) – assert on wire bytes"
           - "buildMdnsQuery default keeps QCLASS 0x0001"
-        run: "./gradlew :core-network:test --tests '*MdnsPacketParserTest' --no-daemon"
-        expect: "RED"
+        run: "./gradlew :core-network:test --tests '*MdnsPacketParserTest' --tests '*MdnsDiscoverySessionTest' --no-daemon"
+        expect: "RED (the QU parameter and session API were absent)"
       green:
         steps:
           - "MdnsPacketParser.buildMdnsQuery gains `unicastResponse: Boolean = false`."
           - "MdnsRepositoryImpl: create socket via binder; try bind 5353 (reuseAddress) catch SocketException -> bind(0), useUnicastResponses=true; setNetworkInterface(iface) when non-null; joinGroup(InetSocketAddress(MDNS_GROUP, 5353), iface); send queries with QU when fallback active."
           - "Extract the packet-processing loop state (PartialService bookkeeping) into core-network `MdnsDiscoverySession` (pure) so it becomes unit-testable (also serves F038)."
-        run: "./gradlew :core-network:test :app:assembleDebug --no-daemon"
+        run: "./gradlew :core-network:test :app:testDebugUnitTest --tests '*MdnsRepositoryImpl*' :app:assembleDebug --no-daemon --no-parallel"
         expect: "PASS"
-      refactor: []
+      refactor:
+        - "MdnsDiscoverySession owns service types, partial records, deduplication, changed snapshots, and the final hostname-bearing sweep; the app repository only adapts dnsjava records and socket effects."
     acceptance_criteria:
       - "MdnsDiscoverySession has tests for: meta-query PTR -> type registered; instance PTR -> SRV/TXT queries requested; SRV+A -> service emitted once; end-of-scan sweep emits partials with hostname."
-      - "A platform setup failure such as emulator ENODEV remains an explicit failure with Dismiss, never a successful empty scan; a physical Wi-Fi run uses the selected active interface (commonly wlan0)."
+      - "Socket binding occurs on the selected Android network before local bind, group membership uses its interface, and 5353 SocketException falls back to port 0 with QU set on every query; ENODEV stays an explicit error."
+      - "Injected ENODEV cleanup and dismissible-error coverage pass; API 33 ENODEV reproduction and physical Wi-Fi interface/discovery remain release-device checks recorded in plan/reviews/2026-09-23-release-qa-brief.yaml."
 
   - id: P05-T5
     title: "UI: NetworkStatusBanner + LNP error mapping on LAN tools"

@@ -13,10 +13,13 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.job
-import net.aieat.netswissknife.core.network.mdns.DiscoveredService
+import net.aieat.netswissknife.core.network.mdns.MdnsDiscoverySession
 import net.aieat.netswissknife.core.network.mdns.MdnsPacketParser
+import net.aieat.netswissknife.core.network.mdns.MdnsQueryType
 import net.aieat.netswissknife.core.network.mdns.MdnsRepository
+import net.aieat.netswissknife.core.network.mdns.MdnsSessionRecord
 import net.aieat.netswissknife.core.network.mdns.MdnsUpdate
+import net.aieat.netswissknife.core.network.net.LocalNetworkPermissionDeniedException
 import net.aieat.netswissknife.core.network.net.NetworkBinder
 import net.aieat.netswissknife.core.network.net.NoOpNetworkBinder
 import org.xbill.DNS.ARecord
@@ -31,6 +34,8 @@ import java.net.DatagramPacket
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.MulticastSocket
+import java.net.NetworkInterface
+import java.net.SocketException
 import java.net.SocketTimeoutException
 import javax.inject.Inject
 
@@ -44,9 +49,19 @@ internal interface MdnsMulticastLock {
 internal interface MdnsSocket {
     var reuseAddress: Boolean
     var soTimeout: Int
+    var networkInterface: NetworkInterface?
+        get() = null
+        set(_) {}
+    fun bindToNetwork(binder: NetworkBinder) = Unit
     fun bind(address: InetSocketAddress)
     fun joinGroup(address: InetAddress)
+    fun joinGroup(address: InetSocketAddress, networkInterface: NetworkInterface?) {
+        joinGroup(address.address)
+    }
     fun leaveGroup(address: InetAddress)
+    fun leaveGroup(address: InetSocketAddress, networkInterface: NetworkInterface?) {
+        leaveGroup(address.address)
+    }
     fun send(packet: DatagramPacket)
     fun receive(packet: DatagramPacket)
     fun close()
@@ -71,11 +86,35 @@ private class PlatformMdnsSocket(private val socket: MulticastSocket) : MdnsSock
     override var soTimeout: Int
         get() = socket.soTimeout
         set(value) { socket.soTimeout = value }
+    override var networkInterface: NetworkInterface?
+        get() = socket.networkInterface
+        set(value) { if (value != null) socket.networkInterface = value }
+    override fun bindToNetwork(binder: NetworkBinder) {
+        try {
+            binder.bind(socket)
+        } catch (error: SecurityException) {
+            throw LocalNetworkPermissionDeniedException(error)
+        }
+    }
     override fun bind(address: InetSocketAddress) = socket.bind(address)
     @Suppress("DEPRECATION")
     override fun joinGroup(address: InetAddress) = socket.joinGroup(address)
+    override fun joinGroup(address: InetSocketAddress, networkInterface: NetworkInterface?) {
+        if (networkInterface != null) socket.joinGroup(address, networkInterface)
+        else {
+            @Suppress("DEPRECATION")
+            socket.joinGroup(address.address)
+        }
+    }
     @Suppress("DEPRECATION")
     override fun leaveGroup(address: InetAddress) = socket.leaveGroup(address)
+    override fun leaveGroup(address: InetSocketAddress, networkInterface: NetworkInterface?) {
+        if (networkInterface != null) socket.leaveGroup(address, networkInterface)
+        else {
+            @Suppress("DEPRECATION")
+            socket.leaveGroup(address.address)
+        }
+    }
     override fun send(packet: DatagramPacket) = socket.send(packet)
     override fun receive(packet: DatagramPacket) = socket.receive(packet)
     override fun close() = socket.close()
@@ -124,31 +163,42 @@ class MdnsRepositoryImpl @Inject constructor(
                 onCancelling = true,
                 invokeImmediately = true
             ) { cause -> if (cause is kotlinx.coroutines.CancellationException) socket.close() }
-            var multicastGroup: InetAddress? = null
+            var multicastGroup: InetSocketAddress? = null
+            var multicastInterface: NetworkInterface? = null
             try {
                 socket.reuseAddress = true
-                socket.bind(InetSocketAddress(MDNS_PORT))
+                socket.bindToNetwork(networkBinder)
+                multicastInterface = networkBinder.localInterface()
+                socket.networkInterface = multicastInterface
+                var useUnicastResponse = false
+                try {
+                    socket.bind(InetSocketAddress(MDNS_PORT))
+                } catch (error: SocketException) {
+                    if (error.isDeviceUnavailable()) throw error
+                    socket.bind(InetSocketAddress(0))
+                    useUnicastResponse = true
+                }
 
-                multicastGroup = InetAddress.getByName(MDNS_GROUP)
                 val multicastAddress = InetSocketAddress(MDNS_GROUP, MDNS_PORT)
+                multicastGroup = multicastAddress
 
-                socket.joinGroup(multicastGroup)
+                socket.joinGroup(multicastAddress, multicastInterface)
                 socket.soTimeout = SOCKET_TIMEOUT_MS
 
                 // Send the meta-query to enumerate all service types
-                sendQuery(socket, multicastAddress, META_QUERY, Type.PTR)
+                sendQuery(socket, multicastAddress, META_QUERY, Type.PTR, useUnicastResponse)
 
                 val startTime = System.currentTimeMillis()
-                val emittedKeys = mutableSetOf<String>()
-                val serviceTypes = mutableSetOf<String>()
-                val partialServices = mutableMapOf<String, PartialService>()
+                val session = MdnsDiscoverySession()
                 var lastRequery = 0L
 
                 while (System.currentTimeMillis() - startTime < timeoutMs) {
                     currentCoroutineContext().ensureActive()
                     val now = System.currentTimeMillis()
-                    if (now - lastRequery > REQUERY_INTERVAL_MS && serviceTypes.isNotEmpty()) {
-                        for (type in serviceTypes) sendQuery(socket, multicastAddress, "$type.local.", Type.PTR)
+                    if (now - lastRequery > REQUERY_INTERVAL_MS && session.serviceTypes.isNotEmpty()) {
+                        for (type in session.serviceTypes) {
+                            sendQuery(socket, multicastAddress, "$type.local.", Type.PTR, useUnicastResponse)
+                        }
                         lastRequery = now
                     }
 
@@ -157,127 +207,71 @@ class MdnsRepositoryImpl @Inject constructor(
                     val message = MdnsPacketParser.parsePacket(packet) ?: continue
 
                     val allSections = listOf(Section.ANSWER, Section.AUTHORITY, Section.ADDITIONAL)
+                    val records = mutableListOf<MdnsSessionRecord>()
 
                     for (section in allSections) {
                         for (record in message.getSection(section)) {
                             when (record.type) {
                                 Type.PTR -> {
                                     val ptr = record as PTRRecord
-                                    val target = ptr.target.toString()
-                                    val owner = record.name.toString()
-
-                                    when {
-                                        // Meta-query response: new service type discovered
-                                        owner.contains("_services._dns-sd") -> {
-                                            val serviceType = MdnsPacketParser.extractServiceType(target)
-                                            if (serviceType.isNotEmpty() && serviceTypes.add(serviceType)) {
-                                                // target already has a trailing dot from dnsjava
-                                                sendQuery(socket, multicastAddress, target, Type.PTR)
-                                            }
-                                        }
-                                        // Instance enumeration: new service instance
-                                        else -> {
-                                            val key = target
-                                            if (key !in partialServices) {
-                                                val serviceType = MdnsPacketParser.extractServiceType(target)
-                                                val displayName = MdnsPacketParser.extractDisplayName(target)
-                                                partialServices[key] = PartialService(
-                                                    instanceName = target,
-                                                    displayName = displayName,
-                                                    serviceType = serviceType
-                                                )
-                                                // Query for SRV+TXT
-                                                sendQuery(socket, multicastAddress, target, Type.SRV)
-                                                sendQuery(socket, multicastAddress, target, Type.TXT)
-                                            }
-                                        }
-                                    }
+                                    records += MdnsSessionRecord.Ptr(record.name.toString(), ptr.target.toString())
                                 }
 
                                 Type.SRV -> {
                                     val srv = record as SRVRecord
-                                    val owner = record.name.toString()
-                                    val partial = partialServices[owner]
-                                    if (partial != null) {
-                                        partial.hostname = MdnsPacketParser.normalizeHostname(srv.target.toString())
-                                        partial.port = srv.port
-                                        // Query for A/AAAA
-                                        sendQuery(socket, multicastAddress, srv.target.toString(), Type.A)
-                                        sendQuery(socket, multicastAddress, srv.target.toString(), Type.AAAA)
-                                        tryEmit(partial, emittedKeys)?.let {
-                                            currentCoroutineContext().ensureActive()
-                                            emit(MdnsUpdate.ServiceFound(it))
-                                        }
-                                    }
+                                    records += MdnsSessionRecord.Srv(
+                                        record.name.toString(), srv.target.toString(), srv.port
+                                    )
                                 }
 
                                 Type.TXT -> {
                                     val txt = record as TXTRecord
-                                    val owner = record.name.toString()
-                                    val partial = partialServices[owner]
-                                    if (partial != null) {
-                                        @Suppress("UNCHECKED_CAST")
-                                        val strings = txt.strings as List<String>
-                                        partial.txtRecords = MdnsPacketParser.parseTxtPairs(strings)
-                                        tryEmit(partial, emittedKeys)?.let {
-                                            currentCoroutineContext().ensureActive()
-                                            emit(MdnsUpdate.ServiceFound(it))
-                                        }
-                                    }
+                                    @Suppress("UNCHECKED_CAST")
+                                    val strings = txt.strings as List<String>
+                                    records += MdnsSessionRecord.Txt(record.name.toString(), strings)
                                 }
 
                                 Type.A -> {
                                     val a = record as ARecord
-                                    val owner = record.name.toString()
                                     val ip = a.address.hostAddress ?: continue
-                                    for (partial in partialServices.values) {
-                                        if (partial.hostname?.let { "$it." } == owner || partial.hostname == MdnsPacketParser.normalizeHostname(owner)) {
-                                            if (!partial.ipAddresses.contains(ip)) {
-                                                partial.ipAddresses.add(ip)
-                                                tryEmit(partial, emittedKeys)?.let {
-                                                    currentCoroutineContext().ensureActive()
-                                                    emit(MdnsUpdate.ServiceFound(it))
-                                                }
-                                            }
-                                        }
-                                    }
+                                    records += MdnsSessionRecord.Address(record.name.toString(), ip)
                                 }
 
                                 Type.AAAA -> {
                                     val aaaa = record as AAAARecord
-                                    val owner = record.name.toString()
                                     val ip = aaaa.address.hostAddress ?: continue
-                                    for (partial in partialServices.values) {
-                                        if (partial.hostname?.let { "$it." } == owner || partial.hostname == MdnsPacketParser.normalizeHostname(owner)) {
-                                            if (!partial.ipAddresses.contains(ip)) {
-                                                partial.ipAddresses.add(ip)
-                                                tryEmit(partial, emittedKeys)?.let {
-                                                    currentCoroutineContext().ensureActive()
-                                                    emit(MdnsUpdate.ServiceFound(it))
-                                                }
-                                            }
-                                        }
-                                    }
+                                    records += MdnsSessionRecord.Address(record.name.toString(), ip)
                                 }
                             }
                         }
                     }
-                }
 
-                // Emit any partial services that have at minimum a hostname
-                for (partial in partialServices.values) {
-                    currentCoroutineContext().ensureActive()
-                    if (partial.instanceName !in emittedKeys && partial.hostname != null) {
+                    val result = session.process(records)
+                    for (query in result.queries) {
+                        sendQuery(
+                            socket,
+                            multicastAddress,
+                            query.name,
+                            query.type.toDnsType(),
+                            useUnicastResponse,
+                        )
+                    }
+                    for (service in result.services) {
                         currentCoroutineContext().ensureActive()
-                        emit(MdnsUpdate.ServiceFound(partial.toService()))
-                        emittedKeys.add(partial.instanceName)
+                        emit(MdnsUpdate.ServiceFound(service))
                     }
                 }
 
+                // Keep hostname-bearing partials that never became fully ready visible at scan end.
+                for (service in session.finish()) {
+                    currentCoroutineContext().ensureActive()
+                    emit(MdnsUpdate.ServiceFound(service))
+                }
+
                 currentCoroutineContext().ensureActive()
-                emit(MdnsUpdate.DiscoveryComplete(emittedKeys.size))
+                emit(MdnsUpdate.DiscoveryComplete(session.totalFound))
             } finally {
-                try { multicastGroup?.let { socket.leaveGroup(it) } } catch (_: Exception) {}
+                try { multicastGroup?.let { socket.leaveGroup(it, multicastInterface) } } catch (_: Exception) {}
                 socket.close()
                 cancellationHandle.dispose()
             }
@@ -286,9 +280,15 @@ class MdnsRepositoryImpl @Inject constructor(
         }
     }.flowOn(Dispatchers.IO)
 
-    private suspend fun sendQuery(socket: MdnsSocket, address: InetSocketAddress, name: String, type: Int) {
+    private suspend fun sendQuery(
+        socket: MdnsSocket,
+        address: InetSocketAddress,
+        name: String,
+        type: Int,
+        unicastResponse: Boolean,
+    ) {
         try {
-            val bytes = MdnsPacketParser.buildMdnsQuery(name, type)
+            val bytes = MdnsPacketParser.buildMdnsQuery(name, type, unicastResponse)
             val packet = DatagramPacket(bytes, bytes.size, address)
             socket.send(packet)
         } catch (e: CancellationException) {
@@ -317,29 +317,15 @@ class MdnsRepositoryImpl @Inject constructor(
         }
     }
 
-    private fun tryEmit(partial: PartialService, emitted: MutableSet<String>): DiscoveredService? {
-        if (partial.hostname == null || partial.port == 0) return null
-        emitted.add(partial.instanceName) // track for end-of-scan sweep dedup
-        return partial.toService()
+    private fun MdnsQueryType.toDnsType(): Int = when (this) {
+        MdnsQueryType.PTR -> Type.PTR
+        MdnsQueryType.SRV -> Type.SRV
+        MdnsQueryType.TXT -> Type.TXT
+        MdnsQueryType.A -> Type.A
+        MdnsQueryType.AAAA -> Type.AAAA
     }
 
-    private class PartialService(
-        val instanceName: String,
-        val displayName: String,
-        val serviceType: String,
-        var hostname: String? = null,
-        var port: Int = 0,
-        val ipAddresses: MutableList<String> = mutableListOf(),
-        var txtRecords: Map<String, String> = emptyMap()
-    ) {
-        fun toService() = DiscoveredService(
-            serviceType = serviceType,
-            instanceName = instanceName,
-            displayName = displayName,
-            hostname = hostname ?: "",
-            port = port,
-            ipAddresses = ipAddresses.toList(),
-            txtRecords = txtRecords
-        )
-    }
+    private fun SocketException.isDeviceUnavailable(): Boolean =
+        message.orEmpty().contains("ENODEV", ignoreCase = true) ||
+            message.orEmpty().contains("no such device", ignoreCase = true)
 }
