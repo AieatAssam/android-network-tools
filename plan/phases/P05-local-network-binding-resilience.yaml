@@ -12,7 +12,7 @@ phase:
   id: P05
   title: "NetworkBinder abstraction + Wi-Fi/Ethernet binding for all LAN sockets, connectivity status banner, LNP error mapping, mDNS port-bind fallback"
   priority: high
-  status: todo
+  status: in_progress
   estimated_effort: "M (2-4 agent sessions)"
   depends_on: []          # best after P01 (probes) but can run first; P01 must then adopt the binder
   enables: [P11, P12, P13]
@@ -155,7 +155,7 @@ design:
 tasks:
   - id: P05-T1
     title: "core: NetworkBinder, NoOp, LocalDestinationPolicy, FakeNetworkBinder"
-    status: todo
+    status: done
     tdd:
       red:
         test_file: core-network/src/test/kotlin/net/aieat/netswissknife/core/network/net/LocalDestinationPolicyTest.kt
