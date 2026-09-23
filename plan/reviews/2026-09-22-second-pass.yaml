@@ -10,7 +10,7 @@ findings:
   - id: R2-001
     severity: high
     kind: security_gap
-    status: todo
+    status: done
     title: "Cross-origin redirects strip headers but can replay a sensitive request body"
     related_phase: P10
     implementation_task: P10-T3
@@ -20,20 +20,20 @@ findings:
       - { file: core-network/src/test/kotlin/net/aieat/netswissknife/core/network/httprobe/HttpProbeRepositoryTest.kt, line: 493, detail: "Origin-boundary tests cover credential headers; the separate 307 test verifies body preservation, not consent for cross-origin entity replay." }
     impact: "A user-entered token or other sensitive data in a POST/PUT/PATCH body can be sent to a different origin via a redirect despite header stripping. This is a missing diagnostic-tool safety policy, not a claim that HTTP method-preservation semantics are incorrect."
     recommended_action: "Before any cross-origin redirect that retains an entity, stop with redirect evidence and require explicit approval of destination/method/body replay. Default deny replay; do not silently discard an entity yet claim the same diagnostic request. Preserve compliant same-origin redirect semantics."
-    validation: "Two controlled loopback origins: POST 307/308 and PUT/PATCH 301/302 must cause zero destination requests until explicit approval; same-origin 307 preserves body; headers remain stripped across origins; approval is scoped to the displayed run and destination."
+    validation: "Passed `./gradlew :core-network:test --tests '*HttpProbeRepositoryRedirectTest' :app:testDebugUnitTest --tests '*HttpProbeViewModelTest' :app:compileDebugKotlin --no-daemon --no-parallel` (11 redirect tests and 13 ViewModel tests, 0 failures/errors; final repository rerun plus app compile also passed). Loopback POST 307/308 and PUT 301/302 plus fake-connection PATCH 301/302 remain unopened until consent; approved requests replay method/body with custom headers stripped; same-origin 307 preserves body; no callback denies; source connection disconnects before consent wait. A two-hop ViewModel test proves stale approval A cannot authorize B in the same run. Separate QA and adversarial re-reviews cleared the final diff."
 
   - id: R2-002
     severity: high
     kind: plan_defect
-    status: todo
+    status: done
     title: "The HTTP roadmap weakens secure downgrade behavior by default"
     related_phase: P10
     implementation_task: P10-T3
     evidence:
-      - { file: plan/phases/P10-security-tools-depth.yaml, line: 85, detail: "A3 explicitly proposes allowInsecureDowngrade=true and followed-with-warning behavior." }
-      - { file: core-network/src/main/kotlin/net/aieat/netswissknife/core/network/httprobe/HttpProbeRepositoryImpl.kt, line: 130, detail: "Current code refuses HTTPS-to-HTTP redirects before connecting to the destination." }
+      - { file: plan/phases/P10-security-tools-depth.yaml, line: 88, detail: "Assumption A5 overrides the unsafe proposal: keep allowInsecureDowngrade=false and require a separately configured cleartext probe." }
+      - { file: core-network/src/main/kotlin/net/aieat/netswissknife/core/network/httprobe/HttpProbeRepositoryImpl.kt, line: 129, detail: "Current code refuses HTTPS-to-HTTP redirects before connecting to the destination." }
     impact: "Implementing the plan would silently send a request over cleartext. Removing headers/body does not remove potentially sensitive URL path/query data or make an altered diagnostic equivalent."
-    recommended_action: "Keep allowInsecureDowngrade=false by default. Report the blocked hop and allow a separate explicit cleartext probe after destination/data disclosure; do not automatically forward original credentials, URL secrets, or request body."
+    recommended_action: "Maintain the corrected plan behavior: keep allowInsecureDowngrade=false by default, report the blocked hop, and require a separately configured cleartext probe after destination/data disclosure."
     validation: "Controlled HTTPS endpoint redirects to HTTP: default sends zero HTTP requests and preserves the blocked Location as evidence; explicit new probe captures its own configuration and security warning. Verify URL-userinfo/query redaction in UI exports and logs."
 
   - id: R2-003

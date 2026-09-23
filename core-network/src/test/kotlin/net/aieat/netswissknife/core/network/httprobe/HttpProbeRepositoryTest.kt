@@ -2,8 +2,17 @@ package net.aieat.netswissknife.core.network.httprobe
 
 import com.sun.net.httpserver.HttpServer
 import com.sun.net.httpserver.HttpExchange
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withContext
 import net.aieat.netswissknife.core.network.NetworkResult
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+import java.io.InputStream
+import java.io.OutputStream
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -14,8 +23,11 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import java.net.InetSocketAddress
+import java.net.HttpURLConnection
+import java.net.URL
 import java.nio.charset.Charset
 import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.atomic.AtomicInteger
 
 @DisplayName("HttpProbeRepositoryImpl – input validation")
 class HttpProbeRepositoryValidationTest {
@@ -517,6 +529,148 @@ class HttpProbeRepositoryRedirectTest {
     }
 
     @Test
+    @DisplayName("cross-origin entity redirects wait for per-hop explicit approval")
+    fun `cross-origin entity redirects are gated by approval`() = runTest {
+        val cases = listOf(
+            HttpMethod.POST to 307,
+            HttpMethod.POST to 308,
+            HttpMethod.PUT to 301,
+            HttpMethod.PUT to 302
+        )
+        for ((method, status) in cases) {
+            val destinationRequests = AtomicInteger()
+            val receivedMethod = AtomicReference<String>()
+            val receivedBody = AtomicReference<String>()
+            val receivedAuthorization = AtomicReference<String?>()
+            val targetUrl = startRecordingServer { exchange ->
+                destinationRequests.incrementAndGet()
+                receivedMethod.set(exchange.requestMethod)
+                receivedBody.set(exchange.requestBody.bufferedReader().use { it.readText() })
+                receivedAuthorization.set(exchange.requestHeaders.getFirst("Authorization"))
+                Triple(200, "ok", null)
+            }
+            val sourceUrl = startRecordingServer { exchange ->
+                exchange.responseHeaders.add("Location", targetUrl)
+                Triple(status, "", null)
+            }
+            val replayRequest = CompletableDeferred<CrossOriginEntityReplay>()
+            val userDecision = CompletableDeferred<Boolean>()
+
+            val probe = async(Dispatchers.IO) {
+                repo.probe(
+                    HttpProbeRequest(
+                        url = sourceUrl,
+                        method = method,
+                        body = "sensitive-$method-$status",
+                        headers = listOf("Authorization" to "Bearer secret"),
+                        approveCrossOriginEntityReplay = { replay ->
+                            replayRequest.complete(replay)
+                            userDecision.await()
+                        }
+                    )
+                )
+            }
+
+            val requestedApproval = withContext(Dispatchers.Default) {
+                withTimeout(5_000) { replayRequest.await() }
+            }
+            assertEquals(targetUrl, requestedApproval.destinationUrl)
+            assertEquals(method, requestedApproval.method)
+            assertEquals(0, destinationRequests.get(), "destination must remain untouched pending approval")
+
+            userDecision.complete(true)
+            val result = withContext(Dispatchers.Default) {
+                withTimeout(5_000) { probe.await() }
+            }
+            assertTrue(result is NetworkResult.Success, "$method/$status should proceed after approval")
+            assertEquals(1, destinationRequests.get())
+            assertEquals(method.name, receivedMethod.get())
+            assertEquals("sensitive-$method-$status", receivedBody.get())
+            assertNull(receivedAuthorization.get(), "custom headers must remain stripped after approval")
+        }
+    }
+
+    @Test
+    @DisplayName("PATCH 301 and 302 redirects do not open the cross-origin destination before approval")
+    fun `patch entity redirects are gated before destination connection`() = runTest {
+        for (status in listOf(301, 302)) {
+            val sourceUrl = URL("http://source.test/start")
+            val targetUrl = URL("http://destination.test/next")
+            val openedUrls = mutableListOf<String>()
+            lateinit var sourceConnection: RecordingHttpConnection
+            lateinit var targetConnection: RecordingHttpConnection
+            val connectionFactory = HttpProbeConnectionFactory { url ->
+                openedUrls += url.toString()
+                when (url.toString()) {
+                    sourceUrl.toString() -> RecordingHttpConnection(url, status, targetUrl.toString()).also {
+                        sourceConnection = it
+                    }
+                    targetUrl.toString() -> RecordingHttpConnection(url, 200, null).also {
+                        targetConnection = it
+                    }
+                    else -> error("Unexpected URL: $url")
+                }
+            }
+            val replayRequest = CompletableDeferred<CrossOriginEntityReplay>()
+            val userDecision = CompletableDeferred<Boolean>()
+            val fakeRepo = HttpProbeRepositoryImpl(connectionFactory)
+            val probe = async(Dispatchers.IO) {
+                fakeRepo.probe(
+                    HttpProbeRequest(
+                        url = sourceUrl.toString(),
+                        method = HttpMethod.PATCH,
+                        body = "patch-$status",
+                        headers = listOf("X-Secret" to "private"),
+                        approveCrossOriginEntityReplay = { replay ->
+                            assertTrue(sourceConnection.disconnected, "source connection must close before waiting for consent")
+                            replayRequest.complete(replay)
+                            userDecision.await()
+                        }
+                    )
+                )
+            }
+
+            val approval = withContext(Dispatchers.Default) {
+                withTimeout(5_000) { replayRequest.await() }
+            }
+            assertEquals(targetUrl.toString(), approval.destinationUrl)
+            assertEquals(HttpMethod.PATCH, approval.method)
+            assertEquals(status, approval.statusCode)
+            assertEquals(listOf(sourceUrl.toString()), openedUrls)
+
+            userDecision.complete(true)
+            val result = withContext(Dispatchers.Default) {
+                withTimeout(5_000) { probe.await() }
+            }
+            assertTrue(result is NetworkResult.Success)
+            assertEquals(listOf(sourceUrl.toString(), targetUrl.toString()), openedUrls)
+            assertEquals("PATCH", targetConnection.requestedMethod)
+            assertEquals("patch-$status", targetConnection.requestBody())
+            assertFalse(targetConnection.requestProperties.containsKey("X-Secret"))
+        }
+    }
+
+    @Test
+    @DisplayName("cross-origin entity redirects default to deny when no approval flow is supplied")
+    fun `cross-origin entity redirect without approval never contacts destination`() = runTest {
+        val destinationRequests = AtomicInteger()
+        val targetUrl = startRecordingServer { _ ->
+            destinationRequests.incrementAndGet()
+            Triple(200, "should not be reached", null)
+        }
+        val sourceUrl = startRecordingServer { exchange ->
+            exchange.responseHeaders.add("Location", targetUrl)
+            Triple(307, "", null)
+        }
+
+        val result = repo.probe(HttpProbeRequest(url = sourceUrl, method = HttpMethod.POST, body = "secret"))
+
+        assertTrue(result is NetworkResult.Error)
+        assertTrue((result as NetworkResult.Error).message.contains("requires approval"))
+        assertEquals(0, destinationRequests.get())
+    }
+
+    @Test
     @DisplayName("POST 302 follows browser-compatible method semantics")
     fun `post 302 becomes get without body`() = runTest {
         val receivedMethod = AtomicReference<String>()
@@ -613,5 +767,41 @@ class HttpProbeRepositoryRedirectTest {
         assertEquals(0L, (result as NetworkResult.Success).data.responseBodyBytes)
         assertTrue(result.data.responseBodyTruncated)
         assertEquals(5L, result.data.declaredBodyBytes)
+    }
+
+    private class RecordingHttpConnection(
+        url: URL,
+        private val statusCode: Int,
+        private val location: String?
+    ) : HttpURLConnection(url) {
+        private val bodyOutput = ByteArrayOutputStream()
+        val requestProperties = linkedMapOf<String, String>()
+        var disconnected = false
+            private set
+        var requestedMethod: String? = null
+            private set
+
+        override fun connect() = Unit
+        override fun disconnect() {
+            disconnected = true
+        }
+        override fun usingProxy(): Boolean = false
+        override fun setRequestMethod(method: String) {
+            requestedMethod = method
+        }
+        override fun getRequestMethod(): String? = requestedMethod
+        override fun setRequestProperty(key: String, value: String) {
+            requestProperties[key] = value
+        }
+        override fun getHeaderField(name: String): String? =
+            if (name.equals("Location", ignoreCase = true)) location else null
+        override fun getHeaderFields(): Map<String?, List<String>> =
+            location?.let { mapOf("Location" to listOf(it)) } ?: emptyMap()
+        override fun getResponseCode(): Int = statusCode
+        override fun getResponseMessage(): String = if (statusCode >= 300) "Redirect" else "OK"
+        override fun getInputStream(): InputStream = ByteArrayInputStream("ok".toByteArray())
+        override fun getOutputStream(): OutputStream = bodyOutput
+
+        fun requestBody(): String = bodyOutput.toString(Charsets.UTF_8)
     }
 }

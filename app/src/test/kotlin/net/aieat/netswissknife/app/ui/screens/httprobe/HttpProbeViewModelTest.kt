@@ -5,6 +5,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -14,14 +15,17 @@ import kotlinx.coroutines.test.setMain
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
 import net.aieat.netswissknife.core.domain.HttpProbeUseCase
+import net.aieat.netswissknife.core.domain.HttpProbeParams
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.httprobe.HttpMethod
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeRequest
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeResult
+import net.aieat.netswissknife.core.network.httprobe.CrossOriginEntityReplay
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
@@ -176,5 +180,54 @@ class HttpProbeViewModelTest {
         viewModel.onUrlChange("https://example.com")
         viewModel.send()
         coVerify { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_HTTP_HOSTS, "https://example.com") }
+    }
+
+    @Test
+    fun `stale approval token cannot approve the next redirect in the same run`() = runTest {
+        coEvery { useCase(any()) } coAnswers {
+            val request = firstArg<HttpProbeParams>()
+            val requestApproval = requireNotNull(request.approveCrossOriginEntityReplay)
+            assertTrue(
+                requestApproval(
+                    CrossOriginEntityReplay(
+                        destinationUrl = "https://first.example/path",
+                        method = HttpMethod.POST,
+                        statusCode = 307
+                    )
+                )
+            )
+            assertTrue(
+                requestApproval(
+                    CrossOriginEntityReplay(
+                        destinationUrl = "https://second.example/path",
+                        method = HttpMethod.POST,
+                        statusCode = 307
+                    )
+                )
+            )
+            NetworkResult.Success(stubResult)
+        }
+        viewModel.onUrlChange("https://source.example/start")
+        viewModel.onMethodChange(HttpMethod.POST)
+        viewModel.onBodyChange("payload")
+
+        viewModel.send()
+        val hopA = requireNotNull(viewModel.uiState.value.pendingEntityReplayApproval)
+        assertEquals("https://first.example/path", hopA.destinationUrl)
+
+        viewModel.respondToEntityReplayApproval(hopA.runId, hopA.approvalId, approved = true)
+        val hopB = requireNotNull(viewModel.uiState.value.pendingEntityReplayApproval)
+        assertEquals(hopA.runId, hopB.runId)
+        assertNotEquals(hopA.approvalId, hopB.approvalId)
+        assertEquals("https://second.example/path", hopB.destinationUrl)
+
+        viewModel.respondToEntityReplayApproval(hopA.runId, hopA.approvalId, approved = true)
+        assertEquals(hopB, viewModel.uiState.value.pendingEntityReplayApproval)
+        assertTrue(viewModel.uiState.value.isLoading)
+
+        viewModel.respondToEntityReplayApproval(hopB.runId, hopB.approvalId, approved = true)
+        assertNull(viewModel.uiState.value.pendingEntityReplayApproval)
+        assertFalse(viewModel.uiState.value.isLoading)
+        assertEquals(stubResult, viewModel.uiState.value.result)
     }
 }

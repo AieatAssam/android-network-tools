@@ -14,7 +14,15 @@ import java.net.URL
 import java.nio.charset.Charset
 import java.nio.charset.CodingErrorAction
 
-class HttpProbeRepositoryImpl : HttpProbeRepository {
+fun interface HttpProbeConnectionFactory {
+    fun open(url: URL): HttpURLConnection
+}
+
+class HttpProbeRepositoryImpl internal constructor(
+    private val connectionFactory: HttpProbeConnectionFactory
+) : HttpProbeRepository {
+
+    constructor() : this(HttpProbeConnectionFactory { it.openConnection() as HttpURLConnection })
 
     companion object {
         private const val MAX_REDIRECTS = 10
@@ -64,7 +72,7 @@ class HttpProbeRepositoryImpl : HttpProbeRepository {
         }
     }
 
-    private fun executeRequest(
+    private suspend fun executeRequest(
         startUrl: URL,
         request: HttpProbeRequest
     ): NetworkResult<HttpProbeResult> {
@@ -76,7 +84,7 @@ class HttpProbeRepositoryImpl : HttpProbeRepository {
         val startTimeNs = System.nanoTime()
 
         repeat(MAX_REDIRECTS + 1) { attempt ->
-            val conn = currentUrl.openConnection() as HttpURLConnection
+            val conn = connectionFactory.open(currentUrl)
             try {
                 conn.instanceFollowRedirects = false
                 conn.requestMethod = currentMethod.name
@@ -132,10 +140,32 @@ class HttpProbeRepositoryImpl : HttpProbeRepository {
                         redirectChain.add(currentUrl.toString())
                         // Custom headers are user-controlled and may contain credentials
                         // under arbitrary names. Never forward any of them across origins.
-                        if (!sameOrigin(currentUrl, nextUrl)) forwardCustomHeaders = false
                         val redirectedRequest = redirectRequest(currentMethod, currentBody, statusCode)
+                        val changesOrigin = !sameOrigin(currentUrl, nextUrl)
+                        if (changesOrigin && redirectedRequest.first.supportsBody && redirectedRequest.second != null) {
+                            // Do not keep the source response connection open while waiting
+                            // for user consent. The finally block disconnects idempotently.
+                            conn.disconnect()
+                            val approval = request.approveCrossOriginEntityReplay
+                                ?: return NetworkResult.Error(
+                                    "Cross-origin HTTP $statusCode redirect to $nextUrl requires approval before replaying ${redirectedRequest.first} body"
+                                )
+                            val approved = approval(
+                                CrossOriginEntityReplay(
+                                    destinationUrl = nextUrl.toString(),
+                                    method = redirectedRequest.first,
+                                    statusCode = statusCode
+                                )
+                            )
+                            if (!approved) {
+                                return NetworkResult.Error(
+                                    "HTTP $statusCode redirect body replay to $nextUrl was not approved"
+                                )
+                            }
+                        }
                         currentMethod = redirectedRequest.first
                         currentBody = redirectedRequest.second
+                        if (changesOrigin) forwardCustomHeaders = false
                         currentUrl = nextUrl
                         return@repeat // continue loop
                     }

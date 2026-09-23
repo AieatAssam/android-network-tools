@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -18,9 +19,19 @@ import net.aieat.netswissknife.core.domain.HttpProbeUseCase
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.httprobe.HttpMethod
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeResult
+import net.aieat.netswissknife.core.network.httprobe.CrossOriginEntityReplay
+import java.util.UUID
 import javax.inject.Inject
 
 data class HeaderEntry(val key: String = "", val value: String = "")
+
+data class PendingEntityReplayApproval(
+    val runId: String,
+    val approvalId: String,
+    val destinationUrl: String,
+    val method: HttpMethod,
+    val statusCode: Int
+)
 
 data class HttpProbeUiState(
     val url: String = "",
@@ -31,6 +42,7 @@ data class HttpProbeUiState(
     val isLoading: Boolean = false,
     val result: HttpProbeResult? = null,
     val error: String? = null,
+    val pendingEntityReplayApproval: PendingEntityReplayApproval? = null,
     val selectedTab: Int = 0,
     val headersExpanded: Boolean = false
 )
@@ -43,6 +55,13 @@ class HttpProbeViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(HttpProbeUiState())
     val uiState: StateFlow<HttpProbeUiState> = _uiState.asStateFlow()
+    private data class ActiveReplayDecision(
+        val runId: String,
+        val approvalId: String,
+        val decision: CompletableDeferred<Boolean>
+    )
+
+    private var activeReplayDecision: ActiveReplayDecision? = null
 
     val recentHosts: StateFlow<List<String>> = recentHostsRepository
         .getRecents(AppPreferenceKeys.RECENT_HTTP_HOSTS)
@@ -58,6 +77,15 @@ class HttpProbeViewModel @Inject constructor(
         _uiState.update { it.copy(followRedirects = !it.followRedirects) }
 
     fun onTabSelected(tab: Int) = _uiState.update { it.copy(selectedTab = tab) }
+
+    fun respondToEntityReplayApproval(runId: String, approvalId: String, approved: Boolean) {
+        val active = activeReplayDecision ?: return
+        val pending = _uiState.value.pendingEntityReplayApproval
+        if (active.runId != runId || active.approvalId != approvalId || pending == null ||
+            pending.runId != runId || pending.approvalId != approvalId
+        ) return
+        active.decision.complete(approved)
+    }
 
     fun onToggleHeadersExpanded() =
         _uiState.update { it.copy(headersExpanded = !it.headersExpanded) }
@@ -100,6 +128,7 @@ class HttpProbeViewModel @Inject constructor(
             recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_HTTP_HOSTS, state.url.trim())
         }
         _uiState.update { it.copy(isLoading = true, result = null, error = null, selectedTab = 0) }
+        val runId = UUID.randomUUID().toString()
 
         viewModelScope.launch {
             val headers = state.customHeaders
@@ -113,7 +142,35 @@ class HttpProbeViewModel @Inject constructor(
                         method = state.method,
                         headers = headers,
                         body = state.body.takeIf { it.isNotBlank() && state.method.supportsBody },
-                        followRedirects = state.followRedirects
+                        followRedirects = state.followRedirects,
+                        approveCrossOriginEntityReplay = { replay ->
+                            val approvalId = UUID.randomUUID().toString()
+                            val decision = CompletableDeferred<Boolean>()
+                            val active = ActiveReplayDecision(runId, approvalId, decision)
+                            activeReplayDecision = active
+                            _uiState.update { current ->
+                                current.copy(
+                                    pendingEntityReplayApproval = PendingEntityReplayApproval(
+                                        runId = runId,
+                                        approvalId = approvalId,
+                                        destinationUrl = replay.destinationUrl,
+                                        method = replay.method,
+                                        statusCode = replay.statusCode
+                                    )
+                                )
+                            }
+                            try {
+                                decision.await()
+                            } finally {
+                                if (activeReplayDecision == active) activeReplayDecision = null
+                                _uiState.update { current ->
+                                    val pending = current.pendingEntityReplayApproval
+                                    if (pending?.runId == runId && pending.approvalId == approvalId) {
+                                        current.copy(pendingEntityReplayApproval = null)
+                                    } else current
+                                }
+                            }
+                        }
                     )
                 )
 
@@ -122,10 +179,12 @@ class HttpProbeViewModel @Inject constructor(
                         is NetworkResult.Success -> current.copy(
                             isLoading = false,
                             result = result.data,
+                            pendingEntityReplayApproval = null,
                             selectedTab = 0
                         )
                         is NetworkResult.Error -> current.copy(
                             isLoading = false,
+                            pendingEntityReplayApproval = null,
                             error = result.message
                         )
                     }
@@ -136,7 +195,7 @@ class HttpProbeViewModel @Inject constructor(
                 val detail = e.message?.trim().takeUnless { it.isNullOrEmpty() }
                     ?: e::class.simpleName
                     ?: "Unknown request error"
-                _uiState.update { it.copy(isLoading = false, error = "Request failed: $detail") }
+                _uiState.update { it.copy(isLoading = false, pendingEntityReplayApproval = null, error = "Request failed: $detail") }
             }
         }
     }

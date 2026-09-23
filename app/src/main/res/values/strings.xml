@@ -567,6 +567,10 @@
     <string name="httprobe_body_placeholder">{"key": "value"}</string>
     <string name="httprobe_follow_redirects_label">Follow Redirects</string>
     <string name="httprobe_follow_redirects_sub">Automatically follow HTTP 3xx responses</string>
+    <string name="httprobe_cross_origin_replay_title">Confirm request body redirect</string>
+    <string name="httprobe_cross_origin_replay_message">HTTP %1$d changes origin and will resend the %2$s request body to:</string>
+    <string name="httprobe_cross_origin_replay_approve">Send body</string>
+    <string name="httprobe_cross_origin_replay_deny">Cancel redirect</string>
     <string name="httprobe_send_button">Send Request</string>
     <string name="httprobe_sending">Sending…</string>
 

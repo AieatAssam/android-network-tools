@@ -180,6 +180,28 @@ fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
                 )
             }
 
+            uiState.pendingEntityReplayApproval?.let { approval ->
+                item(key = "entity-replay-${approval.runId}-${approval.destinationUrl}") {
+                    CrossOriginEntityReplayApprovalCard(
+                        approval = approval,
+                        onApprove = {
+                            viewModel.respondToEntityReplayApproval(
+                                approval.runId,
+                                approval.approvalId,
+                                approved = true
+                            )
+                        },
+                        onDeny = {
+                            viewModel.respondToEntityReplayApproval(
+                                approval.runId,
+                                approval.approvalId,
+                                approved = false
+                            )
+                        }
+                    )
+                }
+            }
+
             item {
                 val displayState: DisplayState = when {
                     uiState.isLoading     -> DisplayState.Loading
@@ -246,6 +268,44 @@ fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
             ),
             onDismiss = { showHelp = false }
         )
+    }
+}
+
+@Composable
+private fun CrossOriginEntityReplayApprovalCard(
+    approval: PendingEntityReplayApproval,
+    onApprove: () -> Unit,
+    onDeny: () -> Unit
+) {
+    OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.httprobe_cross_origin_replay_title),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.error
+            )
+            Text(stringResource(
+                R.string.httprobe_cross_origin_replay_message,
+                approval.statusCode,
+                approval.method.name
+            ))
+            Text(
+                text = approval.destinationUrl,
+                style = MaterialTheme.typography.bodyMedium,
+                fontFamily = FontFamily.Monospace
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = onApprove) {
+                    Text(stringResource(R.string.httprobe_cross_origin_replay_approve))
+                }
+                TextButton(onClick = onDeny) {
+                    Text(stringResource(R.string.httprobe_cross_origin_replay_deny))
+                }
+            }
+        }
     }
 }
 

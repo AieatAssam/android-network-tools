@@ -8,16 +8,16 @@ expansion_tasks:
   rule: "Coordinate with these expansion tasks; do not duplicate existing scope or block independent regression fixes on optional enhancements. See comprehensive_expansion.regression_delivery for fresh follow-up ownership."
 
 second_pass_follow_up:
-  status: todo
+  status: in_progress
   report: plan/reviews/2026-09-22-second-pass.yaml
-  findings: [R2-001, R2-002, R2-009, R2-012]
+  findings: [R2-001, R2-009, R2-012]
   rule: "Apply report recommendations and regression acceptance before closing the listed follow-ups; historical phase completion does not close new findings."
 
 phase:
   id: P10
   title: "TLS (hostname verification, validity windows, chain issues, protocol/ALPN probing, PEM export, pin check) · HTTP Probe (OkHttp engine with timing breakdown + HTTP/2, redirect hops with status, explicit downgrade diagnostics, deeper header grading, cookie check, cURL export, JSON pretty-print) · WHOIS (monotonic timing, RDAP with fallback, public suffix list)"
   priority: medium
-  status: todo
+  status: in_progress
   estimated_effort: "L (4-6 agent sessions; split into three PR series TLS / HTTP / WHOIS)"
   depends_on: [P07-T1, P07-T3]          # error typing + descriptionKey model; can start core work earlier on a branch
   enables: [P15]
@@ -185,14 +185,18 @@ tasks:
   - id: P10-T3
     second_pass_review:
       report: plan/reviews/2026-09-22-second-pass.yaml
-      findings: [R2-001, R2-002]
+      findings: [R2-001]
       rule: "Treat each linked finding as a required independently verified acceptance case; urgent regression slices do not wait for optional task breadth."
     title: "HTTP: OkHttp engine + timings + protocol; RedirectPolicy pure; explicit downgrade diagnostics; redirect hops"
-    status: todo
+    status: in_progress
+    progress:
+      - "Completed the R2-001 security slice: cross-origin body redirects require per-hop approval; source connection closes before the prompt suspends; default behavior denies replay; same-origin semantics and cross-origin header stripping remain intact."
+      - "Focused repository and ViewModel tests plus app compilation pass; the broader OkHttp adapter/timing acceptance remains open."
     tdd:
       red:
         tests:
-          - "RedirectPolicyTest: same-origin 301 POST->GET and 307 body preservation; cross-origin entity replay blocked until destination-scoped approval; headers stripped; default downgrade sends zero cleartext requests; >10 hops typed failure"
+          - "HttpProbeRepositoryTest: same-origin 301 POST->GET and 307 body preservation; cross-origin POST 307/308 and PUT/PATCH 301/302 stay unopened until destination-scoped approval; headers stripped; default downgrade sends zero cleartext requests; >10 hops typed failure"
+          - "HttpProbeViewModelTest: a stale approval token from hop A cannot approve hop B within the same run"
           - "OkHttpEngineTest (MockWebServer): timings non-negative and totalMs >= ttfbMs; protocol reported; body bounded at maxBytes with truncated flag; error body for 4xx"
           - "HttpProbeRepositoryTest (existing 617 lines) migrated to the engine fake; redirectHops carry status codes and Location"
         expect: "RED"

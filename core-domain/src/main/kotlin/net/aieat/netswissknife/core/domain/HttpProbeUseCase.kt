@@ -6,6 +6,7 @@ import net.aieat.netswissknife.core.network.httprobe.HttpMethod
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeRepository
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeRequest
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeResult
+import net.aieat.netswissknife.core.network.httprobe.CrossOriginEntityReplay
 import java.net.URI
 import java.net.URISyntaxException
 import java.util.Locale
@@ -16,7 +17,8 @@ data class HttpProbeParams(
     val headers: List<Pair<String, String>> = emptyList(),
     val body: String? = null,
     val followRedirects: Boolean = true,
-    val timeoutMs: Int = 15_000
+    val timeoutMs: Int = 15_000,
+    val approveCrossOriginEntityReplay: (suspend (CrossOriginEntityReplay) -> Boolean)? = null
 )
 
 class HttpProbeUseCase(private val repository: HttpProbeRepository) {
@@ -38,7 +40,8 @@ class HttpProbeUseCase(private val repository: HttpProbeRepository) {
                 headers = params.headers,
                 body = effectiveBody,
                 followRedirects = params.followRedirects,
-                timeoutMs = params.timeoutMs
+                timeoutMs = params.timeoutMs,
+                approveCrossOriginEntityReplay = params.approveCrossOriginEntityReplay
             )
         )
     }

@@ -19,7 +19,16 @@ data class HttpProbeRequest(
     val body: String? = null,
     val followRedirects: Boolean = true,
     val timeoutMs: Int = 15_000,
-    val maxResponseBodyBytes: Long = 512_000L
+    val maxResponseBodyBytes: Long = 512_000L,
+    /** Per-run approval callback. It is invoked before an entity is replayed to another origin. */
+    val approveCrossOriginEntityReplay: (suspend (CrossOriginEntityReplay) -> Boolean)? = null
+)
+
+data class CrossOriginEntityReplay(
+    /** Exact resolved URL displayed to the user for this single redirect hop. */
+    val destinationUrl: String,
+    val method: HttpMethod,
+    val statusCode: Int
 )
 
 data class SecurityHeaderCheck(
