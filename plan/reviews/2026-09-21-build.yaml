@@ -48,9 +48,10 @@ findings:
         detail: "After one source yields rows, a later source failure only emits a warning; OUTPUT.write_text then overwrites the complete resource with the partial result. A valid CSV with an unexpected header can also produce zero rows without failing."
     impact: "A transient failure fetching MA-M or MA-S silently removes those vendor prefixes from the next generated resource, weakening LAN vendor enrichment."
     recommended_action: "Validate each source's expected headers and non-empty result, require all required registries to succeed before replacement, and expose an explicit partial-update mode only if needed. Replace the resource atomically after validation."
-    validation: "Mock a successful MA-L response followed by failed or malformed MA-M/MA-S responses and assert the previous resource remains intact; check a complete three-source update."
+    validation: "Mock successful MA-L data followed by failed, malformed, empty, truncated, wrong-class, or wrong-width MA-M/MA-S responses and assert the previous resource remains intact. Check a complete source-bound three-registry refresh and runtime longest-prefix lookup."
     related_phase: P01
-    status: todo
+    status: done
+    resolution: "The updater now binds oui.csv, mam.csv, and oui36.csv to MA-L, MA-M, and MA-S; strict UTF-8/CSV, unique required headers, complete rows, supported registry widths, and restricted hex separators are validated before publication. A same-directory temporary file is atomically replaced only after all sources succeed, preserving the existing mode and cleaning up on replacement failure. OuiDatabase now loads 6/7/9-digit prefixes and selects the longest match; MAC inputs must be complete and use plain, colon, hyphen, or Cisco dotted notation. Thirteen Python tests cover partial/malformed/wrong-source failures, replacement cleanup, and successful three-registry output; the full core-network test suite passed. Independent QA and adversarial reviews found no remaining blocker."
 
 coverage:
   inspected: [".github/workflows/ci.yml", ".github/workflows/release.yml", "app/build.gradle.kts", "build.gradle.kts", "settings.gradle.kts", "tools/oui/update_oui.py", "plan/plan.yaml"]

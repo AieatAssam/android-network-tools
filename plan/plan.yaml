@@ -199,7 +199,7 @@ comprehensive_expansion:
       - {"finding":"RAPP004","owner_task":"P12-T1","follow_up_status":"todo","report":"plan/reviews/2026-09-21-app.yaml"}
       - {"finding":"RBUILD001","owner_task":"P09-T4","follow_up_status":"todo","report":"plan/reviews/2026-09-21-build.yaml"}
       - {"finding":"RBUILD002","owner_task":"P09-T4","follow_up_status":"todo","report":"plan/reviews/2026-09-21-build.yaml"}
-      - {"finding":"RBUILD003","owner_task":"P01-T7","follow_up_status":"todo","report":"plan/reviews/2026-09-21-build.yaml"}
+      - {"finding":"RBUILD003","owner_task":"P01-T7","follow_up_status":"done","report":"plan/reviews/2026-09-21-build.yaml"}
       - {"finding":"RLAN001","owner_task":"E00-T01","follow_up_status":"done","report":"plan/reviews/2026-09-22-lan-scan-noise.yaml"}
       - {"finding":"RNET001","owner_task":"P01-T4","follow_up_status":"done","report":"plan/reviews/2026-09-21-network.yaml"}
       - {"finding":"RNET002","owner_task":"P05-T1","follow_up_status":"todo","report":"plan/reviews/2026-09-21-network.yaml"}
@@ -272,7 +272,7 @@ incremental_review:
     - { id: RNET004, severity: low, kind: bug, phase: P03, status: done, title: "Wi-Fi unique-network count disagrees with logical network grouping" }
     - { id: RNET007, severity: low, kind: bug, phase: P11, status: todo, title: "GeoIP bogon detection rejects explicit false values" }
     - { id: RUI007, severity: low, kind: bug, phase: P11, status: todo, title: "Stopped traceroute results discard elapsed-time metadata" }
-    - { id: RBUILD003, severity: low, kind: gap, phase: P01, status: todo, title: "OUI refresh can replace a complete registry with a partial download" }
+    - { id: RBUILD003, severity: low, kind: gap, phase: P01, status: done, title: "OUI refresh can replace a complete registry with a partial download" }
     - { id: RNET010, severity: low, kind: gap, phase: P12, status: todo, title: "Subnet calculator has no RFC 3021 point-to-point /31 mode" }
     - { id: RNET008, severity: low, kind: opportunity, phase: P11, status: todo, title: "Open-port banner reads can exceed the configured per-port timeout" }
   validation:
@@ -817,3 +817,5 @@ changelog:
     note: "Closed RAPP001, RNET001, and RNET004 after current-source revalidation. Wi-Fi scan outcomes now reflect EXTRA_RESULTS_UPDATED, timeout/rejection/error, preserve cached samples with explicit state and permission retry, and use the sample timestamp; network counts now match logical grouping. LAN MAC enrichment now uses a fresh authoritative per-scan ARP snapshot and preserves worker data on snapshot/read failures. App/core-network JVM suites passed; API 36 ScanRequestAwaiterTest passed 3/3 and WifiScanScreenTest passed 12/12; QA and adversarial reviews found no blocker. P01/E00-T01 stays in progress for device-only Wi-Fi/VPN and real NBSTAT checks; RNET011/RBUILD003 and the P02.5 dependency-submission gate remain open."
   - date: "2026-09-23"
     note: "Closed RNET011 after adding cancellation regressions for NameProbe.resolveName and MacResolver.resolve, including a gated two-worker test proving cancellation prevents the sibling from starting another quick-port check. The focused 13-test LAN discovery pipeline suite passed, and independent QA/adversarial reviews found no coverage gap. P01 remains in progress for RBUILD003 and E00-T01 device-only Wi-Fi/VPN and real NBSTAT checks."
+  - date: "2026-09-23"
+    note: "Closed RBUILD003 after making OUI refresh fail closed across the required MA-L/MA-M/MA-S feeds and publish atomically, then teaching OuiDatabase to load 6/7/9-digit prefixes with strict complete-MAC normalization and longest-prefix lookup. Thirteen Python updater tests, py_compile, and the full core-network suite passed; QA and adversarial reviews cleared the final diff. P01 regression follow-ups are complete; E00-T01 retains device-only Wi-Fi/VPN and real NBSTAT checks."
