@@ -139,6 +139,7 @@ class PortScanRepositoryImpl(
                 clock = clock,
             )
         )
+        var completedSummary: PortScanSummary? = null
 
         OperationRunner.run(session) {
             ensureOperationActive()
@@ -240,7 +241,7 @@ class PortScanRepositoryImpl(
             }
 
             ensureOperationActive()
-            val summary = PortScanSummary(
+            completedSummary = PortScanSummary(
                 host = host,
                 resolvedIp = resolvedIp,
                 scannedPorts = ports,
@@ -250,8 +251,9 @@ class PortScanRepositoryImpl(
                 scanDurationMs = clock.elapsedMillisSince(startTime),
                 results = results.sortedBy { it.port }
             )
-            send(PortScanUpdate.Complete(summary))
         }
+        // The terminal update is deliberately sent only after OperationRunner closes the scope.
+        send(PortScanUpdate.Complete(checkNotNull(completedSummary)))
     }.flowOn(Dispatchers.IO)
 }
 
