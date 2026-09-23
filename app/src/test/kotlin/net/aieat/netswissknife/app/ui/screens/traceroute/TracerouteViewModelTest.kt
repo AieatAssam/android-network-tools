@@ -100,7 +100,10 @@ class TracerouteViewModelTest {
             every { tracerouteUseCase(any()) } returns flowOf()
             viewModel.onHostChange("unreachable")
             viewModel.startTrace()
-            assertTrue(viewModel.uiState.value is TracerouteUiState.Error)
+            assertEquals(
+                TracerouteUiState.Error("No route found to unreachable"),
+                viewModel.uiState.value
+            )
         }
 
         @Test

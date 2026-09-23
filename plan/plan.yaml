@@ -222,7 +222,7 @@ comprehensive_expansion:
       - {"finding":"RUI008","owner_task":"P04-T6","follow_up_status":"todo","report":"plan/reviews/2026-09-21-ui-domain.yaml"}
       - {"finding":"RUI009","owner_task":"P08-T4","follow_up_status":"todo","report":"plan/reviews/2026-09-21-ui-domain.yaml"}
       - {"finding":"RUI010","owner_task":"E01-T10","follow_up_status":"done","report":"plan/reviews/2026-09-22-release-qa-brief.yaml"}
-      - {"finding":"RUI011","owner_task":"E01-T07/E01-T09","follow_up_status":"todo","report":"plan/reviews/2026-09-22-release-qa-brief.yaml"}
+      - {"finding":"RUI011","owner_task":"E01-T07/E01-T09","follow_up_status":"done","report":"plan/reviews/2026-09-22-release-qa-brief.yaml"}
       - {"finding":"RUI012","owner_task":"E01-T07/E01-T09","follow_up_status":"done","report":"plan/reviews/2026-09-22-release-qa-brief.yaml"}
 
 incremental_review:
@@ -267,7 +267,7 @@ incremental_review:
     - { id: RNET003, severity: medium, kind: gap, phase: P02, status: todo, title: "Topology parameters omit bounds for hops, timeout, and retries" }
     - { id: RNET006, severity: medium, kind: gap, phase: P10, status: todo, title: "WHOIS cancellation does not bound blocking DNS and socket work" }
     - { id: RUI010, severity: medium, kind: bug, phase: P08, status: done, owner: E01-T10, title: "Host fields reject surrounding whitespace even though shared validation trims it" }
-    - { id: RUI011, severity: medium, kind: gap, phase: P08, status: todo, owner: E01-T07/E01-T09, title: "Traceroute dead-path state lacks verified Ping-style recovery presentation" }
+    - { id: RUI011, severity: medium, kind: gap, phase: P08, status: done, owner: E01-T07/E01-T09, title: "Traceroute dead-path state lacks verified Ping-style recovery presentation" }
     - { id: RUI012, severity: medium, kind: gap, phase: P08, status: done, owner: E01-T07/E01-T09, title: "Topology progress message is stored but not shown, and Cancel lacks UI regression coverage" }
     - { id: RNET004, severity: low, kind: bug, phase: P03, status: todo, title: "Wi-Fi unique-network count collapses all hidden APs" }
     - { id: RNET007, severity: low, kind: bug, phase: P11, status: todo, title: "GeoIP bogon detection rejects explicit false values" }
@@ -428,7 +428,7 @@ phases:
     status: todo
     depends_on: [P07]
     findings: [F024, F030, RUI010, RUI011, RUI012]
-    summary: "Concrete a11y defects (4 sub-48dp buttons, no live regions, nativeCanvas text in Wi-Fi charts) plus 2026-09-22 QA follow-ups. RUI010 host whitespace and RUI012 Topology progress/cancel are fixed and tested; Traceroute recovery remains open, and the API 33 Topology sparse-canvas lab check is a separate device follow-up."
+    summary: "Concrete a11y defects (4 sub-48dp buttons, no live regions, nativeCanvas text in Wi-Fi charts) plus 2026-09-22 QA follow-ups. RUI010 host whitespace, RUI011 Traceroute recovery coverage, and RUI012 Topology progress/cancel are verified; API 33 Traceroute dead-route and Topology sparse-canvas checks remain device-only."
 
   - id: P09
     file: plan/phases/P09-quality-gates-and-test-coverage.yaml
@@ -791,3 +791,5 @@ changelog:
     note: "Closed RUI010 in 83c4e08: Ping and Traceroute forms now use HostValidator normalization for button/IME gating; valid normalized hosts reach use cases and recents, while invalid host input is not persisted by Traceroute. Ping/Traceroute Compose suites passed 10/10 and 7/7; focused ViewModel tests passed. E01-T10 remains open for shared form architecture and other fields."
   - date: "2026-09-22"
     note: "Closed RUI012 after rendering TopologyDiscoveryViewModel progressMessage beside the node count and keeping Cancel visible outside the config card's collapsed fields. API 36 TopologyDiscoveryScreenTest passed 7/7, including progress updates and a real UI start/collapse/Cancel/reset sequence; QA and adversarial review found no remaining code blocker. The API 33 10.0.2.2/public/v2c sparse-canvas usability check remains device-only."
+  - date: "2026-09-22"
+    note: "Closed RUI011 as a stale/unverified behavior gap after confirming the existing offline Error, no-route completion, Retry/Clear actions, and zero-hop Running progress/Stop state. Focused TracerouteViewModelTest passed; API 36 TracerouteScreenTest passed 9/9 and adversarial review found no test overclaim. Keep real API 33 airplane/dead-route validation in the release QA manual check."

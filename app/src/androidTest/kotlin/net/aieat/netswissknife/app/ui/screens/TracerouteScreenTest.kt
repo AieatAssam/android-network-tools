@@ -162,6 +162,71 @@ class TracerouteScreenTest {
     }
 
     @Test
+    fun runningState_withoutResponsesShowsProgressAndStopAction() {
+        val viewModel = fakeViewModel(
+            TracerouteUiState.Running(host = "example.com", hops = emptyList())
+        )
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                TracerouteScreen(viewModel = viewModel)
+            }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        composeRule.mainClock.autoAdvance = true
+
+        composeRule
+            .onNodeWithText(context.getString(R.string.traceroute_running_title, "example.com"))
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule
+            .onNodeWithText(context.resources.getQuantityString(R.plurals.traceroute_running_subtitle, 0, 0))
+            .assertIsDisplayed()
+        composeRule
+            .onNodeWithText(context.getString(R.string.traceroute_stop_button))
+            .performScrollTo()
+            .assertIsDisplayed()
+            .performClick()
+        composeRule.mainClock.autoAdvance = false
+
+        verify(exactly = 1) { viewModel.onStop() }
+    }
+
+    @Test
+    fun offlineErrorState_showsMessageAndRecoveryActions() {
+        val viewModel = fakeViewModel(TracerouteUiState.Error("No network connection"))
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                TracerouteScreen(viewModel = viewModel)
+            }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        composeRule.mainClock.autoAdvance = true
+
+        composeRule
+            .onNodeWithText(context.getString(R.string.traceroute_error_title))
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule
+            .onNodeWithText("No network connection")
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule
+            .onNodeWithText(context.getString(R.string.traceroute_retry_button))
+            .performScrollTo()
+            .assertIsDisplayed()
+            .performClick()
+        composeRule
+            .onNodeWithText(context.getString(R.string.traceroute_clear_button))
+            .performScrollTo()
+            .assertIsDisplayed()
+            .performClick()
+        composeRule.mainClock.autoAdvance = false
+
+        verify(exactly = 1) { viewModel.onRetry() }
+        verify(exactly = 1) { viewModel.onClear() }
+    }
+
+    @Test
     fun probeTypeChip_selectingUdp_notifiesViewModel() {
         val viewModel = fakeViewModel(TracerouteUiState.Idle)
         composeRule.setContent {

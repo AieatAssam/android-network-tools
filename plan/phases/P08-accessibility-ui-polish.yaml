@@ -25,7 +25,7 @@ review_follow_up:
   reports:
     - plan/reviews/2026-09-21-ui-domain.yaml
     - plan/reviews/2026-09-22-release-qa-brief.yaml
-  note: "New source-review and release-QA follow-ups; preserve historical task completion. RUI010 was fixed and verified in 83c4e08, and RUI012 was fixed with API 36 Compose coverage; RUI011 and the API 33 sparse-canvas lab check remain open. See report evidence, recommended_action, and validation for current scope."
+  note: "New source-review and release-QA follow-ups; preserve historical task completion. RUI010 was fixed and verified in 83c4e08; RUI011 behavior was confirmed and covered by focused tests; RUI012 progress/cancel was fixed with API 36 Compose coverage. The API 33 Traceroute dead-route and Topology sparse-canvas checks remain device-only. See report evidence, recommended_action, and validation for current scope."
 
 context:
   problem: |

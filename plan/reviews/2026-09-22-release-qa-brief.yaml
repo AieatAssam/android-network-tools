@@ -3,12 +3,12 @@ review:
   status: done
   source: "User-provided Net Swiss Knife QA brief v2026.09.21.1, based on the latest main release."
   baseline_commit: "5e183721e64ce8a8946f1a0b50f52b83544e8898"
-  checked_commit: "83c4e08a87cc3fd68f8afd0848dd27a618bdddd2"
+  checked_commit: "8b41d203cf345921837eb8803d245ad32ab04681"
   environment:
     connected_emulator: "API 36 (Android 16); not the brief's API 33 emulator"
     host_snmpd: "Not available in this audit"
     physical_wifi: "Not available in this audit"
-  implementation_source_matches_main: true
+  implementation_source_matches_main: false
   note: "The current branch is based on the brief's latest main commit. Fixed-release reports remain closed unless listed evidence contradicts them."
 
 fixed_release_items:
@@ -32,8 +32,8 @@ brief_items:
     route: "No new implementation task."
   - id: ISS-17
     disposition: partial
-    evidence: "TracerouteViewModel maps unavailable validated network to Error('No network connection'); TracerouteErrorPanel offers Retry/Clear and unit coverage exists. Dead-path progress and Ping-style offline presentation remain unverified on device."
-    route: "E01-T07 and E01-T09; RUI011."
+    evidence: "The code-level recovery path already existed: offline input maps to Error('No network connection'), the shared error card offers Retry/Clear, an empty completed trace reports 'No route found', and a no-response Running state shows progress plus Stop. Focused ViewModel tests passed, and the API 36 TracerouteScreenTest suite passed 9/9. A real API 33 dead-route/ICMP check remains device-only."
+    route: "RUI011 code-level verification is complete; retain the API 33 dead-route/device check under E01-T07/E01-T09."
   - id: ISS-20
     disposition: fixed
     evidence: "PingScreen and TracerouteScreen gate Start and IME Go with HostValidator.normalize, accepting outer whitespace while rejecting internal spaces. API 36 Compose suites passed Ping 10/10 and Traceroute 7/7. Focused ViewModel tests verify normalized hosts reach use cases/recents; invalid Traceroute hosts are not saved."
@@ -69,13 +69,15 @@ findings:
     kind: gap
     title: "Traceroute dead-path state lacks verified Ping-style recovery presentation"
     evidence:
-      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/traceroute/TracerouteViewModel.kt", lines: "49,142-180", detail: "Offline validation yields No network connection; an empty completed stream becomes a no-route error, while a dead path can remain Running until probes finish." }
-      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/TracerouteScreen.kt", lines: "198-222,546-582,1335-1350", detail: "Running shows progress and Error offers Retry/Clear, but the error treatment is not yet validated for dead-path/offline parity with Ping." }
-    recommended_action: "Keep the configuration/result states visible, announce meaningful progress, and align dead-path/offline recovery copy and retry behavior with the shared operation-state work."
-    validation: "Run deterministic no-network and no-hop cases plus API 33 device airplane/dead-route checks; verify progress, no blank hop area, and an actionable retry state."
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/traceroute/TracerouteViewModel.kt", lines: "49,142-201", detail: "Offline validation yields No network connection; an empty completed stream becomes a specific no-route error, and Running is exposed immediately while hop results accumulate." }
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/TracerouteScreen.kt", lines: "198-222,546-582,1338-1353", detail: "The no-response Running panel shows its progress count and the config card retains Stop; the shared error card offers Retry/Clear for offline and no-route errors." }
+      - { file: "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/screens/TracerouteScreenTest.kt", lines: "164-227", detail: "API 36 tests verify zero-hop progress/Stop and offline error visibility with Retry/Clear actions." }
+      - { file: "app/src/test/kotlin/net/aieat/netswissknife/app/ui/screens/traceroute/TracerouteViewModelTest.kt", lines: "98-119", detail: "Focused unit tests assert the exact no-route state and offline failure before probe invocation." }
+    recommended_action: "Keep the configuration/result states visible and retain actionable offline/no-route recovery; verify progress and Retry/Clear behavior deterministically."
+    validation: "TracerouteViewModelTest passed with exact offline and no-route state assertions; API 36 TracerouteScreenTest passed 9/9, covering zero-hop progress/Stop and offline Retry/Clear. Adversarial review found no test overclaim. API 33 device airplane/dead-route verification remains separate."
     related_phase: P08
     owner: E01-T07/E01-T09
-    status: todo
+    status: done
 
   - id: RUI012
     severity: medium
@@ -92,6 +94,7 @@ findings:
     status: done
 
 manual_checks:
+  - "API 33 emulator in airplane mode and on a dead/ICMP-blocked route: verify the Running state stays visibly stoppable, offline/no-route states preserve the input, and Retry/Clear remain actionable."
   - "API 33 emulator with host snmpd at 10.0.2.2/community public/v2c: assess topology progress and sparse-canvas usability; emulator public ICMP/DNS success is not a requirement."
   - "API 33 emulator without a usable Wi-Fi interface: mDNS ENODEV must remain a clear failure with Dismiss, not a successful empty scan."
   - "Physical Wi-Fi device: verify mDNS uses the active local interface (often wlan0) and retains graceful error handling."
