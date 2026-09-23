@@ -87,6 +87,7 @@ findings:
     severity: medium
     kind: bug
     status: done
+    fixed_in: "2b697b829f02e0509a3fbe2b70a9596b3afaf6a3"
     title: "Ping CSV statistics use locale-specific decimal commas as field separators"
     related_phase: P04
     implementation_task: E01-T12
