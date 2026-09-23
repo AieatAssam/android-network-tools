@@ -17,6 +17,8 @@ import net.aieat.netswissknife.core.network.mdns.DiscoveredService
 import net.aieat.netswissknife.core.network.mdns.MdnsPacketParser
 import net.aieat.netswissknife.core.network.mdns.MdnsRepository
 import net.aieat.netswissknife.core.network.mdns.MdnsUpdate
+import net.aieat.netswissknife.core.network.net.NetworkBinder
+import net.aieat.netswissknife.core.network.net.NoOpNetworkBinder
 import org.xbill.DNS.ARecord
 import org.xbill.DNS.AAAARecord
 import org.xbill.DNS.PTRRecord
@@ -80,7 +82,8 @@ private class PlatformMdnsSocket(private val socket: MulticastSocket) : MdnsSock
 }
 
 class MdnsRepositoryImpl @Inject constructor(
-    @param:ApplicationContext private val context: Context
+    @param:ApplicationContext private val context: Context,
+    private val networkBinder: NetworkBinder = NoOpNetworkBinder,
 ) : MdnsRepository {
 
     /** Platform seams let cancellation/cleanup be tested without relying on emulator networking. */

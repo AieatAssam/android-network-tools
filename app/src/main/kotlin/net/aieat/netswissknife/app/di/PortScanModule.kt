@@ -5,6 +5,7 @@ import net.aieat.netswissknife.core.network.MonotonicClock
 import net.aieat.netswissknife.core.network.SystemMonotonicClock
 import net.aieat.netswissknife.core.network.portscan.PortScanRepository
 import net.aieat.netswissknife.core.network.portscan.PortScanRepositoryImpl
+import net.aieat.netswissknife.core.network.net.NetworkBinder
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -21,7 +22,7 @@ object PortScanModule {
 
     @Provides
     @Singleton
-    fun providePortScanRepository(): PortScanRepository = PortScanRepositoryImpl()
+    fun providePortScanRepository(binder: NetworkBinder): PortScanRepository = PortScanRepositoryImpl(binder = binder)
 
     @Provides
     @Singleton

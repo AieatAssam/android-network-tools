@@ -209,7 +209,12 @@ kover {
                     "net.aieat.netswissknife.app.ui.screens.whois.ConnectorSegment",
                     "net.aieat.netswissknife.app.data.AppPreferenceKeys",
                     "net.aieat.netswissknife.app.data.RecentHostsRepository",
-                    "net.aieat.netswissknife.app.platform.LinkInfoMapper"
+                    "net.aieat.netswissknife.app.platform.LinkInfoMapper",
+                    "net.aieat.netswissknife.app.platform.NetworkSelection",
+                    "net.aieat.netswissknife.app.platform.CapabilitySnapshot",
+                    "net.aieat.netswissknife.app.platform.NetworkSnapshot",
+                    "net.aieat.netswissknife.app.platform.NetworkStatus",
+                    "net.aieat.netswissknife.app.platform.Transport"
                 )
             }
             excludes {

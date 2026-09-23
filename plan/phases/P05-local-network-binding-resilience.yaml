@@ -197,7 +197,7 @@ tasks:
 
   - id: P05-T3
     title: "app: AndroidNetworkBinder + ConnectivityObserver + DI"
-    status: todo
+    status: done
     depends_on: [P05-T2]
     tdd:
       red:
@@ -212,11 +212,12 @@ tasks:
         expect: "RED"
       green:
         steps:
-          - "NetworkSelection (pure) + AndroidNetworkBinder (maps ConnectivityManager -> snapshots; caches chosen Network + LinkProperties; refreshes via NetworkCallback)."
-          - "ConnectivityObserver: callbackFlow(registerDefaultNetworkCallback + registerNetworkCallback(VPN request)) -> StateFlow(NetworkStatus)."
-          - "NetworkModule @Provides @Singleton both; wire into Lan/PortScan/WakeOnLan/Topology/Mdns modules."
-          - "Add NetworkSelection to app Kover includes."
-        run: "./gradlew :app:testDebugUnitTest :app:assembleDebug --no-daemon"
+          - "Implement pure NetworkSelection over transport/capability snapshots; prefer non-VPN Wi-Fi, then Ethernet, and derive status from local and active-network snapshots."
+          - "AndroidNetworkBinder caches the chosen Network and LinkProperties, refreshes over API-26-compatible Wi-Fi/Ethernet NetworkCallback requests, and delegates socket binding to Network.bindSocket."
+          - "ConnectivityObserver publishes callbackFlow snapshots through StateFlow, watching the default network and VPN transport."
+          - "NetworkModule provides the app binder and observer; pass the binder to LAN, port-scan, WOL, topology, and mDNS repositories."
+          - "Include the pure selection models in app Kover reports; XML shows 100% line coverage for each included class."
+        run: "./gradlew :app:testDebugUnitTest --no-daemon --no-parallel && ./gradlew :app:assembleDebug --no-daemon --no-parallel && ./gradlew :app:koverVerify --no-daemon && ./gradlew :app:lintDebug --no-daemon --no-parallel"
         expect: "PASS"
     acceptance_criteria: ["Selection logic 100% covered; lint clean."]
 
