@@ -192,7 +192,7 @@ findings:
   - id: R2-013
     severity: high
     kind: correctness_gap
-    status: todo
+    status: done
     title: "Port scan reports one resolved address but sends probes using the hostname again"
     related_phase: P11
     implementation_task: E02-T03
@@ -201,7 +201,14 @@ findings:
       - { file: core-network/src/main/kotlin/net/aieat/netswissknife/core/network/portscan/PortScanRepositoryImpl.kt, line: 118, detail: "Workers pass the original host to effectiveChecker; defaultChecker constructs InetSocketAddress(host, port), allowing another hostname resolution." }
     impact: "Changing DNS answers or different address selection can make ports attributed to one IP actually belong to another. It also undermines explicit target/network selection and trustworthy scan comparisons."
     recommended_action: "Resolve and select an immutable literal endpoint before scheduling; use it for every connection and report. Fail clearly if resolution fails; represent multiple selected addresses as separate per-address scans. Preserve the hostname separately for display and TLS SNI where applicable."
-    validation: "Inject alternating DNS results and assert one resolution/selected endpoint for all probes; summary and diff keys match that endpoint. Cover IPv4/IPv6, failed resolution and explicit multi-address selection."
+    validation: "Passed `./gradlew :core-network:test --tests '*PortScanRepositoryImplTest' :core-domain:test --tests '*PortScanUseCaseTest' --no-daemon --no-parallel` and `./gradlew :app:testDebugUnitTest --no-daemon --no-parallel`. Tests inject an alternating DNS resolver and verify one resolution, the same IPv4 address for every probe and summary, selected IPv6 identity, and resolution failure before any probe. The app suite passes after the separate LAN diagnostic punctuation correction. QA and adversarial reviews cleared the endpoint-pinning diff."
+    fixed_in: "fcd69926d6b8025c3bd579bcdd5a82758d1af8dc"
+    completion_evidence:
+      - { file: core-network/src/main/kotlin/net/aieat/netswissknife/core/network/portscan/PortScanRepositoryImpl.kt, line: 25, detail: "PortConnectChecker receives InetAddress directly, so the worker boundary cannot re-resolve the display hostname." }
+      - { file: core-network/src/main/kotlin/net/aieat/netswissknife/core/network/portscan/PortScanRepositoryImpl.kt, line: 97, detail: "scan resolves once, checks cancellation before and after resolution, and fails before scheduling workers if name resolution fails." }
+      - { file: core-network/src/main/kotlin/net/aieat/netswissknife/core/network/portscan/PortScanRepositoryImpl.kt, line: 129, detail: "Every worker probes the selected address; defaultChecker connects with InetSocketAddress(address, port)." }
+      - { file: core-network/src/test/kotlin/net/aieat/netswissknife/core/network/portscan/PortScanRepositoryImplTest.kt, line: 235, detail: "Regression cases cover one resolution and stable IPv4 attribution, IPv6 identity, and failed resolution with zero probes." }
+    limitations: "System InetAddress.getByName is synchronous and cannot be interrupted while blocked in DNS; the post-resolution cancellation check prevents probes after it returns. Multi-address selection and scan-diff attribution remain part of the broader E02-T03 work, which stays open."
 
   - id: R2-014
     severity: medium

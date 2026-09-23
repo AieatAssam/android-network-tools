@@ -177,6 +177,12 @@ expansion:
         report: plan/reviews/2026-09-22-second-pass.yaml
         findings: [R2-013]
         rule: "Treat each linked finding as a required independently verified acceptance case; urgent regression slices do not wait for optional task breadth."
+      completed_slices:
+        - finding: R2-013
+          status: done
+          fixed_in: fcd69926d6b8025c3bd579bcdd5a82758d1af8dc
+          scope: "Resolve the host once per scan, pin every TCP probe and summary to that selected address, and fail clearly before probing if resolution fails."
+          validation: "Focused port-scan repository and use-case tests pass; the app unit suite passes. QA and adversarial reviews cleared this slice. The blocking system resolver is still synchronous, while multi-address scans, profiles, scan budgets, comparison and UI remain in E02-T03."
       priority: medium
       status: todo
       title: "Port scanner profiles, scan budget, and result delta"
