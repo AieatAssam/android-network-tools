@@ -221,7 +221,7 @@
     <string name="lan_stat_subnet">Subnet</string>
     <string name="lan_show_diagnostics">Show uncertain probes (%1$d)</string>
     <string name="lan_hide_diagnostics">Hide uncertain probes</string>
-    <string name="lan_diagnostic_entry">%1$s — %2$s%3$s</string>
+    <string name="lan_diagnostic_entry">%1$s: %2$s%3$s</string>
     <string name="lan_diagnostic_tcp_refused">TCP connection refusal reported</string>
     <string name="lan_diagnostic_tcp_timed_out">TCP probe timed out</string>
     <string name="lan_diagnostic_tcp_unreachable">TCP route unreachable</string>
