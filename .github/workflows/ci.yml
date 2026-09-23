@@ -33,6 +33,11 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x ./gradlew
 
+      - name: Check coroutine tokens and raw resource inventory
+        run: |
+          python3 -B -m unittest discover -s tools/quality -p 'test_*.py' -v
+          python3 -B tools/quality/check_resource_sites.py
+
       - name: Run Android Lint
         run: ./gradlew :app:lintDebug --no-daemon --no-parallel
 
