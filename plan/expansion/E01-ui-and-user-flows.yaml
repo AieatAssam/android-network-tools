@@ -495,6 +495,7 @@ tasks:
     completed_slices:
       - finding: R2-007
         status: done
+        fixed_in: fd8681fb332f60c7ae8a6c490c5c9fff61d46edc
         scope: "Specify safe consent, input/result redaction, no-backup storage, bounded retention, unknown-version behavior, interrupted purge recovery and implementation/verification ownership."
         validation: "Separate QA and adversarial reviews cleared the plan contract; strict SnakeYAML 2.5 validation passed for all 29 plan files. E01-T11 remains todo for the actual history implementation."
     privacy_and_storage_contract:
