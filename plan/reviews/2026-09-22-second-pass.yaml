@@ -189,7 +189,7 @@ findings:
   - id: R2-012
     severity: medium
     kind: plan_gap
-    status: todo
+    status: done
     title: "Response limits cover bodies but do not define header-count or metadata budgets"
     related_phase: P10
     implementation_task: E03-T04
@@ -197,8 +197,11 @@ findings:
       - { file: core-network/src/main/kotlin/net/aieat/netswissknife/core/network/httprobe/HttpProbeRepositoryImpl.kt, line: 151, detail: "Every header list is copied into responseHeaders; the configurable maxResponseBodyBytes applies only to the body reader." }
       - { file: plan/expansion/E03-performance-reliability-and-quality.yaml, line: 329, detail: "Shared byte budgets focus on response bodies; transport header parsing/retention limits are not specified." }
     impact: "Application-level response-size guarantees do not cover headers or their subsequent UI/export copies. Transport implementations may impose their own limits, but the app neither defines nor verifies a portable contract."
-    recommended_action: "Specify aggregate header bytes/count and per-value limits at the engine boundary, document underlying parser bounds, and preserve duplicate header semantics with explicit truncated/rejected outcomes. Do not claim bounded parser memory merely by truncating after materialization."
-    validation: "Scripted engine fixtures with huge values/counts test application retention bounds; transport integration tests verify behavior before materialization. Security grading treats omitted headers as unknown rather than absent."
+    recommended_action: "Define aggregate decoded-metadata bytes, raw field-occurrence count, and per-value limits at the engine boundary; document parser enforcement and test before materialization. Preserve repeated field values and reject over-limit responses with a typed outcome. Do not claim bounded parser memory from post-materialization truncation."
+    validation: "E03-T04 now sets 100 response field occurrences, 65,536 decoded metadata bytes, and 16,384 UTF-8 bytes per field value. Limits are checked before collection allocation; duplicate names are case-insensitive, each occurrence counts separately, and values retain per-name arrival order without comma-folding Set-Cookie. Any exceeded limit rejects the response with ResponseMetadataLimitExceeded so security grading cannot mistake omitted headers for absent headers. Boundary, duplicate, scripted-engine, and selected-transport parser tests are required. This closes the plan gap only; E03-T04 implementation remains todo behind E03-T01/P05-T1/P05-T2."
+    completion_evidence:
+      - { file: plan/expansion/E03-performance-reliability-and-quality.yaml, detail: "E03-T04 defines exact header occurrence, decoded metadata byte, and per-value limits plus duplicate-field and typed rejection semantics." }
+      - { file: plan/expansion/E03-performance-reliability-and-quality.yaml, detail: "E03-T04 acceptance criteria require cap boundary tests at the engine parser before materialization and the selected transport's integration path." }
 
   - id: R2-013
     severity: high

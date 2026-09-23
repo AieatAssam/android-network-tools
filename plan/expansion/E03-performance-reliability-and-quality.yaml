@@ -338,12 +338,25 @@ tasks:
       route-aware keys. Never cache credentials, raw packet data, scan results,
       WHOIS bodies, or TLS sessions. Every response reader enforces the shared
       byte budget and every chained lookup consumes one overall deadline rather
-      than resetting a timeout per referral.
+      than resetting a timeout per referral. HTTP response metadata has a
+      separate engine-level budget: at most 100 field occurrences, 65,536
+      decoded metadata bytes (UTF-8 name/value bytes plus four framing bytes per
+      occurrence), and 16,384 decoded UTF-8 bytes for any one field value. Check
+      each occurrence before allocating or appending it to a retained collection.
+      Count repeated names separately, compare names case-insensitively, and
+      retain each normalized name's values in arrival order; never comma-fold
+      Set-Cookie. Exceeding any limit rejects the response with a typed
+      `ResponseMetadataLimitExceeded` outcome instead of returning partial
+      headers that security analysis could mistake for absent headers. The
+      selected transport must enforce equivalent limits in its parser before
+      full header materialization; a post-materialization adapter cap is not a
+      parser-memory guarantee.
     depends_on: [E03-T01]
     implementation_steps:
       - "Record current timeout and response-size behavior in tests before changing defaults; distinguish measured baseline from the proposed shared defaults."
       - "Implement `TimeoutPolicy` and bounded TTL cache with injectable clock, max entries 256, positive/negative TTLs, route/scope key, and single-flight lookup; keep fresh diagnostic probes opt-out of cache by default."
       - "Adapt HostResolver/DNS/GeoIP/HTTP/TLS/WHOIS/speed-test and provider-chain seams; ensure `CancellationException` propagates and `disconnect/close` runs on cancellation."
+      - "Configure the selected HTTP response engine to enforce 100 field occurrences, 65,536 decoded metadata bytes (UTF-8 name/value bytes plus four framing bytes per occurrence), and 16,384 decoded UTF-8 bytes per value before retaining each field. Count duplicate occurrences independently; normalize field names case-insensitively only for grouping; preserve same-name value order and keep Set-Cookie entries separate. On any breach, close the response and return typed `ResponseMetadataLimitExceeded(limitKind, limit)` with no partial response or security analysis. If the current engine cannot enforce parser-time limits, replace it or narrow HTTP probe capability explicitly; post-materialization trimming does not satisfy this acceptance case."
       - "Add a maximum total response budget of 1 MiB by default, per-tool overrides only when justified by an acceptance test, and a typed `ResponseTruncated`/`DeadlineExceeded` outcome."
       - "Add offline read path only for an explicit stale-view action; show age/source and provide clear-cache controls through the existing settings architecture (coordinate with P12 rather than duplicating its export). Honor DNS record TTL and never replace it with the generic positive TTL."
     files_or_seams:
@@ -355,6 +368,7 @@ tasks:
       - "Each blocking network call has connect/read/overall timeout values derived from one policy; a fixture that never returns reaches DeadlineExceeded within the injected deadline and closes the resource."
       - "Cache size never exceeds 256 entries; repeated concurrent identical opt-in cached lookups invoke the fake provider once; expiry, negative expiry, route-key separation, DNS record TTL, clear, fresh-by-default behavior, and stale-offline labeling are tested."
       - "No default response reader retains more than 1 MiB; oversized HTTP/WHOIS/GeoIP fixtures return a typed truncation/size outcome and do not create an unbounded StringBuilder. Fresh DNS/HTTP/TLS diagnostics never silently serve a cache hit."
+      - "The selected HTTP engine rejects the 101st field occurrence, the first occurrence over 65,536 aggregate decoded metadata bytes, or a field value over 16,384 decoded UTF-8 bytes before materializing the complete header collection. Exact-limit responses are accepted. Duplicate field names are grouped case-insensitively with per-name arrival order preserved; separate Set-Cookie values stay separate. Scripted repository fixtures verify retained bounds, while engine/parser and loopback transport integration tests prove parser-time rejection. A rejected/unknown header set never reaches security analysis as an empty or partial map."
       - "Cache contents and exported settings contain no password, authorization header, packet payload, WHOIS body, or raw scan host list."
     validation:
       red: "./gradlew :core-network:test --tests '*Timeout*' --tests '*Cache*' --tests '*GeoIpRepositoryImplTest' --tests '*DnsRepositoryImplTest' --no-daemon"
