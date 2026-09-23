@@ -46,8 +46,8 @@ second_pass_review:
   report: plan/reviews/2026-09-22-second-pass.yaml
   findings: [R2-001, R2-002, R2-005, R2-007, R2-010, R2-013, R2-003, R2-004, R2-006, R2-008, R2-009, R2-011, R2-012, R2-014, R2-015]
   prioritized_findings:
-    - {"id":"R2-001","priority":"high","kind":"security_gap","status":"todo","owner":"P10-T3","title":"Cross-origin redirects strip headers but can replay a sensitive request body"}
-    - {"id":"R2-002","priority":"high","kind":"plan_defect","status":"todo","owner":"P10-T3","title":"The HTTP roadmap weakens secure downgrade behavior by default"}
+    - {"id":"R2-001","priority":"high","kind":"security_gap","status":"done","owner":"P10-T3","title":"Cross-origin redirects strip headers but can replay a sensitive request body"}
+    - {"id":"R2-002","priority":"high","kind":"plan_defect","status":"done","owner":"P10-T3","title":"The HTTP roadmap weakens secure downgrade behavior by default"}
     - {"id":"R2-005","priority":"high","kind":"privacy_gap","status":"todo","owner":"E01-T02","title":"HTTP recents persist the complete URL before validation, including possible secrets"}
     - {"id":"R2-007","priority":"high","kind":"plan_gap","status":"todo","owner":"E01-T11","title":"New history persistence needs an explicit consent, backup and version-compatibility contract"}
     - {"id":"R2-010","priority":"high","kind":"resource_gap","status":"todo","owner":"E03-T05","title":"Topology fan-out and SNMP walks can grow before UI caps take effect"}
@@ -374,7 +374,7 @@ phases:
     status: in_progress
     depends_on: [P02]
     findings: [F041]
-    summary: "Initial remediation upgrades Kotlin 2.4.20, AGP 9.4.1, and KSP 2.3.12 and pins affected build-only transitives. buildEnvironment selects patched artifacts and releaseRuntimeClasspath is clean; three original alerts are fixed, while six alerts last updated 2026-09-18 await GitHub rescan or documented disposition."
+    summary: "Initial remediation upgrades Kotlin 2.4.20, AGP 9.4.1, and KSP 2.3.12 and pins affected build-only transitives. The help trace records patched artifacts, while a settings-scoped selection report remains outstanding; releaseRuntimeClasspath is clean. GitHub still reports six open alerts and its fresh SBOM retains vulnerable metadata-edge versions alongside patched versions, so investigate submission inputs or obtain approved time-bounded dispositions."
 
   - id: P03
     file: plan/phases/P03-wifi-live-scanning.yaml
@@ -443,10 +443,10 @@ phases:
     file: plan/phases/P10-security-tools-depth.yaml
     title: "Security tools depth: TLS (hostname verification, validity windows, protocol/ALPN, PEM export), HTTP Probe (timing breakdown, redirect codes, cURL export, deeper header grading), WHOIS (RDAP, monotonic timing)"
     priority: medium
-    status: todo
+    status: in_progress
     depends_on: [P07]
     findings: [F015, F028, F029]
-    summary: "Feature depth for the three 'Security' tools, ordered by user value. Includes fixing HTTPS→HTTP redirect being an error and CSP/HSTS 'PASS for any value'."
+    summary: "Feature depth for the three Security tools. HTTP redirect replay now requires destination-scoped approval for cross-origin bodies, while HTTPS-to-HTTP remains blocked by default; TLS, analyzer, WHOIS, and broader HTTP work remain open."
 
   - id: P11
     file: plan/phases/P11-diagnostics-tools-depth.yaml
@@ -755,9 +755,9 @@ findings:
   - id: F041
     severity: critical
     area: dependencies
-    title: "GitHub retains Bouncy Castle alerts after Gradle resolves patched plugin versions"
-    evidence: "Authenticated `gh api repos/AieatAssam/android-network-tools/dependabot/alerts` rechecked on 2026-09-23: #3/#4/#7 are fixed, while #1/#2/#5/#6/#8/#9 remain open and the BC alerts have not updated since 2026-09-18. GitHub's SBOM records sdk-common 32.4.1 -> Bouncy Castle 1.80.2 request edges alongside pinned 1.85. A fresh `./gradlew help --debug --offline --no-daemon --no-parallel --no-configuration-cache` resolves the Gradle plugin requests and loads bcprov/bcpkix 1.85, commons-lang3 3.18.0, httpclient 4.5.14, jose4j 0.9.6, and JDOM 2.0.6.1; the log contains no affected older versions. The build files match the current default-branch baseline, and `releaseRuntimeClasspath` contains none of the affected packages."
-    impact: "The verified Gradle plugin and Android runtime graphs select patched versions, but GitHub still presents six open alerts, including one critical and one high. Security code remediation is complete; alert-state closure remains pending a GitHub dependency-graph rescan or approved disposition, so P02.5 remains open."
+    title: "GitHub dependency submission retains vulnerable metadata edges after build dependency remediation"
+    evidence: "Authenticated `gh api repos/AieatAssam/android-network-tools/dependabot/alerts` rechecked on 2026-09-23: #3/#4/#7 are fixed, while #1/#2/#5/#6/#8/#9 remain open and the BC alerts have not updated since 2026-09-18. The fresh SBOM generated at 2026-09-23T02:01:07Z still includes sdk-common 32.4.1 -> Bouncy Castle 1.80.2, commons-compress -> commons-lang3 3.16, and httpmime 4.5.6 -> httpclient 4.5.6 edges alongside patched versions; see plan/reviews/2026-09-23-p025-dependency-state.yaml. A `./gradlew help --debug --offline --no-daemon --no-parallel --no-configuration-cache` trace records plugin requests and loads bcprov/bcpkix 1.85, commons-lang3 3.18.0, httpclient 4.5.14, jose4j 0.9.6, and JDOM 2.0.6.1; it does not isolate settings-plugin configuration selection. The build files match the current default-branch baseline, and `releaseRuntimeClasspath` contains none of the affected packages."
+    impact: "Patched artifacts appear in the help trace and affected packages are absent from Android runtime, but GitHub still presents six open alerts, including one critical and one high, and a fresh SBOM still contains vulnerable metadata edges. P02.5 remains open until the submission source/path is corrected or each alert has an approved, time-bounded disposition; local resolution evidence alone does not close the gate."
     phase: P02.5
 
 changelog:
@@ -805,3 +805,9 @@ changelog:
     note: "Closed RLAN001 after verifying the committed confirmed-host boundary end to end: only ICMP, completed TCP, or correlated local-protocol replies confirm a host; failures stay bounded opt-in diagnostics, with no enrichment/count/topology/export leakage. Focused LAN/TCP/NBSTAT/mDNS/classifier/UDP tests passed; QA and adversarial reviews found no code blocker. Physical Wi-Fi/VPN capture and anonymized real NBSTAT validation remain under E00-T01."
   - date: "2026-09-23"
     note: "Closed RAPP002 with cancellation-triggered mDNS socket close, cancellation-safe multicast-lock release, and a bounded repository-to-ViewModel stop test. Closed RNET009 by mapping only explicit ESS-only capabilities to OPEN, unknown/future tokens to UNKNOWN, and showing an accessible help indicator; focused JVM and API 36 Compose tests passed. Re-audit confirmed `help --debug` selects patched versions across the plugin classpath. GitHub's alert timestamps remain unchanged since 2026-09-18, so P02.5 remains in progress pending graph rescan/disposition before another medium follow-up."
+  - date: "2026-09-23"
+    note: "Adversarial and QA re-audit narrowed P02.5 dependency evidence: the help trace records patched artifacts but does not isolate settings-plugin selection, and GitHub's fresh SBOM still includes vulnerable metadata-edge versions alongside patched versions. P02.5-T1/T3 remain in progress; investigate the dependency-submission source/path or obtain approved time-bounded dispositions rather than waiting on another rescan alone."
+  - date: "2026-09-23"
+    note: "Rechecked the supplied v2026.09.21.1 brief against current code/tests. ISS-05/06/20 remain covered, ISS-17/21 have documented API 33 device follow-ups, and ISS-22 remains routed to P05/RAPP004. Tightened ISS-17 manual validation to verify the zero-hop progress/Stop panel is visible in the initial viewport without scrolling; current API 36 coverage does not prove that layout detail."
+  - date: "2026-09-23"
+    note: "Closed R2-001 with per-hop approval IDs, explicit default-deny behavior, header stripping, source-connection disconnect before consent, and preserved same-origin 307 semantics. The redirect matrix and two-hop stale-token regression passed; separate QA and adversarial re-reviews cleared the final diff. P10 remains in progress for the broader HTTP/TLS/WHOIS scope."

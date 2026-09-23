@@ -3,7 +3,7 @@ review:
   status: done
   source: "User-provided Net Swiss Knife QA brief v2026.09.21.1, based on the latest main release."
   baseline_commit: "5e183721e64ce8a8946f1a0b50f52b83544e8898"
-  checked_commit: "eb561d9434fccbe7b5c2bf1d54f15391647d9c82"
+  checked_commit: "ac3eb0ec3a19c43be4ee40f03db4681e2f31e9f1"
   environment:
     connected_emulator: "API 36 (Android 16); not the brief's API 33 emulator"
     host_snmpd: "Not available in this audit"
@@ -32,7 +32,7 @@ brief_items:
     route: "No new implementation task."
   - id: ISS-17
     disposition: partial
-    evidence: "The code-level recovery path already existed: offline input maps to Error('No network connection'), the shared error card offers Retry/Clear, an empty completed trace reports 'No route found', and a no-response Running state shows progress plus Stop. Focused ViewModel tests passed, and the API 36 TracerouteScreenTest suite passed 9/9. A real API 33 dead-route/ICMP check remains device-only."
+    evidence: "The code-level recovery path already exists: offline input maps to Error('No network connection'), the shared error card offers Retry/Clear, an empty completed trace reports 'No route found', and a no-response Running state exposes progress plus Stop. Focused ViewModel tests passed, and the API 36 TracerouteScreenTest suite passed 9/9. The tests prove the running panel can be found/reached, but do not prove it appears in the initial viewport without scrolling after Start. Real API 33 dead-route/ICMP and initial-viewport checks remain device-only."
     route: "RUI011 code-level verification is complete; retain the API 33 dead-route/device check under E01-T07/E01-T09."
   - id: ISS-20
     disposition: fixed
@@ -74,7 +74,7 @@ findings:
       - { file: "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/screens/TracerouteScreenTest.kt", lines: "164-227", detail: "API 36 tests verify zero-hop progress/Stop and offline error visibility with Retry/Clear actions." }
       - { file: "app/src/test/kotlin/net/aieat/netswissknife/app/ui/screens/traceroute/TracerouteViewModelTest.kt", lines: "98-119", detail: "Focused unit tests assert the exact no-route state and offline failure before probe invocation." }
     recommended_action: "Keep the configuration/result states visible and retain actionable offline/no-route recovery; verify progress and Retry/Clear behavior deterministically."
-    validation: "TracerouteViewModelTest passed with exact offline and no-route state assertions; API 36 TracerouteScreenTest passed 9/9, covering zero-hop progress/Stop and offline Retry/Clear. Adversarial review found no test overclaim. API 33 device airplane/dead-route verification remains separate."
+    validation: "TracerouteViewModelTest passed with exact offline and no-route state assertions; API 36 TracerouteScreenTest passed 9/9, covering zero-hop progress/Stop and offline Retry/Clear. The suite does not establish that zero-hop progress is visible without scrolling immediately after Start. API 33 device airplane/dead-route plus initial-viewport verification remains separate."
     related_phase: P08
     owner: E01-T07/E01-T09
     status: done
@@ -94,7 +94,7 @@ findings:
     status: done
 
 manual_checks:
-  - "API 33 emulator in airplane mode and on a dead/ICMP-blocked route: verify the Running state stays visibly stoppable, offline/no-route states preserve the input, and Retry/Clear remain actionable."
+  - "API 33 emulator in airplane mode and on a dead/ICMP-blocked route: after Start, verify progress/Stop is visible in the initial viewport without scrolling; verify offline/no-route states preserve the input and Retry/Clear remain actionable."
   - "API 33 emulator with host snmpd at 10.0.2.2/community public/v2c: assess topology progress and sparse-canvas usability; emulator public ICMP/DNS success is not a requirement."
   - "API 33 emulator without a usable Wi-Fi interface: mDNS ENODEV must remain a clear failure with Dismiss, not a successful empty scan."
   - "Physical Wi-Fi device: verify mDNS uses the active local interface (often wlan0), discovers a known service, and handles port-5353 conflicts gracefully."

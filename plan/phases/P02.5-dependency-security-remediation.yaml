@@ -60,13 +60,19 @@ implementation_status: |
   (Kotlin KGP) fixed; six remain open (#1/#2/#5/#6/#8/#9). The SBOM contains both
   vulnerable Bouncy Castle 1.80.2 and pinned 1.85 because sdk-common 32.4.1's
   upstream metadata requests the older artifacts. `:app:buildEnvironment` does not
-  expose plugin DSL dependencies, but a fresh `./gradlew help --debug --offline
-  --no-daemon --no-parallel --no-configuration-cache` resolves the plugin requests
-  and loads bcprov/bcpkix 1.85, commons-lang3 3.18.0, httpclient 4.5.14, jose4j
-  0.9.6, and JDOM 2.0.6.1; no affected older versions appear in the resolution log.
-  The six open alerts (including #8 critical and #9 high) have not updated since
-  2026-09-18. The resolved graphs are patched; final phase closure awaits GitHub's
-  dependency-graph rescan or an approved alert disposition.
+  expose plugin DSL dependencies. A fresh `./gradlew help --debug --offline
+  --no-daemon --no-parallel --no-configuration-cache` log records settings-plugin
+  and project plugin requests and loads patched artifacts (bcprov/bcpkix 1.85,
+  commons-lang3 3.18.0, httpclient 4.5.14, jose4j 0.9.6, and JDOM 2.0.6.1), with
+  no affected older versions in that trace. This is evidence for the artifacts
+  loaded during the help invocation, but it is not a configuration-scoped report
+  proving selection on the separate settings-plugin classpath. The six open alerts
+  (#1/#2/#5/#6/#8/#9) have not updated since 2026-09-18. More importantly, the
+  latest GitHub SBOM was generated on 2026-09-23 and still contains vulnerable
+  versions alongside patched versions as upstream/request metadata edges. Do not
+  treat this as a rescan-only wait: identify and correct the dependency-submission
+  source/path or record specific approved, time-bounded alert dispositions before
+  closing the phase.
 
 assumptions:
   - id: A1
@@ -111,12 +117,13 @@ files_to_modify:
 tasks:
   - id: P02.5-T1
     title: "Trace all nine alerts to resolved configurations and shipped artifacts"
-    status: done
+    status: in_progress
     steps:
       - "Record alert JSON/SBOM and project buildEnvironment plus app/runtime dependency graphs."
       - "Classify each package as settings/plugin/buildscript/test-only, or shipped runtime."
-      - "Project buildEnvironment alone omits plugin DSL dependencies; a fresh Gradle `help --debug` trace resolved AGP and confirmed patched transitive selections across its actual plugin classpath."
-      - "The SBOM's sdk-common -> Bouncy Castle 1.80.2 relationship is a requested metadata edge; Gradle selects 1.85. The app runtime graph contains none of the affected packages."
+      - "Project buildEnvironment alone omits plugin DSL dependencies. The retained `help --debug` trace proves the invocation loaded patched artifacts, but it does not isolate the settings-plugin classpath or provide configuration-scoped selection reasons; capture a direct report or narrow the alert ownership classification with equivalent evidence."
+      - "The fresh 2026-09-23 GitHub SBOM still lists vulnerable versions alongside patched versions, including sdk-common -> Bouncy Castle 1.80.2. Distinguish these reported metadata edges from Gradle-loaded artifacts and determine what submission data GitHub evaluates. The app runtime graph contains none of the affected packages."
+      - "Check in a concise, reproducible review artifact with the exact commands, dates, hashes, configuration scope, and alert/SBOM state; do not rely on temporary `/tmp` logs as the retained graph record."
     acceptance_criteria: ["Every alert has an owning dependency path and a runtime/build scope classification, including plugins-DSL configurations."]
 
   - id: P02.5-T2
@@ -131,13 +138,13 @@ tasks:
 
   - id: P02.5-T3
     title: "Constrain or replace remaining vulnerable transitives"
-    status: done
+    status: in_progress
     depends_on: [P02.5-T1, P02.5-T2]
     steps:
       - "Align Bouncy Castle modules to a patched compatible line."
       - "Remediate jose4j, JDOM, Commons Lang, and Apache HttpClient through their owning plugin/dependency path."
       - "Use explicit Gradle constraints only where the parent upgrade cannot resolve the alert cleanly; document why."
-      - "Applied buildscript classpath pins for affected transitives and verified the actual plugins DSL resolution selects patched versions: bcprov/bcpkix 1.85, jose4j 0.9.6, JDOM 2.0.6.1, Commons Lang 3.18.0, and HttpClient 4.5.14; none enter releaseRuntimeClasspath."
+      - "Applied buildscript classpath pins for affected transitives. The `help --debug` trace records patched artifacts at bcprov/bcpkix 1.85, jose4j 0.9.6, JDOM 2.0.6.1, Commons Lang 3.18.0, and HttpClient 4.5.14; none enter releaseRuntimeClasspath. Confirm the settings-scoped configuration separately before describing all plugin-DSL paths as resolved."
     acceptance_criteria: ["No vulnerable package version remains in any shipped runtime graph; build-only exceptions are explicitly documented."]
 
   - id: P02.5-T4
@@ -150,7 +157,8 @@ tasks:
       - "./gradlew :app:lintDebug --no-daemon --no-parallel"
       - "./gradlew :app:assembleDebug :app:assembleRelease --no-daemon"
       - "gh api repos/AieatAssam/android-network-tools/dependabot/alerts --paginate"
-      - "Completed repository tests, all three Kover verification tasks, debug lint, release assembly, actual Gradle plugin-resolution trace, and releaseRuntimeClasspath inspection. Re-query on 2026-09-23: #3/#4/#7 are fixed; #1/#2/#5/#6/#8/#9 remain open with alert timestamps unchanged since 2026-09-18. The resolved graphs contain only patched versions; await GitHub dependency-graph rescan or record an approved disposition before closing the phase."
+      - "gh api repos/AieatAssam/android-network-tools/dependency-graph/sbom"
+      - "Completed repository tests, all three Kover verification tasks, debug lint, release assembly, Gradle help trace, and releaseRuntimeClasspath inspection. Re-query on 2026-09-23: #3/#4/#7 are fixed; #1/#2/#5/#6/#8/#9 remain open with alert timestamps unchanged since 2026-09-18. The GitHub SBOM generated at 2026-09-23T02:01:07Z still contains vulnerable metadata-edge versions alongside patched versions; summary and payload hash are in plan/reviews/2026-09-23-p025-dependency-state.yaml. Investigate/correct the dependency-submission source or obtain approved, time-bounded dispositions; a pending rescan alone is not sufficient."
     acceptance_criteria: ["All quality gates pass and Dependabot reports no unresolved actionable alert introduced by this phase."]
 
 qa_validation:

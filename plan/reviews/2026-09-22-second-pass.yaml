@@ -21,6 +21,7 @@ findings:
     impact: "A user-entered token or other sensitive data in a POST/PUT/PATCH body can be sent to a different origin via a redirect despite header stripping. This is a missing diagnostic-tool safety policy, not a claim that HTTP method-preservation semantics are incorrect."
     recommended_action: "Before any cross-origin redirect that retains an entity, stop with redirect evidence and require explicit approval of destination/method/body replay. Default deny replay; do not silently discard an entity yet claim the same diagnostic request. Preserve compliant same-origin redirect semantics."
     validation: "Passed `./gradlew :core-network:test --tests '*HttpProbeRepositoryRedirectTest' :app:testDebugUnitTest --tests '*HttpProbeViewModelTest' :app:compileDebugKotlin --no-daemon --no-parallel` (11 redirect tests and 13 ViewModel tests, 0 failures/errors; final repository rerun plus app compile also passed). Loopback POST 307/308 and PUT 301/302 plus fake-connection PATCH 301/302 remain unopened until consent; approved requests replay method/body with custom headers stripped; same-origin 307 preserves body; no callback denies; source connection disconnects before consent wait. A two-hop ViewModel test proves stale approval A cannot authorize B in the same run. Separate QA and adversarial re-reviews cleared the final diff."
+    fixed_in: "ac3eb0ec3a19c43be4ee40f03db4681e2f31e9f1"
 
   - id: R2-002
     severity: high

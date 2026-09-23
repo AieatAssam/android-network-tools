@@ -1,0 +1,57 @@
+review:
+  id: P02.5-dependency-state
+  checked_at: "2026-09-23"
+  branch: "plan/comprehensive-review-2026-09-22"
+  commit: "38ba78b6f91c45549d4ffae327b893d2b1a019f1"
+  status: "open"
+  sources:
+    alerts_command: "gh api --paginate repos/AieatAssam/android-network-tools/dependabot/alerts"
+    sbom_command: "gh api repos/AieatAssam/android-network-tools/dependency-graph/sbom"
+    gradle_command: "./gradlew help --debug --offline --no-daemon --no-parallel --no-configuration-cache"
+    runtime_graph_command: "./gradlew :app:dependencies --configuration releaseRuntimeClasspath --no-daemon"
+
+dependabot_alerts:
+  checked_date: "2026-09-23"
+  fixed: [3, 4, 7]
+  open: [1, 2, 5, 6, 8, 9]
+  open_alerts_have_fixed_at: false
+  open_alerts_have_dismissed_at: false
+  note: "Six alerts remain open, including critical #8 and high #9. Their update timestamps remain 2026-09-18."
+
+github_sbom:
+  generated_at: "2026-09-23T02:01:07Z"
+  sha256: "91f002e2c043ead575ef04872153c2474298fc6eec48e0f43fa9517d1a5d5e6a"
+  reported_versions:
+    "org.bouncycastle:bcprov-jdk18on": ["1.80.2", "1.85"]
+    "org.bouncycastle:bcpkix-jdk18on": ["1.80.2", "1.85"]
+    "org.apache.commons:commons-lang3": ["3.16.0", "3.18.0"]
+    "org.apache.httpcomponents:httpclient": ["4.5.6", "4.5.14"]
+  vulnerable_metadata_edges:
+    - "com.android.tools:sdk-common:32.4.1 -> org.bouncycastle:bcpkix-jdk18on:1.80.2"
+    - "com.android.tools:sdk-common:32.4.1 -> org.bouncycastle:bcprov-jdk18on:1.80.2"
+    - "org.apache.commons:commons-compress:1.27.1 -> org.apache.commons:commons-lang3:3.16.0"
+    - "org.apache.httpcomponents:httpmime:4.5.6 -> org.apache.httpcomponents:httpclient:4.5.6"
+  interpretation: "The SBOM is freshly generated and still reports vulnerable versions alongside patched versions. Treat these as dependency-submission metadata edges until reconciled against Gradle-selected artifacts; they remain the data GitHub currently uses while six alerts are open."
+
+gradle_evidence:
+  trace_sha256: "a614de05d4dbc4433112f298bfe9f243d7eb1b5edfd973dbe0c3ae4706908b36"
+  observed_patched_artifacts:
+    "org.bouncycastle:bcprov-jdk18on": "1.85"
+    "org.bouncycastle:bcpkix-jdk18on": "1.85"
+    "org.bitbucket.b_c:jose4j": "0.9.6"
+    "org.jdom:jdom2": "2.0.6.1"
+    "org.apache.commons:commons-lang3": "3.18.0"
+    "org.apache.httpcomponents:httpclient": "4.5.14"
+  scope_limitations:
+    - "The help trace records the plugin requests and artifacts loaded during that invocation; it is not a configuration-scoped selection report for the separate settings-plugin classpath."
+    - "The trace loads org.apache.httpcomponents:httpmime:4.5.6. This is distinct from the httpclient alert, though the fresh SBOM shows the former requesting vulnerable httpclient:4.5.6."
+    - "The releaseRuntimeClasspath report excludes the affected packages from the Android runtime; it does not establish the build/settings plugin classpath."
+
+disposition:
+  phase_status: "in_progress"
+  blockers:
+    - "Produce a settings-scoped dependency report or equivalent evidence for every alerted build/plugin configuration."
+    - "Identify and correct the dependency-submission source/path that continues to emit old requested versions, or obtain explicit, time-bounded approvals for each unresolved alert."
+  closure_rule: "Do not close P02.5 based only on local artifact-resolution evidence or the expectation of a later rescan."
+
+artifact_note: "The compact evidence and hashes are retained here. Raw Gradle and SBOM JSON payloads were collected under /tmp during this audit and are not committed."
