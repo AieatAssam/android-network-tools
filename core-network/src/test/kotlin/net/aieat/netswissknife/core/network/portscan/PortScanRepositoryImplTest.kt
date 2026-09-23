@@ -1,12 +1,18 @@
 package net.aieat.netswissknife.core.network.portscan
 
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import net.aieat.netswissknife.core.network.net.FakeNetworkBinder
 import net.aieat.netswissknife.core.network.net.LocalNetworkPermissionDeniedException
+import net.aieat.netswissknife.core.network.testkit.ScriptedSocket
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertThrows
@@ -70,6 +76,78 @@ class PortScanRepositoryImplTest {
             checker(InetAddress.getLoopbackAddress(), 80)
         }
         assertEquals("permission denied", error.cause?.message)
+    }
+
+    @Test
+    fun `cancelling a banner read closes its socket and emits no late result`() = runTest {
+        val socket = ScriptedSocket()
+        val updates = java.util.concurrent.CopyOnWriteArrayList<PortScanUpdate>()
+        val repo = PortScanRepositoryImpl(
+            hostResolver = { InetAddress.getLoopbackAddress() },
+            socketFactory = { socket },
+        )
+
+        val collector = backgroundScope.launch(Dispatchers.IO) {
+            repo.scan("localhost", listOf(22), timeoutMs = 1_000, concurrency = 1)
+                .onEach(updates::add)
+                .toList()
+        }
+
+        assertTrue(
+            withContext(Dispatchers.IO) { socket.awaitBlockingRead(5, TimeUnit.SECONDS) },
+            "default checker did not block in banner read"
+        )
+        withContext(Dispatchers.Default) {
+            withTimeout(2_000) { collector.cancelAndJoin() }
+        }
+
+        assertTrue(socket.isClosed, "cancelling the scan must close its active socket")
+        assertTrue(updates.any { it is PortScanUpdate.Started })
+        assertTrue(updates.none { it is PortScanUpdate.PortResult || it is PortScanUpdate.Complete })
+    }
+
+    @Test
+    fun `cancelling a blocking connect closes its socket and emits no late result`() = runTest {
+        val socket = ScriptedSocket(blockConnectUntilClosed = true)
+        val updates = java.util.concurrent.CopyOnWriteArrayList<PortScanUpdate>()
+        val repo = PortScanRepositoryImpl(
+            hostResolver = { InetAddress.getLoopbackAddress() },
+            socketFactory = { socket },
+        )
+
+        val collector = backgroundScope.launch(Dispatchers.IO) {
+            repo.scan("localhost", listOf(22), timeoutMs = 1_000, concurrency = 1)
+                .onEach(updates::add)
+                .toList()
+        }
+
+        assertTrue(
+            withContext(Dispatchers.IO) { socket.connectStarted.await(5, TimeUnit.SECONDS) },
+            "default checker did not reach connect"
+        )
+        withContext(Dispatchers.Default) {
+            withTimeout(2_000) { collector.cancelAndJoin() }
+        }
+
+        assertTrue(socket.isClosed, "cancelling the scan must close a connecting socket")
+        assertTrue(updates.any { it is PortScanUpdate.Started })
+        assertTrue(updates.none { it is PortScanUpdate.PortResult || it is PortScanUpdate.Complete })
+    }
+
+    @Test
+    fun `checker cancellation while scan remains active fails the operation`() = runTest {
+        val repo = PortScanRepositoryImpl(
+            checker = { _, _ -> throw kotlinx.coroutines.CancellationException("checker stopped") },
+            hostResolver = { InetAddress.getLoopbackAddress() },
+        )
+
+        val error = assertThrows(IllegalStateException::class.java) {
+            kotlinx.coroutines.runBlocking {
+                repo.scan("localhost", listOf(22, 23), timeoutMs = 1_000, concurrency = 1).toList()
+            }
+        }
+
+        assertTrue(error.message!!.contains("Port checker cancelled"))
     }
 
     // ── Helper checkers ────────────────────────────────────────────────────────
