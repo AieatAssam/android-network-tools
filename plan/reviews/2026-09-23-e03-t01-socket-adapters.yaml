@@ -14,22 +14,25 @@ scope:
   - "WHOIS now creates an INTERNET OperationSession with a shared monotonic three-hop deadline, one-probe concurrency, and a response-byte limit. Each active socket is registered in the operation ResourceScope and released by a single idempotent lease after completion or cancellation."
   - "WHOIS progress checks the shared deadline before each hop emission; deadline exceptions pass through hop fallback handling to the stable total-deadline error mapping."
   - "The bounded WHOIS executor closes the cancel-before-enqueue race with a post-submit cancellation check; cancelled queued work is removed, while active sockets close through the operation scope."
+  - "mDNS now uses a per-collection LOCAL_NETWORK OperationSession with a clamped monotonic scan window that includes setup and the initial query; multicast lock, socket, and group membership are registered in LIFO cleanup order."
+  - "mDNS cancellation closes blocked receive/join work, preserves USER_STOP and LIFECYCLE_PAUSE, emits no late update, and emits DiscoveryComplete only after successful cleanup. Expected deadline completion is withheld when cleanup failures appear anywhere in the deadline/cancellation cause chain."
 
 validation:
   command: "./gradlew :core-network:test :core-domain:test :app:testDebugUnitTest --no-daemon --no-parallel"
   status: passed
-  result: "core-network, core-domain, and app unit suites completed with zero failures after the WHOIS shared-budget deadline fix. Focused WHOIS tests also passed before the full run."
-  additional: "git diff --check passed."
+  result: "Full core-network/core-domain/app unit suites passed: 973 core-network tests (1 skipped), 173 core-domain tests, and 358 app tests; zero failures/errors. The previously timed-out OperationRunnerTest passed in this full rerun and as an isolated class."
+  additional: "Focused mDNS repository and ViewModel suites passed, including a 500 ms blocked-receive deadline test with a throwing socket close; CI resource-site checker tests passed (4), its ledger check inventories 15 sites (6 reviewed, 9 follow-ups), and git diff --check passed."
 
 reviewers:
-  qa: "Cleared the LAN sibling-cancellation path, reverse-DNS worker cancellation/enqueue race, Port Scan Started ordering, and WHOIS budget/deadline/socket ownership changes."
-  adversarial: "Cleared the LAN and Port Scan paths after fixes; for WHOIS, caught a split-clock deadline path that could become a partial hop result. The adapter now uses the shared budget and rethrows deadline exceptions; follow-up review cleared the fix."
+  qa: "Cleared LAN sibling-cancellation, reverse-DNS worker cancellation/enqueue, Port Scan Started ordering, WHOIS ownership, and mDNS receive/join cancellation, lifecycle reasons, bounded scan timing, and deadline cleanup propagation."
+  adversarial: "Cleared LAN and Port Scan after fixes; for WHOIS, caught split-clock deadline handling. For mDNS, caught the deadline-success/cleanup-failure case; the adapter now recursively checks cause-chain suppressed failures and the regression confirms no terminal success after a failed socket close."
 
 limits:
   - "InetAddress.isReachable and platform address resolution do not expose closeable handles. The ICMP call receives its per-host timeout and checks cancellation after return; a platform implementation may still overrun that timeout."
   - "A native reverse-DNS resolver may ignore thread interruption. Caller cancellation returns promptly, while the fixed executor bounds residual resolver work to two workers and four queued requests; excess lookups return no name."
   - "Platform WHOIS DNS resolution may ignore thread interruption. The caller still returns promptly, while the shared fixed executor bounds residual work to two workers and sixteen queued requests; excess submissions fail with a bounded-worker rejection."
   - "API 33 SNMP lab, TalkBack, and physical-Wi-Fi checks from the supplied release QA brief remain device-only; see 2026-09-23-release-qa-brief.yaml."
+  - "The E03 target of <=500 ms cleanup is not measured by these JVM tests; real MulticastSocket interruption, API 33 ENODEV, physical-interface selection, multicast discovery, and port-5353 conflict behavior remain device checks."
 
 phase_disposition:
-  E03-T01: "in_progress; Port Scan, LAN Scan, and WHOIS adapters are validated. Other tool adapters, static CI enforcement, and phase-wide/device gates remain open."
+  E03-T01: "in_progress; Port Scan, LAN Scan, WHOIS, and mDNS adapters are validated. CI now inventories raw resource sites and rejects unlisted/banned patterns; remaining tool adapters, phase-wide gates, and device cleanup measurements remain open."

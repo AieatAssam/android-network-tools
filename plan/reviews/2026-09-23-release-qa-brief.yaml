@@ -2,7 +2,7 @@ review:
   area: release-qa-brief
   status: audited
   source: "User-provided Net Swiss Knife QA brief v2026.09.21.1 (API 33, host snmpd at 10.0.2.2)."
-  checked_commit: "12e7162"
+  checked_commit: "fe4c8b7288fa9259be15978c4b63cf83be98c0df"
   branch: "plan/comprehensive-review-2026-09-22"
   environment:
     connected_emulator: "API 36 / Android 16; not the requested API 33 emulator"
@@ -10,6 +10,62 @@ review:
     physical_wifi: "Not available"
   fixed_items_rechecked: [ISS-01, ISS-02, ISS-03, ISS-04, ISS-08, ISS-09, ISS-15, SNMP-threading]
   fixed_items_result: "No regression found in current source/tests. Navigation, Ping, Settings, TLS, and topology changes preserve the listed behaviors. SNMP work remains on IO/background dispatchers; no live SNMP query or ANR measurement was possible."
+  fixed_item_evidence:
+    - id: ISS-01
+      classification: source_confirmed_specific_label_ui_test_not_found
+      evidence:
+        - { file: "app/src/main/res/values/strings.xml", lines: "85-90", detail: "Ping timeout label is `Timeout (s)`, consistent with seconds-based timeout chips in the input row." }
+        - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/PingScreen.kt", lines: "573-585", detail: "Timeout chips are labeled 1s, 2s, 3s, and 5s." }
+      limitation: "The current PingScreenTest has no specific assertion for the timeout label/chips; source was rechecked. No separate API 33 run."
+    - id: ISS-02
+      classification: source_and_ui_test_present
+      evidence:
+        - { file: "app/src/main/res/values/strings.xml", lines: "6-10", detail: "Home scroll hint text is `Scroll for more tools`." }
+        - { file: "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/NavigationAccessibilityTest.kt", lines: "69-82", detail: "Home test asserts the scroll cue is displayed." }
+      limitation: "API 36 instrumentation passed; no separate API 33 run."
+    - id: ISS-03
+      classification: source_and_ui_test_present
+      evidence:
+        - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/navigation/NavRoutes.kt", lines: "64-79", detail: "The shared tool list includes WHOIS, HTTP Probe, Subnet Calc, Speed Test, and Wake-on-LAN." }
+        - { file: "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/NavigationAccessibilityTest.kt", lines: "84-112", detail: "More sheet test iterates every shared tool, scrolls to it, and asserts display, click action, and button role." }
+      limitation: "API 36 instrumentation passed; no separate API 33 run."
+    - id: ISS-04
+      classification: source_and_unit_test_present_ui_error_rendering_test_present
+      evidence:
+        - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/ping/PingViewModel.kt", lines: "126-128,276-303", detail: "Offline guard emits `PingUiState.Error(\"No network connection\")` before starting the probe." }
+        - { file: "app/src/test/kotlin/net/aieat/netswissknife/app/ui/screens/ping/PingViewModelTest.kt", lines: "235-244", detail: "Unit test checks offline error state and verifies the Ping use case is not invoked." }
+        - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/PingScreen.kt", lines: "236-260", detail: "Error state is rendered in the results panel; the input header also renders the internet NetworkStatusBanner." }
+        - { file: "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/screens/PingScreenTest.kt", lines: "79-108", detail: "Compose tests cover rendering error title/message and empty-detail fallback using a fake ViewModel." }
+      limitation: "The ViewModel offline unit test and generic Compose error rendering are covered; airplane-mode UI behavior was not separately exercised on API 33."
+    - id: ISS-08
+      classification: source_and_ui_test_present
+      evidence:
+        - { file: "app/src/main/AndroidManifest.xml", lines: "18-25", detail: "Application launcher label references `@string/app_name`." }
+        - { file: "app/src/main/res/values/strings.xml", lines: "2-4", detail: "`app_name` is `NetSwiss`; full in-app brand text remains `Net Swiss Knife`." }
+        - { file: "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/NavigationAccessibilityTest.kt", lines: "132-137", detail: "Instrumentation test reads the package launcher label and compares it with `app_name`, including a length bound." }
+      limitation: "API 36 instrumentation passed; no separate API 33 run."
+    - id: ISS-09
+      classification: source_and_ui_test_present
+      evidence:
+        - { file: "app/src/main/res/values/strings.xml", lines: "735-738", detail: "Settings attribution body contains the Cloudflare service disclosure and is a readable multi-sentence text resource." }
+        - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/settings/SettingsScreen.kt", lines: "482-512", detail: "Attributions section displays the body in a full-width card with normal body-small styling and a service link." }
+        - { file: "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/screens/settings/SettingsScreenTest.kt", lines: "53-74", detail: "UI test scrolls to the bottom attribution text and asserts it is displayed." }
+      limitation: "API 36 instrumentation passed; no separate API 33 run or physical font-size/accessibility check."
+    - id: ISS-15
+      classification: source_and_ui_test_present
+      evidence:
+        - { file: "app/src/main/res/values/strings.xml", lines: "484-488", detail: "TLS error title is `Inspection failed` and retry action is `Retry`." }
+        - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/tls/TlsInspectorScreen.kt", lines: "389-398", detail: "TLS error card displays the title/message and wires Retry to the inspect callback." }
+        - { file: "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/screens/tls/TlsInspectorScreenTest.kt", lines: "150-169", detail: "UI test checks error title/message and verifies Retry calls inspect." }
+      limitation: "API 36 instrumentation passed with a fake ViewModel; no live Cloudflare request is required or asserted."
+    - id: SNMP-threading
+      classification: source_and_unit_test_present_runtime_responsiveness_unverified
+      evidence:
+        - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/topology/TopologyDiscoveryRepositoryImpl.kt", lines: "38-50,198-200", detail: "SNMP client construction, discovery, and teardown are in the upstream flow dispatched with `flowOn(Dispatchers.IO)`; cancellation closes the client and is rethrown." }
+        - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/topology/Snmp4jClientImpl.kt", lines: "88-103,121-130", detail: "GET setup and request work run off-main, with cancellable request handling." }
+        - { file: "core-network/src/test/kotlin/net/aieat/netswissknife/core/network/topology/TopologyDiscoveryRepositoryTest.kt", lines: "367-420", detail: "Repository tests cover closing the client during an active walk and blocking GET cancellation." }
+        - { file: "core-network/src/test/kotlin/net/aieat/netswissknife/core/network/topology/Snmp4jClientImplLoopbackTest.kt", lines: "187-248", detail: "Loopback tests cover prompt cancellation of SNMP walk and GET requests." }
+      limitation: "Source and tests support background dispatch/cancellation, but the host snmpd lab was unavailable; UI responsiveness and absence of ANR/NetworkOnMainThreadException were not measured live."
   interpretation: "The brief's v2026.09.21.1 release metadata describes its test baseline, not the checked source revision. Classifications below reflect current worktree source/tests; live claims remain unverified unless explicitly noted."
 
 items:
@@ -79,10 +135,10 @@ api36_instrumentation:
 unit_validation:
   command: "./gradlew :core-network:test :core-domain:test :app:testDebugUnitTest --no-daemon --no-parallel"
   status: passed
-  results: { core_network: 895, core_network_skipped: 1, core_domain: 172, app: 328, failures: 0, errors: 0 }
+  results: { core_network: 973, core_network_skipped: 1, core_domain: 173, app: 358, failures: 0, errors: 0 }
 
 brief_accuracy:
   - "ISS-21's listed features (Cancel, progress, sysName/IP labels, and node-details sheet) exist in current source. The remaining concrete question is live SNMP cancellation and usability of sparse graph layouts, not missing feature implementation as stated."
   - "The report's API 33 observations cannot be reproduced with the connected API 36 emulator. Emulator public ICMP/DNS instability is appropriately treated as a non-goal; test error and recovery UX instead."
-  - "The supplied release version identifies a release under test; it is not evidence that every reported issue still exists at checked commit 12e7162 or the current reviewed worktree."
+  - "The supplied release version identifies a release under test; it is not evidence that every reported issue still exists at checked commit fe4c8b7288fa9259be15978c4b63cf83be98c0df or the current reviewed worktree."
   - "The brief's do-not-reopen list was checked against current source/tests and has no observed regression. SNMP background dispatch is source-confirmed, while responsiveness/no-ANR remains a live runtime claim that this environment could not measure."
