@@ -37,7 +37,12 @@ import org.snmp4j.util.TreeUtils
 import org.snmp4j.util.TreeEvent
 import org.snmp4j.util.TreeListener
 import java.net.InetAddress
+import java.net.InetSocketAddress
 import java.util.concurrent.ConcurrentHashMap
+import net.aieat.netswissknife.core.network.net.LocalNetworkPermissionDeniedException
+import net.aieat.netswissknife.core.network.net.NetworkBinder
+import net.aieat.netswissknife.core.network.net.NoOpNetworkBinder
+import net.aieat.netswissknife.core.network.net.newUdpSocket
 
 /**
  * One SNMP4J transport/session for one topology discovery run.
@@ -47,10 +52,11 @@ import java.util.concurrent.ConcurrentHashMap
  * GET and WALK while still isolating credentials between discovery runs.
  */
 class Snmp4jClientImpl(
-    private val sessionParams: TopologyParams
+    private val sessionParams: TopologyParams,
+    private val binder: NetworkBinder = NoOpNetworkBinder,
 ) : SnmpClient {
 
-    private val transport = DefaultUdpTransportMapping()
+    private val transport = createTransport()
     private val snmp = Snmp(transport)
     private val targetCache = ConcurrentHashMap<String, Target<*>>()
     private val authoritativeEngineIdCache = ConcurrentHashMap<String, ByteArray>()
@@ -67,6 +73,16 @@ class Snmp4jClientImpl(
             snmp.getUSM().addUser(spec.toUsmUser())
         }
         transport.listen()
+    }
+
+    private fun createTransport(): DefaultUdpTransportMapping = try {
+        if (binder.shouldBind(sessionParams.targetIp)) {
+            BoundUdpTransportMapping(binder, sessionParams.targetIp)
+        } else {
+            DefaultUdpTransportMapping()
+        }
+    } catch (error: SecurityException) {
+        throw LocalNetworkPermissionDeniedException(error)
     }
 
     @OptIn(InternalCoroutinesApi::class)
@@ -287,6 +303,28 @@ class Snmp4jClientImpl(
     companion object {
         @Volatile
         private var usmSecurityModelRegistered = false
+    }
+}
+
+/** Uses an unbound replacement socket so the platform can select its network before bind(). */
+private class BoundUdpTransportMapping(
+    binder: NetworkBinder,
+    destinationIp: String,
+) : DefaultUdpTransportMapping() {
+    init {
+        socket.close()
+        val networkSocket = binder.newUdpSocket(destinationIp, forceBind = true)
+        try {
+            networkSocket.bind(InetSocketAddress(0))
+            socket = networkSocket
+            udpAddress.port = networkSocket.localPort
+        } catch (error: SecurityException) {
+            networkSocket.close()
+            throw LocalNetworkPermissionDeniedException(error)
+        } catch (error: Exception) {
+            networkSocket.close()
+            throw error
+        }
     }
 }
 

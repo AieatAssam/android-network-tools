@@ -6,12 +6,16 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import net.aieat.netswissknife.core.network.NetworkResult
+import net.aieat.netswissknife.core.network.net.FakeNetworkBinder
+import net.aieat.netswissknife.core.network.net.LocalNetworkPermissionDeniedException
+import net.aieat.netswissknife.core.network.net.NetworkBinder
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.net.DatagramPacket
 import java.net.DatagramSocket
+import java.net.SocketAddress
 
 class WakeOnLanRepositoryImplTest {
 
@@ -65,5 +69,44 @@ class WakeOnLanRepositoryImplTest {
             port = 9,
         )
         assertTrue(result is NetworkResult.Error)
+    }
+
+    @Test
+    fun `binds a selected local socket before sending the magic packet`() = runBlocking {
+        val binder = FakeNetworkBinder(shouldBindResult = true)
+        val boundAtSend = mutableListOf<Boolean>()
+        val socket = object : DatagramSocket(null as SocketAddress?) {
+            override fun send(packet: DatagramPacket) {
+                boundAtSend += binder.boundDatagramSockets.singleOrNull() === this
+            }
+        }
+        val repo = WakeOnLanRepositoryImpl(binder = binder, socketFactory = { socket })
+
+        val result = repo.sendMagicPacket("01:02:03:04:05:06", "192.168.1.255", port = 9, repeatCount = 1)
+
+        assertTrue(result is NetworkResult.Success, "expected Success, got $result")
+        assertEquals(listOf(true), boundAtSend)
+        assertEquals(listOf(socket), binder.boundDatagramSockets)
+        assertEquals(listOf(false), binder.datagramSocketBoundStatesAtBind)
+        assertTrue(socket.isBound)
+    }
+
+    @Test
+    fun `maps local socket permission denial to a typed error cause`() = runBlocking {
+        val delegate = FakeNetworkBinder(shouldBindResult = true)
+        val binder = object : NetworkBinder by delegate {
+            override fun bind(socket: DatagramSocket) {
+                throw SecurityException("permission denied")
+            }
+        }
+        val socket = DatagramSocket(null as SocketAddress?)
+        val repo = WakeOnLanRepositoryImpl(binder = binder, socketFactory = { socket })
+
+        val result = repo.sendMagicPacket("01:02:03:04:05:06", "192.168.1.255", port = 9)
+
+        assertTrue(result is NetworkResult.Error)
+        result as NetworkResult.Error
+        assertTrue(result.cause is LocalNetworkPermissionDeniedException)
+        assertEquals("permission denied", result.cause?.cause?.message)
     }
 }

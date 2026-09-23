@@ -17,6 +17,10 @@ import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.net.SocketTimeoutException
+import net.aieat.netswissknife.core.network.net.LocalNetworkPermissionDeniedException
+import net.aieat.netswissknife.core.network.net.NetworkBinder
+import net.aieat.netswissknife.core.network.net.NoOpNetworkBinder
+import net.aieat.netswissknife.core.network.net.newTcpSocket
 import net.aieat.netswissknife.core.network.MonotonicClock
 import net.aieat.netswissknife.core.network.SystemMonotonicClock
 import net.aieat.netswissknife.core.network.elapsedMillisSince
@@ -45,6 +49,8 @@ class PortScanRepositoryImpl(
     private val checker: PortConnectChecker? = null,
     private val clock: MonotonicClock = SystemMonotonicClock,
     private val hostResolver: (String) -> InetAddress = InetAddress::getByName,
+    private val binder: NetworkBinder = NoOpNetworkBinder,
+    private val socketFactory: () -> Socket = { Socket() },
 ) : PortScanRepository {
 
     companion object {
@@ -54,11 +60,13 @@ class PortScanRepositoryImpl(
         fun defaultChecker(
             timeoutMs: Int,
             clock: MonotonicClock = SystemMonotonicClock,
+            binder: NetworkBinder = NoOpNetworkBinder,
+            socketFactory: () -> Socket = { Socket() },
         ): PortConnectChecker = { address, port ->
             val start = clock.nowNanos()
             var socket: Socket? = null
             try {
-                socket = Socket()
+                socket = binder.newTcpSocket(address.hostAddress, socketFactory)
                 socket.connect(InetSocketAddress(address, port), timeoutMs)
                 val responseTime = clock.elapsedMillisSince(start)
 
@@ -69,6 +77,8 @@ class PortScanRepositoryImpl(
                     val bytes = ByteArray(256)
                     val read = inputStream.read(bytes)
                     if (read > 0) BannerSanitizer.sanitize(String(bytes, 0, read)) else null
+                } catch (error: SecurityException) {
+                    throw LocalNetworkPermissionDeniedException(error)
                 } catch (_: Exception) { null }
 
                 PortConnectResult(PortStatus.OPEN, responseTime, banner)
@@ -76,6 +86,10 @@ class PortScanRepositoryImpl(
                 PortConnectResult(PortStatus.CLOSED, clock.elapsedMillisSince(start), null)
             } catch (e: SocketTimeoutException) {
                 PortConnectResult(PortStatus.FILTERED, clock.elapsedMillisSince(start), null)
+            } catch (e: LocalNetworkPermissionDeniedException) {
+                throw e
+            } catch (e: SecurityException) {
+                throw LocalNetworkPermissionDeniedException(e)
             } catch (_: Exception) {
                 PortConnectResult(PortStatus.FILTERED, clock.elapsedMillisSince(start), null)
             } finally {
@@ -90,7 +104,7 @@ class PortScanRepositoryImpl(
         timeoutMs: Int,
         concurrency: Int
     ): Flow<PortScanUpdate> = flow {
-        val effectiveChecker = checker ?: defaultChecker(timeoutMs, clock)
+        val effectiveChecker = checker ?: defaultChecker(timeoutMs, clock, binder, socketFactory)
         val startTime = clock.nowNanos()
         val results = mutableListOf<PortScanResult>()
 

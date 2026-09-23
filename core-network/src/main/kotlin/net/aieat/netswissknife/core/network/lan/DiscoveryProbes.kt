@@ -10,6 +10,10 @@ import java.net.SocketTimeoutException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import net.aieat.netswissknife.core.network.net.LocalNetworkPermissionDeniedException
+import net.aieat.netswissknife.core.network.net.NetworkBinder
+import net.aieat.netswissknife.core.network.net.NoOpNetworkBinder
+import net.aieat.netswissknife.core.network.net.newTcpSocket
 
 /** Probe used to establish whether an IPv4 host answers ICMP echo. */
 fun interface IcmpProbe {
@@ -113,14 +117,17 @@ data class TcpConnectResult(
 
 /** Sequential TCP presence probe. Only a completed connection is positive evidence. */
 class SocketTcpPresenceProbe(
-    private val connector: (ip: String, port: Int, timeoutMs: Int) -> TcpConnectResult = ::connect,
+    private val binder: NetworkBinder = NoOpNetworkBinder,
+    private val socketFactory: () -> Socket = { Socket() },
+    private val connector: ((ip: String, port: Int, timeoutMs: Int) -> TcpConnectResult)? = null,
 ) : TcpPresenceProbe {
     override suspend fun probe(ip: String, ports: List<Int>, timeoutMs: Int): TcpPresence {
         val perPortTimeout = timeoutMs.coerceAtMost(400).coerceAtLeast(1)
         var firstFailure: TcpPresence? = null
         for (port in ports) {
             currentCoroutineContext().ensureActive()
-            val result = connector(ip, port, perPortTimeout)
+            val result = connector?.invoke(ip, port, perPortTimeout)
+                ?: connect(ip, port, perPortTimeout, binder, socketFactory)
             val detail = result.detail?.take(160)
             when (result.outcome) {
                 TcpConnectOutcome.OPEN -> return TcpPresence.Open(port)
@@ -136,10 +143,16 @@ class SocketTcpPresenceProbe(
     }
 
     companion object {
-        private fun connect(ip: String, port: Int, timeoutMs: Int): TcpConnectResult {
+        private fun connect(
+            ip: String,
+            port: Int,
+            timeoutMs: Int,
+            binder: NetworkBinder,
+            socketFactory: () -> Socket,
+        ): TcpConnectResult {
             var socket: Socket? = null
             return try {
-                socket = Socket()
+                socket = binder.newTcpSocket(ip, socketFactory)
                 socket.connect(InetSocketAddress(ip, port), timeoutMs)
                 TcpConnectResult(TcpConnectOutcome.OPEN)
             } catch (error: ConnectException) {
@@ -150,7 +163,7 @@ class SocketTcpPresenceProbe(
             } catch (error: NoRouteToHostException) {
                 TcpConnectResult(TcpConnectOutcome.UNREACHABLE, error.diagnosticDetail())
             } catch (error: SecurityException) {
-                TcpConnectResult(TcpConnectOutcome.POLICY_DENIED, error.diagnosticDetail())
+                throw LocalNetworkPermissionDeniedException(error)
             } catch (error: IOException) {
                 TcpConnectResult(TcpConnectOutcome.UNKNOWN_FAILURE, error.diagnosticDetail())
             } finally {

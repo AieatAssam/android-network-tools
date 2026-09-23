@@ -14,16 +14,21 @@ import kotlinx.coroutines.job
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import net.aieat.netswissknife.core.network.HostValidator
+import net.aieat.netswissknife.core.network.net.NetworkBinder
+import net.aieat.netswissknife.core.network.net.NoOpNetworkBinder
 import java.util.LinkedList
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 
 class TopologyDiscoveryRepositoryImpl(
-    private val snmpClientFactory: SnmpClientFactory = SnmpClientFactory { Snmp4jClientImpl(it) },
-    private val limits: TopologyResourceLimits = TopologyResourceLimits()
+    private val snmpClientFactory: SnmpClientFactory? = null,
+    private val limits: TopologyResourceLimits = TopologyResourceLimits(),
+    private val binder: NetworkBinder = NoOpNetworkBinder,
 ) : TopologyDiscoveryRepository {
 
     private val walkLimiter = Semaphore(4)
+    private val effectiveSnmpClientFactory = snmpClientFactory
+        ?: SnmpClientFactory { params -> Snmp4jClientImpl(params, binder) }
 
     constructor(client: SnmpClient) : this(SnmpClientFactory { client }, TopologyResourceLimits())
     constructor(client: SnmpClient, limits: TopologyResourceLimits) :
@@ -36,7 +41,7 @@ class TopologyDiscoveryRepositoryImpl(
         try {
             val normalizedTarget = HostValidator.normalize(params.targetIp) ?: params.targetIp
             val effectiveParams = params.copy(targetIp = normalizedTarget)
-            val snmpClient = CloseOnceSnmpClient(snmpClientFactory.create(effectiveParams))
+            val snmpClient = CloseOnceSnmpClient(effectiveSnmpClientFactory.create(effectiveParams))
             val cancellationHandle = currentCoroutineContext().job.invokeOnCompletion(
                 onCancelling = true,
                 invokeImmediately = true

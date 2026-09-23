@@ -13,6 +13,8 @@ class FakeNetworkBinder(
 ) : NetworkBinder {
     val boundTcpSockets = mutableListOf<Socket>()
     val boundDatagramSockets = mutableListOf<DatagramSocket>()
+    val tcpSocketBoundStatesAtBind = mutableListOf<Boolean>()
+    val datagramSocketBoundStatesAtBind = mutableListOf<Boolean>()
 
     override fun localSubnet(): String? = subnet
 
@@ -20,10 +22,12 @@ class FakeNetworkBinder(
 
     override fun bind(socket: Socket) {
         boundTcpSockets += socket
+        tcpSocketBoundStatesAtBind += socket.isBound
     }
 
     override fun bind(socket: DatagramSocket) {
         boundDatagramSockets += socket
+        datagramSocketBoundStatesAtBind += socket.isBound
     }
 
     override fun localInterface(): NetworkInterface? = null

@@ -8,6 +8,10 @@ import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import net.aieat.netswissknife.core.network.net.LocalNetworkPermissionDeniedException
+import net.aieat.netswissknife.core.network.net.NetworkBinder
+import net.aieat.netswissknife.core.network.net.NoOpNetworkBinder
+import net.aieat.netswissknife.core.network.net.newUdpSocket
 
 /** Small injectable UDP seam shared by LAN discovery protocols. */
 fun interface UdpExchange {
@@ -30,9 +34,35 @@ fun interface CorrelatedUdpExchange {
 }
 
 object DefaultUdpExchange : UdpExchange, CorrelatedUdpExchange {
+    private val delegate = NetworkBoundUdpExchange(NoOpNetworkBinder)
+
+    override fun exchange(ip: String, port: Int, payload: ByteArray, timeoutMs: Int): ByteArray? =
+        delegate.exchange(ip, port, payload, timeoutMs)
+
+    internal fun withBinder(binder: NetworkBinder): UdpExchange =
+        if (binder === NoOpNetworkBinder) this else NetworkBoundUdpExchange(
+            binder = binder,
+            bindMulticastDestinations = true,
+        )
+
+    override suspend fun exchangeCorrelated(
+        ip: String,
+        port: Int,
+        payload: ByteArray,
+        timeoutMs: Int,
+        accepts: (CorrelatedUdpReply) -> Boolean,
+    ): CorrelatedUdpReply? = delegate.exchangeCorrelated(ip, port, payload, timeoutMs, accepts)
+}
+
+internal class NetworkBoundUdpExchange(
+    private val binder: NetworkBinder,
+    private val socketFactory: () -> DatagramSocket = { DatagramSocket(null) },
+    private val bindMulticastDestinations: Boolean = false,
+) : UdpExchange, CorrelatedUdpExchange {
+
     override fun exchange(ip: String, port: Int, payload: ByteArray, timeoutMs: Int): ByteArray? {
-        return runCatching {
-            DatagramSocket().use { socket ->
+        return try {
+            openSocket(ip).use { socket ->
                 socket.soTimeout = timeoutMs.coerceAtLeast(1)
                 socket.send(DatagramPacket(payload, payload.size, InetSocketAddress(ip, port)))
                 val responseBuffer = ByteArray(4096)
@@ -40,7 +70,11 @@ object DefaultUdpExchange : UdpExchange, CorrelatedUdpExchange {
                 socket.receive(response)
                 response.data.copyOf(response.length)
             }
-        }.getOrNull()
+        } catch (permissionDenied: LocalNetworkPermissionDeniedException) {
+            throw permissionDenied
+        } catch (_: Exception) {
+            null
+        }
     }
 
     override suspend fun exchangeCorrelated(
@@ -52,7 +86,7 @@ object DefaultUdpExchange : UdpExchange, CorrelatedUdpExchange {
     ): CorrelatedUdpReply? {
         val deadlineNanos = System.nanoTime() + timeoutMs.coerceAtLeast(1) * 1_000_000L
         return try {
-            DatagramSocket().use { socket ->
+            openSocket(ip).use { socket ->
                 socket.send(DatagramPacket(payload, payload.size, InetSocketAddress(ip, port)))
                 val responseBuffer = ByteArray(4096)
                 while (true) {
@@ -81,10 +115,26 @@ object DefaultUdpExchange : UdpExchange, CorrelatedUdpExchange {
             }
         } catch (cancelled: CancellationException) {
             throw cancelled
+        } catch (permissionDenied: LocalNetworkPermissionDeniedException) {
+            throw permissionDenied
         } catch (_: IOException) {
             null
         } catch (_: IllegalArgumentException) {
             null
         }
+    }
+
+    private fun openSocket(ip: String): DatagramSocket {
+        val socket = binder.newUdpSocket(ip, socketFactory, bindMulticastDestinations)
+        try {
+            socket.bind(InetSocketAddress(0))
+        } catch (error: SecurityException) {
+            socket.close()
+            throw LocalNetworkPermissionDeniedException(error)
+        } catch (error: Exception) {
+            socket.close()
+            throw error
+        }
+        return socket
     }
 }

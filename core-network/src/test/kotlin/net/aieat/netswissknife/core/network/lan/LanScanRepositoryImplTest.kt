@@ -5,6 +5,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
+import net.aieat.netswissknife.core.network.net.FakeNetworkBinder
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
@@ -12,9 +13,51 @@ import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.net.Socket
+import java.net.SocketAddress
 
 @DisplayName("LanScanRepositoryImpl")
 class LanScanRepositoryImplTest {
+
+    @Test
+    fun `default TCP presence and enrichment probes bind local sockets before connect`() = runTest {
+        val binder = FakeNetworkBinder(shouldBindResult = true)
+        val connectedAfterBind = mutableListOf<Boolean>()
+        val repo = LanScanRepositoryImpl(
+            hostChecker = null,
+            arpTableReader = emptyArpReader,
+            portChecker = null,
+            icmpProbe = IcmpProbe { _, _ -> null },
+            macResolver = object : MacResolver {
+                override val supported = false
+                override suspend fun resolve(ip: String): String? = null
+            },
+            binder = binder,
+            socketFactory = {
+                object : Socket() {
+                    override fun connect(endpoint: SocketAddress?, timeout: Int) {
+                        connectedAfterBind += binder.boundTcpSockets.lastOrNull() === this
+                    }
+                }
+            }
+        )
+
+        val complete = repo.scan(
+            LanScanRequest(
+                subnet = subnet24,
+                timeoutMs = 100,
+                concurrency = 1,
+                presencePorts = listOf(80),
+                enableNameProbes = false
+            )
+        ).filterIsInstance<LanScanUpdate.ScanComplete>().first()
+
+        assertEquals(2, complete.summary.aliveHosts)
+        assertTrue(connectedAfterBind.isNotEmpty())
+        assertTrue(connectedAfterBind.all { it })
+        assertEquals(connectedAfterBind.size, binder.boundTcpSockets.size)
+        assertTrue(binder.tcpSocketBoundStatesAtBind.all { !it })
+    }
 
     /** Only 192.168.1.1 is "alive". */
     private val aliveIp = "192.168.1.1"

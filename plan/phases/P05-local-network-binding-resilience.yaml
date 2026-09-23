@@ -81,8 +81,8 @@ assumptions:
     statement: "ConnectivityManager.getAllNetworks() + getNetworkCapabilities: a network with TRANSPORT_WIFI and without TRANSPORT_VPN is the LAN network; NET_CAPABILITY_NOT_VPN true."
     verify_with: "Log capabilities on a device with VPN on."
   - id: A3
-    statement: "SNMP4J 3.13.1 DefaultUdpTransportMapping has NO public getSocket() (verified via javap 2026-09-18). It does expose `protected DatagramSocket socket` and `protected synchronized DatagramSocket ensureSocket()`. Binding therefore requires a subclass in core-network: `class BoundUdpTransportMapping(address: UdpAddress, private val bind: (DatagramSocket) -> Unit) : DefaultUdpTransportMapping(address) { override fun ensureSocket(): DatagramSocket = super.ensureSocket().also(bind) }` – the binder lambda calls Network.bindSocket(socket) in :app. Binding a local address alone (UdpAddress(localAddr, 0)) is NOT sufficient under a VPN because Android routes per-UID, not per-source-address."
-    verify_with: "javap -p -cp <snmp4j jar> org.snmp4j.transport.DefaultUdpTransportMapping | grep -E 'socket;|ensureSocket' ; device test with VPN on: SNMP GET to the router succeeds only with the bound subclass."
+    statement: "SNMP4J 3.13.1 exposes no public socket getter, but its protected `socket` field is available to a subclass. A fresh `DefaultUdpTransportMapping` eagerly creates and binds a DatagramSocket in every public constructor; `ensureSocket()` only returns that already-bound socket, so overriding it to call `Network.bindSocket` is too late. A bound subclass must close the eager socket before listen, create `DatagramSocket(null)`, call the binder while it is unbound, then bind it to wildcard port 0 and assign it to the protected field. Binding a local address alone is NOT sufficient under a VPN because Android routes per-UID, not per-source-address."
+    verify_with: "Inspect SNMP4J 3.13.1 constructors and ensureSocket with javap -p -c; a JVM fake-binder test asserts the socket is unbound at bind time and listen succeeds afterward. Validate router SNMP GET with VPN on a physical device."
   - id: A4
     statement: "ContextCompat/ConnectivityManager NetworkCallback with NetworkRequest for INTERNET and VPN detection works from API 26."
     verify_with: "Compile + device log."
@@ -171,7 +171,7 @@ tasks:
 
   - id: P05-T2
     title: "core repositories accept and use the binder"
-    status: todo
+    status: done
     depends_on: [P05-T1]
     tdd:
       red:
@@ -179,18 +179,21 @@ tasks:
           - "PortScanRepositoryImplTest: with FakeNetworkBinder(shouldBind=true) each socket created by the default checker is passed to binder.bind before connect (inject a socket factory: `socketFactory: () -> Socket`)"
           - "PortScanRepositoryImplTest: shouldBind=false -> binder.bind never called"
           - "WakeOnLanRepositoryImplTest: DatagramSocket passed to binder.bind before send (inject datagram socket factory)"
-          - "LanScanRepositoryImplTest: TCP presence/port checker sockets bound when policy says local"
-          - "SecurityException from socket factory -> repositories surface LocalNetworkPermissionDeniedException (PortScan: PortScanUpdate.Complete? no – throw so the flow errors; WOL: NetworkResult.Error with cause LocalNetworkPermissionDeniedException)"
+          - "LanScanRepositoryImplTest: default TCP presence and enrichment-port sockets bind before connect"
+          - "UdpExchangeTest: selected LAN unicast and mDNS multicast sockets bind before send; permission denial remains typed"
+          - "Snmp4jClientImplLoopbackTest: selected transport binds an unbound replacement socket and starts its listener"
+          - "Socket-factory/binder SecurityException maps to LocalNetworkPermissionDeniedException (PortScan flow error; WOL NetworkResult.Error cause)"
         run: "./gradlew :core-network:test --no-daemon"
         expect: "RED"
       green:
         steps:
-          - "Add `binder` params + socket factories; resolve host to IP before deciding shouldBind (PortScan already resolves for summary – reuse; LanScan has IPs)."
-          - "Snmp4jClientImpl: when binder.shouldBind(target.ip) use `BoundUdpTransportMapping(UdpAddress(\"0.0.0.0/0\"), binder::bind)` (subclass overriding ensureSocket(), see A3); otherwise plain DefaultUdpTransportMapping(). Unit test: a fake binder records that bind() was called with the transport's socket before listen() completes."
-        run: "./gradlew :core-network:test --no-daemon"
+          - "Add `binder` params and injectable socket factories; resolve destinations before applying local-subnet policy. Keep NoOpNetworkBinder as the JVM default."
+          - "Route TCP, WOL UDP, and LAN discovery UDP creation through BoundSockets so binding happens before connect/send; bind mDNS multicast queries to the selected network for their unicast-response mode."
+          - "For selected SNMP targets, replace SNMP4J's eagerly bound socket with a binder-bound unbound DatagramSocket, then bind an ephemeral local port and assign the socket before listen()."
+        run: "./gradlew :core-network:test :app:testDebugUnitTest --no-daemon --no-parallel"
         expect: "PASS"
-      refactor: ["Single `BoundSockets` helper: `fun NetworkBinder.newTcpSocket(dest: String): Socket`, `newUdpSocket(dest)`."]
-    acceptance_criteria: ["All core repos compile with NoOp default; tests prove bind ordering."]
+      refactor: ["Completed with shared NetworkBinder.newTcpSocket/newUdpSocket helpers; retain SNMP-specific transport setup for its eager-socket lifecycle."]
+    acceptance_criteria: ["All core repositories compile with NoOp defaults; deterministic tests prove bind-before-connect/send/listen and typed permission-denial behavior."]
 
   - id: P05-T3
     title: "app: AndroidNetworkBinder + ConnectivityObserver + DI"

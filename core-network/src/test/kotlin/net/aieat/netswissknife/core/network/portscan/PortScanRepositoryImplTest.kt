@@ -5,6 +5,8 @@ import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
+import net.aieat.netswissknife.core.network.net.FakeNetworkBinder
+import net.aieat.netswissknife.core.network.net.LocalNetworkPermissionDeniedException
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertThrows
@@ -13,6 +15,9 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import java.util.Collections
+import java.net.InetAddress
+import java.net.Socket
+import java.net.SocketAddress
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
@@ -20,6 +25,52 @@ import java.util.concurrent.atomic.AtomicInteger
 @OptIn(ExperimentalCoroutinesApi::class)
 @DisplayName("PortScanRepositoryImpl")
 class PortScanRepositoryImplTest {
+
+    @Test
+    fun `default checker binds only selected local sockets before connect`() {
+        val binder = FakeNetworkBinder(shouldBindResult = true)
+        var boundBeforeConnect = false
+        val socket = object : Socket() {
+            override fun connect(endpoint: SocketAddress?, timeout: Int) {
+                boundBeforeConnect = binder.boundTcpSockets.singleOrNull() === this
+            }
+        }
+
+        val result = PortScanRepositoryImpl.defaultChecker(
+            timeoutMs = 100,
+            binder = binder,
+            socketFactory = { socket }
+        )(InetAddress.getByAddress(byteArrayOf(192.toByte(), 168.toByte(), 1, 7)), 80)
+
+        assertEquals(PortStatus.OPEN, result.status)
+        assertTrue(boundBeforeConnect, "the selected socket must be bound before connect")
+        assertEquals(listOf(socket), binder.boundTcpSockets)
+
+        val defaultRouteBinder = FakeNetworkBinder(shouldBindResult = false)
+        val unboundSocket = object : Socket() {
+            override fun connect(endpoint: SocketAddress?, timeout: Int) = Unit
+        }
+        PortScanRepositoryImpl.defaultChecker(
+            timeoutMs = 100,
+            binder = defaultRouteBinder,
+            socketFactory = { unboundSocket }
+        )(InetAddress.getByAddress(byteArrayOf(192.toByte(), 168.toByte(), 1, 7)), 80)
+        assertTrue(defaultRouteBinder.boundTcpSockets.isEmpty())
+    }
+
+    @Test
+    fun `default checker surfaces local permission denial from socket creation`() {
+        val checker = PortScanRepositoryImpl.defaultChecker(
+            timeoutMs = 100,
+            binder = FakeNetworkBinder(shouldBindResult = true),
+            socketFactory = { throw SecurityException("permission denied") }
+        )
+
+        val error = assertThrows(LocalNetworkPermissionDeniedException::class.java) {
+            checker(InetAddress.getLoopbackAddress(), 80)
+        }
+        assertEquals("permission denied", error.cause?.message)
+    }
 
     // ── Helper checkers ────────────────────────────────────────────────────────
 

@@ -8,6 +8,9 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.withTimeout
+import net.aieat.netswissknife.core.network.net.FakeNetworkBinder
+import net.aieat.netswissknife.core.network.net.LocalNetworkPermissionDeniedException
+import net.aieat.netswissknife.core.network.net.NetworkBinder
 import org.snmp4j.CommandResponder
 import org.snmp4j.CommandResponderEvent
 import org.snmp4j.MessageDispatcherImpl
@@ -49,6 +52,38 @@ import java.util.concurrent.atomic.AtomicInteger
 class Snmp4jClientImplLoopbackTest {
 
     private val sysDescrOid = "1.3.6.1.2.1.1.1.0"
+
+    @Test
+    fun `selected SNMP transport binds its unbound socket before listen`() {
+        val binder = FakeNetworkBinder(shouldBindResult = true)
+        val params = TopologyParams(targetIp = "192.168.1.7", timeoutMs = 100, retries = 0)
+
+        val client = Snmp4jClientImpl(params, binder)
+        try {
+            assertEquals(1, binder.boundDatagramSockets.size)
+            assertEquals(listOf(false), binder.datagramSocketBoundStatesAtBind)
+            assertTrue(binder.boundDatagramSockets.single().isBound)
+            assertTrue(binder.boundDatagramSockets.single().localPort > 0)
+        } finally {
+            client.close()
+        }
+    }
+
+    @Test
+    fun `SNMP transport maps bind permission denial to the typed exception`() {
+        val delegate = FakeNetworkBinder(shouldBindResult = true)
+        val binder = object : NetworkBinder by delegate {
+            override fun bind(socket: DatagramSocket) {
+                throw SecurityException("permission denied")
+            }
+        }
+        val params = TopologyParams(targetIp = "192.168.1.7", timeoutMs = 100, retries = 0)
+
+        val error = assertThrows(LocalNetworkPermissionDeniedException::class.java) {
+            Snmp4jClientImpl(params, binder)
+        }
+        assertEquals("permission denied", error.cause?.message)
+    }
 
     @Test
     fun `v2c GET returns a responder value`() = runTest {

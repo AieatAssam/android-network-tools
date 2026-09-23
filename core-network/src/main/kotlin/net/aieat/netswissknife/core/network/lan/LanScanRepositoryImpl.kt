@@ -16,6 +16,10 @@ import kotlinx.coroutines.isActive
 import net.aieat.netswissknife.core.network.MonotonicClock
 import net.aieat.netswissknife.core.network.SystemMonotonicClock
 import net.aieat.netswissknife.core.network.elapsedMillisSince
+import net.aieat.netswissknife.core.network.net.LocalNetworkPermissionDeniedException
+import net.aieat.netswissknife.core.network.net.NetworkBinder
+import net.aieat.netswissknife.core.network.net.NoOpNetworkBinder
+import net.aieat.netswissknife.core.network.net.newTcpSocket
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.Socket
@@ -36,25 +40,54 @@ class LanScanRepositoryImpl(
     /** Legacy seam retained for existing callers; when set it is the sole presence probe. */
     private val hostChecker: HostChecker? = null,
     private val arpTableReader: ArpTableReader = DEFAULT_ARP_READER,
-    private val portChecker: PortChecker = DEFAULT_PORT_CHECKER,
+    private val portChecker: PortChecker? = null,
     private val clock: MonotonicClock = SystemMonotonicClock,
     private val icmpProbe: IcmpProbe = ReachabilityIcmpProbe(),
-    private val tcpProbe: TcpPresenceProbe = SocketTcpPresenceProbe(),
-    private val nameProbes: List<NameProbe> = listOf(
-        ReverseDnsNameProbe(),
-        NetBiosNameProbe(),
-        MdnsReverseNameProbe(),
-    ),
+    private val tcpProbe: TcpPresenceProbe? = null,
+    private val nameProbes: List<NameProbe>? = null,
     macResolver: MacResolver? = null,
+    private val binder: NetworkBinder = NoOpNetworkBinder,
+    private val socketFactory: () -> Socket = { Socket() },
 ) : LanScanRepository {
 
     private val effectiveMacResolver: MacResolver = macResolver ?: ArpFileMacResolver(arpTableReader)
+    private val effectiveTcpProbe: TcpPresenceProbe = tcpProbe ?: SocketTcpPresenceProbe(
+        binder = binder,
+        socketFactory = socketFactory,
+    )
+    private val effectivePortChecker: PortChecker = portChecker ?: createPortChecker(binder, socketFactory)
+    private val effectiveNameProbes: List<NameProbe> = nameProbes ?: run {
+        val udpExchange = DefaultUdpExchange.withBinder(binder)
+        listOf(
+            ReverseDnsNameProbe(),
+            NetBiosNameProbe(udpExchange),
+            MdnsReverseNameProbe(udpExchange),
+        )
+    }
     private val effectiveIcmpProbe: IcmpProbe = hostChecker?.let { checker ->
         IcmpProbe { ip, timeoutMs -> checker(ip, timeoutMs) }
     } ?: icmpProbe
 
     companion object {
         private const val MAX_DIAGNOSTIC_DETAILS = 100
+
+        private fun createPortChecker(binder: NetworkBinder, socketFactory: () -> Socket): PortChecker =
+            { ip, port, timeoutMs ->
+                var socket: Socket? = null
+                try {
+                    socket = binder.newTcpSocket(ip, socketFactory)
+                    socket.connect(InetSocketAddress(ip, port), timeoutMs.coerceAtMost(500))
+                    true
+                } catch (error: SecurityException) {
+                    throw LocalNetworkPermissionDeniedException(error)
+                } catch (permissionDenied: LocalNetworkPermissionDeniedException) {
+                    throw permissionDenied
+                } catch (_: Exception) {
+                    false
+                } finally {
+                    runCatching { socket?.close() }
+                }
+            }
 
         val DEFAULT_HOST_CHECKER: HostChecker = { ip, timeoutMs ->
             try {
@@ -263,7 +296,7 @@ class LanScanRepositoryImpl(
         // callers use the strategy pipeline below.
         if (hostChecker != null) return PresenceResult(null)
 
-        val tcp = tcpProbe.probe(ip, request.presencePorts, request.timeoutMs)
+        val tcp = effectiveTcpProbe.probe(ip, request.presencePorts, request.timeoutMs)
         when (tcp) {
             is TcpPresence.Open -> {
                 return PresenceResult(
@@ -285,7 +318,7 @@ class LanScanRepositoryImpl(
         }
 
         if (request.enableNameProbes) {
-            for (probe in nameProbes.filterNot { it is ReverseDnsNameProbe }) {
+            for (probe in effectiveNameProbes.filterNot { it is ReverseDnsNameProbe }) {
                 val reply = try {
                     when (probe) {
                         is PresenceNameProbe -> probe.probePresence(ip, request.timeoutMs)
@@ -293,6 +326,8 @@ class LanScanRepositoryImpl(
                     }
                 } catch (cancelled: CancellationException) {
                     throw cancelled
+                } catch (permissionDenied: LocalNetworkPermissionDeniedException) {
+                    throw permissionDenied
                 } catch (_: Exception) {
                     null
                 }
@@ -326,11 +361,13 @@ class LanScanRepositoryImpl(
             }.getOrNull()
         } else {
             var resolved: String? = null
-            for (probe in nameProbes.filterNot { it is PresenceNameProbe }) {
+            for (probe in effectiveNameProbes.filterNot { it is PresenceNameProbe }) {
                 resolved = try {
                     probe.resolveName(ip, request.timeoutMs)
                 } catch (cancelled: CancellationException) {
                     throw cancelled
+                } catch (permissionDenied: LocalNetworkPermissionDeniedException) {
+                    throw permissionDenied
                 } catch (_: Exception) {
                     null
                 }
@@ -353,7 +390,7 @@ class LanScanRepositoryImpl(
         val openPorts = mutableListOf<Int>()
         for (port in QUICK_PORTS) {
             currentCoroutineContext().ensureActive()
-            if (portChecker(ip, port, request.timeoutMs)) openPorts += port
+            if (effectivePortChecker(ip, port, request.timeoutMs)) openPorts += port
         }
         return LanHost(
             ip = ip,
