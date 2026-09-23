@@ -16,18 +16,22 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.job
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.withTimeout
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
 import net.aieat.netswissknife.app.platform.LinkInfoProvider
 import net.aieat.netswissknife.core.domain.ContinuousPingUseCase
 import net.aieat.netswissknife.core.domain.PingFlowResult
 import net.aieat.netswissknife.core.domain.PingUseCase
+import net.aieat.netswissknife.core.domain.PingSessionLogger
 import net.aieat.netswissknife.core.network.ping.PingPacketResult
 import net.aieat.netswissknife.core.network.ping.PingStatus
 import org.junit.jupiter.api.AfterEach
@@ -306,6 +310,124 @@ class PingViewModelTest {
                 emit(PingFlowResult.Packet(successPacket.copy(sequence = i + 1)))
             }
             suspendCancellableCoroutine<Nothing> { }
+        }
+
+        @Test
+        fun `bounded log queue backpressures and close drains every packet in order`() = runTest {
+            val appendStarted = CompletableDeferred<Unit>()
+            val releaseAppend = CompletableDeferred<Unit>()
+            val logFile = java.io.File.createTempFile("ping_bounded_writer_", ".csv")
+            val writer = ContinuousPingLogWriter(
+                scope = backgroundScope,
+                logger = PingSessionLogger(logFile),
+                appendPacket = { logger, sequence, packet ->
+                    if (sequence == 1) {
+                        appendStarted.complete(Unit)
+                        releaseAppend.await()
+                    }
+                    logger.append(sequence, packet)
+                },
+                dispatcher = UnconfinedTestDispatcher(testScheduler)
+            )
+
+            try {
+                writer.append(1, successPacket)
+                appendStarted.await()
+                repeat(ContinuousPingLogWriter.PACKET_QUEUE_CAPACITY) { index ->
+                    writer.append(index + 2, successPacket)
+                }
+
+                val backpressuredSend = launch {
+                    writer.append(ContinuousPingLogWriter.PACKET_QUEUE_CAPACITY + 2, successPacket)
+                }
+                runCurrent()
+                assertFalse(backpressuredSend.isCompleted, "send should wait while the bounded queue is full")
+
+                releaseAppend.complete(Unit)
+                backpressuredSend.join()
+                assertTrue(writer.closeAndJoin())
+
+                assertEquals(
+                    (1..ContinuousPingLogWriter.PACKET_QUEUE_CAPACITY + 2).map { it.toString() },
+                    logFile.readLines().drop(1).map { it.substringBefore(',') }
+                )
+            } finally {
+                releaseAppend.complete(Unit)
+                writer.cancel()
+                logFile.delete()
+            }
+        }
+
+        @Test
+        fun `cancelling a backpressured append does not cancel writer or lose accepted packets`() = runTest {
+            val appendStarted = CompletableDeferred<Unit>()
+            val releaseAppend = CompletableDeferred<Unit>()
+            val logFile = java.io.File.createTempFile("ping_cancelled_send_", ".csv")
+            val writer = ContinuousPingLogWriter(
+                scope = backgroundScope,
+                logger = PingSessionLogger(logFile),
+                appendPacket = { logger, sequence, packet ->
+                    if (sequence == 1) {
+                        appendStarted.complete(Unit)
+                        releaseAppend.await()
+                    }
+                    logger.append(sequence, packet)
+                },
+                dispatcher = UnconfinedTestDispatcher(testScheduler)
+            )
+
+            try {
+                writer.append(1, successPacket)
+                appendStarted.await()
+                repeat(ContinuousPingLogWriter.PACKET_QUEUE_CAPACITY) { index ->
+                    writer.append(index + 2, successPacket)
+                }
+                val cancelledSend = launch {
+                    writer.append(ContinuousPingLogWriter.PACKET_QUEUE_CAPACITY + 2, successPacket)
+                }
+                runCurrent()
+                assertFalse(cancelledSend.isCompleted, "send should wait while the bounded queue is full")
+
+                cancelledSend.cancelAndJoin()
+                releaseAppend.complete(Unit)
+                assertTrue(writer.closeAndJoin())
+                assertTrue(cancelledSend.isCancelled)
+
+                assertEquals(
+                    (1..ContinuousPingLogWriter.PACKET_QUEUE_CAPACITY + 1).map { it.toString() },
+                    logFile.readLines().drop(1).map { it.substringBefore(',') }
+                )
+            } finally {
+                releaseAppend.complete(Unit)
+                writer.cancel()
+                logFile.delete()
+            }
+        }
+
+        @Test
+        fun `log initialization failure stays best effort and does not block later appends`() = runTest {
+            val directory = java.nio.file.Files.createTempDirectory("ping_writer_init_failure_").toFile()
+            var appendCount = 0
+            val writer = ContinuousPingLogWriter(
+                scope = backgroundScope,
+                logger = PingSessionLogger(directory),
+                appendPacket = { _, _, _ -> appendCount++ },
+                dispatcher = UnconfinedTestDispatcher(testScheduler)
+            )
+
+            try {
+                withTimeout(5_000) {
+                    repeat(ContinuousPingLogWriter.PACKET_QUEUE_CAPACITY + 1) { index ->
+                        writer.append(index + 1, successPacket)
+                    }
+                }
+                assertFalse(writer.closeAndJoin())
+                writer.append(ContinuousPingLogWriter.PACKET_QUEUE_CAPACITY + 2, successPacket)
+                assertEquals(0, appendCount)
+            } finally {
+                writer.cancel()
+                directory.deleteRecursively()
+            }
         }
 
         @BeforeEach

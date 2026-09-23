@@ -7,10 +7,12 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.ClosedSendChannelException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -42,14 +44,20 @@ import javax.inject.Inject
 internal class ContinuousPingLogWriter(
     scope: CoroutineScope,
     private val logger: PingSessionLogger,
-    private val appendPacket: suspend (PingSessionLogger, Int, PingPacketResult) -> Unit
+    private val appendPacket: suspend (PingSessionLogger, Int, PingPacketResult) -> Unit,
+    dispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
-    private val packets = Channel<Pair<Int, PingPacketResult>>(Channel.UNLIMITED)
+    private val packets = Channel<Pair<Int, PingPacketResult>>(PACKET_QUEUE_CAPACITY)
+
+    internal companion object {
+        /** Bounds queued log data while allowing brief bursts during disk writes. */
+        const val PACKET_QUEUE_CAPACITY = 64
+    }
 
     @Volatile
     private var initializationFailed = false
 
-    private val writerJob = scope.launch(Dispatchers.IO) {
+    private val writerJob = scope.launch(dispatcher) {
         try {
             logger.init()
             for ((sequence, packet) in packets) {
@@ -69,8 +77,13 @@ internal class ContinuousPingLogWriter(
         }
     }
 
-    fun append(sequence: Int, packet: PingPacketResult) {
-        packets.trySend(sequence to packet)
+    suspend fun append(sequence: Int, packet: PingPacketResult) {
+        try {
+            packets.send(sequence to packet)
+        } catch (_: ClosedSendChannelException) {
+            // Logging remains best-effort if initialization has failed or the writer
+            // has already been closed. Cancellation still propagates to the producer.
+        }
     }
 
     suspend fun closeAndJoin(): Boolean {
