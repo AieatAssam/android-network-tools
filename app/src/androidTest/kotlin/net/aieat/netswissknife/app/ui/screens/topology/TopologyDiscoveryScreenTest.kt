@@ -19,7 +19,9 @@ import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.theme.NetSwissKnifeTheme
 import net.aieat.netswissknife.core.network.topology.TopologyGraph
 import net.aieat.netswissknife.core.network.topology.TopologyNode
+import net.aieat.netswissknife.core.network.topology.TopologyParams
 import net.aieat.netswissknife.core.network.topology.TopologyTruncationReason
+import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -195,6 +197,54 @@ class TopologyDiscoveryScreenTest {
         composeRule
             .onNodeWithText(context.getString(R.string.topology_discover_button))
             .assertIsEnabled()
+    }
+
+    @Test
+    fun targetIpWithOuterWhitespace_startsWithNormalizedSeed() {
+        val viewModel = fakeViewModel(TopologyUiState.Idle)
+        var submitted: TopologyParams? = null
+        every { viewModel.startDiscovery(any()) } answers { submitted = firstArg() }
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                TopologyDiscoveryScreen(viewModel = viewModel)
+            }
+        }
+        composeRule.mainClock.advanceTimeBy(500L)
+
+        composeRule
+            .onNodeWithText(context.getString(R.string.topology_target_ip_label))
+            .performTextInput(" 192.168.1.1 ")
+        composeRule.mainClock.advanceTimeBy(200L)
+        composeRule
+            .onNodeWithText(context.getString(R.string.topology_discover_button))
+            .assertIsEnabled()
+            .performClick()
+
+        assertEquals("192.168.1.1", submitted?.targetIp)
+    }
+
+    @Test
+    fun targetIpWithInternalSpace_showsValidationAndBlocksDiscovery() {
+        val viewModel = fakeViewModel(TopologyUiState.Idle)
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                TopologyDiscoveryScreen(viewModel = viewModel)
+            }
+        }
+        composeRule.mainClock.advanceTimeBy(500L)
+
+        composeRule
+            .onNodeWithText(context.getString(R.string.topology_target_ip_label))
+            .performTextInput("bad host")
+        composeRule.mainClock.advanceTimeBy(200L)
+        composeRule
+            .onNodeWithText(context.getString(R.string.error_invalid_host))
+            .assertIsDisplayed()
+        composeRule
+            .onNodeWithText(context.getString(R.string.topology_discover_button))
+            .assertIsNotEnabled()
+
+        verify(exactly = 0) { viewModel.startDiscovery(any()) }
     }
 
     @Test

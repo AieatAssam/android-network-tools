@@ -13,6 +13,7 @@ import kotlinx.coroutines.launch
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
 import net.aieat.netswissknife.core.domain.TopologyDiscoveryUseCase
+import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.topology.*
 import javax.inject.Inject
 
@@ -54,18 +55,25 @@ class TopologyDiscoveryViewModel @Inject constructor(
         // job's own locally-accumulated node/link lists can overwrite the newer
         // job's progress whenever it wakes up.
         discoveryJob?.cancel()
+        // Normalize valid input at the ViewModel boundary as well as in the form.
+        // Keep invalid raw input so the domain use case can report its usual error.
+        val normalizedTargetIp = HostValidator.normalize(params.targetIp)
+        val normalizedParams = params.copy(targetIp = normalizedTargetIp ?: params.targetIp)
         discoveryJob = viewModelScope.launch {
             val nodes = mutableListOf<TopologyNode>()
             val links = mutableListOf<TopologyLink>()
             var savedSeed = false
             _uiState.value = TopologyUiState.Discovering(emptyList(), emptyList(), "Starting...", 0)
 
-            useCase.invoke(params).collect { event ->
+            useCase.invoke(normalizedParams).collect { event ->
                 when (event) {
                     is TopologyDiscoveryEvent.NodeDiscovered -> {
                         if (!savedSeed) {
                             savedSeed = true
-                            recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_TOPOLOGY_SEEDS, params.targetIp)
+                            recentHostsRepository.addRecent(
+                                AppPreferenceKeys.RECENT_TOPOLOGY_SEEDS,
+                                normalizedParams.targetIp
+                            )
                         }
                         nodes.add(event.node)
                         val current = _uiState.value

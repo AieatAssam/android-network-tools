@@ -37,6 +37,7 @@ import net.aieat.netswissknife.app.ui.components.HeroTitleText
 import net.aieat.netswissknife.app.ui.components.RecentHostsRow
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.ui.theme.AppShapes
+import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.topology.*
 import kotlin.math.*
 
@@ -119,6 +120,8 @@ private fun TopologyScreenContent(
     var showPrivPassword by remember { mutableStateOf(false) }
 
     val isDiscovering = uiState is TopologyUiState.Discovering
+    val normalizedTargetIp = HostValidator.normalize(targetIp)
+    val isTargetIpInvalid = targetIp.isNotBlank() && normalizedTargetIp == null
 
     val selectedNode = when (uiState) {
         is TopologyUiState.Discovering -> uiState.nodes.find { it.ip == uiState.selectedNodeIp }
@@ -217,6 +220,10 @@ private fun TopologyScreenContent(
                                 value = targetIp,
                                 onValueChange = { targetIp = it },
                                 label = { Text(stringResource(R.string.topology_target_ip_label)) },
+                                isError = isTargetIpInvalid,
+                                supportingText = if (isTargetIpInvalid) {
+                                    { Text(stringResource(R.string.error_invalid_host)) }
+                                } else null,
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true,
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
@@ -391,7 +398,7 @@ private fun TopologyScreenContent(
                                 onClick = {
                                     onStartDiscovery(
                                         TopologyParams(
-                                            targetIp = targetIp,
+                                            targetIp = normalizedTargetIp ?: targetIp,
                                             snmpVersion = snmpVersion,
                                             communityString = community,
                                             v3Username = v3Username.ifBlank { null },
@@ -407,7 +414,7 @@ private fun TopologyScreenContent(
                                     configExpanded = false
                                 },
                                 modifier = Modifier.fillMaxWidth(),
-                                enabled = !isDiscovering && targetIp.isNotBlank() &&
+                                enabled = !isDiscovering && normalizedTargetIp != null &&
                                     !(v3PrivProto != V3PrivProtocol.NONE && v3AuthProto == V3AuthProtocol.NONE)
                             ) {
                                 if (isDiscovering) {

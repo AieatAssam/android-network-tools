@@ -129,6 +129,43 @@ class TopologyDiscoveryViewModelTest {
         }
 
         @Test
+        fun `normalizes target before probing and saving seed`() = runTest {
+            val rawParams = params.copy(targetIp = " 192.168.1.1 ")
+            every { useCase.invoke(params) } returns flowOf(
+                TopologyDiscoveryEvent.NodeDiscovered(stubNode)
+            )
+
+            viewModel.startDiscovery(rawParams)
+
+            coVerify(exactly = 1) { useCase.invoke(params) }
+            coVerify(exactly = 1) {
+                recentHostsRepository.addRecent(
+                    net.aieat.netswissknife.app.data.AppPreferenceKeys.RECENT_TOPOLOGY_SEEDS,
+                    "192.168.1.1"
+                )
+            }
+        }
+
+        @Test
+        fun `invalid target is passed to domain error path and not saved`() = runTest {
+            val invalidParams = params.copy(targetIp = "bad host")
+            every { useCase.invoke(invalidParams) } returns flowOf(
+                TopologyDiscoveryEvent.Error("Target IP or hostname must be valid")
+            )
+
+            viewModel.startDiscovery(invalidParams)
+
+            assertEquals("Target IP or hostname must be valid", (viewModel.uiState.value as TopologyUiState.Failure).message)
+            coVerify(exactly = 1) { useCase.invoke(invalidParams) }
+            coVerify(exactly = 0) {
+                recentHostsRepository.addRecent(
+                    net.aieat.netswissknife.app.data.AppPreferenceKeys.RECENT_TOPOLOGY_SEEDS,
+                    any()
+                )
+            }
+        }
+
+        @Test
         fun `transitions to Done on Complete`() = runTest {
             val graph = TopologyGraph(
                 nodes = listOf(stubNode), links = listOf(stubLink),
