@@ -1,6 +1,7 @@
 package net.aieat.netswissknife.core.network.speedtest
 
 import kotlinx.coroutines.flow.Flow
+import net.aieat.netswissknife.core.network.operation.OperationSession
 
 /**
  * Repository that runs a full internet speed test (latency, download, upload)
@@ -15,4 +16,7 @@ interface SpeedTestRepository {
      * phase cannot be measured.
      */
     fun runSpeedTest(): Flow<SpeedTestEvent>
+
+    /** Caller-owned operation variant; legacy implementations keep working by delegating. */
+    fun runSpeedTest(operationSession: OperationSession): Flow<SpeedTestEvent> = runSpeedTest()
 }

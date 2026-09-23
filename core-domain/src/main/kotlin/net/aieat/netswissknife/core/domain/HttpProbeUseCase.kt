@@ -7,6 +7,7 @@ import net.aieat.netswissknife.core.network.httprobe.HttpProbeRepository
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeRequest
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeResult
 import net.aieat.netswissknife.core.network.httprobe.CrossOriginEntityReplay
+import net.aieat.netswissknife.core.network.operation.OperationSession
 import java.net.URI
 import java.net.URISyntaxException
 import java.util.Locale
@@ -23,7 +24,19 @@ data class HttpProbeParams(
 
 class HttpProbeUseCase(private val repository: HttpProbeRepository) {
 
-    suspend operator fun invoke(params: HttpProbeParams): NetworkResult<HttpProbeResult> {
+    suspend operator fun invoke(params: HttpProbeParams): NetworkResult<HttpProbeResult> =
+        invokeValidated(params, null)
+
+    /** Caller-owned operation variant; the original entry point remains source-compatible. */
+    suspend operator fun invoke(
+        params: HttpProbeParams,
+        operationSession: OperationSession,
+    ): NetworkResult<HttpProbeResult> = invokeValidated(params, operationSession)
+
+    private suspend fun invokeValidated(
+        params: HttpProbeParams,
+        operationSession: OperationSession?,
+    ): NetworkResult<HttpProbeResult> {
         val url = params.url.trim()
 
         validateHttpProbeUrl(url)?.let { return NetworkResult.Error(it) }
@@ -33,17 +46,17 @@ class HttpProbeUseCase(private val repository: HttpProbeRepository) {
 
         val effectiveBody = if (params.method.supportsBody) params.body else null
 
-        return repository.probe(
-            HttpProbeRequest(
-                url = url,
-                method = params.method,
-                headers = params.headers,
-                body = effectiveBody,
-                followRedirects = params.followRedirects,
-                timeoutMs = params.timeoutMs,
-                approveCrossOriginEntityReplay = params.approveCrossOriginEntityReplay
-            )
+        val request = HttpProbeRequest(
+            url = url,
+            method = params.method,
+            headers = params.headers,
+            body = effectiveBody,
+            followRedirects = params.followRedirects,
+            timeoutMs = params.timeoutMs,
+            approveCrossOriginEntityReplay = params.approveCrossOriginEntityReplay
         )
+        return if (operationSession == null) repository.probe(request)
+        else repository.probe(request, operationSession)
     }
 }
 

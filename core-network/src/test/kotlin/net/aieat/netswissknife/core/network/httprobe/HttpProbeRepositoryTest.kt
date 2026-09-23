@@ -9,6 +9,8 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withContext
 import net.aieat.netswissknife.core.network.NetworkResult
+import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationCancellationException
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
@@ -28,6 +30,7 @@ import java.net.URL
 import java.nio.charset.Charset
 import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.CountDownLatch
 
 @DisplayName("HttpProbeRepositoryImpl – input validation")
 class HttpProbeRepositoryValidationTest {
@@ -644,6 +647,8 @@ class HttpProbeRepositoryRedirectTest {
             }
             assertTrue(result is NetworkResult.Success)
             assertEquals(listOf(sourceUrl.toString(), targetUrl.toString()), openedUrls)
+            assertEquals(1, sourceConnection.disconnectCount, "early consent cleanup must not disconnect twice")
+            assertEquals(1, targetConnection.disconnectCount)
             assertEquals("PATCH", targetConnection.requestedMethod)
             assertEquals("patch-$status", targetConnection.requestBody())
             assertFalse(targetConnection.requestProperties.containsKey("X-Secret"))
@@ -778,11 +783,14 @@ class HttpProbeRepositoryRedirectTest {
         val requestProperties = linkedMapOf<String, String>()
         var disconnected = false
             private set
+        var disconnectCount = 0
+            private set
         var requestedMethod: String? = null
             private set
 
         override fun connect() = Unit
         override fun disconnect() {
+            disconnectCount++
             disconnected = true
         }
         override fun usingProxy(): Boolean = false
@@ -803,5 +811,88 @@ class HttpProbeRepositoryRedirectTest {
         override fun getOutputStream(): OutputStream = bodyOutput
 
         fun requestBody(): String = bodyOutput.toString(Charsets.UTF_8)
+    }
+}
+
+@DisplayName("HttpProbeRepositoryImpl – operation resource ownership")
+class HttpProbeOperationTest {
+
+    @Test
+    @DisplayName("user stop disconnects a blocked body read and remains cancellation")
+    fun `user stop closes blocked response connection`() = runTest {
+        val readEntered = CompletableDeferred<Unit>()
+        val releaseRead = CountDownLatch(1)
+        val disconnectCount = AtomicInteger()
+        val url = URL("http://example.test/")
+        val connection = object : HttpURLConnection(url) {
+            override fun connect() = Unit
+            override fun disconnect() {
+                disconnectCount.incrementAndGet()
+                releaseRead.countDown()
+            }
+            override fun usingProxy() = false
+            override fun getResponseCode() = 200
+            override fun getResponseMessage() = "OK"
+            override fun getInputStream(): InputStream = object : InputStream() {
+                override fun read(): Int {
+                    readEntered.complete(Unit)
+                    releaseRead.await()
+                    return -1
+                }
+            }
+        }
+        val repository = HttpProbeRepositoryImpl(HttpProbeConnectionFactory { connection })
+        val session = HttpProbeOperation.newSession(timeoutMillis = 5_000)
+        val probe = async(Dispatchers.IO) {
+            repository.probe(HttpProbeRequest(url = url.toString()), session)
+        }
+
+        withContext(Dispatchers.Default) { withTimeout(5_000) { readEntered.await() } }
+        session.cancel(CancellationReason.USER_STOP)
+        val failure = withContext(Dispatchers.IO) {
+            withTimeout(5_000) { runCatching { probe.await() }.exceptionOrNull() }
+        }
+
+        assertTrue(failure is OperationCancellationException)
+        assertEquals(CancellationReason.USER_STOP, (failure as OperationCancellationException).reason)
+        assertEquals(1, disconnectCount.get(), "the registered connection must close once")
+    }
+
+    @Test
+    @DisplayName("deadline closes a blocked body read and cannot return late success")
+    fun `deadline maps to timeout after closing blocked response connection`() = runTest {
+        val readEntered = CompletableDeferred<Unit>()
+        val releaseRead = CountDownLatch(1)
+        val disconnectCount = AtomicInteger()
+        val url = URL("http://example.test/")
+        val connection = object : HttpURLConnection(url) {
+            override fun connect() = Unit
+            override fun disconnect() {
+                disconnectCount.incrementAndGet()
+                releaseRead.countDown()
+            }
+            override fun usingProxy() = false
+            override fun getResponseCode() = 200
+            override fun getResponseMessage() = "OK"
+            override fun getInputStream(): InputStream = object : InputStream() {
+                override fun read(): Int {
+                    readEntered.complete(Unit)
+                    releaseRead.await()
+                    return -1
+                }
+            }
+        }
+        val repository = HttpProbeRepositoryImpl(HttpProbeConnectionFactory { connection })
+        val session = HttpProbeOperation.newSession(timeoutMillis = 500)
+        val probe = async(Dispatchers.IO) {
+            repository.probe(HttpProbeRequest(url = url.toString()), session)
+        }
+
+        withContext(Dispatchers.Default) { withTimeout(5_000) { readEntered.await() } }
+        val result = withContext(Dispatchers.IO) { withTimeout(5_000) { probe.await() } }
+
+        assertTrue(result is NetworkResult.Error)
+        assertEquals("HTTP request timed out", (result as NetworkResult.Error).message)
+        assertEquals(1, disconnectCount.get(), "the registered connection must close once")
     }
 }

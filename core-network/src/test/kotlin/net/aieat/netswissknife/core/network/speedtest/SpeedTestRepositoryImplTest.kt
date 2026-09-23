@@ -1,14 +1,34 @@
 package net.aieat.netswissknife.core.network.speedtest
 
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
+import java.io.IOException
+import java.io.InputStream
+import java.net.HttpURLConnection
+import java.net.URL
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.Collections
+import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationBudget
+import net.aieat.netswissknife.core.network.operation.OperationRequirement
+import net.aieat.netswissknife.core.network.operation.OperationSession
+import net.aieat.netswissknife.core.network.testkit.FakeClock
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @DisplayName("SpeedTestRepositoryImpl")
@@ -66,11 +86,152 @@ class SpeedTestRepositoryImplTest {
             assertEquals(SpeedTestPhase.LATENCY, failure.phase)
             assertEquals("timed out", failure.message)
         }
+
+        @Test
+        fun `late custom probe return after deadline emits no latency success`() = runTest {
+            val clock = FakeClock()
+            val probeEntered = CompletableDeferred<Unit>()
+            val releaseProbe = CompletableDeferred<Unit>()
+            val session = OperationSession(
+                OperationBudget.start(
+                    requirement = OperationRequirement.ANY_NETWORK,
+                    timeoutMillis = 100,
+                    maxConcurrentProbes = 1,
+                    clock = clock,
+                )
+            )
+            val repository = SpeedTestRepositoryImpl(
+                latencyProbeCount = 1,
+                latencyProbe = {
+                    probeEntered.complete(Unit)
+                    releaseProbe.await()
+                    12L
+                },
+                downloadStream = fakeStream(emptyList()),
+                uploadStream = fakeStream(emptyList()),
+            )
+            val collection = async(Dispatchers.IO) {
+                repository.runSpeedTest(session).toList()
+            }
+
+            withContext(Dispatchers.IO) { withTimeout(3_000) { probeEntered.await() } }
+            clock.advanceBy(100_000_000L)
+            releaseProbe.complete(Unit)
+            val events = withContext(Dispatchers.IO) { withTimeout(3_000) { collection.await() } }
+
+            assertTrue(events.none { it is SpeedTestEvent.LatencyProgress || it is SpeedTestEvent.LatencyFinished })
+            val failure = events.single() as SpeedTestEvent.Failed
+            assertEquals(SpeedTestPhase.LATENCY, failure.phase)
+            assertEquals("Speed test timed out", failure.message)
+        }
     }
 
     @Nested
     @DisplayName("download / upload phases")
     inner class ThroughputPhases {
+
+        @Test
+        fun `cancelling an active download disconnects its connection and does not emit a failed result`() = runTest {
+            val readEntered = CountDownLatch(1)
+            val disconnects = AtomicInteger()
+            val streamCloses = AtomicInteger()
+            val released = CountDownLatch(1)
+            val disconnected = CountDownLatch(1)
+            val streamClosedAfterDisconnect = AtomicBoolean(false)
+            val connection = object : HttpURLConnection(URL("https://speed.cloudflare.com/__down")) {
+                override fun connect() = Unit
+                override fun usingProxy() = false
+                override fun disconnect() {
+                    disconnects.incrementAndGet()
+                    released.countDown()
+                    disconnected.countDown()
+                }
+                override fun getInputStream(): InputStream = object : InputStream() {
+                    override fun read(): Int {
+                        readEntered.countDown()
+                        released.await(5, TimeUnit.SECONDS)
+                        throw IOException("closed by disconnect")
+                    }
+                    override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
+                        readEntered.countDown()
+                        released.await(5, TimeUnit.SECONDS)
+                        throw IOException("closed by disconnect")
+                    }
+                    override fun close() {
+                        streamCloses.incrementAndGet()
+                        streamClosedAfterDisconnect.set(disconnected.await(3, TimeUnit.SECONDS))
+                    }
+                }
+            }
+            val repository = SpeedTestRepositoryImpl(
+                latencyProbeCount = 1,
+                latencyProbe = { 8L },
+                connectionFactory = { _, _ -> connection },
+            )
+            val session = SpeedTestOperation.newSession()
+            val events = Collections.synchronizedList(mutableListOf<SpeedTestEvent>())
+            val collector = async(Dispatchers.IO) { repository.runSpeedTest(session).collect { events.add(it) } }
+
+            assertTrue(withContext(Dispatchers.IO) { readEntered.await(3, TimeUnit.SECONDS) })
+            session.cancel(CancellationReason.USER_STOP)
+            withContext(Dispatchers.IO) { assertTrue(released.await(3, TimeUnit.SECONDS)) }
+            var wasCancelled = false
+            try {
+                collector.await()
+            } catch (_: CancellationException) {
+                wasCancelled = true
+            }
+            assertTrue(wasCancelled)
+            assertEquals(1, disconnects.get())
+            assertTrue(events.none { it is SpeedTestEvent.Failed })
+            assertEquals(1, streamCloses.get())
+            assertTrue(streamClosedAfterDisconnect.get(), "disconnect must unblock the stream before close")
+        }
+
+        @Test
+        fun `deadline disconnects an active download connection`() = runTest {
+            val readEntered = CountDownLatch(1)
+            val disconnects = AtomicInteger()
+            val released = CountDownLatch(1)
+            val connection = object : HttpURLConnection(URL("https://speed.cloudflare.com/__down")) {
+                override fun connect() = Unit
+                override fun usingProxy() = false
+                override fun disconnect() {
+                    disconnects.incrementAndGet()
+                    released.countDown()
+                }
+                override fun getInputStream(): InputStream = object : InputStream() {
+                    override fun read(): Int {
+                        readEntered.countDown()
+                        released.await(5, TimeUnit.SECONDS)
+                        throw IOException("closed by disconnect")
+                    }
+                    override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
+                        readEntered.countDown()
+                        released.await(5, TimeUnit.SECONDS)
+                        throw IOException("closed by disconnect")
+                    }
+                }
+            }
+            val repository = SpeedTestRepositoryImpl(
+                latencyProbeCount = 1,
+                latencyProbe = { 8L },
+                connectionFactory = { _, _ -> connection },
+            )
+            val collector = async(Dispatchers.IO) {
+                repository.runSpeedTest(SpeedTestOperation.newSession(timeoutMs = 500L)).toList()
+            }
+
+            assertTrue(withContext(Dispatchers.IO) { readEntered.await(3, TimeUnit.SECONDS) })
+            withContext(Dispatchers.IO) { assertTrue(released.await(3, TimeUnit.SECONDS)) }
+            val events = collector.await()
+            assertEquals(1, disconnects.get())
+            assertEquals(
+                SpeedTestEvent.Failed(SpeedTestPhase.DOWNLOAD, "Speed test timed out"),
+                events.last(),
+            )
+            assertTrue(events.none { it is SpeedTestEvent.DownloadFinished || it is SpeedTestEvent.UploadFinished })
+        }
 
         @Test
         fun `streams progress samples and a final result for download`() = runTest {

@@ -2,8 +2,19 @@ package net.aieat.netswissknife.core.network.httprobe
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.withContext
 import net.aieat.netswissknife.core.network.NetworkResult
+import net.aieat.netswissknife.core.network.MonotonicClock
+import net.aieat.netswissknife.core.network.SystemMonotonicClock
+import net.aieat.netswissknife.core.network.elapsedMillisSince
+import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationCancellationException
+import net.aieat.netswissknife.core.network.operation.OperationDeadlineExceededException
+import net.aieat.netswissknife.core.network.operation.OperationResourcesContext
+import net.aieat.netswissknife.core.network.operation.OperationRunner
+import net.aieat.netswissknife.core.network.operation.OperationSession
+import net.aieat.netswissknife.core.network.operation.ensureCurrentOperationActive
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.net.HttpURLConnection
@@ -13,6 +24,7 @@ import java.net.URISyntaxException
 import java.net.URL
 import java.nio.charset.Charset
 import java.nio.charset.CodingErrorAction
+import java.util.concurrent.atomic.AtomicBoolean
 
 fun interface HttpProbeConnectionFactory {
     fun open(url: URL): HttpURLConnection
@@ -21,6 +33,8 @@ fun interface HttpProbeConnectionFactory {
 class HttpProbeRepositoryImpl internal constructor(
     private val connectionFactory: HttpProbeConnectionFactory
 ) : HttpProbeRepository {
+
+    internal var clock: MonotonicClock = SystemMonotonicClock
 
     constructor() : this(HttpProbeConnectionFactory { it.openConnection() as HttpURLConnection })
 
@@ -36,7 +50,18 @@ class HttpProbeRepositoryImpl internal constructor(
         private val CHARSET_PATTERN = Regex("(?i)(?:^|;)\\s*charset\\s*=\\s*(?:\"([^\"]+)\"|([^;\\s]+))")
     }
 
-    override suspend fun probe(request: HttpProbeRequest): NetworkResult<HttpProbeResult> {
+    override suspend fun probe(request: HttpProbeRequest): NetworkResult<HttpProbeResult> =
+        probeInternal(request, null)
+
+    override suspend fun probe(
+        request: HttpProbeRequest,
+        operationSession: OperationSession,
+    ): NetworkResult<HttpProbeResult> = probeInternal(request, operationSession)
+
+    private suspend fun probeInternal(
+        request: HttpProbeRequest,
+        callerSession: OperationSession?,
+    ): NetworkResult<HttpProbeResult> {
         val trimmedUrl = request.url.trim()
         if (trimmedUrl.isBlank()) return NetworkResult.Error("URL must not be blank")
         if (request.timeoutMs !in 500..60_000)
@@ -60,13 +85,33 @@ class HttpProbeRepositoryImpl internal constructor(
         }
 
         return withContext(Dispatchers.IO) {
+            val session = callerSession ?: HttpProbeOperation.newSession(request, clock)
             try {
-                executeRequest(parsedUrl, request)
+                OperationRunner.run(session) {
+                    executeRequest(parsedUrl, request)
+                }
             } catch (e: CancellationException) {
+                if (e is OperationCancellationException &&
+                    e.reason == CancellationReason.DEADLINE_EXCEEDED
+                ) return@withContext NetworkResult.Error("HTTP request timed out", e)
                 throw e
+            } catch (e: OperationDeadlineExceededException) {
+                return@withContext NetworkResult.Error("HTTP request timed out", e)
             } catch (e: IOException) {
+                session.cancellationReason?.let { reason ->
+                    if (reason == CancellationReason.DEADLINE_EXCEEDED) {
+                        return@withContext NetworkResult.Error("HTTP request timed out", e)
+                    }
+                    throw OperationCancellationException(reason, e)
+                }
                 NetworkResult.Error("Network error: ${e.message}", e)
             } catch (e: Exception) {
+                session.cancellationReason?.let { reason ->
+                    if (reason == CancellationReason.DEADLINE_EXCEEDED) {
+                        return@withContext NetworkResult.Error("HTTP request timed out", e)
+                    }
+                    throw OperationCancellationException(reason, e)
+                }
                 NetworkResult.Error("Unexpected error: ${e.message}", e)
             }
         }
@@ -81,15 +126,27 @@ class HttpProbeRepositoryImpl internal constructor(
         var currentMethod = request.method
         var currentBody = request.body.takeIf { request.method.supportsBody }
         var forwardCustomHeaders = true
-        val startTimeNs = System.nanoTime()
+        val startTimeNs = clock.nowNanos()
 
         repeat(MAX_REDIRECTS + 1) { attempt ->
+            ensureCurrentOperationActive()
             val conn = connectionFactory.open(currentUrl)
+            val lease = HttpConnectionLease(conn)
+            val resources = currentCoroutineContext()[OperationResourcesContext]?.resources
+            resources?.register(lease)
             try {
+                ensureCurrentOperationActive()
+                val remainingTimeoutMs = currentCoroutineContext()[OperationResourcesContext]
+                    ?.session?.budget?.remainingTimeoutMillis()
+                    ?.coerceAtMost(request.timeoutMs.toLong())
+                    ?.coerceAtMost(Int.MAX_VALUE.toLong())
+                    ?.toInt()
+                    ?.coerceAtLeast(1)
+                    ?: request.timeoutMs
                 conn.instanceFollowRedirects = false
                 conn.requestMethod = currentMethod.name
-                conn.connectTimeout = request.timeoutMs
-                conn.readTimeout = request.timeoutMs
+                conn.connectTimeout = remainingTimeoutMs
+                conn.readTimeout = remainingTimeoutMs
 
                 // Credentials must not cross an origin boundary during a redirect.
                 // Entity headers are also invalid once redirect semantics change the
@@ -108,9 +165,12 @@ class HttpProbeRepositoryImpl internal constructor(
                     conn.outputStream.use { it.write(currentBody!!.toByteArray(Charsets.UTF_8)) }
                 }
 
+                ensureCurrentOperationActive()
                 conn.connect()
+                ensureCurrentOperationActive()
 
                 val statusCode = conn.responseCode
+                ensureCurrentOperationActive()
                 val statusMessage = conn.responseMessage ?: ""
 
                 // Handle redirects manually
@@ -145,7 +205,7 @@ class HttpProbeRepositoryImpl internal constructor(
                         if (changesOrigin && redirectedRequest.first.supportsBody && redirectedRequest.second != null) {
                             // Do not keep the source response connection open while waiting
                             // for user consent. The finally block disconnects idempotently.
-                            conn.disconnect()
+                            lease.close()
                             val approval = request.approveCrossOriginEntityReplay
                                 ?: return NetworkResult.Error(
                                     "Cross-origin HTTP $statusCode redirect to $nextUrl requires approval before replaying ${redirectedRequest.first} body"
@@ -187,9 +247,10 @@ class HttpProbeRepositoryImpl internal constructor(
                         charset = responseCharset(conn)
                     )
                 } ?: BodyRead(null, 0L, false)
+                ensureCurrentOperationActive()
                 val declaredBodyBytes = declaredContentLength(responseHeaders)
 
-                val elapsed = (System.nanoTime() - startTimeNs) / 1_000_000L
+                val elapsed = clock.elapsedMillisSince(startTimeNs)
                 val securityChecks = HttpSecurityAnalyzer.analyze(responseHeaders, isHttps)
 
                 return NetworkResult.Success(
@@ -208,8 +269,13 @@ class HttpProbeRepositoryImpl internal constructor(
                         securityChecks = securityChecks
                     )
                 )
+            } catch (failure: Exception) {
+                // A disconnect caused by cancellation/deadline commonly surfaces as IOException.
+                // Re-check here so it cannot be converted into an ordinary network error.
+                ensureCurrentOperationActive()
+                throw failure
             } finally {
-                conn.disconnect()
+                if (resources == null || resources.release(lease)) lease.close()
             }
         }
 
@@ -262,6 +328,16 @@ class HttpProbeRepositoryImpl internal constructor(
         val bufferedBytes: Long,
         val truncated: Boolean
     )
+
+    private class HttpConnectionLease(
+        private val connection: HttpURLConnection,
+    ) : AutoCloseable {
+        private val closed = AtomicBoolean(false)
+
+        override fun close() {
+            if (closed.compareAndSet(false, true)) connection.disconnect()
+        }
+    }
 
     /**
      * Parses `Content-Length` into the full body size. Absent, malformed, or

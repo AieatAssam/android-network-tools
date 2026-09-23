@@ -20,6 +20,9 @@ import net.aieat.netswissknife.core.network.speedtest.SpeedTestPhase
 import net.aieat.netswissknife.core.network.speedtest.SpeedTestResult
 import net.aieat.netswissknife.core.network.speedtest.ThroughputResult
 import net.aieat.netswissknife.core.network.speedtest.ThroughputSample
+import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationSession
+import net.aieat.netswissknife.core.network.speedtest.SpeedTestOperation
 import javax.inject.Inject
 
 /** All possible states for the Speed Test UI. */
@@ -47,9 +50,13 @@ class SpeedTestViewModel @Inject constructor(
     val networkStatus: StateFlow<NetworkStatus> = networkStatusProvider.status
 
     private var testJob: Job? = null
+    private var operationSession: OperationSession? = null
 
     fun startTest() {
+        operationSession?.cancel(CancellationReason.USER_STOP)
         testJob?.cancel()
+        val session = SpeedTestOperation.newSession()
+        operationSession = session
 
         val latencySamples = mutableListOf<LatencySample>()
         val downloadSamples = mutableListOf<ThroughputSample>()
@@ -65,7 +72,7 @@ class SpeedTestViewModel @Inject constructor(
 
         testJob = viewModelScope.launch {
             try {
-                speedTestUseCase().collect { event ->
+                speedTestUseCase(session).collect { event ->
                     when (event) {
                         is SpeedTestEvent.LatencyProgress -> {
                             latencySamples.add(event.sample)
@@ -109,11 +116,15 @@ class SpeedTestViewModel @Inject constructor(
                 throw e
             } catch (e: Exception) {
                 _uiState.value = SpeedTestUiState.Error(current.phase, e.message ?: "Unknown error")
+            } finally {
+                if (operationSession === session) operationSession = null
             }
         }
     }
 
     fun onCancel() {
+        operationSession?.cancel(CancellationReason.USER_STOP)
+        operationSession = null
         testJob?.cancel()
         testJob = null
         _uiState.value = SpeedTestUiState.Idle
@@ -122,6 +133,8 @@ class SpeedTestViewModel @Inject constructor(
     fun onRetry() = startTest()
 
     override fun onCleared() {
+        operationSession?.cancel(CancellationReason.LIFECYCLE_PAUSE)
+        operationSession = null
         testJob?.cancel()
     }
 }

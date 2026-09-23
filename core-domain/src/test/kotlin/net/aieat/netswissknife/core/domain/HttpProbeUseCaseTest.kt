@@ -9,6 +9,7 @@ import net.aieat.netswissknife.core.network.httprobe.HttpMethod
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeRepository
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeRequest
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeResult
+import net.aieat.netswissknife.core.network.httprobe.HttpProbeOperation
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
@@ -108,6 +109,18 @@ class HttpProbeUseCaseTest {
 
         assertTrue(result is NetworkResult.Success)
         coVerify(exactly = 1) { repository.probe(any()) }
+    }
+
+    @Test
+    @DisplayName("caller-owned operation session reaches the repository")
+    fun `invoke forwards caller-owned operation session`() = runTest {
+        coEvery { repository.probe(any(), any()) } returns NetworkResult.Success(fakeResult)
+        val session = HttpProbeOperation.newSession(timeoutMillis = 2_000)
+
+        val result = useCase(HttpProbeParams(url = "https://example.com"), session)
+
+        assertTrue(result is NetworkResult.Success)
+        coVerify { repository.probe(match { it.url == "https://example.com" }, session) }
     }
 
     @Test

@@ -8,6 +8,8 @@ import kotlinx.coroutines.test.runTest
 import net.aieat.netswissknife.core.network.speedtest.LatencyStats
 import net.aieat.netswissknife.core.network.speedtest.SpeedTestEvent
 import net.aieat.netswissknife.core.network.speedtest.SpeedTestRepository
+import net.aieat.netswissknife.core.network.operation.OperationBudget
+import net.aieat.netswissknife.core.network.operation.OperationSession
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
@@ -28,5 +30,22 @@ class SpeedTestUseCaseTest {
         val useCase = SpeedTestUseCase(FakeRepository(expected))
 
         assertEquals(expected, useCase().toList())
+    }
+
+    @Test
+    fun `forwards caller-owned operation session`() = runTest {
+        val expected = listOf(SpeedTestEvent.LatencyFinished(LatencyStats.EMPTY))
+        val session = OperationSession(OperationBudget.start(timeoutMillis = 10_000))
+        var received: OperationSession? = null
+        val repository = object : SpeedTestRepository {
+            override fun runSpeedTest(): Flow<SpeedTestEvent> = flowOf(*expected.toTypedArray())
+            override fun runSpeedTest(operationSession: OperationSession): Flow<SpeedTestEvent> {
+                received = operationSession
+                return flowOf(*expected.toTypedArray())
+            }
+        }
+
+        assertEquals(expected, SpeedTestUseCase(repository)(session).toList())
+        assertEquals(session, received)
     }
 }

@@ -87,7 +87,7 @@ class HttpProbeViewModelTest {
 
         @Test
         fun `success sets result and resets loading`() = runTest {
-            coEvery { useCase(any()) } returns NetworkResult.Success(stubResult)
+            coEvery { useCase(any(), any()) } returns NetworkResult.Success(stubResult)
             viewModel.onUrlChange("https://example.com")
             viewModel.send()
             val state = viewModel.uiState.value
@@ -98,7 +98,7 @@ class HttpProbeViewModelTest {
 
         @Test
         fun `error sets error message`() = runTest {
-            coEvery { useCase(any()) } returns NetworkResult.Error("timeout")
+            coEvery { useCase(any(), any()) } returns NetworkResult.Error("timeout")
             viewModel.onUrlChange("https://example.com")
             viewModel.send()
             val state = viewModel.uiState.value
@@ -108,7 +108,7 @@ class HttpProbeViewModelTest {
 
         @Test
         fun `exception sets error and stops loading`() = runTest {
-            coEvery { useCase(any()) } throws IllegalStateException("connection reset")
+            coEvery { useCase(any(), any()) } throws IllegalStateException("connection reset")
             viewModel.onUrlChange("https://example.com")
 
             viewModel.send()
@@ -127,7 +127,7 @@ class HttpProbeViewModelTest {
 
         @Test
         fun `double send while loading is ignored`() = runTest {
-            coEvery { useCase(any()) } returns NetworkResult.Success(stubResult)
+            coEvery { useCase(any(), any()) } returns NetworkResult.Success(stubResult)
             viewModel.onUrlChange("https://example.com")
             viewModel.send()
             val firstResult = viewModel.uiState.value.result
@@ -176,7 +176,7 @@ class HttpProbeViewModelTest {
 
     @Test
     fun `stores only safe origin on send even when request fails`() = runTest {
-        coEvery { useCase(any()) } returns NetworkResult.Error("timeout")
+        coEvery { useCase(any(), any()) } returns NetworkResult.Error("timeout")
         viewModel.onUrlChange("https://user:secret@example.com/private?token=sensitive#section")
         viewModel.send()
         coVerify {
@@ -187,7 +187,7 @@ class HttpProbeViewModelTest {
 
     @Test
     fun `invalid URL is not stored in recents`() = runTest {
-        coEvery { useCase(any()) } returns NetworkResult.Error("Only HTTP and HTTPS URLs are supported")
+        coEvery { useCase(any(), any()) } returns NetworkResult.Error("Only HTTP and HTTPS URLs are supported")
         viewModel.onUrlChange("ftp://user:secret@example.com/private?token=sensitive")
 
         viewModel.send()
@@ -214,7 +214,7 @@ class HttpProbeViewModelTest {
 
     @Test
     fun `stale approval token cannot approve the next redirect in the same run`() = runTest {
-        coEvery { useCase(any()) } coAnswers {
+        coEvery { useCase(any(), any()) } coAnswers {
             val request = firstArg<HttpProbeParams>()
             val requestApproval = requireNotNull(request.approveCrossOriginEntityReplay)
             assertTrue(

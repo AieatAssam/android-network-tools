@@ -5,8 +5,6 @@ import android.net.wifi.WifiManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.emitAll
@@ -453,7 +451,7 @@ class MdnsRepositoryImpl @Inject constructor(
         }
     }
 
-    private suspend fun receivePacket(socket: MdnsSocket): ByteArray? {
+    private suspend fun OperationContext.receivePacket(socket: MdnsSocket): ByteArray? {
         return try {
             val buf = ByteArray(BUFFER_SIZE)
             val packet = DatagramPacket(buf, buf.size)
@@ -464,7 +462,10 @@ class MdnsRepositoryImpl @Inject constructor(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            currentCoroutineContext().ensureActive()
+            // The deadline reason is recorded immediately before the operation job is cancelled.
+            // Check the shared operation state too, so an I/O failure in that tiny race remains
+            // typed cancellation instead of escaping as a packet error.
+            ensureOperationActive()
             throw MdnsPacketIoException(MdnsIoOperation.RECEIVE_PACKET, e)
         }
     }

@@ -86,7 +86,7 @@ class SpeedTestViewModelTest {
 
         @Test
         fun `an exception during the test flow surfaces as Error instead of crashing`() = runTest {
-            every { useCase() } returns kotlinx.coroutines.flow.flow {
+            every { useCase(any()) } returns kotlinx.coroutines.flow.flow {
                 throw java.io.IOException("connection reset")
             }
             viewModel.startTest()
@@ -96,7 +96,7 @@ class SpeedTestViewModelTest {
 
         @Test
         fun `Running state tracks latency progress`() = runTest {
-            every { useCase() } returns flowOf(
+            every { useCase(any()) } returns flowOf(
                 SpeedTestEvent.LatencyProgress(latencySample, total = 5)
             )
 
@@ -109,7 +109,7 @@ class SpeedTestViewModelTest {
 
         @Test
         fun `advances through phases as events arrive`() = runTest {
-            every { useCase() } returns flowOf(
+            every { useCase(any()) } returns flowOf(
                 SpeedTestEvent.LatencyFinished(latencyStats),
                 SpeedTestEvent.DownloadProgress(downloadSample),
                 SpeedTestEvent.DownloadFinished(downloadResult),
@@ -126,7 +126,7 @@ class SpeedTestViewModelTest {
 
         @Test
         fun `Finished on UploadFinished combines all phase results`() = runTest {
-            every { useCase() } returns flowOf(
+            every { useCase(any()) } returns flowOf(
                 SpeedTestEvent.LatencyFinished(latencyStats),
                 SpeedTestEvent.DownloadFinished(downloadResult),
                 SpeedTestEvent.UploadFinished(uploadResult)
@@ -142,7 +142,7 @@ class SpeedTestViewModelTest {
 
         @Test
         fun `Error state on Failed event`() = runTest {
-            every { useCase() } returns flowOf(
+            every { useCase(any()) } returns flowOf(
                 SpeedTestEvent.Failed(SpeedTestPhase.DOWNLOAD, "connection reset")
             )
 
@@ -153,6 +153,19 @@ class SpeedTestViewModelTest {
             assertEquals("connection reset", state.message)
         }
 
+        @Test
+        fun `deadline failure ends the run in Error instead of leaving it Running`() = runTest {
+            every { useCase(any()) } returns flowOf(
+                SpeedTestEvent.Failed(SpeedTestPhase.DOWNLOAD, "Speed test timed out")
+            )
+
+            viewModel.startTest()
+
+            val state = viewModel.uiState.value as SpeedTestUiState.Error
+            assertEquals(SpeedTestPhase.DOWNLOAD, state.phase)
+            assertEquals("Speed test timed out", state.message)
+        }
+
     }
 
     @Nested
@@ -161,7 +174,7 @@ class SpeedTestViewModelTest {
 
         @Test
         fun `onCancel resets to Idle`() = runTest {
-            every { useCase() } returns flowOf(
+            every { useCase(any()) } returns flowOf(
                 SpeedTestEvent.LatencyProgress(latencySample, total = 5)
             )
             viewModel.startTest()
@@ -173,12 +186,12 @@ class SpeedTestViewModelTest {
 
         @Test
         fun `onRetry re-invokes the use case`() = runTest {
-            every { useCase() } returns flowOf(
+            every { useCase(any()) } returns flowOf(
                 SpeedTestEvent.Failed(SpeedTestPhase.LATENCY, "timeout")
             )
             viewModel.startTest()
 
-            every { useCase() } returns flowOf(
+            every { useCase(any()) } returns flowOf(
                 SpeedTestEvent.LatencyProgress(latencySample, total = 5)
             )
             viewModel.onRetry()

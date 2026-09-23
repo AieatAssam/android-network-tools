@@ -25,8 +25,11 @@ import net.aieat.netswissknife.core.domain.HttpProbeParams
 import net.aieat.netswissknife.core.domain.HttpProbeUseCase
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.httprobe.HttpMethod
+import net.aieat.netswissknife.core.network.httprobe.HttpProbeOperation
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeResult
 import net.aieat.netswissknife.core.network.httprobe.CrossOriginEntityReplay
+import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationSession
 import java.util.UUID
 import javax.inject.Inject
 
@@ -71,6 +74,13 @@ class HttpProbeViewModel @Inject constructor(
     )
 
     private var activeReplayDecision: ActiveReplayDecision? = null
+    private var operationSession: OperationSession? = null
+
+    init {
+        addCloseable(LIFECYCLE_CLOSEABLE_KEY, AutoCloseable {
+            cancelRequest(CancellationReason.LIFECYCLE_PAUSE)
+        })
+    }
 
     val recentHosts: StateFlow<List<String>> = flow {
         recentHostsRepository.sanitizeRecents(
@@ -150,6 +160,8 @@ class HttpProbeViewModel @Inject constructor(
         }
         _uiState.update { it.copy(isLoading = true, result = null, error = null, selectedTab = 0) }
         val runId = UUID.randomUUID().toString()
+        val session = HttpProbeOperation.newSession()
+        operationSession = session
 
         viewModelScope.launch {
             val headers = state.customHeaders
@@ -192,7 +204,8 @@ class HttpProbeViewModel @Inject constructor(
                                 }
                             }
                         }
-                    )
+                    ),
+                    session
                 )
 
                 _uiState.update { current ->
@@ -217,7 +230,24 @@ class HttpProbeViewModel @Inject constructor(
                     ?: e::class.simpleName
                     ?: "Unknown request error"
                 _uiState.update { it.copy(isLoading = false, pendingEntityReplayApproval = null, error = "Request failed: $detail") }
+            } finally {
+                if (operationSession === session) operationSession = null
             }
         }
+    }
+
+    private fun cancelRequest(reason: CancellationReason) {
+        operationSession?.let { session ->
+            operationSession = null
+            runCatching { session.cancel(reason) }
+        }
+    }
+
+    override fun onCleared() {
+        cancelRequest(CancellationReason.LIFECYCLE_PAUSE)
+    }
+
+    private companion object {
+        const val LIFECYCLE_CLOSEABLE_KEY = "http_probe_operation_lifecycle"
     }
 }
