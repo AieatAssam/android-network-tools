@@ -76,8 +76,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material3.Badge
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -140,6 +142,7 @@ import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.core.network.wifi.WifiBand
+import net.aieat.netswissknife.core.network.wifi.WifiSecurity
 
 // ── Network colour palette (12 visually distinct colours) ────────────────────
 
@@ -148,6 +151,8 @@ private fun networkColor(colorIndex: Int): Color =
 
 object WifiScreenTestTags {
     const val CONTENT_LIST = "wifi_content_list"
+    const val UNKNOWN_SECURITY_ICON = "wifi_unknown_security_icon"
+    const val UNKNOWN_SECURITY_LABEL = "wifi_unknown_security_label"
     const val NETWORKS_START_INDEX = 7
 }
 
@@ -1012,6 +1017,7 @@ private fun signalLevelColor(level: net.aieat.netswissknife.core.network.wifi.Si
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -1067,15 +1073,7 @@ private fun signalLevelColor(level: net.aieat.netswissknife.core.network.wifi.Si
             HorizontalDivider()
 
             DetailSectionHeader(stringResource(R.string.wifi_detail_security))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    if (ap.security.isEncrypted) Icons.Default.Lock else Icons.Default.LockOpen,
-                    null, Modifier.size(18.dp),
-                    tint = if (ap.security.isEncrypted) MaterialTheme.colorScheme.primary
-                           else MaterialTheme.colorScheme.tertiary
-                )
-                Text(ap.security.displayName, style = MaterialTheme.typography.bodyMedium)
-            }
+            WifiSecurityIndicator(ap.security)
             val tokens = ap.capabilities
                 .removePrefix("[").removeSuffix("]")
                 .split("][")
@@ -1109,6 +1107,38 @@ private fun signalLevelColor(level: net.aieat.netswissknife.core.network.wifi.Si
                     "${connectedInfo.rssi} dBm  (${connectedInfo.signalQualityPercent}%)")
             }
         }
+    }
+}
+
+@Composable
+internal fun WifiSecurityIndicator(security: WifiSecurity) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        val securityIcon = when (security) {
+            WifiSecurity.UNKNOWN -> Icons.AutoMirrored.Filled.HelpOutline
+            WifiSecurity.OPEN -> Icons.Default.LockOpen
+            else -> Icons.Default.Lock
+        }
+        Icon(
+            securityIcon,
+            if (security == WifiSecurity.UNKNOWN) stringResource(R.string.wifi_security_unknown) else null,
+            Modifier.size(18.dp).then(
+                if (security == WifiSecurity.UNKNOWN) Modifier.testTag(WifiScreenTestTags.UNKNOWN_SECURITY_ICON)
+                else Modifier
+            ),
+            tint = when (security) {
+                WifiSecurity.UNKNOWN -> MaterialTheme.colorScheme.onSurfaceVariant
+                WifiSecurity.OPEN -> MaterialTheme.colorScheme.tertiary
+                else -> MaterialTheme.colorScheme.primary
+            }
+        )
+        Text(
+            security.displayName,
+            Modifier.then(
+                if (security == WifiSecurity.UNKNOWN) Modifier.testTag(WifiScreenTestTags.UNKNOWN_SECURITY_LABEL)
+                else Modifier
+            ),
+            style = MaterialTheme.typography.bodyMedium
+        )
     }
 }
 

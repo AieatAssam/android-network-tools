@@ -189,7 +189,7 @@ class WifiScanRepositoryImpl(private val context: Context) : WifiScanRepository 
     private fun mapScanResult(sr: ScanResult, connectedBssid: String?): WifiAccessPoint {
         val band = WifiBand.fromFrequency(sr.frequency)
         val channel = WifiChannelHelper.frequencyToChannel(sr.frequency, band)
-        val security = WifiSecurity.fromCapabilities(sr.capabilities ?: "")
+        val security = WifiSecurity.fromCapabilities(sr.capabilities)
         val standard = getScanResultStandard(sr, band)
         val widthMhz = WifiChannelHelper.channelWidthMhz(sr.channelWidth)
         val vendor = OuiDatabase.lookup(sr.BSSID ?: "") ?: ""

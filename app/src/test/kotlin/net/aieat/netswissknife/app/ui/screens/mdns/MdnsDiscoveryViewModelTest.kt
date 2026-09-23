@@ -7,6 +7,7 @@ import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.job
@@ -155,6 +156,23 @@ class MdnsDiscoveryViewModelTest {
             viewModel.stopScan()
 
             assertTrue(!viewModel.uiState.value.isScanning)
+        }
+
+        @Test
+        fun `cancellation keeps partial results and does not become a discovery error`() {
+            val partial = stubService()
+            every { useCase(any()) } returns flow {
+                emit(MdnsUpdate.ServiceFound(partial))
+                awaitCancellation()
+            }
+            viewModel.startScan()
+
+            viewModel.stopScan()
+
+            assertEquals(listOf(partial), viewModel.uiState.value.services)
+            assertTrue(!viewModel.uiState.value.isScanning)
+            assertEquals(null, viewModel.uiState.value.error)
+            assertTrue(!viewModel.uiState.value.scanComplete)
         }
 
         @Test

@@ -4,10 +4,14 @@ import android.content.Context
 import android.net.wifi.WifiManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.InternalCoroutinesApi
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.job
 import net.aieat.netswissknife.core.network.mdns.DiscoveredService
 import net.aieat.netswissknife.core.network.mdns.MdnsPacketParser
 import net.aieat.netswissknife.core.network.mdns.MdnsRepository
@@ -26,9 +30,56 @@ import java.net.MulticastSocket
 import java.net.SocketTimeoutException
 import javax.inject.Inject
 
+internal interface MdnsMulticastLock {
+    fun setReferenceCounted(value: Boolean)
+    fun acquire()
+    val isHeld: Boolean
+    fun release()
+}
+
+internal interface MdnsSocket {
+    var reuseAddress: Boolean
+    var soTimeout: Int
+    fun bind(address: InetSocketAddress)
+    fun joinGroup(address: InetAddress)
+    fun leaveGroup(address: InetAddress)
+    fun send(packet: DatagramPacket)
+    fun receive(packet: DatagramPacket)
+    fun close()
+}
+
+private class PlatformMdnsSocket(private val socket: MulticastSocket) : MdnsSocket {
+    override var reuseAddress: Boolean
+        get() = socket.reuseAddress
+        set(value) { socket.reuseAddress = value }
+    override var soTimeout: Int
+        get() = socket.soTimeout
+        set(value) { socket.soTimeout = value }
+    override fun bind(address: InetSocketAddress) = socket.bind(address)
+    @Suppress("DEPRECATION")
+    override fun joinGroup(address: InetAddress) = socket.joinGroup(address)
+    @Suppress("DEPRECATION")
+    override fun leaveGroup(address: InetAddress) = socket.leaveGroup(address)
+    override fun send(packet: DatagramPacket) = socket.send(packet)
+    override fun receive(packet: DatagramPacket) = socket.receive(packet)
+    override fun close() = socket.close()
+}
+
 class MdnsRepositoryImpl @Inject constructor(
     @param:ApplicationContext private val context: Context
 ) : MdnsRepository {
+
+    /** Platform seams let cancellation/cleanup be tested without relying on emulator networking. */
+    internal var socketFactory: () -> MdnsSocket = { PlatformMdnsSocket(MulticastSocket(null)) }
+    internal var multicastLockFactory: (WifiManager) -> MdnsMulticastLock = { manager ->
+        val lock = manager.createMulticastLock("mdns_discovery")
+        object : MdnsMulticastLock {
+            override fun setReferenceCounted(value: Boolean) = lock.setReferenceCounted(value)
+            override fun acquire() = lock.acquire()
+            override val isHeld: Boolean get() = lock.isHeld
+            override fun release() = lock.release()
+        }
+    }
 
     companion object {
         private const val MDNS_PORT = 5353
@@ -39,15 +90,23 @@ class MdnsRepositoryImpl @Inject constructor(
         private const val REQUERY_INTERVAL_MS = 1_500L
     }
 
+    @OptIn(InternalCoroutinesApi::class)
     override fun discover(timeoutMs: Long): Flow<MdnsUpdate> = flow {
         val wifiManager = context.getSystemService(Context.WIFI_SERVICE) as WifiManager
-        val multicastLock = wifiManager.createMulticastLock("mdns_discovery")
+        val multicastLock = multicastLockFactory(wifiManager)
 
         try {
             multicastLock.setReferenceCounted(false)
             multicastLock.acquire()
 
-            val socket = MulticastSocket(null)
+            val socket = socketFactory()
+            // DatagramSocket.receive is blocking and does not observe coroutine cancellation.
+            // Close it as soon as the collecting job enters cancellation so the receive returns
+            // immediately; final cleanup below still owns group leave and lock release.
+            val cancellationHandle = currentCoroutineContext().job.invokeOnCompletion(
+                onCancelling = true,
+                invokeImmediately = true
+            ) { cause -> if (cause is kotlinx.coroutines.CancellationException) socket.close() }
             var multicastGroup: InetAddress? = null
             try {
                 socket.reuseAddress = true
@@ -69,6 +128,7 @@ class MdnsRepositoryImpl @Inject constructor(
                 var lastRequery = 0L
 
                 while (System.currentTimeMillis() - startTime < timeoutMs) {
+                    currentCoroutineContext().ensureActive()
                     val now = System.currentTimeMillis()
                     if (now - lastRequery > REQUERY_INTERVAL_MS && serviceTypes.isNotEmpty()) {
                         for (type in serviceTypes) sendQuery(socket, multicastAddress, "$type.local.", Type.PTR)
@@ -76,6 +136,7 @@ class MdnsRepositoryImpl @Inject constructor(
                     }
 
                     val packet = receivePacket(socket) ?: continue
+                    currentCoroutineContext().ensureActive()
                     val message = MdnsPacketParser.parsePacket(packet) ?: continue
 
                     val allSections = listOf(Section.ANSWER, Section.AUTHORITY, Section.ADDITIONAL)
@@ -126,7 +187,10 @@ class MdnsRepositoryImpl @Inject constructor(
                                         // Query for A/AAAA
                                         sendQuery(socket, multicastAddress, srv.target.toString(), Type.A)
                                         sendQuery(socket, multicastAddress, srv.target.toString(), Type.AAAA)
-                                        tryEmit(partial, emittedKeys)?.let { emit(MdnsUpdate.ServiceFound(it)) }
+                                        tryEmit(partial, emittedKeys)?.let {
+                                            currentCoroutineContext().ensureActive()
+                                            emit(MdnsUpdate.ServiceFound(it))
+                                        }
                                     }
                                 }
 
@@ -138,7 +202,10 @@ class MdnsRepositoryImpl @Inject constructor(
                                         @Suppress("UNCHECKED_CAST")
                                         val strings = txt.strings as List<String>
                                         partial.txtRecords = MdnsPacketParser.parseTxtPairs(strings)
-                                        tryEmit(partial, emittedKeys)?.let { emit(MdnsUpdate.ServiceFound(it)) }
+                                        tryEmit(partial, emittedKeys)?.let {
+                                            currentCoroutineContext().ensureActive()
+                                            emit(MdnsUpdate.ServiceFound(it))
+                                        }
                                     }
                                 }
 
@@ -150,7 +217,10 @@ class MdnsRepositoryImpl @Inject constructor(
                                         if (partial.hostname?.let { "$it." } == owner || partial.hostname == MdnsPacketParser.normalizeHostname(owner)) {
                                             if (!partial.ipAddresses.contains(ip)) {
                                                 partial.ipAddresses.add(ip)
-                                                tryEmit(partial, emittedKeys)?.let { emit(MdnsUpdate.ServiceFound(it)) }
+                                                tryEmit(partial, emittedKeys)?.let {
+                                                    currentCoroutineContext().ensureActive()
+                                                    emit(MdnsUpdate.ServiceFound(it))
+                                                }
                                             }
                                         }
                                     }
@@ -164,7 +234,10 @@ class MdnsRepositoryImpl @Inject constructor(
                                         if (partial.hostname?.let { "$it." } == owner || partial.hostname == MdnsPacketParser.normalizeHostname(owner)) {
                                             if (!partial.ipAddresses.contains(ip)) {
                                                 partial.ipAddresses.add(ip)
-                                                tryEmit(partial, emittedKeys)?.let { emit(MdnsUpdate.ServiceFound(it)) }
+                                                tryEmit(partial, emittedKeys)?.let {
+                                                    currentCoroutineContext().ensureActive()
+                                                    emit(MdnsUpdate.ServiceFound(it))
+                                                }
                                             }
                                         }
                                     }
@@ -176,23 +249,27 @@ class MdnsRepositoryImpl @Inject constructor(
 
                 // Emit any partial services that have at minimum a hostname
                 for (partial in partialServices.values) {
+                    currentCoroutineContext().ensureActive()
                     if (partial.instanceName !in emittedKeys && partial.hostname != null) {
+                        currentCoroutineContext().ensureActive()
                         emit(MdnsUpdate.ServiceFound(partial.toService()))
                         emittedKeys.add(partial.instanceName)
                     }
                 }
 
+                currentCoroutineContext().ensureActive()
                 emit(MdnsUpdate.DiscoveryComplete(emittedKeys.size))
             } finally {
                 try { multicastGroup?.let { socket.leaveGroup(it) } } catch (_: Exception) {}
                 socket.close()
+                cancellationHandle.dispose()
             }
         } finally {
             if (multicastLock.isHeld) multicastLock.release()
         }
     }.flowOn(Dispatchers.IO)
 
-    private fun sendQuery(socket: MulticastSocket, address: InetSocketAddress, name: String, type: Int) {
+    private fun sendQuery(socket: MdnsSocket, address: InetSocketAddress, name: String, type: Int) {
         try {
             val bytes = MdnsPacketParser.buildMdnsQuery(name, type)
             val packet = DatagramPacket(bytes, bytes.size, address)
@@ -200,7 +277,7 @@ class MdnsRepositoryImpl @Inject constructor(
         } catch (_: Exception) {}
     }
 
-    private fun receivePacket(socket: MulticastSocket): ByteArray? {
+    private suspend fun receivePacket(socket: MdnsSocket): ByteArray? {
         return try {
             val buf = ByteArray(BUFFER_SIZE)
             val packet = DatagramPacket(buf, buf.size)
@@ -209,6 +286,7 @@ class MdnsRepositoryImpl @Inject constructor(
         } catch (_: SocketTimeoutException) {
             null
         } catch (_: Exception) {
+            currentCoroutineContext().ensureActive()
             null
         }
     }

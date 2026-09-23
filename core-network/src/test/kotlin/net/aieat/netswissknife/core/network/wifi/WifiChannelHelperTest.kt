@@ -143,12 +143,12 @@ class WifiChannelHelperTest {
     inner class SecurityParsing {
         @Test
         fun `SAE only is WPA3`() {
-            assertEquals(WifiSecurity.WPA3, WifiSecurity.fromCapabilities("[SAE][ESS]"))
+            assertEquals(WifiSecurity.WPA3, WifiSecurity.fromCapabilities("[RSN-SAE-CCMP][ESS]"))
         }
 
         @Test
         fun `PSK and SAE is WPA2_WPA3`() {
-            assertEquals(WifiSecurity.WPA2_WPA3, WifiSecurity.fromCapabilities("[WPA2-PSK-CCMP][SAE][ESS]"))
+            assertEquals(WifiSecurity.WPA2_WPA3, WifiSecurity.fromCapabilities("[WPA2-PSK+SAE-CCMP][ESS]"))
         }
 
         @Test

@@ -331,6 +331,7 @@
     <string name="wifi_detail_max_speed">Max Speed</string>
     <string name="wifi_detail_vendor">Vendor</string>
     <string name="wifi_detail_security">Security</string>
+    <string name="wifi_security_unknown">Security type unknown</string>
     <string name="wifi_detail_ip">IP Address</string>
     <string name="wifi_detail_ipv6">IPv6 Addresses</string>
     <string name="wifi_detail_gateway">Gateway</string>

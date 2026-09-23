@@ -230,6 +230,21 @@ class WifiScanScreenTest {
     }
 
     @Test
+    fun unknownSecurity_showsUnknownIndicatorInsteadOfOpenLock() {
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                WifiSecurityIndicator(WifiSecurity.UNKNOWN)
+            }
+        }
+
+        composeRule.onNodeWithTag(WifiScreenTestTags.UNKNOWN_SECURITY_LABEL).assertIsDisplayed()
+        composeRule.onNodeWithTag(WifiScreenTestTags.UNKNOWN_SECURITY_ICON).assertIsDisplayed()
+        composeRule
+            .onNodeWithContentDescription(context.getString(R.string.wifi_security_unknown))
+            .assertIsDisplayed()
+    }
+
+    @Test
     fun sortChip_tapCallsSetSortOrder() {
         val viewModel = fakeViewModel(successState(listOf(fakeAp("HomeNet", "AA:AA:AA:AA:AA:01", -50))))
         composeRule.setContent {

@@ -2,6 +2,7 @@ package net.aieat.netswissknife.app.ui.screens.mdns
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CancellationException
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -75,6 +76,8 @@ class MdnsDiscoveryViewModel @Inject constructor(
                         }
                     }
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _uiState.update { it.copy(isScanning = false, error = e.message ?: "Discovery failed") }
                 stopTimer()
