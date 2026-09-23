@@ -71,6 +71,7 @@ findings:
     severity: high
     kind: privacy_gap
     status: done
+    fixed_in: "b922fad138c389be8553a658c66edde2257155c7"
     title: "HTTP recents persist the complete URL before validation, including possible secrets"
     related_phase: P12
     implementation_task: E01-T02
