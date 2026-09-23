@@ -141,6 +141,24 @@ class MdnsDiscoveryScreenTest {
     }
 
     @Test
+    fun socketSetupFailure_showsErrorAndDismissResets() {
+        val viewModel = fakeViewModel(
+            state = MdnsDiscoveryUiState(error = "setsockopt failed: ENODEV")
+        )
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                MdnsDiscoveryScreen(viewModel = viewModel)
+            }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        composeRule.onNodeWithText("setsockopt failed: ENODEV").assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.mdns_error_dismiss)).performClick()
+
+        verify(exactly = 1) { viewModel.reset() }
+    }
+
+    @Test
     fun groupedResults_showServiceTypeHeader() {
         val service = fakeService("_http._tcp", "printer")
         composeRule.setContent {

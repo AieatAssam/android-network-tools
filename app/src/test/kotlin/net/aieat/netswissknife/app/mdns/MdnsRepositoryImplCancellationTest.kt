@@ -25,12 +25,36 @@ import org.junit.jupiter.api.Test
 import java.net.DatagramPacket
 import java.net.InetAddress
 import java.net.InetSocketAddress
+import java.net.SocketException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class MdnsRepositoryImplCancellationTest {
+
+    @Test
+    fun `socket setup ENODEV reaches caller and releases socket and multicast lock`() = runBlocking {
+        val context = mockk<Context>()
+        val wifiManager = mockk<WifiManager>()
+        every { context.getSystemService(Context.WIFI_SERVICE) } returns wifiManager
+
+        val socket = JoinFailureMdnsSocket()
+        val lock = TrackingMulticastLock()
+        val repository = MdnsRepositoryImpl(context).apply {
+            socketFactory = { socket }
+            multicastLockFactory = { lock }
+        }
+
+        val failure = runCatching {
+            repository.discover(timeoutMs = 1_000).collect { }
+        }.exceptionOrNull()
+
+        assertEquals("setsockopt failed: ENODEV", failure?.message)
+        assertTrue(socket.closed.get())
+        assertFalse(lock.held.get())
+        assertTrue(lock.released.get())
+    }
 
     @Test
     fun `stopScan closes blocked repository receive and leaves no late error or completion`() = runBlocking {
@@ -124,5 +148,19 @@ class MdnsRepositoryImplCancellationTest {
             closed.set(true)
             closedSignal.countDown()
         }
+    }
+
+    private class JoinFailureMdnsSocket : MdnsSocket {
+        val closed = AtomicBoolean(false)
+        override var reuseAddress: Boolean = false
+        override var soTimeout: Int = 0
+        override fun bind(address: InetSocketAddress) = Unit
+        override fun joinGroup(address: InetAddress) {
+            throw SocketException("setsockopt failed: ENODEV")
+        }
+        override fun leaveGroup(address: InetAddress) = Unit
+        override fun send(packet: DatagramPacket) = Unit
+        override fun receive(packet: DatagramPacket) = Unit
+        override fun close() { closed.set(true) }
     }
 }
