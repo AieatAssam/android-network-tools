@@ -194,13 +194,13 @@ comprehensive_expansion:
     rule: "Each finding is an independently closable follow-up to owner_task, even if that historical task is done. Implement the minimal regression first using the report evidence and validation; optional E01-E03 enhancements do not gate it. Update finding and index only after fresh regression evidence."
     entries:
       - {"finding":"RAPP001","owner_task":"P03-T2","follow_up_status":"todo","report":"plan/reviews/2026-09-21-app.yaml"}
-      - {"finding":"RAPP002","owner_task":"P05-T4","follow_up_status":"todo","report":"plan/reviews/2026-09-21-app.yaml"}
+      - {"finding":"RAPP002","owner_task":"P05-T4","follow_up_status":"done","report":"plan/reviews/2026-09-21-app.yaml"}
       - {"finding":"RAPP003","owner_task":"P04-T3","follow_up_status":"todo","report":"plan/reviews/2026-09-21-app.yaml"}
       - {"finding":"RAPP004","owner_task":"P12-T1","follow_up_status":"todo","report":"plan/reviews/2026-09-21-app.yaml"}
       - {"finding":"RBUILD001","owner_task":"P09-T4","follow_up_status":"todo","report":"plan/reviews/2026-09-21-build.yaml"}
       - {"finding":"RBUILD002","owner_task":"P09-T4","follow_up_status":"todo","report":"plan/reviews/2026-09-21-build.yaml"}
       - {"finding":"RBUILD003","owner_task":"P01-T7","follow_up_status":"todo","report":"plan/reviews/2026-09-21-build.yaml"}
-      - {"finding":"RLAN001","owner_task":"E00-T01","follow_up_status":"in_progress","report":"plan/reviews/2026-09-22-lan-scan-noise.yaml"}
+      - {"finding":"RLAN001","owner_task":"E00-T01","follow_up_status":"done","report":"plan/reviews/2026-09-22-lan-scan-noise.yaml"}
       - {"finding":"RNET001","owner_task":"P01-T4","follow_up_status":"todo","report":"plan/reviews/2026-09-21-network.yaml"}
       - {"finding":"RNET002","owner_task":"P05-T1","follow_up_status":"todo","report":"plan/reviews/2026-09-21-network.yaml"}
       - {"finding":"RNET003","owner_task":"P02-T2","follow_up_status":"todo","report":"plan/reviews/2026-09-21-network.yaml"}
@@ -209,7 +209,7 @@ comprehensive_expansion:
       - {"finding":"RNET006","owner_task":"P10-T5","follow_up_status":"todo","report":"plan/reviews/2026-09-21-network.yaml"}
       - {"finding":"RNET007","owner_task":"P11-T2","follow_up_status":"todo","report":"plan/reviews/2026-09-21-network.yaml"}
       - {"finding":"RNET008","owner_task":"P11-T3","follow_up_status":"todo","report":"plan/reviews/2026-09-21-network.yaml"}
-      - {"finding":"RNET009","owner_task":"P03-T1","follow_up_status":"todo","report":"plan/reviews/2026-09-21-network.yaml"}
+      - {"finding":"RNET009","owner_task":"P03-T1","follow_up_status":"done","report":"plan/reviews/2026-09-21-network.yaml"}
       - {"finding":"RNET010","owner_task":"P12-T3","follow_up_status":"todo","report":"plan/reviews/2026-09-21-network.yaml"}
       - {"finding":"RNET011","owner_task":"P01-T4","follow_up_status":"todo","report":"plan/reviews/2026-09-21-network.yaml"}
       - {"finding":"RUI001","owner_task":"P12-T1","follow_up_status":"todo","report":"plan/reviews/2026-09-21-ui-domain.yaml"}
@@ -233,8 +233,8 @@ incremental_review:
   reviewer_reasoning_effort: xhigh
   method: "Parallel source review; findings saved in small verified batches before final consolidation. Existing F001-F041 remain historical baseline findings."
   priority_order: [critical, high, medium, low]
-  recommended_first_followups: [RLAN001, RAPP002, RAPP004, RNET009]
-  first_followups_rationale: "Prioritize the LAN false-positive regression first, then mDNS stop/I/O reporting and misleading Wi-Fi security classification. The DNS submission race is closed. Existing unresolved critical/high findings still come first."
+  recommended_first_followups: [RAPP004, RNET002]
+  first_followups_rationale: "RAPP002 cancellation and RNET009 Wi-Fi security classification are closed with focused tests. The critical P02.5 dependency-alert gate remains unresolved and takes precedence before starting another medium follow-up; after that, RAPP004 and RNET002 remain ready. RLAN001's device-only Wi-Fi/VPN and NBSTAT observations remain tracked under E00-T01."
   execution_guidance: "Merge these findings with open phase work by severity; existing unresolved critical/high findings retain precedence. Address confirmed bugs before optional feature waves P13-P15. Follow each finding's related_phase and validation, including follow-ups to historically completed phases."
   reports:
     - { area: core-network, file: plan/reviews/2026-09-21-network.yaml }
@@ -244,16 +244,16 @@ incremental_review:
     - { area: lan-scan-discovery, file: plan/reviews/2026-09-22-lan-scan-noise.yaml }
     - { area: release-qa-brief, file: plan/reviews/2026-09-22-release-qa-brief.yaml }
   prioritized_findings:
-    - { id: RLAN001, severity: high, kind: bug, phase: P01, status: in_progress, title: "A failed TCP connect is promoted to a live host and floods LAN results with false positives" }
+    - { id: RLAN001, severity: high, kind: bug, phase: P01, status: done, title: "A failed TCP connect is promoted to a live host and floods LAN results with false positives" }
     - { id: RAPP001, severity: medium, kind: bug, phase: P03, status: todo, title: "Wi-Fi scan failures are reported as completed scans" }
-    - { id: RAPP002, severity: medium, kind: bug, phase: P05, status: todo, title: "mDNS stop/cancellation does not promptly terminate the socket loop" }
+    - { id: RAPP002, severity: medium, kind: bug, phase: P05, status: done, title: "mDNS stop/cancellation does not promptly terminate the socket loop" }
     - { id: RAPP004, severity: medium, kind: bug, phase: P12, status: todo, title: "mDNS packet I/O failures are converted into successful empty scans" }
     - { id: RBUILD001, severity: medium, kind: bug, phase: P09, status: todo, title: "Release SNMP retention gate succeeds when only one required class survives" }
     - { id: RBUILD002, severity: medium, kind: bug, phase: P09, status: todo, title: "Daily release version allocation can reuse an existing version" }
     - { id: RNET001, severity: medium, kind: bug, phase: P01, status: todo, title: "ARP enrichment snapshots the cache before all probes finish" }
     - { id: RNET002, severity: medium, kind: bug, phase: P05, status: todo, title: "Both platform and fallback subnet detection silently clamp the real prefix length" }
     - { id: RNET005, severity: medium, kind: bug, phase: P04, status: done, title: "DNS lookup does not normalize Unicode domains to IDNA" }
-    - { id: RNET009, severity: medium, kind: bug, phase: P03, status: todo, title: "Unknown Wi-Fi capabilities are classified as open networks" }
+    - { id: RNET009, severity: medium, kind: bug, phase: P03, status: done, title: "Unknown Wi-Fi capabilities are classified as open networks" }
     - { id: RNET011, severity: medium, kind: bug, phase: P01, status: todo, title: "LAN enrichment can swallow cancellation from injected suspend probes" }
     - { id: RUI001, severity: medium, kind: bug, phase: P08, status: todo, title: "mDNS user cancellation is surfaced as a discovery error" }
     - { id: RUI002, severity: medium, kind: bug, phase: P11, status: todo, title: "Stopping a port scan loses resolved IP and reports zero duration" }
@@ -755,9 +755,9 @@ findings:
   - id: F041
     severity: critical
     area: dependencies
-    title: "Six Dependabot build-tool alerts remain open after patched Gradle resolution"
-    evidence: "Authenticated `gh api repos/AieatAssam/android-network-tools/dependabot/alerts` on 2026-09-19 reported nine alerts. Rechecked 2026-09-22: #3 JDOM, #4 jose4j, and #7 Kotlin KGP are fixed; six remain open (#1/#2/#5/#6/#8/#9). Root buildEnvironment selects patched versions for affected build-classpath requests, while releaseRuntimeClasspath contains none of them; GitHub's SBOM still records some older requested versions, so the remaining alert state awaits a rescan/disposition."
-    impact: "GitHub still reports six open alerts even though Gradle resolves the affected build classpath to patched versions and the shipped runtime graph excludes them; the security status remains unresolved until a rescan or documented alert disposition."
+    title: "Critical Bouncy Castle alerts remain open in the settings/plugin dependency graph"
+    evidence: "Authenticated `gh api repos/AieatAssam/android-network-tools/dependabot/alerts` rechecked on 2026-09-23: #3/#4/#7 are fixed, while #1/#2/#5/#6/#8/#9 remain open. The SBOM contains both vulnerable Bouncy Castle 1.80.2 and pinned 1.85; `:app:buildEnvironment` does not expose the plugins-DSL classpath, so the earlier buildscript-only resolution check does not prove the affected plugin graph is patched. `releaseRuntimeClasspath` contains none of the affected packages."
+    impact: "At least the dependency graph reported to GitHub still contains vulnerable build-time artifacts, including the critical and high Bouncy Castle alerts. Their absence from the Android runtime graph limits shipped-app exposure but does not close the build-tool security gate; verify and remediate the plugin classpath or obtain an approved, time-bounded exception."
     phase: P02.5
 
 changelog:
@@ -801,3 +801,7 @@ changelog:
     note: "Closed RUI005: each continuous Ping session now owns an independent IO writer; Stop and natural completion join the producer, drain the writer, and only then expose the CSV. Clear/restart and error paths invalidate and clean up per-session files. PingViewModelTest passed 37/37, including blocked-writer Stop/natural completion, zero-packet deletion, and validation-error cleanup; QA and adversarial reviews found no closure blocker."
   - date: "2026-09-23"
     note: "Closed RUI008: DNS lookups are single-flight with synchronous Loading, clear invalidates/cancels the active generation, and recents use captured request parameters. Query controls lock while loading and IME Search is guarded; recent-store failures do not replace the lookup result. DnsViewModelTest passed 16/16; DnsScreenTest passed 7/7 on API 36. QA and adversarial reviews found no blocker."
+  - date: "2026-09-23"
+    note: "Closed RLAN001 after verifying the committed confirmed-host boundary end to end: only ICMP, completed TCP, or correlated local-protocol replies confirm a host; failures stay bounded opt-in diagnostics, with no enrichment/count/topology/export leakage. Focused LAN/TCP/NBSTAT/mDNS/classifier/UDP tests passed; QA and adversarial reviews found no code blocker. Physical Wi-Fi/VPN capture and anonymized real NBSTAT validation remain under E00-T01."
+  - date: "2026-09-23"
+    note: "Closed RAPP002 with cancellation-triggered mDNS socket close, cancellation-safe multicast-lock release, and a bounded repository-to-ViewModel stop test. Closed RNET009 by mapping only explicit ESS-only capabilities to OPEN, unknown/future tokens to UNKNOWN, and showing an accessible help indicator; focused JVM and API 36 Compose tests passed. Re-audit corrected F041: the SBOM contains vulnerable Bouncy Castle 1.80.2 alongside 1.85 and the app buildEnvironment check does not cover the plugins-DSL classpath, so P02.5 remains the critical gate before another medium follow-up."

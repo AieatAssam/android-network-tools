@@ -53,7 +53,8 @@ findings:
     recommended_action: "Make the receive loop cancellation-aware, use a cancellable socket/close hook (or a short receive timeout plus ensureActive), and release the multicast lock in a cancellation-safe finally path before returning."
     validation: "Add a fake socket/adapter test that cancels during receive and asserts close/release immediately; add an integration test with a long timeout verifying stopScan leaves no active receiver/socket/lock and no post-cancel update."
     related_phase: P05
-    status: todo
+    status: done
+    resolution: "The repository closes its socket synchronously when the collecting coroutine is cancelled, checks cancellation after the blocking receive, and releases the multicast lock in a cancellation-safe finally path. MdnsRepositoryImplCancellationTest.stopScan closes a blocked receive through the real repository/use-case/ViewModel path and verifies no completion/error/late state; MdnsDiscoveryViewModelTest retains partial results on cancellation. Focused app unit tests passed."
 
   - id: RAPP003
     severity: medium

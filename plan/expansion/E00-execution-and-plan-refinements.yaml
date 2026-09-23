@@ -172,7 +172,7 @@ tasks:
     risks: ["Conservative classification may omit closed-port hosts without another signal; expose uncertainty honestly rather than presenting unused IPs as devices."]
     checkpoint:
       task_id: E00-T01
-      baseline_or_current_commit: 5a6a578
+      baseline_or_current_commit: 990138c77ea1ab33ec5da7f10ad379d2fb838644
       status: in_progress
       files_changed:
         - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/DiscoveryProbes.kt
@@ -211,7 +211,7 @@ tasks:
       remaining_acceptance:
         - "Device-only Wi-Fi/VPN LAN capture remains unavailable in this environment."
         - "Validate with an anonymized real NBSTAT response when one is available."
-      next_action: "Continue with the confirmed ISS-20/RUI010 whitespace regression; keep E00-T01 in progress pending device-only validation."
+      next_action: "Reconcile P02.5's critical/high Dependabot alerts against the plugins-DSL classpath and record a valid disposition before starting another medium follow-up. E00-T01 remains in progress for device-only Wi-Fi/VPN capture and an anonymized real NBSTAT response."
       running_handles: none
       blockers: none
 

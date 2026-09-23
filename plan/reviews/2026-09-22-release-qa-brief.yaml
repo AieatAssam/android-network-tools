@@ -3,7 +3,7 @@ review:
   status: done
   source: "User-provided Net Swiss Knife QA brief v2026.09.21.1, based on the latest main release."
   baseline_commit: "5e183721e64ce8a8946f1a0b50f52b83544e8898"
-  checked_commit: "2db99f14152d08a069409b36785689f6c65d47db"
+  checked_commit: "eb561d9434fccbe7b5c2bf1d54f15391647d9c82"
   environment:
     connected_emulator: "API 36 (Android 16); not the brief's API 33 emulator"
     host_snmpd: "Not available in this audit"

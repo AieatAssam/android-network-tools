@@ -177,7 +177,8 @@ findings:
     recommended_action: "Return UNKNOWN for blank or unrecognized capabilities and reserve OPEN for an explicit unencrypted marker such as [ESS] with no security tokens; add compatibility handling for new Android capability tokens."
     validation: "Add tests for blank, unknown, [ESS], and representative future tokens; assert only explicit unencrypted capabilities produce OPEN and null platform capabilities remain UNKNOWN."
     related_phase: P03
-    status: todo
+    status: done
+    resolution: "WifiSecurity.fromCapabilities now returns UNKNOWN for missing, blank, unrecognized, or future capabilities and returns OPEN only for explicit ESS-only data; recognized WPA/RSN/EAP/OWE and mixed PSK+SAE forms retain their security mappings. The Android adapter passes nullable capabilities through. The detail indicator uses an accessible help icon for UNKNOWN, LockOpen only for OPEN, and the detail sheet scrolls. WifiSecurityTest and WifiChannelHelperTest passed; WifiScanScreenTest passed on API 36."
   - id: RNET010
     severity: low
     kind: gap
