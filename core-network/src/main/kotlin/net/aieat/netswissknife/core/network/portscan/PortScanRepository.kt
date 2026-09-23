@@ -6,7 +6,9 @@ import kotlinx.coroutines.flow.Flow
  * Contract for a port scanner.
  *
  * Implementations emit one [PortScanUpdate] per scanned port, then a final
- * [PortScanUpdate.Complete] when all ports have been tested.
+ * a [PortScanUpdate.Started] event once the target is resolved, one
+ * [PortScanUpdate.PortResult] per scanned port, then a [PortScanUpdate.Complete]
+ * when all ports have been tested.
  */
 interface PortScanRepository {
 
@@ -28,6 +30,12 @@ interface PortScanRepository {
 
 /** Progress events emitted during a scan. */
 sealed interface PortScanUpdate {
+    /** Emitted after target resolution and before any port probes begin. */
+    data class Started(
+        val resolvedIp: String,
+        val totalCount: Int
+    ) : PortScanUpdate
+
     /** Emitted after each port is probed. */
     data class PortResult(
         val result: PortScanResult,

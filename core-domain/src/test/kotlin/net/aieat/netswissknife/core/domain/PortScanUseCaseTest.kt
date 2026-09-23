@@ -207,6 +207,19 @@ class PortScanUseCaseTest {
         }
 
         @Test
+        fun `Started event carries resolved IP and total count before port results`() = runTest {
+            val events = makeUseCase().invoke(
+                PortScanParams(host = "example.com", preset = PortScanPreset.WEB)
+            )
+                .toList()
+
+            val started = events.first() as PortScanFlowResult.Started
+            assertEquals("203.0.113.8", started.resolvedIp)
+            assertEquals(PortScanPreset.WEB.ports.size, started.totalCount)
+            assertTrue(events.indexOfFirst { it is PortScanFlowResult.Started } < events.indexOfFirst { it is PortScanFlowResult.PortScanned })
+        }
+
+        @Test
         fun `scan emits ScanComplete as last event`() = runTest {
             val results = makeUseCase().invoke(
                 PortScanParams(host = "8.8.8.8", preset = PortScanPreset.WEB)

@@ -104,3 +104,18 @@ latest_recheck:
   dependabot_open_alerts: [1, 2, 5, 6, 8, 9]
   newest_stable_agp: "9.4.1"
   outcome: "The current source still does not remove vulnerable coordinates from the submitted plugin graph. No later stable AGP release is available to test; keep P02.5 open and recheck the next stable plugin-stack candidate against a new default-branch dependency submission, or obtain explicit time-bounded dispositions."
+
+toolchain_recheck:
+  checked_at: "2026-09-23"
+  candidate: "AGP 9.5.0-alpha06 is a preview; AGP 9.4.1 remains the current stable release."
+  compatibility:
+    gradle_wrapper: "Gradle 9.7.1 satisfies AGP 9.4's documented minimum of 9.6.0."
+    kotlin: "Kotlin 2.4.20 documents Gradle 9.7.0 support, and Android's Kotlin/AGP table requires AGP 8.5.2+ for Kotlin 2.4."
+    ksp: "KSP 2.3.12 documents AGP 8.12.0 as its minimum; this does not by itself establish full-stack compatibility."
+  primary_sources:
+    - "https://developer.android.com/reference/tools/gradle-api"
+    - "https://developer.android.com/build/releases/agp-9-4-0-release-notes"
+    - "https://developer.android.com/build/kotlin-support"
+    - "https://kotlinlang.org/docs/whatsnew2420.html"
+    - "https://github.com/google/ksp/releases/tag/2.3.12"
+  conclusion: "Do not move the production stack to the 9.5 alpha solely to silence the remaining alerts. No stable upgrade path is presently available; continue evidence-driven dependency-submission/selection analysis or obtain explicit time-bounded dispositions."

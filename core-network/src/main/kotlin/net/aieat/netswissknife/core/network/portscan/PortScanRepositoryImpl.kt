@@ -104,6 +104,7 @@ class PortScanRepositoryImpl(
         }
         currentCoroutineContext().ensureActive()
         val resolvedIp = resolvedAddress.hostAddress
+        emit(PortScanUpdate.Started(resolvedIp = resolvedIp, totalCount = ports.size))
 
         val effectiveConcurrency = concurrency.coerceIn(1, 500)
 

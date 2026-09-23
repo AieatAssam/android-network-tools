@@ -5,6 +5,12 @@ import net.aieat.netswissknife.core.network.portscan.PortScanSummary
 
 /** Events emitted by [PortScanUseCase] while a scan is in progress. */
 sealed interface PortScanFlowResult {
+    /** Target resolution completed; emitted before any port results. */
+    data class Started(
+        val resolvedIp: String,
+        val totalCount: Int
+    ) : PortScanFlowResult
+
     /** A single port result with scan progress. */
     data class PortScanned(
         val result: PortScanResult,

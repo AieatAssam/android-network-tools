@@ -229,6 +229,8 @@ private fun TlsInputSection(
     val focusManager = LocalFocusManager.current
     val normalizedHost = HostValidator.normalize(host)
     val isHostInvalid = host.isNotBlank() && normalizedHost == null
+    val parsedPort = port.toIntOrNull()
+    val isPortValid = parsedPort != null && parsedPort in 1..65_535
 
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -256,6 +258,7 @@ private fun TlsInputSection(
                 supportingText = if (isHostInvalid) {
                     { Text(stringResource(R.string.error_invalid_host)) }
                 } else null,
+                enabled       = !isLoading,
                 singleLine    = true,
                 modifier      = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(
@@ -268,7 +271,8 @@ private fun TlsInputSection(
                 recentHosts = recentHosts,
                 onHostSelected = onHostChange,
                 onRemoveHost = onRemoveRecentHost,
-                onClearAll = onClearRecentHosts
+                onClearAll = onClearRecentHosts,
+                selectionEnabled = !isLoading
             )
 
             // Port field
@@ -276,6 +280,11 @@ private fun TlsInputSection(
                 value         = port,
                 onValueChange = onPortChange,
                 label         = { Text(stringResource(R.string.tls_port_label)) },
+                isError       = !isPortValid,
+                supportingText = if (!isPortValid) {
+                    { Text(stringResource(R.string.error_invalid_port)) }
+                } else null,
+                enabled       = !isLoading,
                 singleLine    = true,
                 modifier      = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(
@@ -285,7 +294,7 @@ private fun TlsInputSection(
                 keyboardActions = KeyboardActions(
                     onDone = {
                         focusManager.clearFocus()
-                        if (!isLoading && normalizedHost != null) onInspect()
+                        if (!isLoading && normalizedHost != null && isPortValid) onInspect()
                     }
                 )
             )
@@ -296,7 +305,7 @@ private fun TlsInputSection(
                     focusManager.clearFocus()
                     onInspect()
                 },
-                enabled   = normalizedHost != null && !isLoading,
+                enabled   = normalizedHost != null && isPortValid && !isLoading,
                 modifier  = Modifier.fillMaxWidth()
             ) {
                 if (isLoading) {

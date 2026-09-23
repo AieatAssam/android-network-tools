@@ -2,10 +2,13 @@ package net.aieat.netswissknife.app.ui.screens
 
 import android.Manifest
 import android.os.Build
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -26,6 +29,7 @@ import net.aieat.netswissknife.app.ui.screens.ping.PingViewModel
 import net.aieat.netswissknife.app.ui.theme.NetSwissKnifeTheme
 import net.aieat.netswissknife.core.network.ping.PingPacketResult
 import net.aieat.netswissknife.core.network.ping.PingStatus
+import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -192,6 +196,42 @@ class PingScreenTest {
     }
 
     @Test
+    fun advancedOptions_showViewModelValuesAfterCompositionReentry() {
+        val payloadBytes = MutableStateFlow(56)
+        val ttl = MutableStateFlow(64)
+        val intervalMs = MutableStateFlow(1_000)
+        val viewModel = fakePingViewModel(
+            PingUiState.Idle,
+            payloadBytes = payloadBytes,
+            ttl = ttl,
+            intervalMs = intervalMs
+        )
+        val screenGeneration = mutableStateOf(0)
+        composeRule.setContent {
+            key(screenGeneration.value) {
+                NetSwissKnifeTheme { PingScreen(viewModel = viewModel) }
+            }
+        }
+        composeRule.mainClock.advanceTimeBy(2_000L)
+
+        // Dispose and re-enter the screen composition with the same ViewModel.
+        payloadBytes.value = 512
+        ttl.value = 128
+        intervalMs.value = 2_500
+        composeRule.mainClock.advanceTimeBy(100L)
+        composeRule.runOnIdle {
+            screenGeneration.value++
+        }
+        composeRule.mainClock.advanceTimeBy(2_000L)
+        composeRule.onNodeWithText(context.getString(R.string.action_expand)).performClick()
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        composeRule.onNodeWithText("Payload size: 512 bytes").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("TTL: 128").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Interval: 2500 ms").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
     fun advancedOptions_toggleHidesPacketControls() {
         composeRule.setContent {
             NetSwissKnifeTheme {
@@ -205,6 +245,24 @@ class PingScreenTest {
         composeRule.onNodeWithText(context.getString(R.string.action_collapse)).performClick()
         composeRule.mainClock.advanceTimeBy(1_000L)
         composeRule.onNodeWithText("Payload size: 56 bytes").assertDoesNotExist()
+    }
+
+    @Test
+    fun countSlider_supportsSettingsMaximumOf100() {
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                PingScreen(viewModel = fakePingViewModel(PingUiState.Idle, count = 100))
+            }
+        }
+
+        composeRule.mainClock.advanceTimeBy(2_000L)
+        composeRule.onNodeWithText("Count: 100").performScrollTo().assertIsDisplayed()
+
+        val slider = composeRule.onNodeWithTag(PingScreenTestTags.COUNT_SLIDER)
+            .fetchSemanticsNode()
+        val range = slider.config[SemanticsProperties.ProgressBarRangeInfo]
+        assertEquals(100f, range.current)
+        assertEquals(1f..100f, range.range)
     }
 
     @Test
@@ -272,13 +330,20 @@ class PingScreenTest {
     private fun fakePingViewModel(
         state: PingUiState? = null,
         flow: MutableStateFlow<PingUiState>? = null,
-        host: String = ""
+        host: String = "",
+        count: Int = 4,
+        payloadBytes: MutableStateFlow<Int> = MutableStateFlow(56),
+        ttl: MutableStateFlow<Int> = MutableStateFlow(64),
+        intervalMs: MutableStateFlow<Int> = MutableStateFlow(1_000)
     ): PingViewModel {
         val viewModel = mockk<PingViewModel>(relaxed = true)
         every { viewModel.uiState } returns (flow ?: MutableStateFlow(state ?: PingUiState.Idle))
         every { viewModel.host } returns MutableStateFlow(host)
-        every { viewModel.count } returns MutableStateFlow(4)
+        every { viewModel.count } returns MutableStateFlow(count)
         every { viewModel.timeoutMs } returns MutableStateFlow(1000)
+        every { viewModel.payloadBytes } returns payloadBytes
+        every { viewModel.ttl } returns ttl
+        every { viewModel.intervalMs } returns intervalMs
         every { viewModel.continuousMode } returns MutableStateFlow(false)
         every { viewModel.recentHosts } returns MutableStateFlow(emptyList())
         return viewModel

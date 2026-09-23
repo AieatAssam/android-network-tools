@@ -62,6 +62,7 @@ import androidx.activity.compose.BackHandler
 import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -75,6 +76,10 @@ import net.aieat.netswissknife.app.ui.screens.wifi.WifiRefreshIntervalPicker
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.ui.theme.AppShapes
 import kotlin.math.roundToInt
+
+object SettingsScreenTestTags {
+    const val DEFAULT_CONCURRENCY_SLIDER = "settings_default_concurrency_slider"
+}
 
 @Composable
 fun SettingsScreen(
@@ -271,9 +276,10 @@ private fun DefaultsSection(
             SliderSetting(
                 label = stringResource(R.string.settings_concurrency_label, concurrency),
                 value = concurrency.toFloat(),
-                valueRange = 10f..500f,
-                steps = 48,
-                onValueChange = { onConcurrencyChange((it / 10).roundToInt() * 10) }
+                valueRange = 1f..500f,
+                steps = 498,
+                onValueChange = { onConcurrencyChange(it.roundToInt()) },
+                testTag = SettingsScreenTestTags.DEFAULT_CONCURRENCY_SLIDER
             )
             Text(
                 stringResource(R.string.settings_wifi_refresh_interval_label),
@@ -294,7 +300,8 @@ private fun SliderSetting(
     value: Float,
     valueRange: ClosedFloatingPointRange<Float>,
     steps: Int,
-    onValueChange: (Float) -> Unit
+    onValueChange: (Float) -> Unit,
+    testTag: String? = null
 ) {
     Column {
         Text(
@@ -309,7 +316,7 @@ private fun SliderSetting(
             steps = steps,
             modifier = Modifier.fillMaxWidth().semantics {
                 contentDescription = "$label: ${value.toInt()}"
-            }
+            }.then(testTag?.let { Modifier.testTag(it) } ?: Modifier)
         )
     }
 }

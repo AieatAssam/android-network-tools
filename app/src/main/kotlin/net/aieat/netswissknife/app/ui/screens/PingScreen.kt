@@ -74,7 +74,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -140,6 +139,7 @@ import net.aieat.netswissknife.core.network.ping.PingStatus
 
 object PingScreenTestTags {
     const val CONTENT_LIST = "ping_content_list"
+    const val COUNT_SLIDER = "ping_count_slider"
 
     /** Index of the idle/running/finished/error results panel within [CONTENT_LIST]. */
     const val RESULTS_PANEL_INDEX = 2
@@ -156,9 +156,9 @@ fun PingScreen(
     val host by viewModel.host.collectAsStateWithLifecycle()
     val count by viewModel.count.collectAsStateWithLifecycle()
     val timeoutMs by viewModel.timeoutMs.collectAsStateWithLifecycle()
-    var payloadBytes by remember { mutableIntStateOf(56) }
-    var ttl by remember { mutableIntStateOf(64) }
-    var intervalMs by remember { mutableIntStateOf(1_000) }
+    val payloadBytes by viewModel.payloadBytes.collectAsStateWithLifecycle()
+    val ttl by viewModel.ttl.collectAsStateWithLifecycle()
+    val intervalMs by viewModel.intervalMs.collectAsStateWithLifecycle()
     val continuousMode by viewModel.continuousMode.collectAsStateWithLifecycle()
     val recentHosts by viewModel.recentHosts.collectAsStateWithLifecycle()
 
@@ -216,9 +216,9 @@ fun PingScreen(
                     onHostChange = viewModel::onHostChange,
                     onCountChange = viewModel::onCountChange,
                     onTimeoutChange = viewModel::onTimeoutChange,
-                    onPayloadSizeChange = { payloadBytes = it; viewModel.onPayloadSizeChange(it) },
-                    onTtlChange = { ttl = it; viewModel.onTtlChange(it) },
-                    onIntervalChange = { intervalMs = it; viewModel.onIntervalChange(it) },
+                    onPayloadSizeChange = viewModel::onPayloadSizeChange,
+                    onTtlChange = viewModel::onTtlChange,
+                    onIntervalChange = viewModel::onIntervalChange,
                     onToggleContinuous = viewModel::onToggleContinuous,
                     onStart = viewModel::startPing,
                     onStop = viewModel::onStop,
@@ -431,10 +431,11 @@ private fun PingInputCard(
                 PingSliderRow(
                     label = "${stringResource(R.string.ping_count_label)}: $count",
                     value = count.toFloat(),
-                    valueRange = 1f..50f,
-                    steps = 48,
+                    valueRange = 1f..100f,
+                    steps = 98,
                     onValueChange = { onCountChange(it.toInt()) },
-                    enabled = !isRunning
+                    enabled = !isRunning,
+                    sliderTestTag = PingScreenTestTags.COUNT_SLIDER
                 )
             }
 
@@ -540,7 +541,8 @@ private fun PingSliderRow(
     valueRange: ClosedFloatingPointRange<Float>,
     steps: Int,
     onValueChange: (Float) -> Unit,
-    enabled: Boolean
+    enabled: Boolean,
+    sliderTestTag: String? = null
 ) {
     Column {
         Text(
@@ -554,7 +556,9 @@ private fun PingSliderRow(
             valueRange = valueRange,
             steps = steps,
             enabled = enabled,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(if (sliderTestTag == null) Modifier else Modifier.testTag(sliderTestTag))
         )
     }
 }

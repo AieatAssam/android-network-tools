@@ -12,6 +12,9 @@ import net.aieat.netswissknife.core.domain.PortScanParams
 import net.aieat.netswissknife.core.domain.PortScanPreset
 import net.aieat.netswissknife.core.domain.PortScanUseCase
 import net.aieat.netswissknife.core.network.HostValidator
+import net.aieat.netswissknife.core.network.MonotonicClock
+import net.aieat.netswissknife.core.network.SystemMonotonicClock
+import net.aieat.netswissknife.core.network.elapsedMillisSince
 import net.aieat.netswissknife.core.network.portscan.PortScanResult
 import net.aieat.netswissknife.core.network.portscan.PortScanSummary
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -33,6 +36,7 @@ sealed interface PortScanUiState {
         val liveResults: List<PortScanResult>,
         val scannedCount: Int,
         val totalCount: Int,
+        val resolvedIp: String? = null,
         val progress: Float = if (totalCount > 0) scannedCount.toFloat() / totalCount else 0f
     ) : PortScanUiState
     data class Finished(val summary: PortScanSummary) : PortScanUiState
@@ -45,6 +49,7 @@ class PortScanViewModel @Inject constructor(
     private val dataStore: DataStore<Preferences>,
     private val recentHostsRepository: RecentHostsRepository,
     private val savedStateHandle: SavedStateHandle = SavedStateHandle(),
+    private val monotonicClock: MonotonicClock = SystemMonotonicClock,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<PortScanUiState>(PortScanUiState.Idle)
@@ -75,6 +80,7 @@ class PortScanViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private var scanJob: Job? = null
+    private var scanStartedAtNanos: Long? = null
 
     init {
         savedStateHandle.get<String>("host")
@@ -83,7 +89,7 @@ class PortScanViewModel @Inject constructor(
         viewModelScope.launch {
             val prefs = dataStore.data.first()
             _timeoutMs.value = prefs[AppPreferenceKeys.DEFAULT_TIMEOUT_MS] ?: 2_000
-            _concurrency.value = prefs[AppPreferenceKeys.DEFAULT_CONCURRENCY] ?: 50
+            _concurrency.value = (prefs[AppPreferenceKeys.DEFAULT_CONCURRENCY] ?: 50).coerceIn(1, 500)
         }
     }
 
@@ -99,7 +105,7 @@ class PortScanViewModel @Inject constructor(
 
     fun onTimeoutChange(value: Int) { _timeoutMs.value = value }
 
-    fun onConcurrencyChange(value: Int) { _concurrency.value = value }
+    fun onConcurrencyChange(value: Int) { _concurrency.value = value.coerceIn(1, 500) }
 
     fun removeRecentHost(host: String) {
         viewModelScope.launch {
@@ -115,6 +121,7 @@ class PortScanViewModel @Inject constructor(
 
     fun onClear() {
         scanJob?.cancel()
+        scanStartedAtNanos = null
         _uiState.value = PortScanUiState.Idle
     }
 
@@ -123,16 +130,18 @@ class PortScanViewModel @Inject constructor(
         val current = _uiState.value
         if (current is PortScanUiState.Scanning) {
             // Build partial summary from live results
+            val startedAtNanos = scanStartedAtNanos ?: monotonicClock.nowNanos()
             val partial = net.aieat.netswissknife.core.network.portscan.PortScanSummary(
                 host = _host.value,
-                resolvedIp = null,
+                resolvedIp = current.resolvedIp,
                 scannedPorts = current.liveResults.map { it.port },
                 openPorts = current.liveResults.count { it.status == net.aieat.netswissknife.core.network.portscan.PortStatus.OPEN },
                 closedPorts = current.liveResults.count { it.status == net.aieat.netswissknife.core.network.portscan.PortStatus.CLOSED },
                 filteredPorts = current.liveResults.count { it.status == net.aieat.netswissknife.core.network.portscan.PortStatus.FILTERED },
-                scanDurationMs = 0L,
+                scanDurationMs = monotonicClock.elapsedMillisSince(startedAtNanos),
                 results = current.liveResults.sortedBy { it.port }
             )
+            scanStartedAtNanos = null
             _uiState.value = PortScanUiState.Finished(partial)
         }
     }
@@ -158,11 +167,38 @@ class PortScanViewModel @Inject constructor(
             concurrency = _concurrency.value
         )
 
+        val totalPorts = if (_selectedPreset.value == PortScanPreset.CUSTOM) {
+            val start = params.startPort
+            val end = params.endPort
+            if (start in 1..65_535 && end in start..65_535 && end - start + 1 <= 10_000) {
+                end - start + 1
+            } else {
+                0
+            }
+        } else {
+            _selectedPreset.value.ports.size
+        }
+        scanStartedAtNanos = monotonicClock.nowNanos()
+        _uiState.value = PortScanUiState.Scanning(
+            liveResults = emptyList(),
+            scannedCount = 0,
+            totalCount = totalPorts
+        )
+
         scanJob = viewModelScope.launch {
             try {
                 portScanUseCase(params).collect { result ->
                     when (result) {
+                        is PortScanFlowResult.Started -> {
+                            _uiState.value = PortScanUiState.Scanning(
+                                liveResults = liveResults.toList(),
+                                scannedCount = 0,
+                                totalCount = result.totalCount,
+                                resolvedIp = result.resolvedIp
+                            )
+                        }
                         is PortScanFlowResult.ValidationError -> {
+                            scanStartedAtNanos = null
                             _uiState.value = PortScanUiState.Error(result.message)
                         }
                         is PortScanFlowResult.PortScanned -> {
@@ -170,10 +206,12 @@ class PortScanViewModel @Inject constructor(
                             _uiState.value = PortScanUiState.Scanning(
                                 liveResults = liveResults.toList(),
                                 scannedCount = result.scannedCount,
-                                totalCount = result.totalCount
+                                totalCount = result.totalCount,
+                                resolvedIp = (_uiState.value as? PortScanUiState.Scanning)?.resolvedIp
                             )
                         }
                         is PortScanFlowResult.ScanComplete -> {
+                            scanStartedAtNanos = null
                             _uiState.value = PortScanUiState.Finished(result.summary)
                         }
                     }
@@ -181,6 +219,7 @@ class PortScanViewModel @Inject constructor(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                scanStartedAtNanos = null
                 _uiState.value = PortScanUiState.Error("Scan failed: ${e.message ?: "Unknown error"}")
             }
         }

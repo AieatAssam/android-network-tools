@@ -80,6 +80,12 @@ class PortScanUseCase(private val repository: PortScanRepository) {
             concurrency = params.concurrency
         ).collect { update ->
             when (update) {
+                is PortScanUpdate.Started -> emit(
+                    PortScanFlowResult.Started(
+                        resolvedIp = update.resolvedIp,
+                        totalCount = update.totalCount
+                    )
+                )
                 is PortScanUpdate.PortResult -> emit(
                     PortScanFlowResult.PortScanned(
                         result = update.result,

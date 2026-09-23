@@ -27,6 +27,7 @@ import net.aieat.netswissknife.app.ui.screens.portscan.PortScanUiState
 import net.aieat.netswissknife.app.ui.screens.portscan.PortScanViewModel
 import net.aieat.netswissknife.app.ui.theme.NetSwissKnifeTheme
 import net.aieat.netswissknife.core.domain.PortScanPreset
+import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -85,6 +86,26 @@ class PortsScreenTest {
         composeRule
             .onNodeWithText(context.getString(R.string.ports_concurrency_high_warning))
             .assertDoesNotExist()
+    }
+
+    @Test
+    fun concurrencySliderSupportsPersistedMaximumOf500() {
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                PortsScreen(viewModel = fakePortScanViewModel(concurrency = 500))
+            }
+        }
+
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        composeRule.onNodeWithText("${context.getString(R.string.ports_concurrency_label)}: 500")
+            .performScrollTo()
+            .assertIsDisplayed()
+
+        val slider = composeRule.onNodeWithTag(PortsScreenTestTags.CONCURRENCY_SLIDER).fetchSemanticsNode()
+        val range = slider.config[androidx.compose.ui.semantics.SemanticsProperties.ProgressBarRangeInfo]
+        assertEquals(500f, range.current, 0f)
+        assertEquals(1f..500f, range.range)
+        assertEquals(498, range.steps)
     }
 
     @Test

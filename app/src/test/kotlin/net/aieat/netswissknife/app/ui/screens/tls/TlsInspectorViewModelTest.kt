@@ -171,4 +171,73 @@ class TlsInspectorViewModelTest {
         coVerify(exactly = 0) { useCase(any()) }
         coVerify(exactly = 0) { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_TLS_HOSTS, any()) }
     }
+
+    @Test
+    fun `inspect rejects invalid ports without probing or saving recent host`() = runTest {
+        viewModel.onHostChange("example.com")
+        viewModel.onPortChange("not-a-port")
+
+        viewModel.inspect()
+
+        assertEquals("Port must be a number from 1 to 65535", viewModel.uiState.value.error)
+        assertTrue(!viewModel.uiState.value.isLoading)
+        assertNull(viewModel.uiState.value.result)
+        coVerify(exactly = 0) { useCase(any()) }
+        coVerify(exactly = 0) { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_TLS_HOSTS, any()) }
+    }
+
+    @Test
+    fun `inspect rejects ports outside the valid range without probing`() = runTest {
+        viewModel.onHostChange("example.com")
+        viewModel.onPortChange("65536")
+
+        viewModel.inspect()
+
+        assertEquals("Port must be a number from 1 to 65535", viewModel.uiState.value.error)
+        coVerify(exactly = 0) { useCase(any()) }
+        coVerify(exactly = 0) { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_TLS_HOSTS, any()) }
+    }
+
+    @Test
+    fun `inspect rejects port zero without probing or saving recent host`() = runTest {
+        viewModel.onHostChange("example.com")
+        viewModel.onPortChange("0")
+
+        viewModel.inspect()
+
+        assertEquals("Port must be a number from 1 to 65535", viewModel.uiState.value.error)
+        coVerify(exactly = 0) { useCase(any()) }
+        coVerify(exactly = 0) { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_TLS_HOSTS, any()) }
+    }
+
+    @Test
+    fun `inspect forwards a valid custom port unchanged`() = runTest {
+        coEvery { useCase(any()) } returns NetworkResult.Success(stubResult)
+        viewModel.onHostChange("example.com")
+        viewModel.onPortChange("8443")
+
+        viewModel.inspect()
+
+        coVerify { useCase(match { it.host == "example.com" && it.port == 8443 }) }
+        coVerify { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_TLS_HOSTS, "example.com") }
+        assertNull(viewModel.uiState.value.error)
+    }
+
+    @Test
+    fun `editing host or port clears the previous result`() = runTest {
+        coEvery { useCase(any()) } returns NetworkResult.Success(stubResult)
+        viewModel.onHostChange("example.com")
+        viewModel.inspect()
+        assertNotNull(viewModel.uiState.value.result)
+
+        viewModel.onHostChange("other.example")
+
+        assertNull(viewModel.uiState.value.result)
+        viewModel.inspect()
+        assertNotNull(viewModel.uiState.value.result)
+
+        viewModel.onPortChange("8443")
+
+        assertNull(viewModel.uiState.value.result)
+    }
 }

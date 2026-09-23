@@ -19,9 +19,9 @@ findings:
         detail: "The stop test calls stopScan() without a runTest/advanceUntilIdle, so it only asserts the immediate isScanning flag and does not exercise the cancelled collector's later state update."
     impact: "Stopping or resetting an in-flight scan can show a misleading failure instead of preserving partial results/clean idle state, and cancellation exceptions are handled as application failures."
     recommended_action: "Catch CancellationException separately and rethrow it before the generic error handler; add a coroutine test that starts a suspending flow, calls stopScan(), drains the scheduler, and asserts error remains null."
-    validation: "Focused MdnsDiscoveryViewModel tests cover stop/reset cancellation and normal flow exceptions separately; no error state after user cancellation."
+    validation: "CancellationException is rethrown before generic failures; ViewModel/repository cancellation regressions passed in the combined core-network/core-domain/app unit run (app: 328 tests). Independent QA and adversarial reviews found no closure blocker."
     related_phase: P08
-    status: todo
+    status: done
 
   - id: RUI002
     severity: medium
@@ -39,9 +39,9 @@ findings:
         detail: "Normal completion resolves the host once and records a monotonic elapsed duration in PortScanSummary, showing the missing values are available from the scan contract but not retained by the ViewModel."
     impact: "A partial result shown after pressing Stop is materially misleading and its copied/shared report omits useful identity and timing data."
     recommended_action: "Capture scan start time and resolved address (or retain the latest repository summary/progress metadata) in the ViewModel; compute elapsed duration on stop and preserve the resolved IP when available. Add stopped-scan assertions for both fields."
-    validation: "Start a scan with a hostname and at least one emitted result, stop it, and assert Finished.summary.resolvedIp and scanDurationMs are populated/non-negative; verify the report includes them."
+    validation: "PortScanViewModelTest verifies stopped summaries retain the resolved IP, monotonic duration through Stop, and partial results; a separate deterministic test stops after target resolution before the first port result and verifies the IP remains. Repository and use-case tests verify Started metadata is emitted/forwarded before port results. Combined core-network/core-domain/app unit tests passed; independent QA and adversarial reviews found no blocker."
     related_phase: P11
-    status: todo
+    status: done
 
   - id: RUI003
     severity: medium
@@ -62,9 +62,9 @@ findings:
         detail: "The existing test explicitly verifies that 500 is coerced to and persisted as 100, but there is no Ping screen test that composes with a persisted count above 50."
     impact: "Users who choose a default count above 50 can see a thumb/label mismatch and cannot select the stored value through the Ping control, despite the Settings UI advertising 1..100."
     recommended_action: "Use one shared count range: either make PingScreen's slider 1..100 (and add coverage for 100) or constrain Settings/ViewModel to 1..50. Prefer the former if the domain contract remains 1..100."
-    validation: "Compose PingScreen with a ViewModel whose count is 100 and assert it renders; exercise Settings values 1, 50, 100 and start a ping with each."
+    validation: "PingScreenTest on API 36 asserts the slider range/value at 100; PingViewModelTest verifies the max count and advanced parameters reach PingUseCase. Combined unit tests and targeted PingScreenTest passed; QA and adversarial reviews found no blocker."
     related_phase: P08
-    status: todo
+    status: done
 
   - id: RUI004
     severity: medium
@@ -82,9 +82,9 @@ findings:
         detail: "Starting a ping reads the ViewModel's StateFlow values, so the request can use a payload/TTL/interval different from what the form visibly shows."
     impact: "The Ping form can lie about the parameters of the next probe, causing confusing diagnostics and accidental tests with settings the user did not see."
     recommended_action: "Collect payloadBytes, ttl, and intervalMs from the ViewModel like the other fields, or move all form state to SavedStateHandle/ViewModel; add a recreation-oriented UI/ViewModel test that changes each advanced field before re-rendering."
-    validation: "Change each advanced option, recreate the screen with the same ViewModel, and assert labels/sliders and the captured PingParams agree."
+    validation: "PingScreen collects payload/TTL/interval from the ViewModel; PingScreenTest re-enters the composition with the same ViewModel and asserts edited values render, while PingViewModelTest verifies request parameters. API 36 PingScreenTest and combined unit tests passed; QA and adversarial reviews found no blocker."
     related_phase: P08
-    status: todo
+    status: done
 
   - id: RUI005
     severity: medium
@@ -128,9 +128,9 @@ findings:
         detail: "The host is also added to recent history before the request, so a malformed port can appear as a successful-looking recent inspection attempt despite not using the entered port."
     impact: "Users may believe they tested a custom TLS port while the app actually probed 443, masking service misconfiguration and making failures difficult to reproduce."
     recommended_action: "Validate the entered port before launching the use case (numeric and 1..65535, or an explicit empty-field default), surface an error, and add the exact entered host/port only after validation. Add ViewModel tests for nonnumeric, zero, 65536, and valid custom ports."
-    validation: "Capture TlsInspectorParams from the fake use case and assert invalid text never invokes it; assert valid 8443 is passed unchanged and the UI displays a validation error for invalid values."
+    validation: "TlsInspectorViewModelTest covers nonnumeric, port 0, 65536, valid 8443 forwarding, and clearing stale results on edits; invalid ports do not invoke the use case or update recents. TlsInspectorScreenTest and the combined core-network/core-domain/app unit run passed on API 36/JVM respectively. QA and adversarial reviews found no blocker."
     related_phase: P10
-    status: todo
+    status: done
 
   - id: RUI007
     severity: low
@@ -197,9 +197,9 @@ findings:
         detail: "The existing settings test verifies that an out-of-range value is coerced to 500, but there is no Port screen regression test with that persisted value."
     impact: "After selecting the supported default concurrency of 500 in Settings, the Port Scanner opens with a misleading thumb position and cannot select values 301..500 through its slider, despite the displayed label and scan request retaining 500."
     recommended_action: "Share the concurrency range between Settings, PortScanViewModel, and PortsScreen (or deliberately constrain the stored setting to 300); add a render/request test for the upper boundary."
-    validation: "Persist DEFAULT_CONCURRENCY = 500, create the Port screen/ViewModel, and assert the slider's declared range includes the value and a scan sends the same configured concurrency; exercise 10, 300, and 500 boundaries."
+    validation: "PortsScreenTest and SettingsScreenTest on API 36 assert the slider semantics support 1..500 in unit steps and represent 500. PortScanViewModelTest verifies 500 reaches scan params and clamps corrupt stored/callback values; SettingsViewModelTest verifies stale stored values display clamped. Combined core-network/core-domain/app unit tests passed; QA and adversarial reviews found no blocker."
     related_phase: P08
-    status: todo
+    status: done
 
 coverage:
   reviewed:

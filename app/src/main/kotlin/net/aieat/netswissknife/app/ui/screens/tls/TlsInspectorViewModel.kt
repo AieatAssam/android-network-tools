@@ -41,11 +41,13 @@ class TlsInspectorViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     fun onHostChange(value: String) {
-        _uiState.value = _uiState.value.copy(host = value, error = null)
+        if (_uiState.value.isLoading) return
+        _uiState.value = _uiState.value.copy(host = value, error = null, result = null)
     }
 
     fun onPortChange(value: String) {
-        _uiState.value = _uiState.value.copy(port = value, error = null)
+        if (_uiState.value.isLoading) return
+        _uiState.value = _uiState.value.copy(port = value, error = null, result = null)
     }
 
     fun removeRecentHost(host: String) {
@@ -71,6 +73,15 @@ class TlsInspectorViewModel @Inject constructor(
             )
             return
         }
+        val port = state.port.toIntOrNull()?.takeIf { it in 1..65_535 }
+        if (port == null) {
+            _uiState.value = state.copy(
+                isLoading = false,
+                result = null,
+                error = "Port must be a number from 1 to 65535"
+            )
+            return
+        }
         _uiState.value = state.copy(host = normalizedHost, isLoading = true, error = null, result = null)
         viewModelScope.launch {
             recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_TLS_HOSTS, normalizedHost)
@@ -79,7 +90,7 @@ class TlsInspectorViewModel @Inject constructor(
             try {
                 val params = TlsInspectorParams(
                     host      = normalizedHost,
-                    port      = state.port.toIntOrNull() ?: 443,
+                    port      = port,
                     timeoutMs = 10_000
                 )
                 when (val res = useCase(params)) {

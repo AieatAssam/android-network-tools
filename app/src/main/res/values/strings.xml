@@ -477,6 +477,7 @@
     <string name="tls_host_label">Host or IP address</string>
     <string name="tls_host_placeholder">e.g. example.com or 192.168.1.1</string>
     <string name="tls_port_label">Port (default 443)</string>
+    <string name="error_invalid_port">Port must be a number from 1 to 65535</string>
     <string name="tls_inspect_button">Inspect</string>
     <string name="tls_inspecting">Inspecting…</string>
 

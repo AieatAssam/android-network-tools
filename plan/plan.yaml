@@ -212,15 +212,15 @@ comprehensive_expansion:
       - {"finding":"RNET009","owner_task":"P03-T1","follow_up_status":"done","report":"plan/reviews/2026-09-21-network.yaml"}
       - {"finding":"RNET010","owner_task":"P12-T3","follow_up_status":"todo","report":"plan/reviews/2026-09-21-network.yaml"}
       - {"finding":"RNET011","owner_task":"P01-T4","follow_up_status":"done","report":"plan/reviews/2026-09-21-network.yaml"}
-      - {"finding":"RUI001","owner_task":"P12-T1","follow_up_status":"todo","report":"plan/reviews/2026-09-21-ui-domain.yaml"}
-      - {"finding":"RUI002","owner_task":"P11-T3","follow_up_status":"todo","report":"plan/reviews/2026-09-21-ui-domain.yaml"}
-      - {"finding":"RUI003","owner_task":"P04-T4","follow_up_status":"todo","report":"plan/reviews/2026-09-21-ui-domain.yaml"}
-      - {"finding":"RUI004","owner_task":"P04-T4","follow_up_status":"todo","report":"plan/reviews/2026-09-21-ui-domain.yaml"}
+      - {"finding":"RUI001","owner_task":"P12-T1","follow_up_status":"done","report":"plan/reviews/2026-09-21-ui-domain.yaml"}
+      - {"finding":"RUI002","owner_task":"P11-T3","follow_up_status":"done","report":"plan/reviews/2026-09-21-ui-domain.yaml"}
+      - {"finding":"RUI003","owner_task":"P04-T4","follow_up_status":"done","report":"plan/reviews/2026-09-21-ui-domain.yaml"}
+      - {"finding":"RUI004","owner_task":"P04-T4","follow_up_status":"done","report":"plan/reviews/2026-09-21-ui-domain.yaml"}
       - {"finding":"RUI005","owner_task":"P04-T4","follow_up_status":"done","report":"plan/reviews/2026-09-21-ui-domain.yaml"}
-      - {"finding":"RUI006","owner_task":"P10-T2","follow_up_status":"todo","report":"plan/reviews/2026-09-21-ui-domain.yaml"}
+      - {"finding":"RUI006","owner_task":"P10-T2","follow_up_status":"done","report":"plan/reviews/2026-09-21-ui-domain.yaml"}
       - {"finding":"RUI007","owner_task":"P11-T2","follow_up_status":"todo","report":"plan/reviews/2026-09-21-ui-domain.yaml"}
       - {"finding":"RUI008","owner_task":"P04-T6","follow_up_status":"done","report":"plan/reviews/2026-09-21-ui-domain.yaml"}
-      - {"finding":"RUI009","owner_task":"P08-T4","follow_up_status":"todo","report":"plan/reviews/2026-09-21-ui-domain.yaml"}
+      - {"finding":"RUI009","owner_task":"P08-T4","follow_up_status":"done","report":"plan/reviews/2026-09-21-ui-domain.yaml"}
       - {"finding":"RUI010","owner_task":"E01-T10","follow_up_status":"done","report":"plan/reviews/2026-09-22-release-qa-brief.yaml"}
       - {"finding":"RUI011","owner_task":"E01-T07/E01-T09","follow_up_status":"done","report":"plan/reviews/2026-09-22-release-qa-brief.yaml"}
       - {"finding":"RUI012","owner_task":"E01-T07/E01-T09","follow_up_status":"done","report":"plan/reviews/2026-09-22-release-qa-brief.yaml"}
@@ -233,8 +233,8 @@ incremental_review:
   reviewer_reasoning_effort: xhigh
   method: "Parallel source review; findings saved in small verified batches before final consolidation. Existing F001-F041 remain historical baseline findings."
   priority_order: [critical, high, medium, low]
-  recommended_first_followups: [RUI002, RUI003, RUI004]
-  first_followups_rationale: "RAPP003, RAPP004, RNET002, RNET003, RNET006, RNET007, RBUILD001, and RBUILD002 are closed with focused regressions. P02.5 remains the highest-severity open gate because the current dependency submission still contains vulnerable AGP/plugin-transitive coordinates and no later stable AGP candidate is available; continue that remediation when a supported path appears, alongside ready code work. The next ready medium code follow-ups are RUI002-RUI004; RLAN001's device-only Wi-Fi/VPN and NBSTAT observations remain tracked under E00-T01."
+  recommended_first_followups: [R2-006]
+  first_followups_rationale: "RAPP003, RAPP004, RNET002, RNET003, RNET006, RNET007, RBUILD001, RBUILD002, RUI001-RUI004, RUI006, and RUI009 are closed with regressions. P02.5 remains the highest-severity open gate because the current dependency submission still contains vulnerable AGP/plugin-transitive coordinates and no later stable AGP candidate is available; continue that remediation when a supported path appears, alongside ready code work. R2-006 is the next ready medium code follow-up; lower-severity RUI007/RNET008/RNET010 remain tracked. RLAN001's device-only Wi-Fi/VPN and NBSTAT observations remain under E00-T01."
   execution_guidance: "Merge these findings with open phase work by severity; existing unresolved critical/high findings retain precedence. Address confirmed bugs before optional feature waves P13-P15. Follow each finding's related_phase and validation, including follow-ups to historically completed phases."
   reports:
     - { area: core-network, file: plan/reviews/2026-09-21-network.yaml }
@@ -256,14 +256,14 @@ incremental_review:
     - { id: RNET005, severity: medium, kind: bug, phase: P04, status: done, title: "DNS lookup does not normalize Unicode domains to IDNA" }
     - { id: RNET009, severity: medium, kind: bug, phase: P03, status: done, title: "Unknown Wi-Fi capabilities are classified as open networks" }
     - { id: RNET011, severity: medium, kind: bug, phase: P01, status: done, title: "LAN enrichment can swallow cancellation from injected suspend probes" }
-    - { id: RUI001, severity: medium, kind: bug, phase: P08, status: todo, title: "mDNS user cancellation is surfaced as a discovery error" }
-    - { id: RUI002, severity: medium, kind: bug, phase: P11, status: todo, title: "Stopping a port scan loses resolved IP and reports zero duration" }
-    - { id: RUI003, severity: medium, kind: bug, phase: P08, status: todo, title: "Ping count settings and the Ping slider disagree on the supported range" }
-    - { id: RUI004, severity: medium, kind: bug, phase: P08, status: todo, title: "Ping advanced controls can display stale values after recreation" }
+    - { id: RUI001, severity: medium, kind: bug, phase: P08, status: done, title: "mDNS user cancellation is surfaced as a discovery error" }
+    - { id: RUI002, severity: medium, kind: bug, phase: P11, status: done, title: "Stopping a port scan loses resolved IP and reports zero duration" }
+    - { id: RUI003, severity: medium, kind: bug, phase: P08, status: done, title: "Ping count settings and the Ping slider disagree on the supported range" }
+    - { id: RUI004, severity: medium, kind: bug, phase: P08, status: done, title: "Ping advanced controls can display stale values after recreation" }
     - { id: RUI005, severity: medium, kind: bug, phase: P04, status: done, title: "Stopping continuous ping can publish a CSV before its writer drains" }
-    - { id: RUI006, severity: medium, kind: bug, phase: P10, status: todo, title: "TLS inspection silently substitutes port 443 for invalid port text" }
+    - { id: RUI006, severity: medium, kind: bug, phase: P10, status: done, title: "TLS inspection silently substitutes port 443 for invalid port text" }
     - { id: RUI008, severity: medium, kind: bug, phase: P04, status: done, title: "DNS IME submission can overlap lookups and attach recents to the wrong edit" }
-    - { id: RUI009, severity: medium, kind: bug, phase: P08, status: todo, title: "Port scanner cannot represent the configured concurrency maximum" }
+    - { id: RUI009, severity: medium, kind: bug, phase: P08, status: done, title: "Port scanner cannot represent the configured concurrency maximum" }
     - { id: RAPP003, severity: medium, kind: gap, phase: P04, status: done, title: "Native ICMP load failures bypass the advertised reachability fallback" }
     - { id: RNET003, severity: medium, kind: gap, phase: P02, status: done, title: "Topology parameters omit bounds for hops, timeout, and retries" }
     - { id: RNET006, severity: medium, kind: gap, phase: P10, status: done, title: "WHOIS cancellation does not bound blocking DNS and socket work" }
@@ -826,3 +826,5 @@ changelog:
     note: "Closed RAPP003, RNET006, and RNET007 after independent QA/adversarial review. Native ICMP linkage failures now fall back to Reachability for Ping, degrade LAN ICMP to an unavailable observation, and surface a typed Traceroute error while preserving downstream errors and cancellation. WHOIS closes active sockets, uses bounded workers and monotonic total deadlines, and accurately documents that an OS resolver may retain a worker if it ignores interruption. GeoIP bogon detection checks only a root-level boolean true and ignores nested/escaped text. Full :core-network:test passed 895 tests (1 skipped); full :app:testDebugUnitTest passed 314 tests; 0 failures/errors. P02.5 remains the highest-severity open gate; RBUILD001/RBUILD002 are the next medium follow-ups."
   - date: "2026-09-23"
     note: "Closed RBUILD001/RBUILD002 after changing the APK gate to require all three defined SNMP4J class rows and replacing release-count versioning with checked max-suffix allocation over paginated Git tags and Release names. Auto builds atomically create the version tag before building, share a queued non-cancelling concurrency group, and check the remote tag SHA before artifact upload and again before publication; the final publication step also rejects an existing Release identity. Artifact-only runs intentionally leave a tag reservation. Updated push tags and pushed overrides that reuse an existing GitHub Release identity are rejected. Ten versioning tests and four APK-class parser tests passed; no live GitHub Actions run was performed. The v2026.09.21.1 QA brief was rechecked against current source: ISS-05/06/20 are covered, while ISS-17/21/22 retain the documented API 33 or physical-device checks. See plan/reviews/2026-09-23-release-qa-brief.yaml. P02.5 remains the highest-severity gate; RUI002-RUI004 are the next ready medium code follow-ups."
+  - date: "2026-09-23"
+    note: "Closed RUI001-RUI004, RUI006, and RUI009 after unit, API 36 Compose, QA, and adversarial verification. Port-scan Stop now measures through cancellation and retains resolved-IP metadata even if stopped before the first probe; Ping count supports 1..100 and advanced controls render ViewModel state; TLS validates ports 1..65535 and clears stale results; Settings and Ports share integer concurrency 1..500 with stale preferences clamped. Combined :core-network:test/:core-domain:test/:app:testDebugUnitTest passed (895/1 skipped, 172, and 328 tests; zero failures/errors). Targeted API 36 instrumentation passed for Ping, Ports, Settings, navigation/accessibility/onboarding, traceroute, topology, mDNS, and TLS screens. The supplied v2026.09.21.1 QA brief is recorded in plan/reviews/2026-09-23-release-qa-brief.yaml: listed source/UI issues are fixed or covered, while API 33, TalkBack manual navigation, live 10.0.2.2 SNMP, and physical WLAN checks remain open. P02.5 remains the highest-severity gate; R2-006 is the next ready medium code follow-up."

@@ -127,6 +127,7 @@ import net.aieat.netswissknife.core.network.portscan.PortStatus
 object PortsScreenTestTags {
     const val PRESET_FIELD = "ports_preset_field"
     const val SCAN_BUTTON = "ports_scan_button"
+    const val CONCURRENCY_SLIDER = "ports_concurrency_slider"
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -546,9 +547,9 @@ private fun PortScanInputCard(
                 Slider(
                     value = concurrency.toFloat(),
                     onValueChange = { onConcurrencyChange(it.toInt()) },
-                    valueRange = 10f..300f,
-                    steps = 29,
-                    modifier = Modifier.fillMaxWidth()
+                    valueRange = 1f..500f,
+                    steps = 498,
+                    modifier = Modifier.fillMaxWidth().testTag(PortsScreenTestTags.CONCURRENCY_SLIDER)
                 )
                 AnimatedVisibility(visible = concurrency > 100) {
                     Row(

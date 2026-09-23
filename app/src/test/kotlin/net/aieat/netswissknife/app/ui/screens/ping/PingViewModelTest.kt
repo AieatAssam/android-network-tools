@@ -183,6 +183,34 @@ class PingViewModelTest {
         }
 
         @Test
+        fun `passes a count of 100 to the ping use case`() = runTest {
+            coEvery { pingUseCase(any()) } returns flowOf(PingFlowResult.Packet(successPacket))
+            viewModel.onHostChange("example.com")
+            viewModel.onCountChange(100)
+
+            viewModel.startPing()
+
+            coVerify(exactly = 1) { pingUseCase(match { it.count == 100 }) }
+        }
+
+        @Test
+        fun `passes displayed advanced option values to the ping use case`() = runTest {
+            coEvery { pingUseCase(any()) } returns flowOf(PingFlowResult.Packet(successPacket))
+            viewModel.onHostChange("example.com")
+            viewModel.onPayloadSizeChange(512)
+            viewModel.onTtlChange(128)
+            viewModel.onIntervalChange(2_500)
+
+            viewModel.startPing()
+
+            coVerify(exactly = 1) {
+                pingUseCase(match {
+                    it.payloadBytes == 512 && it.ttl == 128 && it.intervalMs == 2_500
+                })
+            }
+        }
+
+        @Test
         fun `transitions to Error on ValidationError`() = runTest {
             coEvery { pingUseCase(any()) } returns flowOf(PingFlowResult.ValidationError("invalid host"))
             viewModel.onHostChange("")
