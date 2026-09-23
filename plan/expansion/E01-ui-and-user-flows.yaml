@@ -567,7 +567,7 @@ tasks:
     kind: actual_gap_plus_refinement
     title: "Replace clipboard/share-only reporting with a durable export and redaction flow"
     second_pass_refinements:
-      - "R2-006: fix the existing Ping CSV's default-locale numeric serialization as a standalone regression before the broader export flow. CSV-parser fixtures must assert field counts and numeric identity across decimal-dot/comma locales."
+      - "R2-006 is closed as a standalone regression: Ping CSV statistics use Locale.ROOT, and CSV-parser tests verify field counts and numeric identity across decimal-dot/comma locales. E01-T12 remains open for the broader durable export, preview, redaction, SAF, and outcome flow."
     source_evidence:
       - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/util/ShareUtils.kt", lines: "6-13", detail: "The current export seam launches a generic ACTION_SEND text chooser and has no file destination, success/failure state, or cancellation result."}
       - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/PingScreen.kt", lines: "745-822", detail: "Ping offers clipboard CSV and share but no durable file export or preview/redaction choice."}

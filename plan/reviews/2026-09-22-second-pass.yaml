@@ -86,7 +86,7 @@ findings:
   - id: R2-006
     severity: medium
     kind: bug
-    status: todo
+    status: done
     title: "Ping CSV statistics use locale-specific decimal commas as field separators"
     related_phase: P04
     implementation_task: E01-T12
@@ -94,7 +94,10 @@ findings:
       - { file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/PingScreen.kt, line: 1308, detail: "Statistics interpolate %.1f/%.3f.format without a fixed locale into comma-delimited fields; unlike packet text, the formatted statistics are not CSV-escaped." }
     impact: "On decimal-comma locales, numeric values add extra CSV columns and corrupt imported statistics. The broad localization/export proposal did not identify this existing regression explicitly."
     recommended_action: "Extract a pure export serializer and use locale-neutral numeric fields plus consistent CSV quoting. Keep localized human presentation separate. Fix the current exporter without waiting for the full export sheet/history redesign."
-    validation: "Serialize identical fixtures under en-US, de-DE and fr-FR; a CSV parser sees identical numeric values and exactly seven statistics columns. Cover null values, quotes/newlines in text and special floating-point values with an explicit policy."
+    validation: "PingCsvSerializerTest parses identical fixtures under en-US, de-DE, and fr-FR and asserts identical dot-decimal values in exactly seven statistics columns. Packet fixtures cover nullable fields and comma/quote/CRLF/LF content; non-finite values have explicit locale-neutral NaN/Infinity tokens. Focused test and full :app:testDebugUnitTest passed (331 tests, zero failures/errors); QA and adversarial reviews found no blocker."
+    completion_evidence:
+      - { file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/ping/PingCsvSerializer.kt, detail: "The pure serializer owns both Copy and Share CSV output, formats finite statistics with Locale.ROOT, quotes fields consistently, and documents canonical non-finite tokens." }
+      - { file: app/src/test/kotlin/net/aieat/netswissknife/app/ui/screens/ping/PingCsvSerializerTest.kt, detail: "The CSV parser fixtures verify seven fields and numeric identity across decimal-dot/comma locales, quoted embedded separators/newlines, null cells, and special values." }
 
   - id: R2-007
     severity: high

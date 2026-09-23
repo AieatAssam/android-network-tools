@@ -130,10 +130,10 @@ import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.ui.screens.ping.PingUiState
 import net.aieat.netswissknife.app.ui.screens.ping.PingViewModel
+import net.aieat.netswissknife.app.ui.screens.ping.PingCsvSerializer
 import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.ping.PingPacketResult
-import net.aieat.netswissknife.core.network.ping.PingResult
 import net.aieat.netswissknife.core.network.ping.PingStats
 import net.aieat.netswissknife.core.network.ping.PingStatus
 
@@ -763,7 +763,7 @@ private fun PingFinishedPanel(
                         fontWeight = FontWeight.SemiBold
                     )
                     IconButton(onClick = {
-                        coroutineScope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("", buildCsvOutput(result)))) }
+                        coroutineScope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("", PingCsvSerializer.serialize(result)))) }
                     }) {
                         Icon(Icons.Default.ContentCopy, contentDescription = stringResource(R.string.ping_copy_csv))
                     }
@@ -816,7 +816,7 @@ private fun PingFinishedPanel(
                         }
                     } else {
                         context.shareText(
-                            text = buildCsvOutput(result),
+                            text = PingCsvSerializer.serialize(result),
                             subject = shareSubject
                         )
                     }
@@ -1288,29 +1288,4 @@ private fun RawOutputCard(
             }
         }
     }
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-private fun csvField(value: String): String =
-    if (value.any { it == ',' || it == '"' || it == '\n' || it == '\r' }) {
-        "\"${value.replace("\"", "\"\"")}\""
-    } else {
-        value
-    }
-
-private fun buildCsvOutput(result: PingResult): String = buildString {
-    appendLine("sequence,host,status,rtt_ms,error,ttl,bytes")
-    result.packets.forEach { p ->
-        appendLine(
-            "${p.sequence},${csvField(p.host)},${p.status},${p.rtTimeMs ?: ""}," +
-                csvField(p.errorMessage ?: "") + ",${p.replyTtl ?: ""},${p.bytes ?: ""}"
-        )
-    }
-    appendLine()
-    appendLine("# Stats")
-    appendLine("sent,received,loss_percent,min_ms,avg_ms,max_ms,jitter_ms")
-    appendLine("${result.stats.sent},${result.stats.received},${"%.1f".format(result.stats.lossPercent)}," +
-            "${result.stats.minMs},${"%.3f".format(result.stats.avgMs)},${result.stats.maxMs}," +
-            "${"%.3f".format(result.stats.jitterMs)}")
 }
