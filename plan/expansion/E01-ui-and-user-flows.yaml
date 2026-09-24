@@ -138,7 +138,7 @@ tasks:
         - "Verify Android SavedStateRegistry/process restoration and run the supported handoff UI checks on the API 33 target and phone/tablet layouts."
       current_vertical_slice:
         status: "LAN -> Ports/Ping/HTTP/TLS/WOL and mDNS -> Ping/HTTP source paths are implemented; all five handoff destinations consume prefill once and expose recreation-safe Clear behavior; integrated navigation and device gates remain open"
-        implementation_commits: [664d6f899315d54213c5ff04a8184d3b1a8e1cc3, b8adffd39a63fef2e2ba6a1b3e1f651c6e52e8b0, 4c02186ed0e7bb9dd7f32deedcea4d5d0b3b8787, b982edb2f33b188933e289ce691c8e23b177f142, 459f90d3391517e8f88d1fc5cf9b167e2cf300d4, 628343cf65fdbb0c2d80dae59d573fbb93a7aa1e, 01370eb6baf682641d679ebc4218afbeeca592db]
+        implementation_commits: [664d6f899315d54213c5ff04a8184d3b1a8e1cc3, b8adffd39a63fef2e2ba6a1b3e1f651c6e52e8b0, 4c02186ed0e7bb9dd7f32deedcea4d5d0b3b8787, b982edb2f33b188933e289ce691c8e23b177f142, 459f90d3391517e8f88d1fc5cf9b167e2cf300d4, 628343cf65fdbb0c2d80dae59d573fbb93a7aa1e, 01370eb6baf682641d679ebc4218afbeeca592db, 931425185f3fffe4d25fcb6b1357c04895d5ad51]
         implemented:
           - "Ports and Ping accept versioned typed host intents while preserving the legacy Ports host query and bare Ping route."
           - "Both destinations prefill validated LAN hosts without auto-starting, show source context, and retain user edits in SavedStateHandle."

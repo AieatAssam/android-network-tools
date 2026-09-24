@@ -3,9 +3,9 @@ review:
   status: audited
   source: "User-provided Net Swiss Knife QA brief v2026.09.21.1 (API 33, host snmpd at 10.0.2.2)."
   release_baseline_commit: "5e183721e64ce8a8946f1a0b50f52b83544e8898"
-  checked_commit: "98d2fa96828795893f6090ce706c619329143a47"
-  checked_worktree_commit: "98d2fa96828795893f6090ce706c619329143a47"
-  checked_scope: "The supplied release corresponds to origin/main at 5e18372. Rechecked that baseline and the current branch source through 98d2fa9, including Ping one-time route consumption, Traceroute cancel cleanup/partial results, OperationRunner USER_STOP handling, WHOIS deadline conversion, and the Wi-Fi permission-state fix. Current source/test validation is recorded below: focused Ping/Traceroute results were last executed at 1796d41; the changed Wi-Fi/topology classes and full app JVM suite passed on the exact source tree committed as 98d2fa9. Android-test Kotlin compilation has passed, but API 33 instrumentation and live lab checks are not claimed. Implementation details remain cross-referenced to E01/E03 and dependency-gate review artifacts."
+  checked_commit: "931425185f3fffe4d25fcb6b1357c04895d5ad51"
+  checked_worktree_commit: "931425185f3fffe4d25fcb6b1357c04895d5ad51"
+  checked_scope: "The supplied release corresponds to origin/main at 5e18372. Rechecked that baseline and current branch source through 9314251, including Ping one-time route consumption, Traceroute cancel cleanup/partial results, OperationRunner USER_STOP handling, WHOIS deadline conversion, Wi-Fi permission-state fixes, the topology per-session SNMP walk cap, and one-time/clearable prefill restoration for Ping, Ports, HTTP, TLS, and WOL. On this committed source tree, TopologyDiscoveryRepositoryTest passed 24/24, the full app JVM suite passed 462/462, the affected HTTP/Ports/TLS/WOL/Ping ViewModel tests passed, Android-test Kotlin sources compiled, and lintDebug passed. API 33 instrumentation and live lab checks are not claimed. The latest exact-head Dependency Submission status is tracked separately in the P02.5 evidence. Implementation details remain cross-referenced to E01/E03 and dependency-gate review artifacts."
   branch: "plan/comprehensive-review-2026-09-22"
   release_metadata:
     app: "Net Swiss Knife"
@@ -19,11 +19,11 @@ review:
     environment_non_goals: "Emulator public ICMP/DNS flakiness is an error-UX check; live Cloudflare success is not required on the target AVD."
   environment:
     connected_emulator: "The initial audit avoided a shared dev36 AVD that another task was using. Before WOL follow-up, adb showed no active device; dev36 was started for targeted Compose checks and shut down afterward. Gradle reported Unknown API Level; direct runner startup stalled with app-process ANRs. No API 33 AVD is available."
-    current_followup: "No emulator was started or used after the 1796d41 Ping, Traceroute, and OperationRunner checks. The current Wi-Fi/topology JVM follow-up and the Kover/lint/assembly gates ran without a connected emulator; API 33 and live lab validations remain open."
+    current_followup: "No emulator was started or used during the 9314251 topology/handoff follow-up. JVM tests, Android-test Kotlin compilation, and lint ran without a connected emulator; API 33 and live lab validations remain open."
     host_snmpd: "Not available; no local snmpd process or SNMP lab endpoint verified"
     physical_wifi: "Not available"
   fixed_items_rechecked: [ISS-01, ISS-02, ISS-03, ISS-04, ISS-08, ISS-09, ISS-15, SNMP-threading]
-  fixed_items_result: "No regression found in current source/tests. Navigation, Ping, Settings, TLS, and topology changes preserve the listed behaviors. TLS inspection now uses a bounded operation session while retaining the Inspection failed/Retry UI and maps deadline expiry to its stable error wording. SNMP work remains on IO/background dispatchers; no live SNMP query or ANR measurement was possible."
+  fixed_items_result: "No regression found in current source/tests. Navigation, Ping, Settings, TLS, and topology changes preserve the listed behaviors. TLS inspection now uses a bounded operation session while retaining the Inspection failed/Retry UI and maps deadline expiry to its stable error wording. Topology SNMP remains on IO/background dispatchers, and walk concurrency is capped by both the caller's session budget and a repository-wide maximum of four. No live SNMP query or ANR measurement was possible."
   fixed_item_evidence:
     - id: ISS-01
       classification: source_confirmed_specific_label_ui_test_not_found
@@ -77,11 +77,11 @@ review:
     - id: SNMP-threading
       classification: source_and_unit_test_present_runtime_responsiveness_unverified
       evidence:
-        - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/topology/TopologyDiscoveryRepositoryImpl.kt", lines: "38-50,198-200", detail: "SNMP client construction, discovery, and teardown are in the upstream flow dispatched with `flowOn(Dispatchers.IO)`; cancellation closes the client and is rethrown." }
+        - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/topology/TopologyDiscoveryRepositoryImpl.kt", lines: "43-50,60-65,211-221,280-304", detail: "SNMP client construction is documented as main-thread unsafe and discovery is dispatched with `flowOn(Dispatchers.IO)`; each session limits concurrent walks to min(session maxConcurrentProbes, 4), in addition to the repository-wide four-walk semaphore; cancellation closes the registered client and is rethrown." }
         - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/topology/Snmp4jClientImpl.kt", lines: "88-103,121-130", detail: "GET setup and request work run off-main, with cancellable request handling." }
-        - { file: "core-network/src/test/kotlin/net/aieat/netswissknife/core/network/topology/TopologyDiscoveryRepositoryTest.kt", lines: "367-420", detail: "Repository tests cover closing the client during an active walk and blocking GET cancellation." }
+        - { file: "core-network/src/test/kotlin/net/aieat/netswissknife/core/network/topology/TopologyDiscoveryRepositoryTest.kt", lines: "265-322,367-420", detail: "Repository tests prove default walks are concurrent but capped at four, a caller session capped at one keeps walk concurrency at one, the SNMP client factory runs off the collecting thread, and cancellation closes clients during active walks/GETs." }
         - { file: "core-network/src/test/kotlin/net/aieat/netswissknife/core/network/topology/Snmp4jClientImplLoopbackTest.kt", lines: "187-248", detail: "Loopback tests cover prompt cancellation of SNMP walk and GET requests." }
-      limitation: "Source and tests support background dispatch/cancellation, but the host snmpd lab was unavailable; UI responsiveness and absence of ANR/NetworkOnMainThreadException were not measured live."
+      limitation: "Source and tests support background dispatch/cancellation and bounded walk concurrency, but the host snmpd lab was unavailable; UI responsiveness and absence of ANR/NetworkOnMainThreadException were not measured live."
   interpretation: "The release-under-test commit is origin/main at 5e18372 (message: keep SNMP and network probes off the main thread). Per-item release_baseline_status distinguishes that source from current branch fixes; live claims remain unverified unless explicitly noted."
 
 items:
@@ -115,23 +115,31 @@ items:
     needed_validation: "The Compose test asserts that Skip invokes the dismissal callback, but the fresh API 36 instrumentation attempt stopped before test execution. Verify the integrated Welcome sheet disappears on the release target; no API 33 run was available."
 
   - id: ISS-20
-    classification: already_fixed_in_source
-    release_baseline_status: "Already fixed on origin/main: shared host normalization trims surrounding whitespace and rejects embedded whitespace. The request to reject a trailing space conflicts with existing normalization behavior."
+    classification: reproduced_on_release_baseline_fixed_in_current_branch
+    release_baseline_status: "The supplied origin/main baseline rejects trailing whitespace in TracerouteScreen before shared normalization: `host.contains(' ')` marks any space invalid. The current branch fixes that screen-level gate by using HostValidator.normalize(host), which trims outer whitespace and continues to reject embedded whitespace."
+    release_baseline_evidence:
+      commit: "5e183721e64ce8a8946f1a0b50f52b83544e8898"
+      file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/TracerouteScreen.kt"
+      lines: "319-322"
+      detail: "The release baseline sets `isHostInvalid = host.isNotBlank() && host.contains(' ')`, so a trailing space disables Start before the shared validator can trim it."
     evidence:
       - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/HostValidator.kt", lines: "92-118", detail: "Shared normalize() trims surrounding whitespace before host validation; internal whitespace remains invalid under hostname/IP validation." }
-      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/TracerouteScreen.kt", lines: "321-324,350-353", detail: "Traceroute derives validity and Start enablement from HostValidator.normalize(host), and reports the invalid-host message only when normalization fails." }
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/TracerouteScreen.kt", lines: "344-350", detail: "Current branch derives invalid state and Start enablement from HostValidator.normalize(host), allowing surrounding whitespace to be trimmed before validation." }
       - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/traceroute/TracerouteViewModel.kt", lines: "148-174", detail: "The ViewModel normalizes accepted hosts and forwards the normalized host to the use case." }
       - { file: "core-network/src/test/kotlin/net/aieat/netswissknife/core/network/HostValidatorTest.kt", lines: "35-41", detail: "Tests surrounding whitespace normalization and rejection of internal spaces." }
-    needed_validation: "HostValidatorTest covers outer-whitespace trimming and malformed embedded spaces; TracerouteScreenTest asserts an internal-space host is invalid/disabled and a separately defined outer-whitespace case remains startable. Ping, Port Scan, TLS, Topology, Traceroute, and HTTP recent-host paths use the shared normalizer. The fresh API 36 instrumentation attempt stopped before the screen tests ran. Trailing whitespace is normalized and Start remains usable, rather than rejected as the stale brief wording suggests."
+      - { file: "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/screens/TracerouteScreenTest.kt", lines: "115", detail: "The outer-whitespace screen case asserts Start remains enabled after surrounding whitespace is normalized." }
+    needed_validation: "HostValidatorTest covers outer-whitespace trimming and malformed embedded spaces; TracerouteScreenTest asserts an internal-space host is invalid/disabled and an outer-whitespace case remains startable. Ping, Port Scan, TLS, Topology, Traceroute, and HTTP recent-host paths use the shared normalizer. Android-test Kotlin sources compile, but connected instrumentation did not execute. The trailing-space regression is fixed in the checked branch; API 33 UI confirmation remains open."
 
   - id: ISS-21
     classification: ui_features_present_live_snmp_and_canvas_usability_unverified
-    release_baseline_status: "The release source already has a Cancel button, sysName/IP labels, and a node-details sheet. The current branch keeps Cancel visible after configuration collapses and adds explicit progress text/count reporting; the claimed missing features overstate what was absent."
+    release_baseline_status: "The release source already has a Cancel button, sysName/IP labels, and a node-details sheet. The current branch keeps Cancel visible after configuration collapses, adds explicit progress text/count reporting, and caps SNMP walks per caller session while preserving a global maximum of four; the brief overstates which features were absent."
     evidence:
       - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/topology/TopologyDiscoveryScreen.kt", lines: "435-445", detail: "Cancel stays visible while discovery runs, outside collapsed configuration fields." }
       - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/topology/TopologyDiscoveryViewModel.kt", lines: "76-103,128-160,195-235", detail: "Discovery owns a bounded LOCAL_NETWORK session; state carries progress and node count; reset/lifecycle cancellation closes the session asynchronously off the UI thread." }
       - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/topology/TopologyDiscoveryScreen.kt", lines: "457-468,484-503,755-790,935-945,991-1015", detail: "Cancel stays available, progress and node counts render, and canvas labels use sysName or IP; selected nodes open a details sheet." }
       - { file: "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/screens/topology/TopologyDiscoveryScreenTest.kt", lines: "85-156", detail: "Compose tests cover progress text/count accumulation and Cancel invoking reset; test uses a fake ViewModel." }
+      - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/topology/TopologyDiscoveryRepositoryImpl.kt", lines: "60-62,280-304", detail: "SNMP walks are limited to min(session maxConcurrentProbes, 4) per discovery session and at most four across the repository." }
+      - { file: "core-network/src/test/kotlin/net/aieat/netswissknife/core/network/topology/TopologyDiscoveryRepositoryTest.kt", lines: "265-304", detail: "Repository tests assert default concurrency stays within four and caller maxConcurrentProbes=1 constrains observed walks to one." }
     needed_validation: "Compose coverage exists for progress, Cancel/reset, and node details. Canvas labels are source-confirmed but are not asserted by the screen test, which explicitly avoids absolute-offset label assertions. The fresh API 36 instrumentation attempt stopped before test execution. Run live SNMP discovery against 10.0.2.2/community public/v2c and cancel during an actual query; assess sparse graph layout, labels/hit areas, and details-sheet usability on API 33. The host snmpd/lab endpoint was unavailable here."
 
   - id: ISS-22
@@ -161,16 +169,16 @@ api36_instrumentation:
     runner_argument: "class=ToolHandoffNavigationTest,LanScanScreenTest,WakeOnLanScreenTest"
     attempted_classes: [ToolHandoffNavigationTest, LanScanScreenTest, WakeOnLanScreenTest]
     outcome: "AndroidTest sources compiled. Gradle connectedDebugAndroidTest detected dev36 but rejected it as Unknown API Level and reported no compatible device. A direct `adb shell am instrument -w` attempt reached the app process, which stalled during startup and logged ANRs; the runner was stopped before tests completed. The API 36 AVD was shut down with `adb emu kill`. No instrumentation results are claimed."
-  note: "Previously recorded API 36 passes are historical and do not validate the latest branch changes. UI tests use fake ViewModels; successful UI instrumentation still does not replace API 33, TalkBack, host snmpd, or physical WLAN checks."
+  note: "Previously recorded API 36 passes are historical and predate checked HEAD 9314251; they do not validate the latest branch changes. UI tests use fake ViewModels; successful UI instrumentation still does not replace API 33, TalkBack, host snmpd, or physical WLAN checks."
 
 unit_validation:
   command: "./gradlew :core-network:test :core-domain:test :app:testDebugUnitTest --no-daemon --no-parallel --console=plain"
-  status: full_jvm_passed_current_worktree
-  android_test_kotlin_compile: passed_in_earlier_focused_run
-  results: { core_network: 1023, core_network_skipped: 1, core_domain: 188, app: 448, failures: 0, errors: 0 }
+  status: current_branch_head_validated_with_focused_core_network_rerun
+  android_test_kotlin_compile: passed_on_current_branch_head
+  results: { core_network_latest_full_report: 1023, core_network_latest_full_report_skipped: 1, core_network_focused_topology_rerun: 24, core_domain_latest_report: 188, app_fresh_full_run: 462, failures: 0, errors: 0 }
   focused_followup: { operation_runner: "14/14", ping_view_model: "50/50", traceroute_view_model: "17/17", android_test_kotlin_compile: "passed" }
-  current_worktree_followup: "On 2026-09-24, the serialized full JVM Gradle invocation exited BUILD SUCCESSFUL. :app:testDebugUnitTest executed against the current worktree and passed 448 tests with zero failures/errors; the focused changed classes passed WifiScanViewModelTest 38/38 and TopologyDiscoveryViewModelTest 19/19. Core-network (1,023 tests, 1 skipped) and core-domain (188 tests) were UP-TO-DATE in this invocation and their latest XML reports show zero failures/errors. The full app test task is fresh; the two core module outputs are unchanged cached task results. No emulator or live network lab was used."
-  additional: "Earlier evidence includes the focused TLS repository class (18 tests), the OperationRunnerTest (14/14), PingViewModelTest (50/50), TracerouteViewModelTest (17/17), Android-test Kotlin compilation, and WOL/codec/route-identity/LAN focused coverage. Current full app JVM suite is no longer pending. API 33 instrumentation, TalkBack, host snmpd, physical WLAN, and other device-specific checks remain open."
+  current_worktree_followup: "On 2026-09-24, the serialized full app JVM task executed against committed HEAD 9314251 and passed 462 tests with zero failures/errors. The affected HTTP, Ports, TLS, WOL, and Ping ViewModel suites passed; the focused TopologyDiscoveryRepositoryTest rerun passed 24/24 after adding the per-session walk limit. The latest full core-network and core-domain reports remain 1,023 tests (one skipped) and 188 tests, with zero failures/errors; the entire core-network suite was not rerun after the topology limiter, so the focused repository class is the fresh core-network evidence. Android-test Kotlin compilation and lintDebug passed on the current source. No emulator or live network lab was used."
+  additional: "Earlier evidence includes the focused TLS repository class (18 tests), OperationRunnerTest (14/14), PingViewModelTest (50/50), TracerouteViewModelTest (17/17), and WOL/codec/route-identity/LAN focused coverage. API 33 instrumentation, TalkBack, host snmpd, physical WLAN, and other device-specific checks remain open."
 
 brief_accuracy:
   - "ISS-21's listed features (Cancel, progress, sysName/IP labels, and node-details sheet) exist in current source. The remaining concrete question is live SNMP cancellation and usability of sparse graph layouts, not missing feature implementation as stated."

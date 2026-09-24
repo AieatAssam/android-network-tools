@@ -1,10 +1,10 @@
 review:
   id: P02.5-dependency-state
-  checked_at: "2026-09-24T09:12:16Z"
+  checked_at: "2026-09-24T09:55:22Z"
   branch: "plan/comprehensive-review-2026-09-22"
-  commit: "98d2fa96828795893f6090ce706c619329143a47"
+  commit: "931425185f3fffe4d25fcb6b1357c04895d5ad51"
   status: "open"
-  worktree_delta: "The Wi-Fi permission-state handling and Wi-Fi/topology test fixes have been committed and pushed. Dependency constraints are unchanged from the successful current-head topic-branch ADS submission below."
+  worktree_delta: "Commit 9314251 adds topology per-session SNMP walk limiting and handoff UI/view-model/tests, with no dependency declaration changes. Exact-head Automatic Dependency Submission completed successfully and is recorded in exact_head_recheck below."
   initial_snapshot: { checked_at: "2026-09-23T22:37:21Z", commit: "7106a5bafa21bf0b30b91afb98470d8d10b184c8", worktree_delta: "Uncommitted app/build.gradle.kts constraints for :app:androidLintTool; this source change had not yet been submitted to GitHub." }
   sources:
     alerts_command: "gh api --paginate repos/AieatAssam/android-network-tools/dependabot/alerts"
@@ -60,7 +60,7 @@ dependency_submission:
     - "The default-branch report lists AGP 9.4.1 -> sdk-common 32.4.1 and includes both old and patched Bouncy Castle versions on the sdk-common entry; commons-compress likewise lists commons-lang3 3.16.0 and 3.18.0; httpmime 4.5.6 lists httpclient 4.5.6 and 4.5.14."
     - "The GitHub submission aggregates Gradle configurations and does not report each selected configuration in its compact payload. Do not infer that an old coordinate is merely an upstream request edge from this payload alone."
     - "The upstream Google Maven POM for sdk-common:32.4.1 requests bcpkix-jdk18on:1.80.2 and bcprov-jdk18on:1.80.2; the AGP:9.4.1 graph also requests old Commons Lang and HttpClient through sdk-common/commons-compress/httpmime. The root :classpath conflict-resolves these requests to patched versions, but :app:androidLintTool is an independent configuration and selected the old versions before the app-level constraints."
-    - "The latest default-branch submission still describes the source before the app-level constraints. The earlier reviewed-branch submission recorded above also predates those constraints; the successful post-constraint topic-branch submission is recorded in `latest_recheck` below."
+    - "The latest default-branch submission still describes the source before the app-level constraints. The earlier reviewed-branch submission recorded above also predates those constraints; the successful post-constraint topic-branch snapshot at 98d2fa9 is retained in `prior_recheck_2026_09_24T0908`, and the newer exact implementation-head submission is in `exact_head_recheck`."
     - "The workflow is GitHub-managed Automatic Dependency Submission for Gradle; the repository CI workflow does not define this submission step."
   upstream_metadata:
     sdk_common_pom: "https://dl.google.com/dl/android/maven2/com/android/tools/sdk-common/32.4.1/sdk-common-32.4.1.pom"
@@ -116,7 +116,7 @@ prior_recheck_2026_09_23:
   newest_stable_agp: "9.4.1"
   outcome: "Six alerts remain open. The live GitHub graph predates the local constraints; keep P02.5 open until the post-constraint main-branch submission clears the old versions or approved time-bounded dispositions are recorded."
 
-latest_recheck:
+prior_recheck_2026_09_24T0908:
   checked_at: "2026-09-24T09:08:24Z"
   reviewed_branch_submission:
     run_id: 35979037038
@@ -173,7 +173,44 @@ latest_recheck:
   quality_gates:
     latest_recorded_run: "2026-09-24 current-worktree verification after Wi-Fi/topology fixes; full app JVM suite, Kover, lintDebug, and debug/release assembly passed. Core-network and core-domain test tasks were UP-TO-DATE."
     current_head_rerun: "The initial combined run on f740cf0, without an emulator, exposed two timing-sensitive topology assertion failures and one Wi-Fi permission-state assertion failure, then stalled in `WifiScanViewModelTest.changing refresh interval while paused does not restart refresh`. After cleanup barriers and test scheduling were fixed, the serialized current-worktree JVM command `./gradlew :core-network:test :core-domain:test :app:testDebugUnitTest --no-daemon --no-parallel --console=plain` passed. App tests executed freshly: 448 tests, zero failures/errors; Wi-Fi passed 38/38 and topology 19/19. Core-network/domain tasks were UP-TO-DATE and their latest reports show 1,023 tests (one skipped) and 188 tests, zero failures/errors. The follow-up `./gradlew :core-network:koverVerify :core-domain:koverVerify :app:koverVerify :app:lintDebug :app:assembleDebug :app:assembleRelease --no-daemon --no-parallel --console=plain` passed in 7m44: all Kover verifications, lintDebug, debug assembly, release lintVital, and unsigned release assembly completed. Release R8 reported the existing missing dnsjava service-provider class warnings. No emulator was used. This closes the current-worktree quality gates, but T4 remains open until main receives a fresh dependency submission and alert statuses are cleared or approved time-bounded dispositions are recorded."
+    exact_head_followup: "For implementation HEAD 9314251, the full app JVM suite passed 462/462, focused TopologyDiscoveryRepositoryTest passed 24/24, affected HTTP/Ports/TLS/WOL/Ping ViewModel suites passed, Android-test Kotlin sources compiled, and lintDebug passed without an emulator. The full core-network suite was not rerun after the topology session limiter; its 1,023-test/one-skip result is earlier evidence only. Kover and debug/release assembly have not been rerun after 9314251, so keep final full-head gates open."
   outcome: "P02.5-T3 is complete for the reviewed branch snapshot: its managed ADS graph resolves all alerted coordinates to patched versions. Keep P02.5 and T4 in progress because main still has stale submission evidence, the live alert API has six open alerts, and the repository SBOM still contains old and patched build coordinates. Recheck main after the change lands there and confirm fresh alert closure or approved time-bounded dispositions before closing the phase."
+
+exact_head_recheck:
+  checked_at: "2026-09-24T09:55:22Z"
+  reviewed_branch_submission:
+    run_id: 35983688792
+    run_url: "https://github.com/AieatAssam/android-network-tools/actions/runs/35983688792"
+    ref: "refs/heads/plan/comprehensive-review-2026-09-22"
+    commit: "931425185f3fffe4d25fcb6b1357c04895d5ad51"
+    event: "dynamic"
+    completed_at: "2026-09-24T09:51Z"
+    scanned_at: "2026-09-24T09:51:08Z"
+    resolved_component_count: 410
+    manifest_count: 1
+    snapshot_json_sha256: "abe7c5b954cae07782f0cddddada0685067bc6189d15cd92b9622fdad3ce7909"
+    result: "Automatic Dependency Submission succeeded for the exact pushed HEAD. All seven alerted coordinates in the submitted resolved map use patched versions. This proves the reviewed topic-branch graph only; it does not refresh main's submission or close Dependabot alerts."
+    patched_resolved_versions:
+      "org.apache.httpcomponents:httpclient": "4.5.14"
+      "org.apache.commons:commons-lang3": "3.18.0"
+      "org.jdom:jdom2": "2.0.6.1"
+      "org.bitbucket.b_c:jose4j": "0.9.6"
+      "org.bouncycastle:bcpkix-jdk18on": "1.85"
+      "org.bouncycastle:bcprov-jdk18on": "1.85"
+      "org.jetbrains.kotlin:kotlin-gradle-plugin": "2.4.20"
+  dependabot_alerts:
+    checked_at: "2026-09-24T09:55:22Z"
+    total: 9
+    fixed: [3, 4, 7]
+    open: [1, 2, 5, 6, 8, 9]
+    open_alerts_have_fixed_at: false
+    open_alerts_have_dismissed_at: false
+    interpretation: "Six alerts remain open even though the exact-head snapshot now resolves their coordinates to patched versions. Alert state has not refreshed or closed; critical #8 and high #9 remain actionable until main receives a fresh submission or approved time-bounded dispositions are recorded."
+  default_branch:
+    latest_submission_run_id: 35601558226
+    commit: "5e183721e64ce8a8946f1a0b50f52b83544e8898"
+    state: "Still the latest main submission; it predates the scoped dependency constraints."
+  outcome: "P02.5-T3 is confirmed for exact topic-branch HEAD 9314251. P02.5/T4 remain open for a fresh default-branch submission and current alert closure or approved time-bounded dispositions; do not infer that the exact-head topic submission updates main."
 
 configuration_scoped_remediation:
   checked_at: "2026-09-23T22:37:21Z"
