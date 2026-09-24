@@ -178,7 +178,7 @@ findings:
   - id: R2-011
     severity: medium
     kind: privacy_gap
-    status: todo
+    status: done
     title: "Crash diagnostics bypass the planned redaction and payload-size limits"
     related_phase: P09
     implementation_task: E03-T06
@@ -188,6 +188,13 @@ findings:
     impact: "Secret-bearing exception text or paths can reach default crash reports, while very large payloads can prevent delivery of the crash UI. The logger-only redaction scope misses this separate pipeline."
     recommended_action: "Use a small bounded sanitized crash-report builder before Intent creation; avoid unbounded StringWriter expansion. Preserve default-handler invocation even if pre-handle hooks/report construction fail. Route crash copy/share through the report privacy policy."
     validation: "Synthetic multi-megabyte messages, nested causes and secret/path fixtures produce bounded sanitized extras; failing hooks/builders still call the default handler once. Copy/share uses sanitized content and does not crash recursively."
+    completion_evidence:
+      - { file: app/src/main/kotlin/net/aieat/netswissknife/app/crash/CrashReportBuilder.kt, detail: "Crash extras use per-field UTF-8 caps, bounded cause/frame traversal, conservative secret/header/URI/path/IP redaction, and a 48 KiB copy/share report budget." }
+      - { file: app/src/main/kotlin/net/aieat/netswissknife/app/crash/CrashHandler.kt, detail: "Hook, report building, and Activity launch are best-effort; the default uncaught handler is delegated exactly once from finally." }
+      - { file: app/src/test/kotlin/net/aieat/netswissknife/app/crash/CrashReportBuilderTest.kt, detail: "Regressions cover multi-megabyte nested messages/frames, quoted and escaped JSON secrets, generic URI schemes, auth/cookie headers, spaced Unix/Windows/UNC paths, IP/CIDR redaction across all Intent fields, malformed Unicode, metadata bounds, and bounded copy/share formatting." }
+      - { file: app/src/test/kotlin/net/aieat/netswissknife/app/crash/CrashHandlerTest.kt, detail: "Hook, builder, and launch failure cases all verify exactly-once default-handler delegation; the successful path verifies sanitized report fields." }
+      - { command: "./gradlew :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:lintDebug --no-daemon --no-parallel --max-workers=1", detail: "2026-09-24 verification: 519 app unit tests passed, Android-test Kotlin compilation passed, and app debug lint passed. Instrumentation tests were compiled but not run on a device." }
+    scope_note: "R2-011 is closed. E03-T06 remains todo for the separate app-wide structured logging, debug-log export, and observability work; this slice does not complete that broader phase."
 
   - id: R2-012
     severity: medium

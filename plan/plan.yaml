@@ -57,7 +57,7 @@ second_pass_review:
     - {"id":"R2-006","priority":"medium","kind":"bug","status":"done","owner":"E01-T12","title":"Ping CSV statistics use locale-specific decimal commas as field separators"}
     - {"id":"R2-008","priority":"medium","kind":"plan_gap","status":"todo","owner":"E01-T12","title":"Report privacy and SAF handling have multiple implementation paths without a single contract owner"}
     - {"id":"R2-009","priority":"medium","kind":"isolation_gap","status":"done","owner":"E03-T03","title":"WHOIS shared progress needed overlap and consumer-isolation coverage"}
-    - {"id":"R2-011","priority":"medium","kind":"privacy_gap","status":"todo","owner":"E03-T06","title":"Crash diagnostics bypass the planned redaction and payload-size limits"}
+    - {"id":"R2-011","priority":"medium","kind":"privacy_gap","status":"done","owner":"E03-T06","title":"Crash diagnostics bypass the planned redaction and payload-size limits"}
     - {"id":"R2-012","priority":"medium","kind":"plan_gap","status":"done","owner":"E03-T04","title":"Response limits cover bodies but do not define header-count or metadata budgets"}
     - {"id":"R2-014","priority":"medium","kind":"correctness_gap","status":"done","owner":"E02-T08","title":"Incomplete topology candidates still need a snapshot-diff guard against false removals"}
     - {"id":"R2-015","priority":"medium","kind":"resource_gap","status":"done","owner":"E03-T05","title":"mDNS service enumeration can grow its state and query fan-out without producer budgets"}

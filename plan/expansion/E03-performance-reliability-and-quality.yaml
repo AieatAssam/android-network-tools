@@ -468,6 +468,7 @@ tasks:
       report: plan/reviews/2026-09-22-second-pass.yaml
       findings: [R2-011]
       rule: "Treat each linked finding as a required independently verified acceptance case; urgent regression slices do not wait for optional task breadth."
+      finding_status: "R2-011 closed 2026-09-24 with bounded, redacted crash Intent and copy/share reports plus failure-path delegation tests. E03-T06 remains todo for app-wide structured logging, diagnostic retention, and debug-log export."
     title: "Add redacted structured observability and bounded diagnostics"
     priority: high
     status: todo
