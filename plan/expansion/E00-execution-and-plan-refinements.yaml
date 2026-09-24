@@ -215,7 +215,7 @@ tasks:
       remaining_acceptance:
         - "Device-only Wi-Fi/VPN LAN capture remains unavailable in this environment."
         - "Validate with an anonymized real NBSTAT response when one is available."
-      next_action: "Keep P02.5 in progress with T3 complete: the 2026-09-24 topic-branch ADS run 35964942879 confirms all alerted coordinates resolve to patched versions in the submitted graph, including AGP/Lint dependencies. Main still has the pre-constraint submission and six open Dependabot alerts; obtain a fresh main submission and alert scan, or approved time-bounded dispositions, before closing P02.5. See plan/reviews/2026-09-23-p025-dependency-state.yaml. The user-directed RAPP001/RNET001/RNET004 regression follow-ups, RNET011, and RBUILD003 are now closed; E00-T01 remains in progress for device-only Wi-Fi/VPN capture and an anonymized real NBSTAT response."
+      next_action: "Keep P02.5 in progress with T3 complete: the 2026-09-24 topic-branch ADS run 35971509735 confirms all alerted coordinates resolve to patched versions in the submitted graph, including AGP/Lint dependencies. Current-worktree JVM, Kover, lint, and debug/release assembly gates now pass after the Wi-Fi and topology test fixes. Main still has the pre-constraint submission and the last checked alert API has six open Dependabot alerts; obtain a fresh main submission and alert scan, or approved time-bounded dispositions, before closing P02.5. See plan/reviews/2026-09-23-p025-dependency-state.yaml. The user-directed RAPP001/RNET001/RNET004 regression follow-ups, RNET011, and RBUILD003 are now closed; E00-T01 remains in progress for device-only Wi-Fi/VPN capture and an anonymized real NBSTAT response."
       running_handles: none
       blockers: none
 

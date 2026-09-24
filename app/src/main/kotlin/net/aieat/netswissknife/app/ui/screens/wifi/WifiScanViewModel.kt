@@ -189,7 +189,9 @@ class WifiScanViewModel @Inject constructor(
     fun onPermissionDenied() {
         cancelActiveScan(CancellationReason.PERMISSION_DENIED)
         stopAutoRefresh()
-        val previous = _uiState.value as? WifiScanUiState.Success
+        val current = _uiState.value
+        val previous = current as? WifiScanUiState.Success
+            ?: lastSuccessfulState.takeIf { current is WifiScanUiState.Scanning }
         _uiState.value = previous?.copy(
             result = cachedResultAfterFailure(
                 previous.result,

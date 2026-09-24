@@ -7,6 +7,7 @@ import io.mockk.slot
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -377,55 +378,87 @@ class TopologyDiscoveryViewModelTest {
         val sessionSlot = slot<OperationSession>()
         val terminalEmitted = CompletableDeferred<Unit>()
         val resourceClosed = CompletableDeferred<Unit>()
+        val cleanupStarted = CompletableDeferred<Unit>()
+        val releaseCleanup = CompletableDeferred<Unit>()
         val graph = TopologyGraph(emptyList(), emptyList(), params.targetIp, 0L)
         every { useCase.invoke(params, capture(sessionSlot)) } returns flow {
-            val completedGraph = OperationRunner.run(sessionSlot.captured) {
-                resources.register(AutoCloseable { resourceClosed.complete(Unit) })
-                graph
+            try {
+                val completedGraph = OperationRunner.run(sessionSlot.captured) {
+                    resources.register(AutoCloseable { resourceClosed.complete(Unit) })
+                    graph
+                }
+                emit(TopologyDiscoveryEvent.NodeDiscovered(stubNode))
+                emit(TopologyDiscoveryEvent.Complete(completedGraph))
+                terminalEmitted.complete(Unit)
+                awaitCancellation()
+            } finally {
+                withContext(NonCancellable) {
+                    cleanupStarted.complete(Unit)
+                    releaseCleanup.await()
+                }
             }
-            emit(TopologyDiscoveryEvent.NodeDiscovered(stubNode))
-            emit(TopologyDiscoveryEvent.Complete(completedGraph))
-            terminalEmitted.complete(Unit)
-            awaitCancellation()
         }
 
-        viewModel.startDiscovery(params)
-        runCurrent()
-        terminalEmitted.await()
-        assertTrue(resourceClosed.isCompleted, "OperationRunner cleanup must finish before Complete")
-        assertTrue(viewModel.uiState.value is TopologyUiState.Discovering)
+        try {
+            viewModel.startDiscovery(params)
+            runCurrent()
+            terminalEmitted.await()
+            assertTrue(resourceClosed.isCompleted, "OperationRunner cleanup must finish before Complete")
+            assertTrue(viewModel.uiState.value is TopologyUiState.Discovering)
 
-        viewModel.reset()
-        assertTrue(viewModel.uiState.value is TopologyUiState.Canceling)
-        awaitTopologyState { it is TopologyUiState.Canceled }
+            viewModel.reset()
+            cleanupStarted.await()
+            assertTrue(viewModel.uiState.value is TopologyUiState.Canceling)
+            releaseCleanup.complete(Unit)
 
-        assertNull(sessionSlot.captured.cancellationReason)
-        val canceled = viewModel.uiState.value as TopologyUiState.Canceled
-        assertEquals(listOf(stubNode), canceled.nodes)
+            awaitTopologyState { it is TopologyUiState.Canceled }
+
+            assertNull(sessionSlot.captured.cancellationReason)
+            val canceled = viewModel.uiState.value as TopologyUiState.Canceled
+            assertEquals(listOf(stubNode), canceled.nodes)
+        } finally {
+            releaseCleanup.complete(Unit)
+        }
     }
 
     @Test
     fun `a won deadline remains an error when Stop is tapped during cleanup`() = runTest {
         val sessionSlot = slot<OperationSession>()
         val errorEmitted = CompletableDeferred<Unit>()
+        val cleanupStarted = CompletableDeferred<Unit>()
+        val releaseCleanup = CompletableDeferred<Unit>()
         every { useCase.invoke(params, capture(sessionSlot)) } returns flow {
-            sessionSlot.captured.cancel(CancellationReason.DEADLINE_EXCEEDED)
-            emit(TopologyDiscoveryEvent.Error("Topology discovery timed out"))
-            errorEmitted.complete(Unit)
-            awaitCancellation()
+            try {
+                sessionSlot.captured.cancel(CancellationReason.DEADLINE_EXCEEDED)
+                emit(TopologyDiscoveryEvent.Error("Topology discovery timed out"))
+                errorEmitted.complete(Unit)
+                awaitCancellation()
+            } finally {
+                withContext(NonCancellable) {
+                    cleanupStarted.complete(Unit)
+                    releaseCleanup.await()
+                }
+            }
         }
 
-        viewModel.startDiscovery(params)
-        runCurrent()
-        errorEmitted.await()
-        assertTrue(viewModel.uiState.value is TopologyUiState.Discovering)
+        try {
+            viewModel.startDiscovery(params)
+            runCurrent()
+            errorEmitted.await()
+            assertTrue(viewModel.uiState.value is TopologyUiState.Discovering)
 
-        viewModel.reset()
-        assertTrue(viewModel.uiState.value is TopologyUiState.Canceling)
-        awaitTopologyState { it is TopologyUiState.Failure }
+            viewModel.reset()
+            cleanupStarted.await()
+            assertTrue(viewModel.uiState.value is TopologyUiState.Canceling)
+            releaseCleanup.complete(Unit)
 
-        assertEquals(CancellationReason.DEADLINE_EXCEEDED, sessionSlot.captured.cancellationReason)
-        assertEquals("Topology discovery timed out", (viewModel.uiState.value as TopologyUiState.Failure).message)
+            awaitTopologyState { it is TopologyUiState.Failure }
+
+            assertEquals(CancellationReason.DEADLINE_EXCEEDED, sessionSlot.captured.cancellationReason)
+            assertEquals("Topology discovery timed out", (viewModel.uiState.value as TopologyUiState.Failure).message)
+        } finally {
+            releaseCleanup.complete(Unit)
+        }
     }
 
     @Test

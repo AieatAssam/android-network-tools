@@ -1,10 +1,11 @@
 review:
   id: P02.5-dependency-state
-  checked_at: "2026-09-23T22:37:21Z"
+  checked_at: "2026-09-24T09:03:28Z"
   branch: "plan/comprehensive-review-2026-09-22"
-  commit: "7106a5bafa21bf0b30b91afb98470d8d10b184c8"
+  commit: "f740cf0775eeb750f34c5323548e1b589e1ea40a (dependency-submission baseline for the current validated worktree)"
   status: "open"
-  worktree_delta: "Uncommitted app/build.gradle.kts constraints for :app:androidLintTool; this source change has not yet been submitted to GitHub."
+  worktree_delta: "The current validated worktree adds Wi-Fi permission-state handling and Wi-Fi/topology test fixes to f740cf0; dependency constraints are unchanged and are included in the successful topic-branch ADS submission below."
+  initial_snapshot: { checked_at: "2026-09-23T22:37:21Z", commit: "7106a5bafa21bf0b30b91afb98470d8d10b184c8", worktree_delta: "Uncommitted app/build.gradle.kts constraints for :app:androidLintTool; this source change had not yet been submitted to GitHub." }
   sources:
     alerts_command: "gh api --paginate repos/AieatAssam/android-network-tools/dependabot/alerts"
     sbom_command: "gh api repos/AieatAssam/android-network-tools/dependency-graph/sbom"
@@ -59,7 +60,7 @@ dependency_submission:
     - "The default-branch report lists AGP 9.4.1 -> sdk-common 32.4.1 and includes both old and patched Bouncy Castle versions on the sdk-common entry; commons-compress likewise lists commons-lang3 3.16.0 and 3.18.0; httpmime 4.5.6 lists httpclient 4.5.6 and 4.5.14."
     - "The GitHub submission aggregates Gradle configurations and does not report each selected configuration in its compact payload. Do not infer that an old coordinate is merely an upstream request edge from this payload alone."
     - "The upstream Google Maven POM for sdk-common:32.4.1 requests bcpkix-jdk18on:1.80.2 and bcprov-jdk18on:1.80.2; the AGP:9.4.1 graph also requests old Commons Lang and HttpClient through sdk-common/commons-compress/httpmime. The root :classpath conflict-resolves these requests to patched versions, but :app:androidLintTool is an independent configuration and selected the old versions before the app-level constraints."
-    - "The latest default-branch submission still describes the source before the app-level constraints. The latest reviewed-branch submission also predates those constraints; the checked-in post-constraint source has not yet generated a GitHub submission."
+    - "The latest default-branch submission still describes the source before the app-level constraints. The earlier reviewed-branch submission recorded above also predates those constraints; the successful post-constraint topic-branch submission is recorded in `latest_recheck` below."
     - "The workflow is GitHub-managed Automatic Dependency Submission for Gradle; the repository CI workflow does not define this submission step."
   upstream_metadata:
     sdk_common_pom: "https://dl.google.com/dl/android/maven2/com/android/tools/sdk-common/32.4.1/sdk-common-32.4.1.pom"
@@ -116,18 +117,18 @@ prior_recheck_2026_09_23:
   outcome: "Six alerts remain open. The live GitHub graph predates the local constraints; keep P02.5 open until the post-constraint main-branch submission clears the old versions or approved time-bounded dispositions are recorded."
 
 latest_recheck:
-  checked_at: "2026-09-24T06:38:20Z"
+  checked_at: "2026-09-24T07:47:39Z"
   reviewed_branch_submission:
-    run_id: 35964942879
-    run_url: "https://github.com/AieatAssam/android-network-tools/actions/runs/35964942879"
+    run_id: 35971509735
+    run_url: "https://github.com/AieatAssam/android-network-tools/actions/runs/35971509735"
     ref: "refs/heads/plan/comprehensive-review-2026-09-22"
-    commit: "05059fff5e2821026230b1ad04a65b04f4e28d58"
-    submitted_at: "2026-09-24T06:32:00Z"
-    scanned_at: "2026-09-24T06:32:36Z"
+    commit: "f740cf0775eeb750f34c5323548e1b589e1ea40a"
+    submitted_at: "2026-09-24T07:47:07Z"
+    scanned_at: "2026-09-24T07:47:39Z"
     resolved_component_count: 410
-    artifact_sha256: "1b01b58ba2517a4b1ef8ee46111df8ceb85ac875befbab0c524aa11a48785db2"
-    artifact_path: "/tmp/p025-latest-submission-05059ff/dependency-graph-reports/dynamicdependency-graphauto-submission-submit-gradle.json"
-    result: "The resolved map contains only patched versions for all alerted coordinates; no vulnerable versions of those coordinates are selected in this topic-branch snapshot."
+    artifact_sha256: "9523cf9f85adfccd526834d7dcaa2e0a91a3f2e3feb2b9719d1859a035f36397"
+    artifact_path: "/tmp/p025-submission-f740cf0/dependency-graph-reports/dynamicdependency-graphauto-submission-submit-gradle.json"
+    result: "Run 35971509735 succeeded. The resolved map contains only patched versions for all alerted coordinates; no vulnerable versions of those coordinates are selected in this topic-branch snapshot."
     patched_resolved_versions:
       "org.bouncycastle:bcprov-jdk18on": "1.85"
       "org.bouncycastle:bcpkix-jdk18on": "1.85"
@@ -153,7 +154,7 @@ latest_recheck:
       "org.bouncycastle:bcpkix-jdk18on": ["1.80.2", "1.85"]
       "org.apache.commons:commons-lang3": ["3.16.0", "3.18.0"]
       "org.apache.httpcomponents:httpclient": ["4.5.6", "4.5.14"]
-    interpretation: "The repository-level GitHub SBOM still aggregates old and patched build coordinates; it is separate from the clean resolved map for topic-branch HEAD 05059ff and does not identify per-configuration selections."
+    interpretation: "The repository-level GitHub SBOM still aggregates old and patched build coordinates; it is separate from the clean resolved map for topic-branch HEAD f740cf0 and does not identify per-configuration selections."
   dependabot_alerts:
     checked_at: "2026-09-24"
     fixed: [3, 4, 7]
@@ -169,8 +170,8 @@ latest_recheck:
     metadata_sha256: "d7d7780ea4d67ba3107fe38ad4a7c82151a6171792e27fcefb0651921450cd98"
     outcome: "No later stable AGP release is listed; retain the stable toolchain rather than move production builds to the preview line solely to change transitive resolution."
   quality_gates:
-    latest_recorded_run: "2026-09-23 verification_rerun in this file; full JVM, Kover, lint, debug/release assembly passed on the post-constraint source."
-    current_head_rerun: "A combined run was attempted on 05059ff without an emulator, but its execution session disappeared before a final result was captured. Fresh XML reports show core-network 1,023 tests (1 skipped) and core-domain 188, both with zero failures/errors. The app test reports were stale, and there is no fresh lint or assembly completion evidence; do not count the combined gate as passed. A wrapper retry then failed because the execution sandbox denied writes to /home/dev/.gradle/wrapper/.../gradle-9.7.1-bin.zip.lck. Dependency configuration files are unchanged since the full passing 2026-09-23 run."
+    latest_recorded_run: "2026-09-24 current-worktree verification after Wi-Fi/topology fixes; full app JVM suite, Kover, lintDebug, and debug/release assembly passed. Core-network and core-domain test tasks were UP-TO-DATE."
+    current_head_rerun: "The initial combined run on f740cf0, without an emulator, exposed two timing-sensitive topology assertion failures and one Wi-Fi permission-state assertion failure, then stalled in `WifiScanViewModelTest.changing refresh interval while paused does not restart refresh`. After cleanup barriers and test scheduling were fixed, the serialized current-worktree JVM command `./gradlew :core-network:test :core-domain:test :app:testDebugUnitTest --no-daemon --no-parallel --console=plain` passed. App tests executed freshly: 448 tests, zero failures/errors; Wi-Fi passed 38/38 and topology 19/19. Core-network/domain tasks were UP-TO-DATE and their latest reports show 1,023 tests (one skipped) and 188 tests, zero failures/errors. The follow-up `./gradlew :core-network:koverVerify :core-domain:koverVerify :app:koverVerify :app:lintDebug :app:assembleDebug :app:assembleRelease --no-daemon --no-parallel --console=plain` passed in 7m44: all Kover verifications, lintDebug, debug assembly, release lintVital, and unsigned release assembly completed. Release R8 reported the existing missing dnsjava service-provider class warnings. No emulator was used. This closes the current-worktree quality gates, but T4 remains open until main receives a fresh dependency submission and alert statuses are cleared or approved time-bounded dispositions are recorded."
   outcome: "P02.5-T3 is complete for the reviewed branch snapshot: its managed ADS graph resolves all alerted coordinates to patched versions. Keep P02.5 and T4 in progress because main still has stale submission evidence, the live alert API has six open alerts, and the repository SBOM still contains old and patched build coordinates. Recheck main after the change lands there and confirm fresh alert closure or approved time-bounded dispositions before closing the phase."
 
 configuration_scoped_remediation:
