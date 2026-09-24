@@ -319,6 +319,44 @@ current_follow_up_2026_09_24T2147Z:
     ref: "refs/heads/plan/comprehensive-review-2026-09-22"
     commit: "ecbe4835512d07c1f9ed0d99e7a4f9323d35c59a"
     result: "The ADS graph selected FreeMarker 2.3.32 on the Kover 0.9.9 implementation path; this brought the newly reported critical alert into scope."
+  post_fix_exact_head_submission:
+    run_id: 36063894666
+    run_url: "https://github.com/AieatAssam/android-network-tools/actions/runs/36063894666"
+    ref: "refs/heads/plan/comprehensive-review-2026-09-22"
+    commit: "7090f4bbcba476988577ebfdbd9e95cbd31fbc3c"
+    completed_at: "2026-09-24T21:51:00Z"
+    artifact_sha256: "7f00579b80b7f1e5fd4f8fffe70e23dc8811540b1dd8f5874f6abb99f1f789fa"
+    artifact_path: "/tmp/p025-7090f4/dependency-graph-reports/dynamicdependency-graphauto-submission-submit-gradle.json"
+    resolved_component_count: 410
+    result: "Succeeded for the exact pushed commit. The resolved graph contains only FreeMarker 2.3.35 and no 2.3.32; every alerted coordinate is resolved at a patched version. This is topic-branch evidence and does not refresh main's dependency submission or close the Dependabot alert."
+    freemarker_path: "org.jetbrains.kotlinx:kover-gradle-plugin:0.9.9 -> org.jetbrains.kotlinx:kover-features-jvm:0.9.9 -> org.jetbrains.intellij.deps:intellij-coverage-reporter:1.0.765 -> org.jetbrains.intellij.deps:coverage-report:1.0.25 -> org.freemarker:freemarker:2.3.35"
+    patched_resolved_versions:
+      "org.freemarker:freemarker": "2.3.35"
+      "org.bouncycastle:bcprov-jdk18on": "1.85"
+      "org.bouncycastle:bcpkix-jdk18on": "1.85"
+      "org.bitbucket.b_c:jose4j": "0.9.6"
+      "org.jdom:jdom2": "2.0.6.1"
+      "org.jetbrains.kotlin:kotlin-gradle-plugin": "2.4.20"
+      "org.apache.commons:commons-lang3": "3.18.0"
+      "org.apache.httpcomponents:httpclient": "4.5.14"
+  github_default_branch_state_after_push:
+    default_branch_submission:
+      run_id: 35601558226
+      commit: "5e183721e64ce8a8946f1a0b50f52b83544e8898"
+      state: "Still the newest completed Automatic Dependency Submission run for main. It predates all current remediation changes."
+    repository_sbom:
+      command: "gh api repos/AieatAssam/android-network-tools/dependency-graph/sbom"
+      generated_at: "2026-09-24T21:51:48Z"
+      sha256: "1e6f666dfe8f92c9f161c75a6d66083cd3d57a0c7e2941902fb3f2efc2a6989c"
+      package_count: 425
+      freemarker_versions: ["2.3.32"]
+      interpretation: "The repository-level SBOM still reflects the old/default-branch graph and reports FreeMarker 2.3.32, plus old and patched Bouncy Castle, Commons Lang, and HttpClient coordinates. It is not evidence that the exact topic-branch submission selected 2.3.32; the exact run artifact above records 2.3.35 only."
+    dependabot_alerts:
+      checked_date: "2026-09-24"
+      total: 10
+      fixed: [3, 4, 7]
+      open: [1, 2, 5, 6, 8, 9, 10]
+      note: "Alert #10 remains open after the topic-branch submission; the API state has not refreshed from a main-branch submission."
   remediation:
     files:
       - "build.gradle.kts"
@@ -349,4 +387,4 @@ current_follow_up_2026_09_24T2147Z:
   independent_reviews:
     qa: "Static review found the plugin coordinate, patched buildscript force, typed extension configuration, and runtime scope consistent. Its requested Gradle proofs passed as recorded above."
     adversarial: "No source blocker found. The reviewer noted the root :classpath force technically affects any FreeMarker requested by that classpath and that Kover is loaded through the shared buildscript classloader; exact build and task verification passed."
-  outcome: "Local dependency selection and quality gates pass for the new configuration. Exact-head ADS after push and a fresh default-branch submission/alert refresh remain required; keep P02.5/T4 in_progress."
+  outcome: "Local dependency selection and quality gates pass for the new configuration, and exact-head ADS confirms FreeMarker 2.3.35. The default-branch ADS/SBOM still records old selections and Dependabot still has seven open alerts, so keep P02.5/T4 in_progress."

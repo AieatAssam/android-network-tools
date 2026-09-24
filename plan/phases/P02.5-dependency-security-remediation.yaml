@@ -67,16 +67,16 @@ implementation_status: |
   The live API check on 2026-09-24 reports seven open alerts (#1/#2/#5/#6/#8/#9/#10)
   and three fixed (#3/#4/#7). Alert #10 is critical FreeMarker CVE-2026-84939,
   reported via settings.gradle.kts; its vulnerable range ends at 2.3.34 and its
-  patched version is 2.3.35. The latest repository SBOM response (generated
-  2026-09-24T09:07:59Z) still lists vulnerable and patched versions together;
-  the latest default-branch dependency-submission run remains 35601558226 at
-  commit 5e18372, before this remediation. The latest topic-branch submission,
-  run 35979037038 for commit 98d2fa9, scanned 410 resolved components and selects
-  patched versions for every alerted coordinate. This establishes the selected
-  graph for that branch snapshot, including AGP/Lint dependencies; it does not
-  update main's graph or the alert API. Keep the phase open until main has a fresh
-  submission and GitHub reports no actionable alerts, or approved, time-bounded
-  dispositions are recorded.
+  patched version is 2.3.35. The repository SBOM generated at
+  2026-09-24T21:51:48Z still reports FreeMarker 2.3.32 and aggregates old and
+  patched build coordinates. The latest default-branch dependency-submission
+  run remains 35601558226 at commit 5e18372, before this remediation. The exact
+  topic-branch submission run 36063894666 for commit 7090f4b scanned 410
+  components and selects FreeMarker 2.3.35 plus patched versions for every
+  alerted coordinate, including AGP/Lint dependencies. This confirms the
+  topic-branch graph but does not update main's graph or close the alert API.
+  Keep the phase open until main has a fresh submission and GitHub reports no
+  actionable alerts, or approved, time-bounded dispositions are recorded.
 
   The latest topic-branch ADS snapshot (run 36059542138 for ecbe483) included
   FreeMarker 2.3.32 through Kover 0.9.9. This release has no newer Kover plugin
@@ -85,8 +85,9 @@ implementation_status: |
   configuration. All module coverage scripts apply Kover from this classpath and
   configure the public Kover project extension directly. Local `buildEnvironment`
   resolves the Kover dependency edge from FreeMarker 2.3.32 to 2.3.35; the app
-  `releaseRuntimeClasspath` contains no FreeMarker. Exact-head ADS remains pending
-  until this change is pushed.
+  `releaseRuntimeClasspath` contains no FreeMarker. Exact-head ADS run 36063894666
+  confirms the corrected graph at commit 7090f4b. The GitHub SBOM and seven open
+  alerts still reflect the default-branch graph, so P02.5/T4 remain open.
 
   An initial debug-lint run crashed in `:app:lintAnalyzeDebug` while the Ping
   ViewModel change was in progress: AGP Lint's
@@ -187,7 +188,7 @@ tasks:
       - "2026-09-24 current-worktree rerun: ./gradlew :core-network:test :core-domain:test :app:testDebugUnitTest --no-daemon --no-parallel --console=plain; then ./gradlew :core-network:koverVerify :core-domain:koverVerify :app:koverVerify :app:lintDebug :app:assembleDebug :app:assembleRelease --no-daemon --no-parallel --console=plain. Both invocations passed. App JVM tests ran 448/448 with zero failures/errors; core-network and core-domain test tasks were UP-TO-DATE (latest reports: 1,023 with one skipped, and 188). All three Kover verifications passed, lintDebug passed, and debug plus unsigned release APK assembly passed. R8 emitted the existing dnsjava service-provider warnings. No emulator was used."
       - "gh api repos/AieatAssam/android-network-tools/dependabot/alerts --paginate"
       - "gh api repos/AieatAssam/android-network-tools/dependency-graph/sbom"
-      - "On 2026-09-23, post-constraint `:app:dependencies --configuration androidLintTool`, targeted dependencyInsight, and `:app:dependencies --configuration releaseRuntimeClasspath` passed. Earlier JVM, Kover, lint, and build verification is retained in the dated review below. On 2026-09-24, the live alert API reports seven open alerts [1, 2, 5, 6, 8, 9, 10], including the new critical FreeMarker alert; three alerts [3, 4, 7] are fixed. Previous exact-head ADS run 36059542138 for ecbe483 selected FreeMarker 2.3.32. The current `buildEnvironment` graph selects 2.3.35 on root `:classpath`, and `dependencyInsight` finds no FreeMarker in `:app:releaseRuntimeClasspath`. The complete Kover rerun passed all three gates; test reports show app 519/519, core-network 1,109 with one skipped, and core-domain 203, all with zero failures/errors. The initial combined Kover run had a 60-second timeout in one port-scan test; its focused retry passed, and the later complete core-network suite passed. `:app:lintDebug`, `:app:assembleDebug`, and `:app:assembleRelease` passed; R8 emitted the existing dnsjava service-provider warnings. A post-push ADS submission and a fresh main-branch scan remain outstanding; keep T4/P02.5 open until those external gates are addressed. No emulator was used. Device/lab release-QA checks are separate. Detailed graph output and its hash are retained in plan/reviews/2026-09-23-p025-dependency-state.yaml."
+      - "On 2026-09-23, post-constraint `:app:dependencies --configuration androidLintTool`, targeted dependencyInsight, and `:app:dependencies --configuration releaseRuntimeClasspath` passed. Earlier JVM, Kover, lint, and build verification is retained in the dated review below. On 2026-09-24, the live alert API reports seven open alerts [1, 2, 5, 6, 8, 9, 10], including the new critical FreeMarker alert; three alerts [3, 4, 7] are fixed. Previous exact-head ADS run 36059542138 for ecbe483 selected FreeMarker 2.3.32. The current `buildEnvironment` graph selects 2.3.35 on root `:classpath`, the exact-head ADS run 36063894666 for 7090f4b selects 2.3.35 and patched versions for every alerted coordinate, and `dependencyInsight` finds no FreeMarker in `:app:releaseRuntimeClasspath`. The repository SBOM generated after the push still reports FreeMarker 2.3.32; the latest main ADS run is still 35601558226 at 5e18372. The complete Kover rerun passed all three gates; test reports show app 519/519, core-network 1,109 with one skipped, and core-domain 203, all with zero failures/errors. The initial combined Kover run had a 60-second timeout in one port-scan test; its focused retry passed, and the later complete core-network suite passed. `:app:lintDebug`, `:app:assembleDebug`, and `:app:assembleRelease` passed; R8 emitted the existing dnsjava service-provider warnings. A fresh main-branch submission remains outstanding; keep T4/P02.5 open until main's graph and alerts refresh. No emulator was used. Device/lab release-QA checks are separate. Detailed graph output and its hash are retained in plan/reviews/2026-09-23-p025-dependency-state.yaml."
     acceptance_criteria: ["The reviewed source tree's JVM, Kover, lint, debug, and release gates pass; all ten alerts have a recorded disposition, and every remaining actionable alert is covered by an explicit, approved, time-bounded exception."]
 
 qa_validation:
