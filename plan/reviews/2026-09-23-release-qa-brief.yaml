@@ -3,9 +3,9 @@ review:
   status: audited
   source: "User-provided Net Swiss Knife QA brief v2026.09.21.1 (API 33, host snmpd at 10.0.2.2)."
   release_baseline_commit: "5e183721e64ce8a8946f1a0b50f52b83544e8898"
-  checked_commit: "628343cf65fdbb0c2d80dae59d573fbb93a7aa1e"
-  checked_worktree_commit: "628343cf65fdbb0c2d80dae59d573fbb93a7aa1e"
-  checked_scope: "The supplied release corresponds to origin/main at 5e18372. Audited that baseline and current branch through 628343c, including LAN/mDNS handoff changes. Focused current-tree checks passed; a full unfiltered app-suite pass and API 33 instrumentation are not claimed. Implementation details are cross-referenced to E03 and dependency-gate review artifacts."
+  checked_commit: "1796d4120f5b81e9d9de1f487c26be7724a121aa"
+  checked_worktree_commit: "1796d4120f5b81e9d9de1f487c26be7724a121aa"
+  checked_scope: "The supplied release corresponds to origin/main at 5e18372. Rechecked that baseline and the current branch through 1796d41, including Ping one-time route consumption, Traceroute cancel cleanup/partial results, and the OperationRunner USER_STOP regression. Focused current-tree tests and Android-test Kotlin compilation passed; a full unfiltered app-suite pass and API 33 instrumentation are not claimed. Implementation details remain cross-referenced to E01/E03 and dependency-gate review artifacts."
   branch: "plan/comprehensive-review-2026-09-22"
   release_metadata:
     app: "Net Swiss Knife"
@@ -19,6 +19,7 @@ review:
     environment_non_goals: "Emulator public ICMP/DNS flakiness is an error-UX check; live Cloudflare success is not required on the target AVD."
   environment:
     connected_emulator: "The initial audit avoided a shared dev36 AVD that another task was using. Before WOL follow-up, adb showed no active device; dev36 was started for targeted Compose checks and shut down afterward. Gradle reported Unknown API Level; direct runner startup stalled with app-process ANRs. No API 33 AVD is available."
+    current_followup: "No emulator was started or used for the Ping, Traceroute, or OperationRunner changes checked at 1796d41."
     host_snmpd: "Not available; no local snmpd process or SNMP lab endpoint verified"
     physical_wifi: "Not available"
   fixed_items_rechecked: [ISS-01, ISS-02, ISS-03, ISS-04, ISS-08, ISS-09, ISS-15, SNMP-threading]
@@ -93,17 +94,17 @@ items:
     needed_validation: "Compose tests assert that merged card labels expose button/click semantics, but the fresh API 36 instrumentation attempt stopped before test execution. Verify TalkBack traversal/activation on the API 33 release target; both runtime checks remain open."
 
   - id: ISS-17
-    classification: implementation_present_fresh_instrumentation_blocked_device_validation_open
-    release_baseline_status: "Partially reproduced in source: the release baseline rejects networks without validated Internet and has no Traceroute connectivity banner. The current branch adds a banner, local/VPN eligibility, prompt Running state, and Retry/Clear; device layout and offline/dead-ICMP behavior remain unverified."
+    classification: implementation_and_cancel_recovery_source_tested_device_validation_open
+    release_baseline_status: "Partially reproduced in source: the release baseline rejects networks without validated Internet and has no Traceroute connectivity banner. The current branch adds a banner, local/VPN eligibility, prompt Running state, Retry/Clear, and Canceling/Canceled states that retain partial hops until cleanup completes; device layout and offline/dead-ICMP behavior remain unverified."
     evidence:
-      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/traceroute/TracerouteViewModel.kt", lines: "151-169,183-229", detail: "Offline state becomes Error('No network connection'); preflight permits Internet, local-network, or VPN status; trace enters Running immediately, owns an operation session, rejects stale emissions, and reports empty completion or ordinary errors." }
-      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/TracerouteScreen.kt", lines: "171-204,1346-1368", detail: "The NetworkStatusBanner is placed immediately below the hero, and the Error panel exposes Retry and Clear." }
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/traceroute/TracerouteViewModel.kt", lines: "178-221,223-280", detail: "Offline state becomes Error('No network connection'); preflight permits Internet, local-network, or VPN status; trace enters Running immediately, owns an operation session, rejects stale emissions, and Stop holds Canceling until collector cleanup before producing retained partial hops. A deadline that won before Stop remains a timeout Error." }
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/TracerouteScreen.kt", lines: "171-247,345-504,591-737", detail: "The NetworkStatusBanner is immediately below the hero. Canceling disables host/config/recent-host/start actions and shows cleanup progress; Canceled renders a partial-result label with retained hops. The Error panel still exposes Retry and Clear." }
       - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/NetworkStatusBanner.kt", lines: "45-53", detail: "ANY_NETWORK shows offline status only when Internet, local-network, and VPN states are all false." }
-      - { file: "app/src/test/kotlin/net/aieat/netswissknife/app/ui/screens/traceroute/TracerouteViewModelTest.kt", lines: "118-152,202-218", detail: "Unit coverage asserts offline rejection, local-only and VPN-only eligibility, and stale-emission invalidation after an offline restart." }
-      - { file: "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/screens/TracerouteScreenTest.kt", lines: "196-244", detail: "Compose coverage asserts offline error copy, Retry/Clear callbacks, and the connectivity banner." }
+      - { file: "app/src/test/kotlin/net/aieat/netswissknife/app/ui/screens/traceroute/TracerouteViewModelTest.kt", lines: "118-168,182-273", detail: "TracerouteViewModelTest passed 17/17, covering offline rejection, local/VPN eligibility, no-route error, blocked cleanup with retained partial hops, duplicate-start gating, and deadline-over-Stop precedence." }
+      - { file: "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/screens/TracerouteScreenTest.kt", lines: "150-252", detail: "Compose source coverage asserts progress/Stop, canceling cleanup copy and disabled host-clear/Stop actions, retained partial hops after Canceled, offline error copy, Retry/Clear callbacks, and the connectivity banner. Android-test Kotlin compilation passed; the test was not executed on a device." }
       - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/traceroute/TracerouteReverseDnsLookup.kt", lines: "22-44,83-111", detail: "Current worktree moves optional reverse-DNS work to a cancellable helper with two daemon workers and an eight-entry queue; callers retain numeric hop results after timeout or lookup failure." }
       - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/traceroute/IcmpEnginTracerouteRepositoryImpl.kt", lines: "90-116,154-159", detail: "Each hop's reverse-DNS wait is capped at one second and by remaining operation time; cancellation and deadline are preserved, and the native mapper no longer resolves names synchronously." }
-    needed_validation: "The fresh API 36 connected instrumentation batch compiled but stopped during APK install before tests started. Run TracerouteScreenTest on API 36 and the reported airplane-mode/dead-or-ICMP-blocked target scenario on API 33; confirm progress/Stop is visible promptly without scrolling. Initial-viewport target-device behavior remains open."
+    needed_validation: "The prior API 36 connected instrumentation attempt stopped during APK install before tests started; the new Compose source compiles but has not been executed. Run TracerouteScreenTest and the reported airplane-mode/dead-or-ICMP-blocked target scenario on API 33; confirm progress/Stop is visible promptly without scrolling. Initial-viewport and live-network behavior remain open."
 
   - id: ISS-06
     classification: skip_callback_covered_integrated_dismissal_verification_open
@@ -164,9 +165,10 @@ api36_instrumentation:
 
 unit_validation:
   command: "./gradlew :core-network:test :core-domain:test :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin --no-daemon --no-parallel --console=plain"
-  status: pending_shared_gradle_capacity
+  status: focused_followup_passed_full_suite_pending
   results: { core_network: null, core_network_skipped: null, core_domain: 184, app: null, failures: null, errors: null }
-  additional: "The focused TLS repository class passed (18 tests, zero failures), and the core-domain suite passed 184 tests. The latest WOL/codec/route-identity/LAN focused set passed 44 tests with zero failures, and Android-test Kotlin compilation passed. Full core-network/app suites remain pending; the shared Gradle daemon was stopped by another workspace task during the prior broad attempt. API 36 instrumentation did not complete and no API 33 emulator or physical device was available."
+  focused_followup: { operation_runner: "14/14", ping_view_model: "50/50", traceroute_view_model: "17/17", android_test_kotlin_compile: "passed" }
+  additional: "Earlier evidence includes the focused TLS repository class (18 tests), core-domain suite (184 tests), and WOL/codec/route-identity/LAN focused set (44 tests). The current follow-up passed OperationRunnerTest 14/14, PingViewModelTest 50/50, TracerouteViewModelTest 17/17, and Android-test Kotlin compilation. One initial build was stopped by another workspace Gradle task; serialized no-daemon retries completed. Full core-network/app suites remain pending. No emulator or live network lab was used for this follow-up, and API 33 instrumentation and physical-device checks remain open."
 
 brief_accuracy:
   - "ISS-21's listed features (Cancel, progress, sysName/IP labels, and node-details sheet) exist in current source. The remaining concrete question is live SNMP cancellation and usability of sparse graph layouts, not missing feature implementation as stated."
