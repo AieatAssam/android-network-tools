@@ -9,6 +9,7 @@ import io.mockk.coVerify
 import io.mockk.slot
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.job
@@ -198,7 +199,10 @@ class LanScanViewModelTest {
             }
 
             viewModel.onStopScan()
-            val state = viewModel.uiState.value as LanScanUiState.Finished
+            withContext(Dispatchers.Default) {
+                withTimeout(2_000) { viewModel.uiState.first { it is LanScanUiState.Canceled } }
+            }
+            val state = viewModel.uiState.value as LanScanUiState.Canceled
             assertEquals(1, state.summary.aliveHosts)
             assertEquals(2, state.summary.uncertainCount)
             assertEquals(2, state.summary.totalScanned)
@@ -221,11 +225,89 @@ class LanScanViewModelTest {
                 }
             }
             viewModel.onStopScan()
+            withContext(Dispatchers.Default) {
+                withTimeout(2_000) { viewModel.uiState.first { it is LanScanUiState.Canceled } }
+            }
 
             assertEquals(CancellationReason.USER_STOP, sessionSlot.captured.cancellationReason)
-            val partial = viewModel.uiState.value as LanScanUiState.Finished
+            val partial = viewModel.uiState.value as LanScanUiState.Canceled
             assertEquals(listOf(stubHost), partial.summary.hosts)
             assertEquals(1, partial.summary.totalScanned)
+        }
+
+        @Test
+        fun `shows Canceling until upstream resource cleanup finishes`() = runTest {
+            val cleanupStarted = CompletableDeferred<Unit>()
+            val allowCleanup = CompletableDeferred<Unit>()
+            every { lanScanUseCase(any(), any()) } returns flow {
+                emit(LanScanFlowResult.HostFound(stubHost, scannedCount = 1, totalCount = 8))
+                try {
+                    awaitCancellation()
+                } finally {
+                    withContext(NonCancellable) {
+                        cleanupStarted.complete(Unit)
+                        allowCleanup.await()
+                    }
+                }
+            }
+            viewModel.onSubnetChange("192.168.1.0/24")
+            viewModel.startScan()
+            withContext(Dispatchers.Default) {
+                withTimeout(2_000) {
+                    viewModel.uiState.first { it is LanScanUiState.Scanning && it.hosts.isNotEmpty() }
+                }
+            }
+
+            viewModel.onStopScan()
+            withContext(Dispatchers.Default) { withTimeout(2_000) { cleanupStarted.await() } }
+            assertTrue(viewModel.uiState.value is LanScanUiState.Canceling)
+            allowCleanup.complete(Unit)
+            withContext(Dispatchers.Default) {
+                withTimeout(2_000) { viewModel.uiState.first { it is LanScanUiState.Canceled } }
+            }
+        }
+
+        @Test
+        fun `duplicate start while prior scan is active does not replace or cancel it`() = runTest {
+            val sessionSlot = slot<OperationSession>()
+            val collectorStarted = CompletableDeferred<Unit>()
+            every { lanScanUseCase(any(), capture(sessionSlot)) } returns flow {
+                collectorStarted.complete(Unit)
+                awaitCancellation()
+            }
+            viewModel.startScan()
+            withContext(Dispatchers.Default) { withTimeout(2_000) { collectorStarted.await() } }
+
+            viewModel.startScan()
+
+            verify(exactly = 1) { lanScanUseCase(any(), any()) }
+            assertEquals(null, sessionSlot.captured.cancellationReason)
+        }
+
+        @Test
+        fun `lifecycle pause finishes partial scan without user-canceled state`() = runTest {
+            val sessionSlot = slot<OperationSession>()
+            every { lanScanUseCase(any(), capture(sessionSlot)) } returns flow {
+                emit(LanScanFlowResult.HostFound(stubHost, scannedCount = 1, totalCount = 8))
+                awaitCancellation()
+            }
+            viewModel.startScan()
+            withContext(Dispatchers.Default) {
+                withTimeout(2_000) { viewModel.uiState.first { it is LanScanUiState.Scanning && it.hosts.isNotEmpty() } }
+            }
+
+            viewModel.onLifecyclePause()
+
+            assertEquals(CancellationReason.LIFECYCLE_PAUSE, sessionSlot.captured.cancellationReason)
+            val state = viewModel.uiState.value
+            assertTrue(state is LanScanUiState.Canceling || state is LanScanUiState.Finished)
+            withContext(Dispatchers.Default) {
+                withTimeout(2_000) { viewModel.uiState.first { it is LanScanUiState.Finished } }
+            }
+            assertTrue(viewModel.uiState.value !is LanScanUiState.Canceled)
+            val finished = viewModel.uiState.value as LanScanUiState.Finished
+            assertTrue(finished.partial)
+            assertEquals(listOf(stubHost), finished.summary.hosts)
         }
 
         @Test
@@ -260,15 +342,22 @@ class LanScanViewModelTest {
             viewModel.onSubnetChange("192.168.1.0/24")
             viewModel.startScan()
             withContext(Dispatchers.Default) { withTimeout(2_000) { oldCollectorStarted.await() } }
+            viewModel.onStopScan()
+            assertTrue(viewModel.uiState.value is LanScanUiState.Canceling)
+            viewModel.startScan()
+            assertTrue(viewModel.uiState.value is LanScanUiState.Canceling)
+            allowOldCompletion.complete(Unit)
+            withContext(Dispatchers.Default) {
+                withTimeout(2_000) { viewModel.uiState.first { it is LanScanUiState.Canceled } }
+            }
+            withContext(Dispatchers.Default) { withTimeout(2_000) { oldCollectorFinished.await() } }
+
+            assertEquals(CancellationReason.USER_STOP, oldSession.captured.cancellationReason)
             viewModel.onSubnetChange("10.0.0.0/24")
             viewModel.startScan()
             withContext(Dispatchers.Default) {
                 withTimeout(2_000) { viewModel.uiState.first { it is LanScanUiState.Finished } }
             }
-            allowOldCompletion.complete(Unit)
-            withContext(Dispatchers.Default) { withTimeout(2_000) { oldCollectorFinished.await() } }
-
-            assertEquals(CancellationReason.USER_STOP, oldSession.captured.cancellationReason)
             assertEquals(newSummary, (viewModel.uiState.value as LanScanUiState.Finished).summary)
         }
     }
@@ -326,7 +415,12 @@ class LanScanViewModelTest {
             viewModel.onLifecyclePause()
 
             assertEquals(CancellationReason.LIFECYCLE_PAUSE, sessionSlot.captured.cancellationReason)
-            assertEquals(listOf(stubHost), (viewModel.uiState.value as LanScanUiState.Finished).summary.hosts)
+            withContext(Dispatchers.Default) {
+                withTimeout(2_000) { viewModel.uiState.first { it is LanScanUiState.Finished } }
+            }
+            val partial = viewModel.uiState.value as LanScanUiState.Finished
+            assertTrue(partial.partial)
+            assertEquals(listOf(stubHost), partial.summary.hosts)
         }
     }
 

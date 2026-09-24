@@ -1,0 +1,29 @@
+review:
+  area: wol-port-validation
+  status: done
+  related_task: E01-T10
+  source: "Focused form-validation audit following the release QA brief review"
+  environment: "Focused JVM unit tests and Android-test Kotlin compilation; emulator not used"
+
+finding:
+  id: RUI013
+  severity: low
+  kind: bug
+  title: "Wake-on-LAN enables the reserved UDP destination port 0"
+  evidence:
+    - { file: "core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/WakeOnLanUseCase.kt", detail: "The use case accepted port 0 in its previous 0..65535 range and passed it to the repository." }
+    - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/wol/WakeOnLanViewModel.kt", detail: "The Send gate also treated 0 as an in-range port." }
+    - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/wol/WakeOnLanScreen.kt", detail: "The form accepted 0 and showed only the normal port hint." }
+    - { source: "IANA Service Name and Transport Protocol Port Number Registry", url: "https://www.iana.org/assignments/service-names-port-numbers?page=1&search=0", detail: "UDP port 0 is reserved." }
+  impact: "Send could be enabled for a reserved destination port, producing a packet the user did not intend to target."
+  recommended_action: "Use one 1..65535 range at the domain, ViewModel, and form boundaries; show an inline error and retain the existing conventional defaults."
+  resolution:
+    status: done
+    summary: "WakeOnLanParams now owns the shared 1..65535 bounds. The use case rejects 0 and out-of-range values, ViewModel Send eligibility uses the same bounds, and the form shows an actionable invalid-port message. Ports 7 and 9 remain accepted; default 9 is unchanged."
+  validation:
+    - "WakeOnLanUseCaseTest: 7/7 passed, including 0 and 65536 rejection and 1/65535 acceptance."
+    - "WakeOnLanViewModelTest: 12/12 passed, including disabled Send/no call for 0 and 65536 and accepted boundaries."
+    - "WakeOnLanScreenTest Android-test Kotlin source compiled; instrumentation was not run."
+    - "Independent source review found no blocking issue."
+  owner: E01-T10
+  related_phase: P08

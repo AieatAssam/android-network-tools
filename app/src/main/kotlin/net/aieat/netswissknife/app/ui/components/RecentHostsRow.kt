@@ -34,6 +34,7 @@ fun RecentHostsRow(
     onRemoveHost: (String) -> Unit,
     onClearAll: () -> Unit,
     selectionEnabled: Boolean = true,
+    actionsEnabled: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     AnimatedVisibility(
@@ -73,6 +74,7 @@ fun RecentHostsRow(
                         )
                         IconButton(
                             onClick = { onRemoveHost(host) },
+                            enabled = actionsEnabled,
                             modifier = Modifier.size(32.dp).wrapContentSize(Alignment.Center)
                         ) {
                             Icon(
@@ -87,6 +89,7 @@ fun RecentHostsRow(
             }
             IconButton(
                 onClick = onClearAll,
+                enabled = actionsEnabled,
                 modifier = Modifier.size(40.dp)
             ) {
                 Icon(

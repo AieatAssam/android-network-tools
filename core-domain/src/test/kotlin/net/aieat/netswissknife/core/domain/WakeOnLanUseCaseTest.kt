@@ -75,9 +75,31 @@ class WakeOnLanUseCaseTest {
     }
 
     @Test
-    fun `rejects out-of-range port`() = runBlocking {
-        val result = useCase(WakeOnLanParams(macAddress = "AA:BB:CC:DD:EE:FF", port = 70_000))
-        assertTrue(result is NetworkResult.Error)
+    fun `rejects reserved zero and out-of-range ports`() = runBlocking {
+        for (port in listOf(0, 65_536)) {
+            val result = useCase(WakeOnLanParams(macAddress = "AA:BB:CC:DD:EE:FF", port = port))
+            assertTrue(result is NetworkResult.Error, "Expected port $port to be rejected")
+        }
         coVerify(exactly = 0) { repository.sendMagicPacket(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `accepts both UDP destination port boundaries`() = runBlocking {
+        coEvery { repository.sendMagicPacket(any(), any(), any(), any()) } coAnswers {
+            NetworkResult.Success(
+                WolSendReport(
+                    macAddress = firstArg(),
+                    broadcastAddress = secondArg(),
+                    port = thirdArg(),
+                    packetsSent = 3,
+                ),
+            )
+        }
+
+        for (port in listOf(1, 65_535)) {
+            val result = useCase(WakeOnLanParams(macAddress = "AA:BB:CC:DD:EE:FF", port = port))
+            assertEquals(port, (result as NetworkResult.Success).data.port)
+            coVerify { repository.sendMagicPacket("AA:BB:CC:DD:EE:FF", "255.255.255.255", port, 3) }
+        }
     }
 }

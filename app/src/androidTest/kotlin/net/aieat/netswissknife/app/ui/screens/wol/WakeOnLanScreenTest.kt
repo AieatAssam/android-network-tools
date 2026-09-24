@@ -124,6 +124,27 @@ class WakeOnLanScreenTest {
     }
 
     @Test
+    fun zeroPort_showsReservedPortErrorAndDisablesSend() {
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                WakeOnLanScreen(
+                    viewModel = fakeViewModel(
+                        macAddress = "AA:BB:CC:DD:EE:FF",
+                        port = "0"
+                    )
+                )
+            }
+        }
+
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        composeRule.onNodeWithText(context.getString(R.string.wol_advanced_options)).performClick()
+        composeRule.mainClock.advanceTimeBy(500L)
+
+        composeRule.onNodeWithText(context.getString(R.string.wol_port_invalid)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.wol_send_button)).assertIsNotEnabled()
+    }
+
+    @Test
     fun validInputs_enableSendButton() {
         composeRule.setContent {
             NetSwissKnifeTheme {

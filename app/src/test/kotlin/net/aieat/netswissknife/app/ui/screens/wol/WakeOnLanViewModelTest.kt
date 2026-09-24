@@ -12,6 +12,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import net.aieat.netswissknife.app.platform.NetworkErrorKind
+import net.aieat.netswissknife.core.domain.WakeOnLanParams
 import net.aieat.netswissknife.core.domain.WakeOnLanUseCase
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.net.LocalNetworkPermissionDeniedException
@@ -136,6 +137,35 @@ class WakeOnLanViewModelTest {
 
         assertEquals(WolUiState.Idle, viewModel.uiState.value)
         coVerify(exactly = 0) { useCase(any(), any()) }
+    }
+
+    @Test
+    fun `rejects UDP destination port zero and values above the maximum`() = runTest {
+        viewModel.onMacAddressChange("AA:BB:CC:DD:EE:FF")
+
+        for (port in listOf("0", "65536")) {
+            viewModel.onPortChange(port)
+            assertFalse(viewModel.canSend, "Expected port $port to disable Send")
+            viewModel.send()
+        }
+
+        coVerify(exactly = 0) { useCase(any(), any()) }
+    }
+
+    @Test
+    fun `accepts UDP destination port boundaries`() = runTest {
+        coEvery { useCase(any(), any()) } coAnswers {
+            val params = firstArg<WakeOnLanParams>()
+            NetworkResult.Success(stubReport.copy(port = params.port))
+        }
+        viewModel.onMacAddressChange("AA:BB:CC:DD:EE:FF")
+
+        for (port in listOf("1", "65535")) {
+            viewModel.onPortChange(port)
+            assertTrue(viewModel.canSend)
+            viewModel.send()
+            coVerify { useCase(match { it.port == port.toInt() }, any()) }
+        }
     }
 
     @Test

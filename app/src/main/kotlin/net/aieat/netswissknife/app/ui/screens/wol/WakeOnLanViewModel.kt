@@ -63,7 +63,7 @@ class WakeOnLanViewModel @Inject constructor(
     val canSend: Boolean
         get() = WolMagicPacket.isValidMac(_macAddress.value) &&
             _broadcastAddress.value.isNotBlank() &&
-            _port.value.toIntOrNull() in 0..65_535 &&
+            _port.value.toIntOrNull() in WakeOnLanParams.MIN_PORT..WakeOnLanParams.MAX_PORT &&
             _uiState.value !is WolUiState.Sending
 
     fun onMacAddressChange(value: String) {

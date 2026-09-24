@@ -224,6 +224,7 @@ comprehensive_expansion:
       - {"finding":"RUI010","owner_task":"E01-T10","follow_up_status":"done","report":"plan/reviews/2026-09-22-release-qa-brief.yaml"}
       - {"finding":"RUI011","owner_task":"E01-T07/E01-T09","follow_up_status":"done","report":"plan/reviews/2026-09-22-release-qa-brief.yaml"}
       - {"finding":"RUI012","owner_task":"E01-T07/E01-T09","follow_up_status":"done","report":"plan/reviews/2026-09-22-release-qa-brief.yaml"}
+      - {"finding":"RUI013","owner_task":"E01-T10","follow_up_status":"done","report":"plan/reviews/2026-09-24-wol-port-validation.yaml"}
 
 incremental_review:
   reviewed_on: "2026-09-21"
@@ -244,6 +245,7 @@ incremental_review:
     - { area: lan-scan-discovery, file: plan/reviews/2026-09-22-lan-scan-noise.yaml }
     - { area: release-qa-brief, file: plan/reviews/2026-09-22-release-qa-brief.yaml }
     - { area: release-qa-brief-current-source, file: plan/reviews/2026-09-23-release-qa-brief.yaml }
+    - { area: wol-port-validation, file: plan/reviews/2026-09-24-wol-port-validation.yaml }
   prioritized_findings:
     - { id: RLAN001, severity: high, kind: bug, phase: P01, status: done, title: "A failed TCP connect is promoted to a live host and floods LAN results with false positives" }
     - { id: RAPP001, severity: medium, kind: bug, phase: P03, status: done, title: "Wi-Fi scan failures are reported as completed scans" }
@@ -270,6 +272,7 @@ incremental_review:
     - { id: RUI010, severity: medium, kind: bug, phase: P08, status: done, owner: E01-T10, title: "Host fields reject surrounding whitespace even though shared validation trims it" }
     - { id: RUI011, severity: medium, kind: gap, phase: P08, status: done, owner: E01-T07/E01-T09, title: "Traceroute dead-path state lacks verified Ping-style recovery presentation" }
     - { id: RUI012, severity: medium, kind: gap, phase: P08, status: done, owner: E01-T07/E01-T09, title: "Topology progress message is stored but not shown, and Cancel lacks UI regression coverage" }
+    - { id: RUI013, severity: low, kind: bug, phase: P08, status: done, owner: E01-T10, title: "Wake-on-LAN enables the reserved UDP destination port 0" }
     - { id: RNET004, severity: low, kind: bug, phase: P03, status: done, title: "Wi-Fi unique-network count disagrees with logical network grouping" }
     - { id: RNET007, severity: low, kind: bug, phase: P11, status: done, title: "GeoIP bogon detection rejects explicit false values" }
     - { id: RUI007, severity: low, kind: bug, phase: P11, status: todo, title: "Stopped traceroute results discard elapsed-time metadata" }
@@ -872,3 +875,5 @@ changelog:
     note: "Extended E01-T01 with a LAN host-to-Ping handoff (664d6f8): the validated host arrives through a typed route without starting a probe, host edits survive ViewModel recreation, and malformed/mismatched payloads show a usable recovery state that clears after valid manual input. LAN child handoffs push onto the back stack; regression coverage checks synthetic push/pop behavior and Ping query argument delivery. The focused Ping ViewModel suite passed 47/47, the earlier combined Ping/LAN gateway/codec run passed 58/58, and Android instrumentation Kotlin sources compile. QA and adversarial reviews cleared the source and recovery behavior; actual AppNavHost/system-Back, phone/tablet, and full navigation-restoration checks remain open. E01-T01 stays in progress for other tool handoffs and route-consumption semantics. No emulator was used."
   - date: "2026-09-24"
     note: "Started the DNS vertical slice of E01-T07: Stop now shows Canceling until OperationRunner has closed the registered resource scope, then Canceled; Clear returns to Idle, preserves the query input, and duplicate starts stay blocked through cleanup. ViewModel teardown cancellation remains silent; actual backgrounding with a retained ViewModel remains an open lifecycle-policy question. The focused DnsViewModelTest suite passed 18/18, Android-test Kotlin sources compiled, and independent QA/adversarial source reviews found no blocker after adding blocked-resource cleanup and control-enabled-state assertions. The canceled subtitle says cleanup finished without promising that every individual close succeeded. Instrumentation and Android background behavior were not run; no emulator was used. E01-T07 remains in progress for LAN/Topology and other tools, integrated UI/lifecycle checks, and phase-wide operation-state migration."
+  - date: "2026-09-24"
+    note: "Extended E01-T07 with LAN cancellation states: Stop shows Canceling until the scan flow finishes cleanup, then exposes canceled partial results; lifecycle pause is labeled Scan paused, and config/recent-subnet actions are disabled during active cleanup. LAN ViewModel tests passed 16/16; Compose Android-test Kotlin compilation passed. Added and closed RUI013 under E01-T10: WOL rejects reserved UDP destination port 0 with consistent 1..65535 validation while retaining ports 7 and 9; use-case tests passed 7/7 and ViewModel tests 12/12. The combined Android-test source compile passed, strings XML and git diff checks passed, and no emulator was used. UI instrumentation and broader E01-T07/E01-T10 criteria remain open."

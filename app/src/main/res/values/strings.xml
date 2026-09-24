@@ -210,7 +210,12 @@
     <string name="lan_idle_title">Enter a subnet to scan</string>
     <string name="lan_idle_subtitle">Discovers live hosts, MAC addresses, vendors and open ports</string>
     <string name="lan_scanning_title">Scanning…</string>
+    <string name="lan_canceling_title">Stopping scan…</string>
     <string name="lan_scan_complete_title">Scan Complete</string>
+    <string name="lan_scan_paused_title">Scan paused</string>
+    <string name="lan_scan_paused_subtitle">These are partial results from the scan paused when the app went to the background.</string>
+    <string name="lan_scan_canceled_title">Scan stopped</string>
+    <string name="lan_scan_canceled_subtitle">These are partial results from the stopped scan.</string>
     <string name="lan_error_title">Scan failed</string>
 
     <!-- LAN Results -->
@@ -1173,6 +1178,7 @@
     <string name="wol_broadcast_hint">255.255.255.255 reaches the whole local network</string>
     <string name="wol_port_label">UDP port</string>
     <string name="wol_port_hint">Port 9 (discard) is the convention; some devices use 7</string>
+    <string name="wol_port_invalid">Enter a UDP port from 1 to 65535</string>
     <string name="wol_send_button">Send magic packet</string>
     <string name="wol_sending">Sending magic packet…</string>
     <string name="wol_success_title">Magic packet sent</string>

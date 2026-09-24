@@ -77,6 +77,7 @@ import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.ui.theme.AppShapes
 import net.aieat.netswissknife.app.ui.theme.AppSpacing
+import net.aieat.netswissknife.core.domain.WakeOnLanParams
 import net.aieat.netswissknife.core.network.wol.WolMagicPacket
 import net.aieat.netswissknife.core.network.wol.WolSendReport
 
@@ -190,7 +191,7 @@ private fun WolInputCard(
     var showAdvanced by remember { mutableStateOf(false) }
 
     val isMacInvalid = macAddress.isNotBlank() && !WolMagicPacket.isValidMac(macAddress)
-    val isPortInvalid = port.toIntOrNull() !in 0..65_535
+    val isPortInvalid = port.toIntOrNull() !in WakeOnLanParams.MIN_PORT..WakeOnLanParams.MAX_PORT
     val canSend = !isSending && !isPortInvalid &&
         broadcastAddress.isNotBlank() && WolMagicPacket.isValidMac(macAddress)
 
@@ -258,7 +259,13 @@ private fun WolInputCard(
                         value = port,
                         onValueChange = onPortChange,
                         label = { Text(stringResource(R.string.wol_port_label)) },
-                        supportingText = { Text(stringResource(R.string.wol_port_hint)) },
+                        supportingText = {
+                            Text(
+                                stringResource(
+                                    if (isPortInvalid) R.string.wol_port_invalid else R.string.wol_port_hint
+                                )
+                            )
+                        },
                         isError = isPortInvalid,
                         singleLine = true,
                         enabled = !isSending,

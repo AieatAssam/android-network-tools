@@ -38,6 +38,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.coroutineContext
 import javax.inject.Inject
 
 private const val TAG = "LanScanViewModel"
@@ -55,10 +56,19 @@ sealed interface LanScanUiState {
         val progress: Float = if (totalCount > 0) scannedCount.toFloat() / totalCount else 0f,
     ) : LanScanUiState
 
+    data class Canceling(val summary: LanScanSummary) : LanScanUiState
+
+    data class Canceled(
+        val summary: LanScanSummary,
+        val expandedHostIp: String? = null,
+        val showDiagnostics: Boolean = false,
+    ) : LanScanUiState
+
     data class Finished(
         val summary: LanScanSummary,
         val expandedHostIp: String? = null,
         val showDiagnostics: Boolean = false,
+        val partial: Boolean = false,
     ) : LanScanUiState
 
     data class Error(
@@ -113,7 +123,14 @@ class LanScanViewModel @Inject constructor(
 
     private var scanJob: Job? = null
     private var scanOperationSession: OperationSession? = null
+    private var pendingCancellation: PendingCancellation? = null
     private var scanStartMs: Long = 0L
+
+    private data class PendingCancellation(
+        val session: OperationSession,
+        val summary: LanScanSummary,
+        val reason: CancellationReason,
+    )
 
     internal var operationSessionFactory: (LanScanParams) -> OperationSession = { params ->
         OperationSession(
@@ -197,8 +214,8 @@ class LanScanViewModel @Inject constructor(
     }
 
     fun startScan() {
-        cancelScan(CancellationReason.USER_STOP)
-        scanJob?.cancel()
+        // Do not overlap a new scan with an operation that is still releasing resources.
+        if (scanJob?.isCompleted == false) return
         val liveHosts = mutableListOf<LanHost>()
         val uncertainDiagnostics = mutableListOf<LanScanDiagnostic>()
         scanStartMs = System.currentTimeMillis()
@@ -282,42 +299,61 @@ class LanScanViewModel @Inject constructor(
                 )
             } finally {
                 if (scanOperationSession === operationSession) scanOperationSession = null
+                if (scanJob === coroutineContext[Job]) scanJob = null
+                pendingCancellation?.takeIf { it.session === operationSession }?.let { pending ->
+                    pendingCancellation = null
+                    _uiState.value = if (pending.reason == CancellationReason.USER_STOP) {
+                        LanScanUiState.Canceled(pending.summary)
+                    } else {
+                        LanScanUiState.Finished(pending.summary, partial = true)
+                    }
+                }
             }
         }
     }
 
     fun onStopScan() {
         AppLogger.i(TAG, "onStopScan: cancelling scan job")
-        cancelScan(CancellationReason.USER_STOP)
-        scanJob?.cancel()
-        finishPartialScan()
+        cancelWithPartial(CancellationReason.USER_STOP)
     }
 
     /** Pauses active probing when the LAN tool leaves the foreground. */
     fun onLifecyclePause() {
-        cancelScan(CancellationReason.LIFECYCLE_PAUSE)
-        scanJob?.cancel()
-        finishPartialScan()
+        cancelWithPartial(CancellationReason.LIFECYCLE_PAUSE)
     }
 
-    private fun finishPartialScan() {
-        val current = _uiState.value
-        if (current is LanScanUiState.Scanning) {
-            val partial = LanScanSummary(
-                subnet = _subnet.value,
-                totalScanned = current.scannedCount,
-                aliveHosts = current.hosts.size,
-                scanDurationMs = System.currentTimeMillis() - scanStartMs,
-                hosts = current.hosts,
-                uncertainHosts = current.uncertainDiagnostics,
-                uncertainCount = current.uncertainCount,
-            )
-            _uiState.value = LanScanUiState.Finished(partial)
+    private fun cancelWithPartial(reason: CancellationReason) {
+        val current = _uiState.value as? LanScanUiState.Scanning ?: return
+        val session = scanOperationSession
+        val job = scanJob
+        val partial = LanScanSummary(
+            subnet = _subnet.value,
+            totalScanned = current.scannedCount,
+            aliveHosts = current.hosts.size,
+            scanDurationMs = System.currentTimeMillis() - scanStartMs,
+            hosts = current.hosts,
+            uncertainHosts = current.uncertainDiagnostics,
+            uncertainCount = current.uncertainCount,
+        )
+        if (session == null || job == null || job.isCompleted) {
+            _uiState.value = if (reason == CancellationReason.USER_STOP) {
+                LanScanUiState.Canceled(partial)
+            } else {
+                LanScanUiState.Finished(partial, partial = true)
+            }
+            return
         }
+
+        pendingCancellation = PendingCancellation(session, partial, reason)
+        scanOperationSession = null
+        _uiState.value = LanScanUiState.Canceling(partial)
+        session.cancel(reason)
+        job.cancel()
     }
 
     fun onClear() {
         AppLogger.d(TAG, "onClear")
+        pendingCancellation = null
         cancelScan(CancellationReason.USER_STOP)
         scanJob?.cancel()
         _searchQuery.value = ""
@@ -325,15 +361,19 @@ class LanScanViewModel @Inject constructor(
     }
 
     fun onToggleHostExpanded(ip: String) {
-        val current = _uiState.value as? LanScanUiState.Finished ?: return
-        _uiState.value = current.copy(
-            expandedHostIp = if (current.expandedHostIp == ip) null else ip
-        )
+        _uiState.value = when (val current = _uiState.value) {
+            is LanScanUiState.Finished -> current.copy(expandedHostIp = if (current.expandedHostIp == ip) null else ip)
+            is LanScanUiState.Canceled -> current.copy(expandedHostIp = if (current.expandedHostIp == ip) null else ip)
+            else -> return
+        }
     }
 
     fun onToggleDiagnostics() {
-        val current = _uiState.value as? LanScanUiState.Finished ?: return
-        _uiState.value = current.copy(showDiagnostics = !current.showDiagnostics)
+        _uiState.value = when (val current = _uiState.value) {
+            is LanScanUiState.Finished -> current.copy(showDiagnostics = !current.showDiagnostics)
+            is LanScanUiState.Canceled -> current.copy(showDiagnostics = !current.showDiagnostics)
+            else -> return
+        }
     }
 
     fun onScanPorts(host: String) {
@@ -352,6 +392,7 @@ class LanScanViewModel @Inject constructor(
     }
 
     override fun onCleared() {
+        pendingCancellation = null
         cancelScan(CancellationReason.LIFECYCLE_PAUSE)
         super.onCleared()
     }

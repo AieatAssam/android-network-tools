@@ -204,8 +204,8 @@ fun LanScreen(
     LaunchedEffect(Unit) { visible = true }
     var showHelp by remember { mutableStateOf(false) }
 
-    val isRefreshing = uiState is LanScanUiState.Scanning
-    val canRefresh = uiState is LanScanUiState.Finished || uiState is LanScanUiState.Error
+    val isRefreshing = uiState is LanScanUiState.Scanning || uiState is LanScanUiState.Canceling
+    val canRefresh = uiState is LanScanUiState.Finished || uiState is LanScanUiState.Canceled || uiState is LanScanUiState.Error
 
     PullToRefreshBox(
         isRefreshing = isRefreshing,
@@ -238,6 +238,7 @@ fun LanScreen(
                 concurrency = concurrency,
                 isSubnetLoading = isSubnetLoading,
                 isScanning = uiState is LanScanUiState.Scanning,
+                isCanceling = uiState is LanScanUiState.Canceling,
                 recentSubnets = recentSubnets,
                 onSubnetChange = viewModel::onSubnetChange,
                 onTimeoutChange = viewModel::onTimeoutChange,
@@ -261,6 +262,23 @@ fun LanScreen(
                 when (state) {
                     is LanScanUiState.Idle -> LanIdleContent()
                     is LanScanUiState.Scanning -> LanScanningContent(state)
+                    is LanScanUiState.Canceling -> LanCancelingContent(state.summary)
+                    is LanScanUiState.Canceled -> LanFinishedContent(
+                        summary = state.summary,
+                        expandedHostIp = state.expandedHostIp,
+                        showDiagnostics = state.showDiagnostics,
+                        searchQuery = searchQuery,
+                        onSearchQueryChange = viewModel::onSearchQueryChange,
+                        onToggleExpand = viewModel::onToggleHostExpanded,
+                        onScanPorts = viewModel::onScanPorts,
+                        onPingHost = viewModel::onPingHost,
+                        onClear = viewModel::onClear,
+                        onRescan = viewModel::startScan,
+                        onToggleDiagnostics = viewModel::onToggleDiagnostics,
+                        title = stringResource(R.string.lan_scan_canceled_title),
+                        subtitle = stringResource(R.string.lan_scan_canceled_subtitle),
+                        isCanceled = true,
+                    )
                     is LanScanUiState.Finished -> LanFinishedContent(
                         summary = state.summary,
                         expandedHostIp = state.expandedHostIp,
@@ -273,6 +291,10 @@ fun LanScreen(
                         onClear = viewModel::onClear,
                         onRescan = viewModel::startScan,
                         onToggleDiagnostics = viewModel::onToggleDiagnostics,
+                        title = stringResource(
+                            if (state.partial) R.string.lan_scan_paused_title else R.string.lan_scan_complete_title,
+                        ),
+                        subtitle = if (state.partial) stringResource(R.string.lan_scan_paused_subtitle) else null,
                     )
                     is LanScanUiState.Error -> LanErrorContent(
                         message = state.message,
@@ -329,6 +351,7 @@ private fun LanInputCard(
     concurrency: Int,
     isSubnetLoading: Boolean,
     isScanning: Boolean,
+    isCanceling: Boolean,
     recentSubnets: List<String>,
     onSubnetChange: (String) -> Unit,
     onTimeoutChange: (Int) -> Unit,
@@ -383,7 +406,7 @@ private fun LanInputCard(
                     }
                 },
                 singleLine = true,
-                enabled = !isScanning,
+                enabled = !isScanning && !isCanceling,
                 modifier = Modifier.fillMaxWidth(),
             )
 
@@ -391,7 +414,9 @@ private fun LanInputCard(
                 recentHosts = recentSubnets,
                 onHostSelected = onSubnetChange,
                 onRemoveHost = onRemoveRecentSubnet,
-                onClearAll = onClearRecentSubnets
+                onClearAll = onClearRecentSubnets,
+                selectionEnabled = !isScanning && !isCanceling,
+                actionsEnabled = !isScanning && !isCanceling,
             )
 
             // Timeout slider
@@ -401,7 +426,7 @@ private fun LanInputCard(
                 onValueChange = { onTimeoutChange(it.toInt()) },
                 valueRange = 100f..10_000f,
                 steps = 0,
-                enabled = !isScanning,
+                enabled = !isScanning && !isCanceling,
             )
 
             // Concurrency slider
@@ -411,11 +436,21 @@ private fun LanInputCard(
                 onValueChange = { onConcurrencyChange(it.toInt()) },
                 valueRange = 1f..500f,
                 steps = 0,
-                enabled = !isScanning,
+                enabled = !isScanning && !isCanceling,
             )
 
             // Action button
-            if (isScanning) {
+            if (isCanceling) {
+                FilledTonalButton(
+                    onClick = {},
+                    enabled = false,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.lan_canceling_title))
+                }
+            } else if (isScanning) {
                 ToolStopButton(
                     text = stringResource(R.string.lan_stop_button),
                     onClick = onStopScan,
@@ -588,6 +623,30 @@ private fun LanScanningContent(state: LanScanUiState.Scanning) {
 }
 
 @Composable
+private fun LanCancelingContent(summary: LanScanSummary) {
+    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            CircularProgressIndicator()
+            Text(stringResource(R.string.lan_canceling_title), style = MaterialTheme.typography.titleMedium)
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                StatChip(
+                    label = stringResource(R.string.lan_stat_scanned),
+                    value = summary.totalScanned.toString(),
+                )
+                StatChip(
+                    label = stringResource(R.string.lan_stat_alive),
+                    value = summary.aliveHosts.toString(),
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun PulsingIndicator() {
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
     val scale by infiniteTransition.animateFloat(
@@ -656,6 +715,9 @@ private fun LanFinishedContent(
     onClear: () -> Unit,
     onRescan: () -> Unit,
     onToggleDiagnostics: () -> Unit,
+    title: String = stringResource(R.string.lan_scan_complete_title),
+    subtitle: String? = null,
+    isCanceled: Boolean = false,
 ) {
     val context = LocalContext.current
     val shareSubject = stringResource(R.string.share_subject_lan, summary.subnet)
@@ -690,13 +752,13 @@ private fun LanFinishedContent(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Icon(
-                            Icons.Default.CheckCircle,
+                            if (isCanceled) Icons.Default.Stop else Icons.Default.CheckCircle,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(22.dp),
                         )
                         Text(
-                            text = stringResource(R.string.lan_scan_complete_title),
+                            text = title,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold,
                         )
@@ -704,6 +766,14 @@ private fun LanFinishedContent(
                     Text(
                         text = stringResource(R.string.lan_duration_format, summary.scanDurationMs),
                         style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
+                subtitle?.let {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }

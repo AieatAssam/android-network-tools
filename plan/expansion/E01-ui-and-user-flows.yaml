@@ -376,7 +376,7 @@ tasks:
       - "P04/P05/P11 own underlying cancellation correctness; E01 must not mask a repository that fails to cancel."
     effort: "L (3-5 agent sessions)"
     checkpoint:
-      status: "DNS Stop/Clear vertical slice adds visible Canceling until the lookup job and session cleanup finish, then Canceled; Clear returns to Idle, input is preserved, duplicate starts are blocked, and ViewModel teardown cancellation stays silent. Focused ViewModel tests and Android-test Kotlin compilation pass. E01-T07 remains open for LAN/Topology and other tools, actual background lifecycle policy, integrated UI checks, and phase-wide operation-state migration."
+      status: "DNS and LAN cancellation slices are implemented. DNS Stop shows Canceling until lookup/session cleanup finishes, then Canceled; LAN Stop shows Canceling until the scan flow finishes cleanup, then Canceled with partial results and rescan/clear actions. LAN lifecycle pause resolves to a partial Scan paused state, and scan inputs/recent-subnet actions stay disabled while running or canceling. DNS ViewModel tests passed 18/18; LAN ViewModel tests passed 16/16; LAN Compose cancellation coverage compiles. Actual instrumentation, retained-ViewModel background policy, integrated UI checks, and phase-wide migration remain open."
 
   - id: E01-T08
     priority: high
@@ -457,8 +457,8 @@ tasks:
     status: todo
     kind: actual_gap_plus_refinement
     title: "Unify form validation, normalization, defaults, and advanced-option disclosure"
-    refines_findings: [RUI010]
-    note: "The narrow RUI010 outer-whitespace regression was fixed and verified in 83c4e08. E01-T10 remains open for shared form state/components, numeric validation/default consistency, and the other forms listed below."
+    refines_findings: [RUI010, RUI013]
+    note: "The narrow RUI010 outer-whitespace regression was fixed and verified in 83c4e08. RUI013 records and closes the WOL reserved-port-0 gap with consistent 1..65535 domain, ViewModel, and UI validation. E01-T10 remains open for shared form state/components, broader numeric validation/default consistency, and the other forms listed below."
     source_evidence:
       - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/PingScreen.kt", lines: "350-476,481-600", detail: "Ping combines host input, recent chips, continuous mode, sliders, timeout chips, advanced options, and start/stop controls, but validation and disclosure are screen-local."}
       - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/TracerouteScreen.kt", lines: "321,347-351,462", detail: "The form rejects every space in the raw host string and disables Start, including surrounding whitespace that HostValidator.normalize already trims (RUI010)."}
@@ -494,6 +494,7 @@ tasks:
       - "P04/P10/P12 own domain validation semantics; E01 must call their validators or adapters instead of duplicating protocol rules."
       - "Do not persist secrets or raw SecureOn/SNMP credentials in general recent history."
     effort: "L (3-4 agent sessions)"
+    checkpoint: "RUI013 is closed: Wake-on-LAN rejects reserved destination port 0 consistently in the use case, ViewModel, and form, displays an inline 1..65535 error, and preserves ports 7 and 9. Focused use-case tests passed 7/7, ViewModel tests passed 12/12, and Android-test Kotlin compilation passed. E01-T10 remains open for shared form state, other fields, IME, rotation, and layout coverage."
 
   - id: E01-T11
     second_pass_review:

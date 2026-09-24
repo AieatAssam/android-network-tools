@@ -3,7 +3,9 @@ package net.aieat.netswissknife.app.ui.screens.lan
 import android.Manifest
 import android.os.Build
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
@@ -177,6 +179,46 @@ class LanScanScreenTest {
     }
 
     @Test
+    fun cancelingState_disablesActionsThenCanceledStateRetainsResultsAndActions() {
+        val summary = LanScanSummary(
+            subnet = "192.168.1.0/24",
+            totalScanned = 12,
+            aliveHosts = 1,
+            scanDurationMs = 900,
+            hosts = listOf(fakeHost("192.168.1.1")),
+        )
+        val stateFlow = MutableStateFlow<LanScanUiState>(LanScanUiState.Canceling(summary))
+        val recentSubnet = "10.0.0.0/24"
+        val viewModel = fakeViewModel(flow = stateFlow, recentSubnets = listOf(recentSubnet))
+        composeRule.setContent {
+            NetSwissKnifeTheme { LanScreen(viewModel = viewModel) }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        val cancelingCopy = composeRule.onAllNodesWithText(context.getString(R.string.lan_canceling_title))
+        cancelingCopy.assertCountEquals(2)
+        cancelingCopy.onFirst().assertIsNotEnabled()
+        composeRule.onAllNodesWithText(context.getString(R.string.lan_rescan_button)).assertCountEquals(0)
+        composeRule.onAllNodesWithText(context.getString(R.string.lan_clear_button)).assertCountEquals(0)
+        composeRule.onAllNodesWithText(context.getString(R.string.lan_stop_button)).assertCountEquals(0)
+        composeRule.onNodeWithText(recentSubnet).assertIsNotEnabled()
+        composeRule.onNodeWithContentDescription(context.getString(R.string.action_remove_recent)).assertIsNotEnabled()
+        composeRule.onNodeWithContentDescription(context.getString(R.string.action_clear_recents)).assertIsNotEnabled()
+
+        stateFlow.value = LanScanUiState.Canceled(summary)
+        composeRule.mainClock.advanceTimeBy(500L)
+
+        composeRule.onNodeWithText(context.getString(R.string.lan_scan_canceled_title)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.lan_scan_canceled_subtitle)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.lan_rescan_button)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.lan_clear_button)).assertIsDisplayed()
+        composeRule.onNodeWithText(recentSubnet).assertIsEnabled()
+        composeRule.onNodeWithContentDescription(context.getString(R.string.action_remove_recent)).assertIsEnabled()
+        composeRule.onNodeWithContentDescription(context.getString(R.string.action_clear_recents)).assertIsEnabled()
+        composeRule.onAllNodesWithText("192.168.1.0/24", substring = true).onFirst().assertIsDisplayed()
+    }
+
+    @Test
     fun expandedHost_offersPingActionForSelectedHost() {
         val ip = "192.168.1.50"
         val stateFlow = MutableStateFlow<LanScanUiState>(
@@ -291,7 +333,8 @@ class LanScanScreenTest {
     private fun fakeViewModel(
         state: LanScanUiState? = null,
         flow: MutableStateFlow<LanScanUiState>? = null,
-        subnet: String = "192.168.1.0/24"
+        subnet: String = "192.168.1.0/24",
+        recentSubnets: List<String> = emptyList(),
     ): LanScanViewModel {
         val viewModel = mockk<LanScanViewModel>(relaxed = true)
         every { viewModel.uiState } returns (flow ?: MutableStateFlow(state ?: LanScanUiState.Idle))
@@ -300,7 +343,7 @@ class LanScanScreenTest {
         every { viewModel.concurrency } returns MutableStateFlow(32)
         every { viewModel.isSubnetLoading } returns MutableStateFlow(false)
         every { viewModel.searchQuery } returns MutableStateFlow("")
-        every { viewModel.recentSubnets } returns MutableStateFlow(emptyList())
+        every { viewModel.recentSubnets } returns MutableStateFlow(recentSubnets)
         return viewModel
     }
 }
