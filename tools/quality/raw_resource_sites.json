@@ -42,16 +42,6 @@
       "status": "scope_registered_reviewed"
     },
     {
-      "id": "RR-005",
-      "file": "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/LanScanRepositoryImpl.kt",
-      "kind": "Socket",
-      "occurrence": 2,
-      "scope_seam": "Unused public DEFAULT_PORT_CHECKER constructs and locally closes a socket without OperationResourcesContext; scan production path uses createPortChecker instead",
-      "test_path": "core-network/src/test/kotlin/net/aieat/netswissknife/core/network/lan/LanScanRepositoryImplTest.kt",
-      "migration_owner": "E03-T01 / LAN scan legacy default cleanup",
-      "status": "legacy_unscoped"
-    },
-    {
       "id": "RR-006",
       "file": "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/UdpExchange.kt",
       "kind": "DatagramSocket",
@@ -80,16 +70,6 @@
       "test_path": "core-network/src/test/kotlin/net/aieat/netswissknife/core/network/portscan/PortScanRepositoryImplTest.kt",
       "migration_owner": "E03-T01 / Port Scan adapter",
       "status": "scope_registered_reviewed"
-    },
-    {
-      "id": "RR-010",
-      "file": "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/portscan/PortScanRepositoryImpl.kt",
-      "kind": "Socket",
-      "occurrence": 2,
-      "scope_seam": "Public defaultChecker overload supplies activeSocket=null and only does local cleanup; repository scan calls the private overload with a registered ActivePortScanSocket",
-      "test_path": "core-network/src/test/kotlin/net/aieat/netswissknife/core/network/portscan/PortScanRepositoryImplTest.kt",
-      "migration_owner": "E03-T01 / Port Scan public checker follow-up",
-      "status": "legacy_unscoped"
     },
     {
       "id": "RR-011",

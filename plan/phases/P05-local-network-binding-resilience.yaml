@@ -50,7 +50,7 @@ context:
     - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/wol/WakeOnLanRepositoryImpl.kt", lines: "789-793", note: "DatagramSocket() unbound" }
     - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/topology/Snmp4jClientImpl.kt", lines: "18, 36", note: "DefaultUdpTransportMapping() unbound" }
     - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/LanScanRepositoryImpl.kt", lines: "48-55, 62-72", note: "isReachable / Socket() unbound" }
-    - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/portscan/PortScanRepositoryImpl.kt", lines: "47-70", note: "Socket() unbound" }
+    - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/portscan/PortScanRepositoryImpl.kt", lines: "47-70", note: "Historical baseline: Socket() was created unbound here; current scans use a repository-owned operation-scoped checker" }
     - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/LocalNetworkPermission.kt", note: "requests NEARBY_WIFI_DEVICES on API 36+; no error mapping" }
     - { file: "AndroidManifest.xml", note: "ACCESS_NETWORK_STATE declared; unused for status" }
   desired_behaviour: |
@@ -110,7 +110,7 @@ design:
 
       Repositories gain a `binder: NetworkBinder = NoOpNetworkBinder` constructor param:
         LanScanRepositoryImpl (SocketTcpPresenceProbe/UdpExchange/port checker receive it),
-        PortScanRepositoryImpl.defaultChecker(timeout, clock, binder, host),
+        PortScanRepositoryImpl(binder = binder).scan(host, ports, timeout, concurrency, operationSession),
         WakeOnLanRepositoryImpl, Snmp4jClientImpl (via TopologyParams? no – via factory ctor),
         MdnsRepositoryImpl (app) uses binder.localInterface().
       Typed error: `class LocalNetworkPermissionDeniedException(cause: SecurityException)` thrown/mapped by

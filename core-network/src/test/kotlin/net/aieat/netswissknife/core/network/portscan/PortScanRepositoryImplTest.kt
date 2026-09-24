@@ -27,6 +27,7 @@ import java.util.Collections
 import java.net.InetAddress
 import java.net.Socket
 import java.net.SocketAddress
+import java.io.ByteArrayInputStream
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
@@ -36,49 +37,72 @@ import java.util.concurrent.atomic.AtomicInteger
 class PortScanRepositoryImplTest {
 
     @Test
-    fun `default checker binds only selected local sockets before connect`() {
+    fun `repository default socket checker binds selected local sockets before connect`() = runTest {
         val binder = FakeNetworkBinder(shouldBindResult = true)
         var boundBeforeConnect = false
+        var socketClosed = false
         val socket = object : Socket() {
             override fun connect(endpoint: SocketAddress?, timeout: Int) {
                 boundBeforeConnect = binder.boundTcpSockets.singleOrNull() === this
             }
-        }
 
-        val result = PortScanRepositoryImpl.defaultChecker(
-            timeoutMs = 100,
+            override fun getInputStream() = ByteArrayInputStream(ByteArray(0))
+
+            override fun close() {
+                socketClosed = true
+            }
+        }
+        val repo = PortScanRepositoryImpl(
+            hostResolver = { InetAddress.getByAddress(byteArrayOf(192.toByte(), 168.toByte(), 1, 7)) },
             binder = binder,
             socketFactory = { socket }
-        )(InetAddress.getByAddress(byteArrayOf(192.toByte(), 168.toByte(), 1, 7)), 80)
+        )
+        val updates = repo.scan("target", listOf(80), timeoutMs = 100, concurrency = 1).toList()
 
-        assertEquals(PortStatus.OPEN, result.status)
+        assertEquals(PortStatus.OPEN, updates.filterIsInstance<PortScanUpdate.PortResult>().single().result.status)
         assertTrue(boundBeforeConnect, "the selected socket must be bound before connect")
         assertEquals(listOf(socket), binder.boundTcpSockets)
-
-        val defaultRouteBinder = FakeNetworkBinder(shouldBindResult = false)
-        val unboundSocket = object : Socket() {
-            override fun connect(endpoint: SocketAddress?, timeout: Int) = Unit
-        }
-        PortScanRepositoryImpl.defaultChecker(
-            timeoutMs = 100,
-            binder = defaultRouteBinder,
-            socketFactory = { unboundSocket }
-        )(InetAddress.getByAddress(byteArrayOf(192.toByte(), 168.toByte(), 1, 7)), 80)
-        assertTrue(defaultRouteBinder.boundTcpSockets.isEmpty())
+        assertTrue(socketClosed, "repository scope must release a completed probe socket")
     }
 
     @Test
-    fun `default checker surfaces local permission denial from socket creation`() {
-        val checker = PortScanRepositoryImpl.defaultChecker(
-            timeoutMs = 100,
+    fun `repository default socket checker skips binding when destination stays on default route`() = runTest {
+        val binder = FakeNetworkBinder(shouldBindResult = false)
+        var connected = false
+        val socket = object : Socket() {
+            override fun connect(endpoint: SocketAddress?, timeout: Int) {
+                connected = true
+            }
+
+            override fun getInputStream() = ByteArrayInputStream(ByteArray(0))
+        }
+        val repo = PortScanRepositoryImpl(
+            hostResolver = { InetAddress.getByAddress(byteArrayOf(192.toByte(), 168.toByte(), 1, 7)) },
+            binder = binder,
+            socketFactory = { socket },
+        )
+
+        val updates = repo.scan("target", listOf(80), timeoutMs = 100, concurrency = 1).toList()
+
+        assertEquals(PortStatus.OPEN, updates.filterIsInstance<PortScanUpdate.PortResult>().single().result.status)
+        assertTrue(connected, "the repository must continue probing over the default route")
+        assertTrue(binder.boundTcpSockets.isEmpty(), "shouldBind=false must skip NetworkBinder.bind")
+    }
+
+    @Test
+    fun `repository default socket checker surfaces local permission denial`() = runTest {
+        val repo = PortScanRepositoryImpl(
+            hostResolver = { InetAddress.getLoopbackAddress() },
             binder = FakeNetworkBinder(shouldBindResult = true),
             socketFactory = { throw SecurityException("permission denied") }
         )
 
-        val error = assertThrows(LocalNetworkPermissionDeniedException::class.java) {
-            checker(InetAddress.getLoopbackAddress(), 80)
-        }
-        assertEquals("permission denied", error.cause?.message)
+        val error = runCatching {
+            repo.scan("localhost", listOf(80), timeoutMs = 100, concurrency = 1).toList()
+        }.exceptionOrNull()
+        val permissionError = error as? LocalNetworkPermissionDeniedException
+        assertNotNull(permissionError)
+        assertEquals("permission denied", permissionError?.cause?.message)
     }
 
     @Test

@@ -129,18 +129,6 @@ class LanScanRepositoryImpl(
             runCatching { java.io.File("/proc/net/arp").readText() }.getOrDefault("")
         }
 
-        val DEFAULT_PORT_CHECKER: PortChecker = { ip, port, timeoutMs ->
-            var socket: Socket? = null
-            try {
-                socket = Socket()
-                socket.connect(InetSocketAddress(ip, port), timeoutMs.coerceAtMost(500))
-                true
-            } catch (_: Exception) {
-                false
-            } finally {
-                runCatching { socket?.close() }
-            }
-        }
     }
 
     override fun scan(request: LanScanRequest): Flow<LanScanUpdate> = flow {

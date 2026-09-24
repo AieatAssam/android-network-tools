@@ -67,7 +67,7 @@ context:
          arbitrary address is flagged wrong and the actual gateway is not flagged.
       4. OuiDatabase.kt has 91 prefixes; entry "3C:5A:B4" -> "Google" is filed under "// Apple".
   evidence:
-    - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/LanScanRepositoryImpl.kt", lines: "48-66", note: "DEFAULT_HOST_CHECKER (isReachable), DEFAULT_ARP_READER (/proc/net/arp), DEFAULT_PORT_CHECKER" }
+    - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/LanScanRepositoryImpl.kt", lines: "48-66", note: "DEFAULT_HOST_CHECKER (isReachable), DEFAULT_ARP_READER (/proc/net/arp); quick-port checks are now created inside the operation ResourceScope" }
     - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/LanScanRepositoryImpl.kt", lines: "75-83", note: "ARP read before probing; gateway = ips.firstOrNull()" }
     - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/LanScanRepositoryImpl.kt", lines: "150-167", note: "buildHost: mac from stale arpMap, rDNS, QUICK_PORTS scan" }
     - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/OuiDatabase.kt", note: "91 entries; mislabelled 3C:5A:B4" }
@@ -148,7 +148,7 @@ design:
         tcpProbe: TcpPresenceProbe = SocketTcpPresenceProbe(),   // java.net.Socket default
         nameProbes: List<NameProbe> = listOf(ReverseDnsNameProbe(), NetBiosNameProbe(), MdnsReverseNameProbe()),
         macResolver: MacResolver = ArpFileMacResolver(),
-        portChecker: PortChecker = DEFAULT_PORT_CHECKER,          // unchanged
+        portChecker: PortChecker? = null,                         // null selects the operation-scoped repository default
         clock: MonotonicClock = SystemMonotonicClock,
     )
 
@@ -265,7 +265,7 @@ tasks:
           - "Probe ports sequentially with per-port timeout = min(timeoutMs, 400); return early on Open or Refused."
         run: "./gradlew :core-network:test --no-daemon"
         expect: "PASS"
-      refactor: ["Share the Socket-connect lambda with PortScanRepositoryImpl.defaultChecker if trivially possible; otherwise leave (avoid cross-package coupling)."]
+      refactor: ["Keep LAN quick-port checks operation-scoped through the repository's internal checker; do not expose a standalone unscoped socket helper."]
     acceptance_criteria: ["4 tests green; no Android imports."]
 
   - id: P01-T3

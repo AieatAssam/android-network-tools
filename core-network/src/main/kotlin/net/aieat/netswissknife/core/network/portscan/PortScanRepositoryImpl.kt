@@ -62,26 +62,19 @@ class PortScanRepositoryImpl(
         /**
          * Returns a TCP checker that uses [timeoutMs] for the connection timeout.
          */
-        fun defaultChecker(
-            timeoutMs: Int,
-            clock: MonotonicClock = SystemMonotonicClock,
-            binder: NetworkBinder = NoOpNetworkBinder,
-            socketFactory: () -> Socket = { Socket() },
-        ): PortConnectChecker = defaultChecker(timeoutMs, clock, binder, socketFactory, null)
-
-        private fun defaultChecker(
+        private fun scopedDefaultChecker(
             timeoutMs: Int,
             clock: MonotonicClock,
             binder: NetworkBinder,
             socketFactory: () -> Socket,
-            activeSocket: ActivePortScanSocket?,
+            activeSocket: ActivePortScanSocket,
         ): PortConnectChecker = { address, port ->
             val start = clock.nowNanos()
             var socket: Socket? = null
             try {
                 socket = binder.newTcpSocket(address.hostAddress) {
                     socketFactory().also { created ->
-                        if (activeSocket != null && !activeSocket.attach(created)) {
+                        if (!activeSocket.attach(created)) {
                             throw CancellationException("Port scan stopped")
                         }
                     }
@@ -117,7 +110,7 @@ class PortScanRepositoryImpl(
                 PortConnectResult(PortStatus.FILTERED, clock.elapsedMillisSince(start), null)
             } finally {
                 try { socket?.close() } catch (_: Exception) {}
-                socket?.let { activeSocket?.detach(it) }
+                socket?.let(activeSocket::detach)
             }
         }
     }
@@ -210,7 +203,7 @@ class PortScanRepositoryImpl(
                 send(PortScanUpdate.Started(resolvedIp = resolvedIp, totalCount = ports.size))
                 val workers = socketSlots.map { socketSlot ->
                     launch(Dispatchers.IO) {
-                        val effectiveChecker = checker ?: defaultChecker(
+                        val effectiveChecker = checker ?: scopedDefaultChecker(
                             timeoutMs = timeoutMs,
                             clock = clock,
                             binder = binder,
