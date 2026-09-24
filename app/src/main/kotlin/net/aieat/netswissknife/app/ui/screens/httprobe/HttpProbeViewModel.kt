@@ -58,6 +58,8 @@ data class HttpProbeUiState(
     val body: String = "",
     val followRedirects: Boolean = true,
     val isLoading: Boolean = false,
+    val isCanceling: Boolean = false,
+    val isCanceled: Boolean = false,
     val result: HttpProbeResult? = null,
     val error: String? = null,
     val pendingEntityReplayApproval: PendingEntityReplayApproval? = null,
@@ -227,7 +229,16 @@ class HttpProbeViewModel @Inject constructor(
                 recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_HTTP_HOSTS, safeOrigin)
             }
         }
-        _uiState.update { it.copy(isLoading = true, result = null, error = null, selectedTab = 0) }
+        _uiState.update {
+            it.copy(
+                isLoading = true,
+                isCanceling = false,
+                isCanceled = false,
+                result = null,
+                error = null,
+                selectedTab = 0,
+            )
+        }
         val runId = UUID.randomUUID().toString()
         val session = HttpProbeOperation.newSession()
         operationSession = session
@@ -281,28 +292,56 @@ class HttpProbeViewModel @Inject constructor(
                     when (result) {
                         is NetworkResult.Success -> current.copy(
                             isLoading = false,
+                            isCanceling = false,
+                            isCanceled = false,
                             result = result.data,
                             pendingEntityReplayApproval = null,
                             selectedTab = 0
                         )
                         is NetworkResult.Error -> current.copy(
                             isLoading = false,
+                            isCanceling = false,
+                            isCanceled = false,
                             pendingEntityReplayApproval = null,
                             error = result.message
                         )
                     }
                 }
             } catch (e: CancellationException) {
+                if (session.cancellationReason == CancellationReason.USER_STOP) {
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            isCanceling = false,
+                            isCanceled = true,
+                            pendingEntityReplayApproval = null,
+                        )
+                    }
+                }
                 throw e
             } catch (e: Exception) {
                 val detail = e.message?.trim().takeUnless { it.isNullOrEmpty() }
                     ?: e::class.simpleName
                     ?: "Unknown request error"
-                _uiState.update { it.copy(isLoading = false, pendingEntityReplayApproval = null, error = "Request failed: $detail") }
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        isCanceling = false,
+                        isCanceled = false,
+                        pendingEntityReplayApproval = null,
+                        error = "Request failed: $detail",
+                    )
+                }
             } finally {
                 if (operationSession === session) operationSession = null
             }
         }
+    }
+
+    fun cancel() {
+        if (!_uiState.value.isLoading || _uiState.value.isCanceling || operationSession == null) return
+        _uiState.update { it.copy(isCanceling = true) }
+        cancelRequest(CancellationReason.USER_STOP)
     }
 
     private fun cancelRequest(reason: CancellationReason) {

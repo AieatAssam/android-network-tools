@@ -55,6 +55,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Surface
@@ -90,6 +91,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -226,6 +230,7 @@ fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
                     onHeaderKeyChange = viewModel::updateHeaderKey,
                     onHeaderValueChange = viewModel::updateHeaderValue,
                     onSend = viewModel::send,
+                    onCancel = viewModel::cancel,
                     onRemoveRecentHost = viewModel::removeRecentHost,
                     onClearRecentHosts = viewModel::clearRecentHosts
                 )
@@ -256,6 +261,7 @@ fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
             item {
                 val displayState: DisplayState = when {
                     uiState.isLoading     -> DisplayState.Loading
+                    uiState.isCanceled    -> DisplayState.Canceled
                     uiState.error != null -> DisplayState.Error(uiState.error!!)
                     uiState.result != null -> DisplayState.Success(uiState.result!!)
                     else                  -> DisplayState.Idle
@@ -269,6 +275,7 @@ fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
                     when (state) {
                         is DisplayState.Idle    -> HttpProbeIdlePlaceholder()
                         is DisplayState.Loading -> HttpProbeLoadingContent()
+                        is DisplayState.Canceled -> HttpProbeCanceledContent()
                         is DisplayState.Error   -> HttpProbeErrorContent(state.message) { viewModel.send() }
                         is DisplayState.Success -> {
                             val shareSubject = stringResource(R.string.share_subject_http, state.result.request.url)
@@ -365,6 +372,7 @@ private fun CrossOriginEntityReplayApprovalCard(
 private sealed class DisplayState {
     object Idle : DisplayState()
     object Loading : DisplayState()
+    object Canceled : DisplayState()
     data class Error(val message: String) : DisplayState()
     data class Success(val result: HttpProbeResult) : DisplayState()
 }
@@ -398,6 +406,7 @@ private fun HttpProbeInputCard(
     onHeaderKeyChange: (Int, String) -> Unit,
     onHeaderValueChange: (Int, String) -> Unit,
     onSend: () -> Unit,
+    onCancel: () -> Unit,
     onRemoveRecentHost: (String) -> Unit,
     onClearRecentHosts: () -> Unit
 ) {
@@ -591,30 +600,49 @@ private fun HttpProbeInputCard(
                 )
             }
 
-            // Send button
-            Button(
-                onClick = hapticAction {
-                    focusManager.clearFocus()
-                    onSend()
-                },
-                enabled = uiState.url.isNotBlank() && !uiState.isLoading && !isUrlInvalid,
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary
-                )
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                if (uiState.isLoading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(18.dp),
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        strokeWidth = 2.dp
+                Button(
+                    onClick = hapticAction {
+                        focusManager.clearFocus()
+                        onSend()
+                    },
+                    enabled = uiState.url.isNotBlank() && !uiState.isLoading && !isUrlInvalid,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary
                     )
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.httprobe_sending))
-                } else {
-                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.httprobe_send_button))
+                ) {
+                    if (uiState.isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.httprobe_sending))
+                    } else {
+                        Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.httprobe_send_button))
+                    }
+                }
+                if (uiState.isLoading) {
+                    OutlinedButton(
+                        onClick = onCancel,
+                        enabled = !uiState.isCanceling,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(
+                            stringResource(
+                                if (uiState.isCanceling) R.string.httprobe_stopping
+                                else R.string.httprobe_cancel_request,
+                            ),
+                        )
+                    }
                 }
             }
         }
@@ -649,6 +677,21 @@ private fun HttpProbeIdlePlaceholder() {
                 textAlign = TextAlign.Center
             )
         }
+    }
+}
+
+@Composable
+private fun HttpProbeCanceledContent() {
+    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = stringResource(R.string.httprobe_request_canceled),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp)
+                .semantics { liveRegion = LiveRegionMode.Polite },
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

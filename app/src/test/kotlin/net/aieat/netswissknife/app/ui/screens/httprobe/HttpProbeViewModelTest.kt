@@ -8,11 +8,15 @@ import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
 import net.aieat.netswissknife.app.ui.navigation.HostTool
@@ -29,7 +33,11 @@ import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.httprobe.HttpMethod
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeRequest
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeResult
+import net.aieat.netswissknife.core.network.httprobe.HttpProbeRepository
 import net.aieat.netswissknife.core.network.httprobe.CrossOriginEntityReplay
+import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationRunner
+import net.aieat.netswissknife.core.network.operation.OperationSession
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -41,6 +49,8 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @DisplayName("HttpProbeViewModel")
@@ -455,6 +465,69 @@ class HttpProbeViewModelTest {
             val firstResult = viewModel.uiState.value.result
             viewModel.send()
             assertEquals(firstResult, viewModel.uiState.value.result)
+        }
+
+        @Test
+        fun `user cancel stays stopping until operation cleanup then shows canceled`() = runTest {
+            val operationEntered = CompletableDeferred<Unit>()
+            val cleanupStarted = CompletableDeferred<Unit>()
+            val allowCleanupToFinish = CountDownLatch(1)
+            lateinit var capturedSession: OperationSession
+            val repository = object : HttpProbeRepository {
+                override suspend fun probe(request: HttpProbeRequest): NetworkResult<HttpProbeResult> =
+                    error("The session-aware path is required")
+
+                override suspend fun probe(
+                    request: HttpProbeRequest,
+                    operationSession: OperationSession,
+                ): NetworkResult<HttpProbeResult> = OperationRunner.run(operationSession) {
+                    capturedSession = operationSession
+                    operationSession.resources.register(AutoCloseable {
+                        cleanupStarted.complete(Unit)
+                        check(allowCleanupToFinish.await(10, TimeUnit.SECONDS)) {
+                            "test did not release HTTP operation cleanup"
+                        }
+                    })
+                    operationEntered.complete(Unit)
+                    awaitCancellation()
+                }
+            }
+            val cancelViewModel = HttpProbeViewModel(
+                HttpProbeUseCase(repository),
+                recentHostsRepository,
+            )
+            cancelViewModel.onUrlChange("https://example.com")
+            cancelViewModel.send()
+
+            try {
+                assertTrue(operationEntered.isCompleted)
+                assertTrue(cancelViewModel.uiState.value.isLoading)
+                assertFalse(cancelViewModel.uiState.value.isCanceling)
+
+                cancelViewModel.cancel()
+                assertTrue(cancelViewModel.uiState.value.isLoading)
+                assertTrue(cancelViewModel.uiState.value.isCanceling)
+                assertFalse(cancelViewModel.uiState.value.isCanceled)
+
+                cancelViewModel.cancel()
+                withContext(Dispatchers.Default.limitedParallelism(1)) {
+                    withTimeout(5_000) { cleanupStarted.await() }
+                }
+                assertTrue(cancelViewModel.uiState.value.isLoading)
+                assertTrue(cancelViewModel.uiState.value.isCanceling)
+            } finally {
+                allowCleanupToFinish.countDown()
+                cancelViewModel.cancel()
+            }
+
+            val canceledState = withContext(Dispatchers.Default.limitedParallelism(1)) {
+                withTimeout(5_000) { cancelViewModel.uiState.first { it.isCanceled } }
+            }
+            assertFalse(canceledState.isLoading)
+            assertFalse(canceledState.isCanceling)
+            assertNull(canceledState.result)
+            assertNull(canceledState.error)
+            assertEquals(CancellationReason.USER_STOP, capturedSession.cancellationReason)
         }
     }
 

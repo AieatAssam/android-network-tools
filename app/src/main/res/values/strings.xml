@@ -617,12 +617,15 @@
     <string name="httprobe_cross_origin_replay_deny">Cancel redirect</string>
     <string name="httprobe_send_button">Send Request</string>
     <string name="httprobe_sending">Sending…</string>
+    <string name="httprobe_cancel_request">Cancel</string>
+    <string name="httprobe_stopping">Stopping…</string>
 
     <!-- HTTP Probe States -->
     <string name="httprobe_idle_title">Enter a URL to probe</string>
     <string name="httprobe_idle_subtitle">Supports GET, POST, PUT, PATCH, DELETE, HEAD, and OPTIONS. Includes security header analysis.</string>
     <string name="httprobe_error_title">Request failed</string>
     <string name="httprobe_retry">Retry</string>
+    <string name="httprobe_request_canceled">Request canceled</string>
 
     <!-- HTTP Probe Tabs -->
     <string name="httprobe_tab_overview">Overview</string>

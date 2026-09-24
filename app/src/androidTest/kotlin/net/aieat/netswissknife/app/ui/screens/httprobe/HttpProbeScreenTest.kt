@@ -95,6 +95,76 @@ class HttpProbeScreenTest {
     }
 
     @Test
+    fun loadingState_showsCancelAction() {
+        val viewModel = fakeViewModel(
+            HttpProbeUiState(url = "https://example.com", isLoading = true),
+        )
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                HttpProbeScreen(viewModel = viewModel)
+            }
+        }
+
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        composeRule
+            .onNodeWithText(context.getString(R.string.httprobe_cancel_request))
+            .performScrollTo()
+            .assertIsDisplayed()
+            .performClick()
+
+        verify { viewModel.cancel() }
+    }
+
+    @Test
+    fun cancelingState_showsStoppingAction() {
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                HttpProbeScreen(
+                    viewModel = fakeViewModel(
+                        HttpProbeUiState(
+                            url = "https://example.com",
+                            isLoading = true,
+                            isCanceling = true,
+                        ),
+                    ),
+                )
+            }
+        }
+
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        composeRule
+            .onNodeWithText(context.getString(R.string.httprobe_stopping))
+            .performScrollTo()
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun canceledState_showsRequestCanceledMessage() {
+        val viewModel = fakeViewModel(
+            HttpProbeUiState(url = "https://example.com", isCanceled = true),
+        )
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                HttpProbeScreen(viewModel = viewModel)
+            }
+        }
+
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        composeRule
+            .onNodeWithTag(HttpProbeScreenTestTags.CONTENT_LIST)
+            .performScrollToIndex(HttpProbeScreenTestTags.RESULT_PANEL_INDEX)
+        composeRule
+            .onNodeWithText(context.getString(R.string.httprobe_request_canceled))
+            .assertIsDisplayed()
+        composeRule
+            .onNodeWithText(context.getString(R.string.httprobe_send_button))
+            .performScrollTo()
+            .performClick()
+
+        verify { viewModel.send() }
+    }
+
+    @Test
     fun mdnsHandoff_showsEditablePrefillAndSourceWithoutSending() {
         val viewModel = mockk<HttpProbeViewModel>(relaxed = true)
         every { viewModel.uiState } returns MutableStateFlow(
