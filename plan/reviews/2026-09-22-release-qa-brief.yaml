@@ -44,8 +44,8 @@ brief_items:
     route: "E01-T07/E01-T09 and existing P02 topology ownership; RUI012."
   - id: ISS-22
     disposition: tracked_device_check
-    evidence: "A repository regression injects joinGroup 'setsockopt failed: ENODEV' and verifies propagation plus socket/multicast-lock cleanup; the API 36 mDNS screen suite passed 6/6, including error display and Dismiss. MdnsRepositoryImpl still binds port 5353 without selecting the active Wi-Fi interface. Its broad sendQuery/receivePacket catches can also turn packet-I/O failures into a successful empty scan, already tracked by RAPP004. API 33 ENODEV and physical Wi-Fi checks were unavailable."
-    route: "P05-T4/P05-T5 for interface and fixed-port behavior; RAPP004 for swallowed packet-I/O failures. Do not add a duplicate mDNS finding."
+    evidence: "Historical note from the 2026-09-22 audit: at that snapshot, active-interface binding and packet-I/O error propagation were reported as missing. These claims were superseded by subsequent work: P05-T4 now binds through NetworkBinder.localInterface(), and RAPP004 now propagates typed mDNS packet-I/O failures instead of reporting a successful empty scan. Current source/unit coverage verifies ENODEV propagation and socket/multicast-lock cleanup, while Compose coverage verifies error display and Dismiss. API 33 ENODEV and physical Wi-Fi behavior remain unverified."
+    route: "Current status is tracked in plan/reviews/2026-09-23-release-qa-brief.yaml. P05-T4 interface binding and RAPP004 error propagation are implemented; retain only API 33 ENODEV and physical-Wi-Fi checks. Do not add a duplicate mDNS finding."
 
 findings:
   - id: RUI010
