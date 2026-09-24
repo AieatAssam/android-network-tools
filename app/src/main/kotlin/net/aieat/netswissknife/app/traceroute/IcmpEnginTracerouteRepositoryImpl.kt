@@ -49,6 +49,7 @@ class IcmpEnginTracerouteRepositoryImpl(
         Int,
     ) -> Flow<HopResult> = ::nativeTrace,
     private val reverseDnsLookup: TracerouteReverseDnsLookup = BoundedTracerouteReverseDnsLookup(),
+    private val hostResolver: TracerouteHostResolver = BoundedTracerouteHostResolver(),
 ) : TracerouteRepository {
 
     override fun trace(
@@ -67,7 +68,7 @@ class IcmpEnginTracerouteRepositoryImpl(
                 probesPerHop,
                 probeType,
                 packetSize,
-                TracerouteOperation.newSession(maxHops, timeoutMs),
+                TracerouteOperation.newSession(maxHops, timeoutMs, probesPerHop),
             )
         )
     }.flowOn(Dispatchers.IO)
@@ -82,9 +83,26 @@ class IcmpEnginTracerouteRepositoryImpl(
         operationSession: OperationSession,
     ): Flow<HopResult> = channelFlow {
         OperationRunner.runOrJoin(operationSession) {
+            val remainingMillis = operationSession.budget.remainingTimeoutMillis()
+            if (operationSession.budget.hasDeadline && remainingMillis <= 0L) {
+                throw OperationDeadlineExceededException()
+            }
+            val resolutionBudgetMillis = if (operationSession.budget.hasDeadline) {
+                minOf(MAX_HOSTNAME_RESOLUTION_WAIT_MILLIS, remainingMillis)
+            } else {
+                MAX_HOSTNAME_RESOLUTION_WAIT_MILLIS
+            }
+            val resolvedHost = withTimeoutOrNull(resolutionBudgetMillis) {
+                hostResolver.resolve(host, operationSession)
+            } ?: run {
+                operationSession.budget.throwIfExpired()
+                throw TracerouteHostResolutionTimeoutException()
+            }
+            currentCoroutineContext().ensureActive()
+            operationSession.budget.throwIfExpired()
             val nativeFlow = try {
                 nativeTraceFactory(
-                    host,
+                    resolvedHost,
                     maxHops,
                     timeoutMs,
                     probesPerHop,
@@ -131,6 +149,9 @@ class IcmpEnginTracerouteRepositoryImpl(
     }.flowOn(Dispatchers.IO)
 
 }
+
+/** Stable failure when the bounded hostname lookup reaches its independent time limit. */
+class TracerouteHostResolutionTimeoutException : Exception("Hostname lookup timed out")
 
 private fun nativeTrace(
     host: String,

@@ -106,6 +106,15 @@ class TracerouteViewModel @Inject constructor(
     /** Incremented each time a new trace is started; guards against stale emissions. */
     private var traceGeneration = 0
 
+    /** Injectable for deterministic deadline tests; production budgets remain request-derived. */
+    internal var operationSessionFactory: (TracerouteParams) -> OperationSession = { params ->
+        TracerouteOperation.newSession(
+            params.maxHops,
+            params.timeoutMs,
+            params.probesPerHop,
+        )
+    }
+
     // ── User actions ─────────────────────────────────────────────────────────
 
     fun onHostChange(value: String)          { _host.value = value }
@@ -190,9 +199,14 @@ class TracerouteViewModel @Inject constructor(
             return
         }
 
-        if (TracerouteOperation.requestedTimeoutMillis(_maxHops.value, _timeoutMs.value) == null) {
+        if (TracerouteOperation.requestedTimeoutMillis(
+                _maxHops.value,
+                _timeoutMs.value,
+                _probesPerHop.value,
+            ) == null
+        ) {
             _uiState.value = TracerouteUiState.Error(
-                "Requested trace exceeds the 15-minute time limit; reduce max hops or per-hop timeout",
+                "Requested trace exceeds the 20-minute time limit; reduce max hops, probes per hop, or timeout",
             )
             return
         }
@@ -212,7 +226,7 @@ class TracerouteViewModel @Inject constructor(
             probeType     = _probeType.value,
             packetSize    = _packetSize.value
         )
-        val session = TracerouteOperation.newSession(params.maxHops, params.timeoutMs)
+        val session = operationSessionFactory(params)
         traceSession = session
         val trimmedHost = params.host
         val startedAtNanos = System.nanoTime()

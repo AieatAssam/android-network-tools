@@ -39,10 +39,32 @@ import org.snmp4j.util.TreeListener
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import net.aieat.netswissknife.core.network.net.LocalNetworkPermissionDeniedException
 import net.aieat.netswissknife.core.network.net.NetworkBinder
 import net.aieat.netswissknife.core.network.net.NoOpNetworkBinder
 import net.aieat.netswissknife.core.network.net.newUdpSocket
+import net.aieat.netswissknife.core.network.operation.OperationDeadline
+import net.aieat.netswissknife.core.network.operation.OperationDeadlineExceededException
+
+fun interface TopologyHostnameResolver {
+    fun resolve(hostname: String): InetAddress
+}
+
+fun interface AuthoritativeEngineIdDiscoverer {
+    fun discover(snmp: Snmp, address: UdpAddress, timeoutMillis: Long): ByteArray?
+}
+
+fun interface TopologyTransportFactory {
+    fun create(params: TopologyParams, binder: NetworkBinder): DefaultUdpTransportMapping
+}
+
+fun interface TopologyTransportStarter {
+    fun start(transport: DefaultUdpTransportMapping)
+}
 
 /**
  * One SNMP4J transport/session for one topology discovery run.
@@ -54,62 +76,139 @@ import net.aieat.netswissknife.core.network.net.newUdpSocket
 class Snmp4jClientImpl(
     private val sessionParams: TopologyParams,
     private val binder: NetworkBinder = NoOpNetworkBinder,
+    private val operationDeadline: OperationDeadline? = null,
+    private val hostnameResolver: TopologyHostnameResolver = TopologyHostnameResolver(InetAddress::getByName),
+    private val engineIdDiscoverer: AuthoritativeEngineIdDiscoverer =
+        AuthoritativeEngineIdDiscoverer { client, address, timeout ->
+            client.discoverAuthoritativeEngineID(address, timeout)
+        },
+    private val transportFactory: TopologyTransportFactory = TopologyTransportFactory { params, networkBinder ->
+        createTopologyTransport(params, networkBinder)
+    },
+    private val transportStarter: TopologyTransportStarter = TopologyTransportStarter { it.listen() },
+    private val deferInitialization: Boolean = false,
 ) : SnmpClient {
 
-    private val transport = createTransport()
-    private val snmp = Snmp(transport)
+    @Volatile private var transport: DefaultUdpTransportMapping? = null
+    @Volatile private var snmp: Snmp? = null
+    @Volatile private var initialized = false
+    @Volatile private var initializationStarted = false
+    @Volatile private var initializationAborted = false
+    @Volatile private var initializationFailure: Throwable? = null
     private val targetCache = ConcurrentHashMap<String, Target<*>>()
     private val authoritativeEngineIdCache = ConcurrentHashMap<String, ByteArray>()
-    private val authoritativeEngineIdDiscoveryAttempts = ConcurrentHashMap.newKeySet<String>()
-    @Volatile
-    private var closed = false
+    private val targetAddressCache = ConcurrentHashMap<String, InetAddress>()
+    private val targetAddressFailures = ConcurrentHashMap<String, SnmpRequestException>()
+    private val authoritativeEngineIdDiscoveries = ConcurrentHashMap<String, CompletableDeferred<Unit>>()
+    @Volatile private var closed = false
+    private val initializationLock = Any()
+    private val initializationMutex = Mutex()
 
-    internal val pendingAsyncRequestCount: Int get() = snmp.pendingAsyncRequestCount
+    internal val pendingAsyncRequestCount: Int get() = snmp?.pendingAsyncRequestCount ?: 0
 
     init {
+        if (!deferInitialization) initializeBlocking()
+    }
+
+    private fun initializeBlocking() {
+        check(!closed) { "SNMP client is closed" }
+        val createdTransport = transportFactory.create(sessionParams, binder)
+        val createdSnmp: Snmp
+        synchronized(initializationLock) {
+            if (closed || initializationAborted) {
+                runCatching { createdTransport.close() }
+                throw CancellationException("SNMP client is closed")
+            }
+            transport = createdTransport
+            createdSnmp = Snmp(createdTransport)
+            snmp = createdSnmp
+        }
         try {
             if (sessionParams.snmpVersion == SnmpVersion.V3) {
                 ensureSecurityProtocols()
                 ensureUsmSecurityModel()
                 val spec = UsmUserSpecFactory.from(sessionParams)
-                snmp.getUSM().addUser(spec.toUsmUser())
+                createdSnmp.getUSM().addUser(spec.toUsmUser())
             }
-            transport.listen()
+            // The repository registers this client before deferred initialization starts, so
+            // cancellation can close the mapping while listen/setup is blocked.
+            transportStarter.start(createdTransport)
+            val canPublish = synchronized(initializationLock) {
+                if (closed || initializationAborted) {
+                    false
+                } else {
+                    initialized = true
+                    true
+                }
+            }
+            if (!canPublish) {
+                // listen() can recreate DefaultUdpTransportMapping.socket after the owner closed
+                // it while startup was blocked. Close the raw mapping again after this late call;
+                // Snmp.close() is not sufficient because it can be idempotent across that reopen.
+                runCatching { createdTransport.close() }
+                throw CancellationException("SNMP client initialization was cancelled")
+            }
         } catch (failure: Throwable) {
-            closed = true
-            try {
-                snmp.close()
-            } catch (closeFailure: Throwable) {
-                if (closeFailure !== failure) failure.addSuppressed(closeFailure)
-            }
+            close()
             throw failure
         }
     }
 
-    private fun createTransport(): DefaultUdpTransportMapping = try {
-        if (binder.shouldBind(sessionParams.targetIp)) {
-            BoundUdpTransportMapping(binder, sessionParams.targetIp)
-        } else {
-            DefaultUdpTransportMapping()
+    private suspend fun ensureInitialized() {
+        initializationFailure?.let { throw it }
+        if (initialized) return
+        initializationMutex.withLock {
+            initializationFailure?.let { throw it }
+            if (initialized) return
+            if (closed) throw CancellationException("SNMP client is closed")
+            check(!initializationStarted) { "SNMP client initialization is already in progress" }
+            initializationStarted = true
+            try {
+                if (operationDeadline == null) {
+                    withContext(Dispatchers.IO) { initializeBlocking() }
+                } else {
+                    TopologyBlockingCall.run(
+                        deadline = operationDeadline,
+                        requestTimeoutMillis = sessionParams.timeoutMs.toLong(),
+                        timeoutMessage = "SNMP transport initialization timed out after ${sessionParams.timeoutMs} ms",
+                    ) { initializeBlocking() }
+                }
+            } catch (failure: Throwable) {
+                // The worker may ignore interruption and return later. Make this attempt terminal
+                // before releasing the mutex, then close its currently owned transport. Any
+                // transport allocated after close is rejected and closed by initializeBlocking.
+                synchronized(initializationLock) {
+                    initializationAborted = true
+                    initializationFailure = failure
+                }
+                close()
+                throw failure
+            }
         }
-    } catch (error: SecurityException) {
-        throw LocalNetworkPermissionDeniedException(error)
     }
 
     @OptIn(InternalCoroutinesApi::class)
     override suspend fun get(target: SnmpTarget, oid: String): String? {
+        ensureInitialized()
+        val activeSnmp = checkNotNull(snmp)
         val (snmpTarget, pdu) = withContext(Dispatchers.IO) {
             check(!closed) { "SNMP client is closed" }
             val pdu = (if (sessionParams.snmpVersion == SnmpVersion.V3) ScopedPDU() else PDU()).apply {
                 type = PDU.GET
                 add(VariableBinding(OID(oid)))
             }
-            val snmpTarget = try {
+            val (snmpTarget, address) = try {
                 targetFor(target)
+            } catch (deadline: OperationDeadlineExceededException) {
+                throw deadline
+            } catch (cancellation: kotlinx.coroutines.CancellationException) {
+                throw cancellation
+            } catch (failure: SnmpRequestException) {
+                throw failure
             } catch (error: Exception) {
                 throw SnmpRequestException.unresolved(target, error)
             }
-            ensureAuthoritativeEngineId(target)
+            ensureAuthoritativeEngineId(target, address)
             snmpTarget to pdu
         }
 
@@ -131,13 +230,13 @@ class Snmp4jClientImpl(
 
             continuation.invokeOnCancellation {
                 synchronized(requestLock) {
-                    if (requestSubmitted) snmp.cancel(pdu, listener)
+                    if (requestSubmitted) activeSnmp.cancel(pdu, listener)
                 }
             }
             synchronized(requestLock) {
                 if (!continuation.isActive) return@suspendCancellableCoroutine
                 try {
-                    snmp.get(pdu, snmpTarget, null, listener)
+                    activeSnmp.get(pdu, snmpTarget, null, listener)
                     requestSubmitted = true
                 } catch (error: Exception) {
                     val token = continuation.tryResumeWithException(error) ?: return@suspendCancellableCoroutine
@@ -179,16 +278,24 @@ class Snmp4jClientImpl(
         oidPrefix: String,
         budget: SnmpWalkBudget
     ): SnmpWalkResult {
+        ensureInitialized()
+        val activeSnmp = checkNotNull(snmp)
         val (snmpTarget, treeUtils) = withContext(Dispatchers.IO) {
             check(!closed) { "SNMP client is closed" }
-            val treeUtils = TreeUtils(snmp, DefaultPDUFactory())
+            val treeUtils = TreeUtils(activeSnmp, DefaultPDUFactory())
             treeUtils.maxRepetitions = budget.maxRepetitions
-            val snmpTarget = try {
+            val (snmpTarget, address) = try {
                 targetFor(target)
+            } catch (deadline: OperationDeadlineExceededException) {
+                throw deadline
+            } catch (cancellation: kotlinx.coroutines.CancellationException) {
+                throw cancellation
+            } catch (failure: SnmpRequestException) {
+                throw failure
             } catch (error: Exception) {
                 throw SnmpRequestException.unresolved(target, error)
             }
-            ensureAuthoritativeEngineId(target)
+            ensureAuthoritativeEngineId(target, address)
             snmpTarget to treeUtils
         }
 
@@ -216,57 +323,113 @@ class Snmp4jClientImpl(
 
     override fun close() {
         if (closed) return
-        closed = true
-        runCatching { snmp.close() }
+        val (currentSnmp, currentTransport) = synchronized(initializationLock) {
+            if (closed) return
+            closed = true
+            snmp to transport
+        }
+        if (currentSnmp != null) runCatching { currentSnmp.close() }
+        else runCatching { currentTransport?.close() }
     }
 
-    private fun targetFor(target: SnmpTarget): Target<*> =
-        targetCache.getOrPut("${target.ip}:${target.port}") { buildTarget(target) }
+    private suspend fun targetFor(target: SnmpTarget): Pair<Target<*>, UdpAddress> {
+        val key = "${target.ip}:${target.port}"
+        val cachedAddress = targetAddressCache[key]
+        val cachedTarget = targetCache[key]
+        if (cachedAddress != null && cachedTarget != null) return cachedTarget to UdpAddress(cachedAddress, target.port)
+        targetAddressFailures[key]?.let { throw it }
+        val address = targetAddressCache[key] ?: run {
+            val resolved = try {
+                resolveHostname(target.ip)
+            } catch (deadline: OperationDeadlineExceededException) {
+                throw deadline
+            } catch (cancellation: kotlinx.coroutines.CancellationException) {
+                throw cancellation
+            } catch (failure: Exception) {
+                val typedFailure = SnmpRequestException.unresolved(target, failure)
+                throw targetAddressFailures.putIfAbsent(key, typedFailure) ?: typedFailure
+            }
+            targetAddressCache.putIfAbsent(key, resolved) ?: resolved
+        }
+        targetCache[key]?.let { return it to UdpAddress(address, target.port) }
+        val udpAddress = UdpAddress(address, target.port)
+        val candidate = buildTarget(target, address)
+        return (targetCache.putIfAbsent(key, candidate) ?: candidate) to udpAddress
+    }
+
+    private suspend fun resolveHostname(hostname: String): InetAddress {
+        val deadline = operationDeadline ?: return hostnameResolver.resolve(hostname)
+        return TopologyBlockingCall.run(
+            deadline = deadline,
+            requestTimeoutMillis = sessionParams.timeoutMs.toLong(),
+            timeoutMessage = "Hostname resolution timed out after ${sessionParams.timeoutMs} ms",
+        ) { hostnameResolver.resolve(hostname) }
+    }
 
     /**
      * USM auth/privacy keys are localized against the responder's authoritative
      * engine ID. Discover it before the first authenticated request and retain
      * the result for the lifetime of this client.
      */
-    private fun ensureAuthoritativeEngineId(target: SnmpTarget) {
+    private suspend fun ensureAuthoritativeEngineId(target: SnmpTarget, address: UdpAddress) {
         if (sessionParams.snmpVersion != SnmpVersion.V3) return
 
         val cacheKey = "${target.ip}:${target.port}"
         if (authoritativeEngineIdCache.containsKey(cacheKey)) return
 
-        synchronized(authoritativeEngineIdCache) {
-            if (authoritativeEngineIdCache.containsKey(cacheKey)) return
-            // A missing agent can make SNMP4J return null. Remember the discovery attempt
-            // too, or every GET/WALK repeats the same timeout for this target.
-            if (!authoritativeEngineIdDiscoveryAttempts.add(cacheKey)) return
+        val discovery = CompletableDeferred<Unit>()
+        val existingDiscovery = authoritativeEngineIdDiscoveries.putIfAbsent(cacheKey, discovery)
+        if (existingDiscovery != null) {
+            existingDiscovery.await()
+            return
+        }
 
-            val address = UdpAddress(InetAddress.getByName(target.ip), target.port)
-            val engineId = snmp.discoverAuthoritativeEngineID(
-                address,
-                sessionParams.timeoutMs.toLong()
-            )
-            if (engineId != null) {
-                authoritativeEngineIdCache[cacheKey] = engineId
+        try {
+            // A missing agent can make SNMP4J return null. Keep the completed attempt cached so
+            // every GET/WALK does not repeat the same engine-ID discovery timeout.
+            val engineId = if (operationDeadline == null) {
+                engineIdDiscoverer.discover(checkNotNull(snmp), address, sessionParams.timeoutMs.toLong())
+            } else {
+                val remainingMillis = operationDeadline.remainingTimeoutMillis()
+                val requestTimeoutMillis = minOf(sessionParams.timeoutMs.toLong(), remainingMillis)
+                TopologyBlockingCall.run(
+                    deadline = operationDeadline,
+                    requestTimeoutMillis = requestTimeoutMillis,
+                    timeoutMessage = "SNMPv3 authoritative engine ID discovery timed out",
+                ) {
+                    engineIdDiscoverer.discover(checkNotNull(snmp), address, requestTimeoutMillis)
+                }
             }
+            if (engineId != null) authoritativeEngineIdCache[cacheKey] = engineId
+            discovery.complete(Unit)
+        } catch (failure: Throwable) {
+            if (failure is OperationDeadlineExceededException) {
+                discovery.completeExceptionally(failure)
+            } else {
+                // Preserve the previous behavior: one failed discovery attempt is remembered,
+                // but does not make every later GET/WALK fail without trying the normal request.
+                discovery.complete(Unit)
+            }
+            throw failure
         }
     }
 
-    private fun buildTarget(target: SnmpTarget): Target<*> {
+    private fun buildTarget(target: SnmpTarget, address: InetAddress): Target<*> {
         val params = sessionParams
-        val address = UdpAddress(InetAddress.getByName(target.ip), target.port)
+        val udpAddress = UdpAddress(address, target.port)
         return when (params.snmpVersion) {
-            SnmpVersion.V1 -> CommunityTarget<UdpAddress>(address, OctetString(params.communityString)).apply {
+            SnmpVersion.V1 -> CommunityTarget<UdpAddress>(udpAddress, OctetString(params.communityString)).apply {
                 version = SnmpConstants.version1
                 timeout = params.timeoutMs.toLong()
                 retries = params.retries
             }
-            SnmpVersion.V2C -> CommunityTarget<UdpAddress>(address, OctetString(params.communityString)).apply {
+            SnmpVersion.V2C -> CommunityTarget<UdpAddress>(udpAddress, OctetString(params.communityString)).apply {
                 version = SnmpConstants.version2c
                 timeout = params.timeoutMs.toLong()
                 retries = params.retries
             }
             SnmpVersion.V3 -> UserTarget<UdpAddress>().apply {
-                this.address = address
+                this.address = udpAddress
                 version = SnmpConstants.version3
                 timeout = params.timeoutMs.toLong()
                 retries = params.retries
@@ -318,6 +481,19 @@ class Snmp4jClientImpl(
         @Volatile
         private var usmSecurityModelRegistered = false
     }
+}
+
+private fun createTopologyTransport(
+    params: TopologyParams,
+    networkBinder: NetworkBinder,
+): DefaultUdpTransportMapping = try {
+    if (networkBinder.shouldBind(params.targetIp)) {
+        BoundUdpTransportMapping(networkBinder, params.targetIp)
+    } else {
+        DefaultUdpTransportMapping()
+    }
+} catch (error: SecurityException) {
+    throw LocalNetworkPermissionDeniedException(error)
 }
 
 /** Uses an unbound replacement socket so the platform can select its network before bind(). */

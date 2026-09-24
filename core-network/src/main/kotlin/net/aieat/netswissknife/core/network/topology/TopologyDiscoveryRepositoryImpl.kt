@@ -24,6 +24,7 @@ import net.aieat.netswissknife.core.network.operation.OperationRunner
 import net.aieat.netswissknife.core.network.operation.OperationSession
 import java.util.LinkedList
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.atomic.AtomicBoolean
 
 class TopologyDiscoveryRepositoryImpl(
@@ -34,14 +35,24 @@ class TopologyDiscoveryRepositoryImpl(
 
     private val requestLimiter = Semaphore(MAX_CONCURRENT_SNMP_REQUESTS)
     private val effectiveSnmpClientFactory = snmpClientFactory
-        ?: SnmpClientFactory { params -> Snmp4jClientImpl(params, binder) }
+        ?: object : SnmpClientFactory {
+            override fun create(params: TopologyParams): SnmpClient = Snmp4jClientImpl(params, binder)
+
+            override fun create(params: TopologyParams, session: OperationSession): SnmpClient =
+                Snmp4jClientImpl(
+                    params,
+                    binder,
+                    session.budget.deadline,
+                    deferInitialization = true,
+                )
+        }
 
     constructor(client: SnmpClient) : this(SnmpClientFactory { client }, TopologyResourceLimits())
     constructor(client: SnmpClient, limits: TopologyResourceLimits) :
         this(SnmpClientFactory { client }, limits)
 
-    // Snmp4jClientImpl starts a UDP transport while it is constructed. Keep the
-    // factory, discovery calls, and client teardown off Android's main thread.
+    // Session-aware creation returns a closeable, uninitialized SNMP client first. The client
+    // is then registered with the operation before its bounded transport setup/listen begins.
     override fun discover(params: TopologyParams): Flow<TopologyDiscoveryEvent> = channelFlow {
         val estimate = TopologyOperationBudget.estimate(
             params,
@@ -75,6 +86,9 @@ class TopologyDiscoveryRepositoryImpl(
             send(TopologyDiscoveryEvent.Error(TopologyOperationBudget.OVER_CEILING_MESSAGE))
             return@channelFlow
         }
+        val partialGraph = AtomicReference(
+            TopologyGraph(emptyList(), emptyList(), params.targetIp, System.currentTimeMillis())
+        )
         try {
             val normalizedTarget = HostValidator.normalize(params.targetIp) ?: params.targetIp
             val effectiveParams = params.copy(targetIp = normalizedTarget)
@@ -84,7 +98,7 @@ class TopologyDiscoveryRepositoryImpl(
                     effectiveRequestConcurrency
                 )
                 val snmpClient = resources.register(
-                    CloseOnceSnmpClient(effectiveSnmpClientFactory.create(effectiveParams))
+                    CloseOnceSnmpClient(effectiveSnmpClientFactory.create(effectiveParams, session))
                 )
                 val visited = mutableSetOf<String>()
                 val queue = LinkedList<Pair<String, Int>>() // ip to hop depth
@@ -217,9 +231,20 @@ class TopologyDiscoveryRepositoryImpl(
                     }
                     val retainedNode = node.copy(tableObservations = tableObservations.snapshot())
                     allNodes.add(retainedNode)
+                    partialGraph.set(
+                        TopologyGraph(
+                            nodes = allNodes.toList(),
+                            links = allLinks.toList(),
+                            seedIp = effectiveParams.targetIp,
+                            queriedAt = System.currentTimeMillis(),
+                            truncationReasons = truncationReasons.toSet(),
+                            hadSnmpErrors = snmpErrors.get(),
+                        )
+                    )
                     send(TopologyDiscoveryEvent.NodeDiscovered(retainedNode))
                     retainedLinks.forEach { link ->
                         allLinks.add(link)
+                        partialGraph.updateAndGet { prior -> prior.copy(links = allLinks.toList()) }
                         send(TopologyDiscoveryEvent.LinkDiscovered(link))
                     }
                     if (graphByteLimitReached) break
@@ -255,7 +280,7 @@ class TopologyDiscoveryRepositoryImpl(
             if (session.cancellationReason == CancellationReason.DEADLINE_EXCEEDED ||
                 e is OperationDeadlineExceededException
             ) {
-                send(TopologyDiscoveryEvent.TimeLimit)
+                send(TopologyDiscoveryEvent.TimeLimit(partialGraph.get()))
             } else {
                 if (e is CancellationException) throw e
                 send(TopologyDiscoveryEvent.Error(SnmpErrorFormatter.describe(e), e))
@@ -341,6 +366,8 @@ class TopologyDiscoveryRepositoryImpl(
                 GetAttempt(client.get(target, oid), null)
             } catch (e: CancellationException) {
                 throw e
+            } catch (e: OperationDeadlineExceededException) {
+                throw e
             } catch (e: Exception) {
                 if (e.containsLocalNetworkPermissionDenied()) throw e
                 GetAttempt(null, e)
@@ -402,6 +429,8 @@ class TopologyDiscoveryRepositoryImpl(
                     tableObservations.record(table, result)
                     result.entries
                 } catch (e: CancellationException) {
+                    throw e
+                } catch (e: OperationDeadlineExceededException) {
                     throw e
                 } catch (e: Exception) {
                     if (e.containsLocalNetworkPermissionDenied()) throw e

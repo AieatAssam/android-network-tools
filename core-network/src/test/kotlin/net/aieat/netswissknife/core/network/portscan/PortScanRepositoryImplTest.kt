@@ -1,13 +1,17 @@
 package net.aieat.netswissknife.core.network.portscan
 
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import net.aieat.netswissknife.core.network.net.FakeNetworkBinder
@@ -15,8 +19,11 @@ import net.aieat.netswissknife.core.network.net.LocalNetworkPermissionDeniedExce
 import net.aieat.netswissknife.core.network.testkit.ScriptedSocket
 import net.aieat.netswissknife.core.network.testkit.FakeClock
 import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationCancellationException
 import net.aieat.netswissknife.core.network.operation.OperationBudget
+import net.aieat.netswissknife.core.network.operation.OperationDeadlineExceededException
 import net.aieat.netswissknife.core.network.operation.OperationSession
+import net.aieat.netswissknife.core.network.operation.OperationRunner
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertThrows
@@ -83,6 +90,299 @@ class PortScanRepositoryImplTest {
         assertTrue(failure is IllegalArgumentException)
         assertTrue((failure as? IllegalArgumentException)?.message.orEmpty().contains("15-minute operation limit"))
         assertTrue(!resolved)
+    }
+
+    @Test
+    fun `direct repository call rejects nonpositive timeout before resolving the host`() = runTest {
+        var resolved = false
+        var probed = false
+        val repo = PortScanRepositoryImpl(
+            checker = { _, _ ->
+                probed = true
+                PortConnectResult(PortStatus.OPEN, 1L, null)
+            },
+            hostResolver = { resolved = true; InetAddress.getLoopbackAddress() },
+        )
+
+        val failure = runCatching {
+            repo.scan("target", listOf(80), timeoutMs = 0, concurrency = 1).toList()
+        }.exceptionOrNull()
+
+        assertTrue(failure is IllegalArgumentException)
+        assertTrue(failure?.message.orEmpty().contains("timeout must be positive"))
+        assertTrue(!resolved)
+        assertTrue(!probed)
+    }
+
+    @Test
+    fun `deadline returns while a non-interruptible hostname resolver remains blocked`() = runTest {
+        val executor = PortScanBlockingResolver.createWorkerExecutor()
+        val resolverEntered = CountDownLatch(1)
+        val releaseResolver = CountDownLatch(1)
+        val resolverStillRunning = java.util.concurrent.atomic.AtomicBoolean(false)
+        val checkerCalls = AtomicInteger()
+        val repo = PortScanRepositoryImpl(
+            checker = { _, _ ->
+                checkerCalls.incrementAndGet()
+                PortConnectResult(PortStatus.OPEN, 1L, null)
+            },
+            hostResolver = {
+                resolverStillRunning.set(true)
+                resolverEntered.countDown()
+                var released = false
+                while (!released) {
+                    try {
+                        releaseResolver.await()
+                        released = true
+                    } catch (_: InterruptedException) {
+                        // Model platform DNS implementations that do not stop on interruption.
+                    }
+                }
+                resolverStillRunning.set(false)
+                InetAddress.getLoopbackAddress()
+            },
+            resolverExecutor = executor,
+        )
+        val session = OperationSession(
+            OperationBudget.start(timeoutMillis = 60_000, maxConcurrentProbes = 1),
+        )
+
+        try {
+            val scan = async(Dispatchers.IO) {
+                runCatching {
+                    repo.scan("slow.example", listOf(80), 1_000, 1, session).toList()
+                }.exceptionOrNull()
+            }
+            assertTrue(
+                withContext(Dispatchers.IO) { resolverEntered.await(2, TimeUnit.SECONDS) },
+                "host resolution should begin on a worker",
+            )
+            session.cancel(CancellationReason.DEADLINE_EXCEEDED)
+
+            val failure = withContext(Dispatchers.IO) {
+                withTimeout(2_000) { scan.await() }
+            }
+
+            assertTrue(failure is OperationDeadlineExceededException)
+            assertEquals(CancellationReason.DEADLINE_EXCEEDED, session.cancellationReason)
+            assertTrue(resolverStillRunning.get(), "the resolver itself is allowed to outlive cancellation")
+            assertEquals(0, checkerCalls.get(), "no port probes may start before host resolution returns")
+            assertEquals(PortScanBlockingResolver.WORKER_COUNT, executor.corePoolSize)
+            assertEquals(PortScanBlockingResolver.QUEUE_CAPACITY, executor.queue.remainingCapacity())
+        } finally {
+            releaseResolver.countDown()
+            executor.shutdownNow()
+            withContext(Dispatchers.IO) { executor.awaitTermination(2, TimeUnit.SECONDS) }
+        }
+    }
+
+    @Test
+    fun `OperationRunner deadline unwinds resolver wait using virtual time`() = runTest {
+        val clock = FakeClock()
+        val executor = PortScanBlockingResolver.createWorkerExecutor()
+        val resolverEntered = CountDownLatch(1)
+        val releaseResolver = CountDownLatch(1)
+        val resolverStillRunning = java.util.concurrent.atomic.AtomicBoolean(false)
+        val session = OperationSession(OperationBudget.start(timeoutMillis = 100, clock = clock))
+        val operation = backgroundScope.async {
+            runCatching {
+                OperationRunner.run(session) {
+                    PortScanBlockingResolver.resolve(
+                        session = session,
+                        executor = executor,
+                    ) {
+                        resolverStillRunning.set(true)
+                        resolverEntered.countDown()
+                        var released = false
+                        while (!released) {
+                            try {
+                                releaseResolver.await()
+                                released = true
+                            } catch (_: InterruptedException) {
+                                // Platform resolver may keep running after the caller is cancelled.
+                            }
+                        }
+                        InetAddress.getLoopbackAddress()
+                    }
+                }
+            }.exceptionOrNull()
+        }
+
+        try {
+            runCurrent()
+            assertTrue(
+                withContext(Dispatchers.IO) { resolverEntered.await(2, TimeUnit.SECONDS) },
+                "resolver worker should enter the blocking call",
+            )
+            clock.advanceBy(100_000_000L)
+            advanceTimeBy(100)
+            runCurrent()
+
+            val failure = withContext(Dispatchers.IO) {
+                withTimeout(2_000) { operation.await() }
+            }
+
+            assertTrue(failure is OperationDeadlineExceededException)
+            assertEquals(CancellationReason.DEADLINE_EXCEEDED, session.cancellationReason)
+            assertTrue(resolverStillRunning.get(), "deadline return must not wait for a stuck resolver")
+        } finally {
+            releaseResolver.countDown()
+            executor.shutdownNow()
+            withContext(Dispatchers.IO) { executor.awaitTermination(2, TimeUnit.SECONDS) }
+        }
+    }
+
+    @Test
+    fun `USER_STOP remains typed while a non-interruptible resolver is waiting`() = runTest {
+        val executor = PortScanBlockingResolver.createWorkerExecutor()
+        val resolverEntered = CountDownLatch(1)
+        val releaseResolver = CountDownLatch(1)
+        val repo = PortScanRepositoryImpl(
+            hostResolver = {
+                resolverEntered.countDown()
+                var released = false
+                while (!released) {
+                    try {
+                        releaseResolver.await()
+                        released = true
+                    } catch (_: InterruptedException) {
+                        // Model a platform resolver that ignores worker interruption.
+                    }
+                }
+                InetAddress.getLoopbackAddress()
+            },
+            resolverExecutor = executor,
+        )
+        val session = OperationSession(OperationBudget.start(timeoutMillis = 60_000))
+
+        try {
+            val scan = async(Dispatchers.IO) {
+                runCatching { repo.scan("slow.example", listOf(80), 1_000, 1, session).toList() }
+                    .exceptionOrNull()
+            }
+            assertTrue(
+                withContext(Dispatchers.IO) { resolverEntered.await(2, TimeUnit.SECONDS) },
+                "host resolution should begin on a worker",
+            )
+            session.cancel(CancellationReason.USER_STOP)
+            val failure = withContext(Dispatchers.IO) {
+                withTimeout(2_000) { scan.await() }
+            }
+
+            assertTrue(failure is OperationCancellationException)
+            assertEquals(CancellationReason.USER_STOP, session.cancellationReason)
+        } finally {
+            releaseResolver.countDown()
+            executor.shutdownNow()
+            withContext(Dispatchers.IO) { executor.awaitTermination(2, TimeUnit.SECONDS) }
+        }
+    }
+
+    @Test
+    fun `resolution phase cap expires within session budget and reports host resolution timeout`() = runTest {
+        val executor = PortScanBlockingResolver.createWorkerExecutor()
+        val resolverEntered = CompletableDeferred<Unit>()
+        val releaseResolver = CountDownLatch(1)
+        val session = OperationSession(OperationBudget.start(timeoutMillis = 60_000))
+        val operation = async {
+            runCatching {
+                PortScanBlockingResolver.resolve(
+                    session = session,
+                    executor = executor,
+                    resolutionTimeoutMillis = 25,
+                ) {
+                    resolverEntered.complete(Unit)
+                    var released = false
+                    while (!released) {
+                        try {
+                            releaseResolver.await()
+                            released = true
+                        } catch (_: InterruptedException) {
+                            // The test keeps the worker occupied until cleanup releases it.
+                        }
+                    }
+                    InetAddress.getLoopbackAddress()
+                }
+            }.exceptionOrNull()
+        }
+
+        try {
+            runCurrent()
+            resolverEntered.await()
+            advanceTimeBy(25)
+            runCurrent()
+
+            val failure = operation.await()
+            assertTrue(failure is PortScanHostResolutionTimeoutException)
+            assertEquals(null, session.cancellationReason, "a phase timeout must not become a session cancellation")
+            assertTrue(session.budget.remainingTimeoutMillis() > 0L)
+        } finally {
+            releaseResolver.countDown()
+            executor.shutdownNow()
+            withContext(Dispatchers.IO) { executor.awaitTermination(2, TimeUnit.SECONDS) }
+        }
+    }
+
+    @Test
+    fun `resolver worker and queue saturation fails fast and remains bounded`() = runTest {
+        val executor = PortScanBlockingResolver.createWorkerExecutor()
+        val resolverEntered = CountDownLatch(PortScanBlockingResolver.WORKER_COUNT)
+        val releaseResolvers = CountDownLatch(1)
+        val startedSessions = List(
+            PortScanBlockingResolver.WORKER_COUNT + PortScanBlockingResolver.QUEUE_CAPACITY,
+        ) { OperationSession(OperationBudget.start(timeoutMillis = 60_000)) }
+        val sessions = startedSessions + OperationSession(OperationBudget.start(timeoutMillis = 60_000))
+        val calls = startedSessions.map { session ->
+            backgroundScope.async(Dispatchers.IO) {
+                runCatching {
+                    PortScanBlockingResolver.resolve(session, executor) {
+                        resolverEntered.countDown()
+                        var released = false
+                        while (!released) {
+                            try {
+                                releaseResolvers.await()
+                                released = true
+                            } catch (_: InterruptedException) {
+                                // Occupy the fixed worker until the test releases it.
+                            }
+                        }
+                        InetAddress.getLoopbackAddress()
+                    }
+                }.exceptionOrNull()
+            }
+        }
+
+        try {
+            assertTrue(
+                withContext(Dispatchers.IO) { resolverEntered.await(2, TimeUnit.SECONDS) },
+                "both bounded resolver workers should be occupied",
+            )
+            withContext(Dispatchers.IO) {
+                withTimeout(2_000) {
+                    while (executor.queue.size < PortScanBlockingResolver.QUEUE_CAPACITY) {
+                        kotlinx.coroutines.yield()
+                    }
+                }
+            }
+            val overflow = withContext(Dispatchers.IO) {
+                runCatching {
+                    PortScanBlockingResolver.resolve(sessions.last(), executor) {
+                        InetAddress.getLoopbackAddress()
+                    }
+                }.exceptionOrNull()
+            }
+
+            assertTrue(overflow is java.util.concurrent.RejectedExecutionException)
+            assertEquals(PortScanBlockingResolver.WORKER_COUNT, executor.corePoolSize)
+            assertTrue(executor.largestPoolSize <= PortScanBlockingResolver.WORKER_COUNT)
+            assertEquals(PortScanBlockingResolver.QUEUE_CAPACITY, executor.queue.size)
+        } finally {
+            sessions.forEach { it.cancel(CancellationReason.USER_STOP) }
+            releaseResolvers.countDown()
+            executor.shutdownNow()
+            withContext(Dispatchers.IO) { executor.awaitTermination(2, TimeUnit.SECONDS) }
+            calls.forEach { it.cancelAndJoin() }
+        }
     }
 
     @Test

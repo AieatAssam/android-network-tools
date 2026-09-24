@@ -12,6 +12,7 @@ import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.yield
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -25,6 +26,7 @@ import net.aieat.netswissknife.app.data.RecentHostsRepository
 import net.aieat.netswissknife.app.platform.NetworkErrorKind
 import net.aieat.netswissknife.core.network.net.LocalNetworkPermissionDeniedException
 import net.aieat.netswissknife.core.domain.TopologyDiscoveryUseCase
+import net.aieat.netswissknife.core.network.topology.SnmpClientFactory
 import net.aieat.netswissknife.core.network.topology.TopologyDiscoveryEvent
 import net.aieat.netswissknife.core.network.topology.TopologyGraph
 import net.aieat.netswissknife.core.network.topology.TopologyLink
@@ -446,7 +448,9 @@ class TopologyDiscoveryViewModelTest {
                 emit(TopologyDiscoveryEvent.NodeDiscovered(stubNode))
                 emit(TopologyDiscoveryEvent.LinkDiscovered(stubLink))
                 sessionSlot.captured.cancel(CancellationReason.DEADLINE_EXCEEDED)
-                emit(TopologyDiscoveryEvent.TimeLimit)
+                emit(TopologyDiscoveryEvent.TimeLimit(
+                    TopologyGraph(listOf(stubNode), listOf(stubLink), params.targetIp, 0L)
+                ))
                 timeLimitEmitted.complete(Unit)
                 awaitCancellation()
             } finally {
@@ -478,6 +482,64 @@ class TopologyDiscoveryViewModelTest {
         } finally {
             releaseCleanup.complete(Unit)
         }
+    }
+
+    @Test
+    fun `repository deadline after a node reaches ViewModel with graph snapshot`() = runTest {
+        val seedIp = params.targetIp
+        lateinit var operationSession: OperationSession
+        val factory = object : SnmpClientFactory {
+            override fun create(params: TopologyParams): SnmpClient = error("session required")
+
+            override fun create(params: TopologyParams, session: OperationSession): SnmpClient {
+                operationSession = session
+                return object : SnmpClient {
+                    override suspend fun get(target: SnmpTarget, oid: String): String? {
+                        if (target.ip != seedIp) {
+                            session.cancel(CancellationReason.DEADLINE_EXCEEDED)
+                            awaitCancellation()
+                        }
+                        return when (oid) {
+                            "1.3.6.1.2.1.1.1.0" -> "Cisco switch"
+                            "1.3.6.1.2.1.1.5.0" -> "core-switch"
+                            else -> null
+                        }
+                    }
+
+                    override suspend fun walk(
+                        target: SnmpTarget,
+                        oidPrefix: String,
+                        budget: SnmpWalkBudget,
+                    ): SnmpWalkResult = if (
+                        oidPrefix == "1.3.6.1.4.1.9.9.23.1.2.1" && target.ip == seedIp
+                    ) {
+                        SnmpWalkResult(mapOf(
+                            "1.3.6.1.4.1.9.9.23.1.2.1.1.3.1.1" to "1",
+                            "1.3.6.1.4.1.9.9.23.1.2.1.1.4.1.1" to "c0:a8:01:02",
+                            "1.3.6.1.4.1.9.9.23.1.2.1.1.6.1.1" to "edge-switch",
+                            "1.3.6.1.4.1.9.9.23.1.2.1.1.7.1.1" to "Gi1/0/2",
+                        ))
+                    } else {
+                        SnmpWalkResult(emptyMap())
+                    }
+
+                    override fun close() = Unit
+                }
+            }
+        }
+        val connectedViewModel = TopologyDiscoveryViewModel(
+            TopologyDiscoveryUseCase(TopologyDiscoveryRepositoryImpl(factory)),
+            recentHostsRepository,
+        )
+
+        connectedViewModel.startDiscovery(params.copy(maxHops = 1))
+        awaitTopologyState(connectedViewModel) { it is TopologyUiState.TimeLimit }
+
+        val state = connectedViewModel.uiState.value as TopologyUiState.TimeLimit
+        assertEquals(CancellationReason.DEADLINE_EXCEEDED, operationSession.cancellationReason)
+        assertEquals(seedIp, state.nodes.single().ip)
+        assertEquals(1, state.links.size)
+        assertEquals("192.168.1.2", state.links.single().toIp)
     }
 
     @Test
@@ -599,12 +661,21 @@ class TopologyDiscoveryViewModelTest {
     }
 
     private suspend fun awaitTopologyState(predicate: (TopologyUiState) -> Boolean) {
-        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2)
-        withContext(Dispatchers.IO) {
-            while (!predicate(viewModel.uiState.value) && System.nanoTime() < deadline) {
-                Thread.sleep(5)
-            }
+        awaitTopologyState(viewModel, predicate)
+    }
+
+    private suspend fun awaitTopologyState(
+        targetViewModel: TopologyDiscoveryViewModel,
+        predicate: (TopologyUiState) -> Boolean,
+    ) {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+        while (!predicate(targetViewModel.uiState.value) && System.nanoTime() < deadline) {
+            yield()
+            withContext(Dispatchers.IO) { Thread.sleep(5) }
         }
-        assertTrue(predicate(viewModel.uiState.value), "topology state did not reach the expected terminal state")
+        assertTrue(
+            predicate(targetViewModel.uiState.value),
+            "topology state did not reach the expected terminal state",
+        )
     }
 }

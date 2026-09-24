@@ -1,5 +1,7 @@
 package net.aieat.netswissknife.core.network.topology
 
+import net.aieat.netswissknife.core.network.HostValidator
+
 /**
  * Estimates a useful SNMP deadline from the request instead of imposing one fixed duration.
  *
@@ -42,13 +44,20 @@ object TopologyOperationBudget {
         // The repository holds one semaphore permit for a full table walk. Nine initial walk jobs
         // can require ceil(9 / concurrency) batches, followed by one conditional VLAN fallback.
         // Add one response page because the collector must observe an extra page to confirm that
-        // the configured cap truncated the walk. SNMPv3 also discovers each responder's engine ID.
+        // the configured cap truncated the walk. A hostname seed also needs one DNS lookup, and
+        // SNMPv3 discovers each responder's engine ID.
         val walkBatches = (INITIAL_TABLE_WALKS_PER_NODE + effectiveConcurrency - 1) / effectiveConcurrency + 1
         val pagesPerWalk = maxPagesPerWalk.toLong() + 1L
         val walkWindows = saturatingMultiply(walkBatches, pagesPerWalk)
+        val hostnameResolutionWindows = if (
+            HostValidator.isValidIpv4(params.targetIp) || HostValidator.isValidIpv6(params.targetIp)
+        ) 0L else 1L
         val engineDiscoveryWindows = if (params.snmpVersion == SnmpVersion.V3) 1L else 0L
         val requestWindows = saturatingAdd(
-            saturatingAdd(SCALAR_GET_WINDOWS_PER_NODE, engineDiscoveryWindows),
+            saturatingAdd(
+                SCALAR_GET_WINDOWS_PER_NODE,
+                engineDiscoveryWindows,
+            ),
             walkWindows,
         )
         val perNodeTimeout = saturatingMultiply(
@@ -59,13 +68,23 @@ object TopologyOperationBudget {
             perNodeTimeout,
             ceilPercent(perNodeTimeout, SCHEDULING_MARGIN_PERCENT),
         )
-        val availableForNodes = HARD_CEILING_MILLIS - FINAL_CLEANUP_ALLOWANCE_MILLIS
+        // Deferred SNMP4J transport setup/listen is separately bounded to one request timeout
+        // per session and runs before any probes, so reserve that window once rather than per node.
+        val setupTimeout = saturatingMultiply(
+            params.timeoutMs.toLong().coerceAtLeast(1L),
+            1L + hostnameResolutionWindows,
+        )
+        val setupWithMargin = saturatingAdd(setupTimeout, ceilPercent(setupTimeout, SCHEDULING_MARGIN_PERCENT))
+        val availableForNodes = HARD_CEILING_MILLIS - FINAL_CLEANUP_ALLOWANCE_MILLIS - setupWithMargin
         val nodeCapacity = (availableForNodes / perNodeWithMargin).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
         if (nodeCapacity < 1) return null
         val maxNodes = minOf(configuredMaxNodes, nodeCapacity)
         val rawWork = saturatingMultiply(perNodeTimeout, maxNodes.toLong())
         val timeoutMillis = saturatingAdd(
-            saturatingAdd(rawWork, ceilPercent(rawWork, SCHEDULING_MARGIN_PERCENT)),
+            saturatingAdd(
+                saturatingAdd(rawWork, ceilPercent(rawWork, SCHEDULING_MARGIN_PERCENT)),
+                setupWithMargin,
+            ),
             FINAL_CLEANUP_ALLOWANCE_MILLIS,
         )
         if (timeoutMillis > HARD_CEILING_MILLIS) return null

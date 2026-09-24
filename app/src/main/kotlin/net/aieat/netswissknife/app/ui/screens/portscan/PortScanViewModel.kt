@@ -225,16 +225,38 @@ class PortScanViewModel @Inject constructor(
     }
 
     fun onStopScan() {
-        cancelScan(CancellationReason.USER_STOP)
-        scanJob?.cancel()
-        finishPartialScan()
+        val session = scanOperationSession ?: return
+        cancelPreservingExpiredDeadline(session, CancellationReason.USER_STOP)
+        when (session.cancellationReason) {
+            CancellationReason.DEADLINE_EXCEEDED -> Unit // Let the winning deadline publish its terminal state.
+            null -> Unit // The operation already finished; let its queued Complete event reach the UI.
+            else -> finishPartialScan()
+        }
     }
 
     /** Stops socket probes when the screen leaves the foreground. */
     fun onLifecyclePause() {
-        cancelScan(CancellationReason.LIFECYCLE_PAUSE)
-        scanJob?.cancel()
-        finishPartialScan()
+        val session = scanOperationSession ?: return
+        cancelPreservingExpiredDeadline(session, CancellationReason.LIFECYCLE_PAUSE)
+        when (session.cancellationReason) {
+            CancellationReason.DEADLINE_EXCEEDED -> Unit
+            null -> Unit
+            else -> finishPartialScan()
+        }
+    }
+
+    /** Give an elapsed monotonic deadline its first-wins reason before Stop/Pause can claim it. */
+    private fun cancelPreservingExpiredDeadline(
+        session: OperationSession,
+        requestedReason: CancellationReason,
+    ) {
+        val reason = try {
+            session.budget.throwIfExpired()
+            requestedReason
+        } catch (_: OperationDeadlineExceededException) {
+            CancellationReason.DEADLINE_EXCEEDED
+        }
+        session.cancel(reason)
     }
 
     private fun cancelScan(reason: CancellationReason) {

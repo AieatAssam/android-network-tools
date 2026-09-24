@@ -23,6 +23,7 @@ import net.aieat.netswissknife.core.network.MonotonicClock
 import net.aieat.netswissknife.core.network.SystemMonotonicClock
 import net.aieat.netswissknife.core.network.elapsedMillisSince
 import net.aieat.netswissknife.core.network.operation.OperationBudget
+import net.aieat.netswissknife.core.network.operation.OperationDeadlineExceededException
 import net.aieat.netswissknife.core.network.operation.OperationRequirement
 import net.aieat.netswissknife.core.network.operation.OperationRunner
 import net.aieat.netswissknife.core.network.operation.OperationSession
@@ -56,6 +57,7 @@ class PortScanRepositoryImpl(
     private val binder: NetworkBinder = NoOpNetworkBinder,
     private val socketFactory: () -> Socket = { Socket() },
     private val operationTimeoutMillis: Long = OperationBudget.DEFAULT_INTERACTIVE_TIMEOUT_MILLIS,
+    private val resolverExecutor: java.util.concurrent.ThreadPoolExecutor = PortScanBlockingResolver.productionExecutor,
 ) : PortScanRepository {
 
     companion object {
@@ -163,6 +165,7 @@ class PortScanRepositoryImpl(
         concurrency: Int,
         callerSession: OperationSession?,
     ): Flow<PortScanUpdate> = channelFlow {
+        require(timeoutMs > 0) { "Per-port timeout must be positive" }
         val startTime = clock.nowNanos()
         val results = mutableListOf<PortScanResult>()
         val requestedConcurrency = concurrency.coerceIn(1, 500)
@@ -186,9 +189,13 @@ class PortScanRepositoryImpl(
         OperationRunner.run(session) {
             ensureOperationActive()
             val resolvedAddress = try {
-                hostResolver(host)
+                PortScanBlockingResolver.resolve(session, resolverExecutor) { hostResolver(host) }
             } catch (cancelled: CancellationException) {
                 throw cancelled
+            } catch (deadline: OperationDeadlineExceededException) {
+                throw deadline
+            } catch (timeout: PortScanHostResolutionTimeoutException) {
+                throw timeout
             } catch (error: Exception) {
                 throw PortScanHostResolutionException(host, error)
             }

@@ -182,12 +182,12 @@ class TopologyDiscoveryViewModel @Inject constructor(
                                 terminalState = TopologyUiState.Done(graph = event.graph, selectedNodeIp = null)
                             }
                         }
-                        TopologyDiscoveryEvent.TimeLimit -> {
+                        is TopologyDiscoveryEvent.TimeLimit -> {
                             terminalEventReceived = true
                             terminalState = TopologyUiState.TimeLimit(
-                                nodes = nodes.toList(),
-                                links = links.toList(),
-                                nodesDone = nodes.size,
+                                nodes = event.partialGraph.nodes,
+                                links = event.partialGraph.links,
+                                nodesDone = event.partialGraph.nodes.size,
                             )
                         }
                         is TopologyDiscoveryEvent.Error -> {

@@ -75,12 +75,12 @@ class TracerouteUseCaseTest {
         @Test
         fun `request exceeding interactive ceiling is rejected before repository probes`() = runTest {
             val results = useCase(
-                TracerouteParams(host = "google.com", maxHops = 64, timeoutMs = 15_000),
+                TracerouteParams(host = "google.com", maxHops = 64, timeoutMs = 20_000),
             ).toList()
 
             assertEquals(
                 TracerouteFlowResult.ValidationError(
-                    "Requested trace exceeds the 15-minute time limit; reduce max hops or per-hop timeout",
+                    "Requested trace exceeds the 20-minute time limit; reduce max hops, probes per hop, or timeout",
                 ),
                 results.single(),
             )

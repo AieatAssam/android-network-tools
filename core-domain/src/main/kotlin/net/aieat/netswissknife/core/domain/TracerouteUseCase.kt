@@ -51,8 +51,13 @@ class TracerouteUseCase(
             params.probesPerHop !in 1..5                 -> "Probes per hop must be between 1 and 5"
             params.packetSize != 0 &&
                 params.packetSize !in 28..1472           -> "Packet size must be 0 (MTU discovery) or between 28 and 1472 bytes"
-            TracerouteOperation.requestedTimeoutMillis(params.maxHops, params.timeoutMs) == null ->
-                "Requested trace exceeds the 15-minute time limit; reduce max hops or per-hop timeout"
+            TracerouteOperation.requestedTimeoutMillis(
+                params.maxHops,
+                params.timeoutMs,
+                params.probesPerHop,
+                operationSession?.budget?.maxConcurrentProbes ?: TracerouteOperation.MAX_CONCURRENT_PROBES,
+            ) == null ->
+                "Requested trace exceeds the 20-minute time limit; reduce max hops, probes per hop, or timeout"
             else                                         -> null
         }
 
@@ -61,7 +66,11 @@ class TracerouteUseCase(
         }
 
         return channelFlow {
-            val session = operationSession ?: TracerouteOperation.newSession(params.maxHops, params.timeoutMs)
+            val session = operationSession ?: TracerouteOperation.newSession(
+                params.maxHops,
+                params.timeoutMs,
+                params.probesPerHop,
+            )
             OperationRunner.run(session) {
                 tracerouteRepository.trace(
                     host = trimmedHost,

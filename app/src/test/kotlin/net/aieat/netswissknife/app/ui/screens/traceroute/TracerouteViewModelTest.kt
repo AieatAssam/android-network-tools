@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -18,16 +19,21 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withContext
+import net.aieat.netswissknife.app.traceroute.IcmpEnginTracerouteRepositoryImpl
+import net.aieat.netswissknife.app.traceroute.TracerouteReverseDnsLookup
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
 import net.aieat.netswissknife.app.platform.NetworkStatus
 import net.aieat.netswissknife.app.platform.NetworkStatusProvider
 import net.aieat.netswissknife.core.domain.TracerouteFlowResult
+import net.aieat.netswissknife.core.domain.TracerouteParams
 import net.aieat.netswissknife.core.domain.TracerouteUseCase
 import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationBudget
 import net.aieat.netswissknife.core.network.operation.OperationSession
 import net.aieat.netswissknife.core.network.traceroute.HopResult
 import net.aieat.netswissknife.core.network.traceroute.HopStatus
+import net.aieat.netswissknife.core.network.traceroute.TracerouteOperation
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
@@ -146,13 +152,13 @@ class TracerouteViewModelTest {
         fun `request over hard ceiling is rejected before invoking use case or recording host`() = runTest {
             viewModel.onHostChange("example.com")
             viewModel.onMaxHopsChange(64)
-            viewModel.onTimeoutChange(15_000)
+            viewModel.onTimeoutChange(20_000)
 
             viewModel.startTrace()
 
             assertEquals(
                 TracerouteUiState.Error(
-                    "Requested trace exceeds the 15-minute time limit; reduce max hops or per-hop timeout",
+                    "Requested trace exceeds the 20-minute time limit; reduce max hops, probes per hop, or timeout",
                 ),
                 viewModel.uiState.value,
             )
@@ -276,6 +282,54 @@ class TracerouteViewModelTest {
 
             checkNotNull(session).cancel(CancellationReason.DEADLINE_EXCEEDED)
             viewModel.onStop()
+
+            val partial = viewModel.uiState.first { it is TracerouteUiState.Finished }
+                as TracerouteUiState.Finished
+            assertTrue(partial.timeLimitReached)
+            assertEquals(listOf(stubHop), partial.result.hops)
+        }
+
+        @Test
+        fun `repository deadline after first native hop is retained as partial in ViewModel`() = runTest {
+            val repository = IcmpEnginTracerouteRepositoryImpl(
+                nativeTraceFactory = { _, _, _, _, _, _, _ ->
+                    flow {
+                        emit(stubHop)
+                        // The second hop never arrives; the repository's real deadline runner wins.
+                        awaitCancellation()
+                    }
+                },
+                reverseDnsLookup = TracerouteReverseDnsLookup { _, _ -> "gateway" },
+            )
+            every { tracerouteUseCase(any(), any()) } answers {
+                val params = firstArg<TracerouteParams>()
+                val session = secondArg<OperationSession>()
+                repository.trace(
+                    host = params.host,
+                    maxHops = params.maxHops,
+                    timeoutMs = params.timeoutMs,
+                    probesPerHop = params.probesPerHop,
+                    probeType = params.probeType,
+                    packetSize = params.packetSize,
+                    operationSession = session,
+                ).map { TracerouteFlowResult.Hop(it) }
+            }
+            viewModel.operationSessionFactory = {
+                OperationSession(
+                    OperationBudget.start(
+                        timeoutMillis = 250,
+                        maxConcurrentProbes = TracerouteOperation.MAX_CONCURRENT_PROBES,
+                    ),
+                )
+            }
+            viewModel.onHostChange("192.0.2.1")
+
+            viewModel.startTrace()
+
+            val running = viewModel.uiState.first {
+                it is TracerouteUiState.Running && stubHop in it.hops
+            } as TracerouteUiState.Running
+            assertEquals(listOf(stubHop), running.hops)
 
             val partial = viewModel.uiState.first { it is TracerouteUiState.Finished }
                 as TracerouteUiState.Finished

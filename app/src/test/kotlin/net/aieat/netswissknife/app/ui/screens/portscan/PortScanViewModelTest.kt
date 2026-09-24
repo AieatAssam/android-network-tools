@@ -16,6 +16,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.InternalCoroutinesApi
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.flowOf
@@ -33,13 +34,17 @@ import net.aieat.netswissknife.app.ui.navigation.ToolIntent
 import net.aieat.netswissknife.app.ui.navigation.ToolIntentCodec
 import net.aieat.netswissknife.app.ui.navigation.ToolSource
 import net.aieat.netswissknife.core.domain.PortScanFlowResult
+import net.aieat.netswissknife.core.domain.PortScanParams
 import net.aieat.netswissknife.core.domain.PortScanPreset
 import net.aieat.netswissknife.core.domain.PortScanUseCase
 import net.aieat.netswissknife.core.network.MonotonicClock
 import net.aieat.netswissknife.core.network.portscan.PortScanResult
+import net.aieat.netswissknife.core.network.portscan.PortConnectResult
+import net.aieat.netswissknife.core.network.portscan.PortScanRepositoryImpl
 import net.aieat.netswissknife.core.network.portscan.PortScanSummary
 import net.aieat.netswissknife.core.network.portscan.PortStatus
 import net.aieat.netswissknife.core.network.operation.OperationBudget
+import net.aieat.netswissknife.core.network.operation.OperationRunner
 import net.aieat.netswissknife.core.network.operation.OperationSession
 import net.aieat.netswissknife.core.network.operation.CancellationReason
 import net.aieat.netswissknife.core.network.operation.OperationDeadlineExceededException
@@ -51,6 +56,8 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 @OptIn(ExperimentalCoroutinesApi::class, InternalCoroutinesApi::class)
 @DisplayName("PortScanViewModel")
@@ -372,7 +379,7 @@ class PortScanViewModelTest {
         assertEquals(ToolSource.LAN, handoff.sourceContext)
         assertTrue(handoff.uiState.value is PortScanUiState.Scanning)
         verify(exactly = 1) { portScanUseCase.newSession(any()) }
-        handoff.onStopScan()
+        handoff.onClear()
     }
 
     @Test
@@ -563,6 +570,35 @@ class PortScanViewModelTest {
         }
 
         @Test
+        fun `Stop after operation completion leaves queued Complete delivery intact`() = runTest {
+            val operationFinished = CompletableDeferred<Unit>()
+            val releaseTerminal = CompletableDeferred<Unit>()
+            every { portScanUseCase(any(), any()) } answers {
+                val session = secondArg<OperationSession>()
+                kotlinx.coroutines.flow.flow {
+                    emit(PortScanFlowResult.Started("93.184.216.34", 1))
+                    OperationRunner.run(session) { }
+                    operationFinished.complete(Unit)
+                    releaseTerminal.await()
+                    emit(PortScanFlowResult.ScanComplete(stubSummary))
+                }
+            }
+            viewModel.onHostChange("example.com")
+            viewModel.startScan()
+            operationFinished.await()
+
+            viewModel.onStopScan()
+
+            assertEquals(null, lastOperationSession.cancellationReason)
+            assertTrue(viewModel.uiState.value is PortScanUiState.Scanning)
+            releaseTerminal.complete(Unit)
+            val finished = viewModel.uiState.first { it is PortScanUiState.Finished } as PortScanUiState.Finished
+
+            assertEquals(PortScanUiState.Completion.COMPLETE, finished.completion)
+            assertEquals(stubSummary, finished.summary)
+        }
+
+        @Test
         fun `transitions to Error on ValidationError`() = runTest {
             every { portScanUseCase(any(), any()) } returns flowOf(
                 PortScanFlowResult.ValidationError("invalid host")
@@ -600,6 +636,134 @@ class PortScanViewModelTest {
             assertEquals(listOf(80), state.summary.scannedPorts)
             assertEquals(listOf(stubResult), state.summary.results)
             assertEquals(1, state.summary.openPorts)
+        }
+
+        @Test
+        fun `Stop preserves a deadline that already won and lets its terminal catch finish`() = runTest {
+            val resumeDeadline = CompletableDeferred<Unit>()
+            every { portScanUseCase(any(), any()) } returns kotlinx.coroutines.flow.flow {
+                emit(PortScanFlowResult.Started("93.184.216.34", 2))
+                emit(PortScanFlowResult.PortScanned(stubResult, scannedCount = 1, totalCount = 2))
+                resumeDeadline.await()
+                throw OperationDeadlineExceededException()
+            }
+            viewModel.onHostChange("example.com")
+            viewModel.startScan()
+            lastOperationSession.cancel(CancellationReason.DEADLINE_EXCEEDED)
+
+            viewModel.onStopScan()
+
+            assertEquals(CancellationReason.DEADLINE_EXCEEDED, lastOperationSession.cancellationReason)
+            assertTrue(viewModel.uiState.value is PortScanUiState.Scanning)
+            resumeDeadline.complete(Unit)
+            val finished = viewModel.uiState.first { it is PortScanUiState.Finished } as PortScanUiState.Finished
+
+            assertEquals(PortScanUiState.Completion.DEADLINE, finished.completion)
+            assertEquals(listOf(80), finished.summary.scannedPorts)
+            assertEquals(1, finished.summary.openPorts)
+        }
+
+        @Test
+        fun `Stop records an expired budget as deadline before the watcher runs`() = runTest {
+            val resumeDeadline = CompletableDeferred<Unit>()
+            val expiredSession = OperationSession(
+                OperationBudget.start(timeoutMillis = 100, maxConcurrentProbes = 1, clock = testClock),
+            )
+            every { portScanUseCase.newSession(any()) } returns expiredSession
+            every { portScanUseCase(any(), any()) } returns kotlinx.coroutines.flow.flow {
+                emit(PortScanFlowResult.Started("93.184.216.34", 2))
+                emit(PortScanFlowResult.PortScanned(stubResult, scannedCount = 1, totalCount = 2))
+                resumeDeadline.await()
+                throw OperationDeadlineExceededException()
+            }
+            viewModel.onHostChange("example.com")
+            viewModel.startScan()
+            testClock.nowNanos += 100_000_000L
+            assertEquals(null, expiredSession.cancellationReason, "the deadline watcher has not recorded a reason")
+
+            viewModel.onStopScan()
+
+            assertEquals(CancellationReason.DEADLINE_EXCEEDED, expiredSession.cancellationReason)
+            assertTrue(viewModel.uiState.value is PortScanUiState.Scanning)
+            resumeDeadline.complete(Unit)
+            val finished = viewModel.uiState.first { it is PortScanUiState.Finished } as PortScanUiState.Finished
+
+            assertEquals(PortScanUiState.Completion.DEADLINE, finished.completion)
+            assertEquals(listOf(80), finished.summary.scannedPorts)
+        }
+
+        @Test
+        fun `repository deadline after a completed probe finishes with the collected partial summary`() = runTest {
+            val laterProbeEntered = CountDownLatch(1)
+            val releaseLaterProbe = CountDownLatch(1)
+            val repository = PortScanRepositoryImpl(
+                checker = { _, port ->
+                    if (port == 80) {
+                        PortConnectResult(PortStatus.OPEN, 10L, null)
+                    } else {
+                        laterProbeEntered.countDown()
+                        var released = false
+                        while (!released) {
+                            try {
+                                releaseLaterProbe.await()
+                                released = true
+                            } catch (_: InterruptedException) {
+                                // Keep the later probe blocked until the test releases it.
+                            }
+                        }
+                        PortConnectResult(PortStatus.CLOSED, 20L, null)
+                    }
+                },
+                hostResolver = { java.net.InetAddress.getLoopbackAddress() },
+            )
+            val actualUseCase = PortScanUseCase(repository)
+            every { portScanUseCase.newSession(any()) } answers {
+                OperationSession(
+                    OperationBudget.start(timeoutMillis = 60_000, maxConcurrentProbes = 1),
+                ).also { lastOperationSession = it }
+            }
+            every { portScanUseCase(any(), any()) } answers {
+                actualUseCase(firstArg<PortScanParams>(), secondArg<OperationSession>())
+            }
+            viewModel.onHostChange("192.0.2.1")
+            viewModel.onPresetChange(PortScanPreset.CUSTOM)
+            viewModel.onStartPortChange("80")
+            viewModel.onEndPortChange("81")
+            viewModel.onConcurrencyChange(1)
+
+            try {
+                viewModel.startScan()
+                assertTrue(
+                    withContext(Dispatchers.IO) { laterProbeEntered.await(2, TimeUnit.SECONDS) },
+                    "the later port probe should block after the first result is emitted",
+                )
+                val partialLive = withContext(Dispatchers.IO) {
+                    withTimeout(2_000) {
+                        viewModel.uiState.first { state ->
+                            state is PortScanUiState.Scanning && state.liveResults.any { it.port == 80 }
+                        }
+                    }
+                } as PortScanUiState.Scanning
+                assertEquals(listOf(80), partialLive.liveResults.map { it.port })
+
+                lastOperationSession.cancel(CancellationReason.DEADLINE_EXCEEDED)
+                releaseLaterProbe.countDown()
+                val terminal = withContext(Dispatchers.IO) {
+                    withTimeout(2_000) {
+                        viewModel.uiState.first {
+                            it is PortScanUiState.Finished &&
+                                it.completion == PortScanUiState.Completion.DEADLINE
+                        }
+                    }
+                } as PortScanUiState.Finished
+
+                assertEquals(listOf(80), terminal.summary.scannedPorts)
+                assertEquals(listOf(80), terminal.summary.results.map { it.port })
+                assertEquals(PortStatus.OPEN, terminal.summary.results.single().status)
+                assertEquals(1, terminal.summary.openPorts)
+            } finally {
+                releaseLaterProbe.countDown()
+            }
         }
 
         @Test
@@ -654,6 +818,7 @@ class PortScanViewModelTest {
 
         assertEquals(CancellationReason.USER_STOP, lastOperationSession.cancellationReason)
         assertTrue(viewModel.uiState.value is PortScanUiState.Finished)
+        viewModel.onClear()
     }
 
     @Test
@@ -669,6 +834,7 @@ class PortScanViewModelTest {
 
         assertEquals(CancellationReason.LIFECYCLE_PAUSE, lastOperationSession.cancellationReason)
         assertTrue(viewModel.uiState.value is PortScanUiState.Finished)
+        viewModel.onClear()
     }
 
     @Test
@@ -772,6 +938,7 @@ class PortScanViewModelTest {
         assertEquals(725L, state.summary.scanDurationMs)
         assertEquals(listOf(80), state.summary.scannedPorts)
         assertEquals(listOf(stubResult), state.summary.results)
+        viewModel.onClear()
     }
 
     @Test
@@ -813,6 +980,7 @@ class PortScanViewModelTest {
         assertEquals("93.184.216.34", summary.resolvedIp)
         assertEquals(1_250L, summary.scanDurationMs)
         assertTrue(summary.results.isEmpty())
+        viewModel.onClear()
     }
 
     private class FakeMonotonicClock(var nowNanos: Long = 1_000_000_000L) : MonotonicClock {

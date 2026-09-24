@@ -26,7 +26,7 @@ fun interface TracerouteReverseDnsLookup {
  * bound both active and queued work, and make the waiting caller promptly cancellable.
  */
 internal class BoundedTracerouteReverseDnsLookup(
-    private val executor: ThreadPoolExecutor = TracerouteReverseDnsWorkers.executor,
+    private val executor: ThreadPoolExecutor = TracerouteNameResolutionWorkers.executor,
     private val resolver: (String) -> String? = ::resolveCanonicalHostname,
 ) : TracerouteReverseDnsLookup {
     @OptIn(InternalCoroutinesApi::class)
@@ -108,7 +108,7 @@ internal class BoundedTracerouteReverseDnsLookup(
     }
 }
 
-private object TracerouteReverseDnsWorkers {
+internal object TracerouteNameResolutionWorkers {
     private val sequence = AtomicInteger()
     private val threadFactory = ThreadFactory { runnable ->
         Thread(runnable, "traceroute-reverse-dns-${sequence.incrementAndGet()}").apply {

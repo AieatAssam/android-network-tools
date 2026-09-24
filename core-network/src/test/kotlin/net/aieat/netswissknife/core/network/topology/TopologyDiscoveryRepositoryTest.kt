@@ -4,11 +4,13 @@ import io.mockk.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
@@ -27,6 +29,10 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.ConcurrentHashMap
+import java.net.InetAddress
+import org.snmp4j.TransportStateReference
+import org.snmp4j.smi.UdpAddress
+import org.snmp4j.transport.DefaultUdpTransportMapping
 
 class TopologyDiscoveryRepositoryTest {
 
@@ -264,6 +270,321 @@ class TopologyDiscoveryRepositoryTest {
         assertTrue(events.none { it is TopologyDiscoveryEvent.Error })
         assertTrue(events.none { it is TopologyDiscoveryEvent.Complete })
         verify(exactly = 1) { snmpClient.close() }
+    }
+
+    @Test
+    fun `seed hostname resolution is bounded by the caller operation deadline`() = runBlocking {
+        val lookupStarted = CountDownLatch(1)
+        val releaseLookup = CountDownLatch(1)
+        val resolver = TopologyHostnameResolver {
+            lookupStarted.countDown()
+            while (true) {
+                try {
+                    releaseLookup.await()
+                    break
+                } catch (_: InterruptedException) {
+                    // Simulate a platform resolver that cannot be stopped by thread interruption.
+                }
+            }
+            InetAddress.getByName("127.0.0.1")
+        }
+        val factory = object : SnmpClientFactory {
+            override fun create(params: TopologyParams): SnmpClient = error("session deadline required")
+            override fun create(params: TopologyParams, session: OperationSession): SnmpClient =
+                Snmp4jClientImpl(
+                    params,
+                    operationDeadline = session.budget.deadline,
+                    hostnameResolver = resolver,
+                    deferInitialization = true,
+                )
+        }
+        val deadlineRepository = TopologyDiscoveryRepositoryImpl(factory)
+        val params = defaultParams.copy(targetIp = "slow-seed.example", maxHops = 1, timeoutMs = 5_000)
+        val session = OperationSession(
+            OperationBudget.start(timeoutMillis = 1_000)
+        )
+        val events = java.util.concurrent.ConcurrentLinkedQueue<TopologyDiscoveryEvent>()
+        val collector = launch(Dispatchers.IO) { deadlineRepository.discover(params, session).collect(events::add) }
+
+        try {
+            assertTrue(lookupStarted.await(5, TimeUnit.SECONDS))
+            withTimeout(5_000) { collector.join() }
+
+            assertEquals(CancellationReason.DEADLINE_EXCEEDED, session.cancellationReason)
+            assertTrue(events.any { it is TopologyDiscoveryEvent.TimeLimit })
+            assertTrue(events.none { it is TopologyDiscoveryEvent.Complete })
+        } finally {
+            releaseLookup.countDown()
+            collector.cancelAndJoin()
+        }
+    }
+
+    @Test
+    fun `SNMPv3 engine ID discovery is bounded by the caller operation deadline`() = runTest {
+        val nowNanos = java.util.concurrent.atomic.AtomicLong(0L)
+        val discoveryStarted = CompletableDeferred<Unit>()
+        val releaseDiscovery = CountDownLatch(1)
+        val engineDiscoverer = AuthoritativeEngineIdDiscoverer { _, _, _ ->
+            discoveryStarted.complete(Unit)
+            while (true) {
+                try {
+                    releaseDiscovery.await()
+                    break
+                } catch (_: InterruptedException) {
+                    // Simulate a library wait that ignores interruption until its own transport closes.
+                }
+            }
+            null
+        }
+        val factory = object : SnmpClientFactory {
+            override fun create(params: TopologyParams): SnmpClient = error("session deadline required")
+            override fun create(params: TopologyParams, session: OperationSession): SnmpClient =
+                Snmp4jClientImpl(
+                    params,
+                    operationDeadline = session.budget.deadline,
+                    engineIdDiscoverer = engineDiscoverer,
+                    deferInitialization = true,
+                )
+        }
+        val deadlineRepository = TopologyDiscoveryRepositoryImpl(factory)
+        val params = defaultParams.copy(
+            snmpVersion = SnmpVersion.V3,
+            v3Username = "tester",
+            maxHops = 1,
+        )
+        val session = OperationSession(
+            OperationBudget.start(timeoutMillis = 100, clock = MonotonicClock { nowNanos.get() })
+        )
+        val events = mutableListOf<TopologyDiscoveryEvent>()
+        val collector = launch { deadlineRepository.discover(params, session).collect(events::add) }
+
+        try {
+            discoveryStarted.await()
+            nowNanos.set(100_000_000L)
+            testScheduler.advanceTimeBy(100)
+            testScheduler.runCurrent()
+            assertTrue(awaitCompletionInRealTime(collector))
+
+            assertEquals(CancellationReason.DEADLINE_EXCEEDED, session.cancellationReason)
+            assertTrue(events.any { it is TopologyDiscoveryEvent.TimeLimit })
+            assertTrue(events.none { it is TopologyDiscoveryEvent.Complete })
+        } finally {
+            releaseDiscovery.countDown()
+        }
+    }
+
+    @Test
+    fun `seed DNS phase timeout is typed cached and returned before an SNMP probe`() = runTest {
+        val lookupStarted = CountDownLatch(1)
+        val releaseLookup = CountDownLatch(1)
+        val lookupCount = AtomicInteger()
+        val client = Snmp4jClientImpl(
+            sessionParams = defaultParams.copy(targetIp = "slow-seed.example", timeoutMs = 40),
+            operationDeadline = OperationBudget.start(timeoutMillis = 5_000).deadline,
+            hostnameResolver = TopologyHostnameResolver {
+                lookupCount.incrementAndGet()
+                lookupStarted.countDown()
+                while (true) {
+                    try {
+                        releaseLookup.await()
+                        break
+                    } catch (_: InterruptedException) {
+                        // DNS implementations may ignore worker interruption.
+                    }
+                }
+                InetAddress.getByName("127.0.0.1")
+            },
+            deferInitialization = true,
+        )
+        val target = SnmpTarget(
+            ip = "slow-seed.example",
+            params = defaultParams.copy(targetIp = "slow-seed.example", timeoutMs = 40),
+        )
+
+        try {
+            val first = withContext(Dispatchers.IO) { runCatching { client.get(target, "1.3.6.1.2.1.1.1.0") }.exceptionOrNull() }
+            assertTrue(withContext(Dispatchers.IO) { lookupStarted.await(2, TimeUnit.SECONDS) })
+            assertTrue(first is SnmpRequestException)
+            assertTrue(first?.message.orEmpty().contains("Hostname resolution timed out"))
+
+            val second = withContext(Dispatchers.IO) { runCatching { client.walk(target, "1.3.6.1.2.1.1", SnmpWalkBudget(TopologyResourceLimits())) }.exceptionOrNull() }
+            assertTrue(second is SnmpRequestException)
+            assertEquals(1, lookupCount.get())
+            assertEquals(0, client.pendingAsyncRequestCount)
+        } finally {
+            releaseLookup.countDown()
+            client.close()
+        }
+    }
+
+    @Test
+    fun `blocked deferred transport initialization is closed and late return sends no probes`() = runTest {
+        val initStarted = CountDownLatch(1)
+        val releaseInit = CountDownLatch(1)
+        val initReturned = CountDownLatch(1)
+        val transportClosed = CountDownLatch(1)
+        val sendCount = AtomicInteger()
+        val engineDiscoverCount = AtomicInteger()
+        val createdClient = java.util.concurrent.atomic.AtomicReference<Snmp4jClientImpl>()
+        val transport = object : DefaultUdpTransportMapping() {
+            override fun sendMessage(
+                address: UdpAddress,
+                message: ByteArray,
+                tmStateReference: TransportStateReference?,
+                timeoutMillis: Long,
+                maxRetries: Int,
+            ) {
+                sendCount.incrementAndGet()
+                super.sendMessage(address, message, tmStateReference, timeoutMillis, maxRetries)
+            }
+
+            override fun close() {
+                try {
+                    super.close()
+                } finally {
+                    transportClosed.countDown()
+                }
+            }
+        }
+        val factory = object : SnmpClientFactory {
+            override fun create(params: TopologyParams): SnmpClient = error("session deadline required")
+            override fun create(params: TopologyParams, session: OperationSession): SnmpClient =
+                Snmp4jClientImpl(
+                    sessionParams = params,
+                    operationDeadline = session.budget.deadline,
+                    engineIdDiscoverer = AuthoritativeEngineIdDiscoverer { _, _, _ ->
+                        engineDiscoverCount.incrementAndGet()
+                        null
+                    },
+                    transportFactory = TopologyTransportFactory { _, _ -> transport },
+                    transportStarter = TopologyTransportStarter {
+                        initStarted.countDown()
+                        while (true) {
+                            try {
+                                releaseInit.await()
+                                break
+                            } catch (_: InterruptedException) {
+                                // Model a transport initialization call that outlives interruption.
+                            }
+                        }
+                        initReturned.countDown()
+                    },
+                    deferInitialization = true,
+                ).also(createdClient::set)
+        }
+        val deadlineRepository = TopologyDiscoveryRepositoryImpl(factory)
+        val params = defaultParams.copy(timeoutMs = 40, maxHops = 1)
+        val session = OperationSession(
+            OperationBudget.start(timeoutMillis = 10_000, clock = MonotonicClock { 0L })
+        )
+        val events = mutableListOf<TopologyDiscoveryEvent>()
+        val collector = launch { deadlineRepository.discover(params, session).collect(events::add) }
+
+        try {
+            assertTrue(withContext(Dispatchers.IO) { initStarted.await(2, TimeUnit.SECONDS) })
+            assertTrue(awaitCompletionInRealTime(collector))
+
+            assertTrue(events.any { it is TopologyDiscoveryEvent.Error && it.message.contains("initialization timed out") })
+            assertTrue(withContext(Dispatchers.IO) { transportClosed.await(2, TimeUnit.SECONDS) })
+            assertEquals(0, sendCount.get())
+            assertEquals(0, engineDiscoverCount.get())
+            assertEquals(0, createdClient.get().pendingAsyncRequestCount)
+        } finally {
+            releaseInit.countDown()
+        }
+        assertTrue(withContext(Dispatchers.IO) { initReturned.await(2, TimeUnit.SECONDS) })
+        assertEquals(0, sendCount.get())
+    }
+
+    @Test
+    fun `late listener recreating a socket is closed after one-shot init timeout`() = runTest {
+        val initStarted = CountDownLatch(1)
+        val releaseInit = CountDownLatch(1)
+        val initReturned = CountDownLatch(1)
+        val secondClose = CountDownLatch(1)
+        val factoryCalls = AtomicInteger()
+        val starterCalls = AtomicInteger()
+        val sendCount = AtomicInteger()
+        class TrackingTransport(private val closeCount: AtomicInteger) : DefaultUdpTransportMapping() {
+            val hasOpenSocket: Boolean get() = socket?.isClosed == false
+
+            override fun sendMessage(
+                address: UdpAddress,
+                message: ByteArray,
+                tmStateReference: TransportStateReference?,
+                timeoutMillis: Long,
+                maxRetries: Int,
+            ) {
+                sendCount.incrementAndGet()
+                super.sendMessage(address, message, tmStateReference, timeoutMillis, maxRetries)
+            }
+
+            override fun close() {
+                val currentCloseCount = closeCount.incrementAndGet()
+                try {
+                    super.close()
+                } finally {
+                    if (currentCloseCount == 2) secondClose.countDown()
+                }
+            }
+        }
+        val transports = java.util.Collections.synchronizedList(mutableListOf<TrackingTransport>())
+        val closeCounts = java.util.Collections.synchronizedList(mutableListOf<AtomicInteger>())
+        val client = Snmp4jClientImpl(
+            sessionParams = defaultParams.copy(timeoutMs = 40),
+            operationDeadline = OperationBudget.start(timeoutMillis = 5_000).deadline,
+            transportFactory = TopologyTransportFactory { _, _ ->
+                factoryCalls.incrementAndGet()
+                val closeCount = AtomicInteger()
+                closeCounts.add(closeCount)
+                TrackingTransport(closeCount).also(transports::add)
+            },
+            transportStarter = TopologyTransportStarter { transport ->
+                starterCalls.incrementAndGet()
+                initStarted.countDown()
+                while (true) {
+                    try {
+                        releaseInit.await()
+                        break
+                    } catch (_: InterruptedException) {
+                        // Keep the first initialization alive past its phase timeout.
+                    }
+                }
+                transport.listen()
+                initReturned.countDown()
+            },
+            deferInitialization = true,
+        )
+        val target = SnmpTarget("192.168.1.1", params = defaultParams.copy(timeoutMs = 40))
+
+        try {
+            val first = withContext(Dispatchers.IO) {
+                runCatching { client.get(target, "1.3.6.1.2.1.1.1.0") }.exceptionOrNull()
+            }
+            assertTrue(first is java.net.SocketTimeoutException)
+            assertTrue(withContext(Dispatchers.IO) { initStarted.await(2, TimeUnit.SECONDS) })
+            val second = withContext(Dispatchers.IO) {
+                runCatching { client.get(target, "1.3.6.1.2.1.1.5.0") }.exceptionOrNull()
+            }
+
+            assertSame(first, second)
+            assertEquals(1, factoryCalls.get())
+            assertEquals(1, starterCalls.get())
+            assertEquals(0, sendCount.get())
+            assertEquals(1, transports.size)
+            assertEquals(listOf(1), closeCounts.map { it.get() })
+        } finally {
+            client.close()
+            releaseInit.countDown()
+        }
+
+        assertTrue(withContext(Dispatchers.IO) { initReturned.await(2, TimeUnit.SECONDS) })
+        assertTrue(withContext(Dispatchers.IO) { secondClose.await(2, TimeUnit.SECONDS) })
+        assertEquals(1, factoryCalls.get())
+        assertEquals(1, starterCalls.get())
+        assertEquals(0, sendCount.get())
+        assertEquals(listOf(2), closeCounts.map { it.get() })
+        assertTrue(transports.none { it.hasOpenSocket })
     }
 
     @Test
@@ -878,6 +1199,12 @@ class TopologyDiscoveryRepositoryTest {
         .filterIsInstance<TopologyDiscoveryEvent.Complete>()
         .single()
         .graph
+
+    private suspend fun awaitCompletionInRealTime(job: Job): Boolean {
+        val completed = CountDownLatch(1)
+        job.invokeOnCompletion { completed.countDown() }
+        return withContext(Dispatchers.IO) { completed.await(2, TimeUnit.SECONDS) }
+    }
 
     private suspend fun discoverEventsWithCdp(
         limits: TopologyResourceLimits,

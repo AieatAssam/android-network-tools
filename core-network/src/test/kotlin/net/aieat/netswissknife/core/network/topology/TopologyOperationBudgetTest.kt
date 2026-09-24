@@ -18,9 +18,9 @@ class TopologyOperationBudgetTest {
         // 20 bounded SNMP request windows × 2 attempts × 3 seconds; branching is capped to 3 nodes.
         val estimate = TopologyOperationBudget.estimate(request)
         assertEquals(3, estimate?.maxNodes)
-        assertEquals(451_000L, estimate?.timeoutMillis)
-        assertEquals(451_000L, TopologyOperationBudget.estimatedTimeoutMillis(request))
-        assertEquals(451_000L, TopologyOperationBudget.timeoutMillisOrNull(request))
+        assertEquals(454_750L, estimate?.timeoutMillis)
+        assertEquals(454_750L, TopologyOperationBudget.estimatedTimeoutMillis(request))
+        assertEquals(454_750L, TopologyOperationBudget.timeoutMillisOrNull(request))
     }
 
     @Test
@@ -40,7 +40,7 @@ class TopologyOperationBudgetTest {
 
         val smallEstimate = TopologyOperationBudget.estimate(small)
         assertEquals(47, smallEstimate?.maxNodes)
-        assertEquals(588_500L, smallEstimate?.timeoutMillis)
+        assertEquals(589_125L, smallEstimate?.timeoutMillis)
         assertTrue(TopologyOperationBudget.estimatedTimeoutMillis(oversized) > TopologyOperationBudget.HARD_CEILING_MILLIS)
         assertNull(TopologyOperationBudget.timeoutMillisOrNull(oversized))
     }
@@ -73,6 +73,28 @@ class TopologyOperationBudgetTest {
 
         assertEquals(3, default?.maxNodes)
         assertEquals(1, serialSession?.maxNodes)
-        assertEquals(331_000L, serialSession?.timeoutMillis)
+        assertEquals(334_750L, serialSession?.timeoutMillis)
+    }
+
+    @Test
+    fun `hostname resolution and SNMPv3 engine discovery are included in the estimate`() {
+        val literal = TopologyParams(
+            targetIp = "192.168.1.1",
+            maxHops = 1,
+            timeoutMs = 500,
+            retries = 0,
+        )
+        val hostname = literal.copy(targetIp = "switch.example")
+        val v3Hostname = hostname.copy(snmpVersion = SnmpVersion.V3, v3Username = "tester")
+
+        val literalEstimate = checkNotNull(TopologyOperationBudget.estimate(literal))
+        val hostnameEstimate = checkNotNull(TopologyOperationBudget.estimate(hostname))
+        val v3Estimate = checkNotNull(TopologyOperationBudget.estimate(v3Hostname))
+
+        assertEquals(literalEstimate.maxNodes, hostnameEstimate.maxNodes)
+        assertTrue(hostnameEstimate.timeoutMillis > literalEstimate.timeoutMillis)
+        assertTrue(v3Estimate.maxNodes < hostnameEstimate.maxNodes)
+        val ipv6 = literal.copy(targetIp = "2001:db8::1")
+        assertEquals(literalEstimate, TopologyOperationBudget.estimate(ipv6))
     }
 }
