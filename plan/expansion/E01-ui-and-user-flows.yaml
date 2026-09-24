@@ -479,6 +479,14 @@ tasks:
           - "Map and migrate recovery states across the remaining tools; add the planned shared state-coverage contract/source guard and localized recovery audit through P07."
           - "Run the LAN Compose cases on an approved connected device and complete the Traceroute offline/dead-path progress and recovery device checks."
 
+      dns_empty_answer_slice:
+        status: "implemented; E01-T09 remains in progress for cross-tool recovery migration and source coverage"
+        behavior: "DNS empty-answer copy distinguishes NOERROR with an empty answer (no requested records were returned), NXDOMAIN (the DNS response reports that the name does not exist), and other response codes (the server's exact RCODE is shown). The result summary still displays RCODE, authority/additional records remain visible, and raw response can still be expanded."
+        validation: "DnsScreenTest Android-test sources compile with fake-result Compose cases for NOERROR, an empty NOERROR referral carrying an NS authority record, NXDOMAIN, SERVFAIL, and REFUSED. Cases assert the message, RCODE, and expanded raw response. QA and adversarial reviews confirmed the copy does not claim nonexistence from an empty NOERROR answer and the raw-toggle test updates its fake StateFlow. Connected instrumentation was not run; no emulator or live DNS server was used."
+        remaining_acceptance:
+          - "Map and migrate recovery states across the remaining tools; add the planned shared state-coverage contract/source guard and localized recovery audit through P07."
+          - "Run DNS and LAN Compose recovery cases on an approved connected device; API 33 and live-network DNS checks remain separate from deterministic error-UX coverage."
+
   - id: E01-T10
     priority: high
     status: todo

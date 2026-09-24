@@ -73,7 +73,11 @@
     <string name="dns_copy_raw">Copy raw response</string>
     <string name="dns_raw_response">Raw DNS response</string>
     <string name="dns_no_records_title">No records found</string>
-    <string name="dns_no_records_subtitle">No %1$s records exist for %2$s</string>
+    <string name="dns_no_records_subtitle">No %1$s records were returned for %2$s.</string>
+    <string name="dns_nxdomain_title">Domain does not exist</string>
+    <string name="dns_nxdomain_subtitle">The DNS server reports that %1$s does not exist.</string>
+    <string name="dns_rcode_error_title">DNS lookup was not completed</string>
+    <string name="dns_rcode_error_subtitle">The DNS server returned %1$s for %2$s.</string>
     <string name="dns_rcode">RCODE: %1$s</string>
     <string name="dns_flags">Flags: %1$s</string>
     <string name="dns_server_used">Server used: %1$s</string>

@@ -1329,6 +1329,14 @@ private fun PlainValueDisplay(value: String) {
 
 @Composable
 private fun DnsNoRecordsCard(result: DnsResult) {
+    val (title, subtitle) = when (result.rcode) {
+        "NOERROR" -> R.string.dns_no_records_title to
+            stringResource(R.string.dns_no_records_subtitle, result.recordType.displayName, result.domain)
+        "NXDOMAIN" -> R.string.dns_nxdomain_title to
+            stringResource(R.string.dns_nxdomain_subtitle, result.domain)
+        else -> R.string.dns_rcode_error_title to
+            stringResource(R.string.dns_rcode_error_subtitle, result.rcode, result.domain)
+    }
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
         shape = AppShapes.large
@@ -1347,12 +1355,12 @@ private fun DnsNoRecordsCard(result: DnsResult) {
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
-                text = stringResource(R.string.dns_no_records_title),
+                text = stringResource(title),
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurface
             )
             Text(
-                text = stringResource(R.string.dns_no_records_subtitle, result.recordType.displayName, result.domain),
+                text = subtitle,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

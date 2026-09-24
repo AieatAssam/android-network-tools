@@ -243,6 +243,105 @@ class DnsScreenTest {
     }
 
     @Test
+    fun noerrorEmptyResult_explainsNoRecordsAndKeepsRcodeAndRawResponse() {
+        assertEmptyResultPresentation(
+            rcode = "NOERROR",
+            expectedTitle = context.getString(R.string.dns_no_records_title),
+            expectedSubtitle = context.getString(
+                R.string.dns_no_records_subtitle,
+                DnsRecordType.A.displayName,
+                "empty.example"
+            )
+        )
+    }
+
+    @Test
+    fun nxdomainEmptyResult_explainsMissingDomainAndKeepsRcodeAndRawResponse() {
+        assertEmptyResultPresentation(
+            rcode = "NXDOMAIN",
+            expectedTitle = context.getString(R.string.dns_nxdomain_title),
+            expectedSubtitle = context.getString(R.string.dns_nxdomain_subtitle, "empty.example")
+        )
+    }
+
+    @Test
+    fun serverFailureEmptyResult_explainsRcodeAndKeepsRcodeAndRawResponse() {
+        assertEmptyResultPresentation(
+            rcode = "SERVFAIL",
+            expectedTitle = context.getString(R.string.dns_rcode_error_title),
+            expectedSubtitle = context.getString(R.string.dns_rcode_error_subtitle, "SERVFAIL", "empty.example")
+        )
+    }
+
+    @Test
+    fun refusedEmptyResult_usesOtherRcodeRecoveryCopy() {
+        assertEmptyResultPresentation(
+            rcode = "REFUSED",
+            expectedTitle = context.getString(R.string.dns_rcode_error_title),
+            expectedSubtitle = context.getString(R.string.dns_rcode_error_subtitle, "REFUSED", "empty.example")
+        )
+    }
+
+    private fun assertEmptyResultPresentation(
+        rcode: String,
+        expectedTitle: String,
+        expectedSubtitle: String,
+        authority: List<DnsRecord> = emptyList()
+    ) {
+        val state = MutableStateFlow<DnsUiState>(DnsUiState.Success(DnsResult(
+            domain = "empty.example",
+            recordType = DnsRecordType.A,
+            server = DnsServer.System(),
+            records = emptyList(),
+            queryTimeMs = 12,
+            rawResponse = "raw response for $rcode",
+            authority = authority,
+            rcode = rcode,
+            serverUsed = "192.0.2.53"
+        )))
+        val viewModel = fakeDnsViewModel(state.value, uiStateFlow = state)
+        every { viewModel.onToggleRawView() } answers {
+            val current = state.value as? DnsUiState.Success
+            if (current != null) state.value = current.copy(showRaw = !current.showRaw)
+        }
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                DnsScreen(viewModel = viewModel)
+            }
+        }
+
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        scrollToStatePanel()
+        composeRule.onNodeWithText(expectedTitle).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText(expectedSubtitle).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.dns_rcode, rcode)).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.dns_raw_response))
+            .performScrollTo()
+            .assertIsDisplayed()
+            .performClick()
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        composeRule.onNodeWithText("raw response for $rcode").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun noerrorEmptyReferral_doesNotClaimTheRecordTypeDoesNotExist() {
+        assertEmptyResultPresentation(
+            rcode = "NOERROR",
+            expectedTitle = context.getString(R.string.dns_no_records_title),
+            expectedSubtitle = "No A records were returned for empty.example.",
+            authority = listOf(
+                DnsRecord(
+                    type = DnsRecordType.NS,
+                    name = "example.",
+                    value = "ns1.example.net.",
+                    ttl = 3_600,
+                    rawLine = "example. 3600 IN NS ns1.example.net."
+                )
+            )
+        )
+    }
+
+    @Test
     fun input_exposesOneDnsServerLabelAndHorizontalOverflowCue() {
         composeRule.setContent {
             NetSwissKnifeTheme {
