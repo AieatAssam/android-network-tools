@@ -152,6 +152,7 @@ class HttpProbeViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     fun onUrlChange(url: String) {
+        if (_uiState.value.isLoading) return
         _uiState.update { it.copy(url = url) }
         savedStateHandle[EDITED_URL_KEY] = url
         if (_hasInvalidHandoff.value && validateHttpProbeUrl(url) == null) {
@@ -169,12 +170,20 @@ class HttpProbeViewModel @Inject constructor(
         onUrlChange("")
     }
 
-    fun onMethodChange(method: HttpMethod) = _uiState.update { it.copy(method = method) }
+    fun onMethodChange(method: HttpMethod) {
+        if (_uiState.value.isLoading) return
+        _uiState.update { it.copy(method = method) }
+    }
 
-    fun onBodyChange(body: String) = _uiState.update { it.copy(body = body) }
+    fun onBodyChange(body: String) {
+        if (_uiState.value.isLoading) return
+        _uiState.update { it.copy(body = body) }
+    }
 
-    fun onFollowRedirectsToggle() =
+    fun onFollowRedirectsToggle() {
+        if (_uiState.value.isLoading) return
         _uiState.update { it.copy(followRedirects = !it.followRedirects) }
+    }
 
     fun onTabSelected(tab: Int) = _uiState.update { it.copy(selectedTab = tab) }
 
@@ -187,25 +196,37 @@ class HttpProbeViewModel @Inject constructor(
         active.decision.complete(approved)
     }
 
-    fun onToggleHeadersExpanded() =
+    fun onToggleHeadersExpanded() {
+        if (_uiState.value.isLoading) return
         _uiState.update { it.copy(headersExpanded = !it.headersExpanded) }
-
-    fun addHeader() =
-        _uiState.update { it.copy(customHeaders = it.customHeaders + HeaderEntry()) }
-
-    fun removeHeader(index: Int) =
-        _uiState.update { it.copy(customHeaders = it.customHeaders.toMutableList().also { list -> list.removeAt(index) }) }
-
-    fun updateHeaderKey(index: Int, key: String) = _uiState.update { state ->
-        val updated = state.customHeaders.toMutableList()
-        updated[index] = updated[index].copy(key = key)
-        state.copy(customHeaders = updated)
     }
 
-    fun updateHeaderValue(index: Int, value: String) = _uiState.update { state ->
-        val updated = state.customHeaders.toMutableList()
-        updated[index] = updated[index].copy(value = value)
-        state.copy(customHeaders = updated)
+    fun addHeader() {
+        if (_uiState.value.isLoading) return
+        _uiState.update { it.copy(customHeaders = it.customHeaders + HeaderEntry()) }
+    }
+
+    fun removeHeader(index: Int) {
+        if (_uiState.value.isLoading) return
+        _uiState.update { it.copy(customHeaders = it.customHeaders.toMutableList().also { list -> list.removeAt(index) }) }
+    }
+
+    fun updateHeaderKey(index: Int, key: String) {
+        if (_uiState.value.isLoading) return
+        _uiState.update { state ->
+            val updated = state.customHeaders.toMutableList()
+            updated[index] = updated[index].copy(key = key)
+            state.copy(customHeaders = updated)
+        }
+    }
+
+    fun updateHeaderValue(index: Int, value: String) {
+        if (_uiState.value.isLoading) return
+        _uiState.update { state ->
+            val updated = state.customHeaders.toMutableList()
+            updated[index] = updated[index].copy(value = value)
+            state.copy(customHeaders = updated)
+        }
     }
 
     fun removeRecentHost(host: String) {

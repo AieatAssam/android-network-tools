@@ -412,6 +412,7 @@ private fun HttpProbeInputCard(
 ) {
     val focusManager = LocalFocusManager.current
     val url = uiState.url
+    val formEnabled = !uiState.isLoading
     val isUrlInvalid = url.isNotBlank() && validateHttpProbeUrl(url) != null
 
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
@@ -423,12 +424,13 @@ private fun HttpProbeInputCard(
             OutlinedTextField(
                 value = url,
                 onValueChange = onUrlChange,
+                enabled = formEnabled,
                 label = { Text(stringResource(R.string.httprobe_url_label)) },
                 placeholder = { Text(stringResource(R.string.httprobe_url_placeholder)) },
                 leadingIcon = { Icon(Icons.Default.Http, contentDescription = null) },
                 trailingIcon = {
                     if (url.isNotEmpty()) {
-                        IconButton(onClick = { onUrlChange("") }) {
+                        IconButton(onClick = { onUrlChange("") }, enabled = formEnabled) {
                             Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.clear))
                         }
                     }
@@ -453,7 +455,8 @@ private fun HttpProbeInputCard(
                 recentHosts = recentHosts,
                 onHostSelected = onUrlChange,
                 onRemoveHost = onRemoveRecentHost,
-                onClearAll = onClearRecentHosts
+                onClearAll = onClearRecentHosts,
+                selectionEnabled = formEnabled,
             )
 
             // Method selector
@@ -471,6 +474,7 @@ private fun HttpProbeInputCard(
                     FilterChip(
                         selected = selected,
                         onClick = { onMethodChange(method) },
+                        enabled = formEnabled,
                         label = { Text(method.name, style = MaterialTheme.typography.labelMedium) },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = methodColor(method).copy(alpha = 0.2f),
@@ -505,14 +509,14 @@ private fun HttpProbeInputCard(
                     }
                     Spacer(Modifier.width(4.dp))
                 }
-                IconButton(onClick = onToggleHeaders, modifier = Modifier.size(32.dp)) {
+                IconButton(onClick = onToggleHeaders, enabled = formEnabled, modifier = Modifier.size(32.dp)) {
                     Icon(
                         imageVector = if (uiState.headersExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                         contentDescription = stringResource(if (uiState.headersExpanded) R.string.action_collapse else R.string.action_expand),
                         modifier = Modifier.size(20.dp)
                     )
                 }
-                IconButton(onClick = onAddHeader, modifier = Modifier.size(32.dp)) {
+                IconButton(onClick = onAddHeader, enabled = formEnabled, modifier = Modifier.size(32.dp)) {
                     Icon(Icons.Default.Add, contentDescription = stringResource(R.string.httprobe_add_header), modifier = Modifier.size(20.dp))
                 }
             }
@@ -532,6 +536,7 @@ private fun HttpProbeInputCard(
                             OutlinedTextField(
                                 value = header.key,
                                 onValueChange = { onHeaderKeyChange(index, it) },
+                                enabled = formEnabled,
                                 label = { Text(stringResource(R.string.httprobe_header_key), style = MaterialTheme.typography.labelSmall) },
                                 singleLine = true,
                                 modifier = Modifier.weight(1f),
@@ -540,6 +545,7 @@ private fun HttpProbeInputCard(
                             OutlinedTextField(
                                 value = header.value,
                                 onValueChange = { onHeaderValueChange(index, it) },
+                                enabled = formEnabled,
                                 label = { Text(stringResource(R.string.httprobe_header_value), style = MaterialTheme.typography.labelSmall) },
                                 singleLine = true,
                                 modifier = Modifier.weight(1f),
@@ -547,6 +553,7 @@ private fun HttpProbeInputCard(
                             )
                             IconButton(
                                 onClick = { onRemoveHeader(index) },
+                                enabled = formEnabled,
                                 modifier = Modifier.size(32.dp)
                             ) {
                                 Icon(
@@ -570,6 +577,7 @@ private fun HttpProbeInputCard(
                 OutlinedTextField(
                     value = uiState.body,
                     onValueChange = onBodyChange,
+                    enabled = formEnabled,
                     label = { Text(stringResource(R.string.httprobe_body_label)) },
                     placeholder = { Text(stringResource(R.string.httprobe_body_placeholder)) },
                     modifier = Modifier.fillMaxWidth().height(120.dp),
@@ -596,7 +604,8 @@ private fun HttpProbeInputCard(
                 }
                 Switch(
                     checked = uiState.followRedirects,
-                    onCheckedChange = { onFollowRedirectsToggle() }
+                    onCheckedChange = { onFollowRedirectsToggle() },
+                    enabled = formEnabled,
                 )
             }
 

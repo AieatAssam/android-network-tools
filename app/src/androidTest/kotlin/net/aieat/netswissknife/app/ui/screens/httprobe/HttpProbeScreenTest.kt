@@ -1,6 +1,7 @@
 package net.aieat.netswissknife.app.ui.screens.httprobe
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.v2.createComposeRule
@@ -22,6 +23,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.theme.NetSwissKnifeTheme
 import net.aieat.netswissknife.app.ui.navigation.ToolSource
+import net.aieat.netswissknife.core.network.httprobe.HttpMethod
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeRequest
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeResult
 import net.aieat.netswissknife.core.network.httprobe.HttpSecurityAnalyzer
@@ -123,9 +125,14 @@ class HttpProbeScreenTest {
                     viewModel = fakeViewModel(
                         HttpProbeUiState(
                             url = "https://example.com",
+                            method = HttpMethod.POST,
+                            customHeaders = listOf(HeaderEntry("X-Test", "value")),
+                            body = "body",
+                            headersExpanded = true,
                             isLoading = true,
                             isCanceling = true,
                         ),
+                        recentHostValues = listOf("https://recent.example"),
                     ),
                 )
             }
@@ -136,6 +143,22 @@ class HttpProbeScreenTest {
             .onNodeWithText(context.getString(R.string.httprobe_stopping))
             .performScrollTo()
             .assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.httprobe_url_label))
+            .assertIsNotEnabled()
+        composeRule.onNodeWithText("POST")
+            .assertIsNotEnabled()
+        composeRule.onNodeWithText(context.getString(R.string.httprobe_header_key))
+            .performScrollTo()
+            .assertIsNotEnabled()
+        composeRule.onNodeWithText(context.getString(R.string.httprobe_header_value))
+            .performScrollTo()
+            .assertIsNotEnabled()
+        composeRule.onNodeWithText(context.getString(R.string.httprobe_body_label))
+            .performScrollTo()
+            .assertIsNotEnabled()
+        composeRule.onNodeWithText("https://recent.example")
+            .performScrollTo()
+            .assertIsNotEnabled()
     }
 
     @Test
@@ -357,10 +380,13 @@ class HttpProbeScreenTest {
             .assertIsDisplayed()
     }
 
-    private fun fakeViewModel(state: HttpProbeUiState): HttpProbeViewModel {
+    private fun fakeViewModel(
+        state: HttpProbeUiState,
+        recentHostValues: List<String> = emptyList(),
+    ): HttpProbeViewModel {
         val viewModel = mockk<HttpProbeViewModel>(relaxed = true)
         every { viewModel.uiState } returns MutableStateFlow(state)
-        every { viewModel.recentHosts } returns MutableStateFlow(emptyList())
+        every { viewModel.recentHosts } returns MutableStateFlow(recentHostValues)
         every { viewModel.sourceContextState } returns MutableStateFlow(null)
         every { viewModel.hasInvalidHandoff } returns MutableStateFlow(false)
         return viewModel

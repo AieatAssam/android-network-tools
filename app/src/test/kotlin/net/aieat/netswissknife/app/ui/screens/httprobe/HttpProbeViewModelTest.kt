@@ -468,6 +468,72 @@ class HttpProbeViewModelTest {
         }
 
         @Test
+        fun `request inputs stay fixed until the submitted request finishes`() = runTest {
+            val submittedRequest = CompletableDeferred<HttpProbeRequest>()
+            val finishRequest = CompletableDeferred<NetworkResult<HttpProbeResult>>()
+            val repository = object : HttpProbeRepository {
+                override suspend fun probe(request: HttpProbeRequest): NetworkResult<HttpProbeResult> =
+                    error("The session-aware path is required")
+
+                override suspend fun probe(
+                    request: HttpProbeRequest,
+                    operationSession: OperationSession,
+                ): NetworkResult<HttpProbeResult> = OperationRunner.run(operationSession) {
+                    submittedRequest.complete(request)
+                    finishRequest.await()
+                }
+            }
+            val savedState = SavedStateHandle()
+            val inFlightViewModel = HttpProbeViewModel(
+                HttpProbeUseCase(repository),
+                recentHostsRepository,
+                savedStateHandle = savedState,
+            )
+            inFlightViewModel.onUrlChange("https://request-a.example")
+            inFlightViewModel.onMethodChange(HttpMethod.POST)
+            inFlightViewModel.onBodyChange("submitted body")
+            inFlightViewModel.addHeader()
+            inFlightViewModel.updateHeaderKey(0, "X-Test")
+            inFlightViewModel.updateHeaderValue(0, "submitted")
+            inFlightViewModel.onFollowRedirectsToggle()
+
+            inFlightViewModel.send()
+            val request = submittedRequest.await()
+            assertEquals("https://request-a.example", savedState.get<String>("editedHttpUrl"))
+            assertEquals("https://request-a.example", request.url)
+            assertEquals(HttpMethod.POST, request.method)
+            assertEquals("submitted body", request.body)
+            assertEquals(listOf("X-Test" to "submitted"), request.headers)
+            assertFalse(request.followRedirects)
+
+            inFlightViewModel.onUrlChange("https://request-b.example")
+            inFlightViewModel.onMethodChange(HttpMethod.PUT)
+            inFlightViewModel.onBodyChange("edited body")
+            inFlightViewModel.updateHeaderValue(0, "edited")
+            inFlightViewModel.removeHeader(0)
+            inFlightViewModel.addHeader()
+            inFlightViewModel.onFollowRedirectsToggle()
+            inFlightViewModel.onToggleHeadersExpanded()
+            inFlightViewModel.clearPrefill()
+
+            val stillSubmitted = inFlightViewModel.uiState.value
+            assertEquals("https://request-a.example", stillSubmitted.url)
+            assertEquals("https://request-a.example", savedState.get<String>("editedHttpUrl"))
+            assertEquals(HttpMethod.POST, stillSubmitted.method)
+            assertEquals("submitted body", stillSubmitted.body)
+            assertEquals(listOf(HeaderEntry("X-Test", "submitted")), stillSubmitted.customHeaders)
+            assertFalse(stillSubmitted.followRedirects)
+            assertFalse(stillSubmitted.headersExpanded)
+
+            finishRequest.complete(NetworkResult.Success(stubResult.copy(request = request)))
+            val completed = withTimeout(5_000) {
+                inFlightViewModel.uiState.first { !it.isLoading }
+            }
+            assertEquals(request, completed.result?.request)
+            assertEquals(request.url, completed.url)
+        }
+
+        @Test
         fun `user cancel stays stopping until operation cleanup then shows canceled`() = runTest {
             val operationEntered = CompletableDeferred<Unit>()
             val cleanupStarted = CompletableDeferred<Unit>()
