@@ -282,6 +282,24 @@ class DnsViewModelTest {
         }
 
         @Test
+        fun `DNS error results are not saved to recents`() = runTest {
+            coEvery { useCase(any(), any()) } returns NetworkResult.Error("Invalid domain")
+
+            listOf("foo bar", "a..b", "2001:db8::1").forEach { query ->
+                viewModel.onDomainChange(query)
+                viewModel.performLookup()
+                assertTrue(viewModel.uiState.value is DnsUiState.Error, "Expected error for $query")
+            }
+
+            coVerify(exactly = 0) {
+                recentHostsRepository.addRecent(
+                    net.aieat.netswissknife.app.data.AppPreferenceKeys.RECENT_DNS_HOSTS,
+                    any()
+                )
+            }
+        }
+
+        @Test
         fun `recent persistence failure does not replace successful DNS result`() = runTest {
             coEvery { useCase(any(), any()) } returns NetworkResult.Success(stubResult)
             coEvery {

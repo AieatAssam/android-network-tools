@@ -178,14 +178,16 @@ class DnsViewModel @Inject constructor(
                 val result = dnsLookupUseCase(params, session)
                 if (requestGeneration != lookupGeneration) return@launch
 
-                try {
-                    addRecentIfInputWasValid(params)
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (_: Exception) {
-                    // Recents are best-effort and must not replace the DNS result.
+                if (result is NetworkResult.Success) {
+                    try {
+                        addRecentIfInputWasValid(params)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        // Recents are best-effort and must not replace the DNS result.
+                    }
+                    if (requestGeneration != lookupGeneration) return@launch
                 }
-                if (requestGeneration != lookupGeneration) return@launch
 
                 val canFallbackToCloudflare =
                     (params.server as? DnsServer.System)?.serverAddresses?.isEmpty() == true
