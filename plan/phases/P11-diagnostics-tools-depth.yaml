@@ -17,7 +17,7 @@ phase:
   id: P11
   title: "Speed Test (keep-alive/TCP latency, server-timing correction, multi-stream, loaded latency capture, server metadata) · Traceroute (per-probe RTT stats, async rDNS/GeoIP enrichment events, provider chain + reserved ranges + IPv6, country flags) · Port Scanner (banner truncation flag, protocol-aware probes, TLS subject)"
   priority: medium
-  status: todo
+  status: in_progress
   estimated_effort: "L (4-6 agent sessions; three PR series)"
   depends_on: [P04, P05]     # ping engine/ICMP + binder; OkHttp from P10 is reused if available (else add here)
   enables: [P14]
@@ -143,7 +143,13 @@ tasks:
 
   - id: P11-T2
     title: "Traceroute: per-probe RTTs, async enrichment, provider chain, reserved ranges, IPv6, flags"
-    status: todo
+    status: in_progress
+    current_progress:
+      date: "2026-09-24"
+      implemented: "The E03-T01 traceroute slice emits raw hops immediately, performs reverse-DNS and GeoIP enrichment asynchronously under the caller session with bounded concurrency and lookup timeouts, and merges enrichment by hop number without changing row order. A deadline during enrichment preserves the raw partial hop."
+      fixed_in: "8286e48"
+      validation: "core-network 1,141 tests (one skipped), core-domain 211, app 522; focused enrichment/deadline/ViewModel/repository tests 36/36; Android-test Kotlin compilation and lintDebug passed. QA and adversarial reviews cleared this slice. No device or live-network trace was used."
+      remaining: "P11-T2 remains in_progress: per-probe RTT statistics, provider fallback/cache/breaker, reserved-range classification, IPv6 enrichment, country flags, corresponding screen presentation, and the manual 1.1.1.1 three-probe validation remain open."
     tdd:
       red:
         tests:
