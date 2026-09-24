@@ -44,6 +44,21 @@ interface PortScanRepository {
         )
     )
 
+    /** Request-sized session for callers that know the scan work before starting it. */
+    fun newSession(
+        portCount: Int,
+        timeoutMs: Int,
+        concurrency: Int,
+        clock: MonotonicClock = SystemMonotonicClock,
+    ): OperationSession = OperationSession(
+        OperationBudget.start(
+            requirement = OperationRequirement.ANY_NETWORK,
+            timeoutMillis = PortScanOperationBudget.sessionTimeoutMillis(portCount, timeoutMs, concurrency),
+            maxConcurrentProbes = concurrency.coerceIn(1, PortScanOperationBudget.MAX_CONCURRENCY),
+            clock = clock,
+        )
+    )
+
     /**
      * Caller-owned variant. The source-compatible default delegates to the legacy method and
      * cannot enforce the session; production repositories that own resources must override it.

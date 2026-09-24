@@ -46,8 +46,8 @@ data class PortConnectResult(
  *
  * @param checker  Functional hook for the TCP probe. Pass null to use the real socket
  *                 implementation, which honours the [scan] `timeoutMs` parameter.
- * @param operationTimeoutMillis Maximum duration of one interactive scan, including resolution
- *                                and result collection. The default is the shared 120-second cap.
+ * @param operationTimeoutMillis Maximum duration for the legacy concurrency-only session API.
+ *                                Request-aware scan overloads derive their deadline from work size.
  */
 class PortScanRepositoryImpl(
     private val checker: PortConnectChecker? = null,
@@ -134,6 +134,20 @@ class PortScanRepositoryImpl(
         )
     )
 
+    override fun newSession(
+        portCount: Int,
+        timeoutMs: Int,
+        concurrency: Int,
+        clock: MonotonicClock,
+    ): OperationSession = OperationSession(
+        OperationBudget.start(
+            requirement = OperationRequirement.ANY_NETWORK,
+            timeoutMillis = PortScanOperationBudget.sessionTimeoutMillis(portCount, timeoutMs, concurrency),
+            maxConcurrentProbes = concurrency.coerceIn(1, PortScanOperationBudget.MAX_CONCURRENCY),
+            clock = clock,
+        )
+    )
+
     override fun scan(
         host: String,
         ports: List<Int>,
@@ -152,10 +166,16 @@ class PortScanRepositoryImpl(
         val startTime = clock.nowNanos()
         val results = mutableListOf<PortScanResult>()
         val requestedConcurrency = concurrency.coerceIn(1, 500)
+        val estimate = PortScanOperationBudget.requireWithinCeiling(
+            portCount = ports.size.coerceAtLeast(1),
+            timeoutMs = timeoutMs.coerceAtLeast(1),
+            requestedConcurrency = requestedConcurrency,
+            sessionConcurrency = callerSession?.budget?.maxConcurrentProbes ?: requestedConcurrency,
+        )
         val session = callerSession ?: OperationSession(
             OperationBudget.start(
                 requirement = OperationRequirement.ANY_NETWORK,
-                timeoutMillis = operationTimeoutMillis,
+                timeoutMillis = estimate.timeoutMillis,
                 maxConcurrentProbes = requestedConcurrency,
                 clock = clock,
             )

@@ -158,6 +158,7 @@ private fun TopologyScreenContent(
         is TopologyUiState.Discovering -> uiState.nodes.find { it.ip == uiState.selectedNodeIp }
         is TopologyUiState.Canceling -> uiState.nodes.find { it.ip == uiState.selectedNodeIp }
         is TopologyUiState.Canceled -> uiState.nodes.find { it.ip == uiState.selectedNodeIp }
+        is TopologyUiState.TimeLimit -> uiState.nodes.find { it.ip == uiState.selectedNodeIp }
         is TopologyUiState.Done -> uiState.graph.nodes.find { it.ip == uiState.selectedNodeIp }
         else -> null
     }
@@ -533,6 +534,17 @@ private fun TopologyScreenContent(
                                 onClearPartialResults = onReset,
                             )
                         }
+                        is TopologyUiState.TimeLimit -> {
+                            TopologyProgressContent(
+                                nodes = state.nodes,
+                                links = state.links,
+                                nodesDone = state.nodesDone,
+                                statusMessage = stringResource(R.string.topology_time_limit_partial_status),
+                                selectedNodeIp = state.selectedNodeIp,
+                                onNodeTap = onSelectNode,
+                                onClearPartialResults = onReset,
+                            )
+                        }
                         is TopologyUiState.Done -> {
                             Box(modifier = Modifier.fillMaxSize()) {
                                 TopologyCanvas(
@@ -579,7 +591,9 @@ private fun TopologyScreenContent(
                         }
                         is TopologyUiState.Failure -> {
                             ErrorContent(
-                                message = state.message,
+                                message = if (state.isBudgetLimit) {
+                                    stringResource(R.string.topology_budget_exceeded)
+                                } else state.message,
                                 retryEnabled = canStartDiscovery,
                                 onRetry = {
                                     onRetryDiscovery(currentTopologyParams())
@@ -606,6 +620,9 @@ private fun TopologyScreenContent(
                     it.fromIp == selectedNode.ip || it.toIp == selectedNode.ip
                 }
                 is TopologyUiState.Canceled -> uiState.links.filter {
+                    it.fromIp == selectedNode.ip || it.toIp == selectedNode.ip
+                }
+                is TopologyUiState.TimeLimit -> uiState.links.filter {
                     it.fromIp == selectedNode.ip || it.toIp == selectedNode.ip
                 }
                 else -> emptyList()

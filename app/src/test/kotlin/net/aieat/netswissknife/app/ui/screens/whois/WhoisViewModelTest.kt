@@ -290,7 +290,8 @@ class WhoisViewModelTest {
 
         assertEquals(CancellationReason.USER_STOP, session.cancellationReason)
         assertFalse(viewModel.uiState.value.isLoading)
-        assertEquals("Lookup stopped. Retry when ready.", viewModel.uiState.value.error)
+        assertNull(viewModel.uiState.value.error)
+        assertTrue(viewModel.uiState.value.isCanceled)
         progress.tryEmit(stubHop.copy(operationId = session.budget.operationId))
         runCurrent()
         assertTrue(viewModel.uiState.value.hopStates.isEmpty(), "stopped lookup must ignore late progress")
@@ -314,7 +315,9 @@ class WhoisViewModelTest {
 
         assertEquals(CancellationReason.LIFECYCLE_PAUSE, session.cancellationReason)
         assertFalse(viewModel.uiState.value.isLoading)
-        assertTrue(viewModel.uiState.value.error.orEmpty().contains("left the foreground"))
+        assertTrue(viewModel.uiState.value.isCanceled)
+        assertNull(viewModel.uiState.value.error)
+        assertTrue(viewModel.uiState.value.isLifecyclePaused)
     }
 
     @Test
@@ -336,11 +339,156 @@ class WhoisViewModelTest {
 
         viewModel.stopLookup()
         runCurrent()
+        assertTrue(viewModel.uiState.value.isCanceling)
         delayedResult.complete(NetworkResult.Success(stubResult.copy(domainName = "late.example.com")))
         runCurrent()
 
         assertFalse(viewModel.uiState.value.isLoading)
+        assertFalse(viewModel.uiState.value.isCanceling)
+        assertTrue(viewModel.uiState.value.isCanceled)
         assertNull(viewModel.uiState.value.result)
-        assertEquals("Lookup stopped. Retry when ready.", viewModel.uiState.value.error)
+        assertNull(viewModel.uiState.value.error)
+    }
+
+    @Test
+    fun `stop waits for cleanup and gates duplicate stop and retry then permits retry`() = runTest {
+        val cleanup = CompletableDeferred<Unit>()
+        var calls = 0
+        coEvery { whoisLookupUseCase(any(), any()) } coAnswers {
+            calls++
+            if (calls == 1) {
+                try {
+                    kotlinx.coroutines.awaitCancellation()
+                } finally {
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { cleanup.await() }
+                }
+            } else {
+                NetworkResult.Success(stubResult.copy(domainName = "retried.example.com"))
+            }
+        }
+
+        viewModel.onQueryChange("example.com")
+        viewModel.lookup()
+        runCurrent()
+        viewModel.stopLookup()
+        runCurrent()
+
+        assertTrue(viewModel.uiState.value.isLoading)
+        assertTrue(viewModel.uiState.value.isCanceling)
+        assertFalse(viewModel.uiState.value.isCanceled)
+        viewModel.stopLookup()
+        viewModel.lookup()
+        runCurrent()
+        assertEquals(1, calls, "repeat Stop and lookup are gated during cleanup")
+
+        cleanup.complete(Unit)
+        runCurrent()
+        assertFalse(viewModel.uiState.value.isLoading)
+        assertFalse(viewModel.uiState.value.isCanceling)
+        assertTrue(viewModel.uiState.value.isCanceled)
+        assertFalse(viewModel.uiState.value.isLifecyclePaused)
+
+        viewModel.lookup()
+        runCurrent()
+        assertEquals(2, calls)
+        assertEquals("retried.example.com", viewModel.uiState.value.result?.domainName)
+        assertFalse(viewModel.uiState.value.isCanceled)
+    }
+
+    @Test
+    fun `replacement lookup waits for active lookup cleanup before starting new session`() = runTest {
+        val cleanup = CompletableDeferred<Unit>()
+        var calls = 0
+        val sessions = mutableListOf<OperationSession>()
+        coEvery { whoisLookupUseCase(any(), any()) } coAnswers {
+            calls++
+            sessions += secondArg<OperationSession>()
+            if (calls == 1) {
+                try {
+                    kotlinx.coroutines.awaitCancellation()
+                } finally {
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { cleanup.await() }
+                }
+            } else {
+                NetworkResult.Success(stubResult.copy(domainName = "second.example.com"))
+            }
+        }
+
+        viewModel.onQueryChange("first.example")
+        viewModel.lookup()
+        runCurrent()
+        val firstSession = sessions.single()
+        viewModel.onQueryChange("second.example")
+        viewModel.lookup()
+        runCurrent()
+
+        assertEquals(1, calls, "the replacement cannot start until canceled work cleans up")
+        assertEquals(CancellationReason.USER_STOP, firstSession.cancellationReason)
+        assertTrue(viewModel.uiState.value.isCanceling)
+
+        cleanup.complete(Unit)
+        runCurrent()
+
+        assertEquals(2, calls)
+        assertEquals("second.example.com", viewModel.uiState.value.result?.domainName)
+        assertFalse(viewModel.uiState.value.isCanceling)
+        assertFalse(viewModel.uiState.value.isCanceled)
+    }
+
+    @Test
+    fun `stopped lookup preserves partial hops and late old progress and result cannot affect retry`() = runTest {
+        val progress = MutableSharedFlow<WhoisHop>(extraBufferCapacity = 4)
+        every { whoisLookupUseCase.hopProgress } returns progress
+        val oldResult = CompletableDeferred<Unit>()
+        val sessions = mutableListOf<OperationSession>()
+        var calls = 0
+        coEvery { whoisLookupUseCase(any(), any()) } coAnswers {
+            calls++
+            sessions += secondArg<OperationSession>()
+            if (calls == 1) {
+                try {
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { oldResult.await() }
+                } catch (_: kotlinx.coroutines.CancellationException) {
+                    // A cancellation-insensitive adapter can still produce a late value.
+                }
+                NetworkResult.Success(stubResult.copy(domainName = "late.example.com"))
+            } else {
+                kotlinx.coroutines.awaitCancellation()
+            }
+        }
+
+        viewModel.onQueryChange("example.com")
+        viewModel.lookup()
+        runCurrent()
+        val oldSession = sessions.single()
+        val partialHop = stubHop.copy(
+            server = WhoisServer("whois.partial.test", WhoisServerRole.REGISTRY),
+            operationId = oldSession.budget.operationId,
+        )
+        progress.emit(partialHop)
+        runCurrent()
+        viewModel.stopLookup()
+        runCurrent()
+        assertEquals(listOf(partialHop.server), viewModel.uiState.value.hopStates.map { it.server })
+        assertTrue(viewModel.uiState.value.isCanceling)
+
+        oldResult.complete(Unit)
+        runCurrent()
+        assertTrue(viewModel.uiState.value.isCanceled)
+        assertNull(viewModel.uiState.value.result, "the old result must not be applied")
+        assertEquals(listOf(partialHop.server), viewModel.uiState.value.hopStates.map { it.server })
+
+        viewModel.onQueryChange("retry.example")
+        viewModel.lookup()
+        runCurrent()
+        val newSession = sessions.last()
+        progress.emit(partialHop.copy(server = WhoisServer("late.old.test", WhoisServerRole.REGISTRY)))
+        runCurrent()
+        assertTrue(viewModel.uiState.value.hopStates.isEmpty(), "old operation progress must be fenced")
+        assertNull(viewModel.uiState.value.result, "late old result must not replace the retry")
+        assertTrue(viewModel.uiState.value.isLoading)
+        assertTrue(oldSession !== newSession)
+        viewModel.stopLookup()
+        runCurrent()
     }
 }

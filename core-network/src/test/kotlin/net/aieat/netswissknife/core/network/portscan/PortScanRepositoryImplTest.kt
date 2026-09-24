@@ -13,6 +13,7 @@ import kotlinx.coroutines.withTimeout
 import net.aieat.netswissknife.core.network.net.FakeNetworkBinder
 import net.aieat.netswissknife.core.network.net.LocalNetworkPermissionDeniedException
 import net.aieat.netswissknife.core.network.testkit.ScriptedSocket
+import net.aieat.netswissknife.core.network.testkit.FakeClock
 import net.aieat.netswissknife.core.network.operation.CancellationReason
 import net.aieat.netswissknife.core.network.operation.OperationBudget
 import net.aieat.netswissknife.core.network.operation.OperationSession
@@ -35,6 +36,54 @@ import java.util.concurrent.atomic.AtomicInteger
 @OptIn(ExperimentalCoroutinesApi::class)
 @DisplayName("PortScanRepositoryImpl")
 class PortScanRepositoryImplTest {
+
+    @Test
+    fun `direct no-session scan derives its deadline from the requested work`() = runTest {
+        val clock = FakeClock()
+        val repo = PortScanRepositoryImpl(
+            checker = { _, _ ->
+                clock.advanceBy(1_000_000_000L)
+                PortConnectResult(PortStatus.CLOSED, 1L, null)
+            },
+            clock = clock,
+            hostResolver = { InetAddress.getLoopbackAddress() },
+        )
+
+        val updates = withContext(Dispatchers.Default) {
+            withTimeout(5_000) {
+                repo.scan("target", (1..100).toList(), timeoutMs = 1_000, concurrency = 1).toList()
+            }
+        }
+
+        assertEquals(100, updates.filterIsInstance<PortScanUpdate.PortResult>().size)
+        assertEquals(PortScanUpdate.Complete::class, updates.last()::class)
+        assertTrue(clock.nowNanos() >= 100_000_000_000L)
+    }
+
+    @Test
+    fun `request-sized repository session exceeds the legacy 120-second default when required`() {
+        val clock = FakeClock()
+        val repo = PortScanRepositoryImpl()
+        val session = repo.newSession(portCount = 200, timeoutMs = 1_000, concurrency = 1, clock = clock)
+
+        assertEquals(270_000L, session.budget.remainingTimeoutMillis())
+    }
+
+    @Test
+    fun `direct repository call rejects work above its hard ceiling before resolving the host`() = runTest {
+        var resolved = false
+        val repo = PortScanRepositoryImpl(
+            hostResolver = { resolved = true; InetAddress.getLoopbackAddress() },
+        )
+
+        val failure = runCatching {
+            repo.scan("target", (1..10_000).toList(), timeoutMs = 30_000, concurrency = 1).toList()
+        }.exceptionOrNull()
+
+        assertTrue(failure is IllegalArgumentException)
+        assertTrue((failure as? IllegalArgumentException)?.message.orEmpty().contains("15-minute operation limit"))
+        assertTrue(!resolved)
+    }
 
     @Test
     fun `repository default socket checker binds selected local sockets before connect`() = runTest {

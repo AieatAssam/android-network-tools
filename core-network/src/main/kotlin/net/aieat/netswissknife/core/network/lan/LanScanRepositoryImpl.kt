@@ -134,6 +134,7 @@ class LanScanRepositoryImpl(
     }
 
     override fun scan(request: LanScanRequest): Flow<LanScanUpdate> = flow {
+        LanScanOperationBudget.requireWithinCeiling(request)
         scan(request, newSession(request)).collect { emit(it) }
     }
 
@@ -141,6 +142,10 @@ class LanScanRepositoryImpl(
         request: LanScanRequest,
         operationSession: OperationSession,
     ): Flow<LanScanUpdate> = channelFlow {
+        LanScanOperationBudget.requireWithinCeiling(
+            request,
+            operationSession.budget.maxConcurrentProbes,
+        )
         val startTime = clock.nowNanos()
         val session = operationSession
         val effectiveConcurrency = request.concurrency
@@ -299,6 +304,7 @@ class LanScanRepositoryImpl(
         return OperationSession(
             OperationBudget.start(
                 requirement = OperationRequirement.LOCAL_NETWORK,
+                timeoutMillis = LanScanOperationBudget.sessionTimeoutMillis(request),
                 maxConcurrentProbes = effectiveConcurrency,
                 clock = clock,
             )

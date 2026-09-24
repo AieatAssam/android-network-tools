@@ -14,6 +14,7 @@ enum class TopologyTruncationReason {
     INTERFACE_LIMIT,
     VLAN_LIMIT,
     WALK_ENTRY_LIMIT,
+    WALK_PAGE_LIMIT,
     WALK_BYTE_LIMIT,
     WALK_VALUE_LIMIT,
     SCALAR_VALUE_LIMIT,
@@ -35,7 +36,8 @@ data class TopologyResourceLimits(
     val maxBytesPerDevice: Int = 1024 * 1024,
     val maxBytesPerGraph: Int = 8 * 1024 * 1024,
     val maxValueChars: Int = 4_096,
-    val maxRepetitions: Int = 10
+    val maxRepetitions: Int = 10,
+    val maxPagesPerWalk: Int = TopologyOperationBudget.DEFAULT_MAX_PAGES_PER_WALK,
 ) {
     init {
         require(maxNodes in 1..512 && maxLinks in 1..2_048 && maxPendingTargets in 1..256)
@@ -44,6 +46,7 @@ data class TopologyResourceLimits(
         require(maxEntriesPerDevice in 1..16_384 && maxBytesPerDevice in 1..2 * 1024 * 1024)
         require(maxBytesPerGraph in 1..16 * 1024 * 1024)
         require(maxValueChars in 1..4_096 && maxRepetitions in 1..25)
+        require(maxPagesPerWalk in 1..64)
     }
 }
 

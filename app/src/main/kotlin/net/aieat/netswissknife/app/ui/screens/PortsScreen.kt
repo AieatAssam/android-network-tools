@@ -258,7 +258,9 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
                         is PortScanUiState.Idle -> PortScanIdleState()
                         is PortScanUiState.Scanning -> PortScanProgressCard(state)
                         is PortScanUiState.Error -> PortScanErrorCard(
-                            message = state.message,
+                            message = if (state.isBudgetLimit) {
+                                stringResource(R.string.ports_scan_budget_exceeded)
+                            } else state.message,
                             onRetry = viewModel::startScan,
                             onClear = viewModel::onClear
                         )
@@ -269,7 +271,18 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
 
             // ── Finished: Summary Card ──────────────────────────────────────────
             if (uiState is PortScanUiState.Finished) {
-                val summary = (uiState as PortScanUiState.Finished).summary
+                val finished = uiState as PortScanUiState.Finished
+                val summary = finished.summary
+                if (finished.completion == PortScanUiState.Completion.DEADLINE) {
+                    item {
+                        Text(
+                            text = stringResource(R.string.ports_scan_deadline_partial),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                }
                 item {
                     val shareSubject = stringResource(R.string.share_subject_ports, summary.host)
                     PortScanSummaryCard(

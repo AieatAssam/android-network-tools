@@ -555,14 +555,14 @@ class PingViewModel @Inject constructor(
         val pingsSent = current.pingsSent
         val result = buildResult(current.host, current.packets, pingsSent)
         val logFile = session.file.takeIf { pingsSent > 0 && logAvailable }
-        _uiState.value = PingUiState.Finished(
-            result = result,
-            sessionLogFile = logFile
-        )
         if (logFile == null) {
             continuousSession = null
             session.file.delete()
         }
+        _uiState.value = PingUiState.Finished(
+            result = result,
+            sessionLogFile = logFile
+        )
     }
 
     // ── Cleanup ──────────────────────────────────────────────────────────────

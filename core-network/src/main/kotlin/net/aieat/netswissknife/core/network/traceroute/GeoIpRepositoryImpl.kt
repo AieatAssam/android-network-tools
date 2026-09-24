@@ -340,7 +340,7 @@ class GeoIpRepositoryImpl internal constructor(
 
     companion object {
         private const val DEFAULT_BASE_URL = "https://ipinfo.io"
-        private const val REQUEST_TIMEOUT_MS = 5_000L
+        private const val REQUEST_TIMEOUT_MS = TracerouteOperation.MAX_GEO_IP_WAIT_MILLIS
         private const val MAX_RESPONSE_BYTES = 65_536L
         private const val BODY_BUFFER_BYTES = 4_096
         private val COUNTRY_NAMES = mapOf(

@@ -126,7 +126,7 @@ class BoundedTracerouteReverseDnsLookupTest {
             ThreadFactory { Thread(it, "reverse-dns-session-stop-test").apply { isDaemon = true } },
             ThreadPoolExecutor.AbortPolicy(),
         )
-        val session = TracerouteOperation.newSession()
+        val session = TracerouteOperation.newSession(2, 500)
         val repository = IcmpEnginTracerouteRepositoryImpl(
             nativeTraceFactory = { _, _, _, _, _, _, _ ->
                 flowOf(HopResult(1, "192.0.2.9", null, 4, HopStatus.SUCCESS))

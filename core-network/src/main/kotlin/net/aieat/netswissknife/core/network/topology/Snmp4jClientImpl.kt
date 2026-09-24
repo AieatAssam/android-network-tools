@@ -60,6 +60,7 @@ class Snmp4jClientImpl(
     private val snmp = Snmp(transport)
     private val targetCache = ConcurrentHashMap<String, Target<*>>()
     private val authoritativeEngineIdCache = ConcurrentHashMap<String, ByteArray>()
+    private val authoritativeEngineIdDiscoveryAttempts = ConcurrentHashMap.newKeySet<String>()
     @Volatile
     private var closed = false
 
@@ -235,6 +236,9 @@ class Snmp4jClientImpl(
 
         synchronized(authoritativeEngineIdCache) {
             if (authoritativeEngineIdCache.containsKey(cacheKey)) return
+            // A missing agent can make SNMP4J return null. Remember the discovery attempt
+            // too, or every GET/WALK repeats the same timeout for this target.
+            if (!authoritativeEngineIdDiscoveryAttempts.add(cacheKey)) return
 
             val address = UdpAddress(InetAddress.getByName(target.ip), target.port)
             val engineId = snmp.discoverAuthoritativeEngineID(
@@ -345,11 +349,25 @@ internal class BoundedSnmpWalkCollector(
     private val results = linkedMapOf<String, String>()
     private val truncationReasons = mutableSetOf<TopologyTruncationReason>()
     private var walkBytes = 0
+    private var responsePages = 0
     private var completed = false
     private var stoppedByLimit = false
     private var hadError = false
 
-    override fun next(event: TreeEvent): Boolean = collect(event)
+    override fun next(event: TreeEvent): Boolean = collectPage(event)
+
+    private fun collectPage(event: TreeEvent): Boolean {
+        if (event.variableBindings?.isNotEmpty() == true) {
+            responsePages++
+            if (responsePages > budget.maxPagesPerWalk) {
+                truncationReasons += TopologyTruncationReason.WALK_PAGE_LIMIT
+                stoppedByLimit = true
+                completed = true
+                return false
+            }
+        }
+        return collect(event)
+    }
 
     private fun collect(event: TreeEvent): Boolean {
         if (event.isError) {
@@ -379,7 +397,13 @@ internal class BoundedSnmpWalkCollector(
     }
 
     override fun finished(event: TreeEvent) {
-        if (!stoppedByLimit) collect(event)
+        if (!stoppedByLimit) {
+            if (event.variableBindings?.isNotEmpty() == true) {
+                collectPage(event)
+            } else {
+                collect(event)
+            }
+        }
         completed = true
     }
 

@@ -42,6 +42,7 @@ import net.aieat.netswissknife.core.network.portscan.PortStatus
 import net.aieat.netswissknife.core.network.operation.OperationBudget
 import net.aieat.netswissknife.core.network.operation.OperationSession
 import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationDeadlineExceededException
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -581,6 +582,41 @@ class PortScanViewModelTest {
             viewModel.startScan()
             val state = viewModel.uiState.value
             assertTrue(state is PortScanUiState.Error)
+        }
+
+        @Test
+        fun `deadline keeps completed results in a partial Finished state`() = runTest {
+            every { portScanUseCase(any(), any()) } returns kotlinx.coroutines.flow.flow {
+                emit(PortScanFlowResult.Started("93.184.216.34", 2))
+                emit(PortScanFlowResult.PortScanned(stubResult, scannedCount = 1, totalCount = 2))
+                throw OperationDeadlineExceededException()
+            }
+            viewModel.onHostChange("example.com")
+
+            viewModel.startScan()
+
+            val state = viewModel.uiState.value as PortScanUiState.Finished
+            assertEquals(PortScanUiState.Completion.DEADLINE, state.completion)
+            assertEquals(listOf(80), state.summary.scannedPorts)
+            assertEquals(listOf(stubResult), state.summary.results)
+            assertEquals(1, state.summary.openPorts)
+        }
+
+        @Test
+        fun `over-ceiling custom scan is rejected before a session or probes start`() = runTest {
+            viewModel.onHostChange("example.com")
+            viewModel.onPresetChange(PortScanPreset.CUSTOM)
+            viewModel.onStartPortChange("1")
+            viewModel.onEndPortChange("10000")
+            viewModel.onTimeoutChange(30_000)
+            viewModel.onConcurrencyChange(1)
+
+            viewModel.startScan()
+
+            val state = viewModel.uiState.value as PortScanUiState.Error
+            assertTrue(state.isBudgetLimit)
+            verify(exactly = 0) { portScanUseCase.newSession(any()) }
+            verify(exactly = 0) { portScanUseCase(any(), any()) }
         }
 
         @Test

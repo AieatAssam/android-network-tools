@@ -235,6 +235,7 @@ fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
                             TracerouteFinishedPanel(
                                 result       = state.result,
                                 viewMode     = state.viewMode,
+                                timeLimitReached = state.timeLimitReached,
                                 onToggleMode = viewModel::onToggleViewMode,
                                 onClear      = viewModel::onClear,
                             )
@@ -658,6 +659,7 @@ private fun TracerouteFinishedPanel(
     result: TracerouteResult,
     viewMode: TracerouteViewMode,
     canceled: Boolean = false,
+    timeLimitReached: Boolean = false,
     onToggleMode: () -> Unit,
     onClear: () -> Unit
 ) {
@@ -673,6 +675,15 @@ private fun TracerouteFinishedPanel(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.secondary,
                 modifier = Modifier.testTag("traceroute_canceled_partial_status"),
+            )
+        }
+
+        if (timeLimitReached) {
+            Text(
+                text = stringResource(R.string.traceroute_time_limit_reached),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.secondary,
+                modifier = Modifier.testTag("traceroute_time_limit_reached"),
             )
         }
 

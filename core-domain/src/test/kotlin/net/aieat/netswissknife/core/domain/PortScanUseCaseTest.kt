@@ -43,6 +43,26 @@ class PortScanUseCaseTest {
         }
     }
 
+    @Test
+    fun `request above derived hard ceiling is rejected before repository probes`() = runTest {
+        val repository = mockk<PortScanRepository>()
+        val useCase = PortScanUseCase(repository)
+        val params = PortScanParams(
+            host = "example.com",
+            preset = PortScanPreset.CUSTOM,
+            startPort = 1,
+            endPort = 10_000,
+            timeoutMs = 30_000,
+            concurrency = 1,
+        )
+        val session = useCase.newSession(params)
+
+        val results = useCase(params, session).toList()
+
+        assertTrue(results.single() is PortScanFlowResult.ValidationError)
+        verify(exactly = 0) { repository.scan(any(), any(), any(), any(), any()) }
+    }
+
     private val openChecker: PortConnectChecker = { _, _ ->
         PortConnectResult(PortStatus.OPEN, 5L, null)
     }

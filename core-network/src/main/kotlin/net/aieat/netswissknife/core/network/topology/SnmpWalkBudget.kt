@@ -11,6 +11,7 @@ class SnmpWalkBudget internal constructor(
     private val limits: TopologyResourceLimits
 ) {
     internal val maxRepetitions: Int get() = limits.maxRepetitions
+    internal val maxPagesPerWalk: Int get() = limits.maxPagesPerWalk
     internal val maxValueChars: Int get() = limits.maxValueChars
     private var deviceEntries = 0
     private var deviceBytes = 0

@@ -6,7 +6,6 @@ import androidx.lifecycle.viewModelScope
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancelAndJoin
@@ -95,8 +94,6 @@ class MdnsRepositoryImplCancellationTest {
             }
 
             activeViewModel.stopScan()
-            val stoppedState = activeViewModel.uiState.value
-
             withTimeout(2_000) {
                 withContext(Dispatchers.IO) {
                     assertTrue(socket.closedSignal.await(1, TimeUnit.SECONDS), "stopScan did not close socket")
@@ -108,8 +105,9 @@ class MdnsRepositoryImplCancellationTest {
             delay(50)
 
             val state = activeViewModel.uiState.value
-            assertEquals(stoppedState, state, "cancelled collection must not update UI after Stop")
             assertFalse(state.isScanning)
+            assertFalse(state.isCanceling)
+            assertTrue(state.scanCanceled)
             assertFalse(state.scanComplete, "cancel must not emit DiscoveryComplete")
             assertEquals(null, state.error, "cancellation must not become a discovery error")
             assertTrue(state.services.isEmpty(), "zero-length packet after close must not emit a service")
@@ -154,9 +152,14 @@ class MdnsRepositoryImplCancellationTest {
         withTimeout(2_000) {
             withContext(Dispatchers.IO) { session.cancel(CancellationReason.USER_STOP) }
         }
-        val scanFailure = runCatching { withTimeout(2_000) { scan.await() } }.exceptionOrNull()
+        val scanResult = withTimeout(2_000) { scan.await() }
+        val cancellation = scanResult.exceptionOrNull()
 
-        assertTrue(scanFailure is CancellationException)
+        assertTrue(
+            cancellation is OperationCancellationException,
+            "unexpected result after blocked join was released: $scanResult",
+        )
+        assertEquals(CancellationReason.USER_STOP, (cancellation as OperationCancellationException).reason)
         assertEquals(CancellationReason.USER_STOP, session.cancellationReason)
         assertEquals(1, socket.closeCount.get())
         assertEquals(0, socket.leaveCount.get())

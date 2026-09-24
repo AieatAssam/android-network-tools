@@ -43,22 +43,45 @@ class TopologyDiscoveryRepositoryImpl(
     // Snmp4jClientImpl starts a UDP transport while it is constructed. Keep the
     // factory, discovery calls, and client teardown off Android's main thread.
     override fun discover(params: TopologyParams): Flow<TopologyDiscoveryEvent> = channelFlow {
+        val estimate = TopologyOperationBudget.estimate(
+            params,
+            configuredMaxNodes = limits.maxNodes,
+            maxPagesPerWalk = limits.maxPagesPerWalk,
+        )
+        if (estimate == null) {
+            send(TopologyDiscoveryEvent.Error(TopologyOperationBudget.OVER_CEILING_MESSAGE))
+            return@channelFlow
+        }
         // Keep session creation inside collection so re-collecting a cold Flow receives a
         // fresh one-shot session and an independent bounded deadline.
-        discover(params, newSession()).collect { send(it) }
+        discover(params, newSession(estimate.timeoutMillis)).collect { send(it) }
     }
 
     override fun discover(
         params: TopologyParams,
         session: OperationSession,
     ): Flow<TopologyDiscoveryEvent> = channelFlow {
+        val effectiveRequestConcurrency = minOf(
+            MAX_CONCURRENT_SNMP_REQUESTS,
+            session.budget.maxConcurrentProbes,
+        )
+        val budgetEstimate = TopologyOperationBudget.estimate(
+            params,
+            configuredMaxNodes = limits.maxNodes,
+            sessionConcurrency = effectiveRequestConcurrency,
+            maxPagesPerWalk = limits.maxPagesPerWalk,
+        )
+        if (budgetEstimate == null) {
+            send(TopologyDiscoveryEvent.Error(TopologyOperationBudget.OVER_CEILING_MESSAGE))
+            return@channelFlow
+        }
         try {
             val normalizedTarget = HostValidator.normalize(params.targetIp) ?: params.targetIp
             val effectiveParams = params.copy(targetIp = normalizedTarget)
             val graph = OperationRunner.run(session) {
                 currentCoroutineContext().ensureActive()
                 val sessionRequestLimiter = Semaphore(
-                    minOf(MAX_CONCURRENT_SNMP_REQUESTS, session.budget.maxConcurrentProbes)
+                    effectiveRequestConcurrency
                 )
                 val snmpClient = resources.register(
                     CloseOnceSnmpClient(effectiveSnmpClientFactory.create(effectiveParams))
@@ -67,6 +90,7 @@ class TopologyDiscoveryRepositoryImpl(
                 val queue = LinkedList<Pair<String, Int>>() // ip to hop depth
                 queue.add(effectiveParams.targetIp to 0)
                 val scheduledTargets = mutableSetOf(effectiveParams.targetIp)
+                val effectiveMaxNodes = minOf(limits.maxNodes, budgetEstimate.maxNodes)
 
                 val allNodes = mutableListOf<TopologyNode>()
                 val allLinks = mutableListOf<TopologyLink>()
@@ -77,7 +101,7 @@ class TopologyDiscoveryRepositoryImpl(
 
                 while (queue.isNotEmpty()) {
                     currentCoroutineContext().ensureActive()
-                    if (allNodes.size >= limits.maxNodes) {
+                    if (allNodes.size >= effectiveMaxNodes) {
                         truncationReasons.add(TopologyTruncationReason.NODE_LIMIT)
                         break
                     }
@@ -183,7 +207,7 @@ class TopologyDiscoveryRepositoryImpl(
 
                     (lldpNeighbourIps + cdpNeighbourIps).forEach { neighbourIp ->
                         if (neighbourIp.isBlank() || neighbourIp in scheduledTargets) return@forEach
-                        if (allNodes.size + queue.size >= limits.maxNodes) {
+                        if (allNodes.size + queue.size >= effectiveMaxNodes) {
                             truncationReasons.add(TopologyTruncationReason.NODE_LIMIT)
                             return@forEach
                         }
@@ -212,7 +236,7 @@ class TopologyDiscoveryRepositoryImpl(
             if (session.cancellationReason == CancellationReason.DEADLINE_EXCEEDED ||
                 e is OperationDeadlineExceededException
             ) {
-                send(TopologyDiscoveryEvent.Error("Topology discovery timed out", e))
+                send(TopologyDiscoveryEvent.TimeLimit)
             } else {
                 if (e is CancellationException) throw e
                 send(TopologyDiscoveryEvent.Error(SnmpErrorFormatter.describe(e), e))
@@ -220,16 +244,15 @@ class TopologyDiscoveryRepositoryImpl(
         }
     }.flowOn(Dispatchers.IO)
 
-    private fun newSession(): OperationSession = OperationSession(
+    private fun newSession(timeoutMillis: Long): OperationSession = OperationSession(
         OperationBudget.start(
             requirement = OperationRequirement.LOCAL_NETWORK,
-            timeoutMillis = DEFAULT_OPERATION_TIMEOUT_MILLIS,
+            timeoutMillis = timeoutMillis,
         )
     )
 
     private companion object {
         const val MAX_CONCURRENT_SNMP_REQUESTS = 4
-        const val DEFAULT_OPERATION_TIMEOUT_MILLIS = 120_000L
     }
 
     private data class GetAttempt(val value: String?, val error: Exception?)

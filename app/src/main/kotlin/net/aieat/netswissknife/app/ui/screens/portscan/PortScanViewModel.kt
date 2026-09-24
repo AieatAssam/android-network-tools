@@ -13,6 +13,7 @@ import net.aieat.netswissknife.app.ui.navigation.ToolIntentCodec
 import net.aieat.netswissknife.app.ui.navigation.ToolSource
 import net.aieat.netswissknife.app.ui.navigation.ToolHost
 import net.aieat.netswissknife.core.domain.PortScanFlowResult
+import net.aieat.netswissknife.core.domain.PortScanDeadlineBudget
 import net.aieat.netswissknife.core.domain.PortScanParams
 import net.aieat.netswissknife.core.domain.PortScanPreset
 import net.aieat.netswissknife.core.domain.PortScanUseCase
@@ -23,6 +24,7 @@ import net.aieat.netswissknife.core.network.elapsedMillisSince
 import net.aieat.netswissknife.core.network.portscan.PortScanResult
 import net.aieat.netswissknife.core.network.portscan.PortScanSummary
 import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationDeadlineExceededException
 import net.aieat.netswissknife.core.network.operation.OperationSession
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -46,8 +48,13 @@ sealed interface PortScanUiState {
         val resolvedIp: String? = null,
         val progress: Float = if (totalCount > 0) scannedCount.toFloat() / totalCount else 0f
     ) : PortScanUiState
-    data class Finished(val summary: PortScanSummary) : PortScanUiState
-    data class Error(val message: String) : PortScanUiState
+    data class Finished(
+        val summary: PortScanSummary,
+        val completion: Completion = Completion.COMPLETE,
+    ) : PortScanUiState
+    data class Error(val message: String, val isBudgetLimit: Boolean = false) : PortScanUiState
+
+    enum class Completion { COMPLETE, USER_STOPPED, DEADLINE }
 }
 
 @HiltViewModel
@@ -253,7 +260,10 @@ class PortScanViewModel @Inject constructor(
                 results = current.liveResults.sortedBy { it.port }
             )
             scanStartedAtNanos = null
-            _uiState.value = PortScanUiState.Finished(partial)
+            _uiState.value = PortScanUiState.Finished(
+                summary = partial,
+                completion = PortScanUiState.Completion.USER_STOPPED,
+            )
         }
     }
 
@@ -262,12 +272,7 @@ class PortScanViewModel @Inject constructor(
         scanJob?.cancel()
         val normalizedHost = HostValidator.normalize(_host.value)
         val hostForScan = normalizedHost ?: _host.value.trim()
-        if (normalizedHost != null) {
-            _host.value = normalizedHost
-            viewModelScope.launch {
-                recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_PORTS_HOSTS, normalizedHost)
-            }
-        }
+        if (normalizedHost != null) _host.value = normalizedHost
         val liveResults = mutableListOf<PortScanResult>()
 
         val params = PortScanParams(
@@ -289,6 +294,28 @@ class PortScanViewModel @Inject constructor(
             }
         } else {
             _selectedPreset.value.ports.size
+        }
+
+        if (totalPorts > 0 && params.timeoutMs in 100..30_000) {
+            val estimate = PortScanDeadlineBudget.estimate(
+                portCount = totalPorts,
+                timeoutMs = params.timeoutMs,
+                requestedConcurrency = params.concurrency,
+            )
+            if (estimate.exceedsHardCeiling) {
+                scanStartedAtNanos = null
+                _uiState.value = PortScanUiState.Error(
+                    message = "This scan may exceed the 15-minute operation limit; increase concurrency or reduce the port range or timeout.",
+                    isBudgetLimit = true,
+                )
+                return
+            }
+        }
+
+        if (normalizedHost != null) {
+            viewModelScope.launch {
+                recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_PORTS_HOSTS, normalizedHost)
+            }
         }
         scanStartedAtNanos = monotonicClock.nowNanos()
         _uiState.value = PortScanUiState.Scanning(
@@ -333,6 +360,25 @@ class PortScanViewModel @Inject constructor(
                 }
             } catch (e: CancellationException) {
                 throw e
+            } catch (_: OperationDeadlineExceededException) {
+                if (scanOperationSession !== operationSession) return@launch
+                val scanning = _uiState.value as? PortScanUiState.Scanning
+                val startedAtNanos = scanStartedAtNanos ?: monotonicClock.nowNanos()
+                val partial = PortScanSummary(
+                    host = hostForScan,
+                    resolvedIp = scanning?.resolvedIp,
+                    scannedPorts = liveResults.map { it.port },
+                    openPorts = liveResults.count { it.status == net.aieat.netswissknife.core.network.portscan.PortStatus.OPEN },
+                    closedPorts = liveResults.count { it.status == net.aieat.netswissknife.core.network.portscan.PortStatus.CLOSED },
+                    filteredPorts = liveResults.count { it.status == net.aieat.netswissknife.core.network.portscan.PortStatus.FILTERED },
+                    scanDurationMs = monotonicClock.elapsedMillisSince(startedAtNanos),
+                    results = liveResults.sortedBy { it.port },
+                )
+                scanStartedAtNanos = null
+                _uiState.value = PortScanUiState.Finished(
+                    summary = partial,
+                    completion = PortScanUiState.Completion.DEADLINE,
+                )
             } catch (e: Exception) {
                 if (scanOperationSession !== operationSession) return@launch
                 scanStartedAtNanos = null

@@ -339,10 +339,16 @@ fun LanScreen(
                         title = stringResource(
                             if (state.partial) R.string.lan_scan_paused_title else R.string.lan_scan_complete_title,
                         ),
-                        subtitle = if (state.partial) stringResource(R.string.lan_scan_paused_subtitle) else null,
+                        subtitle = when {
+                            state.timeLimitReached -> stringResource(R.string.lan_scan_time_limit_subtitle)
+                            state.partial -> stringResource(R.string.lan_scan_paused_subtitle)
+                            else -> null
+                        },
                     )
                     is LanScanUiState.Error -> LanErrorContent(
-                        message = state.message,
+                        message = if (state.isBudgetLimit) {
+                            stringResource(R.string.lan_scan_estimate_too_large)
+                        } else state.message,
                         onRetry = viewModel::startScan,
                         onClear = viewModel::onClear,
                     )

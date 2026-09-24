@@ -5,8 +5,9 @@ import android.net.wifi.WifiManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.FlowCollector
+import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
@@ -162,12 +163,12 @@ class MdnsRepositoryImpl @Inject constructor(
         emitAll(discover(scanWindowMs, MdnsOperation.newSession(timeoutMs = scanWindowMs, clock = monotonicClock)))
     }
 
-    override fun discover(timeoutMs: Long, operationSession: OperationSession): Flow<MdnsUpdate> = flow {
+    override fun discover(timeoutMs: Long, operationSession: OperationSession): Flow<MdnsUpdate> = channelFlow {
         val scanWindowMs = MdnsOperation.clampScanDuration(timeoutMs)
         val observedTotal = AtomicInteger(0)
         val totalFound = try {
             OperationRunner.run(operationSession) {
-                runDiscovery(scanWindowMs, this@flow, observedTotal::set)
+                runDiscovery(scanWindowMs, this@channelFlow, observedTotal::set)
             }
         } catch (deadline: OperationDeadlineExceededException) {
             // A requested scan-window deadline is normal completion for this bounded scan. The
@@ -190,12 +191,12 @@ class MdnsRepositoryImpl @Inject constructor(
         }
         // Publish terminal success only after OperationRunner has closed the group,
         // socket, and multicast lock successfully.
-        emit(MdnsUpdate.DiscoveryComplete(totalFound))
+        send(MdnsUpdate.DiscoveryComplete(totalFound))
     }.flowOn(Dispatchers.IO)
 
     private suspend fun OperationContext.runDiscovery(
         scanWindowMs: Long,
-        collector: FlowCollector<MdnsUpdate>,
+        collector: SendChannel<MdnsUpdate>,
         updateTotalFound: (Int) -> Unit,
     ): Int {
         // The requested scan duration includes lock/socket setup and the initial query.
@@ -319,13 +320,13 @@ class MdnsRepositoryImpl @Inject constructor(
             }
             for (service in result.services) {
                 ensureOperationActive()
-                collector.emit(MdnsUpdate.ServiceFound(service))
+                collector.send(MdnsUpdate.ServiceFound(service))
             }
         }
 
         for (service in discovery.finish()) {
             ensureOperationActive()
-            collector.emit(MdnsUpdate.ServiceFound(service))
+            collector.send(MdnsUpdate.ServiceFound(service))
         }
         updateTotalFound(discovery.totalFound)
         ensureOperationActive()

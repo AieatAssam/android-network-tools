@@ -143,6 +143,24 @@ class TracerouteViewModelTest {
         }
 
         @Test
+        fun `request over hard ceiling is rejected before invoking use case or recording host`() = runTest {
+            viewModel.onHostChange("example.com")
+            viewModel.onMaxHopsChange(64)
+            viewModel.onTimeoutChange(15_000)
+
+            viewModel.startTrace()
+
+            assertEquals(
+                TracerouteUiState.Error(
+                    "Requested trace exceeds the 15-minute time limit; reduce max hops or per-hop timeout",
+                ),
+                viewModel.uiState.value,
+            )
+            io.mockk.verify(exactly = 0) { tracerouteUseCase(any(), any()) }
+            coVerify(exactly = 0) { recentHostsRepository.addRecent(any(), any()) }
+        }
+
+        @Test
         fun `vpn only connectivity can start a trace`() = runTest {
             networkStatus.value = NetworkStatus(hasInternet = false, hasLocalNetwork = false, vpnActive = true)
             every { tracerouteUseCase(any(), any()) } returns flowOf(TracerouteFlowResult.Hop(stubHop))
@@ -244,7 +262,7 @@ class TracerouteViewModelTest {
         }
 
         @Test
-        fun `stop after deadline preserves timeout error`() = runTest {
+        fun `deadline keeps partial hops and reports the time limit`() = runTest {
             var session: OperationSession? = null
             every { tracerouteUseCase(any(), any()) } answers {
                 session = secondArg()
@@ -259,9 +277,10 @@ class TracerouteViewModelTest {
             checkNotNull(session).cancel(CancellationReason.DEADLINE_EXCEEDED)
             viewModel.onStop()
 
-            val error = viewModel.uiState.first { it is TracerouteUiState.Error }
-                as TracerouteUiState.Error
-            assertEquals("Traceroute timed out", error.message)
+            val partial = viewModel.uiState.first { it is TracerouteUiState.Finished }
+                as TracerouteUiState.Finished
+            assertTrue(partial.timeLimitReached)
+            assertEquals(listOf(stubHop), partial.result.hops)
         }
 
         @Test

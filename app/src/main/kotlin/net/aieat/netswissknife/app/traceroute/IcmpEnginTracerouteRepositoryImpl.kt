@@ -67,7 +67,7 @@ class IcmpEnginTracerouteRepositoryImpl(
                 probesPerHop,
                 probeType,
                 packetSize,
-                TracerouteOperation.newSession(),
+                TracerouteOperation.newSession(maxHops, timeoutMs),
             )
         )
     }.flowOn(Dispatchers.IO)
@@ -182,7 +182,7 @@ internal fun nativeTraceConcurrency(probesPerHop: Int, sessionLimit: Int): Int =
         TracerouteOperation.MAX_CONCURRENT_PROBES,
     )
 
-internal const val MAX_REVERSE_DNS_WAIT_MILLIS = 1_000L
+internal const val MAX_REVERSE_DNS_WAIT_MILLIS = TracerouteOperation.MAX_REVERSE_DNS_WAIT_MILLIS
 
 /** A stable, user-displayable failure when the optional JNI traceroute engine cannot load. */
 class NativeTracerouteUnavailableException : Exception(

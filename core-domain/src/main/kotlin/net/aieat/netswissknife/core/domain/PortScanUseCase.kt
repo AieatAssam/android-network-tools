@@ -2,7 +2,10 @@ package net.aieat.netswissknife.core.domain
 
 import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.portscan.PortScanRepository
+import net.aieat.netswissknife.core.network.portscan.PortScanOperationBudget
 import net.aieat.netswissknife.core.network.portscan.PortScanUpdate
+import net.aieat.netswissknife.core.network.operation.OperationBudget
+import net.aieat.netswissknife.core.network.operation.OperationRequirement
 import net.aieat.netswissknife.core.network.operation.OperationSession
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -19,9 +22,20 @@ import kotlinx.coroutines.flow.flow
  */
 class PortScanUseCase(private val repository: PortScanRepository) {
 
-    fun newSession(params: PortScanParams): OperationSession = repository.newSession(params.concurrency)
+    /** Creates one monotonic session sized for this scan's work and effective concurrency. */
+    fun newSession(params: PortScanParams): OperationSession {
+        val concurrency = params.concurrency.coerceIn(1, PortScanOperationBudget.MAX_CONCURRENCY)
+        return OperationSession(
+            OperationBudget.start(
+                requirement = OperationRequirement.ANY_NETWORK,
+                timeoutMillis = PortScanDeadlineBudget.sessionTimeoutMillis(params),
+                maxConcurrentProbes = concurrency,
+            ),
+        )
+    }
 
-    operator fun invoke(params: PortScanParams): Flow<PortScanFlowResult> = execute(params, null)
+    operator fun invoke(params: PortScanParams): Flow<PortScanFlowResult> =
+        execute(params, newSession(params))
 
     operator fun invoke(params: PortScanParams, operationSession: OperationSession): Flow<PortScanFlowResult> =
         execute(params, operationSession)
@@ -77,6 +91,21 @@ class PortScanUseCase(private val repository: PortScanRepository) {
 
         if (portsToScan.isEmpty()) {
             emit(PortScanFlowResult.ValidationError("No ports to scan in the selected preset"))
+            return@flow
+        }
+
+        val estimate = PortScanDeadlineBudget.estimate(
+            portCount = portsToScan.size,
+            timeoutMs = params.timeoutMs,
+            requestedConcurrency = params.concurrency,
+            sessionConcurrency = operationSession?.budget?.maxConcurrentProbes ?: params.concurrency,
+        )
+        if (estimate.exceedsHardCeiling) {
+            emit(
+                PortScanFlowResult.ValidationError(
+                    "This scan may exceed the 15-minute operation limit; increase concurrency or reduce the port range or timeout.",
+                ),
+            )
             return@flow
         }
 

@@ -53,6 +53,12 @@ sealed class TopologyUiState {
         val nodesDone: Int,
         val selectedNodeIp: String? = null
     ) : TopologyUiState()
+    data class TimeLimit(
+        val nodes: List<TopologyNode>,
+        val links: List<TopologyLink>,
+        val nodesDone: Int,
+        val selectedNodeIp: String? = null
+    ) : TopologyUiState()
     data class Done(
         val graph: TopologyGraph,
         val selectedNodeIp: String?
@@ -60,6 +66,7 @@ sealed class TopologyUiState {
     data class Failure(
         val message: String,
         val networkErrorKind: NetworkErrorKind = NetworkErrorKind.GENERAL,
+        val isBudgetLimit: Boolean = false,
     ) : TopologyUiState()
 }
 
@@ -95,10 +102,18 @@ class TopologyDiscoveryViewModel @Inject constructor(
         if (operationSession != null || _uiState.value is TopologyUiState.Discovering ||
             _uiState.value is TopologyUiState.Canceling
         ) return
+        val operationTimeoutMillis = TopologyOperationBudget.timeoutMillisOrNull(params)
+        if (operationTimeoutMillis == null) {
+            _uiState.value = TopologyUiState.Failure(
+                message = TopologyOperationBudget.OVER_CEILING_MESSAGE,
+                isBudgetLimit = true,
+            )
+            return
+        }
         val session = OperationSession(
             OperationBudget.start(
                 requirement = OperationRequirement.LOCAL_NETWORK,
-                timeoutMillis = DEFAULT_OPERATION_TIMEOUT_MILLIS,
+                timeoutMillis = operationTimeoutMillis,
             )
         )
         operationSession = session
@@ -121,7 +136,8 @@ class TopologyDiscoveryViewModel @Inject constructor(
                     if (operationSession !== session || terminalEventReceived ||
                         cancellationReason == CancellationReason.USER_STOP ||
                         cancellationReason == CancellationReason.LIFECYCLE_PAUSE ||
-                        (cancellationReason != null && event !is TopologyDiscoveryEvent.Error)
+                        (cancellationReason != null && event !is TopologyDiscoveryEvent.Error &&
+                            event !is TopologyDiscoveryEvent.TimeLimit)
                     ) {
                         return@collect
                     }
@@ -166,14 +182,32 @@ class TopologyDiscoveryViewModel @Inject constructor(
                                 terminalState = TopologyUiState.Done(graph = event.graph, selectedNodeIp = null)
                             }
                         }
+                        TopologyDiscoveryEvent.TimeLimit -> {
+                            terminalEventReceived = true
+                            terminalState = TopologyUiState.TimeLimit(
+                                nodes = nodes.toList(),
+                                links = links.toList(),
+                                nodesDone = nodes.size,
+                            )
+                        }
                         is TopologyDiscoveryEvent.Error -> {
                             terminalEventReceived = true
                             // Some repositories emit an error before OperationRunner closes its
                             // registered SNMP client. Publish Retry only after collection ends.
-                            terminalState = TopologyUiState.Failure(
-                                event.message,
-                                event.cause.toNetworkErrorKind(),
-                            )
+                            terminalState = if (
+                                session.cancellationReason == CancellationReason.DEADLINE_EXCEEDED
+                            ) {
+                                TopologyUiState.TimeLimit(
+                                    nodes = nodes.toList(),
+                                    links = links.toList(),
+                                    nodesDone = nodes.size,
+                                )
+                            } else {
+                                TopologyUiState.Failure(
+                                    event.message,
+                                    event.cause.toNetworkErrorKind(),
+                                )
+                            }
                         }
                     }
                 }
@@ -212,13 +246,17 @@ class TopologyDiscoveryViewModel @Inject constructor(
                 } else if (cancellationReason != CancellationReason.USER_STOP &&
                     cancellationReason != CancellationReason.LIFECYCLE_PAUSE
                 ) {
-                    _uiState.value = terminalState ?: TopologyUiState.Failure(
-                        if (cancellationReason == CancellationReason.DEADLINE_EXCEEDED) {
-                            "Topology discovery timed out"
-                        } else {
-                            "Topology discovery was interrupted"
-                        },
-                    )
+                    _uiState.value = terminalState ?: if (
+                        cancellationReason == CancellationReason.DEADLINE_EXCEEDED
+                    ) {
+                        TopologyUiState.TimeLimit(
+                            nodes = nodes.toList(),
+                            links = links.toList(),
+                            nodesDone = nodes.size,
+                        )
+                    } else {
+                        TopologyUiState.Failure("Topology discovery was interrupted")
+                    }
                 }
             }
         }
@@ -243,6 +281,7 @@ class TopologyDiscoveryViewModel @Inject constructor(
             is TopologyUiState.Discovering -> _uiState.value = current.copy(selectedNodeIp = ip)
             is TopologyUiState.Canceling -> _uiState.value = current.copy(selectedNodeIp = ip)
             is TopologyUiState.Canceled -> _uiState.value = current.copy(selectedNodeIp = ip)
+            is TopologyUiState.TimeLimit -> _uiState.value = current.copy(selectedNodeIp = ip)
             is TopologyUiState.Done -> _uiState.value = current.copy(selectedNodeIp = ip)
             else -> Unit
         }
@@ -253,6 +292,7 @@ class TopologyDiscoveryViewModel @Inject constructor(
             is TopologyUiState.Discovering -> _uiState.value = current.copy(selectedNodeIp = null)
             is TopologyUiState.Canceling -> _uiState.value = current.copy(selectedNodeIp = null)
             is TopologyUiState.Canceled -> _uiState.value = current.copy(selectedNodeIp = null)
+            is TopologyUiState.TimeLimit -> _uiState.value = current.copy(selectedNodeIp = null)
             is TopologyUiState.Done -> _uiState.value = current.copy(selectedNodeIp = null)
             else -> Unit
         }
@@ -296,7 +336,6 @@ class TopologyDiscoveryViewModel @Inject constructor(
     }
 
     private companion object {
-        const val DEFAULT_OPERATION_TIMEOUT_MILLIS = 120_000L
         const val LIFECYCLE_CLOSEABLE_KEY = "topology-discovery-operation"
     }
 }

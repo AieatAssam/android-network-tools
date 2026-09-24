@@ -173,7 +173,10 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
                         leadingIcon = { Icon(Icons.AutoMirrored.Filled.ManageSearch, contentDescription = null) },
                         trailingIcon = {
                             if (uiState.query.isNotEmpty()) {
-                                IconButton(onClick = { viewModel.onQueryChange("") }) {
+                                IconButton(
+                                    onClick = { viewModel.onQueryChange("") },
+                                    enabled = !uiState.isLoading,
+                                ) {
                                     Icon(Icons.Default.Close, contentDescription = stringResource(R.string.clear))
                                 }
                             }
@@ -185,7 +188,8 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
                         recentHosts = recentHosts,
                         onHostSelected = viewModel::onQueryChange,
                         onRemoveHost = viewModel::removeRecentHost,
-                        onClearAll = viewModel::clearRecentHosts
+                        onClearAll = viewModel::clearRecentHosts,
+                        selectionEnabled = !uiState.isLoading && !uiState.isCanceling,
                     )
                     Button(
                         onClick = hapticAction(viewModel::lookup),
@@ -198,8 +202,14 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
                         TextButton(
                             onClick = viewModel::stopLookup,
                             modifier = Modifier.fillMaxWidth(),
+                            enabled = !uiState.isCanceling,
                         ) {
-                            Text(stringResource(R.string.whois_stop_button))
+                            Text(
+                                stringResource(
+                                    if (uiState.isCanceling) R.string.whois_canceling_button
+                                    else R.string.whois_stop_button
+                                )
+                            )
                         }
                     }
                 }
@@ -215,13 +225,19 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
                         )
                         if (uiState.hopStates.isNotEmpty()) {
                             RelayChainVisualiser(hopStates = uiState.hopStates)
+                        } else if (uiState.isCanceling) {
+                            Text(
+                                text = stringResource(R.string.whois_canceling_status),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         } else {
                             // Show loading indicator when waiting for first hop
                             Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                                 CircularProgressIndicator(modifier = Modifier.size(32.dp))
                             }
                         }
-                        if (uiState.isLoading) {
+                        if (uiState.isLoading && !uiState.isCanceling) {
                             val currentServer = uiState.hopStates
                                 .lastOrNull { it.status == HopStatus.QUERYING || it.status == HopStatus.DONE }
                                 ?.server?.host ?: ""
@@ -239,13 +255,18 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
 
             // ── Main content area (Idle / Error / Success) ─────────────────────
             AnimatedContent(
-                targetState = Triple(uiState.isLoading, uiState.result, uiState.error),
+                targetState = Triple(
+                    uiState.isLoading,
+                    uiState.isCanceled,
+                    Triple(uiState.result, uiState.error, uiState.isLifecyclePaused)
+                ),
                 transitionSpec = {
                     fadeIn(AppMotion.enter(300)) + slideInVertically(AppMotion.enter(300)) { it / 8 } togetherWith
                             fadeOut(AppMotion.exit(200))
                 },
                 label = "whois-content-state"
-            ) { (isLoading, result, error) ->
+            ) { (isLoading, isCanceled, content) ->
+                val (result, error, isLifecyclePaused) = content
                 when {
                     result != null -> {
                         val shareSubject = stringResource(R.string.share_subject_whois, result.query)
@@ -264,6 +285,12 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
                                     context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
                                 } catch (_: Exception) {}
                             }
+                        )
+                    }
+                    isCanceled -> {
+                        CanceledLookupCard(
+                            isLifecyclePaused = isLifecyclePaused,
+                            onRetry = viewModel::lookup,
                         )
                     }
                     error != null -> {
@@ -306,6 +333,33 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
             ),
             onDismiss = { showHelp = false }
         )
+    }
+}
+
+@Composable
+private fun CanceledLookupCard(isLifecyclePaused: Boolean, onRetry: () -> Unit) {
+    OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = stringResource(R.string.whois_canceled_title),
+                style = MaterialTheme.typography.titleMedium
+            )
+            Text(
+                text = stringResource(
+                    if (isLifecyclePaused) R.string.whois_lifecycle_paused_message
+                    else R.string.whois_canceled_message
+                ),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+            Button(onClick = hapticAction(onRetry)) {
+                Text(stringResource(R.string.whois_retry))
+            }
+        }
     }
 }
 

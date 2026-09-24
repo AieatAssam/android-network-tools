@@ -2,6 +2,7 @@ package net.aieat.netswissknife.core.domain
 
 import net.aieat.netswissknife.core.network.lan.LanScanRepository
 import net.aieat.netswissknife.core.network.lan.LanScanRequest
+import net.aieat.netswissknife.core.network.lan.LanScanOperationBudget
 import net.aieat.netswissknife.core.network.lan.LanScanUpdate
 import net.aieat.netswissknife.core.network.lan.SubnetUtils
 import net.aieat.netswissknife.core.network.operation.OperationSession
@@ -64,6 +65,13 @@ class LanScanUseCase(private val repository: LanScanRepository) {
                 gatewayIp = gatewayIp,
                 enableNameProbes = params.enableNameProbes,
             )
+        if (LanScanOperationBudget.estimate(
+                request,
+                operationSession?.budget?.maxConcurrentProbes ?: request.concurrency,
+            ).exceedsHardCeiling
+        ) {
+            return errorFlow(LanScanOperationBudget.OVER_CEILING_MESSAGE)
+        }
         val updates = if (operationSession == null) {
             repository.scan(request)
         } else {

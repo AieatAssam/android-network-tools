@@ -219,9 +219,22 @@ class TopologyDiscoveryRepositoryTest {
         collector.join()
 
         assertEquals(CancellationReason.DEADLINE_EXCEEDED, session.cancellationReason)
-        assertTrue(events.any { it is TopologyDiscoveryEvent.Error && it.message.contains("timed out", true) })
+        assertTrue(events.any { it is TopologyDiscoveryEvent.TimeLimit })
+        assertTrue(events.none { it is TopologyDiscoveryEvent.Error })
         assertTrue(events.none { it is TopologyDiscoveryEvent.Complete })
         verify(exactly = 1) { snmpClient.close() }
+    }
+
+    @Test
+    fun `request above topology budget ceiling is rejected before opening probes`() = runTest {
+        val events = repository.discover(
+            defaultParams.copy(maxHops = 10, timeoutMs = 30_000, retries = 5)
+        ).toList()
+
+        val error = events.filterIsInstance<TopologyDiscoveryEvent.Error>().single()
+        assertEquals(TopologyOperationBudget.OVER_CEILING_MESSAGE, error.message)
+        coVerify(exactly = 0) { snmpClient.get(any(), any()) }
+        coVerify(exactly = 0) { snmpClient.walk(any(), any(), any()) }
     }
 
     @Test

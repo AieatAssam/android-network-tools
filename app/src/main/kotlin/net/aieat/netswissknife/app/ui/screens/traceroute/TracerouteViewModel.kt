@@ -53,7 +53,8 @@ sealed interface TracerouteUiState {
     ) : TracerouteUiState
     data class Finished(
         val result: TracerouteResult,
-        val viewMode: TracerouteViewMode = TracerouteViewMode.Visual
+        val viewMode: TracerouteViewMode = TracerouteViewMode.Visual,
+        val timeLimitReached: Boolean = false,
     ) : TracerouteUiState
     data class Error(val message: String) : TracerouteUiState
 }
@@ -189,6 +190,13 @@ class TracerouteViewModel @Inject constructor(
             return
         }
 
+        if (TracerouteOperation.requestedTimeoutMillis(_maxHops.value, _timeoutMs.value) == null) {
+            _uiState.value = TracerouteUiState.Error(
+                "Requested trace exceeds the 15-minute time limit; reduce max hops or per-hop timeout",
+            )
+            return
+        }
+
         val validatedHost = HostValidator.normalize(_host.value)
         val normalizedHost = validatedHost ?: _host.value.trim()
         if (validatedHost != null) {
@@ -196,9 +204,6 @@ class TracerouteViewModel @Inject constructor(
                 recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_TRACEROUTE_HOSTS, validatedHost)
             }
         }
-        val session = TracerouteOperation.newSession()
-        traceSession = session
-
         val params = TracerouteParams(
             host          = normalizedHost,
             maxHops       = _maxHops.value,
@@ -207,6 +212,8 @@ class TracerouteViewModel @Inject constructor(
             probeType     = _probeType.value,
             packetSize    = _packetSize.value
         )
+        val session = TracerouteOperation.newSession(params.maxHops, params.timeoutMs)
+        traceSession = session
         val trimmedHost = params.host
         val startedAtNanos = System.nanoTime()
         traceStartedAtNanos = startedAtNanos
@@ -256,6 +263,22 @@ class TracerouteViewModel @Inject constructor(
                     else -> "Traceroute was interrupted"
                 }
                 when {
+                    cancellationReason == CancellationReason.DEADLINE_EXCEEDED -> {
+                        val resultHost = when (current) {
+                            is TracerouteUiState.Running -> current.host
+                            is TracerouteUiState.Canceling -> current.host
+                            else -> trimmedHost
+                        }
+                        val partialHops = accumulated.toList()
+                        _uiState.value = TracerouteUiState.Finished(
+                            result = buildResult(
+                                resultHost,
+                                partialHops,
+                                elapsedMsSince(startedAtNanos),
+                            ),
+                            timeLimitReached = true,
+                        )
+                    }
                     current is TracerouteUiState.Canceling && current.operationId == generation &&
                         (cancellationReason == null || cancellationReason == CancellationReason.USER_STOP) -> {
                         _uiState.value = TracerouteUiState.Canceled(

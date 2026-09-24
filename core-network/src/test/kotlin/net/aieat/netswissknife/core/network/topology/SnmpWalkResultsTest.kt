@@ -32,6 +32,24 @@ class SnmpWalkResultsTest {
     }
 
     @Test
+    fun `walk listener bounds sparse multi-page responses and retains earlier pages`() {
+        val budget = SnmpWalkBudget(
+            TopologyResourceLimits(maxPagesPerWalk = 2, maxEntriesPerWalk = 100)
+        )
+        val collector = BoundedSnmpWalkCollector(budget)
+
+        assertTrue(collector.next(event(binding("1.3.6.1.2.1.1", "one"))))
+        assertTrue(collector.next(event(binding("1.3.6.1.2.1.2", "two"))))
+        assertFalse(collector.next(event(binding("1.3.6.1.2.1.3", "three"))))
+
+        assertEquals(
+            mapOf("1.3.6.1.2.1.1" to "one", "1.3.6.1.2.1.2" to "two"),
+            collector.result().entries,
+        )
+        assertEquals(setOf(TopologyTruncationReason.WALK_PAGE_LIMIT), collector.result().truncationReasons)
+    }
+
+    @Test
     fun `walk listener accepts data exactly at the cap without claiming truncation`() {
         val budget = SnmpWalkBudget(
             TopologyResourceLimits(maxEntriesPerWalk = 2, maxBytesPerWalk = 1_000)
@@ -139,6 +157,9 @@ class SnmpWalkResultsTest {
     fun `resource limits reject an unbounded GETBULK page size`() {
         assertThrows(IllegalArgumentException::class.java) {
             TopologyResourceLimits(maxRepetitions = 26)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            TopologyResourceLimits(maxPagesPerWalk = 65)
         }
     }
 

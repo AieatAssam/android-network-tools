@@ -1,6 +1,7 @@
 package net.aieat.netswissknife.app.ui.screens.whois
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
@@ -125,6 +126,54 @@ class WhoisScreenTest {
 
         composeRule.mainClock.advanceTimeBy(1_000L)
         composeRule.onAllNodesWithText("example.com").onFirst().assertIsDisplayed()
+    }
+
+    @Test
+    fun stoppingAndCanceledStates_keepPartialHops_andOfferRetry() {
+        val viewModel = fakeViewModel()
+        val stateFlow = viewModel.uiState as MutableStateFlow<WhoisUiState>
+        every { viewModel.recentHosts } returns MutableStateFlow(listOf("saved.example"))
+        stateFlow.value = WhoisUiState(
+            query = "example.com",
+            isLoading = true,
+            hopStates = listOf(fakeHop("whois.iana.org"))
+        )
+        composeRule.setContent {
+            NetSwissKnifeTheme { WhoisScreen(viewModel = viewModel) }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        composeRule.onNodeWithText(context.getString(R.string.whois_stop_button))
+            .performScrollTo()
+            .performClick()
+        verify(exactly = 1) { viewModel.stopLookup() }
+        composeRule.onNodeWithContentDescription(context.getString(R.string.clear))
+            .assertIsNotEnabled()
+        composeRule.onNodeWithText("saved.example")
+            .performScrollTo()
+            .assertIsNotEnabled()
+        verify(exactly = 0) { viewModel.onQueryChange("saved.example") }
+        stateFlow.value = stateFlow.value.copy(isCanceling = true)
+        composeRule.mainClock.advanceTimeBy(300L)
+        composeRule.onNodeWithText(context.getString(R.string.whois_canceling_button))
+            .assertIsDisplayed()
+            .assertIsNotEnabled()
+        composeRule.onNodeWithText("whois.iana.org").assertIsDisplayed()
+
+        stateFlow.value = stateFlow.value.copy(
+            isLoading = false,
+            isCanceling = false,
+            isCanceled = true
+        )
+        composeRule.mainClock.advanceTimeBy(500L)
+        composeRule.onNodeWithText(context.getString(R.string.whois_canceled_title))
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule.onNodeWithText("whois.iana.org").assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.whois_retry))
+            .performScrollTo()
+            .performClick()
+        verify(exactly = 1) { viewModel.lookup() }
     }
 
     private fun fakeHop(host: String) = HopUiState(

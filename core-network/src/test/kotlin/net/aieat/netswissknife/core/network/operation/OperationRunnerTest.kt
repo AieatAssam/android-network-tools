@@ -372,6 +372,30 @@ class OperationRunnerTest {
     }
 
     @Test
+    fun `recorded stop reason wins over a later IO failure and retains its cause`() = runTest {
+        val session = OperationSession(OperationBudget.start(clock = FakeClock()))
+        val ioFailure = IOException("socket closed during stop")
+        var closeCount = 0
+
+        val surfacedFailure = try {
+            OperationRunner.run(session) {
+                resources.register(AutoCloseable { closeCount++ })
+                session.recordCancellationReason(CancellationReason.USER_STOP)
+                throw ioFailure
+            }
+            null
+        } catch (failure: Throwable) {
+            failure
+        }
+
+        assertTrue(surfacedFailure is OperationCancellationException)
+        assertEquals(CancellationReason.USER_STOP, (surfacedFailure as OperationCancellationException).reason)
+        assertTrue(surfacedFailure.cause is IOException)
+        assertEquals(ioFailure.message, surfacedFailure.cause?.message)
+        assertEquals(1, closeCount)
+    }
+
+    @Test
     fun `already elapsed budget performs no operation work and closes scope`() = runTest {
         val clock = FakeClock()
         val session = OperationSession(OperationBudget.start(timeoutMillis = 10, clock = clock))

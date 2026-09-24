@@ -23,6 +23,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
+import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -31,6 +32,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import net.aieat.netswissknife.core.network.operation.CancellationReason
 import net.aieat.netswissknife.core.network.operation.OperationSession
+import net.aieat.netswissknife.core.network.operation.OperationDeadlineExceededException
 import net.aieat.netswissknife.app.ui.navigation.ToolMacAddress
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
@@ -53,6 +55,22 @@ import org.junit.jupiter.api.Test
 @OptIn(ExperimentalCoroutinesApi::class, kotlinx.coroutines.InternalCoroutinesApi::class)
 @DisplayName("LanScanViewModel")
 class LanScanViewModelTest {
+
+    @Test
+    fun `LAN scan budget uses target waves and bounded per-host probe allowances`() {
+        val twoWaves = LanScanTimeBudget.estimate(targetCount = 51, timeoutMs = 1_000, concurrency = 50)
+        val oneWave = LanScanTimeBudget.estimate(targetCount = 50, timeoutMs = 1_000, concurrency = 50)
+        val slower = LanScanTimeBudget.estimate(targetCount = 50, timeoutMs = 2_000, concurrency = 50)
+
+        // 1s ICMP + 10 x 400ms TCP + 2 x 300ms name + 1s reverse DNS + 16 x 500ms ports.
+        assertEquals(19_250L, oneWave.timeoutMillis)
+        assertEquals(37_500L, twoWaves.timeoutMillis)
+        assertTrue(slower.timeoutMillis > oneWave.timeoutMillis)
+        assertTrue(
+            LanScanTimeBudget.estimate(65_534, 1_000, 1).exceedsHardCeiling,
+            "A very large serial scan must be rejected before it can start",
+        )
+    }
 
     private val testDispatcher = UnconfinedTestDispatcher()
 
@@ -190,6 +208,37 @@ class LanScanViewModelTest {
             }
             assertTrue(state is LanScanUiState.Error)
             assertEquals("invalid subnet", (state as LanScanUiState.Error).message)
+        }
+
+        @Test
+    fun `deadline returns all discovered hosts as an explicit partial result`() = runTest {
+            every { lanScanUseCase(any(), any()) } returns flow {
+                emit(LanScanFlowResult.HostFound(stubHost, scannedCount = 1, totalCount = 254))
+                throw OperationDeadlineExceededException()
+            }
+            viewModel.onSubnetChange("192.168.1.0/24")
+            viewModel.startScan()
+
+            val state = withContext(Dispatchers.Default) {
+                withTimeout(2_000) {
+                    viewModel.uiState.first { it is LanScanUiState.Finished }
+                }
+            } as LanScanUiState.Finished
+
+            assertTrue(state.partial)
+            assertTrue(state.timeLimitReached)
+            assertEquals(listOf(stubHost), state.summary.hosts)
+            assertEquals(1, state.summary.totalScanned)
+        }
+
+        @Test
+        fun `over-ceiling scan estimate is rejected before invoking scan`() = runTest {
+            viewModel.onSubnetChange("10.0.0.0/16")
+            viewModel.startScan()
+
+            val state = viewModel.uiState.value as LanScanUiState.Error
+            assertTrue(state.message.contains("10-minute limit"))
+            verify(exactly = 0) { lanScanUseCase(any(), any()) }
         }
 
         @Test
@@ -411,6 +460,47 @@ class LanScanViewModelTest {
             }
             assertEquals(newSummary, (viewModel.uiState.value as LanScanUiState.Finished).summary)
         }
+    }
+
+    @Test
+    fun `deadline that wins before Stop keeps the time-limit terminal state`() = runTest {
+        val sessionSlot = slot<OperationSession>()
+        val cleanupStarted = CompletableDeferred<Unit>()
+        val allowCleanup = CompletableDeferred<Unit>()
+        val deadlineSignal = CompletableDeferred<Unit>()
+        every { lanScanUseCase(any(), capture(sessionSlot)) } returns flow {
+            emit(LanScanFlowResult.HostFound(stubHost, scannedCount = 1, totalCount = 8))
+            deadlineSignal.await()
+            throw OperationDeadlineExceededException()
+        }.onCompletion {
+            withContext(NonCancellable) {
+                cleanupStarted.complete(Unit)
+                allowCleanup.await()
+            }
+        }
+
+        viewModel.onSubnetChange("192.168.1.0/24")
+        viewModel.startScan()
+        withContext(Dispatchers.Default) {
+            withTimeout(2_000) {
+                viewModel.uiState.first { it is LanScanUiState.Scanning && it.hosts.isNotEmpty() }
+            }
+        }
+
+        sessionSlot.captured.cancel(CancellationReason.DEADLINE_EXCEEDED)
+        deadlineSignal.complete(Unit)
+        withContext(Dispatchers.Default) { withTimeout(2_000) { cleanupStarted.await() } }
+        viewModel.onStopScan()
+        assertTrue(viewModel.uiState.value is LanScanUiState.Canceling)
+
+        allowCleanup.complete(Unit)
+        withContext(Dispatchers.Default) {
+            withTimeout(2_000) { viewModel.uiState.first { it is LanScanUiState.Finished } }
+        }
+        val finished = viewModel.uiState.value as LanScanUiState.Finished
+        assertTrue(finished.partial)
+        assertTrue(finished.timeLimitReached)
+        assertEquals(listOf(stubHost), finished.summary.hosts)
     }
 
     @Nested

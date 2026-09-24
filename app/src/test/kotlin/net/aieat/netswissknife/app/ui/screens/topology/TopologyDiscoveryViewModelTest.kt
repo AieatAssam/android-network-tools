@@ -192,6 +192,20 @@ class TopologyDiscoveryViewModelTest {
         }
 
         @Test
+        fun `request beyond the hard time limit is rejected before invoking discovery`() = runTest {
+            val oversized = params.copy(maxHops = 10, timeoutMs = 30_000, retries = 5)
+
+            viewModel.startDiscovery(oversized)
+
+            val state = viewModel.uiState.value as TopologyUiState.Failure
+            assertEquals(
+                net.aieat.netswissknife.core.network.topology.TopologyOperationBudget.OVER_CEILING_MESSAGE,
+                state.message,
+            )
+            io.mockk.verify(exactly = 0) { useCase.invoke(oversized, any()) }
+        }
+
+        @Test
         fun `transitions to Done on Complete`() = runTest {
             val graph = TopologyGraph(
                 nodes = listOf(stubNode), links = listOf(stubLink),
@@ -422,16 +436,18 @@ class TopologyDiscoveryViewModelTest {
     }
 
     @Test
-    fun `a won deadline remains an error when Stop is tapped during cleanup`() = runTest {
+    fun `a won deadline retains partial graph when Stop is tapped during cleanup`() = runTest {
         val sessionSlot = slot<OperationSession>()
-        val errorEmitted = CompletableDeferred<Unit>()
+        val timeLimitEmitted = CompletableDeferred<Unit>()
         val cleanupStarted = CompletableDeferred<Unit>()
         val releaseCleanup = CompletableDeferred<Unit>()
         every { useCase.invoke(params, capture(sessionSlot)) } returns flow {
             try {
+                emit(TopologyDiscoveryEvent.NodeDiscovered(stubNode))
+                emit(TopologyDiscoveryEvent.LinkDiscovered(stubLink))
                 sessionSlot.captured.cancel(CancellationReason.DEADLINE_EXCEEDED)
-                emit(TopologyDiscoveryEvent.Error("Topology discovery timed out"))
-                errorEmitted.complete(Unit)
+                emit(TopologyDiscoveryEvent.TimeLimit)
+                timeLimitEmitted.complete(Unit)
                 awaitCancellation()
             } finally {
                 withContext(NonCancellable) {
@@ -444,7 +460,7 @@ class TopologyDiscoveryViewModelTest {
         try {
             viewModel.startDiscovery(params)
             runCurrent()
-            errorEmitted.await()
+            timeLimitEmitted.await()
             assertTrue(viewModel.uiState.value is TopologyUiState.Discovering)
 
             viewModel.reset()
@@ -452,10 +468,13 @@ class TopologyDiscoveryViewModelTest {
             assertTrue(viewModel.uiState.value is TopologyUiState.Canceling)
             releaseCleanup.complete(Unit)
 
-            awaitTopologyState { it is TopologyUiState.Failure }
+            awaitTopologyState { it is TopologyUiState.TimeLimit }
 
             assertEquals(CancellationReason.DEADLINE_EXCEEDED, sessionSlot.captured.cancellationReason)
-            assertEquals("Topology discovery timed out", (viewModel.uiState.value as TopologyUiState.Failure).message)
+            val timeLimit = viewModel.uiState.value as TopologyUiState.TimeLimit
+            assertEquals(listOf(stubNode), timeLimit.nodes)
+            assertEquals(listOf(stubLink), timeLimit.links)
+            assertEquals(1, timeLimit.nodesDone)
         } finally {
             releaseCleanup.complete(Unit)
         }

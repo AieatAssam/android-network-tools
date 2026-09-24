@@ -126,7 +126,14 @@ object OperationRunner {
                         val winningReason = session.recordCancellationReason(CancellationReason.PARENT_CANCELLED)
                         winningReason.toTerminalFailure(failure)
                     }
-                    else -> failure
+                    else -> {
+                        val winningReason = session.cancellationReason
+                        if (winningReason == null || failure is Error) {
+                            failure
+                        } else {
+                            winningReason.toTerminalFailure(failure)
+                        }
+                    }
                 }
                 primaryFailure = surfacedFailure
                 throw surfacedFailure

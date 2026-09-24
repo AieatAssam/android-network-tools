@@ -28,10 +28,13 @@ import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.xbill.DNS.DClass
+import org.xbill.DNS.ARecord
 import org.xbill.DNS.Message
 import org.xbill.DNS.Name
 import org.xbill.DNS.PTRRecord
+import org.xbill.DNS.SRVRecord
 import org.xbill.DNS.Section
+import org.xbill.DNS.TXTRecord
 import java.io.IOException
 import java.net.DatagramPacket
 import java.net.InetAddress
@@ -187,6 +190,58 @@ class MdnsRepositoryImplIoTest {
     }
 
     @Test
+    fun `resolved service streams before discovery complete`() = runBlocking {
+        val receiveCount = AtomicInteger()
+        val serviceType = serviceTypeResponse()
+        val resolvedService = resolvedServiceResponse()
+        val fixture = fixture(receive = { packet ->
+            val response = when (receiveCount.incrementAndGet()) {
+                1 -> serviceType
+                2 -> resolvedService
+                else -> throw SocketTimeoutException("quiet network")
+            }
+            System.arraycopy(response, 0, packet.data, packet.offset, response.size)
+            packet.length = response.size
+        })
+
+        val updates = fixture.repository.discover(timeoutMs = 20).toList()
+
+        val serviceEvents = updates.filterIsInstance<MdnsUpdate.ServiceFound>()
+        assertEquals(1, serviceEvents.size)
+        assertEquals("Web", serviceEvents.single().service.displayName)
+        assertEquals(listOf("192.0.2.80"), serviceEvents.single().service.ipAddresses)
+        assertEquals(
+            listOf(MdnsUpdate.ServiceFound::class, MdnsUpdate.DiscoveryComplete::class),
+            updates.filter { it is MdnsUpdate.ServiceFound || it is MdnsUpdate.DiscoveryComplete }
+                .map { it::class },
+        )
+        assertEquals(1, (updates.last() as MdnsUpdate.DiscoveryComplete).totalFound)
+        assertTrue(fixture.socket.closed.get())
+        assertTrue(fixture.lock.released.get())
+    }
+
+    @Test
+    fun `service resolved without a port is emitted by discovery finish`() = runBlocking {
+        val receiveCount = AtomicInteger()
+        val fixture = fixture(receive = { packet ->
+            val response = when (receiveCount.incrementAndGet()) {
+                1 -> serviceTypeResponse()
+                2 -> partialServiceResponse()
+                else -> throw SocketTimeoutException("quiet network")
+            }
+            System.arraycopy(response, 0, packet.data, packet.offset, response.size)
+            packet.length = response.size
+        })
+
+        val operationSession = MdnsOperation.newSession(timeoutMs = 1_000L, clock = fixture.clock)
+        val updates = fixture.repository.discover(timeoutMs = 20L, operationSession = operationSession).toList()
+
+        assertEquals(1, updates.count { it is MdnsUpdate.ServiceFound })
+        assertEquals(1, (updates.last() as MdnsUpdate.DiscoveryComplete).totalFound)
+        assertEquals("host.local", (updates.first() as MdnsUpdate.ServiceFound).service.hostname)
+    }
+
+    @Test
     fun `legacy cold flow creates a fresh session for each collection`() = runBlocking {
         val context = mockk<Context>()
         val wifiManager = mockk<WifiManager>()
@@ -331,6 +386,26 @@ class MdnsRepositoryImplIoTest {
         val target = Name.fromString("_http._tcp.local.")
         return Message().apply {
             addRecord(PTRRecord(owner, DClass.IN, 60, target), Section.ANSWER)
+        }.toWire()
+    }
+
+    private fun resolvedServiceResponse(): ByteArray {
+        val instance = Name.fromString("Web._http._tcp.local.")
+        val host = Name.fromString("host.local.")
+        return Message().apply {
+            addRecord(PTRRecord(Name.fromString("_http._tcp.local."), DClass.IN, 60, instance), Section.ANSWER)
+            addRecord(SRVRecord(instance, DClass.IN, 60, 0, 0, 80, host), Section.ANSWER)
+            addRecord(TXTRecord(instance, DClass.IN, 60, listOf("path=/status", "version=1")), Section.ANSWER)
+            addRecord(ARecord(host, DClass.IN, 60, InetAddress.getByName("192.0.2.80")), Section.ANSWER)
+        }.toWire()
+    }
+
+    private fun partialServiceResponse(): ByteArray {
+        val instance = Name.fromString("Web._http._tcp.local.")
+        val host = Name.fromString("host.local.")
+        return Message().apply {
+            addRecord(PTRRecord(Name.fromString("_http._tcp.local."), DClass.IN, 60, instance), Section.ANSWER)
+            addRecord(SRVRecord(instance, DClass.IN, 60, 0, 0, 0, host), Section.ANSWER)
         }.toWire()
     }
 

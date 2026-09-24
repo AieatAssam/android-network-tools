@@ -9,6 +9,7 @@ import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performScrollTo
@@ -357,6 +358,34 @@ class TracerouteScreenTest {
         composeRule.mainClock.advanceTimeBy(2_000L)
         composeRule.mainClock.autoAdvance = true
         composeRule.onNodeWithText("10.0.0.2").performScrollTo().assertIsDisplayed()
+        composeRule.mainClock.autoAdvance = false
+    }
+
+    @Test
+    fun finishedAfterTimeLimit_showsPartialResultExplanation() {
+        val result = TracerouteResult(
+            host = "example.com",
+            resolvedIp = "10.0.0.1",
+            hops = listOf(fakeHop(1, "10.0.0.1")),
+            rawOutput = "traceroute output",
+            totalTimeMs = 900_000,
+        )
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                TracerouteScreen(
+                    viewModel = fakeViewModel(
+                        TracerouteUiState.Finished(result = result, timeLimitReached = true),
+                    ),
+                )
+            }
+        }
+
+        composeRule.mainClock.advanceTimeBy(2_000L)
+        composeRule.mainClock.autoAdvance = true
+        composeRule.onNodeWithTag("traceroute_time_limit_reached")
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule.onNodeWithText("10.0.0.1").performScrollTo().assertIsDisplayed()
         composeRule.mainClock.autoAdvance = false
     }
 

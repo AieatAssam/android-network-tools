@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -40,6 +41,9 @@ data class HopUiState(
 data class WhoisUiState(
     val query: String = "",
     val isLoading: Boolean = false,
+    val isCanceling: Boolean = false,
+    val isCanceled: Boolean = false,
+    val isLifecyclePaused: Boolean = false,
     val hopStates: List<HopUiState> = emptyList(),
     val result: WhoisResult? = null,
     val error: String? = null,
@@ -63,6 +67,9 @@ class WhoisViewModel @Inject constructor(
 
     private var progressJob: Job? = null
     private var resultJob: Job? = null
+    private var cancellationJob: Job? = null
+    private var pendingReplacementQuery: String? = null
+    private var cancellationReason: CancellationReason = CancellationReason.USER_STOP
     private var operationSession: OperationSession? = null
 
     fun onQueryChange(value: String) {
@@ -86,20 +93,35 @@ class WhoisViewModel @Inject constructor(
     }
 
     fun lookup() {
+        // Keep the current operation session fenced until its cancellation cleanup
+        // finishes. A second lookup during that window could otherwise overlap it.
+        if (_uiState.value.isCanceling) return
         val query = _uiState.value.query.trim()
         if (query.isBlank()) return
 
         viewModelScope.launch {
             recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_WHOIS_HOSTS, query)
         }
-        cancelActiveOperation(CancellationReason.USER_STOP, updateState = false)
-        // A prior lookup's own result coroutine must also be cancelled here — otherwise
-        // a rapid re-submit (edit query, hit lookup again before the first WHOIS
-        // referral chain finishes) leaves two independent result coroutines racing to
-        // write _uiState, and whichever finishes last (not necessarily the newer query)
-        // wins.
-        resultJob?.cancel()
-        _uiState.update { it.copy(isLoading = true, hopStates = emptyList(), result = null, error = null) }
+        val activeSession = operationSession
+        if (activeSession != null) {
+            replaceActiveOperation(query, activeSession)
+            return
+        }
+        startLookup(query)
+    }
+
+    private fun startLookup(query: String) {
+        _uiState.update {
+            it.copy(
+                isLoading = true,
+                isCanceling = false,
+                isCanceled = false,
+                isLifecyclePaused = false,
+                hopStates = emptyList(),
+                result = null,
+                error = null
+            )
+        }
 
         val session = WhoisOperation.newSession()
         operationSession = session
@@ -160,28 +182,97 @@ class WhoisViewModel @Inject constructor(
     fun stopLookup() = cancelActiveOperation(CancellationReason.USER_STOP, updateState = true)
 
     /** Stop an in-flight lookup when this tool leaves the foreground. */
-    fun onLifecyclePause() = cancelActiveOperation(CancellationReason.LIFECYCLE_PAUSE, updateState = true)
+    fun onLifecyclePause() {
+        if (_uiState.value.isCanceling) {
+            // If a replacement was requested while cleanup ran, do not start it
+            // after the screen has left the foreground. Finish this as a pause.
+            pendingReplacementQuery = null
+            cancellationReason = CancellationReason.LIFECYCLE_PAUSE
+            return
+        }
+        cancelActiveOperation(CancellationReason.LIFECYCLE_PAUSE, updateState = true)
+    }
 
     private fun cancelActiveOperation(reason: CancellationReason, updateState: Boolean) {
+        if (_uiState.value.isCanceling) return
         val session = operationSession
         if (session == null) return
-        operationSession = null
-        session.cancel(reason)
-        progressJob?.cancel()
-        progressJob = null
-        resultJob?.cancel()
-        resultJob = null
+        val (oldProgressJob, oldResultJob) = detachOperation(session, reason)
+        cancellationReason = reason
+        pendingReplacementQuery = null
         if (updateState) {
             _uiState.update {
                 it.copy(
-                    isLoading = false,
-                    error = if (reason == CancellationReason.LIFECYCLE_PAUSE) {
-                        "Lookup stopped when WHOIS left the foreground. Retry when ready."
-                    } else {
-                        "Lookup stopped. Retry when ready."
-                    },
+                    isLoading = true,
+                    isCanceling = true,
+                    isCanceled = false,
+                    isLifecyclePaused = false,
+                    error = null,
                 )
             }
+        }
+        oldProgressJob?.cancel()
+        oldResultJob?.cancel()
+
+        if (updateState) {
+            cancellationJob = viewModelScope.launch {
+                oldProgressJob?.cancelAndJoin()
+                oldResultJob?.cancelAndJoin()
+                finishCanceledState()
+                cancellationJob = null
+            }
+        }
+    }
+
+    private fun replaceActiveOperation(query: String, session: OperationSession) {
+        val (oldProgressJob, oldResultJob) = detachOperation(session, CancellationReason.USER_STOP)
+        cancellationReason = CancellationReason.USER_STOP
+        pendingReplacementQuery = query
+        _uiState.update {
+            it.copy(
+                isLoading = true,
+                isCanceling = true,
+                isCanceled = false,
+                isLifecyclePaused = false,
+                hopStates = emptyList(),
+                result = null,
+                error = null,
+            )
+        }
+        oldProgressJob?.cancel()
+        oldResultJob?.cancel()
+        cancellationJob = viewModelScope.launch {
+            oldProgressJob?.cancelAndJoin()
+            oldResultJob?.cancelAndJoin()
+            val replacement = pendingReplacementQuery
+            pendingReplacementQuery = null
+            cancellationJob = null
+            if (replacement != null) startLookup(replacement) else finishCanceledState()
+        }
+    }
+
+    private fun detachOperation(
+        session: OperationSession,
+        reason: CancellationReason,
+    ): Pair<Job?, Job?> {
+        operationSession = null
+        session.cancel(reason)
+        val oldProgressJob = progressJob
+        val oldResultJob = resultJob
+        progressJob = null
+        resultJob = null
+        return oldProgressJob to oldResultJob
+    }
+
+    private fun finishCanceledState() {
+        _uiState.update { state ->
+            if (!state.isCanceling) state else state.copy(
+                isLoading = false,
+                isCanceling = false,
+                isCanceled = true,
+                isLifecyclePaused = cancellationReason == CancellationReason.LIFECYCLE_PAUSE,
+                error = null,
+            )
         }
     }
 }

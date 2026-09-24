@@ -119,7 +119,7 @@ class IcmpEnginTracerouteRepositoryImplTest {
         val repository = IcmpEnginTracerouteRepositoryImpl(
             nativeTraceFactory = { _, _, _, _, _, _, _ -> flow { awaitCancellation() } },
         )
-        val session = TracerouteOperation.newSession()
+        val session = TracerouteOperation.newSession(3, 500)
         val collection = async {
             repository.trace(
                 "192.0.2.7", 3, 100, 1, TracerouteProbeType.ICMP, 56, session,
@@ -192,7 +192,7 @@ class IcmpEnginTracerouteRepositoryImplTest {
 
     @Test
     fun `reverse dns result enriches hop within caller session`() = runBlocking {
-        val session = TracerouteOperation.newSession()
+        val session = TracerouteOperation.newSession(3, 500)
         var receivedSession: net.aieat.netswissknife.core.network.operation.OperationSession? = null
         val repository = IcmpEnginTracerouteRepositoryImpl(
             nativeTraceFactory = { _, _, _, _, _, _, _ ->
@@ -217,7 +217,7 @@ class IcmpEnginTracerouteRepositoryImplTest {
     @Test
     fun `Stop during reverse dns keeps typed reason and emits no late hop`() = runBlocking {
         val lookupStarted = CompletableDeferred<Unit>()
-        val session = TracerouteOperation.newSession()
+        val session = TracerouteOperation.newSession(3, 500)
         val repository = IcmpEnginTracerouteRepositoryImpl(
             nativeTraceFactory = { _, _, _, _, _, _, _ ->
                 flowOf(HopResult(1, "192.0.2.9", null, 4, HopStatus.SUCCESS))

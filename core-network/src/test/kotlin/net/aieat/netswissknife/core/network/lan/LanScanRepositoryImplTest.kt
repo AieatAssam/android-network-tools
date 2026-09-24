@@ -11,8 +11,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
@@ -35,6 +33,30 @@ import java.util.concurrent.atomic.AtomicInteger
 
 @DisplayName("LanScanRepositoryImpl")
 class LanScanRepositoryImplTest {
+
+    @Test
+    fun `direct repository request above the hard ceiling is rejected before probing`() = runTest {
+        val icmpCalls = AtomicInteger()
+        val repo = LanScanRepositoryImpl(
+            arpTableReader = emptyArpReader,
+            icmpProbe = IcmpProbe { _, _ -> icmpCalls.incrementAndGet(); null },
+            tcpProbe = TcpPresenceProbe { _, _, _ -> TcpPresence.None },
+            nameProbes = emptyList(),
+        )
+        val request = LanScanRequest(
+            subnet = "192.168.1.0/30",
+            timeoutMs = 10_000,
+            concurrency = 1,
+            presencePorts = List(10_000) { 80 },
+            enableNameProbes = false,
+        )
+
+        val failure = runCatching { repo.scan(request).toList() }.exceptionOrNull()
+
+        assertTrue(failure is IllegalArgumentException)
+        assertTrue((failure as? IllegalArgumentException)?.message.orEmpty().contains("10-minute limit"))
+        assertEquals(0, icmpCalls.get())
+    }
 
     @Test
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -71,10 +93,10 @@ class LanScanRepositoryImplTest {
                 override val supported = false
                 override suspend fun resolve(ip: String): String? = null
             },
-            operationDispatcher = StandardTestDispatcher(testScheduler),
+            operationDispatcher = Dispatchers.Default,
         )
 
-        val scan = async {
+        val scan = async(Dispatchers.Default) {
             repo.scan(
                 LanScanRequest(
                     subnet = "192.168.1.0/29",
@@ -87,15 +109,17 @@ class LanScanRepositoryImplTest {
         }
 
         try {
-            runCurrent()
-            assertTrue(limitReached.isCompleted, "the session's two allowed workers should start")
+            withContext(Dispatchers.Default) {
+                withTimeout(5_000) { limitReached.await() }
+            }
             assertEquals(sessionLimit, activeProbes.get())
             assertEquals(sessionLimit, maximumActiveProbes.get())
         } finally {
             releaseProbes.complete(Unit)
         }
-        runCurrent()
-        val updates = withTimeout(5_000) { scan.await() }
+        val updates = withContext(Dispatchers.Default) {
+            withTimeout(5_000) { scan.await() }
+        }
         val summary = updates.filterIsInstance<LanScanUpdate.ScanComplete>().single().summary
 
         assertEquals(6, summary.totalScanned)

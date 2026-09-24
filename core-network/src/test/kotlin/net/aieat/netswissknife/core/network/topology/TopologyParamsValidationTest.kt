@@ -89,7 +89,7 @@ class TopologyParamsValidationTest {
     }
 
     @Test
-    fun `accepts topology resource bounds including no SNMP retries`() {
+    fun `accepts minimum topology values and rejects settings above the operation ceiling`() {
         val minimums = validV2cParams().copy(
             maxHops = TopologyParamsValidator.MIN_MAX_HOPS,
             timeoutMs = TopologyParamsValidator.MIN_TIMEOUT_MS,
@@ -102,7 +102,9 @@ class TopologyParamsValidationTest {
         )
 
         assertTrue(TopologyParamsValidator.validate(minimums).isValid)
-        assertTrue(TopologyParamsValidator.validate(maximums).isValid)
+        val maximumResult = TopologyParamsValidator.validate(maximums)
+        assertFalse(maximumResult.isValid)
+        assertTrue(maximumResult.errors.any { it.contains("10 minute limit") })
     }
 
     @ParameterizedTest

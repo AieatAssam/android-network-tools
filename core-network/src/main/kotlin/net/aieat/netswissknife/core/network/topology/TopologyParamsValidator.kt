@@ -33,6 +33,13 @@ object TopologyParamsValidator {
         if (params.retries !in MIN_RETRIES..MAX_RETRIES) {
             errors.add("Retries must be between $MIN_RETRIES and $MAX_RETRIES")
         }
+        if (params.maxHops in MIN_MAX_HOPS..MAX_MAX_HOPS &&
+            params.timeoutMs in MIN_TIMEOUT_MS..MAX_TIMEOUT_MS &&
+            params.retries in MIN_RETRIES..MAX_RETRIES &&
+            TopologyOperationBudget.timeoutMillisOrNull(params) == null
+        ) {
+            errors.add(TopologyOperationBudget.OVER_CEILING_MESSAGE)
+        }
 
         when (params.snmpVersion) {
             SnmpVersion.V1, SnmpVersion.V2C -> {

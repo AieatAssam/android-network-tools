@@ -18,6 +18,21 @@ class TopologyParamsValidatorTest {
     private val communityError = "Community string must not be blank for SNMP v1/v2c"
     private val usernameError = "Username must not be blank for SNMP v3"
 
+    @Test
+    fun `rejects topology budgets beyond the documented ceiling`() {
+        val result = TopologyParamsValidator.validate(
+            TopologyParams(
+                targetIp = "192.168.1.1",
+                maxHops = TopologyParamsValidator.MAX_MAX_HOPS,
+                timeoutMs = TopologyParamsValidator.MAX_TIMEOUT_MS,
+                retries = TopologyParamsValidator.MAX_RETRIES,
+            )
+        )
+
+        assertFalse(result.isValid)
+        assertTrue(result.errors.contains(TopologyOperationBudget.OVER_CEILING_MESSAGE))
+    }
+
     private fun validate(
         targetIp: String = "192.168.1.1",
         version: SnmpVersion = SnmpVersion.V2C,

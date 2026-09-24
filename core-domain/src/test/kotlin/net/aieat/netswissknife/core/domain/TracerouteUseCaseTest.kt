@@ -73,6 +73,23 @@ class TracerouteUseCaseTest {
         }
 
         @Test
+        fun `request exceeding interactive ceiling is rejected before repository probes`() = runTest {
+            val results = useCase(
+                TracerouteParams(host = "google.com", maxHops = 64, timeoutMs = 15_000),
+            ).toList()
+
+            assertEquals(
+                TracerouteFlowResult.ValidationError(
+                    "Requested trace exceeds the 15-minute time limit; reduce max hops or per-hop timeout",
+                ),
+                results.single(),
+            )
+            io.mockk.verify(exactly = 0) {
+                tracerouteRepo.trace(any(), any(), any(), any(), any(), any(), any())
+            }
+        }
+
+        @Test
         fun `probesPerHop below 1 emits ValidationError`() = runTest {
             val results = useCase(TracerouteParams(host = "google.com", probesPerHop = 0)).toList()
             assertInstanceOf(TracerouteFlowResult.ValidationError::class.java, results[0])
@@ -137,7 +154,7 @@ class TracerouteUseCaseTest {
 
         @Test
         fun `one caller session is shared by repository and every hop enrichment`() = runTest {
-            val session = TracerouteOperation.newSession()
+            val session = TracerouteOperation.newSession(30, 3_000)
             val observedSessions = mutableListOf<OperationSession>()
             every { tracerouteRepo.trace(any(), any(), any(), any(), any(), any(), any()) } answers {
                 observedSessions += lastArg<OperationSession>()
