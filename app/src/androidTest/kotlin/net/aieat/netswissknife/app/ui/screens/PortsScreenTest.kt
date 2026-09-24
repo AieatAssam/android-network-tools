@@ -3,12 +3,14 @@ package net.aieat.netswissknife.app.ui.screens
 import android.Manifest
 import android.net.Uri
 import android.os.Build
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -36,6 +38,7 @@ import net.aieat.netswissknife.app.ui.navigation.ToolIntent
 import net.aieat.netswissknife.app.ui.navigation.ToolIntentCodec
 import net.aieat.netswissknife.app.ui.theme.NetSwissKnifeTheme
 import net.aieat.netswissknife.core.domain.PortScanPreset
+import net.aieat.netswissknife.core.network.HostValidator
 import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Rule
@@ -116,8 +119,8 @@ class PortsScreenTest {
 
     @Test
     fun invalidTypedHandoff_showsLocalizedRecoveryAndKeepsFormUsable() {
-        val viewModel = fakePortScanViewModel()
-        every { viewModel.hasInvalidHandoff } returns true
+        val invalidHandoff = MutableStateFlow(true)
+        val viewModel = fakePortScanViewModel(invalidHandoffState = invalidHandoff)
 
         composeRule.setContent {
             NetSwissKnifeTheme { PortsScreen(viewModel = viewModel) }
@@ -130,6 +133,13 @@ class PortsScreenTest {
         composeRule.onNodeWithTag(PortsScreenTestTags.SCAN_BUTTON)
             .performScrollTo()
             .assertIsEnabled()
+        io.mockk.verify(exactly = 0) { viewModel.startScan() }
+
+        composeRule.onNodeWithText(context.getString(R.string.ports_host_label))
+            .performTextInput("replacement.example")
+        composeRule.mainClock.advanceTimeBy(250L)
+        composeRule.onAllNodesWithTag(PortsScreenTestTags.INVALID_HANDOFF).assertCountEquals(0)
+        composeRule.onNodeWithTag(PortsScreenTestTags.SCAN_BUTTON).assertIsEnabled()
         io.mockk.verify(exactly = 0) { viewModel.startScan() }
     }
 
@@ -306,19 +316,25 @@ class PortsScreenTest {
         state: PortScanUiState = PortScanUiState.Idle,
         selectedPreset: PortScanPreset = PortScanPreset.COMMON,
         startPort: String = "1",
-        endPort: String = "1024"
+        endPort: String = "1024",
+        invalidHandoffState: MutableStateFlow<Boolean> = MutableStateFlow(false),
     ): PortScanViewModel {
         val viewModel = mockk<PortScanViewModel>(relaxed = true)
         val hostFlow = MutableStateFlow(host)
         every { viewModel.uiState } returns MutableStateFlow(state)
         every { viewModel.host } returns hostFlow
-        every { viewModel.onHostChange(any()) } answers { hostFlow.value = firstArg() }
+        every { viewModel.onHostChange(any()) } answers {
+            val value = firstArg<String>()
+            hostFlow.value = value
+            if (HostValidator.normalize(value) != null) invalidHandoffState.value = false
+        }
         every { viewModel.selectedPreset } returns MutableStateFlow(selectedPreset)
         every { viewModel.startPort } returns MutableStateFlow(startPort)
         every { viewModel.endPort } returns MutableStateFlow(endPort)
         every { viewModel.timeoutMs } returns MutableStateFlow(1000)
         every { viewModel.concurrency } returns MutableStateFlow(concurrency)
         every { viewModel.recentHosts } returns MutableStateFlow(emptyList())
+        every { viewModel.hasInvalidHandoff } returns invalidHandoffState
         return viewModel
     }
 }

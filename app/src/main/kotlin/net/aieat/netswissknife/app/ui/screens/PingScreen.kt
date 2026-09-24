@@ -167,8 +167,8 @@ fun PingScreen(
     val intervalMs by viewModel.intervalMs.collectAsStateWithLifecycle()
     val continuousMode by viewModel.continuousMode.collectAsStateWithLifecycle()
     val recentHosts by viewModel.recentHosts.collectAsStateWithLifecycle()
+    val hasInvalidHandoff by viewModel.hasInvalidHandoff.collectAsStateWithLifecycle()
     val sourceContext = viewModel.sourceContext
-    val hasInvalidHandoff = viewModel.hasInvalidHandoff
 
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current

@@ -70,8 +70,11 @@ class PortScanViewModel @Inject constructor(
             (routeHost == null || ToolHost.parse(routeHost)?.canonical == intentHost.host.canonical)
         )
 
-    /** True when a present typed route is malformed, unsupported, or disagrees with its host arg. */
-    val hasInvalidHandoff: Boolean = hasIntentArgument && !routeArgumentsMatch
+    /** True when an invalid typed route has not yet been replaced by a valid user edit. */
+    private val _hasInvalidHandoff = MutableStateFlow(
+        hasIntentArgument && !routeArgumentsMatch && savedStateHandle.get<Boolean>("handoffRecovered") != true,
+    )
+    val hasInvalidHandoff: StateFlow<Boolean> = _hasInvalidHandoff.asStateFlow()
 
     private val inboundIntent = decodedIntent.takeIf { routeArgumentsMatch }
 
@@ -112,8 +115,8 @@ class PortScanViewModel @Inject constructor(
     init {
         val restoredEdit = savedStateHandle.get<String>("editedHost")
         val initialHost = when {
-            hasInvalidHandoff -> null
             restoredEdit != null -> restoredEdit
+            _hasInvalidHandoff.value -> null
             hasIntentArgument -> intentHost?.host?.value
             else -> routeHost
         }
@@ -130,6 +133,10 @@ class PortScanViewModel @Inject constructor(
     fun onHostChange(value: String) {
         _host.value = value
         savedStateHandle["editedHost"] = value
+        if (_hasInvalidHandoff.value && HostValidator.normalize(value) != null) {
+            savedStateHandle["handoffRecovered"] = true
+            _hasInvalidHandoff.value = false
+        }
     }
 
     fun onPresetChange(preset: PortScanPreset) { _selectedPreset.value = preset }

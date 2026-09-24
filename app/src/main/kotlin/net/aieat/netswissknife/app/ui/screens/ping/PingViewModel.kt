@@ -175,8 +175,10 @@ class PingViewModel @Inject constructor(
         )
 
     /** A present typed handoff must be valid and intended for Ping. */
-    private val _hasInvalidHandoff = MutableStateFlow(hasIntentArgument && !routeArgumentsMatch)
-    val hasInvalidHandoff: Boolean get() = _hasInvalidHandoff.value
+    private val _hasInvalidHandoff = MutableStateFlow(
+        hasIntentArgument && !routeArgumentsMatch && savedStateHandle.get<Boolean>("handoffRecovered") != true,
+    )
+    val hasInvalidHandoff: StateFlow<Boolean> = _hasInvalidHandoff.asStateFlow()
     val sourceContext: ToolSource? = decodedIntent?.source?.takeIf { routeArgumentsMatch }
 
     private val _count = MutableStateFlow(10)
@@ -215,8 +217,8 @@ class PingViewModel @Inject constructor(
     init {
         val restoredEdit = savedStateHandle.get<String>("editedHost")
         val initialHost = when {
-            hasInvalidHandoff -> null
             restoredEdit != null -> restoredEdit
+            _hasInvalidHandoff.value -> null
             hasIntentArgument -> intentHost?.host?.value
             else -> routeHost
         }
@@ -234,6 +236,7 @@ class PingViewModel @Inject constructor(
         _host.value = value
         savedStateHandle["editedHost"] = value
         if (_hasInvalidHandoff.value && HostValidator.normalize(value) != null) {
+            savedStateHandle["handoffRecovered"] = true
             _hasInvalidHandoff.value = false
         }
     }

@@ -163,7 +163,7 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
     val concurrency by viewModel.concurrency.collectAsStateWithLifecycle()
     val recentHosts by viewModel.recentHosts.collectAsStateWithLifecycle()
     val sourceContext = viewModel.sourceContext
-    val hasInvalidHandoff = viewModel.hasInvalidHandoff
+    val hasInvalidHandoff by viewModel.hasInvalidHandoff.collectAsStateWithLifecycle()
 
     var screenVisible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { screenVisible = true }

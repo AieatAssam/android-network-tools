@@ -403,14 +403,14 @@ class PingScreenTest {
         every { viewModel.recentHosts } returns MutableStateFlow(emptyList())
         every { viewModel.sourceContext } returns sourceContext
         if (hostState != null && invalidHandoffState != null) {
-            every { viewModel.hasInvalidHandoff } answers { invalidHandoffState.value }
+            every { viewModel.hasInvalidHandoff } returns invalidHandoffState
             every { viewModel.onHostChange(any()) } answers {
                 val replacement = firstArg<String>()
                 hostState.value = replacement
                 if (HostValidator.normalize(replacement) != null) invalidHandoffState.value = false
             }
         } else {
-            every { viewModel.hasInvalidHandoff } returns hasInvalidHandoff
+            every { viewModel.hasInvalidHandoff } returns MutableStateFlow(hasInvalidHandoff)
         }
         return viewModel
     }

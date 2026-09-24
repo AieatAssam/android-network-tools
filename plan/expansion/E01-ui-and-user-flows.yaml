@@ -143,9 +143,9 @@ tasks:
         implemented:
           - "Ports and Ping accept versioned typed host intents while preserving the legacy Ports host query and bare Ping route."
           - "Both destinations prefill validated LAN hosts without auto-starting, show source context, and retain user edits in SavedStateHandle."
-          - "Malformed, unsupported, or mismatched intents leave a usable recovery form with a localized inline message; Ping clears its warning after a valid replacement is entered."
+          - "Malformed, unsupported, or mismatched intents leave a usable recovery form with a localized inline message; entered edits survive recreation, and the warning stays cleared after a valid replacement."
           - "LAN handoffs push child routes so Back can return to retained LAN results; a synthetic NavHost regression covers push/pop, and instrumentation source coverage checks Ping query arguments."
-        validation: "The focused Ping ViewModel suite passed 47/47 after the recovery fix; the earlier combined Ping, LAN gateway, and intent-codec run passed 58/58. Android instrumentation Kotlin sources compile after the final Compose assertions. QA/adversarial reviews cleared the current source slice; synthetic navigation tests were compiled but not executed, and AppNavHost/system-Back, phone/tablet, and process-restoration gates remain open. No emulator was used."
+        validation: "The focused Ping and Ports ViewModel suites passed 48/48 and 23/23; Android instrumentation Kotlin sources compile after the final Compose assertions. Tests reconstruct SavedStateHandle values to cover recovery edits and warning state, but do not exercise Android SavedStateRegistry restoration. QA/adversarial reviews cleared the current source slice; synthetic navigation tests were compiled but not executed, and AppNavHost/system-Back, phone/tablet, and process-restoration gates remain open. No emulator was used."
 
   - id: E01-T02
     second_pass_review:

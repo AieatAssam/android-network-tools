@@ -715,7 +715,7 @@ class PingViewModelTest {
 
             assertEquals("192.0.2.8", handoff.host.value)
             assertEquals(ToolSource.LAN, handoff.sourceContext)
-            assertFalse(handoff.hasInvalidHandoff)
+            assertFalse(handoff.hasInvalidHandoff.value)
             assertTrue(handoff.uiState.value is PingUiState.Idle)
             coVerify(exactly = 0) { pingUseCase(any(), any()) }
 
@@ -728,7 +728,7 @@ class PingViewModelTest {
             )
             assertEquals("edited.example", recreated.host.value)
             assertEquals(ToolSource.LAN, recreated.sourceContext)
-            assertFalse(recreated.hasInvalidHandoff)
+            assertFalse(recreated.hasInvalidHandoff.value)
             assertTrue(recreated.uiState.value is PingUiState.Idle)
             coVerify(exactly = 0) { pingUseCase(any(), any()) }
         }
@@ -747,7 +747,7 @@ class PingViewModelTest {
                 )
                 assertEquals("", invalid.host.value)
                 assertNull(invalid.sourceContext)
-                assertTrue(invalid.hasInvalidHandoff)
+                assertTrue(invalid.hasInvalidHandoff.value)
                 assertTrue(invalid.uiState.value is PingUiState.Idle)
             }
         }
@@ -759,12 +759,12 @@ class PingViewModelTest {
             )
             assertEquals("", invalid.host.value)
             assertNull(invalid.sourceContext)
-            assertTrue(invalid.hasInvalidHandoff)
+            assertTrue(invalid.hasInvalidHandoff.value)
 
             val legacy = handoffViewModel(SavedStateHandle(mapOf("host" to "legacy.example")))
             assertEquals("legacy.example", legacy.host.value)
             assertNull(legacy.sourceContext)
-            assertFalse(legacy.hasInvalidHandoff)
+            assertFalse(legacy.hasInvalidHandoff.value)
         }
 
         @Test
@@ -772,15 +772,66 @@ class PingViewModelTest {
             val recovery = handoffViewModel(
                 SavedStateHandle(mapOf("intent" to "ti1.invalid", "host" to "192.0.2.8")),
             )
-            assertTrue(recovery.hasInvalidHandoff)
+            assertTrue(recovery.hasInvalidHandoff.value)
             recovery.onHostChange("bad host")
-            assertTrue(recovery.hasInvalidHandoff)
+            assertTrue(recovery.hasInvalidHandoff.value)
 
             recovery.onHostChange("replacement.example")
 
-            assertFalse(recovery.hasInvalidHandoff)
+            assertFalse(recovery.hasInvalidHandoff.value)
             assertEquals("replacement.example", recovery.host.value)
             assertTrue(recovery.uiState.value is PingUiState.Idle)
+            coVerify(exactly = 0) { pingUseCase(any(), any()) }
+        }
+
+        @Test
+        fun `valid recovery edit and dismissed warning survive malformed and mismatched route recreation`() {
+            val portsIntent = ToolIntentCodec.encode(
+                ToolIntent(
+                    ToolDestination.HostTarget(HostTool.PORTS, requireNotNull(ToolHost.parse("192.0.2.8"))),
+                    ToolSource.LAN,
+                ),
+            )
+            val invalidRoutes = listOf(
+                "ti1.invalid" to "192.0.2.8",
+                portsIntent to "192.0.2.8",
+                encodedPing to "192.0.2.9",
+            )
+
+            invalidRoutes.forEach { (rawIntent, routeHost) ->
+                val routeState = SavedStateHandle(mapOf("intent" to rawIntent, "host" to routeHost))
+                val recovery = handoffViewModel(routeState)
+                assertTrue(recovery.hasInvalidHandoff.value)
+
+                recovery.onHostChange("bad host")
+                assertTrue(recovery.hasInvalidHandoff.value)
+                assertEquals("bad host", routeState.get<String>("editedHost"))
+                val invalidEditRestored = handoffViewModel(
+                    SavedStateHandle(
+                        mapOf("intent" to rawIntent, "host" to routeHost, "editedHost" to "bad host"),
+                    ),
+                )
+                assertEquals("bad host", invalidEditRestored.host.value)
+                assertTrue(invalidEditRestored.hasInvalidHandoff.value)
+
+                recovery.onHostChange("replacement.example")
+                assertFalse(recovery.hasInvalidHandoff.value)
+                assertEquals(true, routeState.get<Boolean>("handoffRecovered"))
+                val recreated = handoffViewModel(
+                    SavedStateHandle(
+                        mapOf(
+                            "intent" to rawIntent,
+                            "host" to routeHost,
+                            "editedHost" to "replacement.example",
+                            "handoffRecovered" to true,
+                        ),
+                    ),
+                )
+                assertEquals("replacement.example", recreated.host.value)
+                assertFalse(recreated.hasInvalidHandoff.value)
+                assertTrue(recreated.uiState.value is PingUiState.Idle)
+            }
+
             coVerify(exactly = 0) { pingUseCase(any(), any()) }
         }
     }

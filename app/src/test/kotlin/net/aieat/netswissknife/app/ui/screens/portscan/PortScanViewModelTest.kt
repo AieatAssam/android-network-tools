@@ -44,6 +44,7 @@ import net.aieat.netswissknife.core.network.operation.OperationSession
 import net.aieat.netswissknife.core.network.operation.CancellationReason
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
@@ -132,7 +133,7 @@ class PortScanViewModelTest {
 
         assertEquals("192.0.2.8", handoffViewModel.host.value)
         assertEquals(ToolSource.LAN, handoffViewModel.sourceContext)
-        assertTrue(!handoffViewModel.hasInvalidHandoff)
+        assertTrue(!handoffViewModel.hasInvalidHandoff.value)
         assertTrue(handoffViewModel.uiState.value is PortScanUiState.Idle)
         verify(exactly = 0) { portScanUseCase(any()) }
         verify(exactly = 0) { portScanUseCase(any(), any()) }
@@ -152,7 +153,7 @@ class PortScanViewModelTest {
         )
         assertEquals("edited.example", recreated.host.value)
         assertEquals(ToolSource.LAN, recreated.sourceContext)
-        assertTrue(!recreated.hasInvalidHandoff)
+        assertTrue(!recreated.hasInvalidHandoff.value)
         assertTrue(recreated.uiState.value is PortScanUiState.Idle)
         verify(exactly = 0) { portScanUseCase(any()) }
         verify(exactly = 0) { portScanUseCase(any(), any()) }
@@ -177,7 +178,7 @@ class PortScanViewModelTest {
 
         assertEquals("", mismatched.host.value)
         assertEquals(null, mismatched.sourceContext)
-        assertTrue(mismatched.hasInvalidHandoff)
+        assertTrue(mismatched.hasInvalidHandoff.value)
         verify(exactly = 0) { portScanUseCase(any(), any()) }
         verify(exactly = 0) { portScanUseCase.newSession(any()) }
     }
@@ -194,7 +195,64 @@ class PortScanViewModelTest {
 
         assertEquals("", invalid.host.value)
         assertEquals(null, invalid.sourceContext)
-        assertTrue(invalid.hasInvalidHandoff)
+        assertTrue(invalid.hasInvalidHandoff.value)
+    }
+
+    @Test
+    fun `valid recovery edit and dismissed warning survive route recreation`() {
+        val encoded = ToolIntentCodec.encode(
+            ToolIntent(
+                ToolDestination.HostTarget(HostTool.PORTS, requireNotNull(ToolHost.parse("router-a.local"))),
+                ToolSource.LAN,
+            ),
+        )
+        val routeState = SavedStateHandle(mapOf("intent" to encoded, "host" to "router-b.local"))
+        val recovery = PortScanViewModel(
+            portScanUseCase,
+            dataStore,
+            recentHostsRepository,
+            savedStateHandle = routeState,
+            monotonicClock = testClock,
+        )
+        assertTrue(recovery.hasInvalidHandoff.value)
+
+        recovery.onHostChange("bad host")
+        assertEquals("bad host", routeState.get<String>("editedHost"))
+        val invalidEditRestored = PortScanViewModel(
+            portScanUseCase,
+            dataStore,
+            recentHostsRepository,
+            savedStateHandle = SavedStateHandle(
+                mapOf("intent" to encoded, "host" to "router-b.local", "editedHost" to "bad host"),
+            ),
+            monotonicClock = testClock,
+        )
+        assertEquals("bad host", invalidEditRestored.host.value)
+        assertTrue(invalidEditRestored.hasInvalidHandoff.value)
+
+        recovery.onHostChange("replacement.example")
+        assertFalse(recovery.hasInvalidHandoff.value)
+        assertEquals(true, routeState.get<Boolean>("handoffRecovered"))
+        val recreated = PortScanViewModel(
+            portScanUseCase,
+            dataStore,
+            recentHostsRepository,
+            savedStateHandle = SavedStateHandle(
+                mapOf(
+                    "intent" to encoded,
+                    "host" to "router-b.local",
+                    "editedHost" to "replacement.example",
+                    "handoffRecovered" to true,
+                ),
+            ),
+            monotonicClock = testClock,
+        )
+        assertEquals("replacement.example", recreated.host.value)
+        assertFalse(recreated.hasInvalidHandoff.value)
+        assertTrue(recreated.uiState.value is PortScanUiState.Idle)
+        verify(exactly = 0) { portScanUseCase(any()) }
+        verify(exactly = 0) { portScanUseCase(any(), any()) }
+        verify(exactly = 0) { portScanUseCase.newSession(any()) }
     }
 
     @Test
