@@ -194,6 +194,70 @@ class TlsInspectorScreenTest {
     }
 
     @Test
+    fun loadingState_showsCancelAction() {
+        val viewModel = fakeViewModel(
+            TlsInspectorUiState(host = "example.com", isLoading = true),
+        )
+        composeRule.setContent {
+            NetSwissKnifeTheme { TlsInspectorScreen(viewModel = viewModel) }
+        }
+
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        composeRule
+            .onNodeWithText(context.getString(R.string.tls_cancel_inspection))
+            .performScrollTo()
+            .assertIsDisplayed()
+            .performClick()
+
+        verify(exactly = 1) { viewModel.stopInspection() }
+    }
+
+    @Test
+    fun cancelingState_showsStoppingAction() {
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                TlsInspectorScreen(
+                    viewModel = fakeViewModel(
+                        TlsInspectorUiState(
+                            host = "example.com",
+                            isLoading = true,
+                            isCanceling = true,
+                        ),
+                    ),
+                )
+            }
+        }
+
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        composeRule
+            .onNodeWithText(context.getString(R.string.tls_stopping))
+            .performScrollTo()
+            .assertIsDisplayed()
+            .assertIsNotEnabled()
+    }
+
+    @Test
+    fun canceledState_showsMessageAndInspectRetries() {
+        val viewModel = fakeViewModel(
+            TlsInspectorUiState(host = "example.com", isCanceled = true),
+        )
+        composeRule.setContent {
+            NetSwissKnifeTheme { TlsInspectorScreen(viewModel = viewModel) }
+        }
+
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        composeRule
+            .onNodeWithText(context.getString(R.string.tls_inspection_canceled))
+            .assertIsDisplayed()
+        composeRule
+            .onNodeWithText(context.getString(R.string.tls_inspect_button))
+            .performScrollTo()
+            .performClick()
+
+        verify(exactly = 1) { viewModel.inspect() }
+    }
+
+    @Test
     fun errorState_showsMessageAndRetryCallsInspect() {
         val viewModel = fakeViewModel(
             TlsInspectorUiState(host = "example.com", error = "Connection refused")

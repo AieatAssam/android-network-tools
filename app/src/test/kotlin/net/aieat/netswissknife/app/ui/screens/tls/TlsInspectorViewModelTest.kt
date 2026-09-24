@@ -5,9 +5,11 @@ import io.mockk.coVerify
 import io.mockk.slot
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.awaitCancellation
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.SavedStateHandle
@@ -15,6 +17,8 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
 import net.aieat.netswissknife.app.ui.navigation.HostTool
@@ -26,7 +30,9 @@ import net.aieat.netswissknife.app.ui.navigation.ToolPort
 import net.aieat.netswissknife.app.ui.navigation.ToolSource
 import net.aieat.netswissknife.core.domain.TlsInspectorUseCase
 import net.aieat.netswissknife.core.network.NetworkResult
+import net.aieat.netswissknife.core.network.operation.OperationRunner
 import net.aieat.netswissknife.core.network.tls.TlsCertificate
+import net.aieat.netswissknife.core.network.tls.TlsInspectorRepository
 import net.aieat.netswissknife.core.network.tls.TlsInspectorResult
 import net.aieat.netswissknife.core.network.operation.CancellationReason
 import net.aieat.netswissknife.core.network.operation.OperationSession
@@ -40,6 +46,8 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @DisplayName("TlsInspectorViewModel")
@@ -337,6 +345,99 @@ class TlsInspectorViewModelTest {
             viewModel.onHostChange("example.com")
             viewModel.inspect()
             assertTrue(!viewModel.uiState.value.isLoading)
+        }
+
+        @Test
+        fun `user stop remains canceling through cleanup then a fresh inspection succeeds`() = runTest {
+            val operationEntered = CompletableDeferred<Unit>()
+            val cleanupStarted = CompletableDeferred<Unit>()
+            val allowCleanupToFinish = CountDownLatch(1)
+            lateinit var capturedSession: OperationSession
+            lateinit var retrySession: OperationSession
+            var operationCount = 0
+            val repository = object : TlsInspectorRepository {
+                override suspend fun inspect(
+                    host: String,
+                    port: Int,
+                    timeoutMs: Int,
+                ): NetworkResult<TlsInspectorResult> = error("The session-aware path is required")
+
+                override suspend fun inspect(
+                    host: String,
+                    port: Int,
+                    timeoutMs: Int,
+                    operationSession: OperationSession,
+                ): NetworkResult<TlsInspectorResult> = OperationRunner.run(operationSession) {
+                    if (operationCount++ == 0) {
+                        capturedSession = operationSession
+                        operationSession.resources.register(AutoCloseable {
+                            cleanupStarted.complete(Unit)
+                            check(allowCleanupToFinish.await(10, TimeUnit.SECONDS)) {
+                                "test did not release TLS operation cleanup"
+                            }
+                        })
+                        operationEntered.complete(Unit)
+                        awaitCancellation()
+                    } else {
+                        retrySession = operationSession
+                        NetworkResult.Success(stubResult)
+                    }
+                }
+            }
+            val cancelViewModel = TlsInspectorViewModel(
+                TlsInspectorUseCase(repository),
+                recentHostsRepository,
+            )
+            cancelViewModel.onHostChange("example.com")
+            cancelViewModel.inspect()
+
+            try {
+                assertTrue(operationEntered.isCompleted)
+                assertTrue(cancelViewModel.uiState.value.isLoading)
+                assertFalse(cancelViewModel.uiState.value.isCanceling)
+
+                cancelViewModel.stopInspection()
+                assertTrue(cancelViewModel.uiState.value.isLoading)
+                assertTrue(cancelViewModel.uiState.value.isCanceling)
+                assertFalse(cancelViewModel.uiState.value.isCanceled)
+
+                cancelViewModel.stopInspection()
+                withContext(Dispatchers.Default.limitedParallelism(1)) {
+                    withTimeout(5_000) { cleanupStarted.await() }
+                }
+                assertTrue(cancelViewModel.uiState.value.isLoading)
+                assertTrue(cancelViewModel.uiState.value.isCanceling)
+            } finally {
+                allowCleanupToFinish.countDown()
+                cancelViewModel.stopInspection()
+                if (operationEntered.isCompleted) {
+                    withContext(Dispatchers.Default.limitedParallelism(1)) {
+                        withTimeout(5_000) { cancelViewModel.uiState.first { !it.isLoading } }
+                    }
+                }
+            }
+
+            val canceledState = withContext(Dispatchers.Default.limitedParallelism(1)) {
+                withTimeout(5_000) { cancelViewModel.uiState.first { it.isCanceled } }
+            }
+            assertFalse(canceledState.isLoading)
+            assertFalse(canceledState.isCanceling)
+            assertNull(canceledState.result)
+            assertNull(canceledState.error)
+            assertEquals(CancellationReason.USER_STOP, capturedSession.cancellationReason)
+
+            cancelViewModel.inspect()
+            val retriedState = withContext(Dispatchers.Default.limitedParallelism(1)) {
+                withTimeout(5_000) {
+                    cancelViewModel.uiState.first { it.result != null || it.error != null }
+                }
+            }
+
+            assertEquals(stubResult, retriedState.result)
+            assertFalse(retriedState.isLoading)
+            assertFalse(retriedState.isCanceled)
+            assertTrue(capturedSession !== retrySession)
+            assertEquals(2, operationCount)
         }
     }
 

@@ -517,12 +517,15 @@
     <string name="error_invalid_port">Port must be a number from 1 to 65535</string>
     <string name="tls_inspect_button">Inspect</string>
     <string name="tls_inspecting">Inspecting…</string>
+    <string name="tls_cancel_inspection">Cancel</string>
+    <string name="tls_stopping">Stopping…</string>
 
     <!-- TLS States -->
     <string name="tls_idle_title">Enter a host to inspect</string>
     <string name="tls_idle_subtitle">Connects via TLS and returns the full certificate chain, including expired or self-signed certificates</string>
     <string name="tls_error_title">Inspection failed</string>
     <string name="tls_retry">Retry</string>
+    <string name="tls_inspection_canceled">Inspection canceled</string>
 
     <!-- TLS Connection Card -->
     <string name="tls_connection_header">Connection</string>

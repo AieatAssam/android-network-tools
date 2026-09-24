@@ -42,6 +42,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.SuggestionChipDefaults
@@ -59,6 +60,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -179,10 +182,12 @@ fun TlsInspectorScreen(viewModel: TlsInspectorViewModel = hiltViewModel()) {
                     host      = uiState.host,
                     port      = uiState.port,
                     isLoading = uiState.isLoading,
+                    isCanceling = uiState.isCanceling,
                     recentHosts = recentHosts,
                     onHostChange = viewModel::onHostChange,
                     onPortChange = viewModel::onPortChange,
                     onInspect    = viewModel::inspect,
+                    onCancel     = viewModel::stopInspection,
                     onRemoveRecentHost = viewModel::removeRecentHost,
                     onClearRecentHosts = viewModel::clearRecentHosts
                 )
@@ -192,6 +197,7 @@ fun TlsInspectorScreen(viewModel: TlsInspectorViewModel = hiltViewModel()) {
             item {
                 val displayState = when {
                     uiState.isLoading          -> DisplayState.Loading
+                    uiState.isCanceled         -> DisplayState.Canceled
                     uiState.error != null      -> DisplayState.Error(uiState.error!!)
                     uiState.result != null     -> DisplayState.Success(uiState.result!!)
                     else                       -> DisplayState.Idle
@@ -207,6 +213,7 @@ fun TlsInspectorScreen(viewModel: TlsInspectorViewModel = hiltViewModel()) {
                     when (state) {
                         is DisplayState.Idle    -> TlsIdlePlaceholder()
                         is DisplayState.Loading -> TlsLoadingContent()
+                        is DisplayState.Canceled -> TlsCanceledContent()
                         is DisplayState.Error   -> TlsErrorContent(state.message) { viewModel.inspect() }
                         is DisplayState.Success -> TlsSuccessContent(state.result)
                     }
@@ -243,6 +250,7 @@ fun TlsInspectorScreen(viewModel: TlsInspectorViewModel = hiltViewModel()) {
 private sealed class DisplayState {
     object Idle : DisplayState()
     object Loading : DisplayState()
+    object Canceled : DisplayState()
     data class Error(val message: String) : DisplayState()
     data class Success(val result: TlsInspectorResult) : DisplayState()
 }
@@ -266,10 +274,12 @@ private fun TlsInputSection(
     host: String,
     port: String,
     isLoading: Boolean,
+    isCanceling: Boolean,
     recentHosts: List<String>,
     onHostChange: (String) -> Unit,
     onPortChange: (String) -> Unit,
     onInspect: () -> Unit,
+    onCancel: () -> Unit,
     onRemoveRecentHost: (String) -> Unit,
     onClearRecentHosts: () -> Unit
 ) {
@@ -346,27 +356,46 @@ private fun TlsInputSection(
                 )
             )
 
-            // Inspect button
-            Button(
-                onClick   = hapticAction {
-                    focusManager.clearFocus()
-                    onInspect()
-                },
-                enabled   = normalizedHost != null && isPortValid && !isLoading,
-                modifier  = Modifier.fillMaxWidth()
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
+                Button(
+                    onClick   = hapticAction {
+                        focusManager.clearFocus()
+                        onInspect()
+                    },
+                    enabled   = normalizedHost != null && isPortValid && !isLoading,
+                    modifier  = Modifier.weight(1f)
+                ) {
+                    if (isLoading) {
+                        CircularProgressIndicator(
+                            modifier  = Modifier.size(18.dp),
+                            color     = MaterialTheme.colorScheme.onPrimary,
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.tls_inspecting))
+                    } else {
+                        Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.tls_inspect_button))
+                    }
+                }
                 if (isLoading) {
-                    CircularProgressIndicator(
-                        modifier  = Modifier.size(18.dp),
-                        color     = MaterialTheme.colorScheme.onPrimary,
-                        strokeWidth = 2.dp
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.tls_inspecting))
-                } else {
-                    Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.tls_inspect_button))
+                    OutlinedButton(
+                        onClick = onCancel,
+                        enabled = !isCanceling,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(
+                            stringResource(
+                                if (isCanceling) R.string.tls_stopping
+                                else R.string.tls_cancel_inspection,
+                            ),
+                        )
+                    }
                 }
             }
         }
@@ -401,6 +430,21 @@ private fun TlsIdlePlaceholder() {
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )
         }
+    }
+}
+
+@Composable
+private fun TlsCanceledContent() {
+    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = stringResource(R.string.tls_inspection_canceled),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp)
+                .semantics { liveRegion = LiveRegionMode.Polite },
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

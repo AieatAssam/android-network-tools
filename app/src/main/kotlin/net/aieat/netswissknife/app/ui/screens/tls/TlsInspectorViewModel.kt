@@ -36,6 +36,8 @@ data class TlsInspectorUiState(
     val host: String = "",
     val port: String = "443",
     val isLoading: Boolean = false,
+    val isCanceling: Boolean = false,
+    val isCanceled: Boolean = false,
     val result: TlsInspectorResult? = null,
     val error: String? = null
 )
@@ -171,6 +173,7 @@ class TlsInspectorViewModel @Inject constructor(
 
     fun inspect() {
         val state = _uiState.value
+        if (state.isLoading) return
         val normalizedHost = HostValidator.normalize(state.host)
         if (normalizedHost == null) {
             _uiState.value = state.copy(
@@ -189,7 +192,14 @@ class TlsInspectorViewModel @Inject constructor(
             )
             return
         }
-        _uiState.value = state.copy(host = normalizedHost, isLoading = true, error = null, result = null)
+        _uiState.value = state.copy(
+            host = normalizedHost,
+            isLoading = true,
+            isCanceling = false,
+            isCanceled = false,
+            error = null,
+            result = null,
+        )
         val session = TlsInspectorOperation.newSession(INSPECTION_TIMEOUT_MS)
         operationSession = session
         viewModelScope.launch {
@@ -205,16 +215,34 @@ class TlsInspectorViewModel @Inject constructor(
                 when (val res = useCase(params, session)) {
                     is NetworkResult.Success -> _uiState.value = _uiState.value.copy(
                         isLoading = false,
+                        isCanceling = false,
+                        isCanceled = false,
                         result    = res.data,
                         error     = null
                     )
                     is NetworkResult.Error   -> _uiState.value = _uiState.value.copy(
                         isLoading = false,
+                        isCanceling = false,
+                        isCanceled = false,
                         result    = null,
                         error     = res.message
                     )
                 }
             } catch (e: CancellationException) {
+                when (session.cancellationReason) {
+                    CancellationReason.USER_STOP -> _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        isCanceling = false,
+                        isCanceled = true,
+                        result = null,
+                    )
+                    CancellationReason.LIFECYCLE_PAUSE -> _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        isCanceling = false,
+                        isCanceled = false,
+                    )
+                    else -> Unit
+                }
                 throw e
             } catch (e: Exception) {
                 val detail = e.message?.trim().takeUnless { it.isNullOrEmpty() }
@@ -222,6 +250,8 @@ class TlsInspectorViewModel @Inject constructor(
                     ?: "Unknown TLS inspection error"
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
+                    isCanceling = false,
+                    isCanceled = false,
                     result = null,
                     error = "TLS inspection failed: $detail"
                 )
@@ -229,6 +259,12 @@ class TlsInspectorViewModel @Inject constructor(
                 if (operationSession === session) operationSession = null
             }
         }
+    }
+
+    fun stopInspection() {
+        if (!_uiState.value.isLoading || _uiState.value.isCanceling || operationSession == null) return
+        _uiState.value = _uiState.value.copy(isCanceling = true)
+        cancelInspection(CancellationReason.USER_STOP)
     }
 
     private fun cancelInspection(reason: CancellationReason) {
