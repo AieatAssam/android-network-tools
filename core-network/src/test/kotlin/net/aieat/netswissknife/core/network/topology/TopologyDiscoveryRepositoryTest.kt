@@ -1,11 +1,13 @@
 package net.aieat.netswissknife.core.network.topology
 
 import io.mockk.*
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
@@ -24,6 +26,7 @@ import org.junit.jupiter.api.Test
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.ConcurrentHashMap
 
 class TopologyDiscoveryRepositoryTest {
 
@@ -301,6 +304,115 @@ class TopologyDiscoveryRepositoryTest {
         repository.discover(defaultParams.copy(maxHops = 0), session).toList()
 
         assertEquals(1, maximumConcurrentWalks.get())
+    }
+
+    @Test
+    fun `repository walk cap is shared across sessions and releases queued work after cancellation`() = runTest {
+        val targetIps = (101..106).map { "192.168.1.$it" }
+        val sessions = targetIps.associateWith {
+            OperationSession(OperationBudget.start(maxConcurrentProbes = 1))
+        }
+        val readySessions = AtomicInteger(0)
+        val allSessionsReady = CompletableDeferred<Unit>()
+        val activeWalks = AtomicInteger(0)
+        val maximumConcurrentWalks = AtomicInteger(0)
+        val activeTargetIps = ConcurrentHashMap.newKeySet<String>()
+        val observedTargetIps = ConcurrentHashMap.newKeySet<String>()
+        val fourSessionsWalking = CompletableDeferred<Unit>()
+        val fifthTargetEntered = CompletableDeferred<String>()
+        val releaseWalks = CompletableDeferred<Unit>()
+        val clientCloseCounts = ConcurrentHashMap<String, AtomicInteger>()
+        val sysUpTimeOid = "1.3.6.1.2.1.1.3.0"
+
+        val boundedRepository = TopologyDiscoveryRepositoryImpl(SnmpClientFactory { clientParams ->
+            object : SnmpClient {
+                override suspend fun get(target: SnmpTarget, oid: String): String? {
+                    if (oid == sysUpTimeOid) {
+                        if (readySessions.incrementAndGet() == targetIps.size) {
+                            allSessionsReady.complete(Unit)
+                        }
+                        allSessionsReady.await()
+                    }
+                    return null
+                }
+
+                override suspend fun walk(
+                    target: SnmpTarget,
+                    oidPrefix: String,
+                    budget: SnmpWalkBudget,
+                ): SnmpWalkResult {
+                    val active = activeWalks.incrementAndGet()
+                    maximumConcurrentWalks.updateAndGet { current -> maxOf(current, active) }
+                    activeTargetIps.add(target.ip)
+                    observedTargetIps.add(target.ip)
+                    if (activeTargetIps.size >= 4) fourSessionsWalking.complete(Unit)
+                    if (observedTargetIps.size > 4) fifthTargetEntered.complete(target.ip)
+                    try {
+                        releaseWalks.await()
+                        return SnmpWalkResult(emptyMap())
+                    } finally {
+                        activeTargetIps.remove(target.ip)
+                        activeWalks.decrementAndGet()
+                    }
+                }
+
+                override fun close() {
+                    clientCloseCounts.computeIfAbsent(clientParams.targetIp) { AtomicInteger() }
+                        .incrementAndGet()
+                }
+            }
+        })
+        val jobs = targetIps.map { targetIp ->
+            launch {
+                try {
+                    boundedRepository.discover(
+                        defaultParams.copy(targetIp = targetIp, maxHops = 0),
+                        sessions.getValue(targetIp),
+                    ).toList()
+                } catch (cancelled: CancellationException) {
+                    if (sessions.getValue(targetIp).cancellationReason != CancellationReason.USER_STOP) {
+                        throw cancelled
+                    }
+                }
+            }
+        }
+
+        try {
+            withContext(Dispatchers.IO) {
+                withTimeout(5_000) { fourSessionsWalking.await() }
+            }
+            val canceledTarget = activeTargetIps.first()
+            assertEquals(4, activeTargetIps.size)
+            assertEquals(4, maximumConcurrentWalks.get())
+
+            sessions.getValue(canceledTarget).cancel(CancellationReason.USER_STOP)
+            val queuedTarget = withContext(Dispatchers.IO) {
+                withTimeout(5_000) { fifthTargetEntered.await() }
+            }
+            assertNotEquals(canceledTarget, queuedTarget)
+            assertTrue(queuedTarget in targetIps)
+            assertEquals(4, maximumConcurrentWalks.get())
+            assertEquals(CancellationReason.USER_STOP, sessions.getValue(canceledTarget).cancellationReason)
+
+            releaseWalks.complete(Unit)
+            withContext(Dispatchers.IO) {
+                withTimeout(5_000) { jobs.joinAll() }
+            }
+
+            assertEquals(targetIps.size, observedTargetIps.size)
+            assertEquals(1, clientCloseCounts.getValue(canceledTarget).get())
+            targetIps.filterNot { it == canceledTarget }.forEach { targetIp ->
+                assertEquals(1, clientCloseCounts.getValue(targetIp).get())
+            }
+            assertTrue(sessions.values.all { it.resources.isClosed })
+            assertEquals(4, maximumConcurrentWalks.get())
+        } finally {
+            releaseWalks.complete(Unit)
+            sessions.values.forEach { it.cancel(CancellationReason.USER_STOP) }
+            withContext(Dispatchers.IO) {
+                withTimeout(5_000) { jobs.joinAll() }
+            }
+        }
     }
 
     @Test
