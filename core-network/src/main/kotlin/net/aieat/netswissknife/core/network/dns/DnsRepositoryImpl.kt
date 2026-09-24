@@ -5,8 +5,17 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.NetworkResult
+import net.aieat.netswissknife.core.network.elapsedMillisSince
+import net.aieat.netswissknife.core.network.MonotonicClock
+import net.aieat.netswissknife.core.network.SystemMonotonicClock
+import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationCancellationException
+import net.aieat.netswissknife.core.network.operation.OperationRunner
+import net.aieat.netswissknife.core.network.operation.OperationSession
+import net.aieat.netswissknife.core.network.operation.ensureCurrentOperationActive
 import org.xbill.DNS.DClass
 import org.xbill.DNS.ExtendedResolver
+import org.xbill.DNS.io.IoClientFactory
 import org.xbill.DNS.Message
 import org.xbill.DNS.Name
 import org.xbill.DNS.Record
@@ -32,6 +41,8 @@ internal data class DnsResolverEndpoint(val address: String, val resolver: Resol
 class DnsRepositoryImpl(
     private val resolverFactory: ResolverFactory = ResolverFactory { server -> defaultResolver(server) }
 ) : DnsRepository {
+
+    internal var ioClientFactoryFactory: (OperationSession) -> IoClientFactory = { SessionIoClientFactory(it) }
 
     fun interface ResolverFactory {
         fun create(server: DnsServer): Resolver
@@ -141,6 +152,7 @@ class DnsRepositoryImpl(
             is DnsServer.Custom -> simpleResolver(server.address)
         }
 
+
         private fun simpleResolver(address: String): Resolver =
             SimpleResolver(address).also { it.setTimeout(TIMEOUT) }
     }
@@ -149,6 +161,15 @@ class DnsRepositoryImpl(
         domain: String,
         recordType: DnsRecordType,
         server: DnsServer
+    ): NetworkResult<DnsResult> = lookup(domain, recordType, server, DnsLookupOperation.newSession(clock))
+
+    internal var clock: MonotonicClock = SystemMonotonicClock
+
+    override suspend fun lookup(
+        domain: String,
+        recordType: DnsRecordType,
+        server: DnsServer,
+        operationSession: OperationSession,
     ): NetworkResult<DnsResult> = withContext(Dispatchers.IO) {
         if (server is DnsServer.System && server.serverAddresses.isEmpty()) {
             return@withContext NetworkResult.Error(
@@ -162,33 +183,84 @@ class DnsRepositoryImpl(
             return@withContext NetworkResult.Error("Invalid DNS domain name: ${e.message}", e)
         }
 
-        val startNs = System.nanoTime()
         try {
-            val queryName = Name.fromString(normalizedDomain)
-            val queryRecord = Record.newRecord(queryName, recordType.dnsTypeInt, DClass.IN)
-            val queryMessage = Message.newQuery(queryRecord)
-            val resolver = resolverFactory.create(server)
-            val response = resolver.send(queryMessage)
-            val queryTimeMs = (System.nanoTime() - startNs) / 1_000_000L
-            val serverUsed = (resolver as? DnsResolverMetadata)?.lastServerAddress
-                ?.let(::formatServerAddress)
-                ?: serverAddress(server)
-            val result = DnsMessageMapper.toResult(
-                domain = domain.trimEnd('.'),
-                requestedType = recordType,
-                server = server,
-                response = response,
-                serverUsed = serverUsed,
-                queryTimeMs = queryTimeMs
-            )
-            NetworkResult.Success(result)
+            OperationRunner.run(operationSession) {
+                val startNs = clock.nowNanos()
+                val queryName = Name.fromString(normalizedDomain)
+                val queryRecord = Record.newRecord(queryName, recordType.dnsTypeInt, DClass.IN)
+                val queryMessage = Message.newQuery(queryRecord)
+                val resolver = resolverFactory.create(server)
+                bindSessionTransport(resolver, operationSession)
+                ensureCurrentOperationActive()
+                val sendThread = Thread.currentThread()
+                // Dispatchers.IO reuses workers. Clear any prior interrupt before this blocking
+                // call and again afterward so dnsjava's restored interrupt cannot poison the pool.
+                Thread.interrupted()
+                val resolverCall = try {
+                    operationSession.resources.register(ResolverCallLease(sendThread))
+                } catch (failure: Throwable) {
+                    Thread.interrupted()
+                    throw failure
+                }
+                val response = try {
+                    resolver.send(queryMessage)
+                } finally {
+                    // dnsjava restores the interrupt flag when its blocking future wait is
+                    // interrupted. Clear it before Dispatchers.IO reuses this worker.
+                    resolverCall.markCompleted()
+                    Thread.interrupted()
+                    operationSession.resources.release(resolverCall)
+                }
+                ensureCurrentOperationActive()
+                val queryTimeMs = clock.elapsedMillisSince(startNs)
+                val serverUsed = (resolver as? DnsResolverMetadata)?.lastServerAddress
+                    ?.let(::formatServerAddress)
+                    ?: serverAddress(server)
+                val result = DnsMessageMapper.toResult(
+                    domain = domain.trimEnd('.'),
+                    requestedType = recordType,
+                    server = server,
+                    response = response,
+                    serverUsed = serverUsed,
+                    queryTimeMs = queryTimeMs
+                )
+                NetworkResult.Success(result)
+            }
         } catch (e: CancellationException) {
+            if (e is OperationCancellationException && e.reason == CancellationReason.DEADLINE_EXCEEDED) {
+                return@withContext NetworkResult.Error("DNS lookup failed: Operation deadline exceeded", e)
+            }
             throw e
         } catch (e: Exception) {
+            when (operationSession.cancellationReason) {
+                CancellationReason.DEADLINE_EXCEEDED -> return@withContext NetworkResult.Error(
+                    "DNS lookup failed: Operation deadline exceeded",
+                    e,
+                )
+                null -> Unit
+                else -> throw OperationCancellationException(
+                    checkNotNull(operationSession.cancellationReason),
+                    e,
+                )
+            }
             NetworkResult.Error(
                 message = "DNS lookup failed: ${e.message ?: e.javaClass.simpleName}",
                 cause = e
             )
+        }
+    }
+
+    private fun bindSessionTransport(resolver: Resolver, session: OperationSession) {
+        val timeout = Duration.ofMillis(
+            session.budget.remainingTimeoutMillis().coerceAtLeast(1).coerceAtMost(TIMEOUT.toMillis())
+        )
+        when (resolver) {
+            is SimpleResolver -> {
+                resolver.setTimeout(timeout)
+                resolver.ioClientFactory = ioClientFactoryFactory(session)
+            }
+            is TrackingExtendedResolver -> resolver.bindSession(session, timeout, ioClientFactoryFactory)
+            else -> resolver.setTimeout(timeout)
         }
     }
 
@@ -219,6 +291,24 @@ class DnsRepositoryImpl(
             }
         }.toTypedArray()
     ), DnsResolverMetadata {
+
+        fun bindSession(
+            session: OperationSession,
+            timeout: Duration,
+            ioFactory: (OperationSession) -> IoClientFactory,
+        ) {
+            setTimeout(timeout)
+            getResolvers().forEach { resolver ->
+                when (resolver) {
+                    is TrackingResolver -> resolver.bindSession(session, timeout, ioFactory)
+                    is SimpleResolver -> {
+                        resolver.setTimeout(timeout)
+                        resolver.ioClientFactory = ioFactory(session)
+                    }
+                    else -> resolver.setTimeout(timeout)
+                }
+            }
+        }
         constructor(addresses: List<String>) : this(
             ResolverSelection(),
             addresses.map { address ->
@@ -240,6 +330,14 @@ class DnsRepositoryImpl(
         private val address: String,
         private val onSuccess: (String) -> Unit
     ) : Resolver {
+        fun bindSession(
+            session: OperationSession,
+            timeout: Duration,
+            ioFactory: (OperationSession) -> IoClientFactory,
+        ) {
+            delegate.setTimeout(timeout)
+            if (delegate is SimpleResolver) delegate.ioClientFactory = ioFactory(session)
+        }
         override fun setPort(port: Int) = delegate.setPort(port)
         override fun setTCP(flag: Boolean) = delegate.setTCP(flag)
         override fun setIgnoreTruncation(flag: Boolean) = delegate.setIgnoreTruncation(flag)
@@ -252,6 +350,28 @@ class DnsRepositoryImpl(
             delegate.sendAsync(query).whenComplete { _, error -> if (error == null) onSuccess(address) }
         override fun sendAsync(query: Message, executor: Executor): CompletionStage<Message> =
             delegate.sendAsync(query, executor).whenComplete { _, error -> if (error == null) onSuccess(address) }
+    }
+}
+
+/** Interrupts dnsjava's blocking send wait if cancellation lands between UDP and TCP work. */
+private class ResolverCallLease(private val thread: Thread) : AutoCloseable {
+    private enum class State { ACTIVE, COMPLETED, CANCELLED }
+    private val lock = Any()
+    private var state = State.ACTIVE
+
+    fun markCompleted() {
+        synchronized(lock) {
+            if (state == State.ACTIVE) state = State.COMPLETED
+        }
+    }
+
+    override fun close() {
+        synchronized(lock) {
+            if (state == State.ACTIVE) {
+                state = State.CANCELLED
+                thread.interrupt()
+            }
+        }
     }
 }
 

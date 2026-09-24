@@ -14,6 +14,9 @@ import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.dns.DnsRecordType
 import net.aieat.netswissknife.core.network.dns.DnsResult
 import net.aieat.netswissknife.core.network.dns.DnsServer
+import net.aieat.netswissknife.core.network.dns.DnsLookupOperation
+import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationSession
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
@@ -50,6 +53,13 @@ class DnsViewModel @Inject constructor(
     val networkStatus: StateFlow<NetworkStatus> = networkStatusProvider.status
     private var lookupJob: Job? = null
     private var lookupGeneration = 0L
+    private var operationSession: OperationSession? = null
+
+    init {
+        addCloseable(LIFECYCLE_CLOSEABLE_KEY, AutoCloseable {
+            cancelLookup(CancellationReason.LIFECYCLE_PAUSE, resetState = false)
+        })
+    }
 
     // ── Form field state ─────────────────────────────────────────────────────
 
@@ -96,10 +106,11 @@ class DnsViewModel @Inject constructor(
     }
 
     fun onClearResults() {
-        lookupGeneration++
-        lookupJob?.cancel()
-        lookupJob = null
-        _uiState.value = DnsUiState.Idle
+        cancelLookup(CancellationReason.USER_STOP, resetState = true)
+    }
+
+    fun onStopLookup() {
+        cancelLookup(CancellationReason.USER_STOP, resetState = true)
     }
 
     fun onRetry() {
@@ -151,10 +162,12 @@ class DnsViewModel @Inject constructor(
 
         val requestGeneration = ++lookupGeneration
         _uiState.value = DnsUiState.Loading
-        lookupJob?.cancel()
+        operationSession?.cancel(CancellationReason.USER_STOP)
+        val session = DnsLookupOperation.newSession()
+        operationSession = session
         val job = viewModelScope.launch(start = CoroutineStart.LAZY) {
             try {
-                val result = dnsLookupUseCase(params)
+                val result = dnsLookupUseCase(params, session)
                 if (requestGeneration != lookupGeneration) return@launch
 
                 try {
@@ -182,7 +195,10 @@ class DnsViewModel @Inject constructor(
                     _uiState.value = DnsUiState.Error(e.message ?: "DNS lookup failed")
                 }
             } finally {
-                if (requestGeneration == lookupGeneration) lookupJob = null
+                if (requestGeneration == lookupGeneration) {
+                    lookupJob = null
+                    if (operationSession === session) operationSession = null
+                }
             }
         }
         lookupJob = job
@@ -195,5 +211,24 @@ class DnsViewModel @Inject constructor(
         if (domain.isNotBlank() && domain.length <= 253 && customValid) {
             recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_DNS_HOSTS, domain)
         }
+    }
+
+    private fun cancelLookup(reason: CancellationReason, resetState: Boolean) {
+        lookupGeneration++
+        operationSession?.let { session ->
+            operationSession = null
+            runCatching { session.cancel(reason) }
+        }
+        lookupJob?.cancel()
+        lookupJob = null
+        if (resetState) _uiState.value = DnsUiState.Idle
+    }
+
+    override fun onCleared() {
+        cancelLookup(CancellationReason.LIFECYCLE_PAUSE, resetState = false)
+    }
+
+    private companion object {
+        const val LIFECYCLE_CLOSEABLE_KEY = "dns_operation_lifecycle"
     }
 }

@@ -20,6 +20,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.platform.NetworkStatus
 import net.aieat.netswissknife.app.ui.screens.dns.DnsUiState
 import net.aieat.netswissknife.app.ui.screens.dns.DnsViewModel
 import net.aieat.netswissknife.app.ui.theme.NetSwissKnifeTheme
@@ -114,6 +115,22 @@ class DnsScreenTest {
         composeRule.mainClock.advanceTimeBy(1_000L)
         scrollToStatePanel()
         composeRule.onNodeWithText(context.getString(R.string.dns_querying)).assertIsDisplayed()
+    }
+
+    @Test
+    fun loadingState_cancelStopsLookup() {
+        val viewModel = fakeDnsViewModel(DnsUiState.Loading)
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                DnsScreen(viewModel = viewModel)
+            }
+        }
+
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        scrollToStatePanel()
+        composeRule.onNodeWithText(context.getString(R.string.cancel)).performClick()
+
+        verify(exactly = 1) { viewModel.onStopLookup() }
     }
 
     @Test
@@ -217,6 +234,9 @@ class DnsScreenTest {
         every { viewModel.selectedServer } returns MutableStateFlow(selectedServer)
         every { viewModel.customServerAddress } returns MutableStateFlow(customServerAddress)
         every { viewModel.recentHosts } returns MutableStateFlow(recentHostsValue)
+        every { viewModel.networkStatus } returns MutableStateFlow(
+            NetworkStatus(hasInternet = true, hasLocalNetwork = true)
+        )
         return viewModel
     }
 }

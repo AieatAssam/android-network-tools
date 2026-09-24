@@ -1,6 +1,11 @@
 package net.aieat.netswissknife.core.network.dns
 
 import net.aieat.netswissknife.core.network.NetworkResult
+import net.aieat.netswissknife.core.network.operation.OperationSession
+import net.aieat.netswissknife.core.network.MonotonicClock
+import net.aieat.netswissknife.core.network.SystemMonotonicClock
+import net.aieat.netswissknife.core.network.operation.OperationBudget
+import net.aieat.netswissknife.core.network.operation.OperationRequirement
 
 /**
  * Contract for DNS lookup operations.
@@ -18,4 +23,27 @@ interface DnsRepository {
         recordType: DnsRecordType,
         server: DnsServer
     ): NetworkResult<DnsResult>
+
+    /** Caller-owned operation variant; legacy implementations remain source compatible. */
+    suspend fun lookup(
+        domain: String,
+        recordType: DnsRecordType,
+        server: DnsServer,
+        operationSession: OperationSession,
+    ): NetworkResult<DnsResult> = lookup(domain, recordType, server)
+}
+
+/** Shared single-query deadline used by the DNS UI and legacy repository entry point. */
+object DnsLookupOperation {
+    const val TIMEOUT_MILLIS = 8_000L
+
+    fun newSession(clock: MonotonicClock = SystemMonotonicClock): OperationSession =
+        OperationSession(
+            OperationBudget.start(
+                requirement = OperationRequirement.ANY_NETWORK,
+                timeoutMillis = TIMEOUT_MILLIS,
+                maxConcurrentProbes = 1,
+                clock = clock,
+            )
+        )
 }

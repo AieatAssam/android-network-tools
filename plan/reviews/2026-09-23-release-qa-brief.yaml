@@ -2,8 +2,9 @@ review:
   area: release-qa-brief
   status: audited
   source: "User-provided Net Swiss Knife QA brief v2026.09.21.1 (API 33, host snmpd at 10.0.2.2)."
-  checked_commit: "7106a5bafa21bf0b30b91afb98470d8d10b184c8"
-  checked_scope: "Baseline source at 7106a5b plus current worktree source and tests; implementation details are cross-referenced to the E03 and dependency-gate review artifacts."
+  release_baseline_commit: "5e183721e64ce8a8946f1a0b50f52b83544e8898"
+  checked_commit: "c5acccea86311c980c69054c690671aaffe5f34d"
+  checked_scope: "The supplied release corresponds to origin/main at 5e18372. Audited that baseline plus current branch/worktree source and tests through c5accce; implementation details are cross-referenced to the E03 and dependency-gate review artifacts."
   branch: "plan/comprehensive-review-2026-09-22"
   release_metadata:
     app: "Net Swiss Knife"
@@ -16,7 +17,7 @@ review:
     suggested_order: [ISS-20, ISS-21, ISS-17, ISS-05, ISS-06]
     environment_non_goals: "Emulator public ICMP/DNS flakiness is an error-UX check; live Cloudflare success is not required on the target AVD."
   environment:
-    connected_emulator: "None remains connected. A software-rendered API 36 dev36 AVD booted, but PackageManager stalled while installing the test APK; the run was stopped before instrumentation started and the AVD was shut down. No API 33 AVD is available."
+    connected_emulator: "A shared dev36 AVD was already in use by another task; this audit did not use it or start an emulator. A prior API 36 install attempt stalled in PackageManager before instrumentation started. No API 33 AVD is available."
     host_snmpd: "Not available; no local snmpd process or SNMP lab endpoint verified"
     physical_wifi: "Not available"
   fixed_items_rechecked: [ISS-01, ISS-02, ISS-03, ISS-04, ISS-08, ISS-09, ISS-15, SNMP-threading]
@@ -79,11 +80,12 @@ review:
         - { file: "core-network/src/test/kotlin/net/aieat/netswissknife/core/network/topology/TopologyDiscoveryRepositoryTest.kt", lines: "367-420", detail: "Repository tests cover closing the client during an active walk and blocking GET cancellation." }
         - { file: "core-network/src/test/kotlin/net/aieat/netswissknife/core/network/topology/Snmp4jClientImplLoopbackTest.kt", lines: "187-248", detail: "Loopback tests cover prompt cancellation of SNMP walk and GET requests." }
       limitation: "Source and tests support background dispatch/cancellation, but the host snmpd lab was unavailable; UI responsiveness and absence of ANR/NetworkOnMainThreadException were not measured live."
-  interpretation: "The brief's v2026.09.21.1 release metadata describes its test baseline, not the checked source revision. Classifications below reflect current worktree source/tests; live claims remain unverified unless explicitly noted."
+  interpretation: "The release-under-test commit is origin/main at 5e18372 (message: keep SNMP and network probes off the main thread). Per-item release_baseline_status distinguishes that source from current branch fixes; live claims remain unverified unless explicitly noted."
 
 items:
   - id: ISS-05
     classification: merged_card_semantics_implemented_device_validation_open
+    release_baseline_status: "Already implemented on origin/main: the clickable card merges descendants and exposes Role.Button semantics. The issue description is stale against that release source."
     evidence:
       - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/HomeScreen.kt", lines: "262-269", detail: "Clickable ElevatedCard merges descendants and sets Role.Button, so the title is part of the card's merged action semantics." }
       - { file: "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/NavigationAccessibilityTest.kt", lines: "43-67,84-112", detail: "Home and More tests assert each tool label is displayed, clickable, and has button role." }
@@ -91,6 +93,7 @@ items:
 
   - id: ISS-17
     classification: implementation_present_fresh_instrumentation_blocked_device_validation_open
+    release_baseline_status: "Partially reproduced in source: the release baseline rejects networks without validated Internet and has no Traceroute connectivity banner. The current branch adds a banner, local/VPN eligibility, prompt Running state, and Retry/Clear; device layout and offline/dead-ICMP behavior remain unverified."
     evidence:
       - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/traceroute/TracerouteViewModel.kt", lines: "151-169,183-229", detail: "Offline state becomes Error('No network connection'); preflight permits Internet, local-network, or VPN status; trace enters Running immediately, owns an operation session, rejects stale emissions, and reports empty completion or ordinary errors." }
       - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/TracerouteScreen.kt", lines: "171-204,1346-1368", detail: "The NetworkStatusBanner is placed immediately below the hero, and the Error panel exposes Retry and Clear." }
@@ -101,6 +104,7 @@ items:
 
   - id: ISS-06
     classification: skip_callback_covered_integrated_dismissal_verification_open
+    release_baseline_status: "The Welcome sheet Skip callback already invokes dismissal on origin/main. The report is an integration-verification request, not a confirmed missing callback."
     evidence:
       - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/onboarding/OnboardingSheet.kt", lines: "93-96", detail: "The top-right Skip action invokes onDismiss directly from the Welcome sheet (the resource key retains its older 'don't show again' name)." }
       - { file: "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/NavigationAccessibilityTest.kt", lines: "114-130", detail: "Onboarding test clicks the action and asserts the dismiss callback fired." }
@@ -108,6 +112,7 @@ items:
 
   - id: ISS-20
     classification: already_fixed_in_source
+    release_baseline_status: "Already fixed on origin/main: shared host normalization trims surrounding whitespace and rejects embedded whitespace. The request to reject a trailing space conflicts with existing normalization behavior."
     evidence:
       - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/HostValidator.kt", lines: "92-118", detail: "Shared normalize() trims surrounding whitespace before host validation; internal whitespace remains invalid under hostname/IP validation." }
       - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/TracerouteScreen.kt", lines: "321-324,350-353", detail: "Traceroute derives validity and Start enablement from HostValidator.normalize(host), and reports the invalid-host message only when normalization fails." }
@@ -117,6 +122,7 @@ items:
 
   - id: ISS-21
     classification: ui_features_present_live_snmp_and_canvas_usability_unverified
+    release_baseline_status: "The release source already has a Cancel button, sysName/IP labels, and a node-details sheet. The current branch keeps Cancel visible after configuration collapses and adds explicit progress text/count reporting; the claimed missing features overstate what was absent."
     evidence:
       - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/topology/TopologyDiscoveryScreen.kt", lines: "435-445", detail: "Cancel stays visible while discovery runs, outside collapsed configuration fields." }
       - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/topology/TopologyDiscoveryViewModel.kt", lines: "76-103,128-160,195-235", detail: "Discovery owns a bounded LOCAL_NETWORK session; state carries progress and node count; reset/lifecycle cancellation closes the session asynchronously off the UI thread." }
@@ -126,6 +132,7 @@ items:
 
   - id: ISS-22
     classification: graceful_error_source_and_unit_covered_instrumentation_and_device_check_open
+    release_baseline_status: "Graceful error rendering with a Dismiss action already exists on origin/main. Emulator ENODEV reproduction and real wlan0 behavior remain environment-specific checks."
     evidence:
       - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/mdns/MdnsDiscoveryViewModel.kt", lines: "108-119", detail: "Non-cancellation discovery exceptions are surfaced as an error and stop the scan; cancellation is kept separate." }
       - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/mdns/MdnsDiscoveryScreen.kt", lines: "412-433", detail: "Error state renders the error, message, and Dismiss/reset action." }
@@ -155,7 +162,8 @@ api36_instrumentation:
 unit_validation:
   command: "./gradlew :core-network:test :core-domain:test :app:testDebugUnitTest --no-daemon --no-parallel"
   status: passed
-  results: { core_network: 1005, core_network_skipped: 1, core_domain: 182, app: 373, failures: 0, errors: 0 }
+  results: { core_network: 1012, core_network_skipped: 1, core_domain: 183, app: 374, failures: 0, errors: 0 }
+  additional: "`:app:compileDebugAndroidTestKotlin` passed for the DNS Loading-state Cancel test. No connected instrumentation was run because a shared emulator was already in use by another task."
 
 brief_accuracy:
   - "ISS-21's listed features (Cancel, progress, sysName/IP labels, and node-details sheet) exist in current source. The remaining concrete question is live SNMP cancellation and usability of sparse graph layouts, not missing feature implementation as stated."

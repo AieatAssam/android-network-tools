@@ -135,6 +135,7 @@ object DnsScreenTestTags {
     const val DOMAIN_INPUT = "dns_domain_input"
     const val RECORD_TYPE_CHIPS = "dns_record_type_chips"
     const val RECORD_TYPE_SCROLL_HINT = "dns_record_type_scroll_hint"
+    const val CANCEL_LOOKUP = "dns_cancel_lookup"
 
     /** Index of the idle/loading/error/success panel within [CONTENT_LIST]. */
     const val STATE_PANEL_INDEX = 2
@@ -196,6 +197,7 @@ fun DnsScreen(viewModel: DnsViewModel = hiltViewModel()) {
                     onServerChange = viewModel::onServerChange,
                     onCustomServerAddressChange = viewModel::onCustomServerAddressChange,
                     onLookup = viewModel::performLookup,
+                    onCancelLookup = viewModel::onStopLookup,
                     onRemoveRecentHost = viewModel::removeRecentHost,
                     onClearRecentHosts = viewModel::clearRecentHosts
                 )
@@ -315,6 +317,7 @@ private fun DnsInputCard(
     onServerChange: (DnsServer) -> Unit,
     onCustomServerAddressChange: (String) -> Unit,
     onLookup: () -> Unit,
+    onCancelLookup: () -> Unit,
     onRemoveRecentHost: (String) -> Unit,
     onClearRecentHosts: () -> Unit,
     modifier: Modifier = Modifier
@@ -399,25 +402,19 @@ private fun DnsInputCard(
 
             // Lookup button
             Button(
-                onClick = hapticAction(onLookup),
-                enabled = !isLoading && domain.isNotBlank(),
+                onClick = hapticAction(if (isLoading) onCancelLookup else onLookup),
+                enabled = isLoading || domain.isNotBlank(),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(52.dp),
+                    .height(52.dp)
+                    .testTag(DnsScreenTestTags.CANCEL_LOOKUP),
                 shape = AppShapes.medium,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.primary
                 )
             ) {
                 if (isLoading) {
-                    val loadingCd = stringResource(R.string.a11y_loading)
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp).semantics { contentDescription = loadingCd },
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        strokeWidth = 2.dp
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.dns_looking_up))
+                    Text(stringResource(R.string.cancel))
                 } else {
                     Icon(
                         imageVector = Icons.Default.Search,

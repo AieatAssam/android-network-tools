@@ -14,6 +14,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.job
 import kotlinx.coroutines.runBlocking
 import androidx.lifecycle.viewModelScope
@@ -25,6 +26,8 @@ import net.aieat.netswissknife.core.network.dns.DnsRecord
 import net.aieat.netswissknife.core.network.dns.DnsRecordType
 import net.aieat.netswissknife.core.network.dns.DnsResult
 import net.aieat.netswissknife.core.network.dns.DnsServer
+import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationSession
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -149,13 +152,13 @@ class DnsViewModelTest {
 
         @Test
         fun `performLookup passes custom address to use case`() = runTest {
-            coEvery { useCase(any()) } returns NetworkResult.Success(stubResult)
+            coEvery { useCase(any(), any()) } returns NetworkResult.Success(stubResult)
 
             viewModel.onDomainChange("example.com")
             viewModel.onCustomServerAddressChange("192.168.1.1")
             viewModel.performLookup()
 
-            coVerify { useCase(match { it.server == DnsServer.Custom("192.168.1.1") }) }
+            coVerify { useCase(match { it.server == DnsServer.Custom("192.168.1.1") }, any()) }
         }
     }
 
@@ -170,7 +173,7 @@ class DnsViewModelTest {
 
         @Test
         fun `success transitions to Success`() = runTest {
-            coEvery { useCase(any()) } returns NetworkResult.Success(stubResult)
+            coEvery { useCase(any(), any()) } returns NetworkResult.Success(stubResult)
             viewModel.onDomainChange("example.com")
             viewModel.performLookup()
             assertTrue(viewModel.uiState.value is DnsUiState.Success)
@@ -178,7 +181,7 @@ class DnsViewModelTest {
 
         @Test
         fun `error transitions to Error with message`() = runTest {
-            coEvery { useCase(any()) } returns NetworkResult.Error("nxdomain")
+            coEvery { useCase(any(), any()) } returns NetworkResult.Error("nxdomain")
             viewModel.onDomainChange("nonexistent.invalid")
             viewModel.performLookup()
             val state = viewModel.uiState.value
@@ -188,7 +191,7 @@ class DnsViewModelTest {
 
         @Test
         fun `onClearResults resets to Idle`() = runTest {
-            coEvery { useCase(any()) } returns NetworkResult.Success(stubResult)
+            coEvery { useCase(any(), any()) } returns NetworkResult.Success(stubResult)
             viewModel.onDomainChange("example.com")
             viewModel.performLookup()
             viewModel.onClearResults()
@@ -196,8 +199,24 @@ class DnsViewModelTest {
         }
 
         @Test
+        fun `Stop cancels caller-owned operation and returns UI to Idle`() = runTest {
+            var session: OperationSession? = null
+            coEvery { useCase(any(), any()) } coAnswers {
+                session = secondArg()
+                awaitCancellation()
+            }
+            viewModel.onDomainChange("example.com")
+            viewModel.performLookup()
+
+            viewModel.onStopLookup()
+
+            assertEquals(CancellationReason.USER_STOP, session?.cancellationReason)
+            assertTrue(viewModel.uiState.value is DnsUiState.Idle)
+        }
+
+        @Test
         fun `addRecent is called on performLookup`() = runTest {
-            coEvery { useCase(any()) } returns NetworkResult.Success(stubResult)
+            coEvery { useCase(any(), any()) } returns NetworkResult.Success(stubResult)
             viewModel.onDomainChange("example.com")
             viewModel.performLookup()
             coVerify { recentHostsRepository.addRecent(
@@ -208,7 +227,7 @@ class DnsViewModelTest {
 
         @Test
         fun `recent persistence failure does not replace successful DNS result`() = runTest {
-            coEvery { useCase(any()) } returns NetworkResult.Success(stubResult)
+            coEvery { useCase(any(), any()) } returns NetworkResult.Success(stubResult)
             coEvery {
                 recentHostsRepository.addRecent(any(), any())
             } throws IllegalStateException("recent store unavailable")
@@ -224,7 +243,7 @@ class DnsViewModelTest {
         @Test
         fun `duplicate submit while loading is ignored and recent host uses captured input`() = runTest {
             val answer = CompletableDeferred<NetworkResult<DnsResult>>()
-            coEvery { useCase(any()) } coAnswers { answer.await() }
+            coEvery { useCase(any(), any()) } coAnswers { answer.await() }
             viewModel.onDomainChange("queried.example")
 
             viewModel.performLookup()
@@ -232,7 +251,7 @@ class DnsViewModelTest {
             assertTrue(viewModel.uiState.value is DnsUiState.Loading)
             viewModel.onDomainChange("edited.example")
             viewModel.performLookup()
-            coVerify(exactly = 1) { useCase(any()) }
+            coVerify(exactly = 1) { useCase(any(), any()) }
 
             answer.complete(NetworkResult.Success(stubResult.copy(domain = "queried.example")))
             val success = viewModel.uiState.first { it is DnsUiState.Success } as DnsUiState.Success
@@ -254,12 +273,12 @@ class DnsViewModelTest {
         @Test
         fun `late completion from cleared request cannot replace a newer result`() = runTest {
             var completeFirst: ((NetworkResult<DnsResult>) -> Unit)? = null
-            coEvery { useCase(match { it.domain == "first.example" }) } coAnswers {
+            coEvery { useCase(match { it.domain == "first.example" }, any()) } coAnswers {
                 suspendCoroutine { continuation ->
                     completeFirst = { result -> continuation.resume(result) }
                 }
             }
-            coEvery { useCase(match { it.domain == "second.example" }) } returns
+            coEvery { useCase(match { it.domain == "second.example" }, any()) } returns
                 NetworkResult.Success(stubResult.copy(domain = "second.example"))
 
             viewModel.onDomainChange("first.example")

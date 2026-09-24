@@ -6,6 +6,7 @@ import net.aieat.netswissknife.core.network.dns.DnsRecordType
 import net.aieat.netswissknife.core.network.dns.DnsRepository
 import net.aieat.netswissknife.core.network.dns.DnsResult
 import net.aieat.netswissknife.core.network.dns.DnsServer
+import net.aieat.netswissknife.core.network.dns.DnsLookupOperation
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -68,6 +69,19 @@ class DnsLookupUseCaseTest {
             val longDomain = "a".repeat(254)
             val result = useCase(DnsLookupParams(domain = longDomain))
             assertTrue(result is NetworkResult.Error)
+        }
+
+        @Test
+        fun `caller operation session is passed to repository`() = runTest {
+            val params = DnsLookupParams(domain = "example.com")
+            val session = DnsLookupOperation.newSession()
+            coEvery { repository.lookup("example.com", DnsRecordType.A, DnsServer.System(), session) } returns
+                NetworkResult.Success(successResult)
+
+            val result = useCase(params, session)
+
+            assertTrue(result is NetworkResult.Success)
+            coVerify { repository.lookup("example.com", DnsRecordType.A, DnsServer.System(), session) }
         }
 
         @Test

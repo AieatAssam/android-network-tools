@@ -3,6 +3,7 @@ package net.aieat.netswissknife.core.domain
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.dns.DnsRepository
 import net.aieat.netswissknife.core.network.dns.DnsResult
+import net.aieat.netswissknife.core.network.operation.OperationSession
 
 /**
  * Use case that validates the user's input and delegates to [DnsRepository]
@@ -19,6 +20,18 @@ class DnsLookupUseCase(
 ) : UseCase<DnsLookupParams, NetworkResult<DnsResult>> {
 
     override suspend fun invoke(params: DnsLookupParams): NetworkResult<DnsResult> {
+        return invokeValidated(params, null)
+    }
+
+    suspend operator fun invoke(
+        params: DnsLookupParams,
+        operationSession: OperationSession,
+    ): NetworkResult<DnsResult> = invokeValidated(params, operationSession)
+
+    private suspend fun invokeValidated(
+        params: DnsLookupParams,
+        operationSession: OperationSession?,
+    ): NetworkResult<DnsResult> {
         val trimmedDomain = params.domain.trim()
 
         if (trimmedDomain.isBlank()) {
@@ -33,10 +46,19 @@ class DnsLookupUseCase(
             return NetworkResult.Error("Custom DNS server address must not be empty")
         }
 
-        return repository.lookup(
-            domain = trimmedDomain,
-            recordType = params.recordType,
-            server = params.server
-        )
+        return if (operationSession == null) {
+            repository.lookup(
+                domain = trimmedDomain,
+                recordType = params.recordType,
+                server = params.server
+            )
+        } else {
+            repository.lookup(
+                domain = trimmedDomain,
+                recordType = params.recordType,
+                server = params.server,
+                operationSession = operationSession,
+            )
+        }
     }
 }
