@@ -1,8 +1,11 @@
 package net.aieat.netswissknife.app.ui
 
+import android.view.KeyEvent
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
@@ -13,10 +16,13 @@ import androidx.navigation.NavType
 import androidx.navigation.navArgument
 import androidx.navigation.compose.rememberNavController
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import net.aieat.netswissknife.app.ui.navigation.navigateFromToolHandoff
+import androidx.test.platform.app.InstrumentationRegistry
+import net.aieat.netswissknife.app.ui.navigation.AppNavHostContentOverrides
+import net.aieat.netswissknife.app.ui.navigation.AppNavHostWithContentOverrides
 import net.aieat.netswissknife.app.ui.navigation.HostTool
 import net.aieat.netswissknife.app.ui.navigation.NavRoutes
 import net.aieat.netswissknife.app.ui.navigation.ToolDestination
+import net.aieat.netswissknife.app.ui.navigation.navigateFromToolHandoff
 import net.aieat.netswissknife.app.ui.navigation.ToolHost
 import net.aieat.netswissknife.app.ui.navigation.ToolIntent
 import net.aieat.netswissknife.app.ui.navigation.ToolIntentCodec
@@ -34,6 +40,65 @@ import org.junit.runner.RunWith
 class ToolHandoffNavigationTest {
     @get:Rule
     val composeRule = createComposeRule()
+
+    @Test
+    fun productionNavHost_deliversPortsArguments_andSystemBackRetainsLanResult() {
+        val host = requireNotNull(ToolHost.parse("192.0.2.8"))
+        val intent = ToolIntent(
+            ToolDestination.HostTarget(HostTool.PORTS, host),
+            ToolSource.LAN,
+        )
+        val destination = NavRoutes.Ports.createRoute(intent)
+
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                val navController = rememberNavController()
+                AppNavHostWithContentOverrides(
+                    navController = navController,
+                    contentOverrides = AppNavHostContentOverrides(
+                        lan = { controller ->
+                            val scanStarts = rememberSaveable { mutableIntStateOf(0) }
+                            Column {
+                                Text("LAN result screen")
+                                Text("LAN scan starts: ${scanStarts.intValue}")
+                                Button(onClick = { scanStarts.intValue++ }) { Text("Start fake LAN scan") }
+                                Button(onClick = { controller.navigateFromToolHandoff(destination) }) {
+                                    Text("Open ports for host")
+                                }
+                            }
+                        },
+                        ports = { entry ->
+                            val routeHost = entry.arguments?.getString("host")
+                            val decoded = entry.arguments?.getString("intent")?.let(ToolIntentCodec::decode)
+                            val target = decoded?.destination as? ToolDestination.HostTarget
+                            Column {
+                                Text("Ports route host: $routeHost")
+                                Text("Ports intent host: ${target?.host?.value}")
+                                Text("Ports intent tool: ${target?.tool?.name}")
+                                Text("Ports intent source: ${decoded?.source}")
+                            }
+                        },
+                    ),
+                )
+            }
+        }
+
+        composeRule.mainClock.advanceTimeBy(2_000L)
+        composeRule.onNodeWithText("LAN Scanner").performClick()
+        composeRule.onNodeWithText("Start fake LAN scan").performClick()
+        composeRule.onNodeWithText("LAN scan starts: 1").assertIsDisplayed()
+        composeRule.onNodeWithText("Open ports for host").performClick()
+        composeRule.onNodeWithText("Ports route host: 192.0.2.8").assertIsDisplayed()
+        composeRule.onNodeWithText("Ports intent host: 192.0.2.8").assertIsDisplayed()
+        composeRule.onNodeWithText("Ports intent tool: PORTS").assertIsDisplayed()
+        composeRule.onNodeWithText("Ports intent source: LAN").assertIsDisplayed()
+
+        InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+        composeRule.mainClock.advanceTimeBy(2_000L)
+
+        composeRule.onNodeWithText("LAN result screen").assertIsDisplayed()
+        composeRule.onNodeWithText("LAN scan starts: 1").assertIsDisplayed()
+    }
 
     @Test
     fun handoffPushesDestinationAndBackReturnsToOriginatingResult() {

@@ -98,10 +98,35 @@ private fun homeExitTransition(): ExitTransition =
     slideOutVertically(AppMotion.exit()) { -it / 8 } +
     fadeOut(AppMotion.exit())
 
+/** Destination content seam for exercising the production route graph without network work. */
+internal data class AppNavHostContentOverrides(
+    val lan: @Composable (NavHostController) -> Unit,
+    val ports: @Composable (NavBackStackEntry) -> Unit,
+)
+
 // ── Navigation host ───────────────────────────────────────────────────────────
 
 @Composable
 fun AppNavHost(navController: NavHostController, modifier: Modifier = Modifier) {
+    AppNavHostGraph(navController, modifier, contentOverrides = null)
+}
+
+/** Uses the same production graph while replacing LAN and Ports screen content in instrumentation tests. */
+@Composable
+internal fun AppNavHostWithContentOverrides(
+    navController: NavHostController,
+    contentOverrides: AppNavHostContentOverrides,
+    modifier: Modifier = Modifier,
+) {
+    AppNavHostGraph(navController, modifier, contentOverrides)
+}
+
+@Composable
+private fun AppNavHostGraph(
+    navController: NavHostController,
+    modifier: Modifier,
+    contentOverrides: AppNavHostContentOverrides?,
+) {
     NavHost(
         navController    = navController,
         startDestination = NavRoutes.Home.route,
@@ -153,9 +178,17 @@ fun AppNavHost(navController: NavHostController, modifier: Modifier = Modifier) 
                     defaultValue = null
                 },
             ),
-        ) { PortsScreen() }
+        ) { entry ->
+            val portsContent = contentOverrides?.ports
+            if (portsContent != null) portsContent(entry) else PortsScreen()
+        }
         composable(NavRoutes.Lan.route)        {
-            LanScreen(onNavigate = { route -> navController.navigateFromToolHandoff(route) })
+            val lanContent = contentOverrides?.lan
+            if (lanContent != null) {
+                lanContent(navController)
+            } else {
+                LanScreen(onNavigate = { route -> navController.navigateFromToolHandoff(route) })
+            }
         }
         composable(NavRoutes.Dns.route)        { DnsScreen() }
         composable(NavRoutes.WifiScan.route)   { WifiScanScreen() }
