@@ -1,5 +1,7 @@
 package net.aieat.netswissknife.app.ui
 
+import android.Manifest
+import android.os.Build
 import android.view.KeyEvent
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.Button
@@ -10,6 +12,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.NavType
@@ -17,6 +20,14 @@ import androidx.navigation.navArgument
 import androidx.navigation.compose.rememberNavController
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.rule.GrantPermissionRule
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.verify
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
+import net.aieat.netswissknife.app.platform.NetworkStatus
 import net.aieat.netswissknife.app.ui.navigation.AppNavHostContentOverrides
 import net.aieat.netswissknife.app.ui.navigation.AppNavHostWithContentOverrides
 import net.aieat.netswissknife.app.ui.navigation.HostTool
@@ -30,6 +41,12 @@ import net.aieat.netswissknife.app.ui.navigation.ToolMacAddress
 import net.aieat.netswissknife.app.ui.navigation.ToolPort
 import net.aieat.netswissknife.app.ui.navigation.ToolSource
 import net.aieat.netswissknife.app.ui.theme.NetSwissKnifeTheme
+import net.aieat.netswissknife.app.ui.screens.lan.LanNavEvent
+import net.aieat.netswissknife.app.ui.screens.lan.LanScanUiState
+import net.aieat.netswissknife.app.ui.screens.lan.LanScanViewModel
+import net.aieat.netswissknife.app.ui.screens.lan.LanScreen as RealLanScreen
+import net.aieat.netswissknife.core.network.lan.LanHost
+import net.aieat.netswissknife.core.network.lan.LanScanSummary
 import org.junit.Rule
 import org.junit.Assert.assertThrows
 import org.junit.Test
@@ -38,6 +55,13 @@ import org.junit.runner.RunWith
 /** Protects result-screen handoffs from the top-level pop-to-Home navigation policy. */
 @RunWith(AndroidJUnit4::class)
 class ToolHandoffNavigationTest {
+    @get:Rule
+    val permissionRule: GrantPermissionRule = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
+        GrantPermissionRule.grant(Manifest.permission.NEARBY_WIFI_DEVICES)
+    } else {
+        GrantPermissionRule.grant()
+    }
+
     @get:Rule
     val composeRule = createComposeRule()
 
@@ -98,6 +122,93 @@ class ToolHandoffNavigationTest {
 
         composeRule.onNodeWithText("LAN result screen").assertIsDisplayed()
         composeRule.onNodeWithText("LAN scan starts: 1").assertIsDisplayed()
+    }
+
+    @Test
+    fun productionNavHost_realLanPortsActionRoutesTypedIntentAndBackKeepsPreloadedResultWithoutAutoStart() {
+        val lanEvents = Channel<LanNavEvent>(Channel.BUFFERED)
+        val lanViewModel = mockk<LanScanViewModel>(relaxed = true)
+        val summary = LanScanSummary(
+            subnet = "192.0.2.0/24",
+            totalScanned = 1,
+            aliveHosts = 1,
+            scanDurationMs = 5,
+            hosts = listOf(
+                LanHost(
+                    ip = "192.0.2.8",
+                    hostname = null,
+                    macAddress = null,
+                    vendor = null,
+                    openPorts = emptyList(),
+                    pingTimeMs = 3,
+                ),
+            ),
+        )
+        val uiState = MutableStateFlow<LanScanUiState>(LanScanUiState.Finished(summary))
+        every { lanViewModel.navigationEvents } returns lanEvents.receiveAsFlow()
+        every { lanViewModel.uiState } returns uiState
+        every { lanViewModel.networkStatus } returns MutableStateFlow(NetworkStatus(hasLocalNetwork = true))
+        every { lanViewModel.subnet } returns MutableStateFlow(summary.subnet)
+        every { lanViewModel.timeoutMs } returns MutableStateFlow(1_000)
+        every { lanViewModel.concurrency } returns MutableStateFlow(1)
+        every { lanViewModel.isSubnetLoading } returns MutableStateFlow(false)
+        every { lanViewModel.searchQuery } returns MutableStateFlow("")
+        every { lanViewModel.recentSubnets } returns MutableStateFlow(emptyList())
+        every { lanViewModel.onToggleHostExpanded(any()) } answers {
+            val hostIp = firstArg<String>()
+            val current = uiState.value as LanScanUiState.Finished
+            uiState.value = current.copy(expandedHostIp = hostIp)
+        }
+        every { lanViewModel.onScanPorts(any()) } answers {
+            check(lanEvents.trySend(LanNavEvent.NavigateToPorts(firstArg())).isSuccess)
+        }
+
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                val navController = rememberNavController()
+                AppNavHostWithContentOverrides(
+                    navController = navController,
+                    contentOverrides = AppNavHostContentOverrides(
+                        lan = { controller ->
+                            RealLanScreen(
+                                viewModel = lanViewModel,
+                                onNavigate = { route -> controller.navigateFromToolHandoff(route) },
+                            )
+                        },
+                        ports = { entry ->
+                            val routeHost = entry.arguments?.getString("host")
+                            val decoded = entry.arguments?.getString("intent")?.let(ToolIntentCodec::decode)
+                            val target = decoded?.destination as? ToolDestination.HostTarget
+                            Column {
+                                Text("Ports route host: $routeHost")
+                                Text("Ports intent host: ${target?.host?.value}")
+                                Text("Ports intent tool: ${target?.tool?.name}")
+                                Text("Ports intent source: ${decoded?.source}")
+                            }
+                        },
+                    ),
+                )
+            }
+        }
+
+        composeRule.mainClock.advanceTimeBy(2_000L)
+        composeRule.onNodeWithText("LAN Scanner").performClick()
+        composeRule.mainClock.advanceTimeBy(2_000L)
+        composeRule.onNodeWithText("Discovered Hosts (1)").performScrollTo()
+        composeRule.onNodeWithText("192.0.2.8", substring = false).performScrollTo().performClick()
+        composeRule.onNodeWithText("Scan ports").performScrollTo().performClick()
+        composeRule.mainClock.advanceTimeBy(2_000L)
+        composeRule.onNodeWithText("Ports route host: 192.0.2.8").assertIsDisplayed()
+        composeRule.onNodeWithText("Ports intent host: 192.0.2.8").assertIsDisplayed()
+        composeRule.onNodeWithText("Ports intent tool: PORTS").assertIsDisplayed()
+        composeRule.onNodeWithText("Ports intent source: LAN").assertIsDisplayed()
+
+        InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+        composeRule.mainClock.advanceTimeBy(2_000L)
+        composeRule.onNodeWithText("Discovered Hosts (1)").assertIsDisplayed()
+        composeRule.onNodeWithText("192.0.2.8", substring = true).assertIsDisplayed()
+        verify(exactly = 1) { lanViewModel.onScanPorts("192.0.2.8") }
+        verify(exactly = 0) { lanViewModel.startScan() }
     }
 
     @Test
