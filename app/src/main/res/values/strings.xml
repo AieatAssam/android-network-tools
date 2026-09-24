@@ -826,6 +826,11 @@
     <string name="mdns_error_dismiss">Dismiss</string>
     <string name="mdns_scan_button">Scan Network</string>
     <string name="mdns_stop_button">Stop</string>
+    <string name="mdns_canceling_button">Canceling…</string>
+    <string name="mdns_canceling_hint">Stopping discovery…</string>
+    <string name="mdns_canceled_title">Discovery canceled</string>
+    <string name="mdns_canceled_empty_body">No services were found before discovery stopped.</string>
+    <string name="mdns_canceled_partial">Discovery canceled. Showing services found so far.</string>
     <string name="mdns_clear_button">Clear</string>
     <string name="mdns_empty_title">No services found</string>
     <string name="mdns_empty_body">No mDNS services responded. Ensure devices are on the same network and try again.</string>

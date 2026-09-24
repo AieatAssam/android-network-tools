@@ -487,6 +487,14 @@ tasks:
           - "Map and migrate recovery states across the remaining tools; add the planned shared state-coverage contract/source guard and localized recovery audit through P07."
           - "Run DNS and LAN Compose recovery cases on an approved connected device; API 33 and live-network DNS checks remain separate from deterministic error-UX coverage."
 
+      mdns_cancel_recovery_slice:
+        status: "implemented; E01-T09 remains in progress for cross-tool recovery migration and source coverage"
+        behavior: "Stopping mDNS now stays in a Canceling state until the discovery flow and its cleanup finish, then shows a distinct canceled-empty message or retains partial services with a canceled status. Repeated Stop is harmless, retry is gated during cleanup, and generation checks prevent stale events or failures from replacing state after reset/restart."
+        validation: "MdnsDiscoveryViewModelTest passed 14/14, including delayed cleanup, retry gating, empty/partial cancellation, and stale old-run failure after restart. Android-test Kotlin sources compile with Compose coverage for canceling/canceled-empty and preserved partial results. QA/adversarial reviews found no blocker. Connected instrumentation was not run; no emulator, API 33 ENODEV reproduction, physical Wi-Fi, or live mDNS network was used."
+        remaining_acceptance:
+          - "Map and migrate recovery states across the remaining tools; add the planned shared state-coverage contract/source guard and localized recovery audit through P07."
+          - "Run mDNS cancellation and ENODEV recovery on an approved API 33 device/emulator, and confirm discovery over physical Wi-Fi; those runtime checks are separate from deterministic ViewModel/Compose coverage."
+
   - id: E01-T10
     priority: high
     status: todo

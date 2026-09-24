@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -159,6 +161,64 @@ class MdnsDiscoveryScreenTest {
         composeRule.onNodeWithText(context.getString(R.string.mdns_stop_button)).performClick()
 
         verify(exactly = 1) { viewModel.stopScan() }
+    }
+
+    @Test
+    fun canceledEmptyState_isDistinctFromIdleAndCanBeCleared() {
+        val stateFlow = MutableStateFlow(
+            MdnsDiscoveryUiState(isScanning = true, isCanceling = true),
+        )
+        val viewModel = fakeViewModel(flow = stateFlow)
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                MdnsDiscoveryScreen(viewModel = viewModel)
+            }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        composeRule.onNodeWithText(context.getString(R.string.mdns_canceling_button))
+            .assertIsDisplayed().assertIsNotEnabled()
+        composeRule.onNodeWithText(context.getString(R.string.mdns_canceled_title)).assertDoesNotExist()
+        composeRule.onNodeWithText(context.getString(R.string.mdns_canceled_empty_body)).assertDoesNotExist()
+        composeRule.onNodeWithText(context.getString(R.string.mdns_idle_hint)).assertDoesNotExist()
+
+        stateFlow.value = stateFlow.value.copy(isScanning = false, isCanceling = false, scanCanceled = true)
+        composeRule.mainClock.advanceTimeBy(500L)
+
+        composeRule.onNodeWithText(context.getString(R.string.mdns_canceled_title)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.mdns_idle_hint)).assertDoesNotExist()
+        composeRule.onNodeWithText(context.getString(R.string.mdns_scan_button)).assertIsEnabled()
+        composeRule.onNodeWithText(context.getString(R.string.mdns_clear_button)).assertIsEnabled().performClick()
+        verify(exactly = 1) { viewModel.reset() }
+    }
+
+    @Test
+    fun cancelingAndCanceledPartialStatesKeepServicesVisible() {
+        val service = fakeService("_http._tcp", "printer")
+        val stateFlow = MutableStateFlow(
+            MdnsDiscoveryUiState(
+                isScanning = true,
+                isCanceling = true,
+                services = listOf(service),
+                servicesByType = mapOf(service.serviceType to listOf(service)),
+            ),
+        )
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                MdnsDiscoveryScreen(viewModel = fakeViewModel(flow = stateFlow))
+            }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        composeRule.onNodeWithText(context.getString(R.string.mdns_canceling_button))
+            .assertIsDisplayed().assertIsNotEnabled()
+        composeRule.onNodeWithText("printer").assertIsDisplayed()
+
+        stateFlow.value = stateFlow.value.copy(isScanning = false, isCanceling = false, scanCanceled = true)
+        composeRule.mainClock.advanceTimeBy(500L)
+
+        composeRule.onNodeWithText(context.getString(R.string.mdns_canceled_partial)).assertIsDisplayed()
+        composeRule.onNodeWithText("printer").assertIsDisplayed()
     }
 
     @Test

@@ -6,6 +6,7 @@ import kotlinx.coroutines.CancellationException
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -24,9 +25,12 @@ import net.aieat.netswissknife.app.platform.NetworkStatusProvider
 import net.aieat.netswissknife.app.platform.NoOpNetworkStatusProvider
 import net.aieat.netswissknife.app.platform.toNetworkErrorKind
 import javax.inject.Inject
+import kotlin.coroutines.coroutineContext
 
 data class MdnsDiscoveryUiState(
     val isScanning: Boolean = false,
+    val isCanceling: Boolean = false,
+    val scanCanceled: Boolean = false,
     val services: List<DiscoveredService> = emptyList(),
     val servicesByType: Map<String, List<DiscoveredService>> = emptyMap(),
     val error: String? = null,
@@ -50,6 +54,9 @@ class MdnsDiscoveryViewModel @Inject constructor(
     private var scanJob: Job? = null
     private var timerJob: Job? = null
     private var operationSession: OperationSession? = null
+    private var scanGeneration = 0L
+    private var activeScanGeneration: Long? = null
+    private var timerGeneration: Long? = null
 
     init {
         // ViewModel closes registered resources before cancelling viewModelScope. Record the
@@ -63,6 +70,8 @@ class MdnsDiscoveryViewModel @Inject constructor(
     fun startScan(timeoutMs: Long = 5_000L) {
         if (_uiState.value.isScanning) return
 
+        val generation = ++scanGeneration
+        activeScanGeneration = generation
         val scanWindowMs = MdnsOperation.clampScanDuration(timeoutMs)
         val session = MdnsOperation.newSession(timeoutMs = scanWindowMs)
         operationSession = session
@@ -71,20 +80,27 @@ class MdnsDiscoveryViewModel @Inject constructor(
 
         val startTime = SystemMonotonicClock.nowNanos()
 
+        timerGeneration = generation
         timerJob = viewModelScope.launch {
             while (true) {
                 delay(100)
                 val elapsedMs = ((SystemMonotonicClock.nowNanos() - startTime).coerceAtLeast(0L) / 1_000_000L)
-                _uiState.update { it.copy(elapsedMs = elapsedMs) }
+                if (activeScanGeneration == generation) {
+                    _uiState.update { state ->
+                        if (activeScanGeneration == generation && state.isScanning) state.copy(elapsedMs = elapsedMs) else state
+                    }
+                } else break
             }
         }
 
         scanJob = viewModelScope.launch {
+            val runningJob = coroutineContext.job
             try {
                 useCase(scanWindowMs, session).collect { update ->
                     when (update) {
                         is MdnsUpdate.ServiceFound -> {
                             _uiState.update { state ->
+                                if (activeScanGeneration != generation || state.isCanceling) return@update state
                                 val existing = state.services.indexOfFirst { it.instanceName == update.service.instanceName }
                                 val updated = if (existing >= 0) {
                                     state.services.toMutableList().also { it[existing] = update.service }
@@ -96,35 +112,47 @@ class MdnsDiscoveryViewModel @Inject constructor(
                             }
                         }
                         is MdnsUpdate.DiscoveryComplete -> {
-                            _uiState.update { it.copy(
-                                isScanning = false,
-                                scanComplete = true,
-                                totalFound = update.totalFound
-                            )}
-                            stopTimer()
+                            _uiState.update { state ->
+                                if (activeScanGeneration != generation || state.isCanceling) state
+                                else state.copy(scanComplete = true, totalFound = update.totalFound)
+                            }
                         }
                     }
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _uiState.update { it.copy(
-                    isScanning = false,
-                    error = e.message ?: "Discovery failed",
-                    networkErrorKind = e.toNetworkErrorKind(),
-                ) }
-                stopTimer()
+                _uiState.update { state ->
+                    if (activeScanGeneration != generation || state.isCanceling) state
+                    else state.copy(error = e.message ?: "Discovery failed", networkErrorKind = e.toNetworkErrorKind())
+                }
             } finally {
                 if (operationSession === session) operationSession = null
-                if (!_uiState.value.isScanning) stopTimer()
+                if (scanJob === runningJob) scanJob = null
+                if (activeScanGeneration == generation) {
+                    _uiState.update { state ->
+                        if (activeScanGeneration != generation) state
+                        else state.copy(
+                            isScanning = false,
+                            isCanceling = false,
+                            scanCanceled = state.scanCanceled || state.isCanceling,
+                        )
+                    }
+                    activeScanGeneration = null
+                    stopTimer(generation)
+                }
             }
         }
     }
 
     fun stopScan() {
+        val generation = activeScanGeneration ?: return
+        if (!_uiState.value.isScanning || _uiState.value.isCanceling) return
+        _uiState.update { state ->
+            if (activeScanGeneration == generation && state.isScanning) state.copy(isCanceling = true) else state
+        }
         cancelScan(CancellationReason.USER_STOP)
-        stopTimer()
-        _uiState.update { it.copy(isScanning = false) }
+        stopTimer(generation)
     }
 
     private fun cancelScan(reason: CancellationReason) {
@@ -137,13 +165,18 @@ class MdnsDiscoveryViewModel @Inject constructor(
     }
 
     fun reset() {
-        stopScan()
+        scanGeneration++
+        activeScanGeneration = null
+        cancelScan(CancellationReason.USER_STOP)
+        stopTimer()
         _uiState.value = MdnsDiscoveryUiState()
     }
 
-    private fun stopTimer() {
+    private fun stopTimer(generation: Long? = null) {
+        if (generation != null && timerGeneration != generation) return
         timerJob?.cancel()
         timerJob = null
+        timerGeneration = null
     }
 
     override fun onCleared() {

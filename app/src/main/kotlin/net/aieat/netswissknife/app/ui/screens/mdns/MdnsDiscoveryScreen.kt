@@ -152,15 +152,18 @@ fun MdnsDiscoveryScreen(
 
             ControlRow(
                 isScanning = uiState.isScanning,
+                isCanceling = uiState.isCanceling,
                 onScan = { viewModel.startScan(8_000L) },
                 onStop = { viewModel.stopScan() },
                 onReset = { viewModel.reset() },
-                hasPriorResults = uiState.services.isNotEmpty() || uiState.scanComplete
+                hasPriorResults = uiState.services.isNotEmpty() || uiState.scanComplete || uiState.scanCanceled
             )
 
             AnimatedContent(
                 targetState = when {
                     uiState.error != null -> "error"
+                    uiState.services.isEmpty() && uiState.isCanceling -> "canceling_empty"
+                    uiState.services.isEmpty() && uiState.scanCanceled -> "canceled_empty"
                     uiState.services.isEmpty() && !uiState.isScanning && !uiState.scanComplete -> "idle"
                     uiState.services.isEmpty() && uiState.isScanning -> "scanning_empty"
                     uiState.services.isEmpty() && uiState.scanComplete -> "empty_done"
@@ -174,12 +177,16 @@ fun MdnsDiscoveryScreen(
             ) { state ->
                 when (state) {
                     "idle" -> IdleHint()
+                    "canceling_empty" -> CancelingPlaceholder()
+                    "canceled_empty" -> CanceledEmptyHint()
                     "scanning_empty" -> ScanningPlaceholder()
                     "empty_done" -> EmptyResultHint()
                     "error" -> ErrorCard(uiState.error ?: "Unknown error") { viewModel.reset() }
                     else -> ServiceList(
                         servicesByType = uiState.servicesByType,
                         isScanning = uiState.isScanning,
+                        isCanceling = uiState.isCanceling,
+                        scanCanceled = uiState.scanCanceled,
                         onPingHost = { host ->
                             ToolHost.parse(host)?.let { validatedHost ->
                                 onNavigate(
@@ -335,6 +342,7 @@ private fun StatBadge(value: String, label: String) {
 @Composable
 private fun ControlRow(
     isScanning: Boolean,
+    isCanceling: Boolean,
     onScan: () -> Unit,
     onStop: () -> Unit,
     onReset: () -> Unit,
@@ -347,11 +355,17 @@ private fun ControlRow(
             modifier = Modifier.weight(1f)
         ) { scanning ->
             if (scanning) {
-                ToolStopButton(
-                    text = stringResource(R.string.mdns_stop_button),
-                    onClick = onStop,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                if (isCanceling) {
+                    Button(onClick = {}, enabled = false, modifier = Modifier.fillMaxWidth()) {
+                        Text(stringResource(R.string.mdns_canceling_button))
+                    }
+                } else {
+                    ToolStopButton(
+                        text = stringResource(R.string.mdns_stop_button),
+                        onClick = onStop,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             } else {
                 Button(
                     onClick = hapticAction(onScan),
@@ -439,6 +453,34 @@ private fun ScanningPlaceholder() {
 }
 
 @Composable
+private fun CancelingPlaceholder() {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(top = 32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        CircularProgressIndicator(modifier = Modifier.size(40.dp), strokeCap = StrokeCap.Round)
+        Text(stringResource(R.string.mdns_canceling_hint), style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+@Composable
+private fun CanceledEmptyHint() {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(top = 32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(
+            text = stringResource(R.string.mdns_canceled_title),
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Text(stringResource(R.string.mdns_canceled_empty_body), style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+@Composable
 private fun ErrorCard(message: String, onRetry: () -> Unit) {
     ElevatedCard(
         shape = AppShapes.large,
@@ -479,12 +521,24 @@ internal fun mdnsHttpIntent(service: DiscoveredService): ToolIntent? {
 private fun ServiceList(
     servicesByType: Map<String, List<DiscoveredService>>,
     isScanning: Boolean,
+    isCanceling: Boolean,
+    scanCanceled: Boolean,
     onPingHost: (String) -> Unit,
     onHttpProbe: (DiscoveredService) -> Unit,
 ) {
     val expandedTypes = remember { mutableStateMapOf<String, Boolean>() }
 
     LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (scanCanceled) {
+            item {
+                Text(
+                    text = stringResource(R.string.mdns_canceled_partial),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(vertical = 4.dp)
+                )
+            }
+        }
         if (isScanning) {
             item {
                 Row(
@@ -500,7 +554,7 @@ private fun ServiceList(
                         strokeWidth = 2.dp
                     )
                     Text(
-                        stringResource(R.string.mdns_scanning_inline_label),
+                        stringResource(if (isCanceling) R.string.mdns_canceling_hint else R.string.mdns_scanning_inline_label),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
