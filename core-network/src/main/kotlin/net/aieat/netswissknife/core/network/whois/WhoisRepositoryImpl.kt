@@ -263,15 +263,22 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
         budget: OperationBudget,
         responseBudget: WhoisResponseBudget,
     ): Pair<Long, String> {
-        val remainingNanos = budget.remainingNanos()
-        if (remainingNanos <= 0L) throw OperationDeadlineExceededException()
-        val remainingMs = ((remainingNanos + 999_999L) / 1_000_000L).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+        // OperationBudget performs an overflow-safe ceiling conversion. Adding a
+        // rounding constant to a saturated Long.MAX_VALUE deadline would overflow
+        // and turn a large but valid remaining budget into a negative socket timeout.
+        val remainingMs = budget.remainingTimeoutMillis()
+        if (remainingMs <= 0L) throw OperationDeadlineExceededException()
+        // A positive remaining sub-millisecond deadline rounds up to 1 ms. Reject
+        // zero because Socket.connect(timeout = 0) means "no timeout" in the JDK API.
+        val remainingTimeoutMs = remainingMs
+            .coerceAtMost(Int.MAX_VALUE.toLong())
+            .toInt()
         ensureCurrentOperationActive()
         return WhoisBlockingTransport.query(
             host = host,
             query = query,
             port = WHOIS_PORT,
-            timeoutMs = minOf(timeoutMs, remainingMs),
+            timeoutMs = minOf(timeoutMs, remainingTimeoutMs),
             resolver = resolver,
             socketFactory = socketFactory,
             isDisallowedAddress = ::isDisallowedReferralAddress,

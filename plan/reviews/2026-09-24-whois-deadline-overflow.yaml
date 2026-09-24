@@ -1,0 +1,41 @@
+review:
+  area: E03-T01 WHOIS deadline conversion
+  status: slice_verified
+  date: "2026-09-24"
+  source: "Adversarial review of caller-owned OperationSession deadline handling"
+
+finding:
+  severity: medium
+  kind: bug
+  title: "WHOIS rounded a saturated remaining deadline with an overflowing addition"
+  evidence:
+    - file: core-network/src/main/kotlin/net/aieat/netswissknife/core/network/whois/WhoisRepositoryImpl.kt
+      detail: "Adding 999,999 to a Long.MAX_VALUE remaining nanosecond budget can overflow, yielding a negative connect/read timeout. A zero remaining timeout also has special JDK Socket.connect semantics (no timeout)."
+  impact: "A valid caller-owned WHOIS operation budget near the supported Long limit could fail with an invalid timeout or become unbounded at the socket API boundary."
+
+resolution:
+  status: fixed
+  summary: "WHOIS now uses OperationBudget.remainingTimeoutMillis(), clamps before converting to Int, and rejects an expired zero timeout before creating the transport request."
+  regression:
+    file: core-network/src/test/kotlin/net/aieat/netswissknife/core/network/whois/WhoisCancellationTest.kt
+    detail: "A frozen monotonic clock keeps the remaining budget exactly Long.MAX_VALUE; the test verifies a successful lookup and that the socket receives the explicit 1,000 ms request timeout."
+
+validation:
+  - command: "./gradlew :core-network:test --tests '*WhoisCancellationTest' --no-daemon --no-parallel --console=plain"
+    result: "Passed."
+  - command: "./gradlew :core-network:test --tests '*Whois*' --no-daemon --no-parallel --console=plain"
+    result: "Passed; 7 WHOIS test classes, 44 tests, zero failures, errors, or skips."
+  - command: "python3 -B tools/quality/check_resource_sites.py"
+    result: "Passed; 14 raw sites inventoried, all reviewed, no legacy follow-ups or open reviews."
+  - command: "python3 -B -m unittest discover -s tools/quality -p 'test_*.py' -v"
+    result: "Passed; 4 tests."
+  - command: "git diff --check"
+    result: "Passed."
+
+reviewers:
+  qa: "Clear. Confirmed the frozen clock makes the regression fail deterministically on the prior arithmetic; reviewed both focused and full WHOIS test evidence."
+  adversarial: "Clear. Confirmed overflow-safe ceiling conversion, pre-int clamping, and no remaining WHOIS millisecond-ceiling overflow."
+
+limits:
+  - "No emulator or device was used; a shared dev36 emulator and other-project instrumentation/Gradle work were active during planning, then tests were run serially after those tasks ended."
+  - "E03-T01 remains in progress for phase-wide queue/worker assertions, device behavior, full-app validation, and the <=500 ms cleanup-time measurement."

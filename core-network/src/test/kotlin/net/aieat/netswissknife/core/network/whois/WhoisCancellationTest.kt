@@ -92,6 +92,28 @@ class WhoisCancellationTest {
     }
 
     @Test
+    fun `large caller deadline keeps WHOIS socket timeout positive and request bounded`() = runTest {
+        val socket = ResponseSocket(byteArrayOf())
+        val session = OperationSession(
+            OperationBudget.start(
+                timeoutMillis = Long.MAX_VALUE,
+                clock = MonotonicClock { 0L },
+            )
+        )
+        val repository = WhoisRepositoryImpl(
+            resolver = WhoisHostResolver { publicAddress },
+            socketFactory = WhoisSocketFactory { socket },
+        )
+
+        val result = withContext(Dispatchers.IO) {
+            repository.lookup("8.8.8.8", 1_000, session)
+        }
+
+        assertTrue(result is NetworkResult.Success, "large operation budget must not become a negative socket timeout")
+        assertEquals(1_000, socket.connectTimeoutMs)
+    }
+
+    @Test
     fun `cancellation during name resolution propagates without creating a socket`() = runTest {
         val resolverEntered = CountDownLatch(1)
         val resolverInterrupted = CountDownLatch(1)
@@ -341,8 +363,11 @@ class WhoisCancellationTest {
 
     private class ResponseSocket(private val response: ByteArray) : Socket() {
         val closeCalls = AtomicInteger()
+        var connectTimeoutMs: Int? = null
 
-        override fun connect(endpoint: SocketAddress?, timeout: Int) = Unit
+        override fun connect(endpoint: SocketAddress?, timeout: Int) {
+            connectTimeoutMs = timeout
+        }
         override fun getOutputStream() = ByteArrayOutputStream()
         override fun getInputStream(): InputStream = response.inputStream()
         override fun close() { closeCalls.incrementAndGet() }
