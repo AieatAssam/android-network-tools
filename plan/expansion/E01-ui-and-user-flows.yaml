@@ -139,6 +139,7 @@ tasks:
         - "Add real NavHost/back-navigation coverage and phone/tablet checks to confirm return to the originating result without duplicate scans."
       current_vertical_slice:
         status: "LAN host -> Ports is integrated; do not mark the task complete"
+        implementation_commit: 5efafea
         implemented:
           - "NavRoutes/AppNavigation route a versioned typed intent while preserving the legacy Ports host query."
           - "Ports pre-fills the validated host, displays LAN source context, and does not auto-start; manual edits are retained."
