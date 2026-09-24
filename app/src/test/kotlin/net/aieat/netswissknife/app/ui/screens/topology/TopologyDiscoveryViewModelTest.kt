@@ -523,6 +523,8 @@ class TopologyDiscoveryViewModelTest {
     @Test
     fun `reset closes the in-flight SNMP client off the caller thread`() = runTest {
         val requestStarted = CountDownLatch(1)
+        val closeStarted = CountDownLatch(1)
+        val releaseClose = CountDownLatch(1)
         val clientClosed = CountDownLatch(1)
         val closeThread = AtomicReference<Thread>()
         val client = object : SnmpClient {
@@ -537,20 +539,44 @@ class TopologyDiscoveryViewModelTest {
 
             override fun close() {
                 closeThread.set(Thread.currentThread())
+                closeStarted.countDown()
+                check(releaseClose.await(2, TimeUnit.SECONDS))
                 clientClosed.countDown()
             }
         }
         val realUseCase = TopologyDiscoveryUseCase(TopologyDiscoveryRepositoryImpl(client))
         viewModel = TopologyDiscoveryViewModel(realUseCase, recentHostsRepository)
         val callerThread = Thread.currentThread()
-        viewModel.startDiscovery(params)
-        assertTrue(withContext(Dispatchers.IO) { requestStarted.await(2, TimeUnit.SECONDS) })
-        viewModel.reset()
-
-        assertTrue(viewModel.uiState.value is TopologyUiState.Canceling)
-        assertTrue(withContext(Dispatchers.IO) { clientClosed.await(2, TimeUnit.SECONDS) })
+        var discoveryStarted = false
+        var requestObserved = false
+        var resetRequested = false
+        try {
+            viewModel.startDiscovery(params)
+            discoveryStarted = true
+            assertTrue(withContext(Dispatchers.IO) { requestStarted.await(2, TimeUnit.SECONDS) })
+            requestObserved = true
+            viewModel.reset()
+            resetRequested = true
+            assertTrue(withContext(Dispatchers.IO) { closeStarted.await(2, TimeUnit.SECONDS) })
+            assertTrue(viewModel.uiState.value is TopologyUiState.Canceling)
+            assertNotSame(callerThread, closeThread.get())
+        } finally {
+            releaseClose.countDown()
+            if (discoveryStarted && !resetRequested) viewModel.reset()
+            if (discoveryStarted) {
+                try {
+                    if (requestObserved) {
+                        assertTrue(withContext(Dispatchers.IO) { clientClosed.await(2, TimeUnit.SECONDS) })
+                    }
+                } finally {
+                    awaitTopologyState {
+                        it is TopologyUiState.Canceled || it is TopologyUiState.Idle ||
+                            it is TopologyUiState.Failure || it is TopologyUiState.Done
+                    }
+                }
+            }
+        }
         awaitTopologyState { it is TopologyUiState.Canceled }
-        assertNotSame(callerThread, closeThread.get())
     }
 
     private suspend fun awaitTopologyState(predicate: (TopologyUiState) -> Boolean) {

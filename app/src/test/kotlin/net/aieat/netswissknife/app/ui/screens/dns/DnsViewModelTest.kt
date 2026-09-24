@@ -16,6 +16,7 @@ import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.job
 import kotlinx.coroutines.runBlocking
@@ -239,9 +240,13 @@ class DnsViewModelTest {
 
             cleanupGate.countDown()
             withContext(Dispatchers.IO) { runnerFinished.await() }
-            runCurrent()
             assertTrue(session?.resources?.isClosed == true)
-            assertTrue(viewModel.uiState.value is DnsUiState.Canceled)
+            val terminalState = withContext(Dispatchers.IO) {
+                withTimeout(2_000) {
+                    viewModel.uiState.first { it is DnsUiState.Canceled }
+                }
+            }
+            assertTrue(terminalState is DnsUiState.Canceled)
             viewModel.onClearResults()
             assertTrue(viewModel.uiState.value is DnsUiState.Idle)
         }
