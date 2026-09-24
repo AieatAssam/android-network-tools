@@ -177,6 +177,16 @@ fun LanScreen(
                         ),
                     )
                 }
+                is LanNavEvent.NavigateToPing -> ToolHost.parse(event.host)?.let { host ->
+                    onNavigate(
+                        NavRoutes.Ping.createRoute(
+                            ToolIntent(
+                                destination = ToolDestination.HostTarget(HostTool.PING, host),
+                                source = ToolSource.LAN,
+                            ),
+                        ),
+                    )
+                }
             }
         }
     }
@@ -259,6 +269,7 @@ fun LanScreen(
                         onSearchQueryChange = viewModel::onSearchQueryChange,
                         onToggleExpand = viewModel::onToggleHostExpanded,
                         onScanPorts = viewModel::onScanPorts,
+                        onPingHost = viewModel::onPingHost,
                         onClear = viewModel::onClear,
                         onRescan = viewModel::startScan,
                         onToggleDiagnostics = viewModel::onToggleDiagnostics,
@@ -567,6 +578,7 @@ private fun LanScanningContent(state: LanScanUiState.Scanning) {
                             onClick = {},
                             macResolutionSupported = true,
                             onScanPorts = {},
+                            onPingHost = {},
                         )
                     }
                 }
@@ -640,6 +652,7 @@ private fun LanFinishedContent(
     onSearchQueryChange: (String) -> Unit,
     onToggleExpand: (String) -> Unit,
     onScanPorts: (String) -> Unit,
+    onPingHost: (String) -> Unit,
     onClear: () -> Unit,
     onRescan: () -> Unit,
     onToggleDiagnostics: () -> Unit,
@@ -882,6 +895,7 @@ private fun LanFinishedContent(
                             onClick = { onToggleExpand(host.ip) },
                             macResolutionSupported = summary.macResolutionSupported,
                             onScanPorts = onScanPorts,
+                            onPingHost = onPingHost,
                         )
                     }
                 }
@@ -1071,6 +1085,7 @@ private fun HostCard(
     onClick: () -> Unit,
     macResolutionSupported: Boolean,
     onScanPorts: (String) -> Unit,
+    onPingHost: (String) -> Unit,
 ) {
     val containerColor by animateColorAsState(
         targetValue = if (expanded)
@@ -1213,6 +1228,7 @@ private fun HostCard(
                         host = host,
                         macResolutionSupported = macResolutionSupported,
                         onScanPorts = onScanPorts,
+                        onPingHost = onPingHost,
                     )
                 }
             }
@@ -1261,6 +1277,7 @@ private fun HostDetailPanel(
     host: LanHost,
     macResolutionSupported: Boolean,
     onScanPorts: (String) -> Unit,
+    onPingHost: (String) -> Unit,
 ) {
     Column(
         modifier = Modifier.padding(top = 8.dp),
@@ -1322,6 +1339,9 @@ private fun HostDetailPanel(
             )
         }
 
+        TextButton(onClick = { onPingHost(host.ip) }, modifier = Modifier.testTag("lan_action_ping")) {
+            Text(stringResource(R.string.lan_action_ping))
+        }
         TextButton(onClick = { onScanPorts(host.ip) }) {
             Text(stringResource(R.string.lan_action_scan_ports))
         }

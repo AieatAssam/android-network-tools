@@ -3,6 +3,7 @@ package net.aieat.netswissknife.app.ui.screens.ping
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -25,6 +26,11 @@ import net.aieat.netswissknife.app.data.RecentHostsRepository
 import net.aieat.netswissknife.app.platform.LinkInfoProvider
 import net.aieat.netswissknife.app.platform.NetworkStatus
 import net.aieat.netswissknife.app.platform.NetworkStatusProvider
+import net.aieat.netswissknife.app.ui.navigation.HostTool
+import net.aieat.netswissknife.app.ui.navigation.ToolDestination
+import net.aieat.netswissknife.app.ui.navigation.ToolHost
+import net.aieat.netswissknife.app.ui.navigation.ToolIntentCodec
+import net.aieat.netswissknife.app.ui.navigation.ToolSource
 import net.aieat.netswissknife.app.platform.NoOpNetworkStatusProvider
 import net.aieat.netswissknife.core.domain.ContinuousPingParams
 import net.aieat.netswissknife.core.domain.ContinuousPingUseCase
@@ -140,6 +146,7 @@ class PingViewModel @Inject constructor(
     private val recentHostsRepository: RecentHostsRepository,
     private val linkInfoProvider: LinkInfoProvider = LinkInfoProvider { true },
     private val networkStatusProvider: NetworkStatusProvider = NoOpNetworkStatusProvider,
+    private val savedStateHandle: SavedStateHandle = SavedStateHandle(),
 ) : ViewModel() {
 
     companion object {
@@ -155,6 +162,22 @@ class PingViewModel @Inject constructor(
 
     private val _host = MutableStateFlow("")
     val host: StateFlow<String> = _host.asStateFlow()
+
+    private val rawIntentArgument = savedStateHandle.get<String>("intent")
+    private val hasIntentArgument = rawIntentArgument != null
+    private val decodedIntent = rawIntentArgument?.let(ToolIntentCodec::decode)
+    private val intentHost = (decodedIntent?.destination as? ToolDestination.HostTarget)
+        ?.takeIf { it.tool == HostTool.PING }
+    private val routeHost = savedStateHandle.get<String>("host")
+    private val routeArgumentsMatch = !hasIntentArgument || (
+        intentHost != null &&
+            (routeHost == null || ToolHost.parse(routeHost)?.canonical == intentHost.host.canonical)
+        )
+
+    /** A present typed handoff must be valid and intended for Ping. */
+    private val _hasInvalidHandoff = MutableStateFlow(hasIntentArgument && !routeArgumentsMatch)
+    val hasInvalidHandoff: Boolean get() = _hasInvalidHandoff.value
+    val sourceContext: ToolSource? = decodedIntent?.source?.takeIf { routeArgumentsMatch }
 
     private val _count = MutableStateFlow(10)
     val count: StateFlow<Int> = _count.asStateFlow()
@@ -190,6 +213,14 @@ class PingViewModel @Inject constructor(
         { logger, sequence, packet -> logger.append(sequence, packet) }
 
     init {
+        val restoredEdit = savedStateHandle.get<String>("editedHost")
+        val initialHost = when {
+            hasInvalidHandoff -> null
+            restoredEdit != null -> restoredEdit
+            hasIntentArgument -> intentHost?.host?.value
+            else -> routeHost
+        }
+        initialHost?.let { _host.value = it }
         viewModelScope.launch {
             val prefs = dataStore.data.first()
             _count.value = prefs[AppPreferenceKeys.DEFAULT_PING_COUNT] ?: 10
@@ -199,7 +230,13 @@ class PingViewModel @Inject constructor(
 
     // ── User actions ─────────────────────────────────────────────────────────
 
-    fun onHostChange(value: String) { _host.value = value }
+    fun onHostChange(value: String) {
+        _host.value = value
+        savedStateHandle["editedHost"] = value
+        if (_hasInvalidHandoff.value && HostValidator.normalize(value) != null) {
+            _hasInvalidHandoff.value = false
+        }
+    }
 
     fun onCountChange(value: Int) { _count.value = value.coerceIn(1, 100) }
 

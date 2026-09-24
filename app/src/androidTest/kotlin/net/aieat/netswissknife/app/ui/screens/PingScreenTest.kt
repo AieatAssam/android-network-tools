@@ -7,15 +7,19 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.performTextClearance
+import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.rule.GrantPermissionRule
@@ -26,9 +30,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.screens.ping.PingUiState
 import net.aieat.netswissknife.app.ui.screens.ping.PingViewModel
+import net.aieat.netswissknife.app.ui.navigation.ToolSource
 import net.aieat.netswissknife.app.ui.theme.NetSwissKnifeTheme
 import net.aieat.netswissknife.core.network.ping.PingPacketResult
 import net.aieat.netswissknife.core.network.ping.PingStatus
+import net.aieat.netswissknife.core.network.HostValidator
 import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Rule
@@ -177,6 +183,51 @@ class PingScreenTest {
         composeRule.mainClock.autoAdvance = false
 
         verify(exactly = 1) { viewModel.startPing() }
+    }
+
+    @Test
+    fun lanHandoff_showsProvenanceAndDoesNotStartPing() {
+        val viewModel = fakePingViewModel(PingUiState.Idle, host = "192.0.2.8", sourceContext = ToolSource.LAN)
+        composeRule.setContent {
+            NetSwissKnifeTheme { PingScreen(viewModel = viewModel) }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        composeRule.onNodeWithTag(PingScreenTestTags.SOURCE_CONTEXT).assertIsDisplayed()
+        composeRule.onNodeWithText("192.0.2.8").assertIsDisplayed()
+        verify(exactly = 0) { viewModel.startPing() }
+    }
+
+    @Test
+    fun invalidTypedHandoff_showsRecoveryMessageAndKeepsPingFormAvailable() {
+        val host = MutableStateFlow("")
+        val hasInvalidHandoff = MutableStateFlow(true)
+        val viewModel = fakePingViewModel(
+            PingUiState.Idle,
+            hostState = host,
+            invalidHandoffState = hasInvalidHandoff,
+        )
+        composeRule.setContent {
+            NetSwissKnifeTheme { PingScreen(viewModel = viewModel) }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        composeRule.onNodeWithTag(PingScreenTestTags.INVALID_HANDOFF).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.ping_host_label)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.ping_start_button)).assertIsNotEnabled()
+
+        val hostField = composeRule.onNodeWithTag(PingScreenTestTags.HOST_FIELD)
+        hostField.performTextInput("bad host")
+
+        composeRule.onNodeWithTag(PingScreenTestTags.INVALID_HANDOFF).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.ping_start_button)).assertIsNotEnabled()
+
+        hostField.performTextClearance()
+        hostField.performTextInput("replacement.example")
+
+        composeRule.onAllNodesWithTag(PingScreenTestTags.INVALID_HANDOFF).assertCountEquals(0)
+        composeRule.onNodeWithText(context.getString(R.string.ping_start_button)).assertIsEnabled()
+        verify(exactly = 0) { viewModel.startPing() }
     }
 
     @Test
@@ -334,11 +385,15 @@ class PingScreenTest {
         count: Int = 4,
         payloadBytes: MutableStateFlow<Int> = MutableStateFlow(56),
         ttl: MutableStateFlow<Int> = MutableStateFlow(64),
-        intervalMs: MutableStateFlow<Int> = MutableStateFlow(1_000)
+        intervalMs: MutableStateFlow<Int> = MutableStateFlow(1_000),
+        sourceContext: ToolSource? = null,
+        hasInvalidHandoff: Boolean = false,
+        hostState: MutableStateFlow<String>? = null,
+        invalidHandoffState: MutableStateFlow<Boolean>? = null,
     ): PingViewModel {
         val viewModel = mockk<PingViewModel>(relaxed = true)
         every { viewModel.uiState } returns (flow ?: MutableStateFlow(state ?: PingUiState.Idle))
-        every { viewModel.host } returns MutableStateFlow(host)
+        every { viewModel.host } returns (hostState ?: MutableStateFlow(host))
         every { viewModel.count } returns MutableStateFlow(count)
         every { viewModel.timeoutMs } returns MutableStateFlow(1000)
         every { viewModel.payloadBytes } returns payloadBytes
@@ -346,6 +401,17 @@ class PingScreenTest {
         every { viewModel.intervalMs } returns intervalMs
         every { viewModel.continuousMode } returns MutableStateFlow(false)
         every { viewModel.recentHosts } returns MutableStateFlow(emptyList())
+        every { viewModel.sourceContext } returns sourceContext
+        if (hostState != null && invalidHandoffState != null) {
+            every { viewModel.hasInvalidHandoff } answers { invalidHandoffState.value }
+            every { viewModel.onHostChange(any()) } answers {
+                val replacement = firstArg<String>()
+                hostState.value = replacement
+                if (HostValidator.normalize(replacement) != null) invalidHandoffState.value = false
+            }
+        } else {
+            every { viewModel.hasInvalidHandoff } returns hasInvalidHandoff
+        }
         return viewModel
     }
 }

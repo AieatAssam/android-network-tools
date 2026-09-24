@@ -50,6 +50,11 @@ fun NavHostController.navigateToTool(route: String) {
     }
 }
 
+/** Push a child tool from the current result screen so Back returns to that result. */
+fun NavHostController.navigateFromToolHandoff(route: String) {
+    navigate(route) { launchSingleTop = true }
+}
+
 /** Return from Settings to the screen that opened it, with a safe Home fallback. */
 fun NavHostController.navigateBackFromSettings() {
     if (!popBackStack()) {
@@ -118,7 +123,21 @@ fun AppNavHost(navController: NavHostController, modifier: Modifier = Modifier) 
             })
         }
 
-        composable(NavRoutes.Ping.route)       { PingScreen() }
+        composable(
+            route = NavRoutes.Ping.route,
+            arguments = listOf(
+                navArgument("host") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+                navArgument("intent") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+            ),
+        ) { PingScreen() }
         composable(NavRoutes.Traceroute.route) { TracerouteScreen() }
         composable(
             route = NavRoutes.Ports.route,
@@ -136,7 +155,7 @@ fun AppNavHost(navController: NavHostController, modifier: Modifier = Modifier) 
             ),
         ) { PortsScreen() }
         composable(NavRoutes.Lan.route)        {
-            LanScreen(onNavigate = { route -> navController.navigateToTool(route) })
+            LanScreen(onNavigate = { route -> navController.navigateFromToolHandoff(route) })
         }
         composable(NavRoutes.Dns.route)        { DnsScreen() }
         composable(NavRoutes.WifiScan.route)   { WifiScanScreen() }

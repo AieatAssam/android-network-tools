@@ -35,7 +35,22 @@ sealed class NavRoutes(
     val icon: ImageVector
 ) {
     object Home : NavRoutes("home", "Home", Icons.Default.Home)
-    object Ping : NavRoutes("ping", "Ping", Icons.Default.NetworkCheck)
+    object Ping : NavRoutes("ping?host={host}&intent={intent}", "Ping", Icons.Default.NetworkCheck) {
+        const val baseRoute = "ping"
+
+        /** Keep the established bare Ping route while allowing host-target handoffs. */
+        fun createRoute(host: String?): String = host
+            ?.takeIf { it.isNotBlank() }
+            ?.let { "$baseRoute?host=${Uri.encode(it)}" }
+            ?: baseRoute
+
+        fun createRoute(intent: ToolIntent): String {
+            val target = intent.destination as? ToolDestination.HostTarget
+                ?: throw IllegalArgumentException("Ping route requires a host destination")
+            require(target.tool == HostTool.PING)
+            return "$baseRoute?host=${Uri.encode(target.host.value)}&intent=${Uri.encode(ToolIntentCodec.encode(intent))}"
+        }
+    }
     object Traceroute : NavRoutes("traceroute", "Traceroute", Icons.Default.Router)
     object Ports : NavRoutes("ports?host={host}&intent={intent}", "Port Scanner", Icons.Default.TravelExplore) {
         const val baseRoute = "ports"

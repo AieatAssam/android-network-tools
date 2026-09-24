@@ -142,6 +142,9 @@ import net.aieat.netswissknife.core.network.ping.PingStatus
 object PingScreenTestTags {
     const val CONTENT_LIST = "ping_content_list"
     const val COUNT_SLIDER = "ping_count_slider"
+    const val HOST_FIELD = "ping_host_field"
+    const val SOURCE_CONTEXT = "ping_source_context"
+    const val INVALID_HANDOFF = "ping_invalid_handoff"
 
     /** Index of the idle/running/finished/error results panel within [CONTENT_LIST]. */
     const val RESULTS_PANEL_INDEX = 2
@@ -164,6 +167,8 @@ fun PingScreen(
     val intervalMs by viewModel.intervalMs.collectAsStateWithLifecycle()
     val continuousMode by viewModel.continuousMode.collectAsStateWithLifecycle()
     val recentHosts by viewModel.recentHosts.collectAsStateWithLifecycle()
+    val sourceContext = viewModel.sourceContext
+    val hasInvalidHandoff = viewModel.hasInvalidHandoff
 
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -204,6 +209,28 @@ fun PingScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     PingHeroHeader(onHelpClick = { showHelp = true })
                     NetworkStatusBanner(networkStatus, scope = NetworkStatusScope.INTERNET)
+                }
+            }
+
+            if (hasInvalidHandoff) {
+                item {
+                    Text(
+                        text = stringResource(R.string.ping_invalid_handoff),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.testTag(PingScreenTestTags.INVALID_HANDOFF),
+                    )
+                }
+            }
+
+            if (sourceContext == net.aieat.netswissknife.app.ui.navigation.ToolSource.LAN) {
+                item {
+                    Text(
+                        text = stringResource(R.string.ping_source_lan),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.testTag(PingScreenTestTags.SOURCE_CONTEXT),
+                    )
                 }
             }
 
@@ -392,7 +419,7 @@ private fun PingInputCard(
                     keyboardController?.hide()
                     if (!isRunning && canStart) onStart()
                 }),
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().testTag(PingScreenTestTags.HOST_FIELD),
                 enabled = !isRunning
             )
 

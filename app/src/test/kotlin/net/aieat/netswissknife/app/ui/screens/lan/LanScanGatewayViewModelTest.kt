@@ -98,4 +98,13 @@ class LanScanGatewayViewModelTest {
             viewModel.navigationEvents.first(),
         )
     }
+
+    @Test
+    fun `ping host emits navigation event`() = runTest {
+        viewModel.onPingHost("192.168.1.10")
+        assertEquals(
+            LanNavEvent.NavigateToPing("192.168.1.10"),
+            viewModel.navigationEvents.first(),
+        )
+    }
 }

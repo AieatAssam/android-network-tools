@@ -4,6 +4,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.SavedStateHandle
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -29,6 +30,12 @@ import kotlinx.coroutines.withTimeout
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
 import net.aieat.netswissknife.app.platform.LinkInfoProvider
+import net.aieat.netswissknife.app.ui.navigation.HostTool
+import net.aieat.netswissknife.app.ui.navigation.ToolDestination
+import net.aieat.netswissknife.app.ui.navigation.ToolHost
+import net.aieat.netswissknife.app.ui.navigation.ToolIntent
+import net.aieat.netswissknife.app.ui.navigation.ToolIntentCodec
+import net.aieat.netswissknife.app.ui.navigation.ToolSource
 import net.aieat.netswissknife.core.domain.ContinuousPingUseCase
 import net.aieat.netswissknife.core.domain.PingFlowResult
 import net.aieat.netswissknife.core.domain.PingUseCase
@@ -60,6 +67,15 @@ class PingViewModelTest {
     private lateinit var recentHostsRepository: RecentHostsRepository
     private lateinit var viewModel: PingViewModel
     private var networkAvailable = true
+
+    private fun handoffViewModel(savedStateHandle: SavedStateHandle) = PingViewModel(
+        pingUseCase,
+        continuousPingUseCase,
+        dataStore,
+        recentHostsRepository,
+        LinkInfoProvider { networkAvailable },
+        savedStateHandle = savedStateHandle,
+    )
 
     private suspend fun awaitFinished(): PingUiState.Finished =
         viewModel.uiState.first { it is PingUiState.Finished } as PingUiState.Finished
@@ -681,6 +697,93 @@ class PingViewModelTest {
     }
 
     // ── Recent hosts ──────────────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("LAN host handoff")
+    inner class LanHostHandoff {
+        private val encodedPing = ToolIntentCodec.encode(
+            ToolIntent(
+                ToolDestination.HostTarget(HostTool.PING, requireNotNull(ToolHost.parse("192.0.2.8"))),
+                ToolSource.LAN,
+            ),
+        )
+
+        @Test
+        fun `valid typed host pre-fills without starting and edits survive recreation`() {
+            val routeState = SavedStateHandle(mapOf("intent" to encodedPing, "host" to "192.0.2.8"))
+            val handoff = handoffViewModel(routeState)
+
+            assertEquals("192.0.2.8", handoff.host.value)
+            assertEquals(ToolSource.LAN, handoff.sourceContext)
+            assertFalse(handoff.hasInvalidHandoff)
+            assertTrue(handoff.uiState.value is PingUiState.Idle)
+            coVerify(exactly = 0) { pingUseCase(any(), any()) }
+
+            handoff.onHostChange("edited.example")
+            assertEquals("edited.example", routeState.get<String>("editedHost"))
+            val recreated = handoffViewModel(
+                SavedStateHandle(
+                    mapOf("intent" to encodedPing, "host" to "192.0.2.8", "editedHost" to "edited.example"),
+                ),
+            )
+            assertEquals("edited.example", recreated.host.value)
+            assertEquals(ToolSource.LAN, recreated.sourceContext)
+            assertFalse(recreated.hasInvalidHandoff)
+            assertTrue(recreated.uiState.value is PingUiState.Idle)
+            coVerify(exactly = 0) { pingUseCase(any(), any()) }
+        }
+
+        @Test
+        fun `malformed or wrong destination typed arguments show blank recovery form`() {
+            val portsIntent = ToolIntentCodec.encode(
+                ToolIntent(
+                    ToolDestination.HostTarget(HostTool.PORTS, requireNotNull(ToolHost.parse("192.0.2.8"))),
+                    ToolSource.LAN,
+                ),
+            )
+            listOf("ti1.invalid", portsIntent).forEach { rawIntent ->
+                val invalid = handoffViewModel(
+                    SavedStateHandle(mapOf("intent" to rawIntent, "host" to "192.0.2.8")),
+                )
+                assertEquals("", invalid.host.value)
+                assertNull(invalid.sourceContext)
+                assertTrue(invalid.hasInvalidHandoff)
+                assertTrue(invalid.uiState.value is PingUiState.Idle)
+            }
+        }
+
+        @Test
+        fun `mismatched typed host does not leak payload into form and bare host route remains supported`() {
+            val invalid = handoffViewModel(
+                SavedStateHandle(mapOf("intent" to encodedPing, "host" to "192.0.2.9")),
+            )
+            assertEquals("", invalid.host.value)
+            assertNull(invalid.sourceContext)
+            assertTrue(invalid.hasInvalidHandoff)
+
+            val legacy = handoffViewModel(SavedStateHandle(mapOf("host" to "legacy.example")))
+            assertEquals("legacy.example", legacy.host.value)
+            assertNull(legacy.sourceContext)
+            assertFalse(legacy.hasInvalidHandoff)
+        }
+
+        @Test
+        fun `invalid handoff warning clears only after a valid replacement without starting ping`() {
+            val recovery = handoffViewModel(
+                SavedStateHandle(mapOf("intent" to "ti1.invalid", "host" to "192.0.2.8")),
+            )
+            assertTrue(recovery.hasInvalidHandoff)
+            recovery.onHostChange("bad host")
+            assertTrue(recovery.hasInvalidHandoff)
+
+            recovery.onHostChange("replacement.example")
+
+            assertFalse(recovery.hasInvalidHandoff)
+            assertEquals("replacement.example", recovery.host.value)
+            assertTrue(recovery.uiState.value is PingUiState.Idle)
+            coVerify(exactly = 0) { pingUseCase(any(), any()) }
+        }
+    }
 
     @Nested
     @DisplayName("recent hosts")

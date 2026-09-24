@@ -81,6 +81,8 @@
     <!-- Ping Screen -->
     <string name="ping_screen_title">Ping</string>
     <string name="ping_screen_subtitle">Measure round-trip time and packet loss to any host</string>
+    <string name="ping_source_lan">Prefilled from LAN Scanner</string>
+    <string name="ping_invalid_handoff">The supplied destination could not be verified. Enter a host to continue.</string>
 
     <!-- Ping Input -->
     <string name="ping_host_label">Host or IP address</string>
@@ -130,7 +132,7 @@
     <!-- Port Scanner Screen -->
     <string name="ports_screen_title">Port Scanner</string>
     <string name="ports_screen_subtitle">Probe TCP ports and identify running services</string>
-    <string name="ports_source_lan">Host selected from LAN Scanner</string>
+    <string name="ports_source_lan">Prefilled from LAN Scanner</string>
     <string name="ports_invalid_handoff">The supplied destination could not be verified. Enter a host to continue.</string>
 
     <!-- Port Scanner Input -->
@@ -250,6 +252,7 @@
     <string name="lan_detail_role">Role</string>
     <string name="lan_mac_unavailable_api29">Not available on Android 10+ (ARP is restricted)</string>
     <string name="lan_action_scan_ports">Scan ports</string>
+    <string name="lan_action_ping">Ping host</string>
     <string name="lan_discovery_icmp">ICMP</string>
     <string name="lan_discovery_tcp_open">TCP open</string>
     <string name="lan_discovery_tcp_refused">TCP refused</string>

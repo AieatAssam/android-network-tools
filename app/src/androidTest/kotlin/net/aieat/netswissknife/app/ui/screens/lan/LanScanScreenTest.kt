@@ -8,6 +8,7 @@ import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -173,6 +174,37 @@ class LanScanScreenTest {
             .performClick()
 
         verify(exactly = 1) { viewModel.startScan() }
+    }
+
+    @Test
+    fun expandedHost_offersPingActionForSelectedHost() {
+        val ip = "192.168.1.50"
+        val stateFlow = MutableStateFlow<LanScanUiState>(
+            LanScanUiState.Finished(
+                LanScanSummary(
+                    subnet = "192.168.1.0/24",
+                    totalScanned = 254,
+                    aliveHosts = 1,
+                    scanDurationMs = 500,
+                    hosts = listOf(fakeHost(ip)),
+                ),
+            ),
+        )
+        val viewModel = fakeViewModel(flow = stateFlow)
+        every { viewModel.onToggleHostExpanded(ip) } answers {
+            val current = stateFlow.value as LanScanUiState.Finished
+            stateFlow.value = current.copy(expandedHostIp = if (current.expandedHostIp == ip) null else ip)
+        }
+
+        composeRule.setContent {
+            NetSwissKnifeTheme { LanScreen(viewModel = viewModel) }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        composeRule.onAllNodesWithText(ip, substring = true).onFirst().performScrollTo().performClick()
+        composeRule.mainClock.advanceTimeBy(500L)
+        composeRule.onNodeWithTag("lan_action_ping").performScrollTo().assertIsDisplayed().performClick()
+
+        verify(exactly = 1) { viewModel.onPingHost(ip) }
     }
 
     @Test

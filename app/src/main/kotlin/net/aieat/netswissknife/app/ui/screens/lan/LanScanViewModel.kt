@@ -69,6 +69,7 @@ sealed interface LanScanUiState {
 
 sealed interface LanNavEvent {
     data class NavigateToPorts(val host: String) : LanNavEvent
+    data class NavigateToPing(val host: String) : LanNavEvent
 }
 
 @HiltViewModel
@@ -337,6 +338,10 @@ class LanScanViewModel @Inject constructor(
 
     fun onScanPorts(host: String) {
         navigationEventsChannel.trySend(LanNavEvent.NavigateToPorts(host))
+    }
+
+    fun onPingHost(host: String) {
+        navigationEventsChannel.trySend(LanNavEvent.NavigateToPing(host))
     }
 
     private fun cancelScan(reason: CancellationReason) {
