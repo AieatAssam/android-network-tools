@@ -1428,18 +1428,3 @@ private fun portServiceName(port: Int): String = when (port) {
     8443 -> "HTTPS-Alt"
     else -> "TCP/$port"
 }
-
-private fun buildLanShareText(summary: LanScanSummary): String = buildString {
-    appendLine("LAN scan – ${summary.subnet}")
-    appendLine("Confirmed hosts: ${summary.aliveHosts} / ${summary.totalScanned}")
-    appendLine("Duration: ${summary.scanDurationMs}ms")
-    appendLine()
-    summary.hosts.forEach { host ->
-        append(host.ip)
-        host.hostname?.let { append(" ($it)") }
-        host.vendor?.let { append(" [$it]") }
-        append(" ${host.pingTimeMs}ms")
-        if (host.openPorts.isNotEmpty()) append(" ports:${host.openPorts.joinToString(",")}")
-        appendLine()
-    }
-}
