@@ -127,19 +127,19 @@ tasks:
       - "Do not put Android Uri or resource IDs in core-domain/core-network."
     effort: "M (2-3 agent sessions)"
     checkpoint:
-      status: "typed intent and codec foundation plus LAN-to-Ports/Ping and mDNS-to-Ping/HTTP handoffs are implemented; remaining handoffs and integrated navigation/device gates stay open"
+      status: "typed intent and codec foundation plus LAN-to-Ports/Ping/TLS and mDNS-to-Ping/HTTP handoffs are implemented; remaining handoffs and integrated navigation/device gates stay open"
       implementation_commit: afd05d15d7894b95a2f9bc58b36092acd5826f77
       implemented:
         - "Typed host, port, MAC, subnet, and source models with strict validation and normalization."
         - "Versioned URL-safe codec with strict UTF-8 decoding and a compatibility decoder for the existing Ports host query."
         - "Round-trip, malformed encoding, scoped IPv6, duplicate/unknown legacy query, and MAC normalization test coverage."
       remaining_acceptance:
-        - "Extend typed handoffs beyond LAN host -> Ports/Ping and mDNS -> Ping/HTTP to LAN -> HTTP/TLS/WOL."
+        - "Extend typed handoffs beyond LAN host -> Ports/Ping/TLS and mDNS -> Ping/HTTP to LAN -> HTTP/WOL."
         - "Add one-time route consumption and navigation process-restoration/edit-preservation coverage across the supported destinations."
         - "Exercise the real AppNavHost and system Back on phone and tablet; confirm return to the originating LAN result without duplicate scans."
       current_vertical_slice:
-        status: "LAN -> Ports/Ping and mDNS -> Ping/HTTP are integrated; do not mark the task complete"
-        implementation_commits: [664d6f899315d54213c5ff04a8184d3b1a8e1cc3, b8adffd39a63fef2e2ba6a1b3e1f651c6e52e8b0, 4c02186ed0e7bb9dd7f32deedcea4d5d0b3b8787]
+        status: "LAN -> Ports/Ping/TLS and mDNS -> Ping/HTTP are integrated; do not mark the task complete"
+        implementation_commits: [664d6f899315d54213c5ff04a8184d3b1a8e1cc3, b8adffd39a63fef2e2ba6a1b3e1f651c6e52e8b0, 4c02186ed0e7bb9dd7f32deedcea4d5d0b3b8787, b982edb2f33b188933e289ce691c8e23b177f142]
         implemented:
           - "Ports and Ping accept versioned typed host intents while preserving the legacy Ports host query and bare Ping route."
           - "Both destinations prefill validated LAN hosts without auto-starting, show source context, and retain user edits in SavedStateHandle."
@@ -147,7 +147,8 @@ tasks:
           - "LAN handoffs push child routes so Back can return to retained LAN results; a synthetic NavHost regression covers push/pop, and instrumentation source coverage checks Ping query arguments."
           - "Expanded mDNS services offer separate validated hostname and literal IPv4/IPv6 Ping actions via typed intents with MDNS source context; Ping shows localized provenance and never auto-starts."
           - "Expanded _http._tcp mDNS records with a validated host and port offer a typed HTTP Probe handoff with MDNS provenance, an editable URL, and no automatic request; malformed/mismatched routes show localized recovery and retain edits after recreation."
-        validation: "The focused Ping and Ports ViewModel suites passed 49/49 and 23/23; HttpProbeViewModelTest passed 9/9. Android instrumentation Kotlin sources compile after the mDNS handoffs and accessibility assertions. mDNS screen tests decode typed hostname, selected-IP, and host/port HTTP routes and reject invalid service records; HTTP tests cover idle prefill, source context, no request, invalid-route recovery, URL validation for scoped/bracketed IPv6, and edit restoration into a reconstructed SavedStateHandle. Compose instrumentation was compiled but not run. SavedStateHandle tests model restoration with new handles rather than Android SavedStateRegistry. Fresh QA/adversarial reviews found no source blocker; AppNavHost/system-Back, phone/tablet, and real navigation restoration remain open, as do LAN -> HTTP/TLS/WOL handoffs. No emulator was used."
+          - "Expanded LAN host details offer a typed TLS Inspector handoff for each discovered open port, with LAN provenance, editable host/port, inline invalid-route recovery, and no automatic inspection; mismatched, malformed, wrong-tool, or incomplete arguments do not prefill untrusted values."
+        validation: "The focused Ping and Ports ViewModel suites passed 49/49 and 23/23; HttpProbeViewModelTest passed 9/9; the LAN Scan and TLS Inspector ViewModel suites passed 17/17 each. Android instrumentation Kotlin sources compile after the mDNS and LAN-to-TLS handoffs. Compose sources cover typed route decoding, push/pop retention, discovered-port actions, source/prefill/no-auto-run, invalid handoff recovery, and mDNS host/port HTTP routing; they compile but were not executed. TLS route construction is covered by a synthetic NavHost test, not AppNavHost. SavedStateHandle tests model restoration with new handles rather than Android SavedStateRegistry. Fresh QA/adversarial reviews found no source blocker; LAN -> HTTP/WOL, one-time route consumption and clear-prefill semantics, AppNavHost/system-Back, process restoration, phone/tablet, and device checks remain open. No emulator was used."
 
   - id: E01-T02
     second_pass_review:
