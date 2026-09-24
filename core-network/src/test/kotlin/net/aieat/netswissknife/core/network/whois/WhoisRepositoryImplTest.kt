@@ -1,11 +1,23 @@
 package net.aieat.netswissknife.core.network.whois
 
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import net.aieat.netswissknife.core.network.NetworkResult
+import net.aieat.netswissknife.core.network.operation.OperationBudget
+import net.aieat.netswissknife.core.network.operation.OperationSession
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import java.io.ByteArrayOutputStream
+import java.io.IOException
+import java.io.InputStream
+import java.net.InetAddress
+import java.net.Socket
+import java.net.SocketAddress
+import java.util.concurrent.atomic.AtomicInteger
 
 @DisplayName("WhoisRepositoryImpl – validation")
 class WhoisRepositoryImplTest {
@@ -33,6 +45,83 @@ class WhoisRepositoryImplTest {
     fun `lookup returns Error for timeout above 30000 ms`() = runTest {
         val result = repo.lookup("example.com", 30_001)
         assertTrue(result is NetworkResult.Error)
+    }
+
+    @Test
+    @DisplayName("invalid inputs are rejected before resolver or socket creation")
+    fun `invalid inputs are rejected before resolver or socket creation`() = runTest {
+        val resolutions = AtomicInteger()
+        val sockets = AtomicInteger()
+        val repository = WhoisRepositoryImpl(
+            resolver = WhoisHostResolver {
+                resolutions.incrementAndGet()
+                InetAddress.getByName("8.8.8.8")
+            },
+            socketFactory = WhoisSocketFactory {
+                sockets.incrementAndGet()
+                Socket()
+            },
+        )
+        val session = OperationSession(OperationBudget.start())
+
+        listOf(
+            "foo bar",
+            "a\r\nb",
+            "999.1.1.1",
+            "1.2.3",
+            "1.2.3.4.5",
+        ).forEach { input ->
+            val result = repository.lookup(input, 1_000, session)
+            assertTrue(result is NetworkResult.Error, "expected '$input' to be rejected")
+        }
+
+        assertEquals(0, resolutions.get())
+        assertEquals(0, sockets.get())
+    }
+}
+
+@DisplayName("WhoisRepositoryImpl – referred RIR failures")
+class WhoisReferredRirFailureTest {
+
+    @Test
+    @DisplayName("connect failure is retained as a failed referred RIR hop")
+    fun `connect failure is retained as a failed referred RIR hop`() = runTest {
+        val publicAddress = InetAddress.getByName("8.8.8.8")
+        val socketCreates = AtomicInteger()
+        val firstHopSocket = object : Socket() {
+            override fun connect(endpoint: SocketAddress?, timeout: Int) = Unit
+            override fun getOutputStream() = ByteArrayOutputStream()
+            override fun getInputStream(): InputStream =
+                "NetName: ARIN-NET\r\nReferralServer: whois://whois.ripe.net\r\n".byteInputStream()
+            override fun close() = Unit
+        }
+        val referralSocket = object : Socket() {
+            override fun connect(endpoint: SocketAddress?, timeout: Int) {
+                throw IOException("referral connect failed")
+            }
+            override fun close() = Unit
+        }
+        val repository = WhoisRepositoryImpl(
+            resolver = WhoisHostResolver { publicAddress },
+            socketFactory = WhoisSocketFactory {
+                if (socketCreates.incrementAndGet() == 1) firstHopSocket
+                else referralSocket
+            },
+        )
+
+        val result = withContext(Dispatchers.IO) { repository.lookup("8.8.8.8", 1_000) }
+
+        assertTrue(result is NetworkResult.Success)
+        val data = (result as NetworkResult.Success).data
+        val hops = data.hops
+        assertEquals(2, hops.size)
+        val failedReferral = hops[1]
+        assertEquals("whois.ripe.net", failedReferral.server.host)
+        assertEquals(WhoisServerRole.RIR, failedReferral.server.role)
+        assertTrue(failedReferral.error.orEmpty().contains("referral connect failed"))
+        assertNotNull(failedReferral.operationId)
+        assertEquals("", failedReferral.rawResponse)
+        assertEquals("ARIN-NET", data.netName, "keep fields parsed from the last successful hop")
     }
 }
 

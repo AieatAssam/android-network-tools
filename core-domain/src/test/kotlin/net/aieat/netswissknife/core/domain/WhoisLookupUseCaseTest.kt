@@ -92,4 +92,46 @@ class WhoisLookupUseCaseTest {
         assertEquals(expected, actual)
         coVerify(exactly = 1) { repository.lookup("example.com", 10_000, session) }
     }
+
+    @Test
+    @DisplayName("IDN domain is normalized to lowercase ASCII without a root dot")
+    fun `IDN domain is normalized to lowercase ASCII without a root dot`() = runTest {
+        val expected = NetworkResult.Success(successResult)
+        coEvery { repository.lookup(any(), any()) } returns expected
+
+        val actual = useCase(WhoisParams(query = " BÜCHER.DE. "))
+
+        assertEquals(expected, actual)
+        coVerify(exactly = 1) { repository.lookup("xn--bcher-kva.de", 10_000) }
+    }
+
+    @Test
+    @DisplayName("spaces, control characters, and malformed IPv4 are rejected before repository access")
+    fun `spaces controls and malformed IPv4 are rejected before repository access`() = runTest {
+        listOf(
+            "foo bar",
+            "a\r\nb",
+            "999.1.1.1",
+            "1.2.3",
+            "1.2.3.4.5",
+        ).forEach { input ->
+            val result = useCase(WhoisParams(query = input))
+            assertTrue(result is NetworkResult.Error, "expected '$input' to be rejected")
+        }
+        coVerify(exactly = 0) { repository.lookup(any(), any()) }
+    }
+
+    @Test
+    @DisplayName("valid IPv4, IPv6, and ASN queries remain supported")
+    fun `valid IP and ASN queries remain supported`() = runTest {
+        coEvery { repository.lookup(any(), any()) } returns NetworkResult.Success(successResult)
+
+        useCase(WhoisParams(query = "8.8.8.8"))
+        useCase(WhoisParams(query = "2001:4860:4860::8888"))
+        useCase(WhoisParams(query = "as15169"))
+
+        coVerify(exactly = 1) { repository.lookup("8.8.8.8", 10_000) }
+        coVerify(exactly = 1) { repository.lookup("2001:4860:4860::8888", 10_000) }
+        coVerify(exactly = 1) { repository.lookup("AS15169", 10_000) }
+    }
 }

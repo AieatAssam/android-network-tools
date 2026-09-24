@@ -3,6 +3,7 @@ package net.aieat.netswissknife.core.domain
 import kotlinx.coroutines.flow.SharedFlow
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.whois.WhoisHop
+import net.aieat.netswissknife.core.network.whois.WhoisQueryTypeDetector
 import net.aieat.netswissknife.core.network.whois.WhoisRepository
 import net.aieat.netswissknife.core.network.whois.WhoisResult
 import net.aieat.netswissknife.core.network.operation.OperationSession
@@ -30,11 +31,11 @@ class WhoisLookupUseCase(private val repository: WhoisRepository) {
         params: WhoisParams,
         operationSession: OperationSession?,
     ): NetworkResult<WhoisResult> {
-        val query = params.query.trim()
-        if (query.isBlank()) return NetworkResult.Error("Query must not be blank")
+        val query = WhoisQueryTypeDetector.normalize(params.query)
+            ?: return NetworkResult.Error("Enter a valid domain, IP address, or ASN without spaces")
         if (params.timeoutMs !in 500..30_000)
             return NetworkResult.Error("Timeout must be between 500 ms and 30 000 ms")
-        return if (operationSession == null) repository.lookup(query, params.timeoutMs)
-        else repository.lookup(query, params.timeoutMs, operationSession)
+        return if (operationSession == null) repository.lookup(query.value, params.timeoutMs)
+        else repository.lookup(query.value, params.timeoutMs, operationSession)
     }
 }

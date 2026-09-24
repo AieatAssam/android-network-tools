@@ -31,10 +31,13 @@ class WifiChannelHelperTest {
     }
 
     @Nested
-    @DisplayName("frequencyToChannel – 5 GHz")
+    @DisplayName("frequencyToChannel – 4.9 and 5 GHz")
     inner class Channel5GHz {
         @ParameterizedTest(name = "{0} MHz → channel {1}")
         @CsvSource(
+            "4910, 182",
+            "4980, 196",
+            "5170, 34",
             "5180, 36",
             "5200, 40",
             "5220, 44",
@@ -111,6 +114,15 @@ class WifiChannelHelperTest {
         fun `no channel above 14 in overlap set`() {
             val result = WifiChannelHelper.overlapping24GHzChannels(13)
             assertTrue(result.none { it > 14 })
+        }
+
+        @Test
+        fun `channel 14 overlap boundary follows its frequency spacing`() {
+            assertTrue(14 !in WifiChannelHelper.overlapping24GHzChannels(10))
+            assertTrue(14 !in WifiChannelHelper.overlapping24GHzChannels(11))
+            assertTrue(14 in WifiChannelHelper.overlapping24GHzChannels(12))
+            assertTrue(14 in WifiChannelHelper.overlapping24GHzChannels(13))
+            assertEquals(setOf(12, 13, 14), WifiChannelHelper.overlapping24GHzChannels(14))
         }
     }
 

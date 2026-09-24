@@ -332,6 +332,10 @@ private fun DnsInputCard(
     modifier: Modifier = Modifier
 ) {
     val isBusy = isLoading || isCanceling
+    val isCustomServerValid = selectedServer !is DnsServer.Custom || customServerAddress.trim().let {
+        HostValidator.isValidIpv4(it) || HostValidator.isValidIpv6(it)
+    }
+    val canLookup = domain.isNotBlank() && isCustomServerValid
     ElevatedCard(
         modifier = modifier.fillMaxWidth(),
         shape = AppShapes.large
@@ -367,7 +371,7 @@ private fun DnsInputCard(
                 ),
                 keyboardActions = KeyboardActions(
                     onSearch = {
-                        if (!isBusy && domain.isNotBlank()) onLookup()
+                        if (!isBusy && canLookup) onLookup()
                     }
                 ),
                 enabled = !isBusy,
@@ -413,7 +417,7 @@ private fun DnsInputCard(
             // Lookup button
             Button(
                 onClick = hapticAction(if (isLoading) onCancelLookup else onLookup),
-                enabled = isLoading || (!isCanceling && domain.isNotBlank()),
+                enabled = isLoading || (!isCanceling && canLookup),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp)
@@ -570,10 +574,10 @@ private fun DnsServerSelector(
                      else selectedServer.displayName
 
     // Custom server addresses must be literal IPs (IPv4 or IPv6).
+    val trimmedCustomAddress = customServerAddress.trim()
     val isCustomInvalid = selectedServer is DnsServer.Custom &&
-        customServerAddress.isNotBlank() &&
-        !HostValidator.isValidIpv4(customServerAddress) &&
-        !HostValidator.isValidIpv6(customServerAddress)
+        !HostValidator.isValidIpv4(trimmedCustomAddress) &&
+        !HostValidator.isValidIpv6(trimmedCustomAddress)
 
     ExposedDropdownMenuBox(
         expanded = expanded,

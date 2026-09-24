@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.flowOn
 import net.aieat.netswissknife.core.network.HostResolver
 import net.aieat.netswissknife.core.network.InetAddressHostResolver
 import net.aieat.netswissknife.core.network.operation.OperationRunner
+import net.aieat.netswissknife.core.network.operation.OperationDeadlineExceededException
 import net.aieat.netswissknife.core.network.operation.OperationSession
 import net.aieat.netswissknife.core.network.operation.ensureCurrentOperationActive
 import java.net.UnknownHostException
@@ -182,25 +183,35 @@ class PingRepositoryImpl(
             return@flow
         }
 
+        // Before the first successful lookup, report and retry DNS failures at the configured
+        // interval. Once resolved, keep the address pinned for the lifetime of this session.
+        var resolvedIp = request.resolvedIp
         var selectedEngine: PingEngine? = null
         var sequence = 1
         while (true) {
-            val resolvedIp = try {
-                request.resolvedIp ?: PingBlockingCallExecutor.run(session) { resolver.resolve(request.host) }
-            } catch (e: UnknownHostException) {
-                emit(errorPacket(request, e.message ?: "Unknown host: ${request.host}", sequence))
-                sequence++
-                delay(request.intervalMs.toLong().coerceAtLeast(0L))
-                continue
-            } catch (e: Exception) {
-                if (e is CancellationException) throw e
-                emit(errorPacket(request, e.message ?: e.javaClass.simpleName, sequence))
-                sequence++
-                delay(request.intervalMs.toLong().coerceAtLeast(0L))
-                continue
+            if (resolvedIp == null) {
+                resolvedIp = try {
+                    PingBlockingCallExecutor.run(session) { resolver.resolve(request.host) }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: OperationDeadlineExceededException) {
+                    throw e
+                } catch (e: UnknownHostException) {
+                    emit(errorPacket(request, e.message ?: "Unknown host: ${request.host}", sequence))
+                    sequence++
+                    delay(request.intervalMs.toLong().coerceAtLeast(0L))
+                    continue
+                } catch (e: Exception) {
+                    emit(errorPacket(request, e.message ?: e.javaClass.simpleName, sequence))
+                    sequence++
+                    delay(request.intervalMs.toLong().coerceAtLeast(0L))
+                    continue
+                }
             }
 
-            val probeRequest = request.copy(resolvedIp = resolvedIp, count = 1)
+            ensureCurrentOperationActive()
+            val pinnedIp = checkNotNull(resolvedIp)
+            val probeRequest = request.copy(resolvedIp = pinnedIp, count = 1)
             // Availability can change after an engine reports a native linkage failure.
             // Recheck every probe so a continuous session does not keep retrying an
             // engine that already declared itself unavailable.

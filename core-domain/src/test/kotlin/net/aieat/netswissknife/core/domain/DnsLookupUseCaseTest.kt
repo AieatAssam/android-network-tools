@@ -112,6 +112,38 @@ class DnsLookupUseCaseTest {
         }
 
         @Test
+        fun `custom server hostname is rejected without calling repository`() = runTest {
+            val result = useCase(
+                DnsLookupParams(domain = "example.com", server = DnsServer.Custom("resolver.example"))
+            )
+
+            assertTrue(result is NetworkResult.Error)
+            coVerify(exactly = 0) { repository.lookup(any(), any(), any()) }
+        }
+
+        @Test
+        fun `custom server hostname with operation session is rejected before repository dispatch`() = runTest {
+            val session = DnsLookupOperation.newSession()
+            val result = useCase(
+                DnsLookupParams(domain = "example.com", server = DnsServer.Custom("resolver.example")),
+                session
+            )
+
+            assertTrue(result is NetworkResult.Error)
+            coVerify(exactly = 0) { repository.lookup(any(), any(), any(), any()) }
+        }
+
+        @Test
+        fun `custom server with port is rejected without calling repository`() = runTest {
+            val result = useCase(
+                DnsLookupParams(domain = "example.com", server = DnsServer.Custom("192.0.2.53:5353"))
+            )
+
+            assertTrue(result is NetworkResult.Error)
+            coVerify(exactly = 0) { repository.lookup(any(), any(), any()) }
+        }
+
+        @Test
         fun `domain is trimmed before passing to repository`() = runTest {
             coEvery { repository.lookup(any(), any(), any()) } returns NetworkResult.Success(successResult)
             useCase(DnsLookupParams(domain = "  example.com  "))
@@ -166,6 +198,15 @@ class DnsLookupUseCaseTest {
             coEvery { repository.lookup(any(), any(), any()) } returns NetworkResult.Success(successResult)
             useCase(DnsLookupParams(domain = "example.com", server = DnsServer.Custom("192.168.1.1")))
             coVerify { repository.lookup(any(), any(), DnsServer.Custom("192.168.1.1")) }
+        }
+
+        @Test
+        fun `custom server surrounding whitespace is trimmed before repository lookup`() = runTest {
+            coEvery { repository.lookup(any(), any(), any()) } returns NetworkResult.Success(successResult)
+
+            useCase(DnsLookupParams(domain = "example.com", server = DnsServer.Custom("  2001:db8::53  ")))
+
+            coVerify(exactly = 1) { repository.lookup("example.com", DnsRecordType.A, DnsServer.Custom("2001:db8::53")) }
         }
     }
 }

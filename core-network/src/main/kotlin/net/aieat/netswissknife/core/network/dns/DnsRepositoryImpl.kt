@@ -23,6 +23,7 @@ import org.xbill.DNS.Rcode
 import org.xbill.DNS.Resolver
 import org.xbill.DNS.Section
 import org.xbill.DNS.SimpleResolver
+import org.xbill.DNS.TXTRecord
 import org.xbill.DNS.Type
 import java.net.Inet6Address
 import java.net.InetAddress
@@ -165,13 +166,30 @@ class DnsRepositoryImpl(
 
     internal var clock: MonotonicClock = SystemMonotonicClock
 
+    /**
+     * Custom DNS server addresses are trimmed and must be IPv4 or IPv6 literals.
+     * Hostnames and host:port input are rejected before resolver construction.
+     */
     override suspend fun lookup(
         domain: String,
         recordType: DnsRecordType,
         server: DnsServer,
         operationSession: OperationSession,
     ): NetworkResult<DnsResult> = withContext(Dispatchers.IO) {
-        if (server is DnsServer.System && server.serverAddresses.isEmpty()) {
+        val normalizedServer = when (server) {
+            is DnsServer.Custom -> {
+                val address = server.address.trim()
+                if (!HostValidator.isValidIpv4(address) && !HostValidator.isValidIpv6(address)) {
+                    return@withContext NetworkResult.Error(
+                        "Invalid custom DNS server: expected an IPv4 or IPv6 address"
+                    )
+                }
+                DnsServer.Custom(address)
+            }
+            else -> server
+        }
+
+        if (normalizedServer is DnsServer.System && normalizedServer.serverAddresses.isEmpty()) {
             return@withContext NetworkResult.Error(
                 "No system DNS server reported by Android (Private DNS or no network). Choose a resolver."
             )
@@ -189,7 +207,7 @@ class DnsRepositoryImpl(
                 val queryName = Name.fromString(normalizedDomain)
                 val queryRecord = Record.newRecord(queryName, recordType.dnsTypeInt, DClass.IN)
                 val queryMessage = Message.newQuery(queryRecord)
-                val resolver = resolverFactory.create(server)
+                val resolver = resolverFactory.create(normalizedServer)
                 bindSessionTransport(resolver, operationSession)
                 ensureCurrentOperationActive()
                 val sendThread = Thread.currentThread()
@@ -215,11 +233,11 @@ class DnsRepositoryImpl(
                 val queryTimeMs = clock.elapsedMillisSince(startNs)
                 val serverUsed = (resolver as? DnsResolverMetadata)?.lastServerAddress
                     ?.let(::formatServerAddress)
-                    ?: serverAddress(server)
+                    ?: serverAddress(normalizedServer)
                 val result = DnsMessageMapper.toResult(
                     domain = domain.trimEnd('.'),
                     requestedType = recordType,
-                    server = server,
+                    server = normalizedServer,
                     response = response,
                     serverUsed = serverUsed,
                     queryTimeMs = queryTimeMs
@@ -436,15 +454,26 @@ object DnsMessageMapper {
 
     private fun formatRecordValue(record: Record): String = try {
         when (record.type) {
-            Type.TXT -> record.rdataToString()
-                .removePrefix("\"")
-                .removeSuffix("\"")
-                .replace("\" \"", " ")
+            Type.TXT -> (record as TXTRecord).semanticTextValue()
             Type.CNAME, Type.NS, Type.PTR, Type.SRV -> record.rdataToString().trimEnd('.')
             Type.SOA -> record.rdataToString().split(" ").joinToString(" ") { it.trimEnd('.') }
             else -> record.rdataToString()
         }
     } catch (_: Exception) {
         record.rdataToString()
+    }
+
+    /** TXT character-strings form one semantic octet string; dnsjava's rdata text is presentation syntax. */
+    private fun TXTRecord.semanticTextValue(): String {
+        @Suppress("UNCHECKED_CAST")
+        val segments = getStringsAsByteArrays() as List<ByteArray>
+        val bytes = ByteArray(segments.sumOf { it.size })
+        var offset = 0
+        for (segment in segments) {
+            segment.copyInto(bytes, destinationOffset = offset)
+            offset += segment.size
+        }
+        // String's UTF-8 decoder replaces malformed sequences with U+FFFD.
+        return String(bytes, Charsets.UTF_8)
     }
 }

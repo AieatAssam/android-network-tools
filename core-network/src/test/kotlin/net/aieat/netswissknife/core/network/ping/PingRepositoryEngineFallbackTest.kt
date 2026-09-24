@@ -154,9 +154,9 @@ class PingRepositoryEngineFallbackTest {
     }
 
     @Test
-    fun `continuous ping resolves the hostname for each probe`() = runTest {
-        val addresses = ArrayDeque(listOf("192.0.2.10", "192.0.2.11", "192.0.2.12"))
-        val seenAddresses = mutableListOf<String?>()
+    fun `continuous ping resolves the hostname once and keeps probes on that address`() = runTest {
+        val resolutionCount = java.util.concurrent.atomic.AtomicInteger()
+        val seenAddresses = java.util.Collections.synchronizedList(mutableListOf<String?>())
         val engine = fakeEngine(PingEngineKind.REACHABILITY) { request ->
             seenAddresses += request.resolvedIp
             flowOf(PingPacketResult(1, request.host, 4, PingStatus.SUCCESS))
@@ -164,14 +164,17 @@ class PingRepositoryEngineFallbackTest {
         val repo = PingRepositoryImpl(
             engines = listOf(engine),
             delayBetweenProbesMs = 0,
-            resolver = HostResolver { addresses.removeFirst() }
+            resolver = HostResolver {
+                if (resolutionCount.incrementAndGet() == 1) "192.0.2.10" else "192.0.2.11"
+            }
         )
 
         repo.continuousPing(PingRequest("example.com", count = 0, timeoutMs = 100))
             .take(3)
             .toList()
 
-        assertEquals(listOf("192.0.2.10", "192.0.2.11", "192.0.2.12"), seenAddresses)
+        assertEquals(1, resolutionCount.get())
+        assertEquals(listOf("192.0.2.10", "192.0.2.10", "192.0.2.10"), seenAddresses)
     }
 
     @Test

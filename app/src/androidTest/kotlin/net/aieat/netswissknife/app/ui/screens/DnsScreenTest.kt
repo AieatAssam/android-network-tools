@@ -106,6 +106,24 @@ class DnsScreenTest {
     }
 
     @Test
+    fun invalidCustomServer_disablesLookupAndImeSubmit() {
+        val viewModel = fakeDnsViewModel(
+            DnsUiState.Idle,
+            selectedServer = DnsServer.Custom("resolver.example"),
+            customServerAddress = "resolver.example",
+            domainValue = "example.com"
+        )
+        composeRule.setContent {
+            NetSwissKnifeTheme { DnsScreen(viewModel = viewModel) }
+        }
+
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        composeRule.onNodeWithTag(DnsScreenTestTags.CANCEL_LOOKUP).assertIsNotEnabled()
+        composeRule.onNodeWithTag(DnsScreenTestTags.DOMAIN_INPUT).performImeAction()
+        verify(exactly = 0) { viewModel.performLookup() }
+    }
+
+    @Test
     fun loadingState_showsQueryingIndicator() {
         composeRule.setContent {
             NetSwissKnifeTheme {

@@ -39,9 +39,10 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
         timeoutMs: Int,
         operationSession: OperationSession,
     ): NetworkResult<WhoisResult> {
-        if (query.isBlank()) return NetworkResult.Error("Query must not be blank")
         if (timeoutMs < 500) return NetworkResult.Error("Timeout must be between 500 ms and 30 000 ms")
         if (timeoutMs > 30_000) return NetworkResult.Error("Timeout must be between 500 ms and 30 000 ms")
+        val normalizedQuery = WhoisQueryTypeDetector.normalize(query)
+            ?: return NetworkResult.Error("Enter a valid domain, IP address, or ASN without spaces")
 
         val session = operationSession
         val responseBudget = WhoisResponseBudget(session.budget.maxResponseBytes)
@@ -52,15 +53,24 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
             OperationRunner.run(session) {
                 withContext(Dispatchers.IO) {
                     val start = System.nanoTime()
-                    val queryType = WhoisQueryTypeDetector.detect(query)
-                    when (queryType) {
+                    when (normalizedQuery.type) {
                         WhoisQueryType.DOMAIN -> performDomainLookup(
-                            query, timeoutMs, start, session.budget, session.budget.operationId, responseBudget
+                            normalizedQuery.value,
+                            timeoutMs,
+                            start,
+                            session.budget,
+                            session.budget.operationId,
+                            responseBudget
                         )
                         WhoisQueryType.IPV4, WhoisQueryType.IPV6, WhoisQueryType.ASN ->
                             performIpAsnLookup(
-                                query, queryType, timeoutMs, start, session.budget, session.budget.operationId,
-                                responseBudget,
+                                normalizedQuery.value,
+                                normalizedQuery.type,
+                                timeoutMs,
+                                start,
+                                session.budget,
+                                session.budget.operationId,
+                                responseBudget
                             )
                     }
                 }
@@ -224,6 +234,17 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
             } catch (e: OperationDeadlineExceededException) {
                 throw e
             } catch (e: Exception) {
+                val failedHop = WhoisHop(
+                    server = WhoisServer(referral, WhoisServerRole.RIR),
+                    rawResponse = "",
+                    queryTimeMs = 0L,
+                    referral = null,
+                    error = e.message ?: "Connection failed",
+                    operationId = operationId,
+                )
+                hops.add(failedHop)
+                ensureCurrentOperationActive()
+                _hopProgress.emit(failedHop)
                 return buildIpResult(query, queryType, hops, overallStart)
             }
             val hop2 = WhoisHop(
@@ -325,7 +346,7 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
         hops: List<WhoisHop>,
         overallStart: Long
     ): NetworkResult<WhoisResult> {
-        val lastResponse = hops.lastOrNull()?.rawResponse ?: ""
+        val lastResponse = hops.lastOrNull { it.error == null }?.rawResponse ?: ""
         val p = WhoisResponseParser
         return NetworkResult.Success(
             WhoisResult(

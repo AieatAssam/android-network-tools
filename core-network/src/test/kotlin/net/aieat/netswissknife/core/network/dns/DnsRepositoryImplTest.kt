@@ -13,6 +13,7 @@ import java.util.concurrent.CompletionStage
 import java.util.concurrent.Executor
 import java.util.concurrent.atomic.AtomicReference
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
@@ -21,6 +22,58 @@ import org.junit.jupiter.params.provider.CsvSource
 
 @DisplayName("DnsRepositoryImpl.normalizeDomain")
 class DnsRepositoryImplTest {
+
+    @Test
+    fun `invalid custom DNS hostname and host port are rejected before resolver construction or IO`() = runTest {
+        var resolverFactoryCalls = 0
+        var resolverCalls = 0
+        var ioFactoryCalls = 0
+        val repository = DnsRepositoryImpl(
+            resolverFactory = DnsRepositoryImpl.ResolverFactory {
+                resolverFactoryCalls++
+                ReportingResolver(onQuery = { resolverCalls++ })
+            }
+        ).also {
+            it.ioClientFactoryFactory = {
+                ioFactoryCalls++
+                throw AssertionError("Invalid custom address must be rejected before transport setup")
+            }
+        }
+
+        listOf("resolver.example", "192.0.2.53:5353").forEach { address ->
+            val result = repository.lookup(
+                domain = "example.com",
+                recordType = DnsRecordType.A,
+                server = DnsServer.Custom(address)
+            )
+            assertTrue(result is NetworkResult.Error, address)
+        }
+
+        assertEquals(0, resolverFactoryCalls)
+        assertEquals(0, ioFactoryCalls)
+        assertEquals(0, resolverCalls)
+    }
+
+    @Test
+    fun `custom DNS literal is trimmed for resolver construction and result`() = runTest {
+        val resolverServer = AtomicReference<DnsServer?>()
+        val repository = DnsRepositoryImpl(
+            resolverFactory = DnsRepositoryImpl.ResolverFactory { server ->
+                resolverServer.set(server)
+                ReportingResolver()
+            }
+        )
+
+        val result = repository.lookup(
+            domain = "example.com",
+            recordType = DnsRecordType.A,
+            server = DnsServer.Custom("  192.0.2.53  ")
+        ) as NetworkResult.Success
+
+        assertEquals(DnsServer.Custom("192.0.2.53"), resolverServer.get())
+        assertEquals(DnsServer.Custom("192.0.2.53"), result.data.server)
+        assertEquals("192.0.2.53:53", result.data.serverUsed)
+    }
 
     @Test
     fun `system DNS result reports the resolver that actually answered`() = runTest {

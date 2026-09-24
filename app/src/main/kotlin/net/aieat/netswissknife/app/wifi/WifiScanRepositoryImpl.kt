@@ -18,7 +18,7 @@ import net.aieat.netswissknife.core.network.lan.OuiDatabase
 import net.aieat.netswissknife.core.network.wifi.WifiAccessPoint
 import net.aieat.netswissknife.core.network.wifi.WifiBand
 import net.aieat.netswissknife.core.network.wifi.WifiChannelHelper
-import net.aieat.netswissknife.core.network.wifi.WifiChannelInfo
+import net.aieat.netswissknife.core.network.wifi.WifiChannelAnalyzer
 import net.aieat.netswissknife.core.network.wifi.WifiConnectionInfo
 import net.aieat.netswissknife.core.network.wifi.WifiScanRepository
 import net.aieat.netswissknife.core.network.wifi.WifiScanOperation
@@ -31,7 +31,6 @@ import net.aieat.netswissknife.core.network.operation.OperationRunner
 import net.aieat.netswissknife.core.network.operation.OperationSession
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlin.math.pow
 
 class WifiScanRepositoryImpl(private val context: Context) : WifiScanRepository {
 
@@ -92,7 +91,7 @@ class WifiScanRepositoryImpl(private val context: Context) : WifiScanRepository 
                 .map { sr -> mapScanResult(sr, connectedBssid) }
                 .sortedByDescending { it.rssi }
 
-            val channels = buildChannelInfo(accessPoints)
+            val channels = WifiChannelAnalyzer.analyze(accessPoints)
             val cacheReadElapsedRealtimeMs = SystemClock.elapsedRealtime()
             val freshness = WifiScanFreshness.compute(
                 newestTimestampUs = rawResults.maxOfOrNull { it.timestamp },
@@ -244,42 +243,6 @@ class WifiScanRepositoryImpl(private val context: Context) : WifiScanRepository 
             centerFrequency1 = sr.centerFreq1,
             timestampUs = sr.timestamp
         )
-    }
-
-    // ── Channel congestion ────────────────────────────────────────────────────
-
-    private fun buildChannelInfo(accessPoints: List<WifiAccessPoint>): List<WifiChannelInfo> {
-        val byChannel = accessPoints.groupBy { it.channel }
-
-        return byChannel.map { (channel, aps) ->
-            val band = aps.first().band
-            val freqMhz = aps.first().frequency
-
-            // Effective interference = sum of linear signal powers (in arbitrary units)
-            // for APs on this channel and overlapping channels (2.4 GHz only).
-            val interference = when (band) {
-                WifiBand.BAND_2_4GHZ -> {
-                    val overlapping = WifiChannelHelper.overlapping24GHzChannels(channel)
-                    accessPoints
-                        .filter { it.channel in overlapping }
-                        .sumOf { 10.0.pow(it.rssi / 10.0) }
-                }
-                else -> aps.sumOf { 10.0.pow(it.rssi / 10.0) }
-            }
-
-            // Normalize: treat -40 dBm * 10 APs as "very busy" → score ≈ 1.0
-            val maxInterference = 10.0.pow(-40.0 / 10.0) * 10.0
-            val congestion = (interference / maxInterference).coerceIn(0.0, 1.0).toFloat()
-
-            WifiChannelInfo(
-                channel = channel,
-                frequencyMhz = freqMhz,
-                band = band,
-                accessPointCount = aps.size,
-                congestionScore = congestion,
-                accessPoints = aps.sortedByDescending { it.rssi }
-            )
-        }.sortedWith(compareBy({ it.band.ordinal }, { it.channel }))
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

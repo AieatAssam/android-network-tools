@@ -396,6 +396,123 @@ class WhoisViewModelTest {
     }
 
     @Test
+    fun `editing query after canceled partial lookup clears stale recovery before new lookup`() = runTest {
+        val progress = MutableSharedFlow<WhoisHop>(extraBufferCapacity = 4)
+        every { whoisLookupUseCase.hopProgress } returns progress
+        var calls = 0
+        var firstSession: OperationSession? = null
+        coEvery { whoisLookupUseCase(any(), any()) } coAnswers {
+            calls++
+            val params = firstArg<WhoisParams>()
+            if (calls == 1) {
+                firstSession = secondArg()
+                kotlinx.coroutines.awaitCancellation()
+            } else {
+                NetworkResult.Success(stubResult.copy(query = params.query, domainName = params.query))
+            }
+        }
+
+        viewModel.onQueryChange("example.com")
+        viewModel.lookup()
+        runCurrent()
+        val session = checkNotNull(firstSession)
+        val partialHop = stubHop.copy(
+            server = WhoisServer("whois.partial.test", WhoisServerRole.REGISTRY),
+            operationId = session.budget.operationId,
+        )
+        progress.emit(partialHop)
+        runCurrent()
+
+        viewModel.stopLookup()
+        runCurrent()
+        assertTrue(viewModel.uiState.value.isCanceled)
+        assertEquals(listOf(partialHop.server), viewModel.uiState.value.hopStates.map { it.server })
+
+        // Formatting-only edits preserve the same retry and partial result.
+        viewModel.onQueryChange(" example.com ")
+        assertTrue(viewModel.uiState.value.isCanceled)
+        assertEquals(listOf(partialHop.server), viewModel.uiState.value.hopStates.map { it.server })
+
+        viewModel.onQueryChange("other.com")
+        val edited = viewModel.uiState.value
+        assertEquals("other.com", edited.query)
+        assertFalse(edited.isCanceled)
+        assertFalse(edited.isLifecyclePaused)
+        assertTrue(edited.hopStates.isEmpty())
+        assertNull(edited.result)
+        assertNull(edited.error)
+
+        viewModel.lookup()
+        runCurrent()
+
+        assertEquals(2, calls)
+        assertEquals("other.com", viewModel.uiState.value.result?.query)
+        assertFalse(viewModel.uiState.value.isCanceled)
+    }
+
+    @Test
+    fun `canonical-equivalent query edits preserve canceled partial lookup`() = runTest {
+        val progress = MutableSharedFlow<WhoisHop>(extraBufferCapacity = 4)
+        every { whoisLookupUseCase.hopProgress } returns progress
+        var session: OperationSession? = null
+        coEvery { whoisLookupUseCase(any(), any()) } coAnswers {
+            session = secondArg()
+            kotlinx.coroutines.awaitCancellation()
+        }
+
+        viewModel.onQueryChange("example.com")
+        viewModel.lookup()
+        runCurrent()
+        val partialHop = stubHop.copy(
+            server = WhoisServer("whois.partial.test", WhoisServerRole.REGISTRY),
+            operationId = checkNotNull(session).budget.operationId,
+        )
+        progress.emit(partialHop)
+        runCurrent()
+        viewModel.stopLookup()
+        runCurrent()
+
+        viewModel.onQueryChange("EXAMPLE.COM")
+        assertTrue(viewModel.uiState.value.isCanceled)
+        assertEquals(listOf(partialHop.server), viewModel.uiState.value.hopStates.map { it.server })
+
+        viewModel.onQueryChange("example.com.")
+        assertTrue(viewModel.uiState.value.isCanceled)
+        assertEquals(listOf(partialHop.server), viewModel.uiState.value.hopStates.map { it.server })
+    }
+
+    @Test
+    fun `equivalent IPv6 spellings preserve canceled partial lookup`() = runTest {
+        val progress = MutableSharedFlow<WhoisHop>(extraBufferCapacity = 4)
+        every { whoisLookupUseCase.hopProgress } returns progress
+        var session: OperationSession? = null
+        coEvery { whoisLookupUseCase(any(), any()) } coAnswers {
+            session = secondArg()
+            kotlinx.coroutines.awaitCancellation()
+        }
+
+        viewModel.onQueryChange("2001:db8::1")
+        viewModel.lookup()
+        runCurrent()
+        val partialHop = stubHop.copy(
+            server = WhoisServer("whois.partial.test", WhoisServerRole.REGISTRY),
+            operationId = checkNotNull(session).budget.operationId,
+        )
+        progress.emit(partialHop)
+        runCurrent()
+        viewModel.stopLookup()
+        runCurrent()
+        assertTrue(viewModel.uiState.value.isCanceled)
+        assertEquals(listOf(partialHop.server), viewModel.uiState.value.hopStates.map { it.server })
+
+        viewModel.onQueryChange("2001:0db8:0:0:0:0:0:1")
+
+        assertTrue(viewModel.uiState.value.isCanceled)
+        assertEquals("2001:0db8:0:0:0:0:0:1", viewModel.uiState.value.query)
+        assertEquals(listOf(partialHop.server), viewModel.uiState.value.hopStates.map { it.server })
+    }
+
+    @Test
     fun `replacement lookup waits for active lookup cleanup before starting new session`() = runTest {
         val cleanup = CompletableDeferred<Unit>()
         var calls = 0

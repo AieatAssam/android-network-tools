@@ -1,8 +1,10 @@
 package net.aieat.netswissknife.core.domain
 
 import net.aieat.netswissknife.core.network.NetworkResult
+import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.dns.DnsRepository
 import net.aieat.netswissknife.core.network.dns.DnsResult
+import net.aieat.netswissknife.core.network.dns.DnsServer
 import net.aieat.netswissknife.core.network.operation.OperationSession
 
 /**
@@ -13,7 +15,7 @@ import net.aieat.netswissknife.core.network.operation.OperationSession
  * - Domain must not be blank
  * - Domain length must not exceed 253 characters
  * - For [DnsServer.Custom][net.aieat.netswissknife.core.network.dns.DnsServer.Custom],
- *   the custom server address must not be blank
+ *   the trimmed custom server address must be an IPv4 or IPv6 literal
  */
 class DnsLookupUseCase(
     private val repository: DnsRepository
@@ -41,22 +43,28 @@ class DnsLookupUseCase(
             return NetworkResult.Error("Domain name is too long (max 253 characters)")
         }
 
-        val customServer = params.server as? net.aieat.netswissknife.core.network.dns.DnsServer.Custom
-        if (customServer != null && customServer.address.isBlank()) {
-            return NetworkResult.Error("Custom DNS server address must not be empty")
+        val server = when (val requestedServer = params.server) {
+            is DnsServer.Custom -> {
+                val address = requestedServer.address.trim()
+                if (!HostValidator.isValidIpv4(address) && !HostValidator.isValidIpv6(address)) {
+                    return NetworkResult.Error("Custom DNS server must be an IPv4 or IPv6 address")
+                }
+                DnsServer.Custom(address)
+            }
+            else -> requestedServer
         }
 
         return if (operationSession == null) {
             repository.lookup(
                 domain = trimmedDomain,
                 recordType = params.recordType,
-                server = params.server
+                server = server
             )
         } else {
             repository.lookup(
                 domain = trimmedDomain,
                 recordType = params.recordType,
-                server = params.server,
+                server = server,
                 operationSession = operationSession,
             )
         }

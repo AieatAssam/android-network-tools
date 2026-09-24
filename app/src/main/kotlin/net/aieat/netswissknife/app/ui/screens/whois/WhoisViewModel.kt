@@ -21,6 +21,7 @@ import net.aieat.netswissknife.core.domain.WhoisLookupUseCase
 import net.aieat.netswissknife.core.domain.WhoisParams
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.whois.WhoisHop
+import net.aieat.netswissknife.core.network.whois.WhoisQueryTypeDetector
 import net.aieat.netswissknife.core.network.whois.WhoisResult
 import net.aieat.netswissknife.core.network.whois.WhoisServer
 import net.aieat.netswissknife.core.network.whois.WhoisServerRole
@@ -73,8 +74,28 @@ class WhoisViewModel @Inject constructor(
     private var operationSession: OperationSession? = null
 
     fun onQueryChange(value: String) {
-        _uiState.update { it.copy(query = value) }
+        _uiState.update { state ->
+            val effectiveQueryChanged = lookupIdentity(value) != lookupIdentity(state.query)
+            if (state.isCanceled && effectiveQueryChanged) {
+                // The canceled card and its partial relay chain belong to the query that
+                // was stopped. Once the user changes the input, Retry must not appear to
+                // retry that old operation while actually submitting a different query.
+                state.copy(
+                    query = value,
+                    isCanceled = false,
+                    isLifecyclePaused = false,
+                    hopStates = emptyList(),
+                    result = null,
+                    error = null,
+                )
+            } else {
+                state.copy(query = value)
+            }
+        }
     }
+
+    private fun lookupIdentity(query: String): String =
+        WhoisQueryTypeDetector.normalize(query)?.let { "${it.type}:${it.value}" } ?: query.trim()
 
     fun onToggleRawResponse() {
         _uiState.update { it.copy(showRawResponse = !it.showRawResponse) }
