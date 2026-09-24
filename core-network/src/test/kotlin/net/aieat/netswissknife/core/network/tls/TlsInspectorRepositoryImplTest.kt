@@ -161,16 +161,21 @@ class TlsInspectorRepositoryImplTest {
         val repository = TlsInspectorRepositoryImpl().apply {
             socketFactory = TlsInspectorSocketFactory { blockedSocket.socket }
         }
-        val session = TlsInspectorOperation.newSession(500)
+        // Leave setup time for the IO worker, then trigger the typed deadline after connect
+        // blocks. The separate deadline tests exercise the real timer; this test isolates
+        // cleanup-failure preservation without racing the 500 ms setup budget.
+        val timeoutMs = 10_000
+        val session = TlsInspectorOperation.newSession(timeoutMs)
         val result = AtomicReference<NetworkResult<TlsInspectorResult>?>(null)
 
         coroutineScope {
             val inspection = async(Dispatchers.IO) {
-                result.set(repository.inspect("example.com", 443, 500, session))
+                result.set(repository.inspect("example.com", 443, timeoutMs, session))
             }
             withContext(Dispatchers.IO) {
-                assertTrue(blockedSocket.entered.await(1, TimeUnit.SECONDS), "connect was not reached")
+                assertTrue(blockedSocket.entered.await(5, TimeUnit.SECONDS), "connect was not reached")
             }
+            session.cancel(CancellationReason.DEADLINE_EXCEEDED)
             inspection.join()
         }
 

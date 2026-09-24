@@ -149,6 +149,46 @@ class WifiScanScreenTest {
     }
 
     @Test
+    fun scanningState_cancelStopsScan() {
+        val viewModel = fakeViewModel(WifiScanUiState.Scanning)
+        composeRule.setContent {
+            NetSwissKnifeTheme { WifiScanScreen(viewModel = viewModel) }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        composeRule.onNodeWithText(context.getString(R.string.cancel))
+            .assertIsDisplayed()
+            .performClick()
+
+        verify(exactly = 1) { viewModel.cancelScan() }
+    }
+
+    @Test
+    fun cancelledState_showsRetryInsteadOfLoadingIndicator() {
+        val viewModel = fakeViewModel(WifiScanUiState.Cancelled)
+        composeRule.setContent {
+            NetSwissKnifeTheme { WifiScanScreen(viewModel = viewModel) }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        composeRule.onNodeWithText(context.getString(R.string.wifi_scan_cancelled_title)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.wifi_scan_cancelled_body)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.wifi_retry)).assertIsDisplayed()
+    }
+
+    @Test
+    fun pausedState_showsPausedCopyRatherThanCancelledCopy() {
+        composeRule.setContent {
+            NetSwissKnifeTheme { WifiScanScreen(viewModel = fakeViewModel(WifiScanUiState.Paused)) }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        composeRule.onNodeWithText(context.getString(R.string.wifi_scan_paused_title)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.wifi_scan_paused_body)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.wifi_scan_cancelled_title)).assertDoesNotExist()
+    }
+
+    @Test
     fun timedOutSuccessState_showsCachedResultsAndAge() {
         val result = WifiScanResult(
             accessPoints = listOf(fakeAp("HomeNet", "AA:AA:AA:AA:AA:01", -50)),

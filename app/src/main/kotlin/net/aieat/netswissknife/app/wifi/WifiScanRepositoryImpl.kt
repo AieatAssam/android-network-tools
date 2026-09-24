@@ -21,11 +21,14 @@ import net.aieat.netswissknife.core.network.wifi.WifiChannelHelper
 import net.aieat.netswissknife.core.network.wifi.WifiChannelInfo
 import net.aieat.netswissknife.core.network.wifi.WifiConnectionInfo
 import net.aieat.netswissknife.core.network.wifi.WifiScanRepository
+import net.aieat.netswissknife.core.network.wifi.WifiScanOperation
 import net.aieat.netswissknife.core.network.wifi.WifiScanResult
 import net.aieat.netswissknife.core.network.wifi.WifiScanFreshness
 import net.aieat.netswissknife.core.network.wifi.WifiScanRefreshStatus
 import net.aieat.netswissknife.core.network.wifi.WifiSecurity
 import net.aieat.netswissknife.core.network.wifi.WifiStandard
+import net.aieat.netswissknife.core.network.operation.OperationRunner
+import net.aieat.netswissknife.core.network.operation.OperationSession
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlin.math.pow
@@ -57,49 +60,65 @@ class WifiScanRepositoryImpl(private val context: Context) : WifiScanRepository 
     // Permission is verified by the caller (WifiScanScreen) before invoking scan(); a
     // SecurityException here (e.g. permission revoked mid-session) is caught by
     // WifiScanViewModel and surfaced as WifiScanUiState.NoPermission.
+    override suspend fun scan(trigger: Boolean): WifiScanResult =
+        scan(trigger, WifiScanOperation.newSession())
+
     @SuppressLint("MissingPermission")
-    override suspend fun scan(trigger: Boolean): WifiScanResult = withContext(Dispatchers.IO) {
-        val locationEnabled = isLocationEnabled
-        val requestOutcome = if (trigger && locationEnabled) {
-            scanRequestAwaiter.requestAndAwait(SCAN_TIMEOUT_MS)
-        } else {
-            null
+    override suspend fun scan(
+        trigger: Boolean,
+        operationSession: OperationSession,
+    ): WifiScanResult = OperationRunner.runOrJoin(operationSession) {
+        withContext(Dispatchers.IO) {
+            ensureOperationActive()
+            val locationEnabled = isLocationEnabled
+            ensureOperationActive()
+            val requestOutcome = if (trigger && locationEnabled) {
+                scanRequestAwaiter.requestAndAwait(
+                    timeoutMs = SCAN_TIMEOUT_MS.coerceAtMost(budget.remainingTimeoutMillis()),
+                    operationSession = operationSession,
+                )
+            } else {
+                null
+            }
+            ensureOperationActive()
+            val rawResults: List<ScanResult> = wifiManager.scanResults ?: emptyList()
+            ensureOperationActive()
+            val activeConnection = getActiveWifiConnection()
+            val connectedBssid = activeConnection?.wifiInfo?.bssid
+                ?.takeIf { it != "02:00:00:00:00:00" }
+            val connectedInfo = activeConnection?.let { buildConnectionInfo(it.wifiInfo, it.linkProperties) }
+
+            val accessPoints = rawResults
+                .map { sr -> mapScanResult(sr, connectedBssid) }
+                .sortedByDescending { it.rssi }
+
+            val channels = buildChannelInfo(accessPoints)
+            val cacheReadElapsedRealtimeMs = SystemClock.elapsedRealtime()
+            val freshness = WifiScanFreshness.compute(
+                newestTimestampUs = rawResults.maxOfOrNull { it.timestamp },
+                nowElapsedMs = cacheReadElapsedRealtimeMs
+            )
+            val refreshStatus = requestOutcome?.status ?: WifiScanRefreshStatus.NOT_REQUESTED
+            val sampledAtMs = estimateScanSampleTimeMs(
+                nowWallClockMs = System.currentTimeMillis(),
+                scanAgeMs = freshness.ageMs,
+                refreshStatus = refreshStatus
+            )
+            ensureOperationActive()
+
+            WifiScanResult(
+                accessPoints = accessPoints,
+                channels = channels,
+                connectedNetwork = connectedInfo,
+                scanTimestampMs = sampledAtMs,
+                isWifiEnabled = wifiManager.isWifiEnabled,
+                isFresh = freshness.isFresh,
+                scanAgeMs = freshness.ageMs,
+                cacheReadElapsedRealtimeMs = cacheReadElapsedRealtimeMs,
+                refreshStatus = refreshStatus,
+                locationEnabled = locationEnabled
+            )
         }
-        val rawResults: List<ScanResult> = wifiManager.scanResults ?: emptyList()
-        val activeConnection = getActiveWifiConnection()
-        val connectedBssid = activeConnection?.wifiInfo?.bssid
-            ?.takeIf { it != "02:00:00:00:00:00" }
-        val connectedInfo = activeConnection?.let { buildConnectionInfo(it.wifiInfo, it.linkProperties) }
-
-        val accessPoints = rawResults
-            .map { sr -> mapScanResult(sr, connectedBssid) }
-            .sortedByDescending { it.rssi }
-
-        val channels = buildChannelInfo(accessPoints)
-        val cacheReadElapsedRealtimeMs = SystemClock.elapsedRealtime()
-        val freshness = WifiScanFreshness.compute(
-            newestTimestampUs = rawResults.maxOfOrNull { it.timestamp },
-            nowElapsedMs = cacheReadElapsedRealtimeMs
-        )
-        val refreshStatus = requestOutcome?.status ?: WifiScanRefreshStatus.NOT_REQUESTED
-        val sampledAtMs = estimateScanSampleTimeMs(
-            nowWallClockMs = System.currentTimeMillis(),
-            scanAgeMs = freshness.ageMs,
-            refreshStatus = refreshStatus
-        )
-
-        WifiScanResult(
-            accessPoints = accessPoints,
-            channels = channels,
-            connectedNetwork = connectedInfo,
-            scanTimestampMs = sampledAtMs,
-            isWifiEnabled = wifiManager.isWifiEnabled,
-            isFresh = freshness.isFresh,
-            scanAgeMs = freshness.ageMs,
-            cacheReadElapsedRealtimeMs = cacheReadElapsedRealtimeMs,
-            refreshStatus = refreshStatus,
-            locationEnabled = locationEnabled
-        )
     }
 
     // ── Connected network info ────────────────────────────────────────────────

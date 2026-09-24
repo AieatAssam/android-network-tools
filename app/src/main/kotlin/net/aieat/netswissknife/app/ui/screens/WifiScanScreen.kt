@@ -200,23 +200,31 @@ fun WifiScanScreen(
     LaunchedEffect(Unit) {
         if (uiState is WifiScanUiState.Idle) {
             permissionLauncher.launch(requiredPermissions)
-        } else if (uiState !is WifiScanUiState.NoPermission && uiState !is WifiScanUiState.NotSupported) {
+        } else if (uiState is WifiScanUiState.Success) {
             viewModel.startAutoRefresh()
         }
     }
 
-    DisposableEffect(Unit) { onDispose { viewModel.stopAutoRefresh() } }
+    DisposableEffect(Unit) { onDispose { viewModel.onLifecyclePause() } }
 
     DisposableEffect(lifecycleOwner) {
+        if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+            viewModel.onLifecycleResume()
+        } else {
+            viewModel.onLifecyclePause()
+        }
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_PAUSE -> viewModel.stopAutoRefresh()
+                Lifecycle.Event.ON_PAUSE -> viewModel.onLifecyclePause()
                 Lifecycle.Event.ON_RESUME -> viewModel.onLifecycleResume()
                 else -> Unit
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            viewModel.onLifecyclePause()
+        }
     }
 
     var visible by remember { mutableStateOf(false) }
@@ -258,7 +266,9 @@ fun WifiScanScreen(
                         context.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
                     }
                 )
-                is WifiScanUiState.Scanning     -> WifiScanningScreen()
+                is WifiScanUiState.Scanning     -> WifiScanningScreen(onCancel = { viewModel.cancelScan() })
+                is WifiScanUiState.Cancelled    -> WifiCancelledScreen(onRetry = { viewModel.startScan() })
+                is WifiScanUiState.Paused       -> WifiPausedScreen(onRetry = { viewModel.startScan() })
                 is WifiScanUiState.Success      -> WifiSuccessScreen(
                     state               = state,
                     autoRefresh         = autoRefresh,
@@ -373,7 +383,7 @@ fun WifiScanScreen(
     ))
 }
 
-@Composable private fun WifiScanningScreen() {
+@Composable private fun WifiScanningScreen(onCancel: () -> Unit) {
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -382,12 +392,35 @@ fun WifiScanScreen(
             Spacer(Modifier.height(8.dp))
             ShimmerBox(Modifier.fillMaxWidth().height(100.dp).clip(RoundedCornerShape(16.dp)))
         }
+        item {
+            Button(onClick = onCancel, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.cancel))
+            }
+        }
         item { ShimmerBox(Modifier.fillMaxWidth().height(48.dp).clip(RoundedCornerShape(8.dp))) }
         item { ShimmerBox(Modifier.fillMaxWidth().height(220.dp).clip(RoundedCornerShape(16.dp))) }
         items(4) {
             ShimmerBox(Modifier.fillMaxWidth().height(72.dp).clip(RoundedCornerShape(16.dp)))
         }
     }
+}
+
+@Composable private fun WifiCancelledScreen(onRetry: () -> Unit) {
+    WifiStatusCard(
+        icon = { Icon(Icons.Default.WifiOff, null, Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+        title = stringResource(R.string.wifi_scan_cancelled_title),
+        body = stringResource(R.string.wifi_scan_cancelled_body),
+        action = { Button(onRetry) { Text(stringResource(R.string.wifi_retry)) } }
+    )
+}
+
+@Composable private fun WifiPausedScreen(onRetry: () -> Unit) {
+    WifiStatusCard(
+        icon = { Icon(Icons.Default.WifiOff, null, Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+        title = stringResource(R.string.wifi_scan_paused_title),
+        body = stringResource(R.string.wifi_scan_paused_body),
+        action = { Button(onRetry) { Text(stringResource(R.string.wifi_retry)) } }
+    )
 }
 
 // ── Success screen ────────────────────────────────────────────────────────────

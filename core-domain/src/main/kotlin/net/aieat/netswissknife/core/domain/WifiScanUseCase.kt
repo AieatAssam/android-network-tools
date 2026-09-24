@@ -2,6 +2,7 @@ package net.aieat.netswissknife.core.domain
 
 import net.aieat.netswissknife.core.network.wifi.WifiScanRepository
 import net.aieat.netswissknife.core.network.wifi.WifiScanResult
+import net.aieat.netswissknife.core.network.operation.OperationSession
 
 /**
  * Use case that orchestrates a Wi-Fi environment scan.
@@ -23,6 +24,15 @@ class WifiScanUseCase(private val repository: WifiScanRepository) {
     suspend operator fun invoke(trigger: Boolean = true): WifiScanResult {
         if (!repository.isSupported) throw WifiNotSupportedException()
         return repository.scan(trigger)
+    }
+
+    /** Executes this scan within the caller's bounded operation session. */
+    suspend operator fun invoke(
+        trigger: Boolean = true,
+        operationSession: OperationSession,
+    ): WifiScanResult {
+        if (!repository.isSupported) throw WifiNotSupportedException()
+        return repository.scan(trigger, operationSession)
     }
 }
 

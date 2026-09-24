@@ -25,9 +25,15 @@ import net.aieat.netswissknife.core.network.wifi.WifiNetwork
 import net.aieat.netswissknife.core.network.wifi.WifiScanResult
 import net.aieat.netswissknife.core.network.wifi.WifiScanRefreshStatus
 import net.aieat.netswissknife.core.network.wifi.WifiScanFreshness
+import net.aieat.netswissknife.core.network.wifi.WifiScanOperation
+import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationDeadlineExceededException
+import net.aieat.netswissknife.core.network.operation.OperationRunner
+import net.aieat.netswissknife.core.network.operation.OperationSession
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.R
 import javax.inject.Inject
+import kotlin.coroutines.coroutineContext
 
 // ── UI State ──────────────────────────────────────────────────────────────────
 
@@ -46,6 +52,12 @@ sealed interface WifiScanUiState {
 
     /** Location Services are off, so Android will not provide Wi-Fi scan results. */
     object LocationDisabled : WifiScanUiState
+
+    /** A scan was stopped before any previous successful result was available. */
+    object Cancelled : WifiScanUiState
+
+    /** An in-flight scan was paused with the screen and can be restarted explicitly. */
+    object Paused : WifiScanUiState
 
     /** Scan is in progress. */
     object Scanning : WifiScanUiState
@@ -156,7 +168,13 @@ class WifiScanViewModel @Inject constructor(
     }
 
     private var scanJob: Job? = null
+    private var scanOperationSession: OperationSession? = null
+    private var scanGeneration = 0L
+    private var lastSuccessfulState: WifiScanUiState.Success? = null
     private var autoRefreshJob: Job? = null
+    private var lifecycleResumed = true
+    private var autoRefreshRequested = true
+    internal var operationSessionFactory: () -> OperationSession = { WifiScanOperation.newSession() }
 
     /** Called by the screen once it has confirmed location permission is granted. */
     fun onPermissionGranted() {
@@ -169,6 +187,7 @@ class WifiScanViewModel @Inject constructor(
 
     /** Called by the screen when permission is denied. */
     fun onPermissionDenied() {
+        cancelActiveScan(CancellationReason.PERMISSION_DENIED)
         stopAutoRefresh()
         val previous = _uiState.value as? WifiScanUiState.Success
         _uiState.value = previous?.copy(
@@ -186,11 +205,18 @@ class WifiScanViewModel @Inject constructor(
     fun startScan(silent: Boolean = false) {
         // Capture user selections BEFORE any state mutation so they survive the scan.
         val prev = _uiState.value as? WifiScanUiState.Success
-        scanJob?.cancel()
+        if (prev != null) lastSuccessfulState = prev
+        cancelActiveScan(CancellationReason.PARENT_CANCELLED)
+        val generation = scanGeneration
+        val operationSession = operationSessionFactory()
+        scanOperationSession = operationSession
         scanJob = viewModelScope.launch {
-            if (!silent) _uiState.value = WifiScanUiState.Scanning
+            if (generation == scanGeneration && !silent) _uiState.value = WifiScanUiState.Scanning
             try {
-                val result = wifiScanUseCase(trigger = true)
+                val result = OperationRunner.run(operationSession) {
+                    wifiScanUseCase(trigger = true, operationSession = operationSession)
+                }
+                if (generation != scanGeneration) return@launch
                 if (!result.locationEnabled) {
                     stopAutoRefresh()
                     _uiState.value = WifiScanUiState.LocationDisabled
@@ -225,7 +251,7 @@ class WifiScanViewModel @Inject constructor(
                     if (prev?.selectedAp != null && stillPresentAp == null) {
                         _apDisappearedEvent.value = ApDisappearedEvent()
                     }
-                    _uiState.value = WifiScanUiState.Success(
+                    val successState = WifiScanUiState.Success(
                         result = visibleResult,
                         bandFilter = prev?.bandFilter
                             ?.takeIf { it in visibleResult.detectedBands }
@@ -234,14 +260,27 @@ class WifiScanViewModel @Inject constructor(
                         selectedAp = stillPresentAp,
                         frozenOrder = prev?.frozenOrder
                     )
+                    _uiState.value = successState
                     updateFreezeState()
+                    lastSuccessfulState = _uiState.value as? WifiScanUiState.Success ?: successState
                     if (!_autoRefresh.value) startAutoRefresh()
                 }
             } catch (e: CancellationException) {
                 throw e
+            } catch (_: OperationDeadlineExceededException) {
+                if (generation != scanGeneration) return@launch
+                if (prev != null) {
+                    _uiState.value = prev.copy(
+                        result = cachedResultAfterFailure(prev.result, WifiScanRefreshStatus.TIMED_OUT)
+                    )
+                } else {
+                    _uiState.value = WifiScanUiState.Error("Wi-Fi scan timed out")
+                }
             } catch (e: WifiNotSupportedException) {
+                if (generation != scanGeneration) return@launch
                 _uiState.value = WifiScanUiState.NotSupported
             } catch (e: SecurityException) {
+                if (generation != scanGeneration) return@launch
                 stopAutoRefresh()
                 _uiState.value = prev?.copy(
                     result = cachedResultAfterFailure(
@@ -250,11 +289,33 @@ class WifiScanViewModel @Inject constructor(
                     )
                 ) ?: WifiScanUiState.NoPermission
             } catch (e: Exception) {
+                if (generation != scanGeneration) return@launch
                 _uiState.value = prev?.copy(
                     result = cachedResultAfterFailure(prev.result, WifiScanRefreshStatus.FAILED)
                 ) ?: WifiScanUiState.Error(e.message ?: "Unknown error")
+            } finally {
+                if (scanOperationSession === operationSession) scanOperationSession = null
+                if (scanJob === coroutineContext[Job]) scanJob = null
             }
         }
+    }
+
+    /** Cancels the active foreground scan and discards any result it might later produce. */
+    fun cancelScan() {
+        stopAutoRefresh()
+        val previousSuccess = (_uiState.value as? WifiScanUiState.Success) ?: lastSuccessfulState
+        cancelActiveScan(CancellationReason.USER_STOP)
+        _uiState.value = previousSuccess ?: WifiScanUiState.Cancelled
+    }
+
+    private fun cancelActiveScan(reason: CancellationReason) {
+        scanGeneration++
+        scanOperationSession?.let { session ->
+            scanOperationSession = null
+            runCatching { session.cancel(reason) }
+        }
+        scanJob?.cancel()
+        scanJob = null
     }
 
     fun setBandFilter(band: WifiBand?) {
@@ -297,23 +358,34 @@ class WifiScanViewModel @Inject constructor(
     }
 
     fun toggleAutoRefresh() {
-        if (_autoRefresh.value) {
+        if (autoRefreshRequested && refreshIntervalMs.value != null) {
+            autoRefreshRequested = false
             stopAutoRefresh()
         } else {
-            startAutoRefresh()
+            autoRefreshRequested = true
+            if (refreshIntervalMs.value == null) {
+                setRefreshInterval(DEFAULT_REFRESH_INTERVAL_MS)
+            } else {
+                startAutoRefresh()
+            }
         }
     }
 
-    fun startAutoRefresh() {
-        if (refreshIntervalMs.value == null) {
+    fun startAutoRefresh(firstIntervalMs: Long? = null) {
+        val selectedIntervalMs = firstIntervalMs ?: refreshIntervalMs.value
+        if (!lifecycleResumed || !autoRefreshRequested || selectedIntervalMs == null) {
             _autoRefresh.value = false
+            autoRefreshJob?.cancel()
+            autoRefreshJob = null
             return
         }
         _autoRefresh.value = true
         autoRefreshJob?.cancel()
         autoRefreshJob = viewModelScope.launch {
+            var nextIntervalMs: Long? = selectedIntervalMs
             while (_autoRefresh.value) {
-                val interval = refreshIntervalMs.first()
+                val interval = nextIntervalMs ?: refreshIntervalMs.first()
+                nextIntervalMs = null
                 if (interval == null) {
                     _autoRefresh.value = false
                     break
@@ -332,8 +404,20 @@ class WifiScanViewModel @Inject constructor(
         autoRefreshJob = null
     }
 
+    /** Pauses background refresh while the Wi-Fi screen is not foreground-visible. */
+    fun onLifecyclePause() {
+        lifecycleResumed = false
+        stopAutoRefresh()
+        if (scanOperationSession != null) {
+            val previousSuccess = (_uiState.value as? WifiScanUiState.Success) ?: lastSuccessfulState
+            cancelActiveScan(CancellationReason.LIFECYCLE_PAUSE)
+            _uiState.value = previousSuccess ?: WifiScanUiState.Paused
+        }
+    }
+
     /** Resumes the configured refresh loop when the Wi-Fi screen becomes visible again. */
     fun onLifecycleResume() {
+        lifecycleResumed = true
         if (_uiState.value is WifiScanUiState.Success && !_autoRefresh.value) {
             startAutoRefresh()
         }
@@ -347,9 +431,13 @@ class WifiScanViewModel @Inject constructor(
             }
         }
         if (intervalMs == null) {
+            autoRefreshRequested = false
             stopAutoRefresh()
-        } else if (_uiState.value is WifiScanUiState.Success && !_autoRefresh.value) {
-            startAutoRefresh()
+        } else {
+            autoRefreshRequested = true
+            if (lifecycleResumed && _uiState.value is WifiScanUiState.Success) {
+                startAutoRefresh(firstIntervalMs = intervalMs)
+            }
         }
     }
 
@@ -377,7 +465,7 @@ class WifiScanViewModel @Inject constructor(
 
     override fun onCleared() {
         stopAutoRefresh()
-        scanJob?.cancel()
+        cancelActiveScan(CancellationReason.LIFECYCLE_PAUSE)
     }
 
     companion object {

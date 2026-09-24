@@ -8,10 +8,14 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,6 +28,11 @@ import net.aieat.netswissknife.core.network.wifi.WifiBand
 import net.aieat.netswissknife.core.network.wifi.WifiChannelInfo
 import net.aieat.netswissknife.core.network.wifi.WifiScanResult
 import net.aieat.netswissknife.core.network.wifi.WifiScanRefreshStatus
+import net.aieat.netswissknife.core.network.MonotonicClock
+import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationBudget
+import net.aieat.netswissknife.core.network.operation.OperationSession
+import net.aieat.netswissknife.core.network.wifi.WifiScanOperation
 import net.aieat.netswissknife.core.network.wifi.WifiSecurity
 import net.aieat.netswissknife.core.network.wifi.WifiStandard
 import org.junit.jupiter.api.AfterEach
@@ -142,7 +151,7 @@ class WifiScanViewModelTest {
         @Test
         fun `starts scan when Wi-Fi is supported`() = runTest(testDispatcher) {
             every { wifiScanUseCase.isSupported } returns true
-            coEvery { wifiScanUseCase(trigger = true) } returns stubResult(stubAp())
+            coEvery { wifiScanUseCase(trigger = true, operationSession = any()) } returns stubResult(stubAp())
 
             viewModel.onPermissionGranted()
             runCurrent()
@@ -170,7 +179,7 @@ class WifiScanViewModelTest {
     @Test
     fun `denied permission retry retains the last successful scan`() = runTest(testDispatcher) {
         val previous = stubResult(stubAp()).copy(scanTimestampMs = System.currentTimeMillis() - 42_000L)
-        coEvery { wifiScanUseCase(trigger = true) } returns previous
+        coEvery { wifiScanUseCase(trigger = true, operationSession = any()) } returns previous
         viewModel.startScan()
         runCurrent()
 
@@ -191,7 +200,7 @@ class WifiScanViewModelTest {
         fun `Success state carries scan result`() = runTest(testDispatcher) {
             every { wifiScanUseCase.isSupported } returns true
             val ap = stubAp()
-            coEvery { wifiScanUseCase(trigger = true) } returns stubResult(ap)
+            coEvery { wifiScanUseCase(trigger = true, operationSession = any()) } returns stubResult(ap)
 
             viewModel.startScan()
             runCurrent()
@@ -203,7 +212,7 @@ class WifiScanViewModelTest {
 
         @Test
         fun `WifiDisabled when scan reports Wi-Fi off`() = runTest(testDispatcher) {
-            coEvery { wifiScanUseCase(trigger = true) } returns stubResult(wifiEnabled = false)
+            coEvery { wifiScanUseCase(trigger = true, operationSession = any()) } returns stubResult(wifiEnabled = false)
 
             viewModel.startScan()
             runCurrent()
@@ -213,7 +222,7 @@ class WifiScanViewModelTest {
 
         @Test
         fun `LocationDisabled when Location Services are off`() = runTest(testDispatcher) {
-            coEvery { wifiScanUseCase(trigger = true) } returns stubResult(locationEnabled = false)
+            coEvery { wifiScanUseCase(trigger = true, operationSession = any()) } returns stubResult(locationEnabled = false)
 
             viewModel.startScan()
             runCurrent()
@@ -224,7 +233,7 @@ class WifiScanViewModelTest {
 
         @Test
         fun `Success exposes freshness and rejected refresh status`() = runTest(testDispatcher) {
-            coEvery { wifiScanUseCase(trigger = true) } returns
+            coEvery { wifiScanUseCase(trigger = true, operationSession = any()) } returns
                 stubResult(stubAp(), refreshStatus = WifiScanRefreshStatus.REJECTED, scanAgeMs = 42_000L)
 
             viewModel.startScan()
@@ -245,13 +254,13 @@ class WifiScanViewModelTest {
                 scanAgeMs = 42_000L,
                 cacheReadElapsedRealtimeMs = 100_000L
             ).copy(scanTimestampMs = 123_000L)
-            coEvery { wifiScanUseCase(trigger = true) } returns previous
+            coEvery { wifiScanUseCase(trigger = true, operationSession = any()) } returns previous
             viewModel.startScan()
             runCurrent()
             viewModel.stopAutoRefresh()
             viewModel.selectAccessPoint(ap)
 
-            coEvery { wifiScanUseCase(trigger = true) } returns stubResult(
+            coEvery { wifiScanUseCase(trigger = true, operationSession = any()) } returns stubResult(
                 refreshStatus = WifiScanRefreshStatus.TIMED_OUT,
                 cacheReadElapsedRealtimeMs = 105_000L
             )
@@ -270,7 +279,7 @@ class WifiScanViewModelTest {
 
         @Test
         fun `NotSupported on WifiNotSupportedException`() = runTest(testDispatcher) {
-            coEvery { wifiScanUseCase(trigger = true) } throws WifiNotSupportedException()
+            coEvery { wifiScanUseCase(trigger = true, operationSession = any()) } throws WifiNotSupportedException()
 
             viewModel.startScan()
             runCurrent()
@@ -280,7 +289,7 @@ class WifiScanViewModelTest {
 
         @Test
         fun `NoPermission on SecurityException`() = runTest(testDispatcher) {
-            coEvery { wifiScanUseCase(trigger = true) } throws SecurityException("denied")
+            coEvery { wifiScanUseCase(trigger = true, operationSession = any()) } throws SecurityException("denied")
 
             viewModel.startScan()
             runCurrent()
@@ -290,7 +299,7 @@ class WifiScanViewModelTest {
 
         @Test
         fun `Error state on generic failure`() = runTest(testDispatcher) {
-            coEvery { wifiScanUseCase(trigger = true) } throws RuntimeException("boom")
+            coEvery { wifiScanUseCase(trigger = true, operationSession = any()) } throws RuntimeException("boom")
 
             viewModel.startScan()
             runCurrent()
@@ -300,17 +309,115 @@ class WifiScanViewModelTest {
         }
 
         @Test
+        fun `user stop closes registered resources and ignores a late scan result`() = runTest(testDispatcher) {
+            val lateResult = CompletableDeferred<WifiScanResult>()
+            val resourcesClosed = CompletableDeferred<Unit>()
+            var operationSession: OperationSession? = null
+            coEvery {
+                wifiScanUseCase(trigger = true, operationSession = any())
+            } coAnswers {
+                operationSession = secondArg()
+                operationSession!!.resources.register(AutoCloseable { resourcesClosed.complete(Unit) })
+                withContext(NonCancellable) { lateResult.await() }
+            }
+
+            viewModel.startScan()
+            runCurrent()
+            viewModel.cancelScan()
+            runCurrent()
+
+            resourcesClosed.await()
+            assertEquals(CancellationReason.USER_STOP, operationSession?.cancellationReason)
+            assertTrue(viewModel.uiState.value is WifiScanUiState.Cancelled)
+            lateResult.complete(stubResult(stubAp()))
+            runCurrent()
+            assertTrue(viewModel.uiState.value is WifiScanUiState.Cancelled)
+        }
+
+        @Test
+        fun `user stop restores the previous successful scan`() = runTest(testDispatcher) {
+            val original = stubResult(stubAp())
+            coEvery { wifiScanUseCase(trigger = true, operationSession = any()) } returns original
+            viewModel.startScan()
+            runCurrent()
+            viewModel.stopAutoRefresh()
+            val previous = viewModel.uiState.value as WifiScanUiState.Success
+
+            val pendingResult = CompletableDeferred<WifiScanResult>()
+            coEvery {
+                wifiScanUseCase(trigger = true, operationSession = any())
+            } coAnswers { withContext(NonCancellable) { pendingResult.await() } }
+            viewModel.startScan()
+            runCurrent()
+            viewModel.cancelScan()
+            runCurrent()
+
+            assertEquals(previous, viewModel.uiState.value)
+            pendingResult.complete(stubResult(stubAp(ssid = "late")))
+            runCurrent()
+            assertEquals(previous, viewModel.uiState.value)
+        }
+
+        @Test
+        fun `operation deadline closes resources and reports timed out without late success`() = runTest(testDispatcher) {
+            val ap = stubAp()
+            val previous = stubResult(ap).copy(
+                scanTimestampMs = System.currentTimeMillis() - 42_000L,
+                scanAgeMs = 42_000L,
+            )
+            coEvery {
+                wifiScanUseCase(trigger = true, operationSession = any())
+            } returns previous
+            viewModel.startScan()
+            runCurrent()
+            viewModel.stopAutoRefresh()
+
+            val lateResult = CompletableDeferred<WifiScanResult>()
+            val resourcesClosed = CompletableDeferred<Unit>()
+            val deadlineClock = MonotonicClock { testScheduler.currentTime * 1_000_000L }
+            viewModel.operationSessionFactory = {
+                OperationSession(
+                    OperationBudget.start(
+                        timeoutMillis = WifiScanOperation.TIMEOUT_MILLIS,
+                        clock = deadlineClock,
+                    ),
+                )
+            }
+            coEvery {
+                wifiScanUseCase(trigger = true, operationSession = any())
+            } coAnswers {
+                secondArg<OperationSession>().resources.register(AutoCloseable { resourcesClosed.complete(Unit) })
+                withContext(NonCancellable) { lateResult.await() }
+            }
+
+            viewModel.startScan(silent = true)
+            runCurrent()
+            advanceTimeBy(WifiScanOperation.TIMEOUT_MILLIS)
+            runCurrent()
+
+            resourcesClosed.await()
+            lateResult.complete(stubResult(stubAp()))
+            runCurrent()
+            val state = viewModel.uiState.value as WifiScanUiState.Success
+            assertEquals(previous.accessPoints, state.result.accessPoints)
+            assertEquals(previous.scanTimestampMs, state.result.scanTimestampMs)
+            assertEquals(WifiScanRefreshStatus.TIMED_OUT, state.refreshStatus)
+            assertTrue(state.scanAgeMs!! >= 42_000L)
+            assertTrue(!state.isFresh)
+        }
+
+        @Test
         fun `exception after a success keeps cached data with a failed refresh status`() = runTest(testDispatcher) {
             val previous = stubResult(stubAp()).copy(
                 scanTimestampMs = System.currentTimeMillis() - 42_000L,
                 scanAgeMs = 42_000L
             )
-            coEvery { wifiScanUseCase(trigger = true) } returns previous
+            coEvery { wifiScanUseCase(trigger = true, operationSession = any()) } returns previous
             viewModel.startScan()
             runCurrent()
             viewModel.stopAutoRefresh()
 
-            coEvery { wifiScanUseCase(trigger = true) } throws RuntimeException("boom")
+            coEvery { wifiScanUseCase(trigger = true, operationSession = any()) } throws RuntimeException("boom")
             viewModel.startScan(silent = true)
             runCurrent()
 
@@ -329,11 +436,11 @@ class WifiScanViewModelTest {
                 scanTimestampMs = System.currentTimeMillis() - 42_000L,
                 scanAgeMs = 42_000L
             )
-            coEvery { wifiScanUseCase(trigger = true) } returns previous
+            coEvery { wifiScanUseCase(trigger = true, operationSession = any()) } returns previous
             viewModel.startScan()
             runCurrent()
 
-            coEvery { wifiScanUseCase(trigger = true) } throws SecurityException("denied")
+            coEvery { wifiScanUseCase(trigger = true, operationSession = any()) } throws SecurityException("denied")
             viewModel.startScan(silent = true)
             runCurrent()
 
@@ -360,7 +467,7 @@ class WifiScanViewModelTest {
 
         @Test
         fun `setBandFilter updates Success state`() = runTest(testDispatcher) {
-            coEvery { wifiScanUseCase(trigger = true) } returns stubResult(stubAp(band = WifiBand.BAND_2_4GHZ))
+            coEvery { wifiScanUseCase(trigger = true, operationSession = any()) } returns stubResult(stubAp(band = WifiBand.BAND_2_4GHZ))
             viewModel.startScan()
             runCurrent()
 
@@ -373,7 +480,7 @@ class WifiScanViewModelTest {
 
         @Test
         fun `setSortOrder updates Success state`() = runTest(testDispatcher) {
-            coEvery { wifiScanUseCase(trigger = true) } returns stubResult(stubAp())
+            coEvery { wifiScanUseCase(trigger = true, operationSession = any()) } returns stubResult(stubAp())
             viewModel.startScan()
             runCurrent()
 
@@ -387,7 +494,7 @@ class WifiScanViewModelTest {
         @Test
         fun `selectAccessPoint updates selectedAp`() = runTest(testDispatcher) {
             val ap = stubAp()
-            coEvery { wifiScanUseCase(trigger = true) } returns stubResult(ap)
+            coEvery { wifiScanUseCase(trigger = true, operationSession = any()) } returns stubResult(ap)
             viewModel.startScan()
             runCurrent()
 
@@ -407,7 +514,7 @@ class WifiScanViewModelTest {
         fun `selecting an AP freezes the list order across a live refresh`() = runTest(testDispatcher) {
             val weak = stubAp(ssid = "Weak", bssid = "AA:BB:CC:DD:EE:01", rssi = -80)
             val strong = stubAp(ssid = "Strong", bssid = "AA:BB:CC:DD:EE:02", rssi = -40)
-            coEvery { wifiScanUseCase(trigger = true) } returns stubResult(weak, strong)
+            coEvery { wifiScanUseCase(trigger = true, operationSession = any()) } returns stubResult(weak, strong)
             viewModel.startScan()
             runCurrent()
 
@@ -422,7 +529,7 @@ class WifiScanViewModelTest {
             // flip the order, but it must stay pinned while something is selected.
             val weakNowStrong = weak.copy(rssi = -30)
             val strongNowWeak = strong.copy(rssi = -90)
-            coEvery { wifiScanUseCase(trigger = true) } returns stubResult(weakNowStrong, strongNowWeak)
+            coEvery { wifiScanUseCase(trigger = true, operationSession = any()) } returns stubResult(weakNowStrong, strongNowWeak)
             viewModel.startScan(silent = true)
             runCurrent()
 
@@ -435,14 +542,14 @@ class WifiScanViewModelTest {
         fun `deselecting resumes live sort order`() = runTest(testDispatcher) {
             val weak = stubAp(ssid = "Weak", bssid = "AA:BB:CC:DD:EE:01", rssi = -80)
             val strong = stubAp(ssid = "Strong", bssid = "AA:BB:CC:DD:EE:02", rssi = -40)
-            coEvery { wifiScanUseCase(trigger = true) } returns stubResult(weak, strong)
+            coEvery { wifiScanUseCase(trigger = true, operationSession = any()) } returns stubResult(weak, strong)
             viewModel.startScan()
             runCurrent()
             viewModel.selectAccessPoint(weak)
 
             val weakNowStrong = weak.copy(rssi = -30)
             val strongNowWeak = strong.copy(rssi = -90)
-            coEvery { wifiScanUseCase(trigger = true) } returns stubResult(weakNowStrong, strongNowWeak)
+            coEvery { wifiScanUseCase(trigger = true, operationSession = any()) } returns stubResult(weakNowStrong, strongNowWeak)
             viewModel.startScan(silent = true)
             runCurrent()
 
@@ -456,12 +563,12 @@ class WifiScanViewModelTest {
         @Test
         fun `selected AP dropping out of range surfaces a message and clears selection`() = runTest(testDispatcher) {
             val ap = stubAp(ssid = "Gone", bssid = "AA:BB:CC:DD:EE:01")
-            coEvery { wifiScanUseCase(trigger = true) } returns stubResult(ap)
+            coEvery { wifiScanUseCase(trigger = true, operationSession = any()) } returns stubResult(ap)
             viewModel.startScan()
             runCurrent()
             viewModel.selectAccessPoint(ap)
 
-            coEvery { wifiScanUseCase(trigger = true) } returns stubResult() // ap no longer present
+            coEvery { wifiScanUseCase(trigger = true, operationSession = any()) } returns stubResult() // ap no longer present
             viewModel.startScan(silent = true)
             runCurrent()
 
@@ -501,7 +608,7 @@ class WifiScanViewModelTest {
 
         @Test
         fun `startScan success enables auto-refresh`() = runTest(testDispatcher) {
-            coEvery { wifiScanUseCase(trigger = true) } returns stubResult(stubAp())
+            coEvery { wifiScanUseCase(trigger = true, operationSession = any()) } returns stubResult(stubAp())
 
             viewModel.startScan()
             runCurrent()
@@ -516,11 +623,136 @@ class WifiScanViewModelTest {
             viewModel.stopAutoRefresh()
             assertTrue(!viewModel.autoRefresh.value)
         }
+
+        @Test
+        fun `scan completing after lifecycle pause does not restart refresh`() = runTest(testDispatcher) {
+            val original = stubResult(stubAp())
+            coEvery { wifiScanUseCase(trigger = true, operationSession = any()) } returns original
+            viewModel.startScan()
+            runCurrent()
+            viewModel.stopAutoRefresh()
+            val previous = viewModel.uiState.value as WifiScanUiState.Success
+
+            val pendingResult = CompletableDeferred<WifiScanResult>()
+            val resourcesClosed = CompletableDeferred<Unit>()
+            var operationSession: OperationSession? = null
+            coEvery {
+                wifiScanUseCase(trigger = true, operationSession = any())
+            } coAnswers {
+                operationSession = secondArg()
+                operationSession!!.resources.register(AutoCloseable { resourcesClosed.complete(Unit) })
+                withContext(NonCancellable) { pendingResult.await() }
+            }
+
+            viewModel.startScan(silent = true)
+            runCurrent()
+            viewModel.onLifecyclePause()
+            runCurrent()
+            resourcesClosed.await()
+            assertEquals(previous, viewModel.uiState.value)
+            pendingResult.complete(stubResult(stubAp()))
+            runCurrent()
+
+            assertEquals(previous, viewModel.uiState.value)
+            assertTrue(!viewModel.autoRefresh.value)
+            assertEquals(CancellationReason.LIFECYCLE_PAUSE, operationSession?.cancellationReason)
+            advanceTimeBy(WifiScanViewModel.DEFAULT_REFRESH_INTERVAL_MS * 2)
+            runCurrent()
+            coVerify(exactly = 1) { wifiScanUseCase(trigger = true, operationSession = any()) }
+        }
+
+        @Test
+        fun `changing refresh interval while paused does not restart refresh`() = runTest(testDispatcher) {
+            coEvery { wifiScanUseCase(trigger = true, operationSession = any()) } returns stubResult(stubAp())
+            viewModel.startScan()
+            runCurrent()
+            assertTrue(viewModel.autoRefresh.value)
+
+            viewModel.onLifecyclePause()
+            viewModel.setRefreshInterval(15_000L)
+            runCurrent()
+
+            assertTrue(!viewModel.autoRefresh.value)
+            advanceTimeBy(30_000L)
+            runCurrent()
+            coVerify(exactly = 1) { wifiScanUseCase(trigger = true, operationSession = any()) }
+        }
+
+        @Test
+        fun `manual refresh off remains off after lifecycle pause and resume`() = runTest(testDispatcher) {
+            coEvery { wifiScanUseCase(trigger = true, operationSession = any()) } returns stubResult(stubAp())
+            viewModel.startScan()
+            runCurrent()
+            assertTrue(viewModel.autoRefresh.value)
+
+            viewModel.toggleAutoRefresh()
+            assertTrue(!viewModel.autoRefresh.value)
+            viewModel.onLifecyclePause()
+            viewModel.onLifecycleResume()
+            assertTrue(!viewModel.autoRefresh.value)
+            advanceTimeBy(WifiScanViewModel.DEFAULT_REFRESH_INTERVAL_MS * 2)
+            runCurrent()
+            coVerify(exactly = 1) { wifiScanUseCase(trigger = true, operationSession = any()) }
+
+            // Off remains explicit until the user selects a real interval again.
+            viewModel.setRefreshInterval(15_000L)
+            runCurrent()
+            assertTrue(viewModel.autoRefresh.value)
+            viewModel.stopAutoRefresh()
+        }
+
+        @Test
+        fun `enabled refresh resumes after lifecycle pause and triggers one scan`() = runTest(testDispatcher) {
+            coEvery { wifiScanUseCase(trigger = true, operationSession = any()) } returns stubResult(stubAp())
+            viewModel.startScan()
+            runCurrent()
+
+            assertTrue(viewModel.autoRefresh.value)
+            coVerify(exactly = 1) { wifiScanUseCase(trigger = true, operationSession = any()) }
+
+            viewModel.onLifecyclePause()
+            assertTrue(!viewModel.autoRefresh.value)
+            viewModel.onLifecycleResume()
+            runCurrent()
+            advanceTimeBy(WifiScanViewModel.DEFAULT_REFRESH_INTERVAL_MS)
+            runCurrent()
+
+            assertTrue(viewModel.autoRefresh.value)
+            coVerify(exactly = 2) { wifiScanUseCase(trigger = true, operationSession = any()) }
+            viewModel.stopAutoRefresh()
+        }
+
+        @Test
+        fun `first scan paused by lifecycle shows retry state and ignores late result`() = runTest(testDispatcher) {
+            val pendingResult = CompletableDeferred<WifiScanResult>()
+            val resourcesClosed = CompletableDeferred<Unit>()
+            var operationSession: OperationSession? = null
+            coEvery {
+                wifiScanUseCase(trigger = true, operationSession = any())
+            } coAnswers {
+                operationSession = secondArg()
+                operationSession!!.resources.register(AutoCloseable { resourcesClosed.complete(Unit) })
+                withContext(NonCancellable) { pendingResult.await() }
+            }
+
+            viewModel.startScan()
+            runCurrent()
+            viewModel.onLifecyclePause()
+            runCurrent()
+            resourcesClosed.await()
+            assertTrue(viewModel.uiState.value is WifiScanUiState.Paused)
+            assertEquals(CancellationReason.LIFECYCLE_PAUSE, operationSession?.cancellationReason)
+
+            pendingResult.complete(stubResult(stubAp()))
+            runCurrent()
+            assertTrue(viewModel.uiState.value is WifiScanUiState.Paused)
+            assertTrue(!viewModel.autoRefresh.value)
+        }
     }
 
     @Test
     fun `onRetry resets to Idle`() = runTest(testDispatcher) {
-        coEvery { wifiScanUseCase(trigger = true) } throws RuntimeException("boom")
+        coEvery { wifiScanUseCase(trigger = true, operationSession = any()) } throws RuntimeException("boom")
         viewModel.startScan()
         runCurrent()
 
@@ -546,7 +778,7 @@ class WifiScanViewModelTest {
 
     @Test
     fun `onRetry from LocationDisabled starts another scan`() = runTest(testDispatcher) {
-        coEvery { wifiScanUseCase(trigger = true) } returnsMany listOf(
+        coEvery { wifiScanUseCase(trigger = true, operationSession = any()) } returnsMany listOf(
             stubResult(locationEnabled = false),
             stubResult(stubAp())
         )
@@ -559,7 +791,7 @@ class WifiScanViewModelTest {
         runCurrent()
 
         assertTrue(viewModel.uiState.value is WifiScanUiState.Success)
-        coVerify(exactly = 2) { wifiScanUseCase(trigger = true) }
+        coVerify(exactly = 2) { wifiScanUseCase(trigger = true, operationSession = any()) }
         viewModel.stopAutoRefresh()
     }
 }

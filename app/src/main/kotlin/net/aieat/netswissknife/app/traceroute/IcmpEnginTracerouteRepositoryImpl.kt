@@ -7,7 +7,11 @@ import net.aieat.netswissknife.core.network.traceroute.TracerouteRepository
 import net.aieat.netswissknife.core.network.traceroute.TracerouteOperation
 import net.aieat.netswissknife.core.network.operation.OperationRunner
 import net.aieat.netswissknife.core.network.operation.OperationSession
+import net.aieat.netswissknife.core.network.operation.OperationDeadlineExceededException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.channelFlow
@@ -16,12 +20,12 @@ import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.withTimeoutOrNull
 import me.impa.icmpenguin.ProbeType
 import me.impa.icmpenguin.trace.PortStrategy
 import me.impa.icmpenguin.trace.ProbeSize
 import me.impa.icmpenguin.trace.Response
 import me.impa.icmpenguin.trace.SimpleTracer
-import java.net.InetAddress
 
 /**
  * [TracerouteRepository] implementation powered by the **icmpenguin** library.
@@ -32,7 +36,7 @@ import java.net.InetAddress
  *
  * Coroutine integration: [SimpleTracer.trace] returns a cold [Flow] that emits one
  * [me.impa.icmpenguin.trace.HopStatus] per TTL level. We map each to our own [HopResult]
- * and enrich it with a reverse-DNS hostname lookup on the IO dispatcher.
+ * and enrich it with a bounded, cancellable reverse-DNS lookup on the IO dispatcher.
  */
 class IcmpEnginTracerouteRepositoryImpl(
     private val nativeTraceFactory: (
@@ -43,6 +47,7 @@ class IcmpEnginTracerouteRepositoryImpl(
         TracerouteProbeType,
         Int,
     ) -> Flow<HopResult> = ::nativeTrace,
+    private val reverseDnsLookup: TracerouteReverseDnsLookup = BoundedTracerouteReverseDnsLookup(),
 ) : TracerouteRepository {
 
     override fun trace(
@@ -85,7 +90,34 @@ class IcmpEnginTracerouteRepositoryImpl(
                     if (failure is LinkageError) throw NativeTracerouteUnavailableException()
                     throw failure
                 }
-                .collect { hop -> this@channelFlow.send(hop) }
+                .collect { hop ->
+                    val enriched = hop.ip?.let { ip ->
+                        val hostname = try {
+                            val remainingMillis = operationSession.budget.remainingTimeoutMillis()
+                            if (operationSession.budget.hasDeadline && remainingMillis <= 0L) {
+                                throw OperationDeadlineExceededException()
+                            }
+                            val lookupBudgetMillis = if (operationSession.budget.hasDeadline) {
+                                minOf(MAX_REVERSE_DNS_WAIT_MILLIS, remainingMillis)
+                            } else {
+                                MAX_REVERSE_DNS_WAIT_MILLIS
+                            }
+                            withTimeoutOrNull(lookupBudgetMillis) {
+                                reverseDnsLookup.lookup(ip, operationSession)
+                            }
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (deadline: OperationDeadlineExceededException) {
+                            throw deadline
+                        } catch (_: Exception) {
+                            null
+                        }
+                        currentCoroutineContext().ensureActive()
+                        operationSession.budget.throwIfExpired()
+                        hop.copy(hostname = hostname)
+                    } ?: hop
+                    this@channelFlow.send(enriched)
+                }
         }
     }.flowOn(Dispatchers.IO)
 
@@ -122,24 +154,17 @@ private fun nativeTrace(
             ?.timeUsec
             ?.let { it.toLong() / 1_000L }
         val status = if (ip != null) HopStatus.SUCCESS else HopStatus.TIMEOUT
-        val hostname = if (ip != null) resolveHostname(ip) else null
         HopResult(
             hopNumber = icmpHop.num,
             ip = ip,
-            hostname = hostname,
+            hostname = null,
             rtTimeMs = rttMs,
             status = status,
         )
     }
 }
 
-private fun resolveHostname(ip: String): String? = try {
-    val addr = InetAddress.getByName(ip)
-    val canonical = addr.canonicalHostName
-    if (canonical == ip) null else canonical
-} catch (_: Exception) {
-    null
-}
+internal const val MAX_REVERSE_DNS_WAIT_MILLIS = 1_000L
 
 /** A stable, user-displayable failure when the optional JNI traceroute engine cannot load. */
 class NativeTracerouteUnavailableException : Exception(

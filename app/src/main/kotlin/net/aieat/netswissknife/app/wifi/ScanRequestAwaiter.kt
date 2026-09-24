@@ -7,6 +7,8 @@ import android.content.IntentFilter
 import android.net.wifi.WifiManager
 import androidx.core.content.ContextCompat
 import net.aieat.netswissknife.core.network.wifi.WifiScanRefreshStatus
+import net.aieat.netswissknife.core.network.operation.OperationSession
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.resume
@@ -44,20 +46,27 @@ class ScanRequestAwaiter(
             ContextCompat.RECEIVER_NOT_EXPORTED
         )
     },
-    private val unregisterReceiver: (BroadcastReceiver) -> Unit = { context.unregisterReceiver(it) }
+    private val unregisterReceiver: (BroadcastReceiver) -> Unit = { context.unregisterReceiver(it) },
+    private val createIntentFilter: (String) -> IntentFilter = ::IntentFilter
 ) {
 
     @Suppress("DEPRECATION")
-    suspend fun requestAndAwait(timeoutMs: Long): ScanRequestOutcome {
+    suspend fun requestAndAwait(timeoutMs: Long): ScanRequestOutcome = requestAndAwait(timeoutMs, null)
+
+    /** The Android scan request itself cannot be cancelled; the receiver wait can. */
+    @Suppress("DEPRECATION")
+    suspend fun requestAndAwait(timeoutMs: Long, operationSession: OperationSession?): ScanRequestOutcome {
         var startScanReturned = false
         var broadcastArrived = false
         var resultsUpdated = false
         var receiver: BroadcastReceiver? = null
         var receiverRegistered = false
+        var receiverLease: ReceiverLease? = null
 
         try {
             withTimeoutOrNull(timeoutMs) {
                 suspendCancellableCoroutine { continuation ->
+                    if (!continuation.isActive) return@suspendCancellableCoroutine
                     val scanReceiver = object : BroadcastReceiver() {
                         override fun onReceive(receiverContext: Context?, intent: Intent?) {
                             if (intent?.action != WifiManager.SCAN_RESULTS_AVAILABLE_ACTION) return
@@ -72,12 +81,15 @@ class ScanRequestAwaiter(
                     receiver = scanReceiver
                     registerReceiver(
                         scanReceiver,
-                        IntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION)
+                        createIntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION)
                     )
                     receiverRegistered = true
+                    val lease = ReceiverLease { unregisterQuietly(scanReceiver) }
+                    receiverLease = operationSession?.resources?.register(lease)
                     continuation.invokeOnCancellation {
-                        if (receiverRegistered) unregisterQuietly(scanReceiver)
+                        lease.close()
                     }
+                    if (!continuation.isActive) return@suspendCancellableCoroutine
 
                     // startScan() is deprecated since API 28, but remains the
                     // documented foreground trigger on API 26–37. Android's
@@ -89,7 +101,12 @@ class ScanRequestAwaiter(
                 }
             }
         } finally {
-            receiver?.let { unregisterQuietly(it) }
+            val lease = receiverLease
+            if (lease == null) {
+                if (receiverRegistered) receiver?.let(::unregisterQuietly)
+            } else if (operationSession?.resources?.release(lease) == true) {
+                lease.close()
+            }
             receiverRegistered = false
         }
 
@@ -101,6 +118,13 @@ class ScanRequestAwaiter(
             unregisterReceiver(receiver)
         } catch (_: IllegalArgumentException) {
             // The receiver may already have been removed by cancellation cleanup.
+        }
+    }
+
+    private class ReceiverLease(private val unregister: () -> Unit) : AutoCloseable {
+        private val closed = AtomicBoolean(false)
+        override fun close() {
+            if (closed.compareAndSet(false, true)) unregister()
         }
     }
 }

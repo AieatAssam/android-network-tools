@@ -307,6 +307,10 @@
     <string name="wifi_not_supported_title">Wi-Fi Not Available</string>
     <string name="wifi_not_supported_body">This device does not have Wi-Fi hardware.</string>
     <string name="wifi_error_title">Scan Failed</string>
+    <string name="wifi_scan_cancelled_title">Scan cancelled</string>
+    <string name="wifi_scan_cancelled_body">The scan was stopped. Retry to scan for nearby networks.</string>
+    <string name="wifi_scan_paused_title">Scan paused</string>
+    <string name="wifi_scan_paused_body">The scan stopped when Wi-Fi Scanner left the foreground. Retry when you are ready.</string>
     <string name="wifi_retry">Retry</string>
     <string name="wifi_ap_disappeared">This network is no longer in range</string>
     <string name="wifi_value_unavailable">N/A</string>
