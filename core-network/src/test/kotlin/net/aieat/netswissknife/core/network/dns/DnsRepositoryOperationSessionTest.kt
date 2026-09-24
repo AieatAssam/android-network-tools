@@ -16,14 +16,18 @@ import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.xbill.DNS.ARecord
 import org.xbill.DNS.DClass
+import org.xbill.DNS.Flags
 import org.xbill.DNS.Message
 import org.xbill.DNS.Name
 import org.xbill.DNS.Record
+import org.xbill.DNS.Section
 import org.xbill.DNS.SimpleResolver
 import org.xbill.DNS.Type
 import java.io.Closeable
 import java.io.DataInputStream
+import java.io.DataOutputStream
 import java.io.InterruptedIOException
 import java.net.DatagramPacket
 import java.net.DatagramSocket
@@ -175,6 +179,108 @@ class DnsRepositoryOperationSessionTest {
             resolver.close()
             unrelatedSender.close()
             responder.join(500)
+        }
+    }
+
+    @Test
+    fun `dnsjava retries truncated udp response over the session scoped tcp socket`() = runBlocking {
+        val loopback = InetAddress.getLoopbackAddress()
+        val udpServer = DatagramSocket(InetSocketAddress(loopback, 0)).apply {
+            soTimeout = 3_000
+        }
+        val tcpServer = ServerSocket(udpServer.localPort, 1, loopback).apply {
+            soTimeout = 3_000
+        }
+        val udpQueryReceived = CountDownLatch(1)
+        val tcpQueryReceived = CountDownLatch(1)
+        val serverFailure = AtomicReference<Throwable?>()
+        val clientSockets = java.util.concurrent.CopyOnWriteArrayList<Closeable>()
+        val udpResponder = Thread {
+            runCatching {
+                val payload = ByteArray(4_096)
+                val packet = DatagramPacket(payload, payload.size)
+                udpServer.receive(packet)
+                val query = Message(packet.data.copyOf(packet.length))
+                val truncatedResponse = Message(query.header.id).apply {
+                    header.setFlag(Flags.QR.toInt())
+                    header.setFlag(Flags.TC.toInt())
+                    addRecord(query.question, Section.QUESTION)
+                }
+                val response = truncatedResponse.toWire()
+                udpServer.send(DatagramPacket(response, response.size, packet.socketAddress))
+                udpQueryReceived.countDown()
+            }.onFailure { serverFailure.compareAndSet(null, it) }
+        }.apply {
+            name = "dns-truncated-udp-fixture"
+            isDaemon = true
+            start()
+        }
+        val tcpResponder = Thread {
+            runCatching {
+                tcpServer.accept().use { accepted ->
+                    accepted.soTimeout = 3_000
+                    val input = DataInputStream(accepted.getInputStream())
+                    val queryLength = input.readUnsignedShort()
+                    val query = Message(ByteArray(queryLength).also(input::readFully))
+                    tcpQueryReceived.countDown()
+                    val answer = Message(query.header.id).apply {
+                        header.setFlag(Flags.QR.toInt())
+                        addRecord(query.question, Section.QUESTION)
+                        addRecord(
+                            ARecord(
+                                query.question.name,
+                                DClass.IN,
+                                60,
+                                InetAddress.getByName("192.0.2.42"),
+                            ),
+                            Section.ANSWER,
+                        )
+                    }.toWire()
+                    val output = DataOutputStream(accepted.getOutputStream())
+                    output.writeShort(answer.size)
+                    output.write(answer)
+                    output.flush()
+                }
+            }.onFailure { serverFailure.compareAndSet(null, it) }
+        }.apply {
+            name = "dns-truncated-tcp-fixture"
+            isDaemon = true
+            start()
+        }
+        val session = newSession()
+        val repository = DnsRepositoryImpl(
+            DnsRepositoryImpl.ResolverFactory {
+                SimpleResolver(InetSocketAddress(loopback, udpServer.localPort))
+            },
+        ).apply {
+            ioClientFactoryFactory = { current ->
+                SessionIoClientFactory(current, onSocketRegistered = clientSockets::add)
+            }
+        }
+
+        try {
+            val result = repository.lookup(
+                "example.com",
+                DnsRecordType.A,
+                DnsServer.Custom(loopback.hostAddress),
+                session,
+            )
+
+            assertTrue(result is NetworkResult.Success, "a complete TCP answer should recover the truncated UDP reply")
+            assertTrue(udpQueryReceived.await(1, TimeUnit.SECONDS), "the real resolver should query over UDP first")
+            assertTrue(tcpQueryReceived.await(1, TimeUnit.SECONDS), "dnsjava should retry over TCP after TC=1")
+            val lookup = (result as NetworkResult.Success).data
+            assertTrue(lookup.records.any { it.value == "192.0.2.42" })
+            assertTrue(clientSockets.filterIsInstance<DatagramSocket>().single().isClosed)
+            assertTrue(clientSockets.filterIsInstance<Socket>().single().isClosed)
+            assertTrue(session.resources.isClosed)
+            assertTrue(serverFailure.get() == null, "loopback fixture failed: ${serverFailure.get()}")
+        } finally {
+            session.cancel(CancellationReason.USER_STOP)
+            udpServer.close()
+            tcpServer.close()
+            udpResponder.join(1_000)
+            tcpResponder.join(1_000)
         }
     }
 

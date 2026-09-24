@@ -99,7 +99,14 @@ internal class SessionIoClientFactory(
                         session.budget.throwIfExpired()
                         taskLease.complete(block())
                     } catch (failure: Throwable) {
-                        taskLease.completeExceptionally(CompletionException(failure))
+                        if (session.cancellationReason != null) {
+                            // Scope cleanup closes sockets before the worker lease. That socket
+                            // close can wake this task with an IOException; preserve the
+                            // already-recorded operation cancellation on the transport future.
+                            taskLease.close()
+                        } else {
+                            taskLease.completeExceptionally(CompletionException(failure))
+                        }
                     } finally {
                         taskLease.finish()
                         if (session.resources.release(taskLease)) taskLease.close()
@@ -116,7 +123,8 @@ internal class SessionIoClientFactory(
             // immediately when the executor supports queue removal.
             if (future.isDone) taskLease.removeQueuedTask()
         } catch (failure: Throwable) {
-            taskLease.completeExceptionally(failure)
+            if (session.cancellationReason != null) taskLease.close()
+            else taskLease.completeExceptionally(failure)
             if (session.resources.release(taskLease)) taskLease.close()
         }
         return future
