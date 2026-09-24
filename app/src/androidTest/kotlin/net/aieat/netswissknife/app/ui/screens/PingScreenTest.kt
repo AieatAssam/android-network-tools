@@ -200,6 +200,30 @@ class PingScreenTest {
     }
 
     @Test
+    fun clearPrefillAction_clearsHostAndSourceWithoutStartingPing() {
+        val host = MutableStateFlow("192.0.2.8")
+        val viewModel = fakePingViewModel(
+            PingUiState.Idle,
+            hostState = host,
+            sourceContext = ToolSource.LAN,
+        )
+        composeRule.setContent {
+            NetSwissKnifeTheme { PingScreen(viewModel = viewModel) }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        composeRule.onNodeWithTag(PingScreenTestTags.CLEAR_PREFILL_ACTION)
+            .assertIsDisplayed()
+            .performClick()
+        composeRule.mainClock.advanceTimeBy(100L)
+
+        composeRule.onAllNodesWithTag(PingScreenTestTags.SOURCE_CONTEXT).assertCountEquals(0)
+        composeRule.onNodeWithTag(PingScreenTestTags.HOST_FIELD).assertTextEquals("")
+        verify(exactly = 1) { viewModel.clearPrefill() }
+        verify(exactly = 0) { viewModel.startPing() }
+    }
+
+    @Test
     fun mdnsHandoff_showsProvenanceAndDoesNotStartPing() {
         val viewModel = fakePingViewModel(
             PingUiState.Idle,
@@ -412,6 +436,7 @@ class PingScreenTest {
         invalidHandoffState: MutableStateFlow<Boolean>? = null,
     ): PingViewModel {
         val viewModel = mockk<PingViewModel>(relaxed = true)
+        val sourceContextFlow = MutableStateFlow(sourceContext)
         every { viewModel.uiState } returns (flow ?: MutableStateFlow(state ?: PingUiState.Idle))
         every { viewModel.host } returns (hostState ?: MutableStateFlow(host))
         every { viewModel.count } returns MutableStateFlow(count)
@@ -422,6 +447,11 @@ class PingScreenTest {
         every { viewModel.continuousMode } returns MutableStateFlow(false)
         every { viewModel.recentHosts } returns MutableStateFlow(emptyList())
         every { viewModel.sourceContext } returns sourceContext
+        every { viewModel.sourceContextState } returns sourceContextFlow
+        every { viewModel.clearPrefill() } answers {
+            hostState?.value = ""
+            sourceContextFlow.value = null
+        }
         if (hostState != null && invalidHandoffState != null) {
             every { viewModel.hasInvalidHandoff } returns invalidHandoffState
             every { viewModel.onHostChange(any()) } answers {

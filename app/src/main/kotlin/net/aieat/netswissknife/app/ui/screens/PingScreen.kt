@@ -144,6 +144,7 @@ object PingScreenTestTags {
     const val COUNT_SLIDER = "ping_count_slider"
     const val HOST_FIELD = "ping_host_field"
     const val SOURCE_CONTEXT = "ping_source_context"
+    const val CLEAR_PREFILL_ACTION = "ping_clear_prefill_action"
     const val INVALID_HANDOFF = "ping_invalid_handoff"
 
     /** Index of the idle/running/finished/error results panel within [CONTENT_LIST]. */
@@ -168,7 +169,12 @@ fun PingScreen(
     val continuousMode by viewModel.continuousMode.collectAsStateWithLifecycle()
     val recentHosts by viewModel.recentHosts.collectAsStateWithLifecycle()
     val hasInvalidHandoff by viewModel.hasInvalidHandoff.collectAsStateWithLifecycle()
-    val sourceContext = viewModel.sourceContext
+    val sourceContext by viewModel.sourceContextState.collectAsStateWithLifecycle()
+    val sourceLabel = when (sourceContext) {
+        net.aieat.netswissknife.app.ui.navigation.ToolSource.LAN -> R.string.ping_source_lan
+        net.aieat.netswissknife.app.ui.navigation.ToolSource.MDNS -> R.string.ping_source_mdns
+        else -> null
+    }
 
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -223,24 +229,27 @@ fun PingScreen(
                 }
             }
 
-            if (sourceContext == net.aieat.netswissknife.app.ui.navigation.ToolSource.LAN) {
+            if (sourceLabel != null) {
                 item {
-                    Text(
-                        text = stringResource(R.string.ping_source_lan),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.secondary,
-                        modifier = Modifier.testTag(PingScreenTestTags.SOURCE_CONTEXT),
-                    )
-                }
-            }
-            if (sourceContext == net.aieat.netswissknife.app.ui.navigation.ToolSource.MDNS) {
-                item {
-                    Text(
-                        text = stringResource(R.string.ping_source_mdns),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.secondary,
-                        modifier = Modifier.testTag(PingScreenTestTags.SOURCE_CONTEXT),
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = stringResource(sourceLabel),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.secondary,
+                            modifier = Modifier.testTag(PingScreenTestTags.SOURCE_CONTEXT),
+                        )
+                        TextButton(
+                            onClick = viewModel::clearPrefill,
+                            enabled = uiState !is PingUiState.Running,
+                            modifier = Modifier.testTag(PingScreenTestTags.CLEAR_PREFILL_ACTION),
+                        ) {
+                            Text(stringResource(R.string.clear))
+                        }
+                    }
                 }
             }
 

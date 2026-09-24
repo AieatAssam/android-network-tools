@@ -717,6 +717,8 @@ class PingViewModelTest {
             assertEquals(ToolSource.LAN, handoff.sourceContext)
             assertFalse(handoff.hasInvalidHandoff.value)
             assertTrue(handoff.uiState.value is PingUiState.Idle)
+            assertEquals(true, routeState.get<Boolean>("pingHandoffConsumed"))
+            assertEquals("lan", routeState.get<String>("pingHandoffSource"))
             coVerify(exactly = 0) { pingUseCase(any(), any()) }
 
             handoff.onHostChange("edited.example")
@@ -729,6 +731,36 @@ class PingViewModelTest {
             assertEquals("edited.example", recreated.host.value)
             assertEquals(ToolSource.LAN, recreated.sourceContext)
             assertFalse(recreated.hasInvalidHandoff.value)
+            assertTrue(recreated.uiState.value is PingUiState.Idle)
+            coVerify(exactly = 0) { pingUseCase(any(), any()) }
+        }
+
+        @Test
+        fun `cleared prefill and source stay cleared after recreation with original route arguments`() {
+            val originalRouteArgs = mapOf("intent" to encodedPing, "host" to "192.0.2.8")
+            val routeState = SavedStateHandle(originalRouteArgs)
+            val handoff = handoffViewModel(routeState)
+            assertEquals("192.0.2.8", handoff.host.value)
+            assertEquals(ToolSource.LAN, handoff.sourceContext)
+
+            handoff.clearPrefill()
+
+            assertEquals("", handoff.host.value)
+            assertNull(handoff.sourceContext)
+            assertEquals("", routeState.get<String>("editedHost"))
+            assertNull(routeState.get<String>("pingHandoffSource"))
+            assertEquals(true, routeState.get<Boolean>("pingHandoffConsumed"))
+
+            val recreated = handoffViewModel(
+                SavedStateHandle(
+                    originalRouteArgs + mapOf(
+                        "editedHost" to "",
+                        "pingHandoffConsumed" to true,
+                    ),
+                ),
+            )
+            assertEquals("", recreated.host.value)
+            assertNull(recreated.sourceContext)
             assertTrue(recreated.uiState.value is PingUiState.Idle)
             coVerify(exactly = 0) { pingUseCase(any(), any()) }
         }

@@ -152,6 +152,9 @@ class PingViewModel @Inject constructor(
     companion object {
         private const val ROLLING_WINDOW = 100
         private const val NO_NETWORK_CONNECTION = "No network connection"
+        private const val HANDOFF_CONSUMED_KEY = "pingHandoffConsumed"
+        private const val HANDOFF_SOURCE_KEY = "pingHandoffSource"
+        private const val EDITED_HOST_KEY = "editedHost"
     }
 
     private val _uiState = MutableStateFlow<PingUiState>(PingUiState.Idle)
@@ -179,7 +182,17 @@ class PingViewModel @Inject constructor(
         hasIntentArgument && !routeArgumentsMatch && savedStateHandle.get<Boolean>("handoffRecovered") != true,
     )
     val hasInvalidHandoff: StateFlow<Boolean> = _hasInvalidHandoff.asStateFlow()
-    val sourceContext: ToolSource? = decodedIntent?.source?.takeIf { routeArgumentsMatch }
+    private val _sourceContext = MutableStateFlow(
+        if (savedStateHandle.get<Boolean>(HANDOFF_CONSUMED_KEY) == true) {
+            savedStateHandle.get<String>(HANDOFF_SOURCE_KEY)?.let { wireName ->
+                ToolSource.entries.singleOrNull { it.wireName == wireName }
+            }
+        } else {
+            decodedIntent?.source?.takeIf { routeArgumentsMatch }
+        },
+    )
+    val sourceContext: ToolSource? get() = _sourceContext.value
+    val sourceContextState: StateFlow<ToolSource?> = _sourceContext.asStateFlow()
 
     private val _count = MutableStateFlow(10)
     val count: StateFlow<Int> = _count.asStateFlow()
@@ -215,14 +228,29 @@ class PingViewModel @Inject constructor(
         { logger, sequence, packet -> logger.append(sequence, packet) }
 
     init {
-        val restoredEdit = savedStateHandle.get<String>("editedHost")
-        val initialHost = when {
-            restoredEdit != null -> restoredEdit
-            _hasInvalidHandoff.value -> null
-            hasIntentArgument -> intentHost?.host?.value
-            else -> routeHost
+        val handoffConsumed = savedStateHandle.get<Boolean>(HANDOFF_CONSUMED_KEY) == true
+        val restoredEdit = savedStateHandle.get<String>(EDITED_HOST_KEY)
+        if (handoffConsumed) {
+            // The NavBackStackEntry retains route arguments across recreation. Once
+            // consumed, only the SavedStateHandle form snapshot is authoritative;
+            // an empty string is an intentional clear and must not fall back to args.
+            _host.value = restoredEdit.orEmpty()
+        } else {
+            val initialHost = when {
+                restoredEdit != null -> restoredEdit
+                _hasInvalidHandoff.value -> null
+                hasIntentArgument -> intentHost?.host?.value
+                else -> routeHost
+            }
+            initialHost?.let { host ->
+                _host.value = host
+                savedStateHandle[EDITED_HOST_KEY] = host
+            }
+            _sourceContext.value?.let { source ->
+                savedStateHandle[HANDOFF_SOURCE_KEY] = source.wireName
+            }
+            savedStateHandle[HANDOFF_CONSUMED_KEY] = true
         }
-        initialHost?.let { _host.value = it }
         viewModelScope.launch {
             val prefs = dataStore.data.first()
             _count.value = prefs[AppPreferenceKeys.DEFAULT_PING_COUNT] ?: 10
@@ -234,11 +262,21 @@ class PingViewModel @Inject constructor(
 
     fun onHostChange(value: String) {
         _host.value = value
-        savedStateHandle["editedHost"] = value
+        savedStateHandle[EDITED_HOST_KEY] = value
         if (_hasInvalidHandoff.value && HostValidator.normalize(value) != null) {
             savedStateHandle["handoffRecovered"] = true
             _hasInvalidHandoff.value = false
         }
+    }
+
+    /** Clear a supplied handoff while recording the blank form as the consumed state. */
+    fun clearPrefill() {
+        if (_uiState.value is PingUiState.Running) return
+        _host.value = ""
+        _sourceContext.value = null
+        savedStateHandle[EDITED_HOST_KEY] = ""
+        savedStateHandle.remove<String>(HANDOFF_SOURCE_KEY)
+        savedStateHandle[HANDOFF_CONSUMED_KEY] = true
     }
 
     fun onCountChange(value: Int) { _count.value = value.coerceIn(1, 100) }
