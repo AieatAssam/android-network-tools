@@ -436,7 +436,10 @@ private fun PortScanInputCard(
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 trailingIcon = {
                     if (host.isNotEmpty()) {
-                        IconButton(onClick = { onHostChange("") }) {
+                        IconButton(
+                            onClick = { onHostChange("") },
+                            enabled = !isScanning,
+                        ) {
                             Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.clear))
                         }
                     }

@@ -88,6 +88,7 @@ import net.aieat.netswissknife.app.ui.navigation.ToolMacAddress
 object WakeOnLanScreenTestTags {
     const val SOURCE_CONTEXT = "wol_source_context"
     const val INVALID_HANDOFF = "wol_invalid_handoff"
+    const val CLEAR_PREFILL_ACTION = "wol_clear_prefill_action"
 }
 
 @Composable
@@ -99,7 +100,7 @@ fun WakeOnLanScreen(viewModel: WakeOnLanViewModel = hiltViewModel()) {
     val networkStatus by viewModel.networkStatus.collectAsStateWithLifecycle()
     val macAddress by viewModel.macAddress.collectAsStateWithLifecycle()
     val hasInvalidHandoff by viewModel.hasInvalidHandoff.collectAsStateWithLifecycle()
-    val sourceContext = viewModel.sourceContext
+    val sourceContext by viewModel.sourceContextState.collectAsStateWithLifecycle()
     val broadcastAddress by viewModel.broadcastAddress.collectAsStateWithLifecycle()
     val port by viewModel.port.collectAsStateWithLifecycle()
 
@@ -134,12 +135,25 @@ fun WakeOnLanScreen(viewModel: WakeOnLanViewModel = hiltViewModel()) {
             )
 
             if (sourceContext == ToolSource.LAN) {
-                Text(
-                    text = stringResource(R.string.wol_source_lan),
-                    color = MaterialTheme.colorScheme.secondary,
-                    style = MaterialTheme.typography.labelLarge,
-                    modifier = Modifier.testTag(WakeOnLanScreenTestTags.SOURCE_CONTEXT),
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = stringResource(R.string.wol_source_lan),
+                        color = MaterialTheme.colorScheme.secondary,
+                        style = MaterialTheme.typography.labelLarge,
+                        modifier = Modifier.testTag(WakeOnLanScreenTestTags.SOURCE_CONTEXT),
+                    )
+                    TextButton(
+                        onClick = viewModel::clearPrefill,
+                        enabled = uiState !is WolUiState.Sending,
+                        modifier = Modifier.testTag(WakeOnLanScreenTestTags.CLEAR_PREFILL_ACTION),
+                    ) {
+                        Text(stringResource(R.string.clear))
+                    }
+                }
             }
             if (hasInvalidHandoff) {
                 Text(

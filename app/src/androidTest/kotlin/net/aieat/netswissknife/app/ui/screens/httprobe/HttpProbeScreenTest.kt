@@ -101,7 +101,7 @@ class HttpProbeScreenTest {
             HttpProbeUiState(url = "http://printer.local:8080/"),
         )
         every { viewModel.recentHosts } returns MutableStateFlow(emptyList())
-        every { viewModel.sourceContext } returns ToolSource.MDNS
+        every { viewModel.sourceContextState } returns MutableStateFlow(ToolSource.MDNS)
         every { viewModel.hasInvalidHandoff } returns MutableStateFlow(false)
 
         composeRule.setContent {
@@ -128,7 +128,7 @@ class HttpProbeScreenTest {
             HttpProbeUiState(url = "http://192.0.2.8:8080/"),
         )
         every { viewModel.recentHosts } returns MutableStateFlow(emptyList())
-        every { viewModel.sourceContext } returns ToolSource.LAN
+        every { viewModel.sourceContextState } returns MutableStateFlow(ToolSource.LAN)
         every { viewModel.hasInvalidHandoff } returns MutableStateFlow(false)
 
         composeRule.setContent { NetSwissKnifeTheme { HttpProbeScreen(viewModel = viewModel) } }
@@ -138,6 +138,36 @@ class HttpProbeScreenTest {
         val urlField = composeRule.onNodeWithText("http://192.0.2.8:8080/")
         urlField.performScrollTo().assert(hasSetTextAction())
         verify(exactly = 0) { viewModel.send() }
+    }
+
+    @Test
+    fun clearPrefillAction_clearsSourceContext() {
+        val uiState = MutableStateFlow(HttpProbeUiState(url = "http://printer.local:8080/"))
+        val sourceContext = MutableStateFlow<ToolSource?>(ToolSource.MDNS)
+        val viewModel = mockk<HttpProbeViewModel>(relaxed = true)
+        every { viewModel.uiState } returns uiState
+        every { viewModel.recentHosts } returns MutableStateFlow(emptyList())
+        every { viewModel.sourceContextState } returns sourceContext
+        every { viewModel.hasInvalidHandoff } returns MutableStateFlow(false)
+        every { viewModel.clearPrefill() } answers {
+            uiState.value = uiState.value.copy(url = "")
+            sourceContext.value = null
+        }
+
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                HttpProbeScreen(viewModel = viewModel)
+            }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        composeRule.onNodeWithTag(HttpProbeScreenTestTags.CLEAR_PREFILL_ACTION)
+            .performScrollTo()
+            .performClick()
+
+        verify(exactly = 1) { viewModel.clearPrefill() }
+        composeRule.onNodeWithTag(HttpProbeScreenTestTags.SOURCE_CONTEXT).assertDoesNotExist()
+        composeRule.onNodeWithTag(HttpProbeScreenTestTags.CLEAR_PREFILL_ACTION).assertDoesNotExist()
     }
 
     @Test
@@ -261,6 +291,7 @@ class HttpProbeScreenTest {
         val viewModel = mockk<HttpProbeViewModel>(relaxed = true)
         every { viewModel.uiState } returns MutableStateFlow(state)
         every { viewModel.recentHosts } returns MutableStateFlow(emptyList())
+        every { viewModel.sourceContextState } returns MutableStateFlow(null)
         every { viewModel.hasInvalidHandoff } returns MutableStateFlow(false)
         return viewModel
     }
@@ -282,6 +313,7 @@ class HttpProbeScreenTest {
         val viewModel = mockk<HttpProbeViewModel>(relaxed = true)
         every { viewModel.uiState } returns MutableStateFlow(HttpProbeUiState(result = result, selectedTab = 3))
         every { viewModel.recentHosts } returns MutableStateFlow(emptyList())
+        every { viewModel.sourceContextState } returns MutableStateFlow(null)
         every { viewModel.hasInvalidHandoff } returns MutableStateFlow(false)
 
         composeRule.setContent {

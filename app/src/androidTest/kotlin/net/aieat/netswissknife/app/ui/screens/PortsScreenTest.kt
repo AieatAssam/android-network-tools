@@ -103,7 +103,9 @@ class PortsScreenTest {
     @Test
     fun lanHandoff_prefillsHostAndShowsSourceWithoutStartingScan() {
         val viewModel = fakePortScanViewModel(host = "192.0.2.8")
-        every { viewModel.sourceContext } returns ToolSource.LAN
+        every { viewModel.sourceContext } answers {
+            ToolSource.LAN.takeIf { viewModel.host.value.isNotBlank() }
+        }
 
         composeRule.setContent {
             NetSwissKnifeTheme { PortsScreen(viewModel = viewModel) }
@@ -115,6 +117,31 @@ class PortsScreenTest {
             .assertIsDisplayed()
             .assertTextEquals(context.getString(R.string.ports_source_lan))
         io.mockk.verify(exactly = 0) { viewModel.startScan() }
+
+        composeRule.onNodeWithContentDescription(context.getString(R.string.clear))
+            .performScrollTo()
+            .performClick()
+        composeRule.onAllNodesWithTag(PortsScreenTestTags.SOURCE_CONTEXT).assertCountEquals(0)
+        io.mockk.verify(exactly = 1) { viewModel.onHostChange("") }
+        io.mockk.verify(exactly = 0) { viewModel.startScan() }
+    }
+
+    @Test
+    fun clearHostAction_isDisabledWhileScanIsRunning() {
+        val viewModel = fakePortScanViewModel(
+            host = "192.0.2.8",
+            state = PortScanUiState.Scanning(emptyList(), scannedCount = 0, totalCount = 10),
+        )
+
+        composeRule.setContent {
+            NetSwissKnifeTheme { PortsScreen(viewModel = viewModel) }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        composeRule.onNodeWithContentDescription(context.getString(R.string.clear))
+            .performScrollTo()
+            .assertIsNotEnabled()
+        io.mockk.verify(exactly = 0) { viewModel.onHostChange("") }
     }
 
     @Test

@@ -135,6 +135,9 @@ class PortScanViewModelTest {
         assertEquals(ToolSource.LAN, handoffViewModel.sourceContext)
         assertTrue(!handoffViewModel.hasInvalidHandoff.value)
         assertTrue(handoffViewModel.uiState.value is PortScanUiState.Idle)
+        assertEquals(true, routeState.get<Boolean>("portsHandoffConsumed"))
+        assertEquals("lan", routeState.get<String>("portsHandoffSource"))
+        assertEquals("192.0.2.8", routeState.get<String>("editedHost"))
         verify(exactly = 0) { portScanUseCase(any()) }
         verify(exactly = 0) { portScanUseCase(any(), any()) }
         verify(exactly = 0) { portScanUseCase.newSession(any()) }
@@ -158,6 +161,217 @@ class PortScanViewModelTest {
         verify(exactly = 0) { portScanUseCase(any()) }
         verify(exactly = 0) { portScanUseCase(any(), any()) }
         verify(exactly = 0) { portScanUseCase.newSession(any()) }
+    }
+
+    @Test
+    fun `consumed typed route snapshots initial host and never replays route after recreation`() {
+        val encoded = ToolIntentCodec.encode(
+            ToolIntent(
+                ToolDestination.HostTarget(HostTool.PORTS, requireNotNull(ToolHost.parse("192.0.2.8"))),
+                ToolSource.LAN,
+            ),
+        )
+        val routeState = SavedStateHandle(mapOf("intent" to encoded, "host" to "192.0.2.8"))
+        val first = PortScanViewModel(
+            portScanUseCase,
+            dataStore,
+            recentHostsRepository,
+            savedStateHandle = routeState,
+            monotonicClock = testClock,
+        )
+        assertEquals("192.0.2.8", first.host.value)
+        assertEquals(true, routeState.get<Boolean>("portsHandoffConsumed"))
+        assertEquals("192.0.2.8", routeState.get<String>("editedHost"))
+
+        val recreated = PortScanViewModel(
+            portScanUseCase,
+            dataStore,
+            recentHostsRepository,
+            savedStateHandle = SavedStateHandle(
+                mapOf(
+                    "intent" to encoded,
+                    "host" to "192.0.2.8",
+                    "portsHandoffConsumed" to true,
+                    "portsHandoffSource" to "lan",
+                    "editedHost" to "192.0.2.8",
+                ),
+            ),
+            monotonicClock = testClock,
+        )
+        assertEquals("192.0.2.8", recreated.host.value)
+        assertEquals(ToolSource.LAN, recreated.sourceContext)
+        assertTrue(recreated.uiState.value is PortScanUiState.Idle)
+        verify(exactly = 0) { portScanUseCase(any()) }
+        verify(exactly = 0) { portScanUseCase(any(), any()) }
+        verify(exactly = 0) { portScanUseCase.newSession(any()) }
+    }
+
+    @Test
+    fun `present empty edit does not fall back to route host while absent edit consumes prefill`() {
+        val encoded = ToolIntentCodec.encode(
+            ToolIntent(
+                ToolDestination.HostTarget(HostTool.PORTS, requireNotNull(ToolHost.parse("192.0.2.8"))),
+                ToolSource.LAN,
+            ),
+        )
+        val route = mapOf("intent" to encoded, "host" to "192.0.2.8")
+
+        val untouched = PortScanViewModel(
+            portScanUseCase,
+            dataStore,
+            recentHostsRepository,
+            savedStateHandle = SavedStateHandle(route),
+            monotonicClock = testClock,
+        )
+        assertEquals("192.0.2.8", untouched.host.value)
+
+        val explicitlyBlank = PortScanViewModel(
+            portScanUseCase,
+            dataStore,
+            recentHostsRepository,
+            savedStateHandle = SavedStateHandle(route + mapOf("editedHost" to "")),
+            monotonicClock = testClock,
+        )
+        assertEquals("", explicitlyBlank.host.value)
+        assertFalse(explicitlyBlank.hasInvalidHandoff.value)
+        assertTrue(explicitlyBlank.uiState.value is PortScanUiState.Idle)
+        verify(exactly = 0) { portScanUseCase(any()) }
+        verify(exactly = 0) { portScanUseCase(any(), any()) }
+        verify(exactly = 0) { portScanUseCase.newSession(any()) }
+    }
+
+    @Test
+    fun `cleared prefill and source remain cleared after recreation with original route arguments`() {
+        val encoded = ToolIntentCodec.encode(
+            ToolIntent(
+                ToolDestination.HostTarget(HostTool.PORTS, requireNotNull(ToolHost.parse("192.0.2.8"))),
+                ToolSource.LAN,
+            ),
+        )
+        val originalRouteArgs = mapOf("intent" to encoded, "host" to "192.0.2.8")
+        val routeState = SavedStateHandle(originalRouteArgs)
+        val handoff = PortScanViewModel(
+            portScanUseCase,
+            dataStore,
+            recentHostsRepository,
+            savedStateHandle = routeState,
+            monotonicClock = testClock,
+        )
+        assertEquals("192.0.2.8", handoff.host.value)
+        assertEquals(ToolSource.LAN, handoff.sourceContext)
+
+        handoff.clearPrefill()
+
+        assertEquals("", handoff.host.value)
+        assertEquals(null, handoff.sourceContext)
+        assertEquals("", routeState.get<String>("editedHost"))
+        assertEquals(null, routeState.get<String>("portsHandoffSource"))
+        assertEquals(true, routeState.get<Boolean>("portsHandoffConsumed"))
+
+        val recreated = PortScanViewModel(
+            portScanUseCase,
+            dataStore,
+            recentHostsRepository,
+            savedStateHandle = SavedStateHandle(
+                originalRouteArgs + mapOf(
+                    "editedHost" to "",
+                    "portsHandoffConsumed" to true,
+                ),
+            ),
+            monotonicClock = testClock,
+        )
+        assertEquals("", recreated.host.value)
+        assertEquals(null, recreated.sourceContext)
+        assertTrue(recreated.uiState.value is PortScanUiState.Idle)
+        verify(exactly = 0) { portScanUseCase(any()) }
+        verify(exactly = 0) { portScanUseCase(any(), any()) }
+        verify(exactly = 0) { portScanUseCase.newSession(any()) }
+
+        // A consumed route with no editedHost snapshot is also authoritative; it
+        // must not fall back to the still-present navigation argument.
+        val absentEdit = PortScanViewModel(
+            portScanUseCase,
+            dataStore,
+            recentHostsRepository,
+            savedStateHandle = SavedStateHandle(
+                originalRouteArgs + mapOf("portsHandoffConsumed" to true),
+            ),
+            monotonicClock = testClock,
+        )
+        assertEquals("", absentEdit.host.value)
+        assertEquals(null, absentEdit.sourceContext)
+        verify(exactly = 0) { portScanUseCase.newSession(any()) }
+    }
+
+    @Test
+    fun `legacy host route remains supported and its host survives recreation`() {
+        val routeState = SavedStateHandle(mapOf("host" to "legacy.example"))
+        val legacy = PortScanViewModel(
+            portScanUseCase,
+            dataStore,
+            recentHostsRepository,
+            savedStateHandle = routeState,
+            monotonicClock = testClock,
+        )
+
+        assertEquals("legacy.example", legacy.host.value)
+        assertEquals(null, legacy.sourceContext)
+        assertEquals(true, routeState.get<Boolean>("portsHandoffConsumed"))
+        assertEquals("legacy.example", routeState.get<String>("editedHost"))
+
+        val recreated = PortScanViewModel(
+            portScanUseCase,
+            dataStore,
+            recentHostsRepository,
+            savedStateHandle = SavedStateHandle(
+                mapOf(
+                    "host" to "legacy.example",
+                    "editedHost" to "legacy.example",
+                    "portsHandoffConsumed" to true,
+                ),
+            ),
+            monotonicClock = testClock,
+        )
+        assertEquals("legacy.example", recreated.host.value)
+        assertEquals(null, recreated.sourceContext)
+        assertTrue(recreated.uiState.value is PortScanUiState.Idle)
+        verify(exactly = 0) { portScanUseCase(any()) }
+        verify(exactly = 0) { portScanUseCase(any(), any()) }
+        verify(exactly = 0) { portScanUseCase.newSession(any()) }
+    }
+
+    @Test
+    fun `clear prefill is ignored while a scan is active`() = runTest {
+        val encoded = ToolIntentCodec.encode(
+            ToolIntent(
+                ToolDestination.HostTarget(HostTool.PORTS, requireNotNull(ToolHost.parse("192.0.2.8"))),
+                ToolSource.LAN,
+            ),
+        )
+        val handoff = PortScanViewModel(
+            portScanUseCase,
+            dataStore,
+            recentHostsRepository,
+            savedStateHandle = SavedStateHandle(mapOf("intent" to encoded, "host" to "192.0.2.8")),
+            monotonicClock = testClock,
+        )
+        every { portScanUseCase(any(), any()) } returns kotlinx.coroutines.flow.flow {
+            emit(PortScanFlowResult.Started("192.0.2.8", 1))
+            awaitCancellation()
+        }
+
+        handoff.startScan()
+        assertTrue(handoff.uiState.value is PortScanUiState.Scanning)
+
+        // The screen's clear icon calls onHostChange("") directly.
+        handoff.onHostChange("")
+        handoff.clearPrefill()
+
+        assertEquals("192.0.2.8", handoff.host.value)
+        assertEquals(ToolSource.LAN, handoff.sourceContext)
+        assertTrue(handoff.uiState.value is PortScanUiState.Scanning)
+        verify(exactly = 1) { portScanUseCase.newSession(any()) }
+        handoff.onStopScan()
     }
 
     @Test
@@ -185,17 +399,43 @@ class PortScanViewModelTest {
 
     @Test
     fun `malformed typed handoff does not silently use legacy host`() {
+        val savedState = SavedStateHandle(
+            mapOf(
+                "intent" to "tool-intent-v1.invalid",
+                "host" to "router.local",
+                "portsHandoffSource" to "lan",
+            ),
+        )
         val invalid = PortScanViewModel(
             portScanUseCase,
             dataStore,
             recentHostsRepository,
-            savedStateHandle = SavedStateHandle(mapOf("intent" to "tool-intent-v1.invalid", "host" to "router.local")),
+            savedStateHandle = savedState,
             monotonicClock = testClock,
         )
 
         assertEquals("", invalid.host.value)
         assertEquals(null, invalid.sourceContext)
         assertTrue(invalid.hasInvalidHandoff.value)
+        assertEquals(null, savedState.get<String>("portsHandoffSource"))
+
+        val staleConsumedSource = PortScanViewModel(
+            portScanUseCase,
+            dataStore,
+            recentHostsRepository,
+            savedStateHandle = SavedStateHandle(
+                mapOf(
+                    "intent" to "tool-intent-v1.invalid",
+                    "host" to "router.local",
+                    "portsHandoffConsumed" to true,
+                    "portsHandoffSource" to "lan",
+                    "editedHost" to "",
+                ),
+            ),
+            monotonicClock = testClock,
+        )
+        assertEquals(null, staleConsumedSource.sourceContext)
+        assertTrue(staleConsumedSource.hasInvalidHandoff.value)
     }
 
     @Test

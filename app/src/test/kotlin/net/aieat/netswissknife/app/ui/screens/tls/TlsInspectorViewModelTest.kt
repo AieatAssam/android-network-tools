@@ -133,6 +133,78 @@ class TlsInspectorViewModelTest {
     }
 
     @Test
+    fun `TLS handoff is consumed once and clear removes host port and source across recreation`() {
+        val intent = ToolIntent(
+            ToolDestination.HostTarget(
+                HostTool.TLS,
+                requireNotNull(ToolHost.parse("192.0.2.8")),
+                requireNotNull(ToolPort.parse(8443)),
+            ),
+            ToolSource.LAN,
+        )
+        val routeArgs = mapOf(
+            "intent" to ToolIntentCodec.encode(intent),
+            "host" to "192.0.2.8",
+            "port" to "8443",
+        )
+        val savedState = SavedStateHandle(routeArgs)
+        val handoff = TlsInspectorViewModel(useCase, recentHostsRepository, savedStateHandle = savedState)
+
+        assertEquals("192.0.2.8", handoff.uiState.value.host)
+        assertEquals("8443", handoff.uiState.value.port)
+        assertEquals(true, savedState.get<Boolean>("tlsHandoffConsumed"))
+        assertEquals("192.0.2.8", savedState.get<String>("editedTlsHost"))
+        assertEquals("8443", savedState.get<String>("editedTlsPort"))
+
+        handoff.clearPrefill()
+
+        assertEquals("", handoff.uiState.value.host)
+        assertEquals("443", handoff.uiState.value.port)
+        assertNull(handoff.sourceContext)
+        assertEquals("", savedState.get<String>("editedTlsHost"))
+        assertEquals("443", savedState.get<String>("editedTlsPort"))
+        assertNull(savedState.get<String>("tlsHandoffSource"))
+
+        val recreated = TlsInspectorViewModel(
+            useCase,
+            recentHostsRepository,
+            savedStateHandle = SavedStateHandle(routeArgs + mapOf(
+                "editedTlsHost" to "",
+                "editedTlsPort" to "443",
+                "tlsHandoffConsumed" to true,
+            )),
+        )
+        assertEquals("", recreated.uiState.value.host)
+        assertEquals("443", recreated.uiState.value.port)
+        assertNull(recreated.sourceContext)
+        assertFalse(recreated.uiState.value.isLoading)
+        coVerify(exactly = 0) { useCase(any(), any()) }
+    }
+
+    @Test
+    fun `clear prefill is ignored while TLS inspection is active`() = runTest {
+        val sessionSlot = slot<OperationSession>()
+        val routeArgs = tlsRouteArgs()
+        val active = TlsInspectorViewModel(
+            useCase,
+            recentHostsRepository,
+            savedStateHandle = SavedStateHandle(routeArgs),
+        )
+        coEvery { useCase(any(), capture(sessionSlot)) } coAnswers { awaitCancellation() }
+
+        active.inspect()
+        assertTrue(active.uiState.value.isLoading)
+        active.clearPrefill()
+
+        assertEquals("192.0.2.8", active.uiState.value.host)
+        assertEquals("8443", active.uiState.value.port)
+        assertEquals(ToolSource.LAN, active.sourceContext)
+        assertTrue(active.uiState.value.isLoading)
+        ViewModelStore().apply { put("tls-active", active) }.clear()
+        assertEquals(CancellationReason.LIFECYCLE_PAUSE, sessionSlot.captured.cancellationReason)
+    }
+
+    @Test
     fun `invalid typed handoff stays editable and valid host port replacement restores`() {
         val validTls = ToolIntent(
             ToolDestination.HostTarget(
@@ -167,8 +239,16 @@ class TlsInspectorViewModelTest {
             assertNull(invalid.sourceContext)
         }
 
-        val invalidState = SavedStateHandle(mapOf("intent" to "ti1.invalid", "host" to "192.0.2.8", "port" to "8443"))
+        val invalidState = SavedStateHandle(
+            mapOf(
+                "intent" to "ti1.invalid",
+                "host" to "192.0.2.8",
+                "port" to "8443",
+                "tlsHandoffSource" to "lan",
+            ),
+        )
         val invalid = TlsInspectorViewModel(useCase, recentHostsRepository, savedStateHandle = invalidState)
+        assertNull(invalidState.get<String>("tlsHandoffSource"))
 
         invalid.onHostChange("192.0.2.9")
         assertFalse(invalid.hasInvalidHandoff.value)
@@ -192,6 +272,24 @@ class TlsInspectorViewModelTest {
         assertFalse(recreated.hasInvalidHandoff.value)
         assertEquals("192.0.2.9", recreated.uiState.value.host)
         assertEquals("9443", recreated.uiState.value.port)
+
+        val staleConsumedSource = TlsInspectorViewModel(
+            useCase,
+            recentHostsRepository,
+            savedStateHandle = SavedStateHandle(
+                mapOf(
+                    "intent" to "ti1.invalid",
+                    "host" to "192.0.2.8",
+                    "port" to "8443",
+                    "tlsHandoffConsumed" to true,
+                    "tlsHandoffSource" to "lan",
+                    "editedTlsHost" to "",
+                    "editedTlsPort" to "443",
+                ),
+            ),
+        )
+        assertNull(staleConsumedSource.sourceContext)
+        assertTrue(staleConsumedSource.hasInvalidHandoff.value)
         coVerify(exactly = 0) { useCase(any(), any()) }
     }
 
@@ -361,5 +459,21 @@ class TlsInspectorViewModelTest {
         store.clear()
 
         assertEquals(CancellationReason.LIFECYCLE_PAUSE, sessionSlot.captured.cancellationReason)
+    }
+
+    private fun tlsRouteArgs(): Map<String, String> {
+        val intent = ToolIntent(
+            ToolDestination.HostTarget(
+                HostTool.TLS,
+                requireNotNull(ToolHost.parse("192.0.2.8")),
+                requireNotNull(ToolPort.parse(8443)),
+            ),
+            ToolSource.LAN,
+        )
+        return mapOf(
+            "intent" to ToolIntentCodec.encode(intent),
+            "host" to "192.0.2.8",
+            "port" to "8443",
+        )
     }
 }

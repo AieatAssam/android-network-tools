@@ -50,12 +50,23 @@ class WakeOnLanViewModel @Inject constructor(
     private val handoffMac = (typedIntent?.destination as? ToolDestination.WakeOnLan)
         ?.mac
         ?.takeIf { routeMac != null && it == routeMac && typedIntent.source == ToolSource.LAN }
+    private val handoffConsumed = savedStateHandle.get<Boolean>(HANDOFF_CONSUMED_KEY) == true
     private val _hasInvalidHandoff = MutableStateFlow(
         (rawIntentArgument != null || savedStateHandle.get<String>("mac") != null) &&
             handoffMac == null && savedStateHandle.get<Boolean>(HANDOFF_RECOVERED_KEY) != true,
     )
     val hasInvalidHandoff: StateFlow<Boolean> = _hasInvalidHandoff.asStateFlow()
-    val sourceContext: ToolSource? = handoffMac?.let { typedIntent?.source }
+    private val _sourceContext = MutableStateFlow(
+        if (handoffConsumed) {
+            savedStateHandle.get<String>(HANDOFF_SOURCE_KEY)?.let { wireName ->
+                ToolSource.entries.singleOrNull { it.wireName == wireName }
+            }?.takeIf { handoffMac != null && typedIntent?.source == it }
+        } else {
+            handoffMac?.let { typedIntent?.source }
+        },
+    )
+    val sourceContext: ToolSource? get() = _sourceContext.value
+    val sourceContextState: StateFlow<ToolSource?> = _sourceContext.asStateFlow()
 
     val networkStatus: StateFlow<NetworkStatus> = networkStatusProvider.status
 
@@ -63,8 +74,12 @@ class WakeOnLanViewModel @Inject constructor(
     val uiState: StateFlow<WolUiState> = _uiState.asStateFlow()
 
     private val _macAddress = MutableStateFlow(
-        savedStateHandle.get<String>(EDITED_MAC_KEY)
-            ?: if (_hasInvalidHandoff.value) "" else handoffMac?.value.orEmpty(),
+        if (handoffConsumed) {
+            savedStateHandle.get<String>(EDITED_MAC_KEY).orEmpty()
+        } else {
+            savedStateHandle.get<String>(EDITED_MAC_KEY)
+                ?: if (_hasInvalidHandoff.value) "" else handoffMac?.value.orEmpty()
+        },
     )
     val macAddress: StateFlow<String> = _macAddress.asStateFlow()
 
@@ -76,6 +91,18 @@ class WakeOnLanViewModel @Inject constructor(
 
     private var operationSession: OperationSession? = null
     private var sendGeneration = 0L
+
+    init {
+        if (!handoffConsumed) {
+            // Snapshot the validated initial prefill once; route arguments remain available
+            // after recreation and must not restore a MAC the user has cleared.
+            savedStateHandle[EDITED_MAC_KEY] = _macAddress.value
+            _sourceContext.value?.let { source ->
+                savedStateHandle[HANDOFF_SOURCE_KEY] = source.wireName
+            } ?: savedStateHandle.remove<String>(HANDOFF_SOURCE_KEY)
+            savedStateHandle[HANDOFF_CONSUMED_KEY] = true
+        }
+    }
 
     /** True when the user has typed something that is not a valid MAC yet. */
     val isMacInvalid: Boolean
@@ -94,6 +121,16 @@ class WakeOnLanViewModel @Inject constructor(
             savedStateHandle[HANDOFF_RECOVERED_KEY] = true
             _hasInvalidHandoff.value = false
         }
+    }
+
+    /** Clears only the incoming MAC prefill; broadcast and port choices remain untouched. */
+    fun clearPrefill() {
+        if (_uiState.value is WolUiState.Sending) return
+        _macAddress.value = ""
+        savedStateHandle[EDITED_MAC_KEY] = ""
+        _sourceContext.value = null
+        savedStateHandle.remove<String>(HANDOFF_SOURCE_KEY)
+        savedStateHandle[HANDOFF_CONSUMED_KEY] = true
     }
 
     fun onBroadcastAddressChange(value: String) {
@@ -158,6 +195,8 @@ class WakeOnLanViewModel @Inject constructor(
         const val DEFAULT_BROADCAST = "255.255.255.255"
         const val DEFAULT_PORT = 9
         private const val EDITED_MAC_KEY = "editedWolMac"
+        private const val HANDOFF_CONSUMED_KEY = "wolHandoffConsumed"
+        private const val HANDOFF_SOURCE_KEY = "wolHandoffSource"
         private const val HANDOFF_RECOVERED_KEY = "wolHandoffRecovered"
     }
 }

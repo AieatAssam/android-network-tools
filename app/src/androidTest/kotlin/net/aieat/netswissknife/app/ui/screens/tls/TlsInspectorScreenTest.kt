@@ -99,8 +99,10 @@ class TlsInspectorScreenTest {
 
     @Test
     fun lanHandoff_showsEditableHostPortAndSourceWithoutInspecting() {
-        val viewModel = fakeViewModel(TlsInspectorUiState(host = "192.0.2.8", port = "8443"))
-        every { viewModel.sourceContext } returns ToolSource.LAN
+        val viewModel = fakeViewModel(
+            TlsInspectorUiState(host = "192.0.2.8", port = "8443"),
+            sourceContext = ToolSource.LAN,
+        )
 
         composeRule.setContent {
             NetSwissKnifeTheme { TlsInspectorScreen(viewModel = viewModel) }
@@ -114,6 +116,12 @@ class TlsInspectorScreenTest {
             .performScrollTo()
             .assertIsEnabled()
         verify(exactly = 0) { viewModel.inspect() }
+
+        composeRule.onNodeWithTag(TlsInspectorScreenTestTags.CLEAR_PREFILL_ACTION)
+            .performScrollTo()
+            .performClick()
+        composeRule.onNodeWithTag(TlsInspectorScreenTestTags.SOURCE_CONTEXT).assertDoesNotExist()
+        verify(exactly = 1) { viewModel.clearPrefill() }
     }
 
     @Test
@@ -246,13 +254,18 @@ class TlsInspectorScreenTest {
         composeRule.onNodeWithText("TLSv1.3", substring = true).performScrollTo().assertIsDisplayed()
     }
 
-    private fun fakeViewModel(state: TlsInspectorUiState): TlsInspectorViewModel {
+    private fun fakeViewModel(
+        state: TlsInspectorUiState,
+        sourceContext: ToolSource? = null,
+    ): TlsInspectorViewModel {
         val viewModel = mockk<TlsInspectorViewModel>(relaxed = true)
         val stateFlow = MutableStateFlow(state)
+        val sourceContextFlow = MutableStateFlow(sourceContext)
         every { viewModel.uiState } returns stateFlow
         every { viewModel.recentHosts } returns MutableStateFlow(emptyList())
         every { viewModel.hasInvalidHandoff } returns MutableStateFlow(false)
-        every { viewModel.sourceContext } returns null
+        every { viewModel.sourceContextState } returns sourceContextFlow
+        every { viewModel.clearPrefill() } answers { sourceContextFlow.value = null }
         // onHostChange is otherwise a no-op on a relaxed mock, so typing into the host
         // field would never be reflected back through uiState.host — feed it back into
         // the captured flow so the Inspect button's enabled-state can react to input.

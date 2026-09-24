@@ -102,6 +102,7 @@ import java.util.concurrent.TimeUnit
 object TlsInspectorScreenTestTags {
     const val SOURCE_CONTEXT = "tls_source_context"
     const val INVALID_HANDOFF = "tls_invalid_handoff"
+    const val CLEAR_PREFILL_ACTION = "tls_clear_prefill_action"
 }
 
 @Composable
@@ -110,7 +111,7 @@ fun TlsInspectorScreen(viewModel: TlsInspectorViewModel = hiltViewModel()) {
     val networkStatus by viewModel.networkStatus.collectAsStateWithLifecycle()
     val recentHosts by viewModel.recentHosts.collectAsStateWithLifecycle()
     val hasInvalidHandoff by viewModel.hasInvalidHandoff.collectAsStateWithLifecycle()
-    val sourceContext = viewModel.sourceContext
+    val sourceContext by viewModel.sourceContextState.collectAsStateWithLifecycle()
 
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
@@ -141,12 +142,25 @@ fun TlsInspectorScreen(viewModel: TlsInspectorViewModel = hiltViewModel()) {
                     TlsHeaderCard(onHelpClick = { showHelp = true })
                     NetworkStatusBanner(networkStatus, scope = NetworkStatusScope.INTERNET)
                     if (sourceContext == ToolSource.LAN) {
-                        Text(
-                            text = stringResource(R.string.tls_source_lan),
-                            color = MaterialTheme.colorScheme.secondary,
-                            style = MaterialTheme.typography.labelLarge,
-                            modifier = Modifier.testTag(TlsInspectorScreenTestTags.SOURCE_CONTEXT),
-                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = stringResource(R.string.tls_source_lan),
+                                color = MaterialTheme.colorScheme.secondary,
+                                style = MaterialTheme.typography.labelLarge,
+                                modifier = Modifier.testTag(TlsInspectorScreenTestTags.SOURCE_CONTEXT),
+                            )
+                            TextButton(
+                                onClick = viewModel::clearPrefill,
+                                enabled = !uiState.isLoading,
+                                modifier = Modifier.testTag(TlsInspectorScreenTestTags.CLEAR_PREFILL_ACTION),
+                            ) {
+                                Text(stringResource(R.string.clear))
+                            }
+                        }
                     }
                     if (hasInvalidHandoff) {
                         Text(

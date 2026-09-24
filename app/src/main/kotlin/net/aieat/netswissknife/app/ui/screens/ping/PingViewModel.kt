@@ -186,7 +186,7 @@ class PingViewModel @Inject constructor(
         if (savedStateHandle.get<Boolean>(HANDOFF_CONSUMED_KEY) == true) {
             savedStateHandle.get<String>(HANDOFF_SOURCE_KEY)?.let { wireName ->
                 ToolSource.entries.singleOrNull { it.wireName == wireName }
-            }
+            }?.takeIf { intentHost != null && routeArgumentsMatch && decodedIntent?.source == it }
         } else {
             decodedIntent?.source?.takeIf { routeArgumentsMatch }
         },

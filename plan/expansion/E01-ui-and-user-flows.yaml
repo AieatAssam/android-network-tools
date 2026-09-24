@@ -127,18 +127,17 @@ tasks:
       - "Do not put Android Uri or resource IDs in core-domain/core-network."
     effort: "M (2-3 agent sessions)"
     checkpoint:
-      status: "typed intent and codec foundation plus LAN-to-Ports/Ping/HTTP/TLS/WOL and mDNS-to-Ping/HTTP handoffs are implemented; integrated navigation and device gates stay open"
+      status: "typed intent handoffs to Ports/Ping/HTTP/TLS/WOL and mDNS-to-Ping/HTTP are implemented with one-time consume and explicit Clear; integrated navigation and device gates stay open"
       implementation_commit: afd05d15d7894b95a2f9bc58b36092acd5826f77
       implemented:
         - "Typed host, port, MAC, subnet, and source models with strict validation and normalization."
         - "Versioned URL-safe codec with strict UTF-8 decoding and a compatibility decoder for the existing Ports host query."
         - "Round-trip, malformed encoding, scoped IPv6, duplicate/unknown legacy query, and MAC normalization test coverage."
       remaining_acceptance:
-        - "Extend one-time route consumption and explicit clear-prefill behavior beyond Ping; cover edit/clear restoration across the supported destinations."
         - "Exercise the real AppNavHost and system Back on phone and tablet, including Hilt argument delivery and return to the originating LAN result without duplicate scans."
         - "Verify Android SavedStateRegistry/process restoration and run the supported handoff UI checks on the API 33 target and phone/tablet layouts."
       current_vertical_slice:
-        status: "LAN -> Ports/Ping/HTTP/TLS/WOL and mDNS -> Ping/HTTP source paths are implemented; Ping now consumes and clears its handoff once; integrated navigation and device gates remain open"
+        status: "LAN -> Ports/Ping/HTTP/TLS/WOL and mDNS -> Ping/HTTP source paths are implemented; all five handoff destinations consume prefill once and expose recreation-safe Clear behavior; integrated navigation and device gates remain open"
         implementation_commits: [664d6f899315d54213c5ff04a8184d3b1a8e1cc3, b8adffd39a63fef2e2ba6a1b3e1f651c6e52e8b0, 4c02186ed0e7bb9dd7f32deedcea4d5d0b3b8787, b982edb2f33b188933e289ce691c8e23b177f142, 459f90d3391517e8f88d1fc5cf9b167e2cf300d4, 628343cf65fdbb0c2d80dae59d573fbb93a7aa1e, 01370eb6baf682641d679ebc4218afbeeca592db]
         implemented:
           - "Ports and Ping accept versioned typed host intents while preserving the legacy Ports host query and bare Ping route."
@@ -151,7 +150,8 @@ tasks:
           - "Expanded LAN host details offer a typed HTTP Probe handoff with LAN provenance and an editable URL; selection prefers observed conventional cleartext ports (80, 8080, 8000, 8888) in that order and otherwise uses editable port 80, never treating 443/8443 as HTTP. The destination does not send automatically."
           - "Expanded LAN host details expose Wake device only for a parseable ARP-sourced unicast MAC; the typed WOL route requires LAN provenance and cross-checks its route MAC. WOL opens editable and never sends automatically; malformed, mismatched, wrong-tool, or wrong-source args stay blank with recovery. All-zero, broadcast, and multicast MACs are rejected; edits survive SavedStateHandle restoration. Query routes are normalized to their base identity for app chrome selection."
           - "Ping snapshots route host/source into SavedStateHandle only once and records intentional blank after clear; returning with unchanged NavBackStackEntry arguments cannot restore the consumed prefill or source. Ping never auto-starts."
-        validation: "Earlier handoff ViewModel suites passed (Ping 49/49 before the clear-prefill addition, Ports 23/23, HTTP Probe 20/20, LAN 20/20, TLS 17/17, and WOL/codec/route-identity/LAN 44/44). After Ping one-time consume/clear coverage, the focused Ping and Traceroute ViewModel tests passed 50/50 and 17/17; Android instrumentation Kotlin sources compile, including the clear-prefill UI test. Synthetic navigation does not instantiate production AppNavHost or prove Hilt argument delivery. The prior API 36 instrumentation attempt stopped before tests; no API 33 instrumentation ran. SavedStateHandle tests model recreation with new handles rather than Android SavedStateRegistry. QA/adversarial review found no source blocker. Clear-prefill is currently implemented for Ping only; real AppNavHost/system Back, process restoration, API 33, phone/tablet, and live-network checks remain open."
+          - "Ports, HTTP, TLS, and WOL now snapshot their validated initial handoff into SavedStateHandle once, preserve edits and intentional clears across recreation, and gate restored provenance on a matching valid route. Clear is blocked during active operations; TLS resets port to 443 and WOL clears only the MAC. No destination auto-starts its operation."
+        validation: "On 2026-09-24, the focused TopologyDiscoveryRepositoryTest passed 24/24, the full app JVM suite passed 462/462, and Android-test Kotlin sources compiled. Changed ViewModel suites passed HTTP 14, Ports 24, TLS 15, WOL 17, plus the full Ping suite. Android instrumentation was not run. Adversarial review found no source blocker, including malformed-consumed provenance and Ports scan-clear behavior. Synthetic navigation does not instantiate production AppNavHost or prove Hilt argument delivery. SavedStateHandle tests model restoration with new handles rather than Android SavedStateRegistry. Real AppNavHost/system Back, process restoration, API 33, phone/tablet, and live-network checks remain open."
 
   - id: E01-T02
     second_pass_review:

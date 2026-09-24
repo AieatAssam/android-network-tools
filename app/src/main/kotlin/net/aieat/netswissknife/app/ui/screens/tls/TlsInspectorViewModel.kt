@@ -57,19 +57,38 @@ class TlsInspectorViewModel @Inject constructor(
             target.tool == HostTool.TLS && target.port != null && routeHost != null && routePort != null &&
                 ToolHost.parse(routeHost)?.canonical == target.host.canonical && routePort == target.port
         }
+    private val handoffConsumed = savedStateHandle.get<Boolean>(HANDOFF_CONSUMED_KEY) == true
     private val _hasInvalidHandoff = MutableStateFlow(
         (rawIntentArgument != null || routeHost != null || savedStateHandle.get<String>("port") != null) &&
             handoffTarget == null && savedStateHandle.get<Boolean>(HANDOFF_RECOVERED_KEY) != true,
     )
     val hasInvalidHandoff: StateFlow<Boolean> = _hasInvalidHandoff.asStateFlow()
-    val sourceContext: ToolSource? = handoffTarget?.let { typedIntent?.source }
+    private val _sourceContext = MutableStateFlow(
+        if (handoffConsumed) {
+            savedStateHandle.get<String>(HANDOFF_SOURCE_KEY)?.let { wireName ->
+                ToolSource.entries.singleOrNull { it.wireName == wireName }
+            }?.takeIf { handoffTarget != null && typedIntent?.source == it }
+        } else {
+            handoffTarget?.let { typedIntent?.source }
+        },
+    )
+    val sourceContext: ToolSource? get() = _sourceContext.value
+    val sourceContextState: StateFlow<ToolSource?> = _sourceContext.asStateFlow()
 
     private val _uiState = MutableStateFlow(
         TlsInspectorUiState(
-            host = savedStateHandle.get<String>(EDITED_HOST_KEY)
-                ?: if (_hasInvalidHandoff.value) "" else handoffTarget?.host?.value.orEmpty(),
-            port = savedStateHandle.get<String>(EDITED_PORT_KEY)
-                ?: if (_hasInvalidHandoff.value) "443" else handoffTarget?.port?.value?.toString() ?: "443",
+            host = if (handoffConsumed) {
+                savedStateHandle.get<String>(EDITED_HOST_KEY).orEmpty()
+            } else {
+                savedStateHandle.get<String>(EDITED_HOST_KEY)
+                    ?: if (_hasInvalidHandoff.value) "" else handoffTarget?.host?.value.orEmpty()
+            },
+            port = if (handoffConsumed) {
+                savedStateHandle.get<String>(EDITED_PORT_KEY) ?: "443"
+            } else {
+                savedStateHandle.get<String>(EDITED_PORT_KEY)
+                    ?: if (_hasInvalidHandoff.value) "443" else handoffTarget?.port?.value?.toString() ?: "443"
+            },
         ),
     )
     val uiState: StateFlow<TlsInspectorUiState> = _uiState.asStateFlow()
@@ -78,6 +97,16 @@ class TlsInspectorViewModel @Inject constructor(
     private var operationSession: OperationSession? = null
 
     init {
+        if (!handoffConsumed) {
+            // Route arguments remain present after recreation. Persist the validated initial
+            // form snapshot (including intentional empty values) before marking it consumed.
+            savedStateHandle[EDITED_HOST_KEY] = _uiState.value.host
+            savedStateHandle[EDITED_PORT_KEY] = _uiState.value.port
+            _sourceContext.value?.let { source ->
+                savedStateHandle[HANDOFF_SOURCE_KEY] = source.wireName
+            } ?: savedStateHandle.remove<String>(HANDOFF_SOURCE_KEY)
+            savedStateHandle[HANDOFF_CONSUMED_KEY] = true
+        }
         addCloseable(LIFECYCLE_CLOSEABLE_KEY, AutoCloseable {
             cancelInspection(CancellationReason.LIFECYCLE_PAUSE)
         })
@@ -99,6 +128,23 @@ class TlsInspectorViewModel @Inject constructor(
         savedStateHandle[EDITED_PORT_KEY] = value
         _uiState.value = _uiState.value.copy(port = value, error = null, result = null)
         recoverInvalidHandoffIfReady()
+    }
+
+    /** Clears the incoming TLS handoff as one host/port edit that survives recreation. */
+    fun clearPrefill() {
+        if (_uiState.value.isLoading) return
+        _sourceContext.value = null
+        savedStateHandle.remove<String>(HANDOFF_SOURCE_KEY)
+        savedStateHandle[HANDOFF_CONSUMED_KEY] = true
+        savedStateHandle[EDITED_HOST_KEY] = ""
+        savedStateHandle[EDITED_PORT_KEY] = DEFAULT_PORT
+        _uiState.value = _uiState.value.copy(
+            host = "",
+            port = DEFAULT_PORT,
+            isLoading = false,
+            result = null,
+            error = null,
+        )
     }
 
     private fun recoverInvalidHandoffIfReady() {
@@ -201,6 +247,9 @@ class TlsInspectorViewModel @Inject constructor(
         const val LIFECYCLE_CLOSEABLE_KEY = "tls_operation_lifecycle"
         const val EDITED_HOST_KEY = "editedTlsHost"
         const val EDITED_PORT_KEY = "editedTlsPort"
+        const val HANDOFF_CONSUMED_KEY = "tlsHandoffConsumed"
+        const val HANDOFF_SOURCE_KEY = "tlsHandoffSource"
         const val HANDOFF_RECOVERED_KEY = "tlsHandoffRecovered"
+        const val DEFAULT_PORT = "443"
     }
 }

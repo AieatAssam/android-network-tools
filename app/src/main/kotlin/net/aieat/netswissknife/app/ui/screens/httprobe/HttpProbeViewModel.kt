@@ -86,12 +86,26 @@ class HttpProbeViewModel @Inject constructor(
             savedStateHandle.get<Boolean>(HANDOFF_RECOVERED_KEY) != true,
     )
     val hasInvalidHandoff: StateFlow<Boolean> = _hasInvalidHandoff.asStateFlow()
-    val sourceContext: ToolSource? = handoffTarget?.let { typedIntent?.source }
+    private val _sourceContext = MutableStateFlow(
+        if (savedStateHandle.get<Boolean>(HANDOFF_CONSUMED_KEY) == true) {
+            savedStateHandle.get<String>(HANDOFF_SOURCE_KEY)?.let { wireName ->
+                ToolSource.entries.singleOrNull { it.wireName == wireName }
+            }?.takeIf { handoffTarget != null && typedIntent?.source == it }
+        } else {
+            handoffTarget?.let { typedIntent?.source }
+        },
+    )
+    val sourceContext: ToolSource? get() = _sourceContext.value
+    val sourceContextState: StateFlow<ToolSource?> = _sourceContext.asStateFlow()
 
     private val _uiState = MutableStateFlow(
         HttpProbeUiState(
-            url = savedStateHandle.get<String>(EDITED_URL_KEY)
-                ?: handoffTarget?.let(::httpUrlForTarget).orEmpty(),
+            url = if (savedStateHandle.get<Boolean>(HANDOFF_CONSUMED_KEY) == true) {
+                savedStateHandle.get<String>(EDITED_URL_KEY).orEmpty()
+            } else {
+                savedStateHandle.get<String>(EDITED_URL_KEY)
+                    ?: if (_hasInvalidHandoff.value) "" else handoffTarget?.let(::httpUrlForTarget).orEmpty()
+            },
         ),
     )
     val uiState: StateFlow<HttpProbeUiState> = _uiState.asStateFlow()
@@ -106,6 +120,16 @@ class HttpProbeViewModel @Inject constructor(
     private var operationSession: OperationSession? = null
 
     init {
+        if (savedStateHandle.get<Boolean>(HANDOFF_CONSUMED_KEY) != true) {
+            // NavBackStackEntry arguments remain present after recreation. Snapshot the
+            // initial form and provenance once so a later clear/edit cannot be replaced
+            // by the original handoff route.
+            savedStateHandle[EDITED_URL_KEY] = _uiState.value.url
+            _sourceContext.value?.let { source ->
+                savedStateHandle[HANDOFF_SOURCE_KEY] = source.wireName
+            } ?: savedStateHandle.remove<String>(HANDOFF_SOURCE_KEY)
+            savedStateHandle[HANDOFF_CONSUMED_KEY] = true
+        }
         addCloseable(LIFECYCLE_CLOSEABLE_KEY, AutoCloseable {
             cancelRequest(CancellationReason.LIFECYCLE_PAUSE)
         })
@@ -132,6 +156,15 @@ class HttpProbeViewModel @Inject constructor(
             savedStateHandle[HANDOFF_RECOVERED_KEY] = true
             _hasInvalidHandoff.value = false
         }
+    }
+
+    /** Clears the incoming handoff and its provenance; the blank URL survives recreation. */
+    fun clearPrefill() {
+        if (_uiState.value.isLoading) return
+        _sourceContext.value = null
+        savedStateHandle.remove<String>(HANDOFF_SOURCE_KEY)
+        savedStateHandle[HANDOFF_CONSUMED_KEY] = true
+        onUrlChange("")
     }
 
     fun onMethodChange(method: HttpMethod) = _uiState.update { it.copy(method = method) }
@@ -286,6 +319,8 @@ class HttpProbeViewModel @Inject constructor(
     private companion object {
         const val LIFECYCLE_CLOSEABLE_KEY = "http_probe_operation_lifecycle"
         const val EDITED_URL_KEY = "editedHttpUrl"
+        const val HANDOFF_CONSUMED_KEY = "httpHandoffConsumed"
+        const val HANDOFF_SOURCE_KEY = "httpHandoffSource"
         const val HANDOFF_RECOVERED_KEY = "handoffRecovered"
     }
 }

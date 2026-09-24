@@ -92,6 +92,71 @@ class WakeOnLanViewModelTest {
     }
 
     @Test
+    fun `WOL handoff is consumed once and clear removes only MAC across recreation`() {
+        val mac = requireNotNull(ToolMacAddress.parse("02:23:45:67:89:AB"))
+        val intent = ToolIntent(ToolDestination.WakeOnLan(mac), ToolSource.LAN)
+        val routeArgs = mapOf("intent" to ToolIntentCodec.encode(intent), "mac" to mac.value)
+        val savedState = SavedStateHandle(routeArgs)
+        val handoff = WakeOnLanViewModel(useCase, savedStateHandle = savedState)
+
+        assertEquals(mac.value, handoff.macAddress.value)
+        assertEquals(ToolSource.LAN, handoff.sourceContext)
+        assertEquals(true, savedState.get<Boolean>("wolHandoffConsumed"))
+        assertEquals(mac.value, savedState.get<String>("editedWolMac"))
+
+        handoff.onBroadcastAddressChange("192.0.2.255")
+        handoff.onPortChange("9999")
+        handoff.clearPrefill()
+
+        assertEquals("", handoff.macAddress.value)
+        assertEquals("192.0.2.255", handoff.broadcastAddress.value)
+        assertEquals("9999", handoff.port.value)
+        assertNull(handoff.sourceContext)
+        assertEquals("", savedState.get<String>("editedWolMac"))
+        assertNull(savedState.get<String>("wolHandoffSource"))
+
+        val recreated = WakeOnLanViewModel(
+            useCase,
+            savedStateHandle = SavedStateHandle(routeArgs + mapOf(
+                "editedWolMac" to "",
+                "wolHandoffConsumed" to true,
+            )),
+        )
+        recreated.onBroadcastAddressChange("192.0.2.255")
+        recreated.onPortChange("9999")
+        assertEquals("", recreated.macAddress.value)
+        assertEquals("192.0.2.255", recreated.broadcastAddress.value)
+        assertEquals("9999", recreated.port.value)
+        assertNull(recreated.sourceContext)
+        assertFalse(recreated.canSend)
+        coVerify(exactly = 0) { useCase(any(), any()) }
+    }
+
+    @Test
+    fun `clear prefill is ignored while WOL send is active`() = runTest {
+        val mac = requireNotNull(ToolMacAddress.parse("02:23:45:67:89:AB"))
+        val intent = ToolIntent(ToolDestination.WakeOnLan(mac), ToolSource.LAN)
+        val active = WakeOnLanViewModel(
+            useCase,
+            savedStateHandle = SavedStateHandle(
+                mapOf("intent" to ToolIntentCodec.encode(intent), "mac" to mac.value),
+            ),
+        )
+        val sessionSlot = slot<OperationSession>()
+        coEvery { useCase(any(), capture(sessionSlot)) } coAnswers { awaitCancellation() }
+
+        active.send()
+        assertEquals(WolUiState.Sending, active.uiState.value)
+        active.clearPrefill()
+
+        assertEquals(mac.value, active.macAddress.value)
+        assertEquals(ToolSource.LAN, active.sourceContext)
+        assertEquals(WolUiState.Sending, active.uiState.value)
+        active.stopSending()
+        assertEquals(CancellationReason.USER_STOP, sessionSlot.captured.cancellationReason)
+    }
+
+    @Test
     fun `edited handoff MAC survives recreation and invalid payload is recoverable`() {
         val mac = requireNotNull(ToolMacAddress.parse("02:23:45:67:89:AB"))
         val intent = ToolIntent(ToolDestination.WakeOnLan(mac), ToolSource.LAN)
@@ -108,11 +173,18 @@ class WakeOnLanViewModelTest {
         assertEquals("02:23:45:67:89:AC", restored.macAddress.value)
         assertFalse(restored.hasInvalidHandoff.value)
 
-        val invalidState = SavedStateHandle(mapOf("intent" to "ti1.invalid", "mac" to mac.value))
+        val invalidState = SavedStateHandle(
+            mapOf(
+                "intent" to "ti1.invalid",
+                "mac" to mac.value,
+                "wolHandoffSource" to "lan",
+            ),
+        )
         val invalid = WakeOnLanViewModel(useCase, savedStateHandle = invalidState)
         assertTrue(invalid.hasInvalidHandoff.value)
         assertEquals("", invalid.macAddress.value)
         assertNull(invalid.sourceContext)
+        assertNull(invalidState.get<String>("wolHandoffSource"))
 
         listOf("01:23:45:67:89:AB", "FF:FF:FF:FF:FF:FF", "00:00:00:00:00:00").forEach { rejectedMac ->
             invalid.onMacAddressChange(rejectedMac)
@@ -124,6 +196,21 @@ class WakeOnLanViewModelTest {
         invalid.onMacAddressChange("02:23:45:67:89:AD")
         assertFalse(invalid.hasInvalidHandoff.value)
         assertEquals(true, invalidState.get<Boolean>("wolHandoffRecovered"))
+
+        val staleConsumedSource = WakeOnLanViewModel(
+            useCase,
+            savedStateHandle = SavedStateHandle(
+                mapOf(
+                    "intent" to "ti1.invalid",
+                    "mac" to mac.value,
+                    "wolHandoffConsumed" to true,
+                    "wolHandoffSource" to "lan",
+                    "editedWolMac" to "",
+                ),
+            ),
+        )
+        assertNull(staleConsumedSource.sourceContext)
+        assertTrue(staleConsumedSource.hasInvalidHandoff.value)
         coVerify(exactly = 0) { useCase(any(), any()) }
     }
 

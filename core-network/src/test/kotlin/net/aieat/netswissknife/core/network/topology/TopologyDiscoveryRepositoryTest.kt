@@ -282,6 +282,28 @@ class TopologyDiscoveryRepositoryTest {
     }
 
     @Test
+    fun `caller session caps concurrent walks below repository maximum`() = runTest {
+        coEvery { snmpClient.get(any(), any()) } returns null
+        val activeWalks = AtomicInteger(0)
+        val maximumConcurrentWalks = AtomicInteger(0)
+        coEvery { snmpClient.walk(any(), any(), any()) } coAnswers {
+            val active = activeWalks.incrementAndGet()
+            maximumConcurrentWalks.updateAndGet { current -> maxOf(current, active) }
+            try {
+                delay(25)
+            } finally {
+                activeWalks.decrementAndGet()
+            }
+            SnmpWalkResult(emptyMap())
+        }
+        val session = OperationSession(OperationBudget.start(maxConcurrentProbes = 1))
+
+        repository.discover(defaultParams.copy(maxHops = 0), session).toList()
+
+        assertEquals(1, maximumConcurrentWalks.get())
+    }
+
+    @Test
     fun `SNMP client is created off the collecting thread`() = runTest {
         val collectingThreadId = Thread.currentThread().id
         var factoryThreadId: Long? = null

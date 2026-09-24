@@ -59,6 +59,12 @@ class PortScanViewModel @Inject constructor(
     private val monotonicClock: MonotonicClock = SystemMonotonicClock,
 ) : ViewModel() {
 
+    companion object {
+        private const val HANDOFF_CONSUMED_KEY = "portsHandoffConsumed"
+        private const val HANDOFF_SOURCE_KEY = "portsHandoffSource"
+        private const val EDITED_HOST_KEY = "editedHost"
+    }
+
     private val rawIntentArgument = savedStateHandle.get<String>("intent")
     private val hasIntentArgument = rawIntentArgument != null
     private val decodedIntent = rawIntentArgument?.let(ToolIntentCodec::decode)
@@ -77,9 +83,18 @@ class PortScanViewModel @Inject constructor(
     val hasInvalidHandoff: StateFlow<Boolean> = _hasInvalidHandoff.asStateFlow()
 
     private val inboundIntent = decodedIntent.takeIf { routeArgumentsMatch }
+    private val _sourceContext = MutableStateFlow(
+        if (savedStateHandle.get<Boolean>(HANDOFF_CONSUMED_KEY) == true) {
+            savedStateHandle.get<String>(HANDOFF_SOURCE_KEY)?.let { wireName ->
+                ToolSource.entries.singleOrNull { it.wireName == wireName }
+            }?.takeIf { inboundIntent?.source == it }
+        } else {
+            inboundIntent?.source
+        },
+    )
 
-    /** Context for a prefilled handoff, retained across process recreation with navigation args. */
-    val sourceContext: ToolSource? = inboundIntent?.source
+    /** Context for a prefilled handoff, retained only while its form value is retained. */
+    val sourceContext: ToolSource? get() = _sourceContext.value
 
     private val _uiState = MutableStateFlow<PortScanUiState>(PortScanUiState.Idle)
     val uiState: StateFlow<PortScanUiState> = _uiState.asStateFlow()
@@ -113,14 +128,28 @@ class PortScanViewModel @Inject constructor(
     private var scanOperationSession: OperationSession? = null
 
     init {
-        val restoredEdit = savedStateHandle.get<String>("editedHost")
-        val initialHost = when {
-            restoredEdit != null -> restoredEdit
-            _hasInvalidHandoff.value -> null
-            hasIntentArgument -> intentHost?.host?.value
-            else -> routeHost
+        val handoffConsumed = savedStateHandle.get<Boolean>(HANDOFF_CONSUMED_KEY) == true
+        val restoredEdit = savedStateHandle.get<String>(EDITED_HOST_KEY)
+        if (handoffConsumed) {
+            // Navigation keeps route arguments across recreation; once consumed,
+            // the saved form snapshot is authoritative, including an intentional blank.
+            _host.value = restoredEdit.orEmpty()
+        } else {
+            val initialHost = when {
+                restoredEdit != null -> restoredEdit
+                _hasInvalidHandoff.value -> null
+                hasIntentArgument -> intentHost?.host?.value
+                else -> routeHost
+            }
+            initialHost?.let { host ->
+                _host.value = host
+                savedStateHandle[EDITED_HOST_KEY] = host
+            }
+            _sourceContext.value?.let { source ->
+                savedStateHandle[HANDOFF_SOURCE_KEY] = source.wireName
+            } ?: savedStateHandle.remove<String>(HANDOFF_SOURCE_KEY)
+            savedStateHandle[HANDOFF_CONSUMED_KEY] = true
         }
-        initialHost?.takeIf { it.isNotBlank() }?.let { _host.value = it }
         viewModelScope.launch {
             val prefs = dataStore.data.first()
             _timeoutMs.value = prefs[AppPreferenceKeys.DEFAULT_TIMEOUT_MS] ?: 2_000
@@ -131,12 +160,32 @@ class PortScanViewModel @Inject constructor(
     // ── User actions ──────────────────────────────────────────────────────────
 
     fun onHostChange(value: String) {
+        // The clear icon routes through onHostChange(""); do not discard a
+        // handoff while its scan still owns an active operation session.
+        if (value.isEmpty() && (scanOperationSession != null || _uiState.value is PortScanUiState.Scanning)) {
+            return
+        }
         _host.value = value
-        savedStateHandle["editedHost"] = value
+        savedStateHandle[EDITED_HOST_KEY] = value
+        if (value.isEmpty()) {
+            _sourceContext.value = null
+            savedStateHandle.remove<String>(HANDOFF_SOURCE_KEY)
+            savedStateHandle[HANDOFF_CONSUMED_KEY] = true
+        }
         if (_hasInvalidHandoff.value && HostValidator.normalize(value) != null) {
             savedStateHandle["handoffRecovered"] = true
             _hasInvalidHandoff.value = false
         }
+    }
+
+    /** Clear a supplied handoff while recording the blank form as the consumed state. */
+    fun clearPrefill() {
+        if (scanOperationSession != null || _uiState.value is PortScanUiState.Scanning) return
+        _host.value = ""
+        _sourceContext.value = null
+        savedStateHandle[EDITED_HOST_KEY] = ""
+        savedStateHandle.remove<String>(HANDOFF_SOURCE_KEY)
+        savedStateHandle[HANDOFF_CONSUMED_KEY] = true
     }
 
     fun onPresetChange(preset: PortScanPreset) { _selectedPreset.value = preset }

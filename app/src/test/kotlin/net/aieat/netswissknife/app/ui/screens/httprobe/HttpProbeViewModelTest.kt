@@ -103,15 +103,18 @@ class HttpProbeViewModelTest {
         val encoded = ToolIntentCodec.encode(intent)
         val decoded = ToolIntentCodec.decode(encoded)
         assertEquals(intent, decoded)
+        val savedState = SavedStateHandle(mapOf("intent" to encoded, "host" to "printer.local"))
 
         val handoffVm = HttpProbeViewModel(
             useCase,
             recentHostsRepository,
-            savedStateHandle = SavedStateHandle(mapOf("intent" to encoded, "host" to "printer.local")),
+            savedStateHandle = savedState,
         )
 
         assertEquals("http://printer.local:8080/", handoffVm.uiState.value.url)
         assertEquals(ToolSource.MDNS, handoffVm.sourceContext)
+        assertEquals(true, savedState.get<Boolean>("httpHandoffConsumed"))
+        assertEquals("mdns", savedState.get<String>("httpHandoffSource"))
         assertFalse(handoffVm.uiState.value.isLoading)
         assertNull(handoffVm.uiState.value.result)
         coVerify(exactly = 0) { useCase(any(), any()) }
@@ -176,6 +179,8 @@ class HttpProbeViewModelTest {
         first.onUrlChange("http://edited.local:9000/custom")
 
         assertEquals("http://edited.local:9000/custom", savedState.get<String>("editedHttpUrl"))
+        assertEquals(true, savedState.get<Boolean>("httpHandoffConsumed"))
+        assertEquals("mdns", savedState.get<String>("httpHandoffSource"))
         val recreated = HttpProbeViewModel(
             useCase,
             recentHostsRepository,
@@ -183,6 +188,8 @@ class HttpProbeViewModelTest {
                 mapOf(
                     "intent" to ToolIntentCodec.encode(intent),
                     "host" to "printer.local",
+                    "httpHandoffConsumed" to true,
+                    "httpHandoffSource" to "mdns",
                     "editedHttpUrl" to "http://edited.local:9000/custom",
                 ),
             ),
@@ -190,6 +197,127 @@ class HttpProbeViewModelTest {
         assertEquals("http://edited.local:9000/custom", recreated.uiState.value.url)
         assertEquals(ToolSource.MDNS, recreated.sourceContext)
         coVerify(exactly = 0) { useCase(any(), any()) }
+    }
+
+    @Test
+    fun `untouched route prefill and provenance survive recreation`() {
+        val intent = ToolIntent(
+            ToolDestination.HostTarget(
+                HostTool.HTTP,
+                requireNotNull(ToolHost.parse("printer.local")),
+                requireNotNull(ToolPort.parse(8080)),
+            ),
+            ToolSource.MDNS,
+        )
+        val encodedIntent = ToolIntentCodec.encode(intent)
+        val firstState = SavedStateHandle(mapOf("intent" to encodedIntent, "host" to "printer.local"))
+        val first = HttpProbeViewModel(useCase, recentHostsRepository, savedStateHandle = firstState)
+
+        val recreated = HttpProbeViewModel(
+            useCase,
+            recentHostsRepository,
+            savedStateHandle = SavedStateHandle(
+                mapOf(
+                    "intent" to encodedIntent,
+                    "host" to "printer.local",
+                    "httpHandoffConsumed" to true,
+                    "httpHandoffSource" to "mdns",
+                    "editedHttpUrl" to "http://printer.local:8080/",
+                ),
+            ),
+        )
+
+        assertEquals("http://printer.local:8080/", first.uiState.value.url)
+        assertEquals("http://printer.local:8080/", recreated.uiState.value.url)
+        assertEquals(ToolSource.MDNS, recreated.sourceContext)
+        assertFalse(recreated.uiState.value.isLoading)
+        assertNull(recreated.uiState.value.result)
+        coVerify(exactly = 0) { useCase(any(), any()) }
+    }
+
+    @Test
+    fun `clearing a handoff removes provenance and preserves intentional blank after recreation`() {
+        val intent = ToolIntent(
+            ToolDestination.HostTarget(
+                HostTool.HTTP,
+                requireNotNull(ToolHost.parse("printer.local")),
+                requireNotNull(ToolPort.parse(8080)),
+            ),
+            ToolSource.MDNS,
+        )
+        val encodedIntent = ToolIntentCodec.encode(intent)
+        val savedState = SavedStateHandle(mapOf("intent" to encodedIntent, "host" to "printer.local"))
+        val first = HttpProbeViewModel(useCase, recentHostsRepository, savedStateHandle = savedState)
+
+        first.clearPrefill()
+
+        assertEquals("", first.uiState.value.url)
+        assertNull(first.sourceContext)
+        assertNull(first.sourceContextState.value)
+        assertEquals(true, savedState.get<Boolean>("httpHandoffConsumed"))
+        assertEquals("", savedState.get<String>("editedHttpUrl"))
+        assertNull(savedState.get<String>("httpHandoffSource"))
+
+        val recreated = HttpProbeViewModel(
+            useCase,
+            recentHostsRepository,
+            savedStateHandle = SavedStateHandle(
+                mapOf(
+                    "intent" to encodedIntent,
+                    "host" to "printer.local",
+                    "httpHandoffConsumed" to true,
+                    "editedHttpUrl" to "",
+                ),
+            ),
+        )
+        assertEquals("", recreated.uiState.value.url)
+        assertNull(recreated.sourceContext)
+        assertFalse(recreated.hasInvalidHandoff.value)
+        assertFalse(recreated.uiState.value.isLoading)
+        assertNull(recreated.uiState.value.result)
+        coVerify(exactly = 0) { useCase(any(), any()) }
+    }
+
+    @Test
+    fun `clear prefill is ignored while a request is active`() = runTest {
+        val intent = ToolIntent(
+            ToolDestination.HostTarget(
+                HostTool.HTTP,
+                requireNotNull(ToolHost.parse("printer.local")),
+                requireNotNull(ToolPort.parse(8080)),
+            ),
+            ToolSource.LAN,
+        )
+        val started = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        coEvery { useCase(any(), any()) } coAnswers {
+            started.complete(Unit)
+            release.await()
+            NetworkResult.Success(stubResult)
+        }
+        val handoffVm = HttpProbeViewModel(
+            useCase,
+            recentHostsRepository,
+            savedStateHandle = SavedStateHandle(
+                mapOf(
+                    "intent" to ToolIntentCodec.encode(intent),
+                    "host" to "printer.local",
+                ),
+            ),
+        )
+
+        handoffVm.send()
+        try {
+            started.await()
+            assertTrue(handoffVm.uiState.value.isLoading)
+
+            handoffVm.clearPrefill()
+
+            assertEquals("http://printer.local:8080/", handoffVm.uiState.value.url)
+            assertEquals(ToolSource.LAN, handoffVm.sourceContext)
+        } finally {
+            release.complete(Unit)
+        }
     }
 
     @Test
@@ -238,6 +366,40 @@ class HttpProbeViewModelTest {
         )
         assertFalse(restored.hasInvalidHandoff.value)
         assertEquals("http://replacement.local/", restored.uiState.value.url)
+        coVerify(exactly = 0) { useCase(any(), any()) }
+    }
+
+    @Test
+    fun `invalid unconsumed route drops stale source provenance`() {
+        val savedState = SavedStateHandle(
+            mapOf(
+                "intent" to "ti1.invalid",
+                "host" to "printer.local",
+                "httpHandoffSource" to "mdns",
+            ),
+        )
+
+        val invalidVm = HttpProbeViewModel(useCase, recentHostsRepository, savedStateHandle = savedState)
+
+        assertTrue(invalidVm.hasInvalidHandoff.value)
+        assertNull(invalidVm.sourceContext)
+        assertNull(savedState.get<String>("httpHandoffSource"))
+
+        val recreated = HttpProbeViewModel(
+            useCase,
+            recentHostsRepository,
+            savedStateHandle = SavedStateHandle(
+                mapOf(
+                    "intent" to "ti1.invalid",
+                    "host" to "printer.local",
+                    "httpHandoffConsumed" to true,
+                    "httpHandoffSource" to "mdns",
+                    "editedHttpUrl" to "",
+                ),
+            ),
+        )
+        assertNull(recreated.sourceContext)
+        assertTrue(recreated.hasInvalidHandoff.value)
         coVerify(exactly = 0) { useCase(any(), any()) }
     }
 

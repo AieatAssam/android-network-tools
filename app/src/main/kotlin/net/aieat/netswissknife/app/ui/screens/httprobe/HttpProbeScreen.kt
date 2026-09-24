@@ -131,6 +131,7 @@ import net.aieat.netswissknife.app.ui.navigation.ToolSource
 object HttpProbeScreenTestTags {
     const val CONTENT_LIST = "httprobe_content_list"
     const val SOURCE_CONTEXT = "httprobe_source_context"
+    const val CLEAR_PREFILL_ACTION = "httprobe_clear_prefill_action"
     const val INVALID_HANDOFF = "httprobe_invalid_handoff"
 
     /** Index of the idle/loading/error/success result panel within [CONTENT_LIST]. */
@@ -143,7 +144,7 @@ fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
     val networkStatus by viewModel.networkStatus.collectAsStateWithLifecycle()
     val recentHosts by viewModel.recentHosts.collectAsStateWithLifecycle()
     val hasInvalidHandoff by viewModel.hasInvalidHandoff.collectAsStateWithLifecycle()
-    val sourceContext = viewModel.sourceContext
+    val sourceContext by viewModel.sourceContextState.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     var visible by remember { mutableStateOf(false) }
@@ -189,12 +190,25 @@ fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
             }
             if (sourceLabel != null) {
                 item {
-                    Text(
-                        text = stringResource(sourceLabel),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.secondary,
-                        modifier = Modifier.testTag(HttpProbeScreenTestTags.SOURCE_CONTEXT),
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = stringResource(sourceLabel),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.secondary,
+                            modifier = Modifier.testTag(HttpProbeScreenTestTags.SOURCE_CONTEXT),
+                        )
+                        TextButton(
+                            onClick = viewModel::clearPrefill,
+                            enabled = !uiState.isLoading,
+                            modifier = Modifier.testTag(HttpProbeScreenTestTags.CLEAR_PREFILL_ACTION),
+                        ) {
+                            Text(stringResource(R.string.clear))
+                        }
+                    }
                 }
             }
 

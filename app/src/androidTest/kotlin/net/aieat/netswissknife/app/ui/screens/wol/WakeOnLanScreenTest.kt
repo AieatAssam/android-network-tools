@@ -120,6 +120,12 @@ class WakeOnLanScreenTest {
             .performScrollTo()
             .assertIsEnabled()
         verify(exactly = 0) { viewModel.send() }
+
+        composeRule.onNodeWithTag(WakeOnLanScreenTestTags.CLEAR_PREFILL_ACTION)
+            .performScrollTo()
+            .performClick()
+        composeRule.onNodeWithTag(WakeOnLanScreenTestTags.SOURCE_CONTEXT).assertDoesNotExist()
+        verify(exactly = 1) { viewModel.clearPrefill() }
     }
 
     @Test
@@ -249,6 +255,9 @@ class WakeOnLanScreenTest {
         every { viewModel.broadcastAddress } returns MutableStateFlow(broadcastAddress)
         every { viewModel.port } returns MutableStateFlow(port)
         every { viewModel.sourceContext } returns sourceContext
+        val sourceContextFlow = MutableStateFlow(sourceContext)
+        every { viewModel.sourceContextState } returns sourceContextFlow
+        every { viewModel.clearPrefill() } answers { sourceContextFlow.value = null }
         every { viewModel.hasInvalidHandoff } returns MutableStateFlow(invalidHandoff)
         return viewModel
     }

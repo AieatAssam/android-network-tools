@@ -766,6 +766,26 @@ class PingViewModelTest {
         }
 
         @Test
+        fun `malformed consumed handoff does not restore stale source provenance`() {
+            val restored = handoffViewModel(
+                SavedStateHandle(
+                    mapOf(
+                        "intent" to "ti1.invalid",
+                        "host" to "192.0.2.8",
+                        "pingHandoffConsumed" to true,
+                        "pingHandoffSource" to "lan",
+                        "editedHost" to "",
+                    ),
+                ),
+            )
+
+            assertEquals("", restored.host.value)
+            assertNull(restored.sourceContext)
+            assertTrue(restored.hasInvalidHandoff.value)
+            coVerify(exactly = 0) { pingUseCase(any(), any()) }
+        }
+
+        @Test
         fun `valid mDNS host pre-fills without starting and edits survive recreation`() {
             val mdnsIntent = ToolIntentCodec.encode(
                 ToolIntent(

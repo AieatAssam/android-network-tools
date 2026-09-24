@@ -286,7 +286,7 @@ tasks:
       - "The four local-network screens and six internet-tool screens render banners with the correct scope; offline state takes precedence over VPN information, and healthy state is hidden."
       - "Permission causes survive wrappers and topology's per-request handling; affected local-tool states expose a localized Grant card, and the user retries explicitly after granting."
       - "Banner/error copy is resource-backed and follows CLAUDE.md Compose and accessibility rules; focused unit tests and banner instrumentation pass."
-    environment_follow_up: "NetworkStatusBannerTest compiles, but connected execution is pending: the API 36 dev36 emulator repeatedly ANR'd in system_server and PackageManager during adb install/instrumentation on 2026-09-23. Rerun on a responsive API 33/API 36 device before release."
+    environment_follow_up: "On 2026-09-24, Android-test Kotlin compilation passed for NetworkStatusBannerTest and the current handoff UI tests. Connected execution is pending: the API 36 dev36 emulator repeatedly ANR'd in system_server and PackageManager during adb install/instrumentation on 2026-09-23. Rerun on a responsive API 33/API 36 device before release."
 
   - id: P05-T6
     title: "Docs"
