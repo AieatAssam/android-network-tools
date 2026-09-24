@@ -1,10 +1,10 @@
 review:
   id: P02.5-dependency-state
-  checked_at: "2026-09-24T09:03:28Z"
+  checked_at: "2026-09-24T09:12:16Z"
   branch: "plan/comprehensive-review-2026-09-22"
-  commit: "f740cf0775eeb750f34c5323548e1b589e1ea40a (dependency-submission baseline for the current validated worktree)"
+  commit: "98d2fa96828795893f6090ce706c619329143a47"
   status: "open"
-  worktree_delta: "The current validated worktree adds Wi-Fi permission-state handling and Wi-Fi/topology test fixes to f740cf0; dependency constraints are unchanged and are included in the successful topic-branch ADS submission below."
+  worktree_delta: "The Wi-Fi permission-state handling and Wi-Fi/topology test fixes have been committed and pushed. Dependency constraints are unchanged from the successful current-head topic-branch ADS submission below."
   initial_snapshot: { checked_at: "2026-09-23T22:37:21Z", commit: "7106a5bafa21bf0b30b91afb98470d8d10b184c8", worktree_delta: "Uncommitted app/build.gradle.kts constraints for :app:androidLintTool; this source change had not yet been submitted to GitHub." }
   sources:
     alerts_command: "gh api --paginate repos/AieatAssam/android-network-tools/dependabot/alerts"
@@ -117,18 +117,18 @@ prior_recheck_2026_09_23:
   outcome: "Six alerts remain open. The live GitHub graph predates the local constraints; keep P02.5 open until the post-constraint main-branch submission clears the old versions or approved time-bounded dispositions are recorded."
 
 latest_recheck:
-  checked_at: "2026-09-24T07:47:39Z"
+  checked_at: "2026-09-24T09:08:24Z"
   reviewed_branch_submission:
-    run_id: 35971509735
-    run_url: "https://github.com/AieatAssam/android-network-tools/actions/runs/35971509735"
+    run_id: 35979037038
+    run_url: "https://github.com/AieatAssam/android-network-tools/actions/runs/35979037038"
     ref: "refs/heads/plan/comprehensive-review-2026-09-22"
-    commit: "f740cf0775eeb750f34c5323548e1b589e1ea40a"
-    submitted_at: "2026-09-24T07:47:07Z"
-    scanned_at: "2026-09-24T07:47:39Z"
+    commit: "98d2fa96828795893f6090ce706c619329143a47"
+    submitted_at: "2026-09-24T09:04:41Z"
+    scanned_at: "2026-09-24T09:05:14Z"
     resolved_component_count: 410
-    artifact_sha256: "9523cf9f85adfccd526834d7dcaa2e0a91a3f2e3feb2b9719d1859a035f36397"
-    artifact_path: "/tmp/p025-submission-f740cf0/dependency-graph-reports/dynamicdependency-graphauto-submission-submit-gradle.json"
-    result: "Run 35971509735 succeeded. The resolved map contains only patched versions for all alerted coordinates; no vulnerable versions of those coordinates are selected in this topic-branch snapshot."
+    artifact_sha256: "21ce41bc51493b2afce4a5c90a7d4b718132662b346b347ebb778c0dea159371"
+    artifact_path: "/tmp/p025-submission-98d2fa9/dependency-graph-reports/dynamicdependency-graphauto-submission-submit-gradle.json"
+    result: "Run 35979037038 succeeded. The resolved map contains only patched versions for all alerted coordinates; no vulnerable versions of those coordinates are selected in the pushed topic-branch snapshot."
     patched_resolved_versions:
       "org.bouncycastle:bcprov-jdk18on": "1.85"
       "org.bouncycastle:bcpkix-jdk18on": "1.85"
@@ -147,16 +147,17 @@ latest_recheck:
     artifact_sha256: "c57002192acc246aab58ed90b13a8bac297ebbea7f7add6344e93cfb1a08cd57"
     state: "Still the newest main submission; it predates the scoped app constraints. The topic-branch ADS run does not update this default-branch result."
   github_sbom:
-    generated_at: "2026-09-24T06:38:20Z"
-    sha256: "3c412392ca5b65b95a46836b15a5c61219e7eb995c0c81def8913c19dbf84d72"
+    generated_at: "2026-09-24T09:07:59Z"
+    sha256: "e80d40645299500025b7b38741f3c1388c9a00e892f81806f3075cd22f15c84b"
+    package_count: 425
     reported_versions:
       "org.bouncycastle:bcprov-jdk18on": ["1.80.2", "1.85"]
       "org.bouncycastle:bcpkix-jdk18on": ["1.80.2", "1.85"]
       "org.apache.commons:commons-lang3": ["3.16.0", "3.18.0"]
       "org.apache.httpcomponents:httpclient": ["4.5.6", "4.5.14"]
-    interpretation: "The repository-level GitHub SBOM still aggregates old and patched build coordinates; it is separate from the clean resolved map for topic-branch HEAD f740cf0 and does not identify per-configuration selections."
+    interpretation: "The repository-level GitHub SBOM still aggregates old and patched build coordinates; it is separate from the clean resolved map for topic-branch HEAD 98d2fa9 and does not identify per-configuration selections."
   dependabot_alerts:
-    checked_at: "2026-09-24"
+    checked_at: "2026-09-24T09:08:24Z"
     fixed: [3, 4, 7]
     open: [1, 2, 5, 6, 8, 9]
     open_alerts_have_fixed_at: false

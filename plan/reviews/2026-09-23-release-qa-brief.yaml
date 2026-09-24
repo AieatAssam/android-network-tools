@@ -3,9 +3,9 @@ review:
   status: audited
   source: "User-provided Net Swiss Knife QA brief v2026.09.21.1 (API 33, host snmpd at 10.0.2.2)."
   release_baseline_commit: "5e183721e64ce8a8946f1a0b50f52b83544e8898"
-  checked_commit: "f740cf0775eeb750f34c5323548e1b589e1ea40a"
-  checked_worktree_commit: "f740cf0 plus the Wi-Fi permission-state change and Wi-Fi/topology test fixes validated in this update"
-  checked_scope: "The supplied release corresponds to origin/main at 5e18372. Rechecked that baseline and the current branch source through f740cf0, including Ping one-time route consumption, Traceroute cancel cleanup/partial results, OperationRunner USER_STOP handling, and WHOIS deadline conversion. Current-worktree JVM validation is recorded below; focused Ping/Traceroute results were last executed at 1796d41, while the full app JVM suite and the changed Wi-Fi/topology tests passed on the current worktree. Android-test Kotlin compilation has passed, but API 33 instrumentation and live lab checks are not claimed. Implementation details remain cross-referenced to E01/E03 and dependency-gate review artifacts."
+  checked_commit: "98d2fa96828795893f6090ce706c619329143a47"
+  checked_worktree_commit: "98d2fa96828795893f6090ce706c619329143a47"
+  checked_scope: "The supplied release corresponds to origin/main at 5e18372. Rechecked that baseline and the current branch source through 98d2fa9, including Ping one-time route consumption, Traceroute cancel cleanup/partial results, OperationRunner USER_STOP handling, WHOIS deadline conversion, and the Wi-Fi permission-state fix. Current source/test validation is recorded below: focused Ping/Traceroute results were last executed at 1796d41; the changed Wi-Fi/topology classes and full app JVM suite passed on the exact source tree committed as 98d2fa9. Android-test Kotlin compilation has passed, but API 33 instrumentation and live lab checks are not claimed. Implementation details remain cross-referenced to E01/E03 and dependency-gate review artifacts."
   branch: "plan/comprehensive-review-2026-09-22"
   release_metadata:
     app: "Net Swiss Knife"
