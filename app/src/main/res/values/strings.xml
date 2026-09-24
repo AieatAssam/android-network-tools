@@ -262,6 +262,7 @@
     <string name="lan_mac_unavailable_api29">Not available on Android 10+ (ARP is restricted)</string>
     <string name="lan_action_scan_ports">Scan ports</string>
     <string name="lan_action_ping">Ping host</string>
+    <string name="lan_action_probe_http_port">Probe HTTP (port %1$d)</string>
     <string name="lan_action_inspect_tls_port">Inspect TLS on open port %1$d</string>
     <string name="lan_discovery_icmp">ICMP</string>
     <string name="lan_discovery_tcp_open">TCP open</string>
@@ -806,6 +807,7 @@
     <string name="mdns_http_probe">Open in HTTP Probe</string>
     <string name="mdns_http_probe_description">Open %1$s in HTTP Probe</string>
     <string name="httprobe_source_mdns">Prefilled from mDNS Browser</string>
+    <string name="httprobe_source_lan">Prefilled from LAN Scanner</string>
     <string name="httprobe_invalid_handoff">The supplied destination could not be verified. Enter a valid HTTP URL to continue.</string>
     <string name="mdns_ping_address">Ping %1$s</string>
 

@@ -182,10 +182,15 @@ fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
                 }
             }
 
-            if (sourceContext == ToolSource.MDNS) {
+            val sourceLabel = when (sourceContext) {
+                ToolSource.LAN -> R.string.httprobe_source_lan
+                ToolSource.MDNS -> R.string.httprobe_source_mdns
+                else -> null
+            }
+            if (sourceLabel != null) {
                 item {
                     Text(
-                        text = stringResource(R.string.httprobe_source_mdns),
+                        text = stringResource(sourceLabel),
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.secondary,
                         modifier = Modifier.testTag(HttpProbeScreenTestTags.SOURCE_CONTEXT),

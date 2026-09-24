@@ -43,6 +43,10 @@ import javax.inject.Inject
 
 private const val TAG = "LanScanViewModel"
 
+/** Prefer a reported conventional cleartext HTTP port; otherwise keep the editable form on port 80. */
+internal fun preferredHttpProbePort(openPorts: Collection<Int>): Int =
+    listOf(80, 8080, 8000, 8888).firstOrNull(openPorts::contains) ?: 80
+
 /** All possible UI states for the LAN scanner screen. */
 sealed interface LanScanUiState {
     object Idle : LanScanUiState
@@ -80,6 +84,7 @@ sealed interface LanScanUiState {
 sealed interface LanNavEvent {
     data class NavigateToPorts(val host: String) : LanNavEvent
     data class NavigateToPing(val host: String) : LanNavEvent
+    data class NavigateToHttp(val host: String, val port: Int) : LanNavEvent
     data class NavigateToTls(val host: String, val port: Int) : LanNavEvent
 }
 
@@ -383,6 +388,10 @@ class LanScanViewModel @Inject constructor(
 
     fun onPingHost(host: String) {
         navigationEventsChannel.trySend(LanNavEvent.NavigateToPing(host))
+    }
+
+    fun onProbeHttp(host: String, port: Int) {
+        navigationEventsChannel.trySend(LanNavEvent.NavigateToHttp(host, port))
     }
 
     fun onInspectTls(host: String, port: Int) {

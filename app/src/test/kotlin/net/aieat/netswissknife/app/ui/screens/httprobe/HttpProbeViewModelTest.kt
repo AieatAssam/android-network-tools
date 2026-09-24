@@ -118,6 +118,31 @@ class HttpProbeViewModelTest {
     }
 
     @Test
+    fun `typed LAN HTTP route pre-fills discovered port with provenance and never sends`() {
+        val intent = ToolIntent(
+            ToolDestination.HostTarget(
+                HostTool.HTTP,
+                requireNotNull(ToolHost.parse("192.0.2.8")),
+                requireNotNull(ToolPort.parse(8080)),
+            ),
+            ToolSource.LAN,
+        )
+        val handoffVm = HttpProbeViewModel(
+            useCase,
+            recentHostsRepository,
+            savedStateHandle = SavedStateHandle(
+                mapOf("intent" to ToolIntentCodec.encode(intent), "host" to "192.0.2.8"),
+            ),
+        )
+
+        assertEquals("http://192.0.2.8:8080/", handoffVm.uiState.value.url)
+        assertEquals(ToolSource.LAN, handoffVm.sourceContext)
+        assertFalse(handoffVm.uiState.value.isLoading)
+        assertNull(handoffVm.uiState.value.result)
+        coVerify(exactly = 0) { useCase(any(), any()) }
+    }
+
+    @Test
     fun `IPv6 targets get a valid bracketed editable HTTP URL`() {
         listOf("fe80::1%wlan0", "[fe80::1%wlan0]", "[2001:db8::1]").forEach { host ->
             val target = ToolDestination.HostTarget(

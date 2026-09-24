@@ -287,6 +287,67 @@ class LanScanScreenTest {
     }
 
     @Test
+    fun expandedHost_offersEditableHttpProbeUsingKnownPortOrPort80Fallback() {
+        val ip = "192.168.1.52"
+        val stateFlow = MutableStateFlow<LanScanUiState>(
+            LanScanUiState.Finished(
+                LanScanSummary(
+                    subnet = "192.168.1.0/24",
+                    totalScanned = 254,
+                    aliveHosts = 1,
+                    scanDurationMs = 500,
+                    hosts = listOf(fakeHost(ip).copy(openPorts = listOf(443, 8080))),
+                ),
+            ),
+        )
+        val viewModel = fakeViewModel(flow = stateFlow)
+        every { viewModel.onToggleHostExpanded(ip) } answers {
+            val current = stateFlow.value as LanScanUiState.Finished
+            stateFlow.value = current.copy(expandedHostIp = if (current.expandedHostIp == ip) null else ip)
+        }
+
+        composeRule.setContent { NetSwissKnifeTheme { LanScreen(viewModel = viewModel) } }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        composeRule.onAllNodesWithText(ip, substring = true).onFirst().performScrollTo().performClick()
+        composeRule.mainClock.advanceTimeBy(500L)
+        composeRule.onNodeWithTag("lan_action_http")
+            .performScrollTo()
+            .assertIsDisplayed()
+            .performClick()
+        verify(exactly = 1) { viewModel.onProbeHttp(ip, 8080) }
+
+        val fallbackIp = "192.168.1.53"
+        stateFlow.value = LanScanUiState.Finished(
+            LanScanSummary(
+                subnet = "192.168.1.0/24",
+                totalScanned = 254,
+                aliveHosts = 1,
+                scanDurationMs = 500,
+                hosts = listOf(fakeHost(fallbackIp).copy(openPorts = listOf(443, 8443))),
+            ),
+            expandedHostIp = fallbackIp,
+        )
+        composeRule.mainClock.advanceTimeBy(500L)
+        composeRule.onNodeWithText("Probe HTTP (port 80)").performScrollTo().assertIsDisplayed().performClick()
+        verify(exactly = 1) { viewModel.onProbeHttp(fallbackIp, 80) }
+
+        val unknownIp = "192.168.1.54"
+        stateFlow.value = LanScanUiState.Finished(
+            LanScanSummary(
+                subnet = "192.168.1.0/24",
+                totalScanned = 254,
+                aliveHosts = 1,
+                scanDurationMs = 500L,
+                hosts = listOf(fakeHost(unknownIp)),
+            ),
+            expandedHostIp = unknownIp,
+        )
+        composeRule.mainClock.advanceTimeBy(500L)
+        composeRule.onNodeWithText("Probe HTTP (port 80)").performScrollTo().assertIsDisplayed().performClick()
+        verify(exactly = 1) { viewModel.onProbeHttp(unknownIp, 80) }
+    }
+
+    @Test
     fun finishedState_hidesUncertainDiagnosticsUntilOptedIn_withoutChangingConfirmedSummary() {
         val uncertainIp = "192.168.1.77"
         val summary = LanScanSummary(

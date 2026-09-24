@@ -188,6 +188,20 @@ fun LanScreen(
                         ),
                     )
                 }
+                is LanNavEvent.NavigateToHttp -> {
+                    val host = ToolHost.parse(event.host)
+                    val port = ToolPort.parse(event.port)
+                    if (host != null && port != null) {
+                        onNavigate(
+                            NavRoutes.HttpProbe.createRoute(
+                                ToolIntent(
+                                    destination = ToolDestination.HostTarget(HostTool.HTTP, host, port),
+                                    source = ToolSource.LAN,
+                                ),
+                            ),
+                        )
+                    }
+                }
                 is LanNavEvent.NavigateToTls -> {
                     val host = ToolHost.parse(event.host)
                     val port = ToolPort.parse(event.port)
@@ -287,6 +301,7 @@ fun LanScreen(
                         onToggleExpand = viewModel::onToggleHostExpanded,
                         onScanPorts = viewModel::onScanPorts,
                         onPingHost = viewModel::onPingHost,
+                        onProbeHttp = viewModel::onProbeHttp,
                         onInspectTls = viewModel::onInspectTls,
                         onClear = viewModel::onClear,
                         onRescan = viewModel::startScan,
@@ -304,6 +319,7 @@ fun LanScreen(
                         onToggleExpand = viewModel::onToggleHostExpanded,
                         onScanPorts = viewModel::onScanPorts,
                         onPingHost = viewModel::onPingHost,
+                        onProbeHttp = viewModel::onProbeHttp,
                         onInspectTls = viewModel::onInspectTls,
                         onClear = viewModel::onClear,
                         onRescan = viewModel::startScan,
@@ -631,6 +647,7 @@ private fun LanScanningContent(state: LanScanUiState.Scanning) {
                             macResolutionSupported = true,
                             onScanPorts = {},
                             onPingHost = {},
+                            onProbeHttp = { _, _ -> },
                             onInspectTls = { _, _ -> },
                         )
                     }
@@ -730,6 +747,7 @@ private fun LanFinishedContent(
     onToggleExpand: (String) -> Unit,
     onScanPorts: (String) -> Unit,
     onPingHost: (String) -> Unit,
+    onProbeHttp: (String, Int) -> Unit,
     onInspectTls: (String, Int) -> Unit,
     onClear: () -> Unit,
     onRescan: () -> Unit,
@@ -985,6 +1003,7 @@ private fun LanFinishedContent(
                             macResolutionSupported = summary.macResolutionSupported,
                             onScanPorts = onScanPorts,
                             onPingHost = onPingHost,
+                            onProbeHttp = onProbeHttp,
                             onInspectTls = onInspectTls,
                         )
                     }
@@ -1176,6 +1195,7 @@ private fun HostCard(
     macResolutionSupported: Boolean,
     onScanPorts: (String) -> Unit,
     onPingHost: (String) -> Unit,
+    onProbeHttp: (String, Int) -> Unit,
     onInspectTls: (String, Int) -> Unit,
 ) {
     val containerColor by animateColorAsState(
@@ -1320,6 +1340,7 @@ private fun HostCard(
                         macResolutionSupported = macResolutionSupported,
                         onScanPorts = onScanPorts,
                         onPingHost = onPingHost,
+                        onProbeHttp = onProbeHttp,
                         onInspectTls = onInspectTls,
                     )
                 }
@@ -1371,6 +1392,7 @@ private fun HostDetailPanel(
     macResolutionSupported: Boolean,
     onScanPorts: (String) -> Unit,
     onPingHost: (String) -> Unit,
+    onProbeHttp: (String, Int) -> Unit,
     onInspectTls: (String, Int) -> Unit,
 ) {
     Column(
@@ -1438,6 +1460,13 @@ private fun HostDetailPanel(
         }
         TextButton(onClick = { onScanPorts(host.ip) }) {
             Text(stringResource(R.string.lan_action_scan_ports))
+        }
+        val httpPort = preferredHttpProbePort(host.openPorts)
+        TextButton(
+            onClick = { onProbeHttp(host.ip, httpPort) },
+            modifier = Modifier.testTag("lan_action_http"),
+        ) {
+            Text(stringResource(R.string.lan_action_probe_http_port, httpPort))
         }
         val tlsPorts = host.openPorts.distinct().sorted()
         if (tlsPorts.isNotEmpty()) {

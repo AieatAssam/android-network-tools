@@ -184,4 +184,66 @@ class ToolHandoffNavigationTest {
         composeRule.onNodeWithText("Back to LAN").performClick()
         composeRule.onNodeWithText("LAN scan result").assertIsDisplayed()
     }
+
+    @Test
+    fun lanHttpHandoffCarriesHostPortAndBackReturnsToLanResult() {
+        val host = requireNotNull(ToolHost.parse("192.0.2.8"))
+        val intent = ToolIntent(
+            ToolDestination.HostTarget(HostTool.HTTP, host, requireNotNull(ToolPort.parse(8080))),
+            ToolSource.LAN,
+        )
+        val encodedIntent = ToolIntentCodec.encode(intent)
+
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                val navController = rememberNavController()
+                NavHost(navController = navController, startDestination = "lan") {
+                    composable("lan") {
+                        Column {
+                            Text("LAN scan result")
+                            Button(onClick = {
+                                navController.navigateFromToolHandoff(NavRoutes.HttpProbe.createRoute(intent))
+                            }) { Text("Probe HTTP") }
+                        }
+                    }
+                    composable(
+                        route = NavRoutes.HttpProbe.route,
+                        arguments = listOf(
+                            navArgument("intent") {
+                                type = NavType.StringType
+                                nullable = true
+                                defaultValue = null
+                            },
+                            navArgument("host") {
+                                type = NavType.StringType
+                                nullable = true
+                                defaultValue = null
+                            },
+                        ),
+                    ) { entry ->
+                        val routeHost = entry.arguments?.getString("host")
+                        val decoded = entry.arguments?.getString("intent")?.let(ToolIntentCodec::decode)
+                        val target = (decoded?.destination as? ToolDestination.HostTarget)
+                            ?.takeIf { it.tool == HostTool.HTTP && it.port?.value == 8080 }
+                            ?.takeIf { ToolHost.parse(routeHost.orEmpty())?.canonical == it.host.canonical }
+                        Column {
+                            Text("Host: $routeHost")
+                            Text("HTTP target: ${target?.host?.value}:${target?.port?.value}")
+                            Text("Source: ${decoded?.source}")
+                            Text("Encoded intent: ${entry.arguments?.getString("intent")}")
+                            Button(onClick = { navController.popBackStack() }) { Text("Back to LAN") }
+                        }
+                    }
+                }
+            }
+        }
+
+        composeRule.onNodeWithText("Probe HTTP").performClick()
+        composeRule.onNodeWithText("Host: 192.0.2.8").assertIsDisplayed()
+        composeRule.onNodeWithText("HTTP target: 192.0.2.8:8080").assertIsDisplayed()
+        composeRule.onNodeWithText("Source: LAN").assertIsDisplayed()
+        composeRule.onNodeWithText("Encoded intent: $encodedIntent").assertIsDisplayed()
+        composeRule.onNodeWithText("Back to LAN").performClick()
+        composeRule.onNodeWithText("LAN scan result").assertIsDisplayed()
+    }
 }

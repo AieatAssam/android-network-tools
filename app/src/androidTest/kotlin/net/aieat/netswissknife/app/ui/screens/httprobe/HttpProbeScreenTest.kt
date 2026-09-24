@@ -122,6 +122,25 @@ class HttpProbeScreenTest {
     }
 
     @Test
+    fun lanHandoff_showsEditablePrefillAndSourceWithoutSending() {
+        val viewModel = mockk<HttpProbeViewModel>(relaxed = true)
+        every { viewModel.uiState } returns MutableStateFlow(
+            HttpProbeUiState(url = "http://192.0.2.8:8080/"),
+        )
+        every { viewModel.recentHosts } returns MutableStateFlow(emptyList())
+        every { viewModel.sourceContext } returns ToolSource.LAN
+        every { viewModel.hasInvalidHandoff } returns MutableStateFlow(false)
+
+        composeRule.setContent { NetSwissKnifeTheme { HttpProbeScreen(viewModel = viewModel) } }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        composeRule.onNodeWithTag(HttpProbeScreenTestTags.SOURCE_CONTEXT).assertIsDisplayed()
+        val urlField = composeRule.onNodeWithText("http://192.0.2.8:8080/")
+        urlField.performScrollTo().assert(hasSetTextAction())
+        verify(exactly = 0) { viewModel.send() }
+    }
+
+    @Test
     fun invalidHandoff_showsRecoveryMessageAndEditableUrlWithoutSending() {
         val viewModel = fakeViewModel(HttpProbeUiState())
         every { viewModel.hasInvalidHandoff } returns MutableStateFlow(true)

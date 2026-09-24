@@ -116,6 +116,23 @@ class LanScanViewModelTest {
         assertEquals(LanNavEvent.NavigateToTls("192.0.2.8", 8443), viewModel.navigationEvents.first())
     }
 
+    @Test
+    fun `HTTP handoff event includes selected host and chosen port`() = runTest {
+        viewModel.onProbeHttp("192.0.2.8", 8080)
+
+        assertEquals(LanNavEvent.NavigateToHttp("192.0.2.8", 8080), viewModel.navigationEvents.first())
+    }
+
+    @Test
+    fun `HTTP handoff prefers a discovered conventional port and falls back to port 80`() {
+        assertEquals(80, preferredHttpProbePort(listOf(443, 8080, 80)))
+        assertEquals(8080, preferredHttpProbePort(listOf(443, 8080)))
+        assertEquals(8000, preferredHttpProbePort(listOf(8888, 8000)))
+        assertEquals(8888, preferredHttpProbePort(listOf(8888)))
+        assertEquals(80, preferredHttpProbePort(listOf(443, 8443)))
+        assertEquals(80, preferredHttpProbePort(emptyList()))
+    }
+
     @Nested
     @DisplayName("startScan state transitions")
     inner class StartScanStateTransitions {
