@@ -1,5 +1,6 @@
 package net.aieat.netswissknife.core.network.lan
 
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
@@ -56,6 +57,7 @@ class LanScanRepositoryImpl(
     macResolver: MacResolver? = null,
     private val binder: NetworkBinder = NoOpNetworkBinder,
     private val socketFactory: () -> Socket = { Socket() },
+    private val operationDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : LanScanRepository {
 
     private val effectiveMacResolver: MacResolver = macResolver ?: ArpFileMacResolver(arpTableReader)
@@ -172,7 +174,7 @@ class LanScanRepositoryImpl(
                     }
                 }
                 val workers = List(minOf(effectiveConcurrency, ips.size)) {
-                    launch(Dispatchers.IO) {
+                    launch(operationDispatcher) {
                         try {
                             for (ip in pending) {
                                 ensureOperationActive()
@@ -290,7 +292,7 @@ class LanScanRepositoryImpl(
             )
         }
         send(LanScanUpdate.ScanComplete(checkNotNull(completedSummary)))
-    }.flowOn(Dispatchers.IO)
+    }.flowOn(operationDispatcher)
 
     private fun newSession(request: LanScanRequest): OperationSession {
         val effectiveConcurrency = request.concurrency.coerceIn(1, 500)

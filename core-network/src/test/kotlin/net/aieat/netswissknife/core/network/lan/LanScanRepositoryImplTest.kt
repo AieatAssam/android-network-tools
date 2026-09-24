@@ -1,13 +1,18 @@
 package net.aieat.netswissknife.core.network.lan
 
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
@@ -22,13 +27,81 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 import java.net.Socket
 import java.net.SocketAddress
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 @DisplayName("LanScanRepositoryImpl")
 class LanScanRepositoryImplTest {
+
+    @Test
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun `scan worker count never exceeds the caller session budget`() = runTest {
+        val sessionLimit = 2
+        val requestConcurrency = 6
+        val activeProbes = AtomicInteger()
+        val maximumActiveProbes = AtomicInteger()
+        val startedProbes = AtomicInteger()
+        val limitReached = CompletableDeferred<Unit>()
+        val releaseProbes = CompletableDeferred<Unit>()
+        val session = OperationSession(
+            OperationBudget.start(
+                requirement = OperationRequirement.LOCAL_NETWORK,
+                maxConcurrentProbes = sessionLimit,
+            ),
+        )
+        val repo = LanScanRepositoryImpl(
+            arpTableReader = emptyArpReader,
+            icmpProbe = IcmpProbe { _, _ ->
+                val active = activeProbes.incrementAndGet()
+                maximumActiveProbes.updateAndGet { previous -> maxOf(previous, active) }
+                if (startedProbes.incrementAndGet() == sessionLimit) limitReached.complete(Unit)
+                try {
+                    releaseProbes.await()
+                    null
+                } finally {
+                    activeProbes.decrementAndGet()
+                }
+            },
+            tcpProbe = TcpPresenceProbe { _, _, _ -> TcpPresence.None },
+            nameProbes = emptyList(),
+            macResolver = object : MacResolver {
+                override val supported = false
+                override suspend fun resolve(ip: String): String? = null
+            },
+            operationDispatcher = StandardTestDispatcher(testScheduler),
+        )
+
+        val scan = async {
+            repo.scan(
+                LanScanRequest(
+                    subnet = "192.168.1.0/29",
+                    timeoutMs = 500,
+                    concurrency = requestConcurrency,
+                    enableNameProbes = false,
+                ),
+                session,
+            ).toList()
+        }
+
+        try {
+            runCurrent()
+            assertTrue(limitReached.isCompleted, "the session's two allowed workers should start")
+            assertEquals(sessionLimit, activeProbes.get())
+            assertEquals(sessionLimit, maximumActiveProbes.get())
+        } finally {
+            releaseProbes.complete(Unit)
+        }
+        runCurrent()
+        val updates = withTimeout(5_000) { scan.await() }
+        val summary = updates.filterIsInstance<LanScanUpdate.ScanComplete>().single().summary
+
+        assertEquals(6, summary.totalScanned)
+        assertEquals(6, startedProbes.get())
+        assertEquals(sessionLimit, maximumActiveProbes.get())
+    }
 
     @Test
     fun `cancelling a blocked TCP presence connect closes its socket before scan ends`() = runTest {
