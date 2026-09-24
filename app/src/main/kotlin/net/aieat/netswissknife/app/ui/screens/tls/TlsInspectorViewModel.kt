@@ -1,6 +1,7 @@
 package net.aieat.netswissknife.app.ui.screens.tls
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -15,6 +16,12 @@ import net.aieat.netswissknife.app.data.RecentHostsRepository
 import net.aieat.netswissknife.app.platform.NetworkStatus
 import net.aieat.netswissknife.app.platform.NetworkStatusProvider
 import net.aieat.netswissknife.app.platform.NoOpNetworkStatusProvider
+import net.aieat.netswissknife.app.ui.navigation.HostTool
+import net.aieat.netswissknife.app.ui.navigation.ToolDestination
+import net.aieat.netswissknife.app.ui.navigation.ToolHost
+import net.aieat.netswissknife.app.ui.navigation.ToolIntentCodec
+import net.aieat.netswissknife.app.ui.navigation.ToolPort
+import net.aieat.netswissknife.app.ui.navigation.ToolSource
 import net.aieat.netswissknife.core.domain.TlsInspectorParams
 import net.aieat.netswissknife.core.domain.TlsInspectorUseCase
 import net.aieat.netswissknife.core.network.NetworkResult
@@ -38,9 +45,33 @@ class TlsInspectorViewModel @Inject constructor(
     private val useCase: TlsInspectorUseCase,
     private val recentHostsRepository: RecentHostsRepository,
     private val networkStatusProvider: NetworkStatusProvider = NoOpNetworkStatusProvider,
+    private val savedStateHandle: SavedStateHandle = SavedStateHandle(),
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(TlsInspectorUiState())
+    private val routeHost = savedStateHandle.get<String>("host")
+    private val routePort = savedStateHandle.get<String>("port")?.toIntOrNull()?.let(ToolPort::parse)
+    private val rawIntentArgument = savedStateHandle.get<String>("intent")
+    private val typedIntent = rawIntentArgument?.let(ToolIntentCodec::decode)
+    private val handoffTarget = (typedIntent?.destination as? ToolDestination.HostTarget)
+        ?.takeIf { target ->
+            target.tool == HostTool.TLS && target.port != null && routeHost != null && routePort != null &&
+                ToolHost.parse(routeHost)?.canonical == target.host.canonical && routePort == target.port
+        }
+    private val _hasInvalidHandoff = MutableStateFlow(
+        (rawIntentArgument != null || routeHost != null || savedStateHandle.get<String>("port") != null) &&
+            handoffTarget == null && savedStateHandle.get<Boolean>(HANDOFF_RECOVERED_KEY) != true,
+    )
+    val hasInvalidHandoff: StateFlow<Boolean> = _hasInvalidHandoff.asStateFlow()
+    val sourceContext: ToolSource? = handoffTarget?.let { typedIntent?.source }
+
+    private val _uiState = MutableStateFlow(
+        TlsInspectorUiState(
+            host = savedStateHandle.get<String>(EDITED_HOST_KEY)
+                ?: if (_hasInvalidHandoff.value) "" else handoffTarget?.host?.value.orEmpty(),
+            port = savedStateHandle.get<String>(EDITED_PORT_KEY)
+                ?: if (_hasInvalidHandoff.value) "443" else handoffTarget?.port?.value?.toString() ?: "443",
+        ),
+    )
     val uiState: StateFlow<TlsInspectorUiState> = _uiState.asStateFlow()
     val networkStatus: StateFlow<NetworkStatus> = networkStatusProvider.status
 
@@ -58,12 +89,26 @@ class TlsInspectorViewModel @Inject constructor(
 
     fun onHostChange(value: String) {
         if (_uiState.value.isLoading) return
+        savedStateHandle[EDITED_HOST_KEY] = value
         _uiState.value = _uiState.value.copy(host = value, error = null, result = null)
+        recoverInvalidHandoffIfReady()
     }
 
     fun onPortChange(value: String) {
         if (_uiState.value.isLoading) return
+        savedStateHandle[EDITED_PORT_KEY] = value
         _uiState.value = _uiState.value.copy(port = value, error = null, result = null)
+        recoverInvalidHandoffIfReady()
+    }
+
+    private fun recoverInvalidHandoffIfReady() {
+        val state = _uiState.value
+        if (_hasInvalidHandoff.value && HostValidator.normalize(state.host) != null &&
+            ToolPort.parse(state.port.toIntOrNull() ?: 0) != null
+        ) {
+            savedStateHandle[HANDOFF_RECOVERED_KEY] = true
+            _hasInvalidHandoff.value = false
+        }
     }
 
     fun removeRecentHost(host: String) {
@@ -154,5 +199,8 @@ class TlsInspectorViewModel @Inject constructor(
     private companion object {
         const val INSPECTION_TIMEOUT_MS = 10_000
         const val LIFECYCLE_CLOSEABLE_KEY = "tls_operation_lifecycle"
+        const val EDITED_HOST_KEY = "editedTlsHost"
+        const val EDITED_PORT_KEY = "editedTlsPort"
+        const val HANDOFF_RECOVERED_KEY = "tlsHandoffRecovered"
     }
 }

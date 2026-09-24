@@ -7,6 +7,7 @@ import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -18,6 +19,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.ui.navigation.ToolSource
 import net.aieat.netswissknife.app.ui.theme.NetSwissKnifeTheme
 import net.aieat.netswissknife.core.network.tls.TlsCertificate
 import net.aieat.netswissknife.core.network.tls.TlsInspectorResult
@@ -93,6 +95,42 @@ class TlsInspectorScreenTest {
         composeRule
             .onNodeWithText(context.getString(R.string.tls_inspect_button))
             .assertIsEnabled()
+    }
+
+    @Test
+    fun lanHandoff_showsEditableHostPortAndSourceWithoutInspecting() {
+        val viewModel = fakeViewModel(TlsInspectorUiState(host = "192.0.2.8", port = "8443"))
+        every { viewModel.sourceContext } returns ToolSource.LAN
+
+        composeRule.setContent {
+            NetSwissKnifeTheme { TlsInspectorScreen(viewModel = viewModel) }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        composeRule.onNodeWithTag(TlsInspectorScreenTestTags.SOURCE_CONTEXT).assertIsDisplayed()
+        composeRule.onNodeWithText("192.0.2.8").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("8443").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.tls_inspect_button))
+            .performScrollTo()
+            .assertIsEnabled()
+        verify(exactly = 0) { viewModel.inspect() }
+    }
+
+    @Test
+    fun invalidHandoff_showsInlineRecoveryAndKeepsHostEditorAvailable() {
+        val viewModel = fakeViewModel(TlsInspectorUiState())
+        every { viewModel.hasInvalidHandoff } returns MutableStateFlow(true)
+
+        composeRule.setContent {
+            NetSwissKnifeTheme { TlsInspectorScreen(viewModel = viewModel) }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        composeRule.onNodeWithTag(TlsInspectorScreenTestTags.INVALID_HANDOFF).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.tls_host_label))
+            .performScrollTo()
+            .assertIsDisplayed()
+        verify(exactly = 0) { viewModel.inspect() }
     }
 
     @Test
@@ -213,6 +251,8 @@ class TlsInspectorScreenTest {
         val stateFlow = MutableStateFlow(state)
         every { viewModel.uiState } returns stateFlow
         every { viewModel.recentHosts } returns MutableStateFlow(emptyList())
+        every { viewModel.hasInvalidHandoff } returns MutableStateFlow(false)
+        every { viewModel.sourceContext } returns null
         // onHostChange is otherwise a no-op on a relaxed mock, so typing into the host
         // field would never be reflected back through uiState.host — feed it back into
         // the captured flow so the Inspect button's enabled-state can react to input.

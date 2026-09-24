@@ -61,6 +61,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.background
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.pluralStringResource
@@ -87,6 +88,7 @@ import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
 import net.aieat.netswissknife.app.ui.theme.StatusBlue
 import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.app.ui.theme.StatusGood
+import net.aieat.netswissknife.app.ui.navigation.ToolSource
 import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.tls.TlsCertificate
 import net.aieat.netswissknife.core.network.tls.TlsInspectorResult
@@ -97,11 +99,18 @@ import java.util.concurrent.TimeUnit
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
+object TlsInspectorScreenTestTags {
+    const val SOURCE_CONTEXT = "tls_source_context"
+    const val INVALID_HANDOFF = "tls_invalid_handoff"
+}
+
 @Composable
 fun TlsInspectorScreen(viewModel: TlsInspectorViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val networkStatus by viewModel.networkStatus.collectAsStateWithLifecycle()
     val recentHosts by viewModel.recentHosts.collectAsStateWithLifecycle()
+    val hasInvalidHandoff by viewModel.hasInvalidHandoff.collectAsStateWithLifecycle()
+    val sourceContext = viewModel.sourceContext
 
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
@@ -131,6 +140,22 @@ fun TlsInspectorScreen(viewModel: TlsInspectorViewModel = hiltViewModel()) {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     TlsHeaderCard(onHelpClick = { showHelp = true })
                     NetworkStatusBanner(networkStatus, scope = NetworkStatusScope.INTERNET)
+                    if (sourceContext == ToolSource.LAN) {
+                        Text(
+                            text = stringResource(R.string.tls_source_lan),
+                            color = MaterialTheme.colorScheme.secondary,
+                            style = MaterialTheme.typography.labelLarge,
+                            modifier = Modifier.testTag(TlsInspectorScreenTestTags.SOURCE_CONTEXT),
+                        )
+                    }
+                    if (hasInvalidHandoff) {
+                        Text(
+                            text = stringResource(R.string.tls_invalid_handoff),
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.testTag(TlsInspectorScreenTestTags.INVALID_HANDOFF),
+                        )
+                    }
                 }
             }
 

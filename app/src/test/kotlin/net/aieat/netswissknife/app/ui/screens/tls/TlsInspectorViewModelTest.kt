@@ -10,12 +10,20 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.awaitCancellation
 import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.SavedStateHandle
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
+import net.aieat.netswissknife.app.ui.navigation.HostTool
+import net.aieat.netswissknife.app.ui.navigation.ToolDestination
+import net.aieat.netswissknife.app.ui.navigation.ToolHost
+import net.aieat.netswissknife.app.ui.navigation.ToolIntent
+import net.aieat.netswissknife.app.ui.navigation.ToolIntentCodec
+import net.aieat.netswissknife.app.ui.navigation.ToolPort
+import net.aieat.netswissknife.app.ui.navigation.ToolSource
 import net.aieat.netswissknife.core.domain.TlsInspectorUseCase
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.tls.TlsCertificate
@@ -24,6 +32,7 @@ import net.aieat.netswissknife.core.network.operation.CancellationReason
 import net.aieat.netswissknife.core.network.operation.OperationSession
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -90,6 +99,100 @@ class TlsInspectorViewModelTest {
         assertEquals("", state.host)
         assertNull(state.result)
         assertNull(state.error)
+    }
+
+    @Test
+    fun `typed LAN TLS handoff prefills host and port without inspecting`() {
+        val intent = ToolIntent(
+            ToolDestination.HostTarget(
+                HostTool.TLS,
+                requireNotNull(ToolHost.parse("192.0.2.8")),
+                requireNotNull(ToolPort.parse(8443)),
+            ),
+            ToolSource.LAN,
+        )
+        val handoff = TlsInspectorViewModel(
+            useCase,
+            recentHostsRepository,
+            savedStateHandle = SavedStateHandle(
+                mapOf(
+                    "intent" to ToolIntentCodec.encode(intent),
+                    "host" to "192.0.2.8",
+                    "port" to "8443",
+                ),
+            ),
+        )
+
+        assertEquals("192.0.2.8", handoff.uiState.value.host)
+        assertEquals("8443", handoff.uiState.value.port)
+        assertEquals(ToolSource.LAN, handoff.sourceContext)
+        assertFalse(handoff.hasInvalidHandoff.value)
+        assertFalse(handoff.uiState.value.isLoading)
+        assertNull(handoff.uiState.value.result)
+        coVerify(exactly = 0) { useCase(any(), any()) }
+    }
+
+    @Test
+    fun `invalid typed handoff stays editable and valid host port replacement restores`() {
+        val validTls = ToolIntent(
+            ToolDestination.HostTarget(
+                HostTool.TLS,
+                requireNotNull(ToolHost.parse("192.0.2.8")),
+                requireNotNull(ToolPort.parse(8443)),
+            ),
+            ToolSource.LAN,
+        )
+        val wrongTool = ToolIntent(
+            ToolDestination.HostTarget(
+                HostTool.PING,
+                requireNotNull(ToolHost.parse("192.0.2.8")),
+            ),
+            ToolSource.LAN,
+        )
+        val invalidArguments = listOf(
+            mapOf("intent" to "ti1.invalid", "host" to "192.0.2.8", "port" to "8443"),
+            mapOf("intent" to ToolIntentCodec.encode(validTls), "host" to "192.0.2.9", "port" to "8443"),
+            mapOf("intent" to ToolIntentCodec.encode(validTls), "host" to "192.0.2.8", "port" to "9443"),
+            mapOf("intent" to ToolIntentCodec.encode(wrongTool), "host" to "192.0.2.8", "port" to "8443"),
+            mapOf("intent" to ToolIntentCodec.encode(validTls), "host" to "192.0.2.8"),
+        )
+        invalidArguments.forEach { args ->
+            val invalid = TlsInspectorViewModel(
+                useCase,
+                recentHostsRepository,
+                savedStateHandle = SavedStateHandle(args),
+            )
+            assertTrue(invalid.hasInvalidHandoff.value)
+            assertEquals("", invalid.uiState.value.host)
+            assertNull(invalid.sourceContext)
+        }
+
+        val invalidState = SavedStateHandle(mapOf("intent" to "ti1.invalid", "host" to "192.0.2.8", "port" to "8443"))
+        val invalid = TlsInspectorViewModel(useCase, recentHostsRepository, savedStateHandle = invalidState)
+
+        invalid.onHostChange("192.0.2.9")
+        assertFalse(invalid.hasInvalidHandoff.value)
+        assertEquals(true, invalidState.get<Boolean>("tlsHandoffRecovered"))
+        invalid.onPortChange("9443")
+
+        val recreated = TlsInspectorViewModel(
+            useCase,
+            recentHostsRepository,
+            savedStateHandle = SavedStateHandle(
+                mapOf(
+                    "intent" to "ti1.invalid",
+                    "host" to "192.0.2.8",
+                    "port" to "8443",
+                    "editedTlsHost" to "192.0.2.9",
+                    "editedTlsPort" to "9443",
+                    "tlsHandoffRecovered" to true,
+                ),
+            ),
+        )
+        assertFalse(recreated.hasInvalidHandoff.value)
+        assertEquals("192.0.2.9", recreated.uiState.value.host)
+        assertEquals("9443", recreated.uiState.value.port)
+        coVerify(exactly = 0) { useCase(any(), any()) }
     }
 
     @Nested

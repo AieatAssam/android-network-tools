@@ -250,6 +250,43 @@ class LanScanScreenTest {
     }
 
     @Test
+    fun expandedHost_offersTlsActionForEachKnownOpenPort() {
+        val ip = "192.168.1.51"
+        val stateFlow = MutableStateFlow<LanScanUiState>(
+            LanScanUiState.Finished(
+                LanScanSummary(
+                    subnet = "192.168.1.0/24",
+                    totalScanned = 254,
+                    aliveHosts = 1,
+                    scanDurationMs = 500,
+                    hosts = listOf(fakeHost(ip).copy(openPorts = listOf(443, 8000))),
+                ),
+            ),
+        )
+        val viewModel = fakeViewModel(flow = stateFlow)
+        every { viewModel.onToggleHostExpanded(ip) } answers {
+            val current = stateFlow.value as LanScanUiState.Finished
+            stateFlow.value = current.copy(expandedHostIp = if (current.expandedHostIp == ip) null else ip)
+        }
+
+        composeRule.setContent {
+            NetSwissKnifeTheme { LanScreen(viewModel = viewModel) }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        composeRule.onAllNodesWithText(ip, substring = true).onFirst().performScrollTo().performClick()
+        composeRule.mainClock.advanceTimeBy(500L)
+        composeRule.onNodeWithTag("lan_action_tls_443")
+            .performScrollTo()
+            .assertIsDisplayed()
+            .performClick()
+        composeRule.onNodeWithTag("lan_action_tls_8000").assertIsDisplayed()
+        composeRule.onNodeWithTag("lan_action_tls_8443").assertDoesNotExist()
+
+        verify(exactly = 1) { viewModel.onInspectTls(ip, 443) }
+        verify(exactly = 0) { viewModel.onInspectTls(ip, 8000) }
+    }
+
+    @Test
     fun finishedState_hidesUncertainDiagnosticsUntilOptedIn_withoutChangingConfirmedSummary() {
         val uncertainIp = "192.168.1.77"
         val summary = LanScanSummary(

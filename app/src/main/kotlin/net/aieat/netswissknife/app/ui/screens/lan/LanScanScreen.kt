@@ -136,6 +136,7 @@ import net.aieat.netswissknife.app.ui.navigation.NavRoutes
 import net.aieat.netswissknife.app.ui.navigation.ToolDestination
 import net.aieat.netswissknife.app.ui.navigation.ToolHost
 import net.aieat.netswissknife.app.ui.navigation.ToolIntent
+import net.aieat.netswissknife.app.ui.navigation.ToolPort
 import net.aieat.netswissknife.app.ui.navigation.ToolSource
 import net.aieat.netswissknife.core.network.lan.LanHost
 import net.aieat.netswissknife.core.network.lan.LanScanSummary
@@ -186,6 +187,20 @@ fun LanScreen(
                             ),
                         ),
                     )
+                }
+                is LanNavEvent.NavigateToTls -> {
+                    val host = ToolHost.parse(event.host)
+                    val port = ToolPort.parse(event.port)
+                    if (host != null && port != null) {
+                        onNavigate(
+                            NavRoutes.TlsInspector.createRoute(
+                                ToolIntent(
+                                    destination = ToolDestination.HostTarget(HostTool.TLS, host, port),
+                                    source = ToolSource.LAN,
+                                ),
+                            ),
+                        )
+                    }
                 }
             }
         }
@@ -272,6 +287,7 @@ fun LanScreen(
                         onToggleExpand = viewModel::onToggleHostExpanded,
                         onScanPorts = viewModel::onScanPorts,
                         onPingHost = viewModel::onPingHost,
+                        onInspectTls = viewModel::onInspectTls,
                         onClear = viewModel::onClear,
                         onRescan = viewModel::startScan,
                         onToggleDiagnostics = viewModel::onToggleDiagnostics,
@@ -288,6 +304,7 @@ fun LanScreen(
                         onToggleExpand = viewModel::onToggleHostExpanded,
                         onScanPorts = viewModel::onScanPorts,
                         onPingHost = viewModel::onPingHost,
+                        onInspectTls = viewModel::onInspectTls,
                         onClear = viewModel::onClear,
                         onRescan = viewModel::startScan,
                         onToggleDiagnostics = viewModel::onToggleDiagnostics,
@@ -614,6 +631,7 @@ private fun LanScanningContent(state: LanScanUiState.Scanning) {
                             macResolutionSupported = true,
                             onScanPorts = {},
                             onPingHost = {},
+                            onInspectTls = { _, _ -> },
                         )
                     }
                 }
@@ -712,6 +730,7 @@ private fun LanFinishedContent(
     onToggleExpand: (String) -> Unit,
     onScanPorts: (String) -> Unit,
     onPingHost: (String) -> Unit,
+    onInspectTls: (String, Int) -> Unit,
     onClear: () -> Unit,
     onRescan: () -> Unit,
     onToggleDiagnostics: () -> Unit,
@@ -966,6 +985,7 @@ private fun LanFinishedContent(
                             macResolutionSupported = summary.macResolutionSupported,
                             onScanPorts = onScanPorts,
                             onPingHost = onPingHost,
+                            onInspectTls = onInspectTls,
                         )
                     }
                 }
@@ -1156,6 +1176,7 @@ private fun HostCard(
     macResolutionSupported: Boolean,
     onScanPorts: (String) -> Unit,
     onPingHost: (String) -> Unit,
+    onInspectTls: (String, Int) -> Unit,
 ) {
     val containerColor by animateColorAsState(
         targetValue = if (expanded)
@@ -1299,6 +1320,7 @@ private fun HostCard(
                         macResolutionSupported = macResolutionSupported,
                         onScanPorts = onScanPorts,
                         onPingHost = onPingHost,
+                        onInspectTls = onInspectTls,
                     )
                 }
             }
@@ -1343,11 +1365,13 @@ private fun DiscoveryMethod.labelRes(): Int = when (this) {
 }
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 private fun HostDetailPanel(
     host: LanHost,
     macResolutionSupported: Boolean,
     onScanPorts: (String) -> Unit,
     onPingHost: (String) -> Unit,
+    onInspectTls: (String, Int) -> Unit,
 ) {
     Column(
         modifier = Modifier.padding(top = 8.dp),
@@ -1414,6 +1438,19 @@ private fun HostDetailPanel(
         }
         TextButton(onClick = { onScanPorts(host.ip) }) {
             Text(stringResource(R.string.lan_action_scan_ports))
+        }
+        val tlsPorts = host.openPorts.distinct().sorted()
+        if (tlsPorts.isNotEmpty()) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                tlsPorts.forEach { port ->
+                    TextButton(
+                        onClick = { onInspectTls(host.ip, port) },
+                        modifier = Modifier.testTag("lan_action_tls_$port"),
+                    ) {
+                        Text(stringResource(R.string.lan_action_inspect_tls_port, port))
+                    }
+                }
+            }
         }
     }
 }

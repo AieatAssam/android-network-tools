@@ -73,7 +73,17 @@ sealed class NavRoutes(
     object DebugLogs : NavRoutes("debug_logs", "Debug Logs", Icons.Default.BugReport)
     object WifiScan : NavRoutes("wifi_scan", "Wi-Fi Scanner", Icons.Default.WifiFind)
     object TopologyDiscovery : NavRoutes("topology", "Network Topology", Icons.Default.AccountTree)
-    object TlsInspector : NavRoutes("tls", "TLS Inspector", Icons.Default.Lock)
+    object TlsInspector : NavRoutes("tls?intent={intent}&host={host}&port={port}", "TLS Inspector", Icons.Default.Lock) {
+        const val baseRoute = "tls"
+
+        fun createRoute(intent: ToolIntent): String {
+            val target = intent.destination as? ToolDestination.HostTarget
+                ?: throw IllegalArgumentException("TLS Inspector route requires a host destination")
+            require(target.tool == HostTool.TLS && target.port != null)
+            return "$baseRoute?intent=${Uri.encode(ToolIntentCodec.encode(intent))}" +
+                "&host=${Uri.encode(target.host.value)}&port=${target.port.value}"
+        }
+    }
     object WhoisLookup : NavRoutes("whois", "WHOIS Lookup", Icons.AutoMirrored.Filled.ManageSearch)
     object HttpProbe : NavRoutes("httprobe?intent={intent}&host={host}", "HTTP Probe", Icons.Default.Http) {
         const val baseRoute = "httprobe"

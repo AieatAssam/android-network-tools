@@ -20,6 +20,7 @@ import net.aieat.netswissknife.app.ui.navigation.ToolDestination
 import net.aieat.netswissknife.app.ui.navigation.ToolHost
 import net.aieat.netswissknife.app.ui.navigation.ToolIntent
 import net.aieat.netswissknife.app.ui.navigation.ToolIntentCodec
+import net.aieat.netswissknife.app.ui.navigation.ToolPort
 import net.aieat.netswissknife.app.ui.navigation.ToolSource
 import net.aieat.netswissknife.app.ui.theme.NetSwissKnifeTheme
 import org.junit.Rule
@@ -120,5 +121,67 @@ class ToolHandoffNavigationTest {
         composeRule.onNodeWithText("Ping selected host").performClick()
         composeRule.onNodeWithText("Host: 192.0.2.8").assertIsDisplayed()
         composeRule.onNodeWithText("Intent: $encodedIntent").assertIsDisplayed()
+    }
+
+    @Test
+    fun lanTlsHandoffCarriesHostPortAndBackReturnsToLanResult() {
+        val host = requireNotNull(ToolHost.parse("192.0.2.8"))
+        val intent = ToolIntent(
+            ToolDestination.HostTarget(HostTool.TLS, host, requireNotNull(ToolPort.parse(8443))),
+            ToolSource.LAN,
+        )
+        val encodedIntent = ToolIntentCodec.encode(intent)
+
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                val navController = rememberNavController()
+                NavHost(navController = navController, startDestination = "lan") {
+                    composable("lan") {
+                        Column {
+                            Text("LAN scan result")
+                            Button(onClick = {
+                                navController.navigateFromToolHandoff(NavRoutes.TlsInspector.createRoute(intent))
+                            }) {
+                                Text("Inspect TLS")
+                            }
+                        }
+                    }
+                    composable(
+                        route = NavRoutes.TlsInspector.route,
+                        arguments = listOf(
+                            navArgument("intent") {
+                                type = NavType.StringType
+                                nullable = true
+                                defaultValue = null
+                            },
+                            navArgument("host") {
+                                type = NavType.StringType
+                                nullable = true
+                                defaultValue = null
+                            },
+                            navArgument("port") {
+                                type = NavType.StringType
+                                nullable = true
+                                defaultValue = null
+                            },
+                        ),
+                    ) { entry ->
+                        Column {
+                            Text("Host: ${entry.arguments?.getString("host")}")
+                            Text("Port: ${entry.arguments?.getString("port")}")
+                            Text("Intent: ${entry.arguments?.getString("intent")}")
+                            Button(onClick = { navController.popBackStack() }) { Text("Back to LAN") }
+                        }
+                    }
+                }
+            }
+        }
+
+        composeRule.onNodeWithText("Inspect TLS").performClick()
+        composeRule.onNodeWithText("Host: 192.0.2.8").assertIsDisplayed()
+        composeRule.onNodeWithText("Port: 8443").assertIsDisplayed()
+        composeRule.onNodeWithText("Intent: $encodedIntent").assertIsDisplayed()
+        composeRule.onNodeWithText("Back to LAN").performClick()
+        composeRule.onNodeWithText("LAN scan result").assertIsDisplayed()
     }
 }

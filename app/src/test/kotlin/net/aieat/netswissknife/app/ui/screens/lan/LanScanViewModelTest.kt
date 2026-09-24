@@ -109,6 +109,13 @@ class LanScanViewModelTest {
         }
     }
 
+    @Test
+    fun `TLS handoff event includes selected host and discovered port`() = runTest {
+        viewModel.onInspectTls("192.0.2.8", 8443)
+
+        assertEquals(LanNavEvent.NavigateToTls("192.0.2.8", 8443), viewModel.navigationEvents.first())
+    }
+
     @Nested
     @DisplayName("startScan state transitions")
     inner class StartScanStateTransitions {
