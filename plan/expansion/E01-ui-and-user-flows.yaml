@@ -392,6 +392,11 @@ tasks:
         behavior: "HTTP Probe locks the submitted URL, method, body, headers, redirect setting, and recent-host selection while a request is running or canceling. ViewModel guards preserve the same request snapshot and SavedStateHandle URL until operation completion."
         validation: "HttpProbeViewModelTest passed 26/26, including a deferred request that attempts URL/form edits, header add/remove, header expansion, Clear prefill, and SavedStateHandle changes before confirming the displayed result still matches request A. HttpProbeScreenTest Android-test sources compile and assert the URL, method, body, header fields, and recent-host selection are disabled while Canceling. Independent QA/adversarial review found no blocker. Connected instrumentation was not run; no emulator was used."
 
+      http_probe_post_completion_edit_invalidation:
+        status: "verified"
+        behavior: "After a completed HTTP Probe request, an effective URL, method, body, redirect, or custom-header edit clears the old response, error, canceled message, and pending replay approval, then returns the result view to its first tab. Same-value edits and non-request UI changes preserve the result."
+        validation: "HttpProbeViewModelTest passed 28/28, covering each request-input category after success, URL edits after error and cancellation, and result preservation for same-value URL, tab, and header-expansion changes. HttpProbeScreenTest Android-test sources compile and assert that the old success panel disappears when the result is cleared. Independent QA and adversarial reviews found no blocker. The Compose test verifies rendering from a fake state flow; connected instrumentation was not run. No emulator was used."
+
   - id: E01-T08
     priority: high
     status: todo

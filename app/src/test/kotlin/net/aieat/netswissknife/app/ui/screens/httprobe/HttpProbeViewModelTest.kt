@@ -534,6 +534,69 @@ class HttpProbeViewModelTest {
         }
 
         @Test
+        fun `effective request edits invalidate terminal output but same values preserve it`() = runTest {
+            coEvery { useCase(any(), any()) } returns NetworkResult.Success(stubResult)
+            viewModel.onUrlChange("https://example.com")
+            viewModel.send()
+            assertNotNull(viewModel.uiState.value.result)
+
+            viewModel.onUrlChange("https://example.com")
+            assertNotNull(viewModel.uiState.value.result)
+            viewModel.onTabSelected(2)
+            viewModel.onToggleHeadersExpanded()
+            assertNotNull(viewModel.uiState.value.result)
+            assertEquals(2, viewModel.uiState.value.selectedTab)
+
+            viewModel.onMethodChange(HttpMethod.POST)
+            assertNull(viewModel.uiState.value.result)
+            assertEquals(0, viewModel.uiState.value.selectedTab)
+
+            viewModel.send()
+            assertNotNull(viewModel.uiState.value.result)
+            viewModel.onBodyChange("request body")
+            assertNull(viewModel.uiState.value.result)
+
+            viewModel.send()
+            assertNotNull(viewModel.uiState.value.result)
+            viewModel.onFollowRedirectsToggle()
+            assertNull(viewModel.uiState.value.result)
+
+            viewModel.send()
+            assertNotNull(viewModel.uiState.value.result)
+            viewModel.addHeader()
+            assertNull(viewModel.uiState.value.result)
+
+            viewModel.send()
+            assertNotNull(viewModel.uiState.value.result)
+            viewModel.updateHeaderKey(0, "X-Test")
+            assertNull(viewModel.uiState.value.result)
+
+            viewModel.send()
+            assertNotNull(viewModel.uiState.value.result)
+            viewModel.updateHeaderValue(0, "value")
+            assertNull(viewModel.uiState.value.result)
+
+            viewModel.send()
+            assertNotNull(viewModel.uiState.value.result)
+            viewModel.removeHeader(0)
+            assertNull(viewModel.uiState.value.result)
+        }
+
+        @Test
+        fun `editing after error clears retry error for old input`() = runTest {
+            coEvery { useCase(any(), any()) } returns NetworkResult.Error("old request failed")
+            viewModel.onUrlChange("https://example.com")
+            viewModel.send()
+            assertEquals("old request failed", viewModel.uiState.value.error)
+
+            viewModel.onUrlChange("https://replacement.example")
+
+            assertNull(viewModel.uiState.value.error)
+            assertNull(viewModel.uiState.value.result)
+            assertEquals("https://replacement.example", viewModel.uiState.value.url)
+        }
+
+        @Test
         fun `user cancel stays stopping until operation cleanup then shows canceled`() = runTest {
             val operationEntered = CompletableDeferred<Unit>()
             val cleanupStarted = CompletableDeferred<Unit>()
@@ -594,6 +657,10 @@ class HttpProbeViewModelTest {
             assertNull(canceledState.result)
             assertNull(canceledState.error)
             assertEquals(CancellationReason.USER_STOP, capturedSession.cancellationReason)
+
+            cancelViewModel.onUrlChange("https://replacement.example")
+            assertEquals("https://replacement.example", cancelViewModel.uiState.value.url)
+            assertFalse(cancelViewModel.uiState.value.isCanceled)
         }
     }
 

@@ -152,8 +152,7 @@ class HttpProbeViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     fun onUrlChange(url: String) {
-        if (_uiState.value.isLoading) return
-        _uiState.update { it.copy(url = url) }
+        if (!updateRequestInput { it.copy(url = url) }) return
         savedStateHandle[EDITED_URL_KEY] = url
         if (_hasInvalidHandoff.value && validateHttpProbeUrl(url) == null) {
             savedStateHandle[HANDOFF_RECOVERED_KEY] = true
@@ -171,18 +170,15 @@ class HttpProbeViewModel @Inject constructor(
     }
 
     fun onMethodChange(method: HttpMethod) {
-        if (_uiState.value.isLoading) return
-        _uiState.update { it.copy(method = method) }
+        updateRequestInput { it.copy(method = method) }
     }
 
     fun onBodyChange(body: String) {
-        if (_uiState.value.isLoading) return
-        _uiState.update { it.copy(body = body) }
+        updateRequestInput { it.copy(body = body) }
     }
 
     fun onFollowRedirectsToggle() {
-        if (_uiState.value.isLoading) return
-        _uiState.update { it.copy(followRedirects = !it.followRedirects) }
+        updateRequestInput { it.copy(followRedirects = !it.followRedirects) }
     }
 
     fun onTabSelected(tab: Int) = _uiState.update { it.copy(selectedTab = tab) }
@@ -202,18 +198,17 @@ class HttpProbeViewModel @Inject constructor(
     }
 
     fun addHeader() {
-        if (_uiState.value.isLoading) return
-        _uiState.update { it.copy(customHeaders = it.customHeaders + HeaderEntry()) }
+        updateRequestInput { it.copy(customHeaders = it.customHeaders + HeaderEntry()) }
     }
 
     fun removeHeader(index: Int) {
-        if (_uiState.value.isLoading) return
-        _uiState.update { it.copy(customHeaders = it.customHeaders.toMutableList().also { list -> list.removeAt(index) }) }
+        updateRequestInput {
+            it.copy(customHeaders = it.customHeaders.toMutableList().also { list -> list.removeAt(index) })
+        }
     }
 
     fun updateHeaderKey(index: Int, key: String) {
-        if (_uiState.value.isLoading) return
-        _uiState.update { state ->
+        updateRequestInput { state ->
             val updated = state.customHeaders.toMutableList()
             updated[index] = updated[index].copy(key = key)
             state.copy(customHeaders = updated)
@@ -221,8 +216,7 @@ class HttpProbeViewModel @Inject constructor(
     }
 
     fun updateHeaderValue(index: Int, value: String) {
-        if (_uiState.value.isLoading) return
-        _uiState.update { state ->
+        updateRequestInput { state ->
             val updated = state.customHeaders.toMutableList()
             updated[index] = updated[index].copy(value = value)
             state.copy(customHeaders = updated)
@@ -369,6 +363,25 @@ class HttpProbeViewModel @Inject constructor(
         operationSession?.let { session ->
             operationSession = null
             runCatching { session.cancel(reason) }
+        }
+    }
+
+    /** Applies a real request-parameter edit only while idle and discards output for old input. */
+    private fun updateRequestInput(transform: (HttpProbeUiState) -> HttpProbeUiState): Boolean {
+        while (true) {
+            val current = _uiState.value
+            if (current.isLoading) return false
+            val updated = transform(current)
+            if (updated == current) return false
+            val next = updated.copy(
+                isCanceling = false,
+                isCanceled = false,
+                result = null,
+                error = null,
+                pendingEntityReplayApproval = null,
+                selectedTab = 0,
+            )
+            if (_uiState.compareAndSet(current, next)) return true
         }
     }
 

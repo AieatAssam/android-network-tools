@@ -188,6 +188,45 @@ class HttpProbeScreenTest {
     }
 
     @Test
+    fun changedInputAfterSuccess_hidesOldResponseAndReturnsToIdlePanel() {
+        val result = HttpProbeResult(
+            request = HttpProbeRequest(url = "https://example.com"),
+            statusCode = 200,
+            statusMessage = "OK",
+            responseTimeMs = 42,
+            responseHeaders = emptyMap(),
+            responseBody = "",
+            responseBodyBytes = 0,
+            finalUrl = "https://example.com",
+            redirectChain = emptyList(),
+            securityChecks = emptyList(),
+        )
+        val state = MutableStateFlow(HttpProbeUiState(url = "https://example.com", result = result))
+        val viewModel = fakeViewModel(state.value)
+        every { viewModel.uiState } returns state
+
+        composeRule.setContent {
+            NetSwissKnifeTheme { HttpProbeScreen(viewModel = viewModel) }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        composeRule.onNodeWithTag(HttpProbeScreenTestTags.CONTENT_LIST)
+            .performScrollToIndex(HttpProbeScreenTestTags.RESULT_PANEL_INDEX)
+        composeRule.onNodeWithText("200").assertIsDisplayed()
+
+        state.value = state.value.copy(
+            url = "https://edited.example",
+            result = null,
+            selectedTab = 0,
+        )
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        composeRule.onNodeWithText("200").assertDoesNotExist()
+        composeRule.onNodeWithText(context.getString(R.string.httprobe_idle_title))
+            .performScrollTo()
+            .assertIsDisplayed()
+    }
+
+    @Test
     fun mdnsHandoff_showsEditablePrefillAndSourceWithoutSending() {
         val viewModel = mockk<HttpProbeViewModel>(relaxed = true)
         every { viewModel.uiState } returns MutableStateFlow(
