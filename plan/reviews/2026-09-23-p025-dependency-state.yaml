@@ -84,13 +84,13 @@ gradle_evidence:
 disposition:
   phase_status: "in_progress"
   blockers:
-    - "Remove the vulnerable coordinates from the submitted Gradle build graph when a compatible stable AGP/plugin-stack release is available, or use a verified supported configuration constraint; rerun the default-branch submission and verify its payload no longer contains the old versions."
-    - "Obtain explicit, time-bounded approvals for any unresolved critical/high alert before closing the phase."
+    - "Propagate the reviewed scoped constraints to main, then obtain a fresh default-branch dependency submission, SBOM, and alert scan. Verify the selected main graph contains only patched versions for the alerted coordinates; record approved time-bounded dispositions for any alert that remains actionable."
+    - "Confirm all nine alerts have a recorded disposition and every remaining actionable critical/high alert has an explicit, time-bounded approval before closing the phase."
   closure_rule: "Do not close P02.5 based only on local artifact-resolution evidence or the expectation of a later rescan."
 
 artifact_note: "Compact evidence, source run IDs, and artifact hashes are retained here. Raw submission JSON and Gradle logs remain under /tmp and are not committed."
 
-latest_recheck:
+prior_recheck_2026_09_23:
   checked_at: "2026-09-23T22:34:40Z"
   current_branch_submission:
     run_id: 35925554802
@@ -114,6 +114,64 @@ latest_recheck:
   dependabot_open_alerts: [1, 2, 5, 6, 8, 9]
   newest_stable_agp: "9.4.1"
   outcome: "Six alerts remain open. The live GitHub graph predates the local constraints; keep P02.5 open until the post-constraint main-branch submission clears the old versions or approved time-bounded dispositions are recorded."
+
+latest_recheck:
+  checked_at: "2026-09-24T06:38:20Z"
+  reviewed_branch_submission:
+    run_id: 35964942879
+    run_url: "https://github.com/AieatAssam/android-network-tools/actions/runs/35964942879"
+    ref: "refs/heads/plan/comprehensive-review-2026-09-22"
+    commit: "05059fff5e2821026230b1ad04a65b04f4e28d58"
+    submitted_at: "2026-09-24T06:32:00Z"
+    scanned_at: "2026-09-24T06:32:36Z"
+    resolved_component_count: 410
+    artifact_sha256: "1b01b58ba2517a4b1ef8ee46111df8ceb85ac875befbab0c524aa11a48785db2"
+    artifact_path: "/tmp/p025-latest-submission-05059ff/dependency-graph-reports/dynamicdependency-graphauto-submission-submit-gradle.json"
+    result: "The resolved map contains only patched versions for all alerted coordinates; no vulnerable versions of those coordinates are selected in this topic-branch snapshot."
+    patched_resolved_versions:
+      "org.bouncycastle:bcprov-jdk18on": "1.85"
+      "org.bouncycastle:bcpkix-jdk18on": "1.85"
+      "org.bitbucket.b_c:jose4j": "0.9.6"
+      "org.jdom:jdom2": "2.0.6.1"
+      "org.jetbrains.kotlin:kotlin-gradle-plugin": "2.4.20"
+      "org.apache.commons:commons-lang3": "3.18.0"
+      "org.apache.httpcomponents:httpclient": "4.5.14"
+    graph_note: "The report includes AGP/Lint dependencies. It still contains unalerted httpmime:4.5.6, whose edge resolves httpclient to 4.5.14; httpmime itself is not an alert coordinate. This confirms the current branch snapshot's selected dependency graph, not main's graph or GitHub alert closure."
+  default_branch_submission:
+    run_id: 35601558226
+    run_url: "https://github.com/AieatAssam/android-network-tools/actions/runs/35601558226"
+    ref: "refs/heads/main"
+    commit: "5e183721e64ce8a8946f1a0b50f52b83544e8898"
+    submitted_at: "2026-09-21T12:47:10Z"
+    artifact_sha256: "c57002192acc246aab58ed90b13a8bac297ebbea7f7add6344e93cfb1a08cd57"
+    state: "Still the newest main submission; it predates the scoped app constraints. The topic-branch ADS run does not update this default-branch result."
+  github_sbom:
+    generated_at: "2026-09-24T06:38:20Z"
+    sha256: "3c412392ca5b65b95a46836b15a5c61219e7eb995c0c81def8913c19dbf84d72"
+    reported_versions:
+      "org.bouncycastle:bcprov-jdk18on": ["1.80.2", "1.85"]
+      "org.bouncycastle:bcpkix-jdk18on": ["1.80.2", "1.85"]
+      "org.apache.commons:commons-lang3": ["3.16.0", "3.18.0"]
+      "org.apache.httpcomponents:httpclient": ["4.5.6", "4.5.14"]
+    interpretation: "The repository-level GitHub SBOM still aggregates old and patched build coordinates; it is separate from the clean resolved map for topic-branch HEAD 05059ff and does not identify per-configuration selections."
+  dependabot_alerts:
+    checked_at: "2026-09-24"
+    fixed: [3, 4, 7]
+    open: [1, 2, 5, 6, 8, 9]
+    open_alerts_have_fixed_at: false
+    open_alerts_have_dismissed_at: false
+    note: "The alert API still reports six open alerts, including critical #8 and high #9; all open alert records retain their 2026-09-18 creation/update era. The topic-branch submission has not refreshed main's alert state."
+  upstream_toolchain_metadata:
+    checked_at: "2026-09-24"
+    source: "https://dl.google.com/dl/android/maven2/com/android/tools/build/gradle/maven-metadata.xml"
+    latest_stable_agp: "9.4.1"
+    latest_preview: "9.5.0-alpha06"
+    metadata_sha256: "d7d7780ea4d67ba3107fe38ad4a7c82151a6171792e27fcefb0651921450cd98"
+    outcome: "No later stable AGP release is listed; retain the stable toolchain rather than move production builds to the preview line solely to change transitive resolution."
+  quality_gates:
+    latest_recorded_run: "2026-09-23 verification_rerun in this file; full JVM, Kover, lint, debug/release assembly passed on the post-constraint source."
+    current_head_rerun: "A combined run was attempted on 05059ff without an emulator, but its execution session disappeared before a final result was captured. Fresh XML reports show core-network 1,023 tests (1 skipped) and core-domain 188, both with zero failures/errors. The app test reports were stale, and there is no fresh lint or assembly completion evidence; do not count the combined gate as passed. A wrapper retry then failed because the execution sandbox denied writes to /home/dev/.gradle/wrapper/.../gradle-9.7.1-bin.zip.lck. Dependency configuration files are unchanged since the full passing 2026-09-23 run."
+  outcome: "P02.5-T3 is complete for the reviewed branch snapshot: its managed ADS graph resolves all alerted coordinates to patched versions. Keep P02.5 and T4 in progress because main still has stale submission evidence, the live alert API has six open alerts, and the repository SBOM still contains old and patched build coordinates. Recheck main after the change lands there and confirm fresh alert closure or approved time-bounded dispositions before closing the phase."
 
 configuration_scoped_remediation:
   checked_at: "2026-09-23T22:37:21Z"
