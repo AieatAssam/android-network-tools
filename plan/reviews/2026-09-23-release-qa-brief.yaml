@@ -3,9 +3,9 @@ review:
   status: audited
   source: "User-provided Net Swiss Knife QA brief v2026.09.21.1 (API 33, host snmpd at 10.0.2.2)."
   release_baseline_commit: "5e183721e64ce8a8946f1a0b50f52b83544e8898"
-  checked_commit: "931425185f3fffe4d25fcb6b1357c04895d5ad51"
-  checked_worktree_commit: "931425185f3fffe4d25fcb6b1357c04895d5ad51"
-  checked_scope: "The supplied release corresponds to origin/main at 5e18372. Rechecked that baseline and current branch source through 9314251, including Ping one-time route consumption, Traceroute cancel cleanup/partial results, OperationRunner USER_STOP handling, WHOIS deadline conversion, Wi-Fi permission-state fixes, the topology per-session SNMP walk cap, and one-time/clearable prefill restoration for Ping, Ports, HTTP, TLS, and WOL. On this committed source tree, TopologyDiscoveryRepositoryTest passed 24/24, the full app JVM suite passed 462/462, the affected HTTP/Ports/TLS/WOL/Ping ViewModel tests passed, Android-test Kotlin sources compiled, and lintDebug passed. API 33 instrumentation and live lab checks are not claimed. The latest exact-head Dependency Submission status is tracked separately in the P02.5 evidence. Implementation details remain cross-referenced to E01/E03 and dependency-gate review artifacts."
+  checked_commit: "fa7e893c7379dc43e32ed978c53063d83c2b6ce0"
+  checked_worktree_commit: "fa7e893c7379dc43e32ed978c53063d83c2b6ce0"
+  checked_scope: "The supplied release corresponds to origin/main at 5e18372. Rechecked that baseline and current branch source through 9314251, the production AppNavHost route-test addition at 24dc39f, and test synchronization at fa7e893, including Ping one-time route consumption, Traceroute cancel cleanup/partial results, OperationRunner USER_STOP handling, WHOIS deadline conversion, Wi-Fi permission-state fixes, the topology per-session SNMP walk cap, and one-time/clearable prefill restoration for Ping, Ports, HTTP, TLS, and WOL. On the current source tree, TopologyDiscoveryRepositoryTest passed 24/24, the full app JVM suite passed 462/462, the affected HTTP/Ports/TLS/WOL/Ping ViewModel tests passed, Android-test Kotlin sources compiled, and lintDebug passed. API 33 instrumentation and live lab checks are not claimed. The P02.5 artifact records Dependency Submission for 9314251 only; it was not refreshed after 24dc39f/fa7e893, though those commits changed no dependency declarations. Implementation details remain cross-referenced to E01/E03 and dependency-gate review artifacts."
   branch: "plan/comprehensive-review-2026-09-22"
   release_metadata:
     app: "Net Swiss Knife"
@@ -19,7 +19,7 @@ review:
     environment_non_goals: "Emulator public ICMP/DNS flakiness is an error-UX check; live Cloudflare success is not required on the target AVD."
   environment:
     connected_emulator: "The initial audit avoided a shared dev36 AVD that another task was using. Before WOL follow-up, adb showed no active device; dev36 was started for targeted Compose checks and shut down afterward. Gradle reported Unknown API Level; direct runner startup stalled with app-process ANRs. No API 33 AVD is available."
-    current_followup: "No emulator was started or used during the 9314251 topology/handoff follow-up. JVM tests, Android-test Kotlin compilation, and lint ran without a connected emulator; API 33 and live lab validations remain open."
+    current_followup: "No emulator was started or used during the 24dc39f/fa7e893 navigation and test follow-up. JVM tests, Android-test Kotlin compilation, and lint ran without using an emulator; API 33 and live lab validations remain open."
     host_snmpd: "Not available; no local snmpd process or SNMP lab endpoint verified"
     physical_wifi: "Not available"
   fixed_items_rechecked: [ISS-01, ISS-02, ISS-03, ISS-04, ISS-08, ISS-09, ISS-15, SNMP-threading]
@@ -36,13 +36,13 @@ review:
       evidence:
         - { file: "app/src/main/res/values/strings.xml", lines: "6-10", detail: "Home scroll hint text is `Scroll for more tools`." }
         - { file: "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/NavigationAccessibilityTest.kt", lines: "69-82", detail: "Home test asserts the scroll cue is displayed." }
-      limitation: "API 36 instrumentation passed; no separate API 33 run."
+      limitation: "An earlier API 36 instrumentation pass predates the checked source; the current source was not instrumented, and no API 33 run was available."
     - id: ISS-03
       classification: source_and_ui_test_present
       evidence:
         - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/navigation/NavRoutes.kt", lines: "64-79", detail: "The shared tool list includes WHOIS, HTTP Probe, Subnet Calc, Speed Test, and Wake-on-LAN." }
         - { file: "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/NavigationAccessibilityTest.kt", lines: "84-112", detail: "More sheet test iterates every shared tool, scrolls to it, and asserts display, click action, and button role." }
-      limitation: "API 36 instrumentation passed; no separate API 33 run."
+      limitation: "An earlier API 36 instrumentation pass predates the checked source; the current source was not instrumented, and no API 33 run was available."
     - id: ISS-04
       classification: source_and_unit_test_present_ui_error_rendering_test_present
       evidence:
@@ -57,14 +57,14 @@ review:
         - { file: "app/src/main/AndroidManifest.xml", lines: "18-25", detail: "Application launcher label references `@string/app_name`." }
         - { file: "app/src/main/res/values/strings.xml", lines: "2-4", detail: "`app_name` is `NetSwiss`; full in-app brand text remains `Net Swiss Knife`." }
         - { file: "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/NavigationAccessibilityTest.kt", lines: "132-137", detail: "Instrumentation test reads the package launcher label and compares it with `app_name`, including a length bound." }
-      limitation: "API 36 instrumentation passed; no separate API 33 run."
+      limitation: "An earlier API 36 instrumentation pass predates the checked source; the current source was not instrumented, and no API 33 run was available."
     - id: ISS-09
       classification: source_and_ui_test_present
       evidence:
         - { file: "app/src/main/res/values/strings.xml", lines: "735-738", detail: "Settings attribution body contains the Cloudflare service disclosure and is a readable multi-sentence text resource." }
         - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/settings/SettingsScreen.kt", lines: "482-512", detail: "Attributions section displays the body in a full-width card with normal body-small styling and a service link." }
         - { file: "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/screens/settings/SettingsScreenTest.kt", lines: "53-74", detail: "UI test scrolls to the bottom attribution text and asserts it is displayed." }
-      limitation: "API 36 instrumentation passed; no separate API 33 run or physical font-size/accessibility check."
+      limitation: "An earlier API 36 instrumentation pass predates the checked source; the current source was not instrumented, and no API 33 run or physical font-size/accessibility check was available."
     - id: ISS-15
       classification: source_and_ui_test_present
       evidence:
@@ -73,7 +73,7 @@ review:
         - { file: "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/screens/tls/TlsInspectorScreenTest.kt", lines: "150-169", detail: "UI test checks error title/message and verifies Retry calls inspect." }
         - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/tls/TlsInspectorRepositoryImpl.kt", lines: "112-126", detail: "Deadline cancellation maps to `TLS inspection timed out`; other typed cancellations remain cancellations and ordinary failures remain Error." }
         - { file: "core-network/src/test/kotlin/net/aieat/netswissknife/core/network/tls/TlsInspectorRepositoryImplTest.kt", lines: "132-186,188-210", detail: "Blocked-connect and blocked-handshake deadline tests assert timeout wording and one close; another blocked-connect test verifies a throwing close remains visible in the returned error cause graph." }
-      limitation: "API 36 instrumentation passed with a fake ViewModel; no live Cloudflare request is required or asserted."
+      limitation: "An earlier API 36 pass with a fake ViewModel predates the current TLS screen/test source; the current source was not instrumented. No live Cloudflare request is required or asserted, and no API 33 run was available."
     - id: SNMP-threading
       classification: source_and_unit_test_present_runtime_responsiveness_unverified
       evidence:
@@ -169,15 +169,15 @@ api36_instrumentation:
     runner_argument: "class=ToolHandoffNavigationTest,LanScanScreenTest,WakeOnLanScreenTest"
     attempted_classes: [ToolHandoffNavigationTest, LanScanScreenTest, WakeOnLanScreenTest]
     outcome: "AndroidTest sources compiled. Gradle connectedDebugAndroidTest detected dev36 but rejected it as Unknown API Level and reported no compatible device. A direct `adb shell am instrument -w` attempt reached the app process, which stalled during startup and logged ANRs; the runner was stopped before tests completed. The API 36 AVD was shut down with `adb emu kill`. No instrumentation results are claimed."
-  note: "Previously recorded API 36 passes are historical and predate checked HEAD 9314251; they do not validate the latest branch changes. UI tests use fake ViewModels; successful UI instrumentation still does not replace API 33, TalkBack, host snmpd, or physical WLAN checks."
+  note: "Previously recorded API 36 passes are historical and predate current checked HEAD fa7e893; they do not validate the latest branch changes. UI tests use fake ViewModels; successful UI instrumentation still does not replace API 33, TalkBack, host snmpd, or physical WLAN checks."
 
 unit_validation:
   command: "./gradlew :core-network:test :core-domain:test :app:testDebugUnitTest --no-daemon --no-parallel --console=plain"
-  status: current_branch_head_validated_with_focused_core_network_rerun
+  status: exact_branch_head_app_validated_with_focused_core_network_rerun
   android_test_kotlin_compile: passed_on_current_branch_head
   results: { core_network_latest_full_report: 1023, core_network_latest_full_report_skipped: 1, core_network_focused_topology_rerun: 24, core_domain_latest_report: 188, app_fresh_full_run: 462, failures: 0, errors: 0 }
   focused_followup: { operation_runner: "14/14", ping_view_model: "50/50", traceroute_view_model: "17/17", android_test_kotlin_compile: "passed" }
-  current_worktree_followup: "On 2026-09-24, the serialized full app JVM task executed against committed HEAD 9314251 and passed 462 tests with zero failures/errors. The affected HTTP, Ports, TLS, WOL, and Ping ViewModel suites passed; the focused TopologyDiscoveryRepositoryTest rerun passed 24/24 after adding the per-session walk limit. The latest full core-network and core-domain reports remain 1,023 tests (one skipped) and 188 tests, with zero failures/errors; the entire core-network suite was not rerun after the topology limiter, so the focused repository class is the fresh core-network evidence. Android-test Kotlin compilation and lintDebug passed on the current source. No emulator or live network lab was used."
+  current_worktree_followup: "On 2026-09-24, the serialized full app JVM task passed 462/462 on exact source HEAD fa7e893. A preceding run exposed test synchronization races in topology reset and DNS Stop assertions; topology now holds SNMP close behind a latch while checking Canceling/off-caller teardown and requires Canceled on success, and DNS waits with a bounded timeout for the Canceled StateFlow postcondition after resources close. The focused topology ViewModel and DNS ViewModel suites passed, followed by the full app suite. The focused TopologyDiscoveryRepositoryTest rerun passed 24/24 after adding the per-session walk limit. The latest full core-network and core-domain reports remain 1,023 tests (one skipped) and 188 tests, with zero failures/errors; the entire core-network suite was not rerun after the topology limiter, so the focused repository class is the fresh core-network evidence. Android-test Kotlin compilation and lintDebug passed on the current source. No emulator or live network lab was used."
   additional: "Earlier evidence includes the focused TLS repository class (18 tests), OperationRunnerTest (14/14), PingViewModelTest (50/50), TracerouteViewModelTest (17/17), and WOL/codec/route-identity/LAN focused coverage. API 33 instrumentation, TalkBack, host snmpd, physical WLAN, and other device-specific checks remain open."
 
 brief_accuracy:
