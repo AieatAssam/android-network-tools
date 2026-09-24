@@ -41,7 +41,7 @@ class BoundedTracerouteReverseDnsLookupTest {
         )
         try {
             val repository = IcmpEnginTracerouteRepositoryImpl(
-                nativeTraceFactory = { _, _, _, _, _, _ ->
+                nativeTraceFactory = { _, _, _, _, _, _, _ ->
                     flowOf(HopResult(1, "192.0.2.8", null, 3, HopStatus.SUCCESS))
                 },
                 reverseDnsLookup = BoundedTracerouteReverseDnsLookup(executor) {
@@ -128,7 +128,7 @@ class BoundedTracerouteReverseDnsLookupTest {
         )
         val session = TracerouteOperation.newSession()
         val repository = IcmpEnginTracerouteRepositoryImpl(
-            nativeTraceFactory = { _, _, _, _, _, _ ->
+            nativeTraceFactory = { _, _, _, _, _, _, _ ->
                 flowOf(HopResult(1, "192.0.2.9", null, 4, HopStatus.SUCCESS))
             },
             reverseDnsLookup = BoundedTracerouteReverseDnsLookup(executor) { "router.example" },
@@ -197,7 +197,7 @@ class BoundedTracerouteReverseDnsLookupTest {
             executor.execute { /* Fill the sole waiting slot. */ }
 
             val repository = IcmpEnginTracerouteRepositoryImpl(
-                nativeTraceFactory = { _, _, _, _, _, _ ->
+                nativeTraceFactory = { _, _, _, _, _, _, _ ->
                     flowOf(HopResult(1, "192.0.2.9", null, 4, HopStatus.SUCCESS))
                 },
                 reverseDnsLookup = BoundedTracerouteReverseDnsLookup(executor) { "router.example" },

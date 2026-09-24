@@ -18,6 +18,8 @@ import net.aieat.netswissknife.core.network.traceroute.HopResult
 import net.aieat.netswissknife.core.network.traceroute.HopStatus
 import net.aieat.netswissknife.core.network.operation.CancellationReason
 import net.aieat.netswissknife.core.network.operation.OperationCancellationException
+import net.aieat.netswissknife.core.network.operation.OperationBudget
+import net.aieat.netswissknife.core.network.operation.OperationSession
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertInstanceOf
 import org.junit.jupiter.api.Assertions.assertThrows
@@ -30,7 +32,7 @@ class IcmpEnginTracerouteRepositoryImplTest {
     @Test
     fun `native linkage failure becomes a controlled traceroute error`() {
         val repository = IcmpEnginTracerouteRepositoryImpl(
-            nativeTraceFactory = { _, _, _, _, _, _ ->
+            nativeTraceFactory = { _, _, _, _, _, _, _ ->
                 flow { throw UnsatisfiedLinkError("missing JNI library") }
             },
         )
@@ -45,9 +47,37 @@ class IcmpEnginTracerouteRepositoryImplTest {
     }
 
     @Test
+    fun `native tracer concurrency respects request and caller session ceiling`() = runBlocking {
+        val capturedConcurrency = mutableListOf<Int>()
+        val repository = IcmpEnginTracerouteRepositoryImpl(
+            nativeTraceFactory = { _, _, _, _, _, _, concurrency ->
+                capturedConcurrency += concurrency
+                flowOf()
+            },
+        )
+        val cases = listOf(
+            1 to 5,
+            5 to 2,
+            5 to 20,
+        )
+
+        for ((sessionLimit, probesPerHop) in cases) {
+            val session = OperationSession(
+                OperationBudget.start(timeoutMillis = 5_000, maxConcurrentProbes = sessionLimit),
+            )
+            repository.trace(
+                "192.0.2.7", 3, 100, probesPerHop, TracerouteProbeType.ICMP, 56, session,
+            ).toList()
+        }
+
+        assertEquals(listOf(1, 2, 5), capturedConcurrency)
+        assertEquals(5, TracerouteOperation.MAX_CONCURRENT_PROBES)
+    }
+
+    @Test
     fun `synchronous native factory linkage failure becomes a controlled traceroute error`() {
         val repository = IcmpEnginTracerouteRepositoryImpl(
-            nativeTraceFactory = { _, _, _, _, _, _ ->
+            nativeTraceFactory = { _, _, _, _, _, _, _ ->
                 throw UnsatisfiedLinkError("constructor cannot link JNI symbol")
             },
         )
@@ -64,7 +94,7 @@ class IcmpEnginTracerouteRepositoryImplTest {
     @Test
     fun `traceroute cancellation is preserved`() {
         val repository = IcmpEnginTracerouteRepositoryImpl(
-            nativeTraceFactory = { _, _, _, _, _, _ ->
+            nativeTraceFactory = { _, _, _, _, _, _, _ ->
                 flow { throw CancellationException("stop trace") }
             },
         )
@@ -87,7 +117,7 @@ class IcmpEnginTracerouteRepositoryImplTest {
     @Test
     fun `caller session cancellation stops native collection`() = runBlocking {
         val repository = IcmpEnginTracerouteRepositoryImpl(
-            nativeTraceFactory = { _, _, _, _, _, _ -> flow { awaitCancellation() } },
+            nativeTraceFactory = { _, _, _, _, _, _, _ -> flow { awaitCancellation() } },
         )
         val session = TracerouteOperation.newSession()
         val collection = async {
@@ -107,7 +137,7 @@ class IcmpEnginTracerouteRepositoryImplTest {
     @Test
     fun `downstream linkage error propagates without traceroute remapping`() {
         val repository = IcmpEnginTracerouteRepositoryImpl(
-            nativeTraceFactory = { _, _, _, _, _, _ ->
+            nativeTraceFactory = { _, _, _, _, _, _, _ ->
                 flowOf(HopResult(1, "192.0.2.1", null, 1, HopStatus.SUCCESS))
             },
         )
@@ -126,7 +156,7 @@ class IcmpEnginTracerouteRepositoryImplTest {
     @Test
     fun `reverse dns failure leaves numeric hop available`() = runBlocking {
         val repository = IcmpEnginTracerouteRepositoryImpl(
-            nativeTraceFactory = { _, _, _, _, _, _ ->
+            nativeTraceFactory = { _, _, _, _, _, _, _ ->
                 flowOf(HopResult(1, "192.0.2.9", null, 4, HopStatus.SUCCESS))
             },
             reverseDnsLookup = TracerouteReverseDnsLookup { _, _ -> error("resolver unavailable") },
@@ -143,7 +173,7 @@ class IcmpEnginTracerouteRepositoryImplTest {
     @Test
     fun `reverse dns timeout leaves numeric hop available`() = runBlocking {
         val repository = IcmpEnginTracerouteRepositoryImpl(
-            nativeTraceFactory = { _, _, _, _, _, _ ->
+            nativeTraceFactory = { _, _, _, _, _, _, _ ->
                 flowOf(HopResult(1, "192.0.2.9", null, 4, HopStatus.SUCCESS))
             },
             reverseDnsLookup = TracerouteReverseDnsLookup { _, _ ->
@@ -165,7 +195,7 @@ class IcmpEnginTracerouteRepositoryImplTest {
         val session = TracerouteOperation.newSession()
         var receivedSession: net.aieat.netswissknife.core.network.operation.OperationSession? = null
         val repository = IcmpEnginTracerouteRepositoryImpl(
-            nativeTraceFactory = { _, _, _, _, _, _ ->
+            nativeTraceFactory = { _, _, _, _, _, _, _ ->
                 flowOf(HopResult(1, "192.0.2.9", null, 4, HopStatus.SUCCESS))
             },
             reverseDnsLookup = TracerouteReverseDnsLookup { ip, operationSession ->
@@ -189,7 +219,7 @@ class IcmpEnginTracerouteRepositoryImplTest {
         val lookupStarted = CompletableDeferred<Unit>()
         val session = TracerouteOperation.newSession()
         val repository = IcmpEnginTracerouteRepositoryImpl(
-            nativeTraceFactory = { _, _, _, _, _, _ ->
+            nativeTraceFactory = { _, _, _, _, _, _, _ ->
                 flowOf(HopResult(1, "192.0.2.9", null, 4, HopStatus.SUCCESS))
             },
             reverseDnsLookup = TracerouteReverseDnsLookup { _, _ ->

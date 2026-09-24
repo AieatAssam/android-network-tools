@@ -46,6 +46,7 @@ class IcmpEnginTracerouteRepositoryImpl(
         Int,
         TracerouteProbeType,
         Int,
+        Int,
     ) -> Flow<HopResult> = ::nativeTrace,
     private val reverseDnsLookup: TracerouteReverseDnsLookup = BoundedTracerouteReverseDnsLookup(),
 ) : TracerouteRepository {
@@ -82,7 +83,15 @@ class IcmpEnginTracerouteRepositoryImpl(
     ): Flow<HopResult> = channelFlow {
         OperationRunner.runOrJoin(operationSession) {
             val nativeFlow = try {
-                nativeTraceFactory(host, maxHops, timeoutMs, probesPerHop, probeType, packetSize)
+                nativeTraceFactory(
+                    host,
+                    maxHops,
+                    timeoutMs,
+                    probesPerHop,
+                    probeType,
+                    packetSize,
+                    nativeTraceConcurrency(probesPerHop, operationSession.budget.maxConcurrentProbes),
+                )
             } catch (_: LinkageError) {
                 throw NativeTracerouteUnavailableException()
             }
@@ -130,6 +139,7 @@ private fun nativeTrace(
     probesPerHop: Int,
     probeType: TracerouteProbeType,
     packetSize: Int,
+    concurrency: Int,
 ): Flow<HopResult> {
     val icmpProbeType = when (probeType) {
         TracerouteProbeType.ICMP -> ProbeType.ICMP
@@ -142,7 +152,7 @@ private fun nativeTrace(
         timeout = timeoutMs,
         maxHops = maxHops,
         probesPerHop = probesPerHop,
-        concurrency = minOf(probesPerHop, 5),
+        concurrency = concurrency,
         portStrategy = PortStrategy.Sequential(),
         probeSize = probeSize,
     )
@@ -163,6 +173,14 @@ private fun nativeTrace(
         )
     }
 }
+
+/** Keep the native worker count within requested probes, caller budget, and tool ceiling. */
+internal fun nativeTraceConcurrency(probesPerHop: Int, sessionLimit: Int): Int =
+    minOf(
+        probesPerHop.coerceAtLeast(1),
+        sessionLimit.coerceAtLeast(1),
+        TracerouteOperation.MAX_CONCURRENT_PROBES,
+    )
 
 internal const val MAX_REVERSE_DNS_WAIT_MILLIS = 1_000L
 
