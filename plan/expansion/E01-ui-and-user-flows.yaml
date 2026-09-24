@@ -430,7 +430,7 @@ tasks:
 
   - id: E01-T09
     priority: high
-    status: todo
+    status: in_progress
     kind: proposal
     title: "Give every tool deliberate empty, filtered-empty, error, retry, and cancel recovery copy"
     refines_findings: [RUI011, RUI012]
@@ -465,6 +465,14 @@ tasks:
       - "Do not call a timed-out or cached operation successful merely to avoid an empty state; preserve repository truth."
       - "Avoid a giant generic screen abstraction; keep domain-specific content in slots."
     effort: "M (2-3 agent sessions)"
+    checkpoint:
+      lan_filtered_empty_slice:
+        status: "implemented; E01-T09 remains in progress for cross-tool recovery migration and source coverage"
+        behavior: "LAN filter-only, search-only, and combined misses show distinct copy and a Show all devices action. The action clears both search and the local filter while preserving the completed scan and never starts a new scan. A genuinely zero-host scan keeps its existing uncertainty-aware empty state. Search and filter are result-scoped: an accepted new scan clears the ViewModel query as Finished/Canceled content leaves composition and its local filter resets to All; a rejected overlapping start leaves state untouched."
+        validation: "LanScanViewModelTest passed 21/21. Android-test Kotlin compilation passed with Compose coverage for filter-only/combined/search-only misses, reset restoring the host and count without scanning, a true zero-host state, and rescan clearing both query and filter. Independent QA/adversarial reviews found no blocker. Connected instrumentation and API/device checks were not run; no emulator was used."
+        remaining_acceptance:
+          - "Map and migrate recovery states across the remaining tools; add the planned shared state-coverage contract/source guard and localized recovery audit through P07."
+          - "Run the LAN Compose cases on an approved connected device and complete the Traceroute offline/dead-path progress and recovery device checks."
 
   - id: E01-T10
     priority: high

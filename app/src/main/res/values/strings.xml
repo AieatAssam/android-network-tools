@@ -283,6 +283,9 @@
     <string name="lan_filter_has_ports">Has Ports</string>
     <string name="lan_hosts_filtered_header">Results (%1$d of %2$d)</string>
     <string name="lan_no_search_results">No devices match your search</string>
+    <string name="lan_no_filter_results">No devices match this filter</string>
+    <string name="lan_no_search_filter_results">No devices match your search and filter</string>
+    <string name="lan_show_all_devices">Show all devices</string>
 
     <!-- Debug Log Screen -->
     <string name="debug_log_title">Debug Logs</string>

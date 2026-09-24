@@ -224,6 +224,10 @@ class LanScanViewModel @Inject constructor(
     fun startScan() {
         // Do not overlap a new scan with an operation that is still releasing resources.
         if (scanJob?.isCompleted == false) return
+        // Search and filter apply to one completed result set. The screen's local filter
+        // resets when Finished content leaves composition; clear the ViewModel query too
+        // so a new scan cannot return with only half of the old filter still applied.
+        _searchQuery.value = ""
         val liveHosts = mutableListOf<LanHost>()
         val uncertainDiagnostics = mutableListOf<LanScanDiagnostic>()
         scanStartMs = System.currentTimeMillis()

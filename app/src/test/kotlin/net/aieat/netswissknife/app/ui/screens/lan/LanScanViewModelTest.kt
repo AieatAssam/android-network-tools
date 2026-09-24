@@ -163,6 +163,22 @@ class LanScanViewModelTest {
         }
 
         @Test
+        fun `starting a new scan clears the previous results search`() = runTest {
+            every { lanScanUseCase(any(), any()) } returns flowOf(
+                LanScanFlowResult.ScanComplete(stubSummary)
+            )
+            viewModel.onSearchQueryChange("old-host")
+
+            viewModel.startScan()
+
+            assertEquals("", viewModel.searchQuery.value)
+            val state = withContext(Dispatchers.Default) {
+                withTimeout(2_000) { viewModel.uiState.first { it !is LanScanUiState.Scanning } }
+            }
+            assertTrue(state is LanScanUiState.Finished)
+        }
+
+        @Test
         fun `transitions to Error on ValidationError`() = runTest {
             every { lanScanUseCase(any(), any()) } returns flowOf(
                 LanScanFlowResult.ValidationError("invalid subnet")

@@ -991,17 +991,34 @@ private fun LanFinishedContent(
 
             if (filteredHosts.isEmpty()) {
                 OutlinedCard(modifier = Modifier.fillMaxWidth()) {
-                    Box(
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(32.dp),
-                        contentAlignment = Alignment.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Text(
-                            text = stringResource(R.string.lan_no_search_results),
+                            text = stringResource(
+                                when {
+                                    searchQuery.isNotBlank() && activeFilter != HostFilter.All ->
+                                        R.string.lan_no_search_filter_results
+                                    searchQuery.isNotBlank() -> R.string.lan_no_search_results
+                                    else -> R.string.lan_no_filter_results
+                                },
+                            ),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
                         )
+                        TextButton(
+                            onClick = {
+                                onSearchQueryChange("")
+                                activeFilter = HostFilter.All
+                            },
+                        ) {
+                            Text(stringResource(R.string.lan_show_all_devices))
+                        }
                     }
                 }
             } else {
