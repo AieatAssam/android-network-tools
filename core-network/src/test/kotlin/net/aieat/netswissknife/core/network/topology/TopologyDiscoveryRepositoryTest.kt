@@ -312,29 +312,24 @@ class TopologyDiscoveryRepositoryTest {
         val sessions = targetIps.associateWith {
             OperationSession(OperationBudget.start(maxConcurrentProbes = 1))
         }
-        val readySessions = AtomicInteger(0)
-        val allSessionsReady = CompletableDeferred<Unit>()
         val activeWalks = AtomicInteger(0)
         val maximumConcurrentWalks = AtomicInteger(0)
         val activeTargetIps = ConcurrentHashMap.newKeySet<String>()
         val observedTargetIps = ConcurrentHashMap.newKeySet<String>()
+        val clientFactoriesReady = CountDownLatch(targetIps.size)
+        val releaseClientFactories = CountDownLatch(1)
         val fourSessionsWalking = CompletableDeferred<Unit>()
         val fifthTargetEntered = CompletableDeferred<String>()
         val releaseWalks = CompletableDeferred<Unit>()
         val clientCloseCounts = ConcurrentHashMap<String, AtomicInteger>()
-        val sysUpTimeOid = "1.3.6.1.2.1.1.3.0"
 
         val boundedRepository = TopologyDiscoveryRepositoryImpl(SnmpClientFactory { clientParams ->
-            object : SnmpClient {
-                override suspend fun get(target: SnmpTarget, oid: String): String? {
-                    if (oid == sysUpTimeOid) {
-                        if (readySessions.incrementAndGet() == targetIps.size) {
-                            allSessionsReady.complete(Unit)
-                        }
-                        allSessionsReady.await()
-                    }
-                    return null
-                }
+            clientFactoriesReady.countDown()
+            check(releaseClientFactories.await(5, TimeUnit.SECONDS)) {
+                "Timed out waiting to release SNMP client factory barrier"
+            }
+            val client = object : SnmpClient {
+                override suspend fun get(target: SnmpTarget, oid: String): String? = null
 
                 override suspend fun walk(
                     target: SnmpTarget,
@@ -361,6 +356,7 @@ class TopologyDiscoveryRepositoryTest {
                         .incrementAndGet()
                 }
             }
+            client
         })
         val jobs = targetIps.map { targetIp ->
             launch {
@@ -378,6 +374,12 @@ class TopologyDiscoveryRepositoryTest {
         }
 
         try {
+            withContext(Dispatchers.IO) {
+                withTimeout(5_000) {
+                    assertTrue(clientFactoriesReady.await(5, TimeUnit.SECONDS))
+                }
+            }
+            releaseClientFactories.countDown()
             withContext(Dispatchers.IO) {
                 withTimeout(5_000) { fourSessionsWalking.await() }
             }
@@ -407,7 +409,123 @@ class TopologyDiscoveryRepositoryTest {
             assertTrue(sessions.values.all { it.resources.isClosed })
             assertEquals(4, maximumConcurrentWalks.get())
         } finally {
+            releaseClientFactories.countDown()
             releaseWalks.complete(Unit)
+            sessions.values.forEach { it.cancel(CancellationReason.USER_STOP) }
+            withContext(Dispatchers.IO) {
+                withTimeout(5_000) { jobs.joinAll() }
+            }
+        }
+    }
+
+    @Test
+    fun `repository caps scalar GET requests across sessions and resumes queued request after cancellation`() = runTest {
+        val targetIps = (111..116).map { "192.168.1.$it" }
+        val sessions = targetIps.associateWith {
+            OperationSession(OperationBudget.start(maxConcurrentProbes = 4))
+        }
+        val activeGets = AtomicInteger(0)
+        val maximumConcurrentGets = AtomicInteger(0)
+        val activeGetTargets = ConcurrentHashMap.newKeySet<String>()
+        val observedGetTargets = ConcurrentHashMap.newKeySet<String>()
+        val clientFactoriesReady = CountDownLatch(targetIps.size)
+        val releaseClientFactories = CountDownLatch(1)
+        val fourTargetsInGet = CompletableDeferred<Unit>()
+        val fifthTargetInGet = CompletableDeferred<String>()
+        val releaseGets = CompletableDeferred<Unit>()
+        val clientCloseCounts = ConcurrentHashMap<String, AtomicInteger>()
+        val firstSystemOid = "1.3.6.1.2.1.1.1.0"
+
+        val boundedRepository = TopologyDiscoveryRepositoryImpl(SnmpClientFactory { clientParams ->
+            clientFactoriesReady.countDown()
+            check(releaseClientFactories.await(5, TimeUnit.SECONDS)) {
+                "Timed out waiting to release SNMP client factory barrier"
+            }
+            val client = object : SnmpClient {
+                override suspend fun get(target: SnmpTarget, oid: String): String? {
+                    if (oid != firstSystemOid) return null
+                    val active = activeGets.incrementAndGet()
+                    maximumConcurrentGets.updateAndGet { current -> maxOf(current, active) }
+                    activeGetTargets.add(target.ip)
+                    observedGetTargets.add(target.ip)
+                    if (activeGetTargets.size >= 4) fourTargetsInGet.complete(Unit)
+                    if (observedGetTargets.size > 4) fifthTargetInGet.complete(target.ip)
+                    try {
+                        releaseGets.await()
+                        return null
+                    } finally {
+                        activeGetTargets.remove(target.ip)
+                        activeGets.decrementAndGet()
+                    }
+                }
+
+                override suspend fun walk(
+                    target: SnmpTarget,
+                    oidPrefix: String,
+                    budget: SnmpWalkBudget,
+                ): SnmpWalkResult = SnmpWalkResult(emptyMap())
+
+                override fun close() {
+                    clientCloseCounts.computeIfAbsent(clientParams.targetIp) { AtomicInteger() }
+                        .incrementAndGet()
+                }
+            }
+            client
+        })
+        val jobs = targetIps.map { targetIp ->
+            launch {
+                try {
+                    boundedRepository.discover(
+                        defaultParams.copy(targetIp = targetIp, maxHops = 0),
+                        sessions.getValue(targetIp),
+                    ).toList()
+                } catch (cancelled: CancellationException) {
+                    if (sessions.getValue(targetIp).cancellationReason != CancellationReason.USER_STOP) {
+                        throw cancelled
+                    }
+                }
+            }
+        }
+
+        try {
+            withContext(Dispatchers.IO) {
+                withTimeout(5_000) {
+                    assertTrue(clientFactoriesReady.await(5, TimeUnit.SECONDS))
+                }
+            }
+            releaseClientFactories.countDown()
+            withContext(Dispatchers.IO) {
+                withTimeout(5_000) { fourTargetsInGet.await() }
+            }
+            val canceledTarget = activeGetTargets.first()
+            assertEquals(4, activeGetTargets.size)
+            assertEquals(4, maximumConcurrentGets.get())
+
+            sessions.getValue(canceledTarget).cancel(CancellationReason.USER_STOP)
+            val queuedTarget = withContext(Dispatchers.IO) {
+                withTimeout(5_000) { fifthTargetInGet.await() }
+            }
+            assertNotEquals(canceledTarget, queuedTarget)
+            assertTrue(queuedTarget in targetIps)
+            assertEquals(4, activeGetTargets.size)
+            assertEquals(4, maximumConcurrentGets.get())
+            assertEquals(CancellationReason.USER_STOP, sessions.getValue(canceledTarget).cancellationReason)
+
+            releaseGets.complete(Unit)
+            withContext(Dispatchers.IO) {
+                withTimeout(5_000) { jobs.joinAll() }
+            }
+
+            assertEquals(targetIps.size, observedGetTargets.size)
+            assertEquals(1, clientCloseCounts.getValue(canceledTarget).get())
+            targetIps.filterNot { it == canceledTarget }.forEach { targetIp ->
+                assertEquals(1, clientCloseCounts.getValue(targetIp).get())
+            }
+            assertTrue(sessions.values.all { it.resources.isClosed })
+            assertEquals(4, maximumConcurrentGets.get())
+        } finally {
+            releaseClientFactories.countDown()
+            releaseGets.complete(Unit)
             sessions.values.forEach { it.cancel(CancellationReason.USER_STOP) }
             withContext(Dispatchers.IO) {
                 withTimeout(5_000) { jobs.joinAll() }

@@ -86,6 +86,24 @@ class Snmp4jClientImplLoopbackTest {
     }
 
     @Test
+    fun `SNMP transport closes its socket when v3 client initialization fails`() {
+        val binder = FakeNetworkBinder(shouldBindResult = true)
+        val params = TopologyParams(
+            targetIp = "192.168.1.7",
+            snmpVersion = SnmpVersion.V3,
+            v3Username = " ",
+        )
+
+        val error = assertThrows(IllegalArgumentException::class.java) {
+            Snmp4jClientImpl(params, binder)
+        }
+
+        assertEquals("SNMP v3 username must not be blank", error.message)
+        assertEquals(1, binder.boundDatagramSockets.size)
+        assertTrue(binder.boundDatagramSockets.single().isClosed)
+    }
+
+    @Test
     fun `v2c GET returns a responder value`() = runTest {
         val params = TopologyParams(
             targetIp = "127.0.0.1",

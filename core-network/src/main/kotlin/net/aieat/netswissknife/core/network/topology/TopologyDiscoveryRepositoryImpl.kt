@@ -32,7 +32,7 @@ class TopologyDiscoveryRepositoryImpl(
     private val binder: NetworkBinder = NoOpNetworkBinder,
 ) : TopologyDiscoveryRepository {
 
-    private val walkLimiter = Semaphore(MAX_CONCURRENT_SNMP_WALKS)
+    private val requestLimiter = Semaphore(MAX_CONCURRENT_SNMP_REQUESTS)
     private val effectiveSnmpClientFactory = snmpClientFactory
         ?: SnmpClientFactory { params -> Snmp4jClientImpl(params, binder) }
 
@@ -57,8 +57,8 @@ class TopologyDiscoveryRepositoryImpl(
             val effectiveParams = params.copy(targetIp = normalizedTarget)
             val graph = OperationRunner.run(session) {
                 currentCoroutineContext().ensureActive()
-                val sessionWalkLimiter = Semaphore(
-                    minOf(MAX_CONCURRENT_SNMP_WALKS, session.budget.maxConcurrentProbes)
+                val sessionRequestLimiter = Semaphore(
+                    minOf(MAX_CONCURRENT_SNMP_REQUESTS, session.budget.maxConcurrentProbes)
                 )
                 val snmpClient = resources.register(
                     CloseOnceSnmpClient(effectiveSnmpClientFactory.create(effectiveParams))
@@ -90,8 +90,8 @@ class TopologyDiscoveryRepositoryImpl(
                     val target = SnmpTarget(ip = currentIp, params = effectiveParams)
                     val walkBudget = SnmpWalkBudget(limits)
 
-                    val sysDescrAttempt = attemptGet(snmpClient, target, "1.3.6.1.2.1.1.1.0")
-                    val sysNameAttempt = attemptGet(snmpClient, target, "1.3.6.1.2.1.1.5.0")
+                    val sysDescrAttempt = attemptGet(snmpClient, target, "1.3.6.1.2.1.1.1.0", sessionRequestLimiter)
+                    val sysNameAttempt = attemptGet(snmpClient, target, "1.3.6.1.2.1.1.5.0", sessionRequestLimiter)
                     if (sysDescrAttempt.error != null || sysNameAttempt.error != null) snmpErrors.set(true)
                     val sysDescr = retainScalar("1.3.6.1.2.1.1.1.0", sysDescrAttempt.value, walkBudget, truncationReasons)
                     val sysName = retainScalar("1.3.6.1.2.1.1.5.0", sysNameAttempt.value, walkBudget, truncationReasons)
@@ -104,13 +104,13 @@ class TopologyDiscoveryRepositoryImpl(
                     }
                     val sysLocation = retainScalar(
                         "1.3.6.1.2.1.1.6.0",
-                        safeGet(snmpClient, target, "1.3.6.1.2.1.1.6.0", snmpErrors),
+                        safeGet(snmpClient, target, "1.3.6.1.2.1.1.6.0", snmpErrors, sessionRequestLimiter),
                         walkBudget,
                         truncationReasons
                     )
                     val sysUpTimeStr = retainScalar(
                         "1.3.6.1.2.1.1.3.0",
-                        safeGet(snmpClient, target, "1.3.6.1.2.1.1.3.0", snmpErrors),
+                        safeGet(snmpClient, target, "1.3.6.1.2.1.1.3.0", snmpErrors, sessionRequestLimiter),
                         walkBudget,
                         truncationReasons
                     )
@@ -125,21 +125,21 @@ class TopologyDiscoveryRepositoryImpl(
                     val firmware = TopologyNodeParser.parseFirmwareVersion(sysDescr, null)
                     val (interfaces, vlans, lldpResult, cdpResult) = coroutineScope {
                         val interfaces = async {
-                            queryInterfaces(snmpClient, target, walkBudget, truncationReasons, snmpErrors, sessionWalkLimiter)
+                            queryInterfaces(snmpClient, target, walkBudget, truncationReasons, snmpErrors, sessionRequestLimiter)
                         }
                         val vlans = async {
-                            queryVlans(snmpClient, target, walkBudget, truncationReasons, snmpErrors, sessionWalkLimiter)
+                            queryVlans(snmpClient, target, walkBudget, truncationReasons, snmpErrors, sessionRequestLimiter)
                         }
                         val lldp = async {
                             queryLldpNeighbours(
                                 snmpClient, target, currentIp, currentHop, params.maxHops,
-                                walkBudget, truncationReasons, snmpErrors, linkBudget, sessionWalkLimiter
+                                walkBudget, truncationReasons, snmpErrors, linkBudget, sessionRequestLimiter
                             )
                         }
                         val cdp = async {
                             queryCdpNeighbours(
                                 snmpClient, target, currentIp, currentHop, params.maxHops,
-                                walkBudget, truncationReasons, snmpErrors, linkBudget, sessionWalkLimiter
+                                walkBudget, truncationReasons, snmpErrors, linkBudget, sessionRequestLimiter
                             )
                         }
                         Quadruple(interfaces.await(), vlans.await(), lldp.await(), cdp.await())
@@ -228,29 +228,38 @@ class TopologyDiscoveryRepositoryImpl(
     )
 
     private companion object {
-        const val MAX_CONCURRENT_SNMP_WALKS = 4
+        const val MAX_CONCURRENT_SNMP_REQUESTS = 4
         const val DEFAULT_OPERATION_TIMEOUT_MILLIS = 120_000L
     }
 
     private data class GetAttempt(val value: String?, val error: Exception?)
 
-    private suspend fun attemptGet(client: SnmpClient, target: SnmpTarget, oid: String): GetAttempt =
-        try {
-            GetAttempt(client.get(target, oid), null)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            if (e.containsLocalNetworkPermissionDenied()) throw e
-            GetAttempt(null, e)
+    private suspend fun attemptGet(
+        client: SnmpClient,
+        target: SnmpTarget,
+        oid: String,
+        sessionRequestLimiter: Semaphore,
+    ): GetAttempt = sessionRequestLimiter.withPermit {
+        requestLimiter.withPermit {
+            try {
+                GetAttempt(client.get(target, oid), null)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                if (e.containsLocalNetworkPermissionDenied()) throw e
+                GetAttempt(null, e)
+            }
         }
+    }
 
     private suspend fun safeGet(
         client: SnmpClient,
         target: SnmpTarget,
         oid: String,
-        snmpErrors: AtomicBoolean
+        snmpErrors: AtomicBoolean,
+        sessionRequestLimiter: Semaphore,
     ): String? {
-        val attempt = attemptGet(client, target, oid)
+        val attempt = attemptGet(client, target, oid, sessionRequestLimiter)
         if (attempt.error != null) snmpErrors.set(true)
         return attempt.value
     }
@@ -284,10 +293,10 @@ class TopologyDiscoveryRepositoryImpl(
         budget: SnmpWalkBudget,
         truncationReasons: MutableSet<TopologyTruncationReason>,
         snmpErrors: AtomicBoolean,
-        sessionWalkLimiter: Semaphore,
+        sessionRequestLimiter: Semaphore,
     ): Map<String, String> =
-        sessionWalkLimiter.withPermit {
-            walkLimiter.withPermit {
+        sessionRequestLimiter.withPermit {
+            requestLimiter.withPermit {
                 try {
                     val result = client.walk(target, oid, budget)
                     truncationReasons.addAll(result.truncationReasons)
@@ -309,14 +318,14 @@ class TopologyDiscoveryRepositoryImpl(
         budget: SnmpWalkBudget,
         truncationReasons: MutableSet<TopologyTruncationReason>,
         snmpErrors: AtomicBoolean,
-        sessionWalkLimiter: Semaphore,
+        sessionRequestLimiter: Semaphore,
     ): List<SnmpInterface> {
         val (descrWalk, speedWalk, highSpeedWalk, statusWalk, macWalk) = coroutineScope {
-            val descr = async { safeWalk(client, target, "1.3.6.1.2.1.2.2.1.2", budget, truncationReasons, snmpErrors, sessionWalkLimiter) }
-            val speed = async { safeWalk(client, target, "1.3.6.1.2.1.2.2.1.5", budget, truncationReasons, snmpErrors, sessionWalkLimiter) }
-            val highSpeed = async { safeWalk(client, target, "1.3.6.1.2.1.31.1.1.1.15", budget, truncationReasons, snmpErrors, sessionWalkLimiter) }
-            val status = async { safeWalk(client, target, "1.3.6.1.2.1.2.2.1.8", budget, truncationReasons, snmpErrors, sessionWalkLimiter) }
-            val mac = async { safeWalk(client, target, "1.3.6.1.2.1.2.2.1.6", budget, truncationReasons, snmpErrors, sessionWalkLimiter) }
+            val descr = async { safeWalk(client, target, "1.3.6.1.2.1.2.2.1.2", budget, truncationReasons, snmpErrors, sessionRequestLimiter) }
+            val speed = async { safeWalk(client, target, "1.3.6.1.2.1.2.2.1.5", budget, truncationReasons, snmpErrors, sessionRequestLimiter) }
+            val highSpeed = async { safeWalk(client, target, "1.3.6.1.2.1.31.1.1.1.15", budget, truncationReasons, snmpErrors, sessionRequestLimiter) }
+            val status = async { safeWalk(client, target, "1.3.6.1.2.1.2.2.1.8", budget, truncationReasons, snmpErrors, sessionRequestLimiter) }
+            val mac = async { safeWalk(client, target, "1.3.6.1.2.1.2.2.1.6", budget, truncationReasons, snmpErrors, sessionRequestLimiter) }
             Quintuple(descr.await(), speed.await(), highSpeed.await(), status.await(), mac.await())
         }
 
@@ -351,12 +360,12 @@ class TopologyDiscoveryRepositoryImpl(
         budget: SnmpWalkBudget,
         truncationReasons: MutableSet<TopologyTruncationReason>,
         snmpErrors: AtomicBoolean,
-        sessionWalkLimiter: Semaphore,
+        sessionRequestLimiter: Semaphore,
     ): List<VlanInfo> {
         val vlans = mutableListOf<VlanInfo>()
         val (vtpWalk, vtpStateWalk) = coroutineScope {
-            val names = async { safeWalk(client, target, "1.3.6.1.4.1.9.9.46.1.3.1.1.4", budget, truncationReasons, snmpErrors, sessionWalkLimiter) }
-            val states = async { safeWalk(client, target, "1.3.6.1.4.1.9.9.46.1.3.1.1.2", budget, truncationReasons, snmpErrors, sessionWalkLimiter) }
+            val names = async { safeWalk(client, target, "1.3.6.1.4.1.9.9.46.1.3.1.1.4", budget, truncationReasons, snmpErrors, sessionRequestLimiter) }
+            val states = async { safeWalk(client, target, "1.3.6.1.4.1.9.9.46.1.3.1.1.2", budget, truncationReasons, snmpErrors, sessionRequestLimiter) }
             names.await() to states.await()
         }
 
@@ -371,7 +380,7 @@ class TopologyDiscoveryRepositoryImpl(
         }
 
         if (vlans.isEmpty()) {
-            safeWalk(client, target, "1.3.6.1.2.1.17.7.1.4.3.1.1", budget, truncationReasons, snmpErrors, sessionWalkLimiter).forEach { (oid, name) ->
+            safeWalk(client, target, "1.3.6.1.2.1.17.7.1.4.3.1.1", budget, truncationReasons, snmpErrors, sessionRequestLimiter).forEach { (oid, name) ->
                 if (vlans.size >= limits.maxVlansPerNode) {
                     truncationReasons.add(TopologyTruncationReason.VLAN_LIMIT)
                     return@forEach
@@ -393,9 +402,9 @@ class TopologyDiscoveryRepositoryImpl(
         truncationReasons: MutableSet<TopologyTruncationReason>,
         snmpErrors: AtomicBoolean,
         linkBudget: LinkBudget,
-        sessionWalkLimiter: Semaphore,
+        sessionRequestLimiter: Semaphore,
     ): Pair<List<TopologyLink>, List<String>> {
-        val lldpWalk = safeWalk(client, target, "1.0.8802.1.1.2.1.4", budget, truncationReasons, snmpErrors, sessionWalkLimiter)
+        val lldpWalk = safeWalk(client, target, "1.0.8802.1.1.2.1.4", budget, truncationReasons, snmpErrors, sessionRequestLimiter)
         if (lldpWalk.isEmpty()) return emptyList<TopologyLink>() to emptyList()
 
         val remoteEntries = TopologyMibParser.parseLldpRemTable(lldpWalk)
@@ -431,9 +440,9 @@ class TopologyDiscoveryRepositoryImpl(
         truncationReasons: MutableSet<TopologyTruncationReason>,
         snmpErrors: AtomicBoolean,
         linkBudget: LinkBudget,
-        sessionWalkLimiter: Semaphore,
+        sessionRequestLimiter: Semaphore,
     ): Pair<List<TopologyLink>, List<String>> {
-        val cdpWalk = safeWalk(client, target, "1.3.6.1.4.1.9.9.23.1.2.1", budget, truncationReasons, snmpErrors, sessionWalkLimiter)
+        val cdpWalk = safeWalk(client, target, "1.3.6.1.4.1.9.9.23.1.2.1", budget, truncationReasons, snmpErrors, sessionRequestLimiter)
         if (cdpWalk.isEmpty()) return emptyList<TopologyLink>() to emptyList()
 
         val links = mutableListOf<TopologyLink>()

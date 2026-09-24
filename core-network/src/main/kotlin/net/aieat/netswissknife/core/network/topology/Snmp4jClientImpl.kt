@@ -66,13 +66,23 @@ class Snmp4jClientImpl(
     internal val pendingAsyncRequestCount: Int get() = snmp.pendingAsyncRequestCount
 
     init {
-        if (sessionParams.snmpVersion == SnmpVersion.V3) {
-            ensureSecurityProtocols()
-            ensureUsmSecurityModel()
-            val spec = UsmUserSpecFactory.from(sessionParams)
-            snmp.getUSM().addUser(spec.toUsmUser())
+        try {
+            if (sessionParams.snmpVersion == SnmpVersion.V3) {
+                ensureSecurityProtocols()
+                ensureUsmSecurityModel()
+                val spec = UsmUserSpecFactory.from(sessionParams)
+                snmp.getUSM().addUser(spec.toUsmUser())
+            }
+            transport.listen()
+        } catch (failure: Throwable) {
+            closed = true
+            try {
+                snmp.close()
+            } catch (closeFailure: Throwable) {
+                if (closeFailure !== failure) failure.addSuppressed(closeFailure)
+            }
+            throw failure
         }
-        transport.listen()
     }
 
     private fun createTransport(): DefaultUdpTransportMapping = try {
