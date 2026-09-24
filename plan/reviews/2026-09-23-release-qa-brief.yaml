@@ -3,8 +3,8 @@ review:
   status: audited
   source: "User-provided Net Swiss Knife QA brief v2026.09.21.1 (API 33, host snmpd at 10.0.2.2)."
   release_baseline_commit: "5e183721e64ce8a8946f1a0b50f52b83544e8898"
-  checked_commit: "c5acccea86311c980c69054c690671aaffe5f34d"
-  checked_scope: "The supplied release corresponds to origin/main at 5e18372. Audited that baseline plus current branch/worktree source and tests through c5accce; implementation details are cross-referenced to the E03 and dependency-gate review artifacts."
+  checked_commit: "2cded156460dbf2e56f09a42d71016590a50758e"
+  checked_scope: "The supplied release corresponds to origin/main at 5e18372. Audited that baseline plus the current branch through 2cded15; implementation details are cross-referenced to the E03 and dependency-gate review artifacts. Fresh full-suite validation of the current implementation is pending."
   branch: "plan/comprehensive-review-2026-09-22"
   release_metadata:
     app: "Net Swiss Knife"
@@ -100,6 +100,8 @@ items:
       - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/NetworkStatusBanner.kt", lines: "45-53", detail: "ANY_NETWORK shows offline status only when Internet, local-network, and VPN states are all false." }
       - { file: "app/src/test/kotlin/net/aieat/netswissknife/app/ui/screens/traceroute/TracerouteViewModelTest.kt", lines: "118-152,202-218", detail: "Unit coverage asserts offline rejection, local-only and VPN-only eligibility, and stale-emission invalidation after an offline restart." }
       - { file: "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/screens/TracerouteScreenTest.kt", lines: "196-244", detail: "Compose coverage asserts offline error copy, Retry/Clear callbacks, and the connectivity banner." }
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/traceroute/TracerouteReverseDnsLookup.kt", lines: "22-44,83-111", detail: "Current worktree moves optional reverse-DNS work to a cancellable helper with two daemon workers and an eight-entry queue; callers retain numeric hop results after timeout or lookup failure." }
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/traceroute/IcmpEnginTracerouteRepositoryImpl.kt", lines: "90-116,154-159", detail: "Each hop's reverse-DNS wait is capped at one second and by remaining operation time; cancellation and deadline are preserved, and the native mapper no longer resolves names synchronously." }
     needed_validation: "The fresh API 36 connected instrumentation batch compiled but stopped during APK install before tests started. Run TracerouteScreenTest on API 36 and the reported airplane-mode/dead-or-ICMP-blocked target scenario on API 33; confirm progress/Stop is visible promptly without scrolling. Initial-viewport target-device behavior remains open."
 
   - id: ISS-06
@@ -160,10 +162,10 @@ api36_instrumentation:
   note: "Previously recorded API 36 passes are historical and do not validate the latest Traceroute/banner/Ping source changes. UI tests use fake ViewModels; successful UI instrumentation still does not replace API 33, TalkBack, host snmpd, or physical WLAN checks."
 
 unit_validation:
-  command: "./gradlew :core-network:test :core-domain:test :app:testDebugUnitTest --no-daemon --no-parallel"
-  status: passed
-  results: { core_network: 1012, core_network_skipped: 1, core_domain: 183, app: 374, failures: 0, errors: 0 }
-  additional: "`:app:compileDebugAndroidTestKotlin` passed for the DNS Loading-state Cancel test. No connected instrumentation was run because a shared emulator was already in use by another task."
+  command: "./gradlew :core-network:test :core-domain:test :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin --no-daemon --no-parallel --console=plain"
+  status: pending_shared_gradle_capacity
+  results: { core_network: null, core_network_skipped: null, core_domain: 184, app: null, failures: null, errors: null }
+  additional: "The focused TLS repository class passed (18 tests, zero failures), and the core-domain suite passed 184 tests. Full core-network/app suites and current androidTest Kotlin compilation still need an uninterrupted run; the shared Gradle daemon was stopped by another workspace task during the attempt. No connected instrumentation or emulator was used for this audit."
 
 brief_accuracy:
   - "ISS-21's listed features (Cancel, progress, sysName/IP labels, and node-details sheet) exist in current source. The remaining concrete question is live SNMP cancellation and usability of sparse graph layouts, not missing feature implementation as stated."

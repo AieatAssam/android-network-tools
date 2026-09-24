@@ -93,7 +93,7 @@ state_and_rollout:
 tasks:
   - id: E01-T01
     priority: high
-    status: todo
+    status: in_progress
     kind: actual_defect_plus_refinement
     title: "Introduce typed destination intents and safe cross-tool handoff arguments"
     source_evidence:
@@ -108,7 +108,7 @@ tasks:
       - "Reject unsupported or ambiguous values with an inline explanation and keep the destination usable as a blank form."
     depends_on: []
     files_and_seams:
-      create: ["app/src/main/kotlin/net/aieat/netswissknife/app/ui/navigation/ToolIntent.kt", "app/src/test/kotlin/net/aieat/netswissknife/app/ui/navigation/ToolIntentTest.kt"]
+      create: ["app/src/main/kotlin/net/aieat/netswissknife/app/ui/navigation/ToolIntent.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/navigation/ToolIntentCodec.kt", "app/src/test/kotlin/net/aieat/netswissknife/app/ui/navigation/ToolIntentCodecTest.kt"]
       modify: ["app/src/main/kotlin/net/aieat/netswissknife/app/ui/navigation/NavRoutes.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/navigation/AppNavigation.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScreen.kt", "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanViewModel.kt", "all destination ViewModels that accept prefill"]
     implementation_steps:
       - "Define a versioned, URL-safe argument codec with a round-trip test matrix for hostname, IPv4, IPv6, zone ID, port, MAC, and Unicode IDN inputs."
@@ -126,6 +126,18 @@ tasks:
       - "Do not break existing deep links or the current Ports?host={host} route; preserve a compatibility decoder."
       - "Do not put Android Uri or resource IDs in core-domain/core-network."
     effort: "M (2-3 agent sessions)"
+    checkpoint:
+      status: "typed intent and codec foundation implemented; route and destination integration remains open"
+      implementation_commit: afd05d15d7894b95a2f9bc58b36092acd5826f77
+      implemented:
+        - "Typed host, port, MAC, subnet, and source models with strict validation and normalization."
+        - "Versioned URL-safe codec with strict UTF-8 decoding and a compatibility decoder for the existing Ports host query."
+        - "Round-trip, malformed encoding, scoped IPv6, duplicate/unknown legacy query, and MAC normalization test coverage."
+      remaining_acceptance:
+        - "Wire NavRoutes/AppNavigation and LAN/mDNS handoff actions to typed destinations."
+        - "Add one-time route consumption, process-recreation/edit preservation, destination prefill, source context, and inline invalid-input recovery."
+        - "Add instrumented navigation coverage and phone/tablet back-navigation checks."
+      validation: "Fresh JVM and androidTest Kotlin compilation is pending for this checkpoint; no destination integration or device behavior is claimed."
 
   - id: E01-T02
     second_pass_review:

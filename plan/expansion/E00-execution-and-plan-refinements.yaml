@@ -173,6 +173,7 @@ tasks:
     checkpoint:
       task_id: E00-T01
       baseline_or_current_commit: 990138c77ea1ab33ec5da7f10ad379d2fb838644
+      implementation_commit: 2cded156460dbf2e56f09a42d71016590a50758e
       status: in_progress
       files_changed:
         - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/DiscoveryProbes.kt
@@ -195,7 +196,9 @@ tasks:
         - core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/LanScanUseCase.kt
         - app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanViewModel.kt
         - app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanScreen.kt
+        - app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanShareText.kt
         - app/src/test/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanViewModelTest.kt
+        - app/src/test/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanShareTextTest.kt
         - app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanScreenTest.kt
         - app/src/main/res/values/strings.xml
         - README.md
@@ -206,6 +209,7 @@ tasks:
         - "Fresh QA audit found the core acceptance covered; confirmed topology/export paths consume only confirmed summary hosts."
         - "./gradlew :app:connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=net.aieat.netswissknife.app.ui.screens.lan.LanScanScreenTest' --no-daemon --no-parallel — passed on API 36 (5/5), including diagnostics opt-in and unchanged confirmed summary."
         - "Final adversarial review rechecked NetworkTopologyCard and buildLanShareText use only summary.hosts; direct Wi-Fi/VPN and NBSTAT evidence remains device-only."
+        - "LanShareTextTest now directly asserts shared output includes only confirmed summary.hosts and excludes uncertain diagnostic addresses/reasons."
         - "ConnectException is unknown rather than definite refusal; cause detail is retained in bounded opt-in diagnostics."
         - "git diff --check passes."
       remaining_acceptance:
