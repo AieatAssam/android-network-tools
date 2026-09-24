@@ -42,13 +42,18 @@ fun interface WhoisSocketFactory {
  */
 internal object WhoisBlockingTransport {
     private const val RESPONSE_CHUNK_SIZE = 8192
+    private const val WORKER_COUNT = 2
+    private const val QUEUE_CAPACITY = 16
 
-    private val workers = ThreadPoolExecutor(
-        2,
-        2,
+    private val workers = createWorkerExecutor()
+
+    /** The production pool factory is shared with tests so its hard bounds stay observable. */
+    internal fun createWorkerExecutor(): ThreadPoolExecutor = ThreadPoolExecutor(
+        WORKER_COUNT,
+        WORKER_COUNT,
         0L,
         TimeUnit.MILLISECONDS,
-        ArrayBlockingQueue(16),
+        ArrayBlockingQueue(QUEUE_CAPACITY),
         ThreadFactory { task -> Thread(task, "whois-io").apply { isDaemon = true } },
         ThreadPoolExecutor.AbortPolicy()
     )

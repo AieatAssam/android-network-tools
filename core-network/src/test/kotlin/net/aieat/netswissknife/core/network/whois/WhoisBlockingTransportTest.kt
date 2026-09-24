@@ -3,9 +3,11 @@ package net.aieat.netswissknife.core.network.whois
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -19,9 +21,11 @@ import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 
 class WhoisBlockingTransportTest {
     @Test
@@ -106,6 +110,122 @@ class WhoisBlockingTransportTest {
             releaseBlocker.countDown()
             executor.shutdownNow()
             executor.awaitTermination(1, TimeUnit.SECONDS)
+        }
+    }
+
+    @Test
+    fun `production executor runs two resolver calls queues sixteen and rejects overflow before socket creation`() = runTest {
+        val executor = WhoisBlockingTransport.createWorkerExecutor()
+        val resolverEntered = CountDownLatch(2)
+        val releaseResolvers = CountDownLatch(1)
+        val resolverCalls = AtomicInteger()
+        val activeResolvers = AtomicInteger()
+        val maximumActiveResolvers = AtomicInteger()
+        val socketsCreated = AtomicInteger()
+        val socketsClosed = AtomicInteger()
+        val acceptedCalls = (0 until 18)
+            .map { index ->
+                async(Dispatchers.Default) {
+                    WhoisBlockingTransport.query(
+                        host = "whois$index.example",
+                        query = "example.com",
+                        port = 43,
+                        timeoutMs = 1_000,
+                        resolver = WhoisHostResolver {
+                            resolverCalls.incrementAndGet()
+                            val active = activeResolvers.incrementAndGet()
+                            maximumActiveResolvers.updateAndGet { previous -> maxOf(previous, active) }
+                            resolverEntered.countDown()
+                            try {
+                                check(releaseResolvers.await(10, TimeUnit.SECONDS)) {
+                                    "Timed out waiting to release the WHOIS resolver gate"
+                                }
+                            } finally {
+                                activeResolvers.decrementAndGet()
+                            }
+                            InetAddress.getByAddress(byteArrayOf(8, 8, 8, 8))
+                        },
+                        socketFactory = WhoisSocketFactory {
+                            socketsCreated.incrementAndGet()
+                            object : Socket() {
+                                override fun connect(endpoint: SocketAddress?, timeout: Int) = Unit
+                                override fun getOutputStream() = ByteArrayOutputStream()
+                                override fun getInputStream() = ByteArrayInputStream(ByteArray(0))
+                                override fun close() { socketsClosed.incrementAndGet() }
+                            }
+                        },
+                        isDisallowedAddress = { false },
+                        executor = executor,
+                    )
+                }
+            }
+
+        try {
+            assertTrue(
+                withContext(Dispatchers.IO) { resolverEntered.await(5, TimeUnit.SECONDS) },
+                "both production resolver workers should start",
+            )
+            val queueFilled = withContext(Dispatchers.IO) {
+                val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+                while (executor.queue.size < 16 && System.nanoTime() < deadline) {
+                    Thread.yield()
+                }
+                executor.queue.size == 16
+            }
+            assertTrue(queueFilled, "the production queue should reach its 16-task capacity")
+
+            assertEquals(2, executor.corePoolSize)
+            assertEquals(2, executor.maximumPoolSize)
+            assertEquals(16, executor.queue.size)
+            assertEquals(2, maximumActiveResolvers.get())
+            assertEquals(2, resolverCalls.get())
+
+            val overflowFailure = withContext(Dispatchers.Default) {
+                withTimeout(5_000) {
+                    async {
+                        runCatching {
+                            WhoisBlockingTransport.query(
+                                host = "overflow.example",
+                                query = "example.com",
+                                port = 43,
+                                timeoutMs = 1_000,
+                                resolver = WhoisHostResolver {
+                                    resolverCalls.incrementAndGet()
+                                    InetAddress.getByAddress(byteArrayOf(8, 8, 8, 8))
+                                },
+                                socketFactory = WhoisSocketFactory {
+                                    socketsCreated.incrementAndGet()
+                                    Socket()
+                                },
+                                isDisallowedAddress = { false },
+                                executor = executor,
+                            )
+                        }.exceptionOrNull()
+                    }.await()
+                }
+            }
+            assertTrue(overflowFailure is RejectedExecutionException, "the 19th call must be rejected")
+            assertEquals(2, resolverCalls.get())
+            assertEquals(0, socketsCreated.get(), "rejected and queued calls must not create sockets early")
+
+            releaseResolvers.countDown()
+            withContext(Dispatchers.Default) {
+                withTimeout(10_000) { acceptedCalls.awaitAll() }
+            }
+            assertTrue(executor.queue.isEmpty(), "all accepted queued work should drain")
+            assertEquals(0, activeResolvers.get())
+            assertEquals(18, resolverCalls.get())
+            assertEquals(18, socketsCreated.get())
+            assertEquals(socketsCreated.get(), socketsClosed.get())
+        } finally {
+            releaseResolvers.countDown()
+            acceptedCalls.forEach { it.cancel() }
+            acceptedCalls.forEach { it.cancelAndJoin() }
+            executor.shutdownNow()
+            assertTrue(
+                withContext(Dispatchers.IO) { executor.awaitTermination(5, TimeUnit.SECONDS) },
+                "test executor should terminate after accepted tasks settle",
+            )
         }
     }
 
