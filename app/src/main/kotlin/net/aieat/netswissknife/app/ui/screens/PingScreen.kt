@@ -115,9 +115,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
 import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
 import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
@@ -134,6 +132,7 @@ import net.aieat.netswissknife.app.ui.screens.ping.PingUiState
 import net.aieat.netswissknife.app.ui.screens.ping.PingViewModel
 import net.aieat.netswissknife.app.ui.screens.ping.PingCsvSerializer
 import net.aieat.netswissknife.app.util.shareText
+import net.aieat.netswissknife.app.util.shareCsvFile
 import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.ping.PingPacketResult
 import net.aieat.netswissknife.core.network.ping.PingStats
@@ -791,6 +790,13 @@ private fun PingFinishedPanel(
     val result = state.result
     val context = LocalContext.current
     val shareSubject = stringResource(R.string.share_subject_ping, result.host)
+    val shareSummary = stringResource(
+        R.string.ping_share_summary,
+        result.host,
+        result.stats.sent,
+        result.stats.received,
+        result.stats.lossPercent,
+    )
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         // Stats card
@@ -865,18 +871,7 @@ private fun PingFinishedPanel(
                 onClick = {
                     val logFile = state.sessionLogFile
                     if (logFile != null) {
-                        // Continuous session: read full log from file on IO then share
-                        coroutineScope.launch(Dispatchers.IO) {
-                            val text = runCatching { logFile.readText() }.getOrElse { "" }
-                            if (text.isNotEmpty()) {
-                                withContext(Dispatchers.Main) {
-                                    context.shareText(
-                                        text = text,
-                                        subject = shareSubject
-                                    )
-                                }
-                            }
-                        }
+                        context.shareCsvFile(logFile, shareSubject, shareSummary)
                     } else {
                         context.shareText(
                             text = PingCsvSerializer.serialize(result),

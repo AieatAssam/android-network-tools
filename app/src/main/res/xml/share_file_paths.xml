@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Continuous Ping logs are created as app-private temporary cache files. -->
+    <cache-path name="shared_ping_logs" path="." />
+</paths>

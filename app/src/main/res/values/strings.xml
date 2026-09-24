@@ -108,6 +108,7 @@
     <!-- Ping Continuous Mode -->
     <string name="ping_continuous_label">Continuous</string>
     <string name="ping_pings_sent">Pings sent: %1$d</string>
+    <string name="ping_share_summary">Continuous ping CSV for %1$s: %2$d packets, %3$d received, %4$.1f%% loss.</string>
     <string name="ping_continuous_running_title">Pinging continuously…</string>
 
     <!-- Ping States -->
@@ -816,6 +817,7 @@
 
     <!-- Share subjects per tool -->
     <string name="share_subject_ping">Ping – %1$s</string>
+    <string name="share_file_unavailable">Unable to share this file.</string>
     <string name="share_subject_traceroute">Traceroute – %1$s</string>
     <string name="share_subject_ports">Port scan – %1$s</string>
     <string name="share_subject_tls">TLS – %1$s:%2$d</string>
