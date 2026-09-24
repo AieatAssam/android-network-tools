@@ -1,6 +1,7 @@
 package net.aieat.netswissknife.app.ui.screens.httprobe
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -13,6 +14,7 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -21,8 +23,14 @@ import net.aieat.netswissknife.app.data.RecentHostsRepository
 import net.aieat.netswissknife.app.platform.NetworkStatus
 import net.aieat.netswissknife.app.platform.NetworkStatusProvider
 import net.aieat.netswissknife.app.platform.NoOpNetworkStatusProvider
+import net.aieat.netswissknife.app.ui.navigation.HostTool
+import net.aieat.netswissknife.app.ui.navigation.ToolDestination
+import net.aieat.netswissknife.app.ui.navigation.ToolHost
+import net.aieat.netswissknife.app.ui.navigation.ToolIntentCodec
+import net.aieat.netswissknife.app.ui.navigation.ToolSource
 import net.aieat.netswissknife.core.domain.HttpProbeParams
 import net.aieat.netswissknife.core.domain.HttpProbeUseCase
+import net.aieat.netswissknife.core.domain.validateHttpProbeUrl
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.httprobe.HttpMethod
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeOperation
@@ -62,9 +70,30 @@ class HttpProbeViewModel @Inject constructor(
     private val useCase: HttpProbeUseCase,
     private val recentHostsRepository: RecentHostsRepository,
     private val networkStatusProvider: NetworkStatusProvider = NoOpNetworkStatusProvider,
+    private val savedStateHandle: SavedStateHandle = SavedStateHandle(),
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(HttpProbeUiState())
+    private val routeHost = savedStateHandle.get<String>("host")
+    private val rawIntentArgument = savedStateHandle.get<String>("intent")
+    private val typedIntent = rawIntentArgument?.let(ToolIntentCodec::decode)
+    private val handoffTarget = (typedIntent?.destination as? ToolDestination.HostTarget)
+        ?.takeIf { target ->
+            target.tool == HostTool.HTTP && target.port != null &&
+            routeHost != null && ToolHost.parse(routeHost)?.canonical == target.host.canonical
+        }
+    private val _hasInvalidHandoff = MutableStateFlow(
+        (rawIntentArgument != null || routeHost != null) && handoffTarget == null &&
+            savedStateHandle.get<Boolean>(HANDOFF_RECOVERED_KEY) != true,
+    )
+    val hasInvalidHandoff: StateFlow<Boolean> = _hasInvalidHandoff.asStateFlow()
+    val sourceContext: ToolSource? = handoffTarget?.let { typedIntent?.source }
+
+    private val _uiState = MutableStateFlow(
+        HttpProbeUiState(
+            url = savedStateHandle.get<String>(EDITED_URL_KEY)
+                ?: handoffTarget?.let(::httpUrlForTarget).orEmpty(),
+        ),
+    )
     val uiState: StateFlow<HttpProbeUiState> = _uiState.asStateFlow()
     val networkStatus: StateFlow<NetworkStatus> = networkStatusProvider.status
     private data class ActiveReplayDecision(
@@ -96,7 +125,14 @@ class HttpProbeViewModel @Inject constructor(
         }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    fun onUrlChange(url: String) = _uiState.update { it.copy(url = url) }
+    fun onUrlChange(url: String) {
+        _uiState.update { it.copy(url = url) }
+        savedStateHandle[EDITED_URL_KEY] = url
+        if (_hasInvalidHandoff.value && validateHttpProbeUrl(url) == null) {
+            savedStateHandle[HANDOFF_RECOVERED_KEY] = true
+            _hasInvalidHandoff.value = false
+        }
+    }
 
     fun onMethodChange(method: HttpMethod) = _uiState.update { it.copy(method = method) }
 
@@ -249,5 +285,15 @@ class HttpProbeViewModel @Inject constructor(
 
     private companion object {
         const val LIFECYCLE_CLOSEABLE_KEY = "http_probe_operation_lifecycle"
+        const val EDITED_URL_KEY = "editedHttpUrl"
+        const val HANDOFF_RECOVERED_KEY = "handoffRecovered"
     }
+}
+
+internal fun httpUrlForTarget(target: ToolDestination.HostTarget): String {
+    val host = target.host.canonical.let { canonical ->
+        val address = canonical.removeSurrounding("[", "]")
+        if (':' in address) "[${address.replace("%", "%25")}]" else address
+    }
+    return "http://$host:${requireNotNull(target.port).value}/"
 }

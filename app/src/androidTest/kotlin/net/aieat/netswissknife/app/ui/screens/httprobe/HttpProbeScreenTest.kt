@@ -1,6 +1,8 @@
 package net.aieat.netswissknife.app.ui.screens.httprobe
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
@@ -10,6 +12,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.performTextReplacement
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import io.mockk.every
@@ -18,6 +21,7 @@ import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.theme.NetSwissKnifeTheme
+import net.aieat.netswissknife.app.ui.navigation.ToolSource
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeRequest
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeResult
 import net.aieat.netswissknife.core.network.httprobe.HttpSecurityAnalyzer
@@ -88,6 +92,53 @@ class HttpProbeScreenTest {
             .onAllNodesWithText(context.getString(R.string.httprobe_sending))
             .onFirst()
             .assertIsDisplayed()
+    }
+
+    @Test
+    fun mdnsHandoff_showsEditablePrefillAndSourceWithoutSending() {
+        val viewModel = mockk<HttpProbeViewModel>(relaxed = true)
+        every { viewModel.uiState } returns MutableStateFlow(
+            HttpProbeUiState(url = "http://printer.local:8080/"),
+        )
+        every { viewModel.recentHosts } returns MutableStateFlow(emptyList())
+        every { viewModel.sourceContext } returns ToolSource.MDNS
+        every { viewModel.hasInvalidHandoff } returns MutableStateFlow(false)
+
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                HttpProbeScreen(viewModel = viewModel)
+            }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        composeRule.onNodeWithTag(HttpProbeScreenTestTags.SOURCE_CONTEXT)
+            .assertIsDisplayed()
+        val urlField = composeRule.onNodeWithText("http://printer.local:8080/")
+        urlField.performScrollTo().assert(hasSetTextAction())
+        urlField.performTextReplacement("http://edited.local:9000/")
+
+        verify(exactly = 1) { viewModel.onUrlChange("http://edited.local:9000/") }
+        verify(exactly = 0) { viewModel.send() }
+    }
+
+    @Test
+    fun invalidHandoff_showsRecoveryMessageAndEditableUrlWithoutSending() {
+        val viewModel = fakeViewModel(HttpProbeUiState())
+        every { viewModel.hasInvalidHandoff } returns MutableStateFlow(true)
+
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                HttpProbeScreen(viewModel = viewModel)
+            }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        composeRule.onNodeWithTag(HttpProbeScreenTestTags.INVALID_HANDOFF)
+            .assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.httprobe_url_label))
+            .performScrollTo()
+            .assert(hasSetTextAction())
+        verify(exactly = 0) { viewModel.send() }
     }
 
     @Test
@@ -191,6 +242,7 @@ class HttpProbeScreenTest {
         val viewModel = mockk<HttpProbeViewModel>(relaxed = true)
         every { viewModel.uiState } returns MutableStateFlow(state)
         every { viewModel.recentHosts } returns MutableStateFlow(emptyList())
+        every { viewModel.hasInvalidHandoff } returns MutableStateFlow(false)
         return viewModel
     }
 
@@ -211,6 +263,7 @@ class HttpProbeScreenTest {
         val viewModel = mockk<HttpProbeViewModel>(relaxed = true)
         every { viewModel.uiState } returns MutableStateFlow(HttpProbeUiState(result = result, selectedTab = 3))
         every { viewModel.recentHosts } returns MutableStateFlow(emptyList())
+        every { viewModel.hasInvalidHandoff } returns MutableStateFlow(false)
 
         composeRule.setContent {
             NetSwissKnifeTheme {

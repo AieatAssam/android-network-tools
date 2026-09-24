@@ -21,6 +21,7 @@ import net.aieat.netswissknife.app.ui.navigation.HostTool
 import net.aieat.netswissknife.app.ui.navigation.ToolDestination
 import net.aieat.netswissknife.app.ui.navigation.ToolHost
 import net.aieat.netswissknife.app.ui.navigation.ToolIntentCodec
+import net.aieat.netswissknife.app.ui.navigation.ToolPort
 import net.aieat.netswissknife.app.ui.navigation.ToolSource
 import net.aieat.netswissknife.app.ui.theme.NetSwissKnifeTheme
 import net.aieat.netswissknife.core.network.mdns.DiscoveredService
@@ -30,6 +31,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+
 
 /**
  * Covers mDNS Browser's help sheet, incremental service discovery, Scan/Stop
@@ -216,6 +218,63 @@ class MdnsDiscoveryScreenTest {
         assertEquals(HostTool.PING, target?.tool)
         assertEquals(requireNotNull(ToolHost.parse("printer.local")), target?.host)
         assertEquals(ToolSource.MDNS, intent?.source)
+    }
+
+    @Test
+    fun httpServiceAction_navigatesWithTypedHostPortSourceAndDoesNotSend() {
+        val service = fakeService("_http._tcp", "printer")
+        val navigatedRoutes = mutableListOf<String>()
+        val viewModel = fakeViewModel(
+            state = MdnsDiscoveryUiState(
+                services = listOf(service),
+                servicesByType = mapOf(service.serviceType to listOf(service)),
+            ),
+        )
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                MdnsDiscoveryScreen(viewModel = viewModel, onNavigate = navigatedRoutes::add)
+            }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        composeRule.onNodeWithContentDescription(
+            context.getString(R.string.mdns_http_probe_description, "printer"),
+        ).performScrollTo().performClick()
+
+        val route = navigatedRoutes.single()
+        assertTrue(route.startsWith("httprobe?"))
+        val parsedRoute = Uri.parse(route)
+        val encoded = requireNotNull(parsedRoute.getQueryParameter("intent"))
+        assertEquals("printer.local", parsedRoute.getQueryParameter("host"))
+        val intent = ToolIntentCodec.decode(encoded)
+        val target = intent?.destination as? ToolDestination.HostTarget
+        assertEquals(HostTool.HTTP, target?.tool)
+        assertEquals(requireNotNull(ToolHost.parse("printer.local")), target?.host)
+        assertEquals(ToolPort.parse(8080), target?.port)
+        assertEquals(ToolSource.MDNS, intent?.source)
+    }
+
+    @Test
+    fun httpAction_isSuppressedForOtherServiceTypesAndInvalidHostsOrPorts() {
+        val eligibleTypeButBadHost = fakeService("_http._tcp", "bad-host").copy(hostname = "bad host")
+        val eligibleTypeButBadPort = fakeService("_http._tcp", "bad-port").copy(port = 65_536)
+        val notHttp = fakeService("_https._tcp", "https-only")
+        val services = listOf(eligibleTypeButBadHost, eligibleTypeButBadPort, notHttp)
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                MdnsDiscoveryScreen(
+                    viewModel = fakeViewModel(
+                        state = MdnsDiscoveryUiState(
+                            services = services,
+                            servicesByType = services.groupBy { it.serviceType },
+                        ),
+                    ),
+                )
+            }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        composeRule.onNodeWithText(context.getString(R.string.mdns_http_probe)).assertDoesNotExist()
     }
 
     @Test

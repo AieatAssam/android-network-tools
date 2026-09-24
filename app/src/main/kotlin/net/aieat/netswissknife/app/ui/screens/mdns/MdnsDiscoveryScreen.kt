@@ -40,6 +40,7 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.ArrowDropUp
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Devices
+import androidx.compose.material.icons.filled.Http
 import androidx.compose.material.icons.filled.NetworkPing
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Router
@@ -105,6 +106,7 @@ import net.aieat.netswissknife.app.ui.navigation.NavRoutes
 import net.aieat.netswissknife.app.ui.navigation.ToolDestination
 import net.aieat.netswissknife.app.ui.navigation.ToolHost
 import net.aieat.netswissknife.app.ui.navigation.ToolIntent
+import net.aieat.netswissknife.app.ui.navigation.ToolPort
 import net.aieat.netswissknife.app.ui.navigation.ToolSource
 import net.aieat.netswissknife.core.network.HostValidator
 
@@ -188,6 +190,11 @@ fun MdnsDiscoveryScreen(
                                         ),
                                     ),
                                 )
+                            }
+                        },
+                        onHttpProbe = { service ->
+                            mdnsHttpIntent(service)?.let { intent ->
+                                onNavigate(NavRoutes.HttpProbe.createRoute(intent))
                             }
                         },
                     )
@@ -458,11 +465,22 @@ private fun ErrorCard(message: String, onRetry: () -> Unit) {
 
 // ── Service list ──────────────────────────────────────────────────────────────
 
+internal fun mdnsHttpIntent(service: DiscoveredService): ToolIntent? {
+    if (!service.serviceType.equals("_http._tcp", ignoreCase = true)) return null
+    val host = ToolHost.parse(service.hostname) ?: return null
+    val port = ToolPort.parse(service.port) ?: return null
+    return ToolIntent(
+        destination = ToolDestination.HostTarget(HostTool.HTTP, host, port),
+        source = ToolSource.MDNS,
+    )
+}
+
 @Composable
 private fun ServiceList(
     servicesByType: Map<String, List<DiscoveredService>>,
     isScanning: Boolean,
     onPingHost: (String) -> Unit,
+    onHttpProbe: (DiscoveredService) -> Unit,
 ) {
     val expandedTypes = remember { mutableStateMapOf<String, Boolean>() }
 
@@ -509,7 +527,7 @@ private fun ServiceList(
                         enter = fadeIn() + expandVertically(),
                         exit = fadeOut() + shrinkVertically()
                     ) {
-                        ServiceItem(service, onPingHost)
+                        ServiceItem(service, onPingHost, onHttpProbe)
                     }
                 }
             }
@@ -581,7 +599,11 @@ private fun ServiceTypeHeader(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun ServiceItem(service: DiscoveredService, onPingHost: (String) -> Unit) {
+private fun ServiceItem(
+    service: DiscoveredService,
+    onPingHost: (String) -> Unit,
+    onHttpProbe: (DiscoveredService) -> Unit,
+) {
     var expanded by remember { mutableStateOf(false) }
 
     OutlinedCard(
@@ -616,6 +638,20 @@ private fun ServiceItem(service: DiscoveredService, onPingHost: (String) -> Unit
 
             val validHostname = ToolHost.parse(service.hostname)?.takeUnless {
                 HostValidator.isValidIpv4(it.value) || HostValidator.isValidIpv6(it.value)
+            }
+            if (mdnsHttpIntent(service) != null) {
+                val httpProbeDescription = stringResource(
+                    R.string.mdns_http_probe_description,
+                    service.displayName,
+                )
+                FilledTonalButton(
+                    onClick = { onHttpProbe(service) },
+                    modifier = Modifier.semantics { contentDescription = httpProbeDescription },
+                ) {
+                    Icon(Icons.Default.Http, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(stringResource(R.string.mdns_http_probe))
+                }
             }
             if (validHostname != null) {
                 val pingHostnameDescription = stringResource(

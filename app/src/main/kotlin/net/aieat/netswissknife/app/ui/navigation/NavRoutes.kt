@@ -75,7 +75,17 @@ sealed class NavRoutes(
     object TopologyDiscovery : NavRoutes("topology", "Network Topology", Icons.Default.AccountTree)
     object TlsInspector : NavRoutes("tls", "TLS Inspector", Icons.Default.Lock)
     object WhoisLookup : NavRoutes("whois", "WHOIS Lookup", Icons.AutoMirrored.Filled.ManageSearch)
-    object HttpProbe : NavRoutes("httprobe", "HTTP Probe", Icons.Default.Http)
+    object HttpProbe : NavRoutes("httprobe?intent={intent}&host={host}", "HTTP Probe", Icons.Default.Http) {
+        const val baseRoute = "httprobe"
+
+        /** Typed host handoffs keep HTTP inputs separate from arbitrary URL route arguments. */
+        fun createRoute(intent: ToolIntent): String {
+            val target = intent.destination as? ToolDestination.HostTarget
+                ?: throw IllegalArgumentException("HTTP Probe route requires a host destination")
+            require(target.tool == HostTool.HTTP && target.port != null)
+            return "$baseRoute?intent=${Uri.encode(ToolIntentCodec.encode(intent))}&host=${Uri.encode(target.host.value)}"
+        }
+    }
     object SubnetCalculator : NavRoutes("subnet", "Subnet Calc", Icons.Default.Calculate)
     object MdnsDiscovery : NavRoutes("mdns", "mDNS Browser", Icons.Default.CellTower)
     object SpeedTest : NavRoutes("speedtest", "Speed Test", Icons.Default.Speed)

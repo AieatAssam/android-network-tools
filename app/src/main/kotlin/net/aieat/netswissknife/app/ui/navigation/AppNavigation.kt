@@ -165,7 +165,21 @@ fun AppNavHost(navController: NavHostController, modifier: Modifier = Modifier) 
         composable(NavRoutes.TopologyDiscovery.route) { TopologyDiscoveryScreen() }
         composable(NavRoutes.TlsInspector.route)      { TlsInspectorScreen() }
         composable(NavRoutes.WhoisLookup.route)       { WhoisScreen() }
-        composable(NavRoutes.HttpProbe.route)         { HttpProbeScreen() }
+        composable(
+            route = NavRoutes.HttpProbe.route,
+            arguments = listOf(
+                navArgument("intent") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+                navArgument("host") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+            ),
+        ) { HttpProbeScreen() }
         composable(NavRoutes.SubnetCalculator.route)  { SubnetCalculatorScreen() }
         composable(NavRoutes.MdnsDiscovery.route)     {
             MdnsDiscoveryScreen(onNavigate = { route -> navController.navigateFromToolHandoff(route) })

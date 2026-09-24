@@ -800,6 +800,10 @@
     <string name="mdns_txt_records_label">TXT Records</string>
     <string name="mdns_ping_hostname">Ping hostname</string>
     <string name="mdns_ping_hostname_description">Ping hostname %1$s</string>
+    <string name="mdns_http_probe">Open in HTTP Probe</string>
+    <string name="mdns_http_probe_description">Open %1$s in HTTP Probe</string>
+    <string name="httprobe_source_mdns">Prefilled from mDNS Browser</string>
+    <string name="httprobe_invalid_handoff">The supplied destination could not be verified. Enter a valid HTTP URL to continue.</string>
     <string name="mdns_ping_address">Ping %1$s</string>
 
     <!-- Onboarding -->

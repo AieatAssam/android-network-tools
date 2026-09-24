@@ -1,5 +1,6 @@
 package net.aieat.netswissknife.app.ui.screens.httprobe
 
+import androidx.lifecycle.SavedStateHandle
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -14,8 +15,16 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
+import net.aieat.netswissknife.app.ui.navigation.HostTool
+import net.aieat.netswissknife.app.ui.navigation.ToolDestination
+import net.aieat.netswissknife.app.ui.navigation.ToolHost
+import net.aieat.netswissknife.app.ui.navigation.ToolIntent
+import net.aieat.netswissknife.app.ui.navigation.ToolIntentCodec
+import net.aieat.netswissknife.app.ui.navigation.ToolPort
+import net.aieat.netswissknife.app.ui.navigation.ToolSource
 import net.aieat.netswissknife.core.domain.HttpProbeUseCase
 import net.aieat.netswissknife.core.domain.HttpProbeParams
+import net.aieat.netswissknife.core.domain.validateHttpProbeUrl
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.httprobe.HttpMethod
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeRequest
@@ -79,6 +88,132 @@ class HttpProbeViewModelTest {
         assertEquals(HttpMethod.GET, state.method)
         assertNull(state.result)
         assertFalse(state.isLoading)
+    }
+
+    @Test
+    fun `typed mDNS HTTP route pre-fills editable URL with provenance and never sends`() {
+        val intent = ToolIntent(
+            ToolDestination.HostTarget(
+                HostTool.HTTP,
+                requireNotNull(ToolHost.parse("printer.local")),
+                requireNotNull(ToolPort.parse(8080)),
+            ),
+            ToolSource.MDNS,
+        )
+        val encoded = ToolIntentCodec.encode(intent)
+        val decoded = ToolIntentCodec.decode(encoded)
+        assertEquals(intent, decoded)
+
+        val handoffVm = HttpProbeViewModel(
+            useCase,
+            recentHostsRepository,
+            savedStateHandle = SavedStateHandle(mapOf("intent" to encoded, "host" to "printer.local")),
+        )
+
+        assertEquals("http://printer.local:8080/", handoffVm.uiState.value.url)
+        assertEquals(ToolSource.MDNS, handoffVm.sourceContext)
+        assertFalse(handoffVm.uiState.value.isLoading)
+        assertNull(handoffVm.uiState.value.result)
+        coVerify(exactly = 0) { useCase(any(), any()) }
+    }
+
+    @Test
+    fun `IPv6 targets get a valid bracketed editable HTTP URL`() {
+        listOf("fe80::1%wlan0", "[fe80::1%wlan0]", "[2001:db8::1]").forEach { host ->
+            val target = ToolDestination.HostTarget(
+                HostTool.HTTP,
+                requireNotNull(ToolHost.parse(host)),
+                requireNotNull(ToolPort.parse(8080)),
+            )
+
+            val url = httpUrlForTarget(target)
+
+            val expectedHost = if ("%" in host) "fe80::1%25wlan0" else "2001:db8::1"
+            assertEquals("http://[$expectedHost]:8080/", url)
+            assertNull(validateHttpProbeUrl(url))
+        }
+    }
+
+    @Test
+    fun `edited mDNS URL is saved and takes precedence after recreation`() {
+        val intent = ToolIntent(
+            ToolDestination.HostTarget(
+                HostTool.HTTP,
+                requireNotNull(ToolHost.parse("printer.local")),
+                requireNotNull(ToolPort.parse(8080)),
+            ),
+            ToolSource.MDNS,
+        )
+        val savedState = SavedStateHandle(
+            mapOf("intent" to ToolIntentCodec.encode(intent), "host" to "printer.local"),
+        )
+        val first = HttpProbeViewModel(useCase, recentHostsRepository, savedStateHandle = savedState)
+        first.onUrlChange("http://edited.local:9000/custom")
+
+        assertEquals("http://edited.local:9000/custom", savedState.get<String>("editedHttpUrl"))
+        val recreated = HttpProbeViewModel(
+            useCase,
+            recentHostsRepository,
+            savedStateHandle = SavedStateHandle(
+                mapOf(
+                    "intent" to ToolIntentCodec.encode(intent),
+                    "host" to "printer.local",
+                    "editedHttpUrl" to "http://edited.local:9000/custom",
+                ),
+            ),
+        )
+        assertEquals("http://edited.local:9000/custom", recreated.uiState.value.url)
+        assertEquals(ToolSource.MDNS, recreated.sourceContext)
+        coVerify(exactly = 0) { useCase(any(), any()) }
+    }
+
+    @Test
+    fun `invalid typed HTTP routes are suppressed and do not send`() {
+        val valid = ToolIntent(
+            ToolDestination.HostTarget(
+                HostTool.HTTP,
+                requireNotNull(ToolHost.parse("printer.local")),
+                requireNotNull(ToolPort.parse(8080)),
+            ),
+            ToolSource.MDNS,
+        )
+        val wrongTool = ToolIntent(
+            ToolDestination.HostTarget(HostTool.PING, requireNotNull(ToolHost.parse("printer.local"))),
+            ToolSource.MDNS,
+        )
+        listOf(
+            mapOf("intent" to "ti1.invalid", "host" to "printer.local"),
+            mapOf("intent" to ToolIntentCodec.encode(wrongTool), "host" to "printer.local"),
+            mapOf("intent" to ToolIntentCodec.encode(valid), "host" to "other.local"),
+            mapOf("intent" to ToolIntentCodec.encode(valid)),
+        ).forEach { args ->
+            val invalidVm = HttpProbeViewModel(useCase, recentHostsRepository, savedStateHandle = SavedStateHandle(args))
+            assertEquals("", invalidVm.uiState.value.url)
+            assertNull(invalidVm.sourceContext)
+            assertTrue(invalidVm.hasInvalidHandoff.value)
+        }
+
+        val recoveringState = SavedStateHandle(mapOf("intent" to "ti1.invalid", "host" to "printer.local"))
+        val recovering = HttpProbeViewModel(useCase, recentHostsRepository, savedStateHandle = recoveringState)
+        recovering.onUrlChange("http://replacement.local/")
+        assertFalse(recovering.hasInvalidHandoff.value)
+        assertEquals(true, recoveringState.get<Boolean>("handoffRecovered"))
+
+        val restored = HttpProbeViewModel(
+            useCase,
+            recentHostsRepository,
+            savedStateHandle = SavedStateHandle(
+                mapOf(
+                    "intent" to "ti1.invalid",
+                    "host" to "printer.local",
+                    "editedHttpUrl" to "http://replacement.local/",
+                    "handoffRecovered" to true,
+                ),
+            ),
+        )
+        assertFalse(restored.hasInvalidHandoff.value)
+        assertEquals("http://replacement.local/", restored.uiState.value.url)
+        coVerify(exactly = 0) { useCase(any(), any()) }
     }
 
     @Nested

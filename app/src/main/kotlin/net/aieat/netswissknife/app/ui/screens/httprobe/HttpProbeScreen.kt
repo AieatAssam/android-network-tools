@@ -124,11 +124,14 @@ import net.aieat.netswissknife.core.network.httprobe.HttpProbeResult
 import net.aieat.netswissknife.core.network.httprobe.SecurityHeaderCheck
 import net.aieat.netswissknife.core.network.httprobe.SecurityRating
 import net.aieat.netswissknife.core.domain.validateHttpProbeUrl
+import net.aieat.netswissknife.app.ui.navigation.ToolSource
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 object HttpProbeScreenTestTags {
     const val CONTENT_LIST = "httprobe_content_list"
+    const val SOURCE_CONTEXT = "httprobe_source_context"
+    const val INVALID_HANDOFF = "httprobe_invalid_handoff"
 
     /** Index of the idle/loading/error/success result panel within [CONTENT_LIST]. */
     const val RESULT_PANEL_INDEX = 2
@@ -139,6 +142,8 @@ fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val networkStatus by viewModel.networkStatus.collectAsStateWithLifecycle()
     val recentHosts by viewModel.recentHosts.collectAsStateWithLifecycle()
+    val hasInvalidHandoff by viewModel.hasInvalidHandoff.collectAsStateWithLifecycle()
+    val sourceContext = viewModel.sourceContext
     val context = LocalContext.current
 
     var visible by remember { mutableStateOf(false) }
@@ -166,6 +171,25 @@ fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     HttpProbeHeaderCard(onHelpClick = { showHelp = true })
                     NetworkStatusBanner(networkStatus, scope = NetworkStatusScope.INTERNET)
+                    if (hasInvalidHandoff) {
+                        Text(
+                            text = stringResource(R.string.httprobe_invalid_handoff),
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.testTag(HttpProbeScreenTestTags.INVALID_HANDOFF),
+                        )
+                    }
+                }
+            }
+
+            if (sourceContext == ToolSource.MDNS) {
+                item {
+                    Text(
+                        text = stringResource(R.string.httprobe_source_mdns),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.testTag(HttpProbeScreenTestTags.SOURCE_CONTEXT),
+                    )
                 }
             }
 
