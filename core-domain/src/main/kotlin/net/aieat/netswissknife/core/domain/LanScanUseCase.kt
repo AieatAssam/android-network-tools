@@ -4,6 +4,7 @@ import net.aieat.netswissknife.core.network.lan.LanScanRepository
 import net.aieat.netswissknife.core.network.lan.LanScanRequest
 import net.aieat.netswissknife.core.network.lan.LanScanUpdate
 import net.aieat.netswissknife.core.network.lan.SubnetUtils
+import net.aieat.netswissknife.core.network.operation.OperationSession
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
@@ -18,6 +19,19 @@ import kotlinx.coroutines.flow.map
 class LanScanUseCase(private val repository: LanScanRepository) {
 
     operator fun invoke(params: LanScanParams): Flow<LanScanFlowResult> {
+        return execute(params, operationSession = null)
+    }
+
+    /** Uses the caller's session so UI cancellation owns the entire LAN scan operation. */
+    operator fun invoke(
+        params: LanScanParams,
+        operationSession: OperationSession,
+    ): Flow<LanScanFlowResult> = execute(params, operationSession)
+
+    private fun execute(
+        params: LanScanParams,
+        operationSession: OperationSession?,
+    ): Flow<LanScanFlowResult> {
         val subnet = params.subnet.trim()
 
         // ── Validation ──────────────────────────────────────────────────────
@@ -43,15 +57,20 @@ class LanScanUseCase(private val repository: LanScanRepository) {
             ?.trim()
             ?.takeIf { SubnetUtils.contains(subnet, it) }
 
-        return repository.scan(
-            LanScanRequest(
+        val request = LanScanRequest(
                 subnet = subnet,
                 timeoutMs = params.timeoutMs,
                 concurrency = params.concurrency,
                 gatewayIp = gatewayIp,
                 enableNameProbes = params.enableNameProbes,
-            ),
-        )
+            )
+        val updates = if (operationSession == null) {
+            repository.scan(request)
+        } else {
+            repository.scan(request, operationSession)
+        }
+
+        return updates
             .map { update ->
                 when (update) {
                     is LanScanUpdate.HostFound ->

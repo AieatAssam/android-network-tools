@@ -5,7 +5,9 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CancellationException
@@ -141,19 +143,22 @@ class LanScanRepositoryImpl(
         }
     }
 
-    override fun scan(request: LanScanRequest): Flow<LanScanUpdate> = channelFlow {
+    override fun scan(request: LanScanRequest): Flow<LanScanUpdate> = flow {
+        scan(request, newSession(request)).collect { emit(it) }
+    }
+
+    override fun scan(
+        request: LanScanRequest,
+        operationSession: OperationSession,
+    ): Flow<LanScanUpdate> = channelFlow {
         val startTime = clock.nowNanos()
-        val effectiveConcurrency = request.concurrency.coerceIn(1, 500)
-        val session = OperationSession(
-            OperationBudget.start(
-                requirement = OperationRequirement.LOCAL_NETWORK,
-                maxConcurrentProbes = effectiveConcurrency,
-                clock = clock,
-            )
-        )
+        val session = operationSession
+        val effectiveConcurrency = request.concurrency
+            .coerceIn(1, 500)
+            .coerceAtMost(session.budget.maxConcurrentProbes)
         var completedSummary: LanScanSummary? = null
 
-        OperationRunner.run(session) {
+        OperationRunner.runOrJoin(session) {
             val ips = SubnetUtils.parseSubnet(request.subnet)
             val totalCount = ips.size
             val aliveHosts = mutableListOf<LanHost>()
@@ -298,6 +303,17 @@ class LanScanRepositoryImpl(
         }
         send(LanScanUpdate.ScanComplete(checkNotNull(completedSummary)))
     }.flowOn(Dispatchers.IO)
+
+    private fun newSession(request: LanScanRequest): OperationSession {
+        val effectiveConcurrency = request.concurrency.coerceIn(1, 500)
+        return OperationSession(
+            OperationBudget.start(
+                requirement = OperationRequirement.LOCAL_NETWORK,
+                maxConcurrentProbes = effectiveConcurrency,
+                clock = clock,
+            )
+        )
+    }
 
     private data class Presence(
         val methods: MutableSet<DiscoveryMethod>,

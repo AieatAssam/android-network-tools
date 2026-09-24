@@ -9,10 +9,10 @@ import kotlinx.coroutines.CancellationException
 import net.aieat.netswissknife.core.network.MonotonicClock
 import net.aieat.netswissknife.core.network.SystemMonotonicClock
 import net.aieat.netswissknife.core.network.operation.CancellationReason
-import net.aieat.netswissknife.core.network.operation.OperationBudget
 import net.aieat.netswissknife.core.network.operation.OperationCancellationException
 import net.aieat.netswissknife.core.network.operation.OperationDeadlineExceededException
-import net.aieat.netswissknife.core.network.operation.OperationRequirement
+import net.aieat.netswissknife.core.network.operation.OperationId
+import net.aieat.netswissknife.core.network.operation.OperationBudget
 import net.aieat.netswissknife.core.network.operation.OperationRunner
 import net.aieat.netswissknife.core.network.operation.OperationSession
 import net.aieat.netswissknife.core.network.operation.ensureCurrentOperationActive
@@ -30,18 +30,21 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
 
     override suspend fun lookup(query: String, timeoutMs: Int): NetworkResult<WhoisResult> {
         if (query.isBlank()) return NetworkResult.Error("Query must not be blank")
+        if (timeoutMs !in 500..30_000) return NetworkResult.Error("Timeout must be between 500 ms and 30 000 ms")
+        return lookup(query, timeoutMs, WhoisOperation.newSession(timeoutMs, clock))
+    }
+
+    override suspend fun lookup(
+        query: String,
+        timeoutMs: Int,
+        operationSession: OperationSession,
+    ): NetworkResult<WhoisResult> {
+        if (query.isBlank()) return NetworkResult.Error("Query must not be blank")
         if (timeoutMs < 500) return NetworkResult.Error("Timeout must be between 500 ms and 30 000 ms")
         if (timeoutMs > 30_000) return NetworkResult.Error("Timeout must be between 500 ms and 30 000 ms")
 
-        val session = OperationSession(
-            OperationBudget.start(
-                requirement = OperationRequirement.INTERNET,
-                timeoutMillis = timeoutMs * MAX_HOPS.toLong(),
-                maxConcurrentProbes = 1,
-                maxResponseBytes = MAX_RESPONSE_BYTES.toLong(),
-                clock = clock,
-            )
-        )
+        val session = operationSession
+        val responseBudget = WhoisResponseBudget(session.budget.maxResponseBytes)
         return try {
             // A chain contains at most three hops. Keep each socket operation bounded
             // by timeoutMs and cap the whole lookup at three such timeouts. OperationRunner
@@ -51,9 +54,14 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
                     val start = System.nanoTime()
                     val queryType = WhoisQueryTypeDetector.detect(query)
                     when (queryType) {
-                        WhoisQueryType.DOMAIN -> performDomainLookup(query, timeoutMs, start, session.budget)
+                        WhoisQueryType.DOMAIN -> performDomainLookup(
+                            query, timeoutMs, start, session.budget, session.budget.operationId, responseBudget
+                        )
                         WhoisQueryType.IPV4, WhoisQueryType.IPV6, WhoisQueryType.ASN ->
-                            performIpAsnLookup(query, queryType, timeoutMs, start, session.budget)
+                            performIpAsnLookup(
+                                query, queryType, timeoutMs, start, session.budget, session.budget.operationId,
+                                responseBudget,
+                            )
                     }
                 }
             }
@@ -82,6 +90,8 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
         timeoutMs: Int,
         overallStart: Long,
         budget: OperationBudget,
+        operationId: OperationId,
+        responseBudget: WhoisResponseBudget,
     ): NetworkResult<WhoisResult> {
         // Strip subdomains — WHOIS registries only know about the registrable domain (eTLD+1)
         val registrableDomain = extractRegistrableDomain(domain)
@@ -89,7 +99,7 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
 
         // Hop 1 — IANA
         val ianaHop = try {
-            queryServer(IANA_SERVER, registrableDomain, timeoutMs, budget)
+            queryServer(IANA_SERVER, registrableDomain, timeoutMs, budget, responseBudget)
         } catch (e: CancellationException) {
             throw e
         } catch (e: OperationDeadlineExceededException) {
@@ -102,7 +112,8 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
             server = WhoisServer(IANA_SERVER, WhoisServerRole.IANA),
             rawResponse = ianaHop.second,
             queryTimeMs = ianaHop.first,
-            referral = ianaReferral
+            referral = ianaReferral,
+            operationId = operationId,
         )
         hops.add(hop1)
         ensureCurrentOperationActive()
@@ -114,7 +125,7 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
             ?: return buildDomainResult(domain, WhoisQueryType.DOMAIN, hops, overallStart)
 
         val registryHop = try {
-            queryServer(registryHost, registrableDomain, timeoutMs, budget)
+            queryServer(registryHost, registrableDomain, timeoutMs, budget, responseBudget)
         } catch (e: CancellationException) {
             throw e
         } catch (e: OperationDeadlineExceededException) {
@@ -127,7 +138,8 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
             server = WhoisServer(registryHost, WhoisServerRole.REGISTRY),
             rawResponse = registryHop.second,
             queryTimeMs = registryHop.first,
-            referral = registrarWhoisServer
+            referral = registrarWhoisServer,
+            operationId = operationId,
         )
         hops.add(hop2)
         ensureCurrentOperationActive()
@@ -136,7 +148,7 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
         // Hop 3 — Registrar
         if (registrarWhoisServer != null) {
             val registrarHop = try {
-                queryServer(registrarWhoisServer, registrableDomain, timeoutMs, budget)
+                queryServer(registrarWhoisServer, registrableDomain, timeoutMs, budget, responseBudget)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: OperationDeadlineExceededException) {
@@ -147,7 +159,8 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
                     rawResponse = "",
                     queryTimeMs = 0L,
                     referral = null,
-                    error = e.message ?: "Connection failed"
+                    error = e.message ?: "Connection failed",
+                    operationId = operationId,
                 )
                 hops.add(failedHop)
                 ensureCurrentOperationActive()
@@ -158,7 +171,8 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
                 server = WhoisServer(registrarWhoisServer, WhoisServerRole.REGISTRAR),
                 rawResponse = registrarHop.second,
                 queryTimeMs = registrarHop.first,
-                referral = null
+                referral = null,
+                operationId = operationId,
             )
             hops.add(hop3)
             ensureCurrentOperationActive()
@@ -174,12 +188,14 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
         timeoutMs: Int,
         overallStart: Long,
         budget: OperationBudget,
+        operationId: OperationId,
+        responseBudget: WhoisResponseBudget,
     ): NetworkResult<WhoisResult> {
         val hops = mutableListOf<WhoisHop>()
 
         // Hop 1 — ARIN
         val arinHop = try {
-            queryServer(ARIN_SERVER, query, timeoutMs, budget)
+            queryServer(ARIN_SERVER, query, timeoutMs, budget, responseBudget)
         } catch (e: CancellationException) {
             throw e
         } catch (e: OperationDeadlineExceededException) {
@@ -192,7 +208,8 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
             server = WhoisServer(ARIN_SERVER, WhoisServerRole.RIR),
             rawResponse = arinHop.second,
             queryTimeMs = arinHop.first,
-            referral = referral
+            referral = referral,
+            operationId = operationId,
         )
         hops.add(hop1)
         ensureCurrentOperationActive()
@@ -201,7 +218,7 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
         // Hop 2 — Referred RIR (if any)
         if (referral != null && referral != ARIN_SERVER) {
             val referralHop = try {
-                queryServer(referral, query, timeoutMs, budget)
+                queryServer(referral, query, timeoutMs, budget, responseBudget)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: OperationDeadlineExceededException) {
@@ -213,7 +230,8 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
                 server = WhoisServer(referral, WhoisServerRole.RIR),
                 rawResponse = referralHop.second,
                 queryTimeMs = referralHop.first,
-                referral = null
+                referral = null,
+                operationId = operationId,
             )
             hops.add(hop2)
             ensureCurrentOperationActive()
@@ -243,6 +261,7 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
         query: String,
         timeoutMs: Int,
         budget: OperationBudget,
+        responseBudget: WhoisResponseBudget,
     ): Pair<Long, String> {
         val remainingNanos = budget.remainingNanos()
         if (remainingNanos <= 0L) throw OperationDeadlineExceededException()
@@ -255,7 +274,8 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
             timeoutMs = minOf(timeoutMs, remainingMs),
             resolver = resolver,
             socketFactory = socketFactory,
-            isDisallowedAddress = ::isDisallowedReferralAddress
+            isDisallowedAddress = ::isDisallowedReferralAddress,
+            responseBudget = responseBudget,
         )
     }
 
@@ -359,7 +379,6 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
         private const val MAX_HOPS = 3
         private const val IANA_SERVER = "whois.iana.org"
         private const val ARIN_SERVER = "whois.arin.net"
-        internal const val MAX_RESPONSE_BYTES = 1_048_576
 
         private val COMPOUND_TLDS = setOf(
             "co.uk", "org.uk", "me.uk", "net.uk", "ltd.uk", "plc.uk",

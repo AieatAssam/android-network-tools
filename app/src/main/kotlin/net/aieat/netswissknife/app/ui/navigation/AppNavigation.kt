@@ -128,6 +128,11 @@ fun AppNavHost(navController: NavHostController, modifier: Modifier = Modifier) 
                     nullable = true
                     defaultValue = null
                 },
+                navArgument("intent") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
             ),
         ) { PortsScreen() }
         composable(NavRoutes.Lan.route)        {

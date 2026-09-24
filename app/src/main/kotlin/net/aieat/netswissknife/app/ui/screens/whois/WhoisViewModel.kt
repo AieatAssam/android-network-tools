@@ -23,6 +23,9 @@ import net.aieat.netswissknife.core.network.whois.WhoisHop
 import net.aieat.netswissknife.core.network.whois.WhoisResult
 import net.aieat.netswissknife.core.network.whois.WhoisServer
 import net.aieat.netswissknife.core.network.whois.WhoisServerRole
+import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationSession
+import net.aieat.netswissknife.core.network.whois.WhoisOperation
 import javax.inject.Inject
 
 enum class HopStatus { PENDING, QUERYING, DONE, FAILED, SKIPPED }
@@ -60,6 +63,7 @@ class WhoisViewModel @Inject constructor(
 
     private var progressJob: Job? = null
     private var resultJob: Job? = null
+    private var operationSession: OperationSession? = null
 
     fun onQueryChange(value: String) {
         _uiState.update { it.copy(query = value) }
@@ -88,7 +92,7 @@ class WhoisViewModel @Inject constructor(
         viewModelScope.launch {
             recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_WHOIS_HOSTS, query)
         }
-        progressJob?.cancel()
+        cancelActiveOperation(CancellationReason.USER_STOP, updateState = false)
         // A prior lookup's own result coroutine must also be cancelled here — otherwise
         // a rapid re-submit (edit query, hit lookup again before the first WHOIS
         // referral chain finishes) leaves two independent result coroutines racing to
@@ -97,9 +101,14 @@ class WhoisViewModel @Inject constructor(
         resultJob?.cancel()
         _uiState.update { it.copy(isLoading = true, hopStates = emptyList(), result = null, error = null) }
 
-        // Subscribe to hop progress to animate each server node in real time
+        val session = WhoisOperation.newSession()
+        operationSession = session
+
+        // Subscribe to hop progress to animate each server node in real time. The operation
+        // id prevents buffered progress from a cancelled/replaced lookup leaking into this one.
         progressJob = viewModelScope.launch {
             whoisLookupUseCase.hopProgress.collect { hop ->
+                if (operationSession !== session || hop.operationId != session.budget.operationId) return@collect
                 _uiState.update { state ->
                     val existing = state.hopStates
                     // Mark previous QUERYING → DONE, then add new hop as DONE
@@ -119,9 +128,12 @@ class WhoisViewModel @Inject constructor(
         resultJob = viewModelScope.launch {
             // Yield so the progress-collection coroutine above can reach collect() first
             kotlinx.coroutines.yield()
-            val result = whoisLookupUseCase(WhoisParams(query = query))
+            val result = whoisLookupUseCase(WhoisParams(query = query), session)
+            if (operationSession !== session) return@launch
             progressJob?.cancel()
             progressJob = null
+            operationSession = null
+            resultJob = null
             _uiState.update { state ->
                 when (result) {
                     is NetworkResult.Success -> state.copy(
@@ -141,6 +153,34 @@ class WhoisViewModel @Inject constructor(
                         error = result.message
                     )
                 }
+            }
+        }
+    }
+
+    fun stopLookup() = cancelActiveOperation(CancellationReason.USER_STOP, updateState = true)
+
+    /** Stop an in-flight lookup when this tool leaves the foreground. */
+    fun onLifecyclePause() = cancelActiveOperation(CancellationReason.LIFECYCLE_PAUSE, updateState = true)
+
+    private fun cancelActiveOperation(reason: CancellationReason, updateState: Boolean) {
+        val session = operationSession
+        if (session == null) return
+        operationSession = null
+        session.cancel(reason)
+        progressJob?.cancel()
+        progressJob = null
+        resultJob?.cancel()
+        resultJob = null
+        if (updateState) {
+            _uiState.update {
+                it.copy(
+                    isLoading = false,
+                    error = if (reason == CancellationReason.LIFECYCLE_PAUSE) {
+                        "Lookup stopped when WHOIS left the foreground. Retry when ready."
+                    } else {
+                        "Lookup stopped. Retry when ready."
+                    },
+                )
             }
         }
     }

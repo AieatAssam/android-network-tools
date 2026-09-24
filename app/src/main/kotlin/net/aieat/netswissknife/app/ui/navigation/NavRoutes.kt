@@ -37,13 +37,21 @@ sealed class NavRoutes(
     object Home : NavRoutes("home", "Home", Icons.Default.Home)
     object Ping : NavRoutes("ping", "Ping", Icons.Default.NetworkCheck)
     object Traceroute : NavRoutes("traceroute", "Traceroute", Icons.Default.Router)
-    object Ports : NavRoutes("ports?host={host}", "Port Scanner", Icons.Default.TravelExplore) {
+    object Ports : NavRoutes("ports?host={host}&intent={intent}", "Port Scanner", Icons.Default.TravelExplore) {
         const val baseRoute = "ports"
 
         fun createRoute(host: String?): String = host
             ?.takeIf { it.isNotBlank() }
             ?.let { "$baseRoute?host=${Uri.encode(it)}" }
             ?: baseRoute
+
+        /** New typed handoffs use the versioned payload; the legacy host route remains supported. */
+        fun createRoute(intent: ToolIntent): String {
+            val target = intent.destination as? ToolDestination.HostTarget
+                ?: throw IllegalArgumentException("Ports route requires a host destination")
+            require(target.tool == HostTool.PORTS)
+            return "$baseRoute?host=${Uri.encode(target.host.value)}&intent=${Uri.encode(ToolIntentCodec.encode(intent))}"
+        }
     }
     object Lan : NavRoutes("lan", "LAN Scanner", Icons.Default.Devices)
     object Dns : NavRoutes("dns", "DNS Lookup", Icons.Default.Language)

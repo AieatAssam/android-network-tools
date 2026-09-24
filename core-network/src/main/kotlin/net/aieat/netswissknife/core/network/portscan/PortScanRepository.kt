@@ -1,6 +1,11 @@
 package net.aieat.netswissknife.core.network.portscan
 
 import kotlinx.coroutines.flow.Flow
+import net.aieat.netswissknife.core.network.MonotonicClock
+import net.aieat.netswissknife.core.network.SystemMonotonicClock
+import net.aieat.netswissknife.core.network.operation.OperationBudget
+import net.aieat.netswissknife.core.network.operation.OperationRequirement
+import net.aieat.netswissknife.core.network.operation.OperationSession
 
 /**
  * Contract for a port scanner.
@@ -26,6 +31,30 @@ interface PortScanRepository {
         timeoutMs: Int,
         concurrency: Int
     ): Flow<PortScanUpdate>
+
+    /** Creates a caller-owned session for one scan. */
+    fun newSession(
+        concurrency: Int,
+        clock: MonotonicClock = SystemMonotonicClock,
+    ): OperationSession = OperationSession(
+        OperationBudget.start(
+            requirement = OperationRequirement.ANY_NETWORK,
+            maxConcurrentProbes = concurrency.coerceIn(1, 500),
+            clock = clock,
+        )
+    )
+
+    /**
+     * Caller-owned variant. The source-compatible default delegates to the legacy method and
+     * cannot enforce the session; production repositories that own resources must override it.
+     */
+    fun scan(
+        host: String,
+        ports: List<Int>,
+        timeoutMs: Int,
+        concurrency: Int,
+        operationSession: OperationSession,
+    ): Flow<PortScanUpdate> = scan(host, ports, timeoutMs, concurrency)
 }
 
 /** Progress events emitted during a scan. */

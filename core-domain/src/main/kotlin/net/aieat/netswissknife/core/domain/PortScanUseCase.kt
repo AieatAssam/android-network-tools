@@ -3,6 +3,7 @@ package net.aieat.netswissknife.core.domain
 import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.portscan.PortScanRepository
 import net.aieat.netswissknife.core.network.portscan.PortScanUpdate
+import net.aieat.netswissknife.core.network.operation.OperationSession
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 
@@ -18,7 +19,14 @@ import kotlinx.coroutines.flow.flow
  */
 class PortScanUseCase(private val repository: PortScanRepository) {
 
-    operator fun invoke(params: PortScanParams): Flow<PortScanFlowResult> = flow {
+    fun newSession(params: PortScanParams): OperationSession = repository.newSession(params.concurrency)
+
+    operator fun invoke(params: PortScanParams): Flow<PortScanFlowResult> = execute(params, null)
+
+    operator fun invoke(params: PortScanParams, operationSession: OperationSession): Flow<PortScanFlowResult> =
+        execute(params, operationSession)
+
+    private fun execute(params: PortScanParams, operationSession: OperationSession?): Flow<PortScanFlowResult> = flow {
         val host = HostValidator.normalize(params.host) ?: params.host.trim()
 
         // Validate host
@@ -73,12 +81,19 @@ class PortScanUseCase(private val repository: PortScanRepository) {
         }
 
         // Delegate to repository and map updates
-        repository.scan(
+        val updates = if (operationSession == null) repository.scan(
             host = host,
             ports = portsToScan,
             timeoutMs = params.timeoutMs,
             concurrency = params.concurrency
-        ).collect { update ->
+        ) else repository.scan(
+            host = host,
+            ports = portsToScan,
+            timeoutMs = params.timeoutMs,
+            concurrency = params.concurrency,
+            operationSession = operationSession,
+        )
+        updates.collect { update ->
             when (update) {
                 is PortScanUpdate.Started -> emit(
                     PortScanFlowResult.Started(

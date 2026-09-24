@@ -104,6 +104,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.compose.runtime.DisposableEffect
 import kotlinx.coroutines.launch
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
 import net.aieat.netswissknife.app.ui.components.ToolErrorCard
@@ -117,6 +121,7 @@ import net.aieat.netswissknife.app.ui.components.RecentHostsRow
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
 import net.aieat.netswissknife.app.ui.screens.portscan.PortScanUiState
 import net.aieat.netswissknife.app.ui.screens.portscan.PortScanViewModel
+import net.aieat.netswissknife.app.ui.navigation.ToolSource
 import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.core.domain.PortScanPreset
 import net.aieat.netswissknife.core.network.HostValidator
@@ -128,11 +133,24 @@ object PortsScreenTestTags {
     const val PRESET_FIELD = "ports_preset_field"
     const val SCAN_BUTTON = "ports_scan_button"
     const val CONCURRENCY_SLIDER = "ports_concurrency_slider"
+    const val SOURCE_CONTEXT = "ports_source_context"
+    const val INVALID_HANDOFF = "ports_invalid_handoff"
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_PAUSE) viewModel.onLifecyclePause()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            viewModel.onLifecyclePause()
+        }
+    }
     val requestLocalNetworkPermission = rememberLocalNetworkPermissionRequester()
     LaunchedEffect(Unit) { requestLocalNetworkPermission() }
 
@@ -144,6 +162,8 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
     val timeoutMs by viewModel.timeoutMs.collectAsStateWithLifecycle()
     val concurrency by viewModel.concurrency.collectAsStateWithLifecycle()
     val recentHosts by viewModel.recentHosts.collectAsStateWithLifecycle()
+    val sourceContext = viewModel.sourceContext
+    val hasInvalidHandoff = viewModel.hasInvalidHandoff
 
     var screenVisible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { screenVisible = true }
@@ -173,6 +193,28 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
                     icon = Icons.Default.Search,
                     onHelpClick = { showHelp = true }
                 )
+            }
+
+            if (hasInvalidHandoff) {
+                item {
+                    Text(
+                        text = stringResource(R.string.ports_invalid_handoff),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.testTag(PortsScreenTestTags.INVALID_HANDOFF),
+                    )
+                }
+            }
+
+            if (sourceContext == ToolSource.LAN) {
+                item {
+                    Text(
+                        text = stringResource(R.string.ports_source_lan),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.testTag(PortsScreenTestTags.SOURCE_CONTEXT),
+                    )
+                }
             }
 
             // ── Input Card ──────────────────────────────────────────────────────

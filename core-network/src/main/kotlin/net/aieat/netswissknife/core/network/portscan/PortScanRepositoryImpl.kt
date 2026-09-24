@@ -127,18 +127,47 @@ class PortScanRepositoryImpl(
         ports: List<Int>,
         timeoutMs: Int,
         concurrency: Int
+    ): Flow<PortScanUpdate> = scanInternal(host, ports, timeoutMs, concurrency, null)
+
+    override fun newSession(
+        concurrency: Int,
+        clock: MonotonicClock,
+    ): OperationSession = OperationSession(
+        OperationBudget.start(
+            requirement = OperationRequirement.ANY_NETWORK,
+            timeoutMillis = operationTimeoutMillis,
+            maxConcurrentProbes = concurrency.coerceIn(1, 500),
+            clock = clock,
+        )
+    )
+
+    override fun scan(
+        host: String,
+        ports: List<Int>,
+        timeoutMs: Int,
+        concurrency: Int,
+        operationSession: OperationSession,
+    ): Flow<PortScanUpdate> = scanInternal(host, ports, timeoutMs, concurrency, operationSession)
+
+    private fun scanInternal(
+        host: String,
+        ports: List<Int>,
+        timeoutMs: Int,
+        concurrency: Int,
+        callerSession: OperationSession?,
     ): Flow<PortScanUpdate> = channelFlow {
         val startTime = clock.nowNanos()
         val results = mutableListOf<PortScanResult>()
-        val effectiveConcurrency = concurrency.coerceIn(1, 500)
-        val session = OperationSession(
+        val requestedConcurrency = concurrency.coerceIn(1, 500)
+        val session = callerSession ?: OperationSession(
             OperationBudget.start(
                 requirement = OperationRequirement.ANY_NETWORK,
                 timeoutMillis = operationTimeoutMillis,
-                maxConcurrentProbes = effectiveConcurrency,
+                maxConcurrentProbes = requestedConcurrency,
                 clock = clock,
             )
         )
+        val effectiveConcurrency = requestedConcurrency.coerceAtMost(session.budget.maxConcurrentProbes)
         var completedSummary: PortScanSummary? = null
 
         OperationRunner.run(session) {

@@ -5,12 +5,15 @@ import net.aieat.netswissknife.core.network.portscan.PortConnectResult
 import net.aieat.netswissknife.core.network.portscan.PortScanRepository
 import net.aieat.netswissknife.core.network.portscan.PortScanRepositoryImpl
 import net.aieat.netswissknife.core.network.portscan.PortStatus
+import net.aieat.netswissknife.core.network.operation.OperationBudget
+import net.aieat.netswissknife.core.network.operation.OperationSession
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -21,6 +24,24 @@ import org.junit.jupiter.api.Test
 
 @DisplayName("PortScanUseCase")
 class PortScanUseCaseTest {
+
+    @Test
+    fun `caller operation session is forwarded to repository`() = runTest {
+        val repository = mockk<PortScanRepository>()
+        val session = OperationSession(OperationBudget.start())
+        every {
+            repository.scan("example.com", PortScanPreset.WEB.ports, 2_000, 100, session)
+        } returns flowOf()
+
+        PortScanUseCase(repository).invoke(
+            PortScanParams(host = "example.com", preset = PortScanPreset.WEB),
+            session,
+        ).toList()
+
+        verify(exactly = 1) {
+            repository.scan("example.com", PortScanPreset.WEB.ports, 2_000, 100, session)
+        }
+    }
 
     private val openChecker: PortConnectChecker = { _, _ ->
         PortConnectResult(PortStatus.OPEN, 5L, null)

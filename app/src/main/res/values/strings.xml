@@ -130,6 +130,8 @@
     <!-- Port Scanner Screen -->
     <string name="ports_screen_title">Port Scanner</string>
     <string name="ports_screen_subtitle">Probe TCP ports and identify running services</string>
+    <string name="ports_source_lan">Host selected from LAN Scanner</string>
+    <string name="ports_invalid_handoff">The supplied destination could not be verified. Enter a host to continue.</string>
 
     <!-- Port Scanner Input -->
     <string name="ports_host_label">Host or IP address</string>
@@ -537,6 +539,7 @@
     <string name="whois_query_label">Domain, IP, or ASN</string>
     <string name="whois_query_placeholder">e.g. example.com, 8.8.8.8, AS15169</string>
     <string name="whois_lookup_button">Look up</string>
+    <string name="whois_stop_button">Stop lookup</string>
     <string name="whois_idle_title">Enter a domain or IP to look up</string>
     <string name="whois_error_title">Lookup failed</string>
     <string name="whois_retry">Retry</string>

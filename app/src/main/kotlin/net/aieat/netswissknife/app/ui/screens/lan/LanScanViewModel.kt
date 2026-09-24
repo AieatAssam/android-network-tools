@@ -20,6 +20,10 @@ import net.aieat.netswissknife.core.network.lan.LanHost
 import net.aieat.netswissknife.core.network.lan.LanScanDiagnostic
 import net.aieat.netswissknife.core.network.lan.LanScanSummary
 import net.aieat.netswissknife.core.network.lan.SubnetUtils
+import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationBudget
+import net.aieat.netswissknife.core.network.operation.OperationRequirement
+import net.aieat.netswissknife.core.network.operation.OperationSession
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
@@ -104,14 +108,31 @@ class LanScanViewModel @Inject constructor(
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
-    val recentSubnets: StateFlow<List<String>> = recentHostsRepository
-        .getRecents(AppPreferenceKeys.RECENT_LAN_SUBNETS)
-        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    val recentSubnets: StateFlow<List<String>>
 
     private var scanJob: Job? = null
+    private var scanOperationSession: OperationSession? = null
     private var scanStartMs: Long = 0L
 
+    internal var operationSessionFactory: (LanScanParams) -> OperationSession = { params ->
+        OperationSession(
+            OperationBudget.start(
+                requirement = OperationRequirement.LOCAL_NETWORK,
+                maxConcurrentProbes = params.concurrency.coerceIn(1, 500),
+            )
+        )
+    }
+
     init {
+        // ViewModelStore closes registered resources before cancelling viewModelScope.
+        // Register first so the active operation records a typed lifecycle reason before
+        // scope cancellation unwinds its collector.
+        addCloseable("lan-scan-operation", AutoCloseable {
+            cancelScan(CancellationReason.LIFECYCLE_PAUSE)
+        })
+        recentSubnets = recentHostsRepository
+            .getRecents(AppPreferenceKeys.RECENT_LAN_SUBNETS)
+            .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
         viewModelScope.launch {
             val prefs = dataStore.data.first()
             _timeoutMs.value = prefs[AppPreferenceKeys.DEFAULT_TIMEOUT_MS] ?: 1_000
@@ -175,6 +196,7 @@ class LanScanViewModel @Inject constructor(
     }
 
     fun startScan() {
+        cancelScan(CancellationReason.USER_STOP)
         scanJob?.cancel()
         val liveHosts = mutableListOf<LanHost>()
         val uncertainDiagnostics = mutableListOf<LanScanDiagnostic>()
@@ -193,13 +215,18 @@ class LanScanViewModel @Inject constructor(
             totalCount = 0,
         )
 
+        val operationSession = operationSessionFactory(params)
+        scanOperationSession = operationSession
         scanJob = viewModelScope.launch {
             withContext(Dispatchers.IO) {
                 AppLogger.i(TAG, "startScan: subnet=${params.subnet} timeoutMs=${params.timeoutMs} concurrency=${params.concurrency}")
             }
             var savedToRecents = false
             try {
-                lanScanUseCase(params).collect { result ->
+                lanScanUseCase(params, operationSession).collect { result ->
+                    // A cancelled scan may finish late in a non-cooperative dependency. Only
+                    // the currently owned operation is allowed to publish state or recents.
+                    if (scanOperationSession !== operationSession) return@collect
                     when (result) {
                         is LanScanFlowResult.ValidationError -> {
                             AppLogger.w(TAG, "startScan: validation error – ${result.message}")
@@ -246,18 +273,33 @@ class LanScanViewModel @Inject constructor(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                if (scanOperationSession !== operationSession) return@launch
                 AppLogger.e(TAG, "startScan: unexpected exception during scan", e)
                 _uiState.value = LanScanUiState.Error(
                     "Scan failed: ${e.message ?: "Unknown error"}",
                     e.toNetworkErrorKind(),
                 )
+            } finally {
+                if (scanOperationSession === operationSession) scanOperationSession = null
             }
         }
     }
 
     fun onStopScan() {
         AppLogger.i(TAG, "onStopScan: cancelling scan job")
+        cancelScan(CancellationReason.USER_STOP)
         scanJob?.cancel()
+        finishPartialScan()
+    }
+
+    /** Pauses active probing when the LAN tool leaves the foreground. */
+    fun onLifecyclePause() {
+        cancelScan(CancellationReason.LIFECYCLE_PAUSE)
+        scanJob?.cancel()
+        finishPartialScan()
+    }
+
+    private fun finishPartialScan() {
         val current = _uiState.value
         if (current is LanScanUiState.Scanning) {
             val partial = LanScanSummary(
@@ -275,6 +317,7 @@ class LanScanViewModel @Inject constructor(
 
     fun onClear() {
         AppLogger.d(TAG, "onClear")
+        cancelScan(CancellationReason.USER_STOP)
         scanJob?.cancel()
         _searchQuery.value = ""
         _uiState.value = LanScanUiState.Idle
@@ -294,5 +337,17 @@ class LanScanViewModel @Inject constructor(
 
     fun onScanPorts(host: String) {
         navigationEventsChannel.trySend(LanNavEvent.NavigateToPorts(host))
+    }
+
+    private fun cancelScan(reason: CancellationReason) {
+        scanOperationSession?.let { session ->
+            scanOperationSession = null
+            session.cancel(reason)
+        }
+    }
+
+    override fun onCleared() {
+        cancelScan(CancellationReason.LIFECYCLE_PAUSE)
+        super.onCleared()
     }
 }

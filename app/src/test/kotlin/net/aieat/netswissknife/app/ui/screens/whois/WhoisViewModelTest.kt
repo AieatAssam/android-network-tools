@@ -24,6 +24,8 @@ import net.aieat.netswissknife.core.network.whois.WhoisQueryType
 import net.aieat.netswissknife.core.network.whois.WhoisResult
 import net.aieat.netswissknife.core.network.whois.WhoisServer
 import net.aieat.netswissknife.core.network.whois.WhoisServerRole
+import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationSession
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -104,7 +106,7 @@ class WhoisViewModelTest {
 
         @Test
         fun `success sets result`() = runTest {
-            coEvery { whoisLookupUseCase(any()) } returns NetworkResult.Success(stubResult)
+            coEvery { whoisLookupUseCase(any(), any()) } returns NetworkResult.Success(stubResult)
             viewModel.onQueryChange("example.com")
             viewModel.lookup()
             val state = viewModel.uiState.value
@@ -114,7 +116,7 @@ class WhoisViewModelTest {
 
         @Test
         fun `error sets error message`() = runTest {
-            coEvery { whoisLookupUseCase(any()) } returns NetworkResult.Error("lookup failed")
+            coEvery { whoisLookupUseCase(any(), any()) } returns NetworkResult.Error("lookup failed")
             viewModel.onQueryChange("example.com")
             viewModel.lookup()
             val state = viewModel.uiState.value
@@ -132,11 +134,11 @@ class WhoisViewModelTest {
         @Test
         fun `a second lookup's result is not overwritten by a stale first lookup`() = runTest {
             val firstResultReady = CompletableDeferred<Unit>()
-            coEvery { whoisLookupUseCase(WhoisParams(query = "first.com")) } coAnswers {
+            coEvery { whoisLookupUseCase(WhoisParams(query = "first.com"), any()) } coAnswers {
                 firstResultReady.await()
                 NetworkResult.Success(stubResult.copy(domainName = "first.com"))
             }
-            coEvery { whoisLookupUseCase(WhoisParams(query = "second.com")) } returns
+            coEvery { whoisLookupUseCase(WhoisParams(query = "second.com"), any()) } returns
                 NetworkResult.Success(stubResult.copy(domainName = "second.com"))
 
             viewModel.onQueryChange("first.com")
@@ -167,9 +169,85 @@ class WhoisViewModelTest {
 
     @Test
     fun `addRecent is called on lookup`() = runTest {
-        coEvery { whoisLookupUseCase(any()) } returns NetworkResult.Success(stubResult)
+        coEvery { whoisLookupUseCase(any(), any()) } returns NetworkResult.Success(stubResult)
         viewModel.onQueryChange("example.com")
         viewModel.lookup()
         coVerify { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_WHOIS_HOSTS, "example.com") }
+    }
+
+    @Test
+    fun `stop cancels caller-owned session with USER_STOP and ignores late progress`() = runTest {
+        val progress = MutableSharedFlow<WhoisHop>(extraBufferCapacity = 4)
+        every { whoisLookupUseCase.hopProgress } returns progress
+        var receivedSession: OperationSession? = null
+        coEvery { whoisLookupUseCase(any(), any()) } coAnswers {
+            receivedSession = secondArg()
+            kotlinx.coroutines.awaitCancellation()
+        }
+
+        viewModel.onQueryChange("example.com")
+        viewModel.lookup()
+        runCurrent()
+        assertNotNull(receivedSession)
+        val session = checkNotNull(receivedSession)
+        assertTrue(viewModel.uiState.value.isLoading)
+
+        viewModel.stopLookup()
+        runCurrent()
+
+        assertEquals(CancellationReason.USER_STOP, session.cancellationReason)
+        assertFalse(viewModel.uiState.value.isLoading)
+        assertEquals("Lookup stopped. Retry when ready.", viewModel.uiState.value.error)
+        progress.tryEmit(stubHop.copy(operationId = session.budget.operationId))
+        runCurrent()
+        assertTrue(viewModel.uiState.value.hopStates.isEmpty(), "stopped lookup must ignore late progress")
+    }
+
+    @Test
+    fun `lifecycle pause cancels caller-owned session with LIFECYCLE_PAUSE`() = runTest {
+        var receivedSession: OperationSession? = null
+        coEvery { whoisLookupUseCase(any(), any()) } coAnswers {
+            receivedSession = secondArg()
+            kotlinx.coroutines.awaitCancellation()
+        }
+        viewModel.onQueryChange("example.com")
+        viewModel.lookup()
+        runCurrent()
+        assertNotNull(receivedSession)
+        val session = checkNotNull(receivedSession)
+
+        viewModel.onLifecyclePause()
+        runCurrent()
+
+        assertEquals(CancellationReason.LIFECYCLE_PAUSE, session.cancellationReason)
+        assertFalse(viewModel.uiState.value.isLoading)
+        assertTrue(viewModel.uiState.value.error.orEmpty().contains("left the foreground"))
+    }
+
+    @Test
+    fun `late result after Stop cannot overwrite stopped state`() = runTest {
+        val delayedResult = CompletableDeferred<NetworkResult<WhoisResult>>()
+        coEvery { whoisLookupUseCase(any(), any()) } coAnswers {
+            try {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { delayedResult.await() }
+            } catch (_: kotlinx.coroutines.CancellationException) {
+                // Model a legacy adapter that returns after cancellation; the ViewModel's
+                // session identity guard must still prevent that result from being applied.
+            }
+            delayedResult.getCompleted()
+        }
+        viewModel.onQueryChange("example.com")
+        viewModel.lookup()
+        runCurrent()
+        assertTrue(viewModel.uiState.value.isLoading)
+
+        viewModel.stopLookup()
+        runCurrent()
+        delayedResult.complete(NetworkResult.Success(stubResult.copy(domainName = "late.example.com")))
+        runCurrent()
+
+        assertFalse(viewModel.uiState.value.isLoading)
+        assertNull(viewModel.uiState.value.result)
+        assertEquals("Lookup stopped. Retry when ready.", viewModel.uiState.value.error)
     }
 }

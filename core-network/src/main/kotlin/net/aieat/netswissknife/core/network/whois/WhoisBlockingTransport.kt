@@ -4,7 +4,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.suspendCancellableCoroutine
 import net.aieat.netswissknife.core.network.operation.OperationResourcesContext
 import net.aieat.netswissknife.core.network.operation.ResourceScope
-import java.io.InputStreamReader
+import java.io.ByteArrayOutputStream
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.Socket
@@ -15,6 +15,7 @@ import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -41,7 +42,6 @@ fun interface WhoisSocketFactory {
  */
 internal object WhoisBlockingTransport {
     private const val RESPONSE_CHUNK_SIZE = 8192
-    private const val MAX_RESPONSE_BYTES = 1_048_576
 
     private val workers = ThreadPoolExecutor(
         2,
@@ -61,6 +61,9 @@ internal object WhoisBlockingTransport {
         resolver: WhoisHostResolver,
         socketFactory: WhoisSocketFactory,
         isDisallowedAddress: (InetAddress) -> Boolean,
+        responseBudget: WhoisResponseBudget = WhoisResponseBudget(
+            net.aieat.netswissknife.core.network.operation.OperationBudget.DEFAULT_MAX_RESPONSE_BYTES,
+        ),
         executor: ThreadPoolExecutor = workers,
     ): Pair<Long, String> {
         val resources = currentCoroutineContext()[OperationResourcesContext]?.resources
@@ -89,21 +92,20 @@ internal object WhoisBlockingTransport {
                     socket.getOutputStream().write("$query\r\n".toByteArray(Charsets.UTF_8))
                     // SO_TIMEOUT bounds idle reads; the repository's total deadline
                     // additionally bounds a peer that trickles bytes indefinitely.
-                    val reader = InputStreamReader(socket.getInputStream(), Charsets.UTF_8).buffered()
-                    val buffer = CharArray(RESPONSE_CHUNK_SIZE)
-                    val text = StringBuilder()
-                    var totalRead = 0
+                    val input = socket.getInputStream()
+                    val buffer = ByteArray(RESPONSE_CHUNK_SIZE)
+                    val response = ByteArrayOutputStream()
                     while (true) {
                         checkNotCancelled(cancelled)
-                        val count = reader.read(buffer)
+                        val count = input.read(buffer)
                         if (count == -1) break
-                        totalRead += count
-                        if (totalRead > MAX_RESPONSE_BYTES) {
-                            throw java.io.IOException("WHOIS response exceeded $MAX_RESPONSE_BYTES bytes")
-                        }
-                        text.append(buffer, 0, count)
+                        responseBudget.consume(count)
+                        response.write(buffer, 0, count)
                     }
-                    result = Pair((System.nanoTime() - startedAt) / 1_000_000L, text.toString())
+                    result = Pair(
+                        (System.nanoTime() - startedAt) / 1_000_000L,
+                        String(response.toByteArray(), Charsets.UTF_8),
+                    )
                 } catch (failure: Throwable) {
                     if (continuation.isActive) continuation.resumeWithException(failure)
                 } finally {
@@ -164,4 +166,20 @@ internal object WhoisBlockingTransport {
         }
     }
 
+}
+
+/** Shared across the referral chain so one session cannot exceed its total response cap. */
+internal class WhoisResponseBudget(private val maxBytes: Long) {
+    private val consumed = AtomicLong()
+
+    init {
+        require(maxBytes > 0) { "Maximum WHOIS response bytes must be positive" }
+    }
+
+    fun consume(bytes: Int) {
+        val total = consumed.addAndGet(bytes.toLong())
+        if (total > maxBytes) {
+            throw java.io.IOException("WHOIS response exceeded $maxBytes bytes")
+        }
+    }
 }

@@ -7,6 +7,9 @@ import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.test.runTest
 import net.aieat.netswissknife.core.network.lan.LanScanRepository
 import net.aieat.netswissknife.core.network.lan.LanScanRequest
+import net.aieat.netswissknife.core.network.operation.OperationBudget
+import net.aieat.netswissknife.core.network.operation.OperationRequirement
+import net.aieat.netswissknife.core.network.operation.OperationSession
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
@@ -37,5 +40,21 @@ class LanScanGatewayTest {
         verify {
             repository.scan(match { it.gatewayIp == null })
         }
+    }
+
+    @Test
+    fun `caller operation session is forwarded to repository`() = runTest {
+        val repository = mockk<LanScanRepository>()
+        val session = OperationSession(
+            OperationBudget.start(requirement = OperationRequirement.LOCAL_NETWORK),
+        )
+        every { repository.scan(any<LanScanRequest>(), any()) } returns emptyFlow()
+
+        LanScanUseCase(repository)(
+            LanScanParams("192.168.1.0/24"),
+            session,
+        ).collect {}
+
+        verify { repository.scan(any<LanScanRequest>(), session) }
     }
 }

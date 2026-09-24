@@ -218,6 +218,11 @@ tasks:
       manual: "On a device, start and stop one LAN scan, mDNS scan, port scan, and continuous ping; inspect session metadata and confirm no socket/read continues after Stop."
     effort: "L (3-5 agent sessions)"
     risk_rollout: "Introduce compatibility adapters that register and close the actual existing resources immediately; a no-op scope is allowed only for a caller with no owned resource and cannot satisfy cancellation coverage by itself. Land one tool family per commit; a missing close hook must fail the test rather than silently fall back to an unbounded thread."
+    current_progress:
+      date: "2026-09-24"
+      implemented: "Caller-owned sessions now propagate through LAN Scan, Port Scan, and WHOIS. LAN records lifecycle cancellation before viewModelScope teardown; Port Scan enforces the session worker cap and ignores stale emissions; WHOIS applies caller-owned response bytes and deadline across referrals."
+      validation: "Focused core-network repository/transport/TLS tests, core-domain tests, and focused LAN/Ports/WHOIS/Traceroute app tests pass. The raw-resource ledger reports 16 sites (14 registered, 2 explicit legacy follow-ups, 0 open reviews)."
+      remaining: "Keep E03-T01 in_progress for phase-wide operation/resource coverage, the two legacy sites, adapter-boundary queue/worker assertions, device behavior, and the <=500 ms cleanup measurement. The full app suite is not claimed green."
 
   - id: E03-T02
     title: "Make availability target-aware and make lifecycle/background behavior explicit"

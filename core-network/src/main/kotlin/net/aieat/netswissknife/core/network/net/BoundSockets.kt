@@ -9,7 +9,7 @@ import java.net.SocketAddress
 /** Creates a TCP socket and applies local-network binding before it can connect. */
 internal fun NetworkBinder.newTcpSocket(
     destinationIp: String,
-    socketFactory: () -> Socket = { Socket() },
+    socketFactory: () -> Socket,
 ): Socket = createBoundSocket(socketFactory) { socket ->
     if (shouldBind(destinationIp)) bind(socket)
 }

@@ -13,6 +13,10 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import net.aieat.netswissknife.core.network.net.FakeNetworkBinder
 import net.aieat.netswissknife.core.network.testkit.ScriptedSocket
+import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationBudget
+import net.aieat.netswissknife.core.network.operation.OperationRequirement
+import net.aieat.netswissknife.core.network.operation.OperationSession
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
@@ -144,6 +148,54 @@ class LanScanRepositoryImplTest {
 
         assertTrue(collector.isCancelled, "a probe-local cancellation must terminate the scan")
         assertTrue(socket.isClosed, "a probe-local cancellation must close its sibling socket")
+        assertTrue(updates.none { it is LanScanUpdate.ScanComplete })
+    }
+
+    @Test
+    fun `caller session stop closes owned resources and prevents ScanComplete`() = runTest {
+        val socket = ScriptedSocket(blockConnectUntilClosed = true)
+        val callerResourceClosed = java.util.concurrent.CountDownLatch(1)
+        val session = OperationSession(
+            OperationBudget.start(
+                requirement = OperationRequirement.LOCAL_NETWORK,
+                maxConcurrentProbes = 1,
+            ),
+        )
+        session.resources.register(AutoCloseable { callerResourceClosed.countDown() })
+        val updates = java.util.concurrent.CopyOnWriteArrayList<LanScanUpdate>()
+        val repo = LanScanRepositoryImpl(
+            icmpProbe = IcmpProbe { _, _ -> null },
+            nameProbes = emptyList(),
+            macResolver = object : MacResolver {
+                override val supported = false
+                override suspend fun resolve(ip: String): String? = null
+            },
+            socketFactory = { socket },
+        )
+        val collector = backgroundScope.launch(Dispatchers.IO) {
+            repo.scan(
+                LanScanRequest(
+                    subnet = "192.168.1.0/30",
+                    timeoutMs = 500,
+                    concurrency = 1,
+                    enableNameProbes = false,
+                ),
+                session,
+            ).onEach(updates::add).toList()
+        }
+
+        assertTrue(
+            withContext(Dispatchers.IO) { socket.connectStarted.await(5, TimeUnit.SECONDS) },
+            "LAN TCP probe did not enter connect",
+        )
+        session.cancel(CancellationReason.USER_STOP)
+        withContext(Dispatchers.Default) {
+            withTimeout(2_000) { collector.join() }
+        }
+
+        assertEquals(CancellationReason.USER_STOP, session.cancellationReason)
+        assertTrue(socket.isClosed, "caller cancellation must close the active probe socket")
+        assertTrue(callerResourceClosed.await(2, TimeUnit.SECONDS), "caller resources must be closed")
         assertTrue(updates.none { it is LanScanUpdate.ScanComplete })
     }
 

@@ -4,7 +4,7 @@ review:
   source: "User-provided Net Swiss Knife QA brief v2026.09.21.1 (API 33, host snmpd at 10.0.2.2)."
   release_baseline_commit: "5e183721e64ce8a8946f1a0b50f52b83544e8898"
   checked_commit: "2cded156460dbf2e56f09a42d71016590a50758e"
-  checked_scope: "The supplied release corresponds to origin/main at 5e18372. Audited that baseline plus the current branch through 2cded15; implementation details are cross-referenced to the E03 and dependency-gate review artifacts. Fresh full-suite validation of the current implementation is pending."
+  checked_scope: "The supplied release corresponds to origin/main at 5e18372. Audited that baseline, branch history through 2cded15, and the current LAN/Ports/WHOIS session changes plus LAN-to-Ports route integration. Focused current-tree checks passed; a full unfiltered app-suite pass and API 33 instrumentation are not claimed. Implementation details are cross-referenced to the E03 and dependency-gate review artifacts."
   branch: "plan/comprehensive-review-2026-09-22"
   release_metadata:
     app: "Net Swiss Knife"

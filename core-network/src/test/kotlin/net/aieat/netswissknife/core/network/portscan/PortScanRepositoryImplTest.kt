@@ -13,6 +13,9 @@ import kotlinx.coroutines.withTimeout
 import net.aieat.netswissknife.core.network.net.FakeNetworkBinder
 import net.aieat.netswissknife.core.network.net.LocalNetworkPermissionDeniedException
 import net.aieat.netswissknife.core.network.testkit.ScriptedSocket
+import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationBudget
+import net.aieat.netswissknife.core.network.operation.OperationSession
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertThrows
@@ -132,6 +135,126 @@ class PortScanRepositoryImplTest {
         assertTrue(socket.isClosed, "cancelling the scan must close a connecting socket")
         assertTrue(updates.any { it is PortScanUpdate.Started })
         assertTrue(updates.none { it is PortScanUpdate.PortResult || it is PortScanUpdate.Complete })
+    }
+
+    @Test
+    fun `caller USER_STOP session closes active socket and emits no late result`() = runTest {
+        val socket = ScriptedSocket(blockConnectUntilClosed = true)
+        val updates = java.util.concurrent.CopyOnWriteArrayList<PortScanUpdate>()
+        val started = CountDownLatch(1)
+        val repo = PortScanRepositoryImpl(
+            hostResolver = { InetAddress.getLoopbackAddress() },
+            socketFactory = { socket },
+        )
+        val session = repo.newSession(concurrency = 1)
+        val collector = backgroundScope.launch(Dispatchers.IO) {
+            repo.scan("localhost", listOf(22), timeoutMs = 1_000, concurrency = 1, operationSession = session)
+                .onEach { update ->
+                    updates.add(update)
+                    if (update is PortScanUpdate.Started) started.countDown()
+                }
+                .toList()
+        }
+
+        assertTrue(
+            withContext(Dispatchers.IO) { started.await(5, TimeUnit.SECONDS) },
+            "scan should publish Started before probing"
+        )
+        assertTrue(
+            withContext(Dispatchers.IO) { socket.connectStarted.await(5, TimeUnit.SECONDS) },
+            "default checker did not reach connect"
+        )
+        session.cancel(CancellationReason.USER_STOP)
+        withContext(Dispatchers.Default) {
+            withTimeout(2_000) { collector.cancelAndJoin() }
+        }
+
+        assertEquals(CancellationReason.USER_STOP, session.cancellationReason)
+        assertTrue(socket.isClosed, "caller cancellation must close the active socket")
+        assertTrue(updates.any { it is PortScanUpdate.Started })
+        assertTrue(updates.none { it is PortScanUpdate.PortResult || it is PortScanUpdate.Complete })
+    }
+
+    @Test
+    fun `caller LIFECYCLE_PAUSE session closes active socket and emits no late result`() = runTest {
+        val socket = ScriptedSocket(blockConnectUntilClosed = true)
+        val updates = java.util.concurrent.CopyOnWriteArrayList<PortScanUpdate>()
+        val started = CountDownLatch(1)
+        val repo = PortScanRepositoryImpl(
+            hostResolver = { InetAddress.getLoopbackAddress() },
+            socketFactory = { socket },
+        )
+        val session = repo.newSession(concurrency = 1)
+        val collector = backgroundScope.launch(Dispatchers.IO) {
+            repo.scan("localhost", listOf(22), timeoutMs = 1_000, concurrency = 1, operationSession = session)
+                .onEach { update ->
+                    updates.add(update)
+                    if (update is PortScanUpdate.Started) started.countDown()
+                }
+                .toList()
+        }
+
+        assertTrue(
+            withContext(Dispatchers.IO) { started.await(5, TimeUnit.SECONDS) },
+            "scan should publish Started before probing"
+        )
+        assertTrue(
+            withContext(Dispatchers.IO) { socket.connectStarted.await(5, TimeUnit.SECONDS) },
+            "default checker did not reach connect"
+        )
+        session.cancel(CancellationReason.LIFECYCLE_PAUSE)
+        withContext(Dispatchers.Default) {
+            withTimeout(2_000) { collector.cancelAndJoin() }
+        }
+
+        assertEquals(CancellationReason.LIFECYCLE_PAUSE, session.cancellationReason)
+        assertTrue(socket.isClosed, "lifecycle cancellation must close the active socket")
+        assertTrue(updates.any { it is PortScanUpdate.Started })
+        assertTrue(updates.none { it is PortScanUpdate.PortResult || it is PortScanUpdate.Complete })
+    }
+
+    @Test
+    fun `caller session bounds worker concurrency below request`() = runTest {
+        val active = AtomicInteger()
+        val maximumActive = AtomicInteger()
+        val firstStarted = CountDownLatch(1)
+        val secondStarted = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val repo = PortScanRepositoryImpl(
+            checker = { _, _ ->
+                val current = active.incrementAndGet()
+                maximumActive.updateAndGet { maxOf(it, current) }
+                if (current == 1) firstStarted.countDown()
+                if (current == 2) secondStarted.countDown()
+                try {
+                    release.await(3, TimeUnit.SECONDS)
+                } finally {
+                    active.decrementAndGet()
+                }
+                PortConnectResult(PortStatus.CLOSED, 1L, null)
+            },
+            hostResolver = { InetAddress.getLoopbackAddress() },
+        )
+        val session = OperationSession(OperationBudget.start(maxConcurrentProbes = 1))
+        val scan = backgroundScope.launch(Dispatchers.IO) {
+            repo.scan(
+                host = "localhost",
+                ports = listOf(22, 23, 80, 443),
+                timeoutMs = 1_000,
+                concurrency = 4,
+                operationSession = session,
+            ).toList()
+        }
+
+        assertTrue(withContext(Dispatchers.IO) { firstStarted.await(2, TimeUnit.SECONDS) })
+        assertTrue(
+            !withContext(Dispatchers.IO) { secondStarted.await(300, TimeUnit.MILLISECONDS) },
+            "the scan must not start a second probe above its caller's budget",
+        )
+        release.countDown()
+        withContext(Dispatchers.Default) { withTimeout(3_000) { scan.join() } }
+
+        assertEquals(1, maximumActive.get())
     }
 
     @Test

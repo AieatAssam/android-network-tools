@@ -25,9 +25,33 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.MonotonicClock
+import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationCancellationException
+import net.aieat.netswissknife.core.network.operation.OperationBudget
+import net.aieat.netswissknife.core.network.operation.OperationSession
 
 class WhoisCancellationTest {
     private val publicAddress = InetAddress.getByName("8.8.8.8")
+
+    @Test
+    fun `caller response byte budget limits the whole lookup`() = runTest {
+        val socket = object : Socket() {
+            override fun connect(endpoint: SocketAddress?, timeout: Int) = Unit
+            override fun getOutputStream() = ByteArrayOutputStream()
+            override fun getInputStream(): InputStream = "12345678".byteInputStream()
+            override fun close() = Unit
+        }
+        val session = OperationSession(OperationBudget.start(maxResponseBytes = 7))
+        val repository = WhoisRepositoryImpl(
+            resolver = WhoisHostResolver { publicAddress },
+            socketFactory = WhoisSocketFactory { socket },
+        )
+
+        val result = withContext(Dispatchers.IO) { repository.lookup("8.8.8.8", 1_000, session) }
+
+        assertTrue(result is NetworkResult.Error)
+        assertTrue((result as NetworkResult.Error).message.contains("7 bytes"))
+    }
 
     @Test
     fun `resolver cancellation is rethrown instead of returned as an error`() = runTest {
@@ -43,6 +67,28 @@ class WhoisCancellationTest {
         } catch (cancelled: CancellationException) {
             assertEquals("resolver cancelled", cancelled.message)
         }
+    }
+
+    @Test
+    fun `caller session response cap is enforced by repository transport`() = runTest {
+        val socket = object : Socket() {
+            override fun connect(endpoint: SocketAddress?, timeout: Int) = Unit
+            override fun getOutputStream() = ByteArrayOutputStream()
+            override fun getInputStream(): InputStream = "12345678".byteInputStream()
+            override fun close() = Unit
+        }
+        val session = OperationSession(OperationBudget.start(maxResponseBytes = 7))
+        val repository = WhoisRepositoryImpl(
+            resolver = WhoisHostResolver { publicAddress },
+            socketFactory = WhoisSocketFactory { socket },
+        )
+
+        val result = withContext(Dispatchers.IO) {
+            repository.lookup("8.8.8.8", 1_000, session)
+        }
+
+        assertTrue(result is NetworkResult.Error)
+        assertTrue((result as NetworkResult.Error).message.contains("7 bytes"))
     }
 
     @Test
@@ -103,6 +149,35 @@ class WhoisCancellationTest {
         assertEquals(1, socket.closeCalls.get(), "socket close must have one owner")
         assertTrue(lookup.isCancelled, "cancellation must not be converted to a NetworkResult.Error")
         assertEquals("8.8.8.8\r\n", socket.request.toString(Charsets.UTF_8.name()))
+    }
+
+    @Test
+    fun `caller-owned USER_STOP session closes active socket and emits no later hop`() = runTest {
+        val socket = BlockingReadSocket()
+        val session = WhoisOperation.newSession(2_000)
+        val repository = repositoryWith(socket)
+        val progress = java.util.Collections.synchronizedList(mutableListOf<WhoisHop>())
+        val collector = launch(Dispatchers.Default, start = CoroutineStart.UNDISPATCHED) {
+            repository.hopProgress.collect { progress += it }
+        }
+        val lookup = async(Dispatchers.Default) { repository.lookup("8.8.8.8", 2_000, session) }
+        awaitLatch(socket.readEntered)
+
+        session.cancel(CancellationReason.USER_STOP)
+        val failure = try {
+            lookup.await()
+            null
+        } catch (cancelled: OperationCancellationException) {
+            cancelled
+        }
+        lookup.cancelAndJoin()
+        collector.cancelAndJoin()
+
+        assertEquals(CancellationReason.USER_STOP, session.cancellationReason)
+        assertEquals(CancellationReason.USER_STOP, failure?.reason)
+        assertTrue(socket.closed.await(1, TimeUnit.SECONDS), "session stop should close the active socket")
+        assertEquals(1, socket.closeCalls.get(), "session cleanup must close the socket exactly once")
+        assertTrue(progress.isEmpty(), "cancellation during the first hop must not emit late progress")
     }
 
     @Test

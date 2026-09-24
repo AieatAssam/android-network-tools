@@ -7,7 +7,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.test.runTest
 import net.aieat.netswissknife.core.network.MonotonicClock
 import net.aieat.netswissknife.core.network.NetworkResult
@@ -155,16 +157,16 @@ class TlsInspectorRepositoryImplTest {
     }
 
     @Test
-    fun `deadline Error preserves a throwing socket close failure`() = runTest {
+    fun `deadline Error preserves a throwing socket close failure`() = runBlocking {
         val closeFailure = IOException("deadline socket close failed")
         val blockedSocket = blockingSocket(SocketOperation.CONNECT, closeFailure)
         val repository = TlsInspectorRepositoryImpl().apply {
             socketFactory = TlsInspectorSocketFactory { blockedSocket.socket }
         }
-        // Leave setup time for the IO worker, then trigger the typed deadline after connect
-        // blocks. The separate deadline tests exercise the real timer; this test isolates
-        // cleanup-failure preservation without racing the 500 ms setup budget.
-        val timeoutMs = 10_000
+        // Wait for connect to block before the natural deadline expires, then verify the
+        // timer's cleanup failure survives timeout mapping. This avoids cancelling the
+        // caller job directly, which would prevent the repository from returning its Error.
+        val timeoutMs = 1_000
         val session = TlsInspectorOperation.newSession(timeoutMs)
         val result = AtomicReference<NetworkResult<TlsInspectorResult>?>(null)
 
@@ -175,8 +177,7 @@ class TlsInspectorRepositoryImplTest {
             withContext(Dispatchers.IO) {
                 assertTrue(blockedSocket.entered.await(5, TimeUnit.SECONDS), "connect was not reached")
             }
-            session.cancel(CancellationReason.DEADLINE_EXCEEDED)
-            inspection.join()
+            withTimeout(5_000) { inspection.await() }
         }
 
         assertTrue(result.get() is NetworkResult.Error)

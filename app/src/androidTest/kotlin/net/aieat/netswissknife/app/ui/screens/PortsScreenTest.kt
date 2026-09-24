@@ -1,10 +1,12 @@
 package net.aieat.netswissknife.app.ui.screens
 
 import android.Manifest
+import android.net.Uri
 import android.os.Build
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
@@ -25,6 +27,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.screens.portscan.PortScanUiState
 import net.aieat.netswissknife.app.ui.screens.portscan.PortScanViewModel
+import net.aieat.netswissknife.app.ui.navigation.ToolSource
+import net.aieat.netswissknife.app.ui.navigation.HostTool
+import net.aieat.netswissknife.app.ui.navigation.NavRoutes
+import net.aieat.netswissknife.app.ui.navigation.ToolDestination
+import net.aieat.netswissknife.app.ui.navigation.ToolHost
+import net.aieat.netswissknife.app.ui.navigation.ToolIntent
+import net.aieat.netswissknife.app.ui.navigation.ToolIntentCodec
 import net.aieat.netswissknife.app.ui.theme.NetSwissKnifeTheme
 import net.aieat.netswissknife.core.domain.PortScanPreset
 import org.junit.Assert.assertEquals
@@ -86,6 +95,56 @@ class PortsScreenTest {
         composeRule
             .onNodeWithText(context.getString(R.string.ports_concurrency_high_warning))
             .assertDoesNotExist()
+    }
+
+    @Test
+    fun lanHandoff_prefillsHostAndShowsSourceWithoutStartingScan() {
+        val viewModel = fakePortScanViewModel(host = "192.0.2.8")
+        every { viewModel.sourceContext } returns ToolSource.LAN
+
+        composeRule.setContent {
+            NetSwissKnifeTheme { PortsScreen(viewModel = viewModel) }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        composeRule.onNodeWithText("192.0.2.8").assertIsDisplayed()
+        composeRule.onNodeWithTag(PortsScreenTestTags.SOURCE_CONTEXT)
+            .assertIsDisplayed()
+            .assertTextEquals(context.getString(R.string.ports_source_lan))
+        io.mockk.verify(exactly = 0) { viewModel.startScan() }
+    }
+
+    @Test
+    fun invalidTypedHandoff_showsLocalizedRecoveryAndKeepsFormUsable() {
+        val viewModel = fakePortScanViewModel()
+        every { viewModel.hasInvalidHandoff } returns true
+
+        composeRule.setContent {
+            NetSwissKnifeTheme { PortsScreen(viewModel = viewModel) }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        composeRule.onNodeWithTag(PortsScreenTestTags.INVALID_HANDOFF)
+            .assertIsDisplayed()
+            .assertTextEquals(context.getString(R.string.ports_invalid_handoff))
+        composeRule.onNodeWithTag(PortsScreenTestTags.SCAN_BUTTON)
+            .performScrollTo()
+            .assertIsEnabled()
+        io.mockk.verify(exactly = 0) { viewModel.startScan() }
+    }
+
+    @Test
+    fun portsIntentRouteCarriesTypedPayloadAndKeepsLegacyHostRoute() {
+        val intent = ToolIntent(
+            ToolDestination.HostTarget(HostTool.PORTS, requireNotNull(ToolHost.parse("router.local"))),
+            ToolSource.LAN,
+        )
+        val typedRoute = NavRoutes.Ports.createRoute(intent)
+        val uri = Uri.parse(typedRoute)
+
+        assertEquals("router.local", uri.getQueryParameter("host"))
+        assertEquals(intent, ToolIntentCodec.decode(requireNotNull(uri.getQueryParameter("intent"))))
+        assertEquals("ports?host=router.local", NavRoutes.Ports.createRoute("router.local"))
     }
 
     @Test

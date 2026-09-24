@@ -10,6 +10,9 @@ import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.whois.WhoisQueryType
 import net.aieat.netswissknife.core.network.whois.WhoisRepository
 import net.aieat.netswissknife.core.network.whois.WhoisResult
+import net.aieat.netswissknife.core.network.operation.OperationBudget
+import net.aieat.netswissknife.core.network.operation.OperationRequirement
+import net.aieat.netswissknife.core.network.operation.OperationSession
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
@@ -75,5 +78,18 @@ class WhoisLookupUseCaseTest {
         val actual = useCase(WhoisParams(query = "example.com"))
         assertEquals(expected, actual)
         coVerify(exactly = 1) { repository.lookup("example.com", 10_000) }
+    }
+
+    @Test
+    @DisplayName("caller-owned operation session is forwarded to repository")
+    fun `caller-owned operation session is forwarded to repository`() = runTest {
+        val session = OperationSession(OperationBudget.start(requirement = OperationRequirement.INTERNET))
+        val expected = NetworkResult.Success(successResult)
+        coEvery { repository.lookup(any(), any(), any()) } returns expected
+
+        val actual = useCase(WhoisParams(query = " example.com "), session)
+
+        assertEquals(expected, actual)
+        coVerify(exactly = 1) { repository.lookup("example.com", 10_000, session) }
     }
 }

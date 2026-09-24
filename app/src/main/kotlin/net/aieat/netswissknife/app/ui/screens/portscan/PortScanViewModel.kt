@@ -7,6 +7,11 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.SavedStateHandle
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
+import net.aieat.netswissknife.app.ui.navigation.HostTool
+import net.aieat.netswissknife.app.ui.navigation.ToolDestination
+import net.aieat.netswissknife.app.ui.navigation.ToolIntentCodec
+import net.aieat.netswissknife.app.ui.navigation.ToolSource
+import net.aieat.netswissknife.app.ui.navigation.ToolHost
 import net.aieat.netswissknife.core.domain.PortScanFlowResult
 import net.aieat.netswissknife.core.domain.PortScanParams
 import net.aieat.netswissknife.core.domain.PortScanPreset
@@ -17,6 +22,8 @@ import net.aieat.netswissknife.core.network.SystemMonotonicClock
 import net.aieat.netswissknife.core.network.elapsedMillisSince
 import net.aieat.netswissknife.core.network.portscan.PortScanResult
 import net.aieat.netswissknife.core.network.portscan.PortScanSummary
+import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationSession
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -52,6 +59,25 @@ class PortScanViewModel @Inject constructor(
     private val monotonicClock: MonotonicClock = SystemMonotonicClock,
 ) : ViewModel() {
 
+    private val rawIntentArgument = savedStateHandle.get<String>("intent")
+    private val hasIntentArgument = rawIntentArgument != null
+    private val decodedIntent = rawIntentArgument?.let(ToolIntentCodec::decode)
+    private val intentHost = (decodedIntent?.destination as? ToolDestination.HostTarget)
+        ?.takeIf { it.tool == HostTool.PORTS }
+    private val routeHost = savedStateHandle.get<String>("host")
+    private val routeArgumentsMatch = !hasIntentArgument || (
+        intentHost != null &&
+            (routeHost == null || ToolHost.parse(routeHost)?.canonical == intentHost.host.canonical)
+        )
+
+    /** True when a present typed route is malformed, unsupported, or disagrees with its host arg. */
+    val hasInvalidHandoff: Boolean = hasIntentArgument && !routeArgumentsMatch
+
+    private val inboundIntent = decodedIntent.takeIf { routeArgumentsMatch }
+
+    /** Context for a prefilled handoff, retained across process recreation with navigation args. */
+    val sourceContext: ToolSource? = inboundIntent?.source
+
     private val _uiState = MutableStateFlow<PortScanUiState>(PortScanUiState.Idle)
     val uiState: StateFlow<PortScanUiState> = _uiState.asStateFlow()
 
@@ -81,11 +107,17 @@ class PortScanViewModel @Inject constructor(
 
     private var scanJob: Job? = null
     private var scanStartedAtNanos: Long? = null
+    private var scanOperationSession: OperationSession? = null
 
     init {
-        savedStateHandle.get<String>("host")
-            ?.takeIf { it.isNotBlank() }
-            ?.let { _host.value = it }
+        val restoredEdit = savedStateHandle.get<String>("editedHost")
+        val initialHost = when {
+            hasInvalidHandoff -> null
+            restoredEdit != null -> restoredEdit
+            hasIntentArgument -> intentHost?.host?.value
+            else -> routeHost
+        }
+        initialHost?.takeIf { it.isNotBlank() }?.let { _host.value = it }
         viewModelScope.launch {
             val prefs = dataStore.data.first()
             _timeoutMs.value = prefs[AppPreferenceKeys.DEFAULT_TIMEOUT_MS] ?: 2_000
@@ -95,7 +127,10 @@ class PortScanViewModel @Inject constructor(
 
     // ── User actions ──────────────────────────────────────────────────────────
 
-    fun onHostChange(value: String) { _host.value = value }
+    fun onHostChange(value: String) {
+        _host.value = value
+        savedStateHandle["editedHost"] = value
+    }
 
     fun onPresetChange(preset: PortScanPreset) { _selectedPreset.value = preset }
 
@@ -120,13 +155,33 @@ class PortScanViewModel @Inject constructor(
     }
 
     fun onClear() {
+        cancelScan(CancellationReason.USER_STOP)
         scanJob?.cancel()
         scanStartedAtNanos = null
         _uiState.value = PortScanUiState.Idle
     }
 
     fun onStopScan() {
+        cancelScan(CancellationReason.USER_STOP)
         scanJob?.cancel()
+        finishPartialScan()
+    }
+
+    /** Stops socket probes when the screen leaves the foreground. */
+    fun onLifecyclePause() {
+        cancelScan(CancellationReason.LIFECYCLE_PAUSE)
+        scanJob?.cancel()
+        finishPartialScan()
+    }
+
+    private fun cancelScan(reason: CancellationReason) {
+        scanOperationSession?.let { session ->
+            scanOperationSession = null
+            session.cancel(reason)
+        }
+    }
+
+    private fun finishPartialScan() {
         val current = _uiState.value
         if (current is PortScanUiState.Scanning) {
             // Build partial summary from live results
@@ -147,6 +202,7 @@ class PortScanViewModel @Inject constructor(
     }
 
     fun startScan() {
+        cancelScan(CancellationReason.USER_STOP)
         scanJob?.cancel()
         val normalizedHost = HostValidator.normalize(_host.value)
         val hostForScan = normalizedHost ?: _host.value.trim()
@@ -185,9 +241,12 @@ class PortScanViewModel @Inject constructor(
             totalCount = totalPorts
         )
 
+        val operationSession = portScanUseCase.newSession(params)
+        scanOperationSession = operationSession
         scanJob = viewModelScope.launch {
             try {
-                portScanUseCase(params).collect { result ->
+                portScanUseCase(params, operationSession).collect { result ->
+                    if (scanOperationSession !== operationSession) return@collect
                     when (result) {
                         is PortScanFlowResult.Started -> {
                             _uiState.value = PortScanUiState.Scanning(
@@ -219,9 +278,17 @@ class PortScanViewModel @Inject constructor(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                if (scanOperationSession !== operationSession) return@launch
                 scanStartedAtNanos = null
                 _uiState.value = PortScanUiState.Error("Scan failed: ${e.message ?: "Unknown error"}")
+            } finally {
+                if (scanOperationSession === operationSession) scanOperationSession = null
             }
         }
+    }
+
+    override fun onCleared() {
+        cancelScan(CancellationReason.LIFECYCLE_PAUSE)
+        super.onCleared()
     }
 }
