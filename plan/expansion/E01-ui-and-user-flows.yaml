@@ -134,17 +134,18 @@ tasks:
         - "Versioned URL-safe codec with strict UTF-8 decoding and a compatibility decoder for the existing Ports host query."
         - "Round-trip, malformed encoding, scoped IPv6, duplicate/unknown legacy query, and MAC normalization test coverage."
       remaining_acceptance:
-        - "Extend typed handoffs beyond LAN host -> Ports to the remaining supported LAN/mDNS actions."
-        - "Add one-time route consumption and process-recreation/edit-preservation coverage across navigation restoration."
-        - "Add real NavHost/back-navigation coverage and phone/tablet checks to confirm return to the originating result without duplicate scans."
+        - "Extend typed handoffs beyond LAN host -> Ports/Ping to the remaining supported LAN and mDNS actions, including HTTP, TLS when a port is known, and WOL when a MAC is known."
+        - "Add one-time route consumption and navigation process-restoration/edit-preservation coverage across the supported destinations."
+        - "Exercise the real AppNavHost and system Back on phone and tablet; confirm return to the originating LAN result without duplicate scans."
       current_vertical_slice:
-        status: "LAN host -> Ports is integrated; do not mark the task complete"
-        implementation_commit: 5efafea
+        status: "LAN host -> Ports and Ping are integrated; do not mark the task complete"
+        implementation_commit: 664d6f8
         implemented:
-          - "NavRoutes/AppNavigation route a versioned typed intent while preserving the legacy Ports host query."
-          - "Ports pre-fills the validated host, displays LAN source context, and does not auto-start; manual edits are retained."
-          - "Malformed, unsupported, or host/payload-mismatched typed intents leave a usable blank form with a localized inline error."
-        validation: "Focused app unit/ViewModel tests pass, including both new-session and session-aware use-case no-auto-start assertions. PortsScreen instrumentation source compilation passed; test execution was skipped because another task occupied the shared AVD."
+          - "Ports and Ping accept versioned typed host intents while preserving the legacy Ports host query and bare Ping route."
+          - "Both destinations prefill validated LAN hosts without auto-starting, show source context, and retain user edits in SavedStateHandle."
+          - "Malformed, unsupported, or mismatched intents leave a usable recovery form with a localized inline message; Ping clears its warning after a valid replacement is entered."
+          - "LAN handoffs push child routes so Back can return to retained LAN results; a synthetic NavHost regression covers push/pop, and instrumentation source coverage checks Ping query arguments."
+        validation: "The focused Ping ViewModel suite passed 47/47 after the recovery fix; the earlier combined Ping, LAN gateway, and intent-codec run passed 58/58. Android instrumentation Kotlin sources compile after the final Compose assertions. QA/adversarial reviews cleared the current source slice; synthetic navigation tests were compiled but not executed, and AppNavHost/system-Back, phone/tablet, and process-restoration gates remain open. No emulator was used."
 
   - id: E01-T02
     second_pass_review:
