@@ -436,10 +436,10 @@ expansion:
       title: "Topology snapshot identity, graph diff, and credential-safe export"
       implementation_checkpoint:
         date: "2026-09-24"
-        fixed_in: "2003a11"
-        scope: "Topology discovery now preserves typed per-table COMPLETE/PARTIAL/FAILED outcomes and reasons, retains successful table data when another table fails, marks interface/VLAN/link/node caps as truncated, and emits a node only after link admission is final so accepted links cannot precede their node."
-        validation: "TopologyDiscoveryRepositoryTest passed in the serialized full run; regressions cover mixed table outcomes, cap/truncation propagation, rejected neighbors, and node-before-link event ordering. Independent QA and adversarial source reviews cleared the emitted-node assertion."
-        remaining: "Implement snapshot identity and graph diff, and prevent absent interfaces or links from being reported removed when either candidate observation is incomplete."
+        fixed_in: "4fbb774"
+        scope: "Topology discovery preserves typed per-table COMPLETE/PARTIAL/FAILED outcomes and reasons, retains successful table data when another table fails, marks caps as truncated, and emits nodes before accepted links. The new pure snapshot diff uses canonical IP literals without DNS, stable sorted output, duplicate-aware link comparison, and per-table completeness guards: it suppresses removals when either side is partial, failed, truncated, errored, conflicted, or has a reused identity; it does not infer whole-node removal from graph absence."
+        validation: "TopologySnapshotDiffTest adds deterministic non-empty permutation, table add/change/remove, duplicate-link, protocol-change, malformed-MAC, and incomplete/conflicting/reused-identity coverage. The full core-network suite passed 1,088 tests with one skipped and zero failures/errors. Independent QA and adversarial reviews cleared ordering and false-removal behavior."
+        remaining: "E02-T08 remains in_progress for cross-IP candidate identity, scan/version/scope metadata, snapshot persistence and explicit partial-save UX, accessible graph-diff UI, and credential-safe JSON export."
       source_evidence:
         - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/topology/TopologyModels.kt", lines: "10-62", detail: "TopologyGraph already represents nodes/links/seed/time, but node identity, scan parameters, and graph comparison are unspecified." }
         - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/topology/TopologyDiscoveryRepositoryImpl.kt", lines: "27-100", detail: "BFS discovery streams nodes/links and runs bounded parallel table queries; E02 must snapshot only after completion and preserve partial state on cancellation." }
