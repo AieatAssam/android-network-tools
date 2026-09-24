@@ -3,6 +3,7 @@ package net.aieat.netswissknife.core.domain
 import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.traceroute.GeoIpRepository
 import net.aieat.netswissknife.core.network.traceroute.TracerouteRepository
+import net.aieat.netswissknife.core.network.traceroute.TracerouteReverseDnsRepository
 import net.aieat.netswissknife.core.network.traceroute.TracerouteOperation
 import net.aieat.netswissknife.core.network.operation.OperationCancellationException
 import net.aieat.netswissknife.core.network.operation.OperationDeadlineExceededException
@@ -11,11 +12,18 @@ import net.aieat.netswissknife.core.network.operation.OperationSession
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.currentCoroutineContext
 
 /**
- * Validates [TracerouteParams], then streams [TracerouteFlowResult]s by:
- *   1. Running the traceroute via [TracerouteRepository].
- *   2. Enriching each hop with geolocation data from [GeoIpRepository].
+ * Validates [TracerouteParams], then emits each observed hop immediately and
+ * streams optional reverse-DNS and GeoIP enrichment updates under the same operation.
  *
  * Validation rules:
  *   - host must not be blank and must be a valid hostname or IPv4 address
@@ -26,7 +34,8 @@ import kotlinx.coroutines.flow.flow
  */
 class TracerouteUseCase(
     private val tracerouteRepository: TracerouteRepository,
-    private val geoIpRepository: GeoIpRepository
+    private val geoIpRepository: GeoIpRepository,
+    private val reverseDnsRepository: TracerouteReverseDnsRepository? = null,
 ) {
     operator fun invoke(params: TracerouteParams): Flow<TracerouteFlowResult> =
         invokeInternal(params, operationSession = null)
@@ -66,42 +75,97 @@ class TracerouteUseCase(
         }
 
         return channelFlow {
+            val output = this
             val session = operationSession ?: TracerouteOperation.newSession(
                 params.maxHops,
                 params.timeoutMs,
                 params.probesPerHop,
             )
             OperationRunner.run(session) {
-                tracerouteRepository.trace(
-                    host = trimmedHost,
-                    maxHops = params.maxHops,
-                    timeoutMs = params.timeoutMs,
-                    probesPerHop = params.probesPerHop,
-                    probeType = params.probeType,
-                    packetSize = params.packetSize,
-                    operationSession = session,
-                ).collect { hop ->
-                    val hopIp = hop.ip
-                    // Geolocation is decorative enrichment, not the payload: a hop must
-                    // still be emitted without a location if an ordinary lookup fails.
-                    // Typed cancellation and the shared deadline always stop the operation.
-                    val enriched = if (hopIp != null) {
-                        val geo = try {
-                            geoIpRepository.lookup(hopIp, session)
-                        } catch (cancelled: OperationCancellationException) {
-                            throw cancelled
-                        } catch (deadline: OperationDeadlineExceededException) {
-                            throw deadline
-                        } catch (cancelled: kotlinx.coroutines.CancellationException) {
-                            throw cancelled
-                        } catch (_: Exception) {
-                            null
+                coroutineScope {
+                    // Bound all in-flight network lookups together, while allowing DNS and
+                    // GeoIP for an individual hop to overlap.
+                    val lookups = Semaphore(
+                        minOf(MAX_ENRICHMENT_CONCURRENCY, session.budget.maxConcurrentProbes),
+                    )
+                    tracerouteRepository.trace(
+                        host = trimmedHost,
+                        maxHops = params.maxHops,
+                        timeoutMs = params.timeoutMs,
+                        probesPerHop = params.probesPerHop,
+                        probeType = params.probeType,
+                        packetSize = params.packetSize,
+                        operationSession = session,
+                    ).collect { hop ->
+                        output.send(TracerouteFlowResult.Hop(hop))
+                        val hopIp = hop.ip ?: return@collect
+
+                        launch {
+                            val hostnameLookup = async {
+                                if (reverseDnsRepository == null || hop.hostname != null) {
+                                    hop.hostname
+                                } else {
+                                    lookups.withPermit {
+                                        optionalEnrichment(
+                                            session,
+                                            TracerouteOperation.MAX_REVERSE_DNS_WAIT_MILLIS,
+                                        ) { reverseDnsRepository.lookup(hopIp, session) }
+                                    }
+                                }
+                            }
+                            val geoLookup = async {
+                                lookups.withPermit {
+                                    optionalEnrichment(
+                                        session,
+                                        TracerouteOperation.MAX_GEO_IP_WAIT_MILLIS,
+                                    ) { geoIpRepository.lookup(hopIp, session) }
+                                }
+                            }
+                            output.send(
+                                TracerouteFlowResult.HopEnriched(
+                                    hopNumber = hop.hopNumber,
+                                    hostname = hostnameLookup.await(),
+                                    geoLocation = geoLookup.await(),
+                                ),
+                            )
                         }
-                        hop.copy(geoLocation = geo)
-                    } else hop
-                    this@channelFlow.send(TracerouteFlowResult.Hop(enriched))
+                    }
                 }
             }
         }
+    }
+
+    private suspend fun <T> optionalEnrichment(
+        session: OperationSession,
+        maximumWaitMillis: Long,
+        lookup: suspend () -> T,
+    ): T? {
+        val remainingMillis = session.budget.remainingTimeoutMillis()
+        if (session.budget.hasDeadline && remainingMillis <= 0L) {
+            throw OperationDeadlineExceededException()
+        }
+        val waitMillis = if (session.budget.hasDeadline) {
+            minOf(maximumWaitMillis, remainingMillis)
+        } else {
+            maximumWaitMillis
+        }
+        val result = try {
+            withTimeoutOrNull(waitMillis.coerceAtLeast(1L)) { lookup() }
+        } catch (cancelled: OperationCancellationException) {
+            throw cancelled
+        } catch (deadline: OperationDeadlineExceededException) {
+            throw deadline
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            null
+        }
+        currentCoroutineContext().ensureActive()
+        session.budget.throwIfExpired()
+        return result
+    }
+
+    private companion object {
+        const val MAX_ENRICHMENT_CONCURRENCY = 4
     }
 }

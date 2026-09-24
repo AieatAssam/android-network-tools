@@ -256,6 +256,19 @@ class TracerouteViewModel @Inject constructor(
                                 _uiState.value = current.copy(hops = accumulated.toList())
                             }
                         }
+                        is TracerouteFlowResult.HopEnriched -> {
+                            val index = accumulated.indexOfFirst { it.hopNumber == result.hopNumber }
+                            if (index < 0) return@collect
+                            val previous = accumulated[index]
+                            accumulated[index] = previous.copy(
+                                hostname = result.hostname ?: previous.hostname,
+                                geoLocation = result.geoLocation ?: previous.geoLocation,
+                            )
+                            val current = _uiState.value
+                            if (current is TracerouteUiState.Running) {
+                                _uiState.value = current.copy(hops = accumulated.toList())
+                            }
+                        }
                     }
                 }
             } catch (e: CancellationException) {

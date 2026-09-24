@@ -9,7 +9,7 @@ import net.aieat.netswissknife.core.network.operation.OperationRunner
 import net.aieat.netswissknife.core.network.operation.OperationSession
 import net.aieat.netswissknife.core.network.operation.OperationDeadlineExceededException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
@@ -35,8 +35,8 @@ import me.impa.icmpenguin.trace.SimpleTracer
  * This makes it work reliably on Android 16+ where those binaries have been removed.
  *
  * Coroutine integration: [SimpleTracer.trace] returns a cold [Flow] that emits one
- * [me.impa.icmpenguin.trace.HopStatus] per TTL level. We map each to our own [HopResult]
- * and enrich it with a bounded, cancellable reverse-DNS lookup on the IO dispatcher.
+ * [me.impa.icmpenguin.trace.HopStatus] per TTL level. We map and emit each numeric [HopResult]
+ * immediately; optional reverse-DNS and GeoIP enrichment is coordinated by the domain use case.
  */
 class IcmpEnginTracerouteRepositoryImpl(
     private val nativeTraceFactory: (
@@ -48,8 +48,8 @@ class IcmpEnginTracerouteRepositoryImpl(
         Int,
         Int,
     ) -> Flow<HopResult> = ::nativeTrace,
-    private val reverseDnsLookup: TracerouteReverseDnsLookup = BoundedTracerouteReverseDnsLookup(),
     private val hostResolver: TracerouteHostResolver = BoundedTracerouteHostResolver(),
+    private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : TracerouteRepository {
 
     override fun trace(
@@ -71,7 +71,7 @@ class IcmpEnginTracerouteRepositoryImpl(
                 TracerouteOperation.newSession(maxHops, timeoutMs, probesPerHop),
             )
         )
-    }.flowOn(Dispatchers.IO)
+    }.flowOn(dispatcher)
 
     override fun trace(
         host: String,
@@ -118,35 +118,12 @@ class IcmpEnginTracerouteRepositoryImpl(
                     throw failure
                 }
                 .collect { hop ->
-                    val enriched = hop.ip?.let { ip ->
-                        val hostname = try {
-                            val remainingMillis = operationSession.budget.remainingTimeoutMillis()
-                            if (operationSession.budget.hasDeadline && remainingMillis <= 0L) {
-                                throw OperationDeadlineExceededException()
-                            }
-                            val lookupBudgetMillis = if (operationSession.budget.hasDeadline) {
-                                minOf(MAX_REVERSE_DNS_WAIT_MILLIS, remainingMillis)
-                            } else {
-                                MAX_REVERSE_DNS_WAIT_MILLIS
-                            }
-                            withTimeoutOrNull(lookupBudgetMillis) {
-                                reverseDnsLookup.lookup(ip, operationSession)
-                            }
-                        } catch (cancelled: CancellationException) {
-                            throw cancelled
-                        } catch (deadline: OperationDeadlineExceededException) {
-                            throw deadline
-                        } catch (_: Exception) {
-                            null
-                        }
-                        currentCoroutineContext().ensureActive()
-                        operationSession.budget.throwIfExpired()
-                        hop.copy(hostname = hostname)
-                    } ?: hop
-                    this@channelFlow.send(enriched)
+                    currentCoroutineContext().ensureActive()
+                    operationSession.budget.throwIfExpired()
+                    this@channelFlow.send(hop)
                 }
         }
-    }.flowOn(Dispatchers.IO)
+    }.flowOn(dispatcher)
 
 }
 
@@ -203,7 +180,6 @@ internal fun nativeTraceConcurrency(probesPerHop: Int, sessionLimit: Int): Int =
         TracerouteOperation.MAX_CONCURRENT_PROBES,
     )
 
-internal const val MAX_REVERSE_DNS_WAIT_MILLIS = TracerouteOperation.MAX_REVERSE_DNS_WAIT_MILLIS
 
 /** A stable, user-displayable failure when the optional JNI traceroute engine cannot load. */
 class NativeTracerouteUnavailableException : Exception(

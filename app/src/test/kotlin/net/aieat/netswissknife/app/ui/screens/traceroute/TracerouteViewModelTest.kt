@@ -20,7 +20,6 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withContext
 import net.aieat.netswissknife.app.traceroute.IcmpEnginTracerouteRepositoryImpl
-import net.aieat.netswissknife.app.traceroute.TracerouteReverseDnsLookup
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
 import net.aieat.netswissknife.app.platform.NetworkStatus
@@ -32,6 +31,7 @@ import net.aieat.netswissknife.core.network.operation.CancellationReason
 import net.aieat.netswissknife.core.network.operation.OperationBudget
 import net.aieat.netswissknife.core.network.operation.OperationSession
 import net.aieat.netswissknife.core.network.traceroute.HopResult
+import net.aieat.netswissknife.core.network.traceroute.HopGeoLocation
 import net.aieat.netswissknife.core.network.traceroute.HopStatus
 import net.aieat.netswissknife.core.network.traceroute.TracerouteOperation
 import org.junit.jupiter.api.AfterEach
@@ -101,6 +101,27 @@ class TracerouteViewModelTest {
             viewModel.startTrace()
             val state = viewModel.uiState.value
             assertTrue(state is TracerouteUiState.Finished, "Expected Finished but was $state")
+        }
+
+        @Test
+        fun `enrichment updates its hop in place without changing order`() = runTest {
+            val first = stubHop.copy(hostname = null, geoLocation = null)
+            val second = stubHop.copy(hopNumber = 2, ip = "10.0.0.2", hostname = null)
+            val firstGeo = HopGeoLocation("10.0.0.1", "United Kingdom", "GB", "London", 51.5, -0.1)
+            every { tracerouteUseCase(any(), any()) } returns flowOf(
+                TracerouteFlowResult.Hop(first),
+                TracerouteFlowResult.Hop(second),
+                TracerouteFlowResult.HopEnriched(1, "router.example", firstGeo),
+            )
+            viewModel.onHostChange("example.com")
+
+            viewModel.startTrace()
+
+            val finished = viewModel.uiState.value as TracerouteUiState.Finished
+            assertEquals(listOf(1, 2), finished.result.hops.map { it.hopNumber })
+            assertEquals("router.example", finished.result.hops[0].hostname)
+            assertEquals(firstGeo, finished.result.hops[0].geoLocation)
+            assertEquals(null, finished.result.hops[1].hostname)
         }
 
         @Test
@@ -299,7 +320,6 @@ class TracerouteViewModelTest {
                         awaitCancellation()
                     }
                 },
-                reverseDnsLookup = TracerouteReverseDnsLookup { _, _ -> "gateway" },
             )
             every { tracerouteUseCase(any(), any()) } answers {
                 val params = firstArg<TracerouteParams>()

@@ -3,6 +3,7 @@ package net.aieat.netswissknife.app.traceroute
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.CancellationException
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.ThreadFactory
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
@@ -11,25 +12,20 @@ import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.toList
-import net.aieat.netswissknife.core.network.traceroute.HopResult
-import net.aieat.netswissknife.core.network.traceroute.HopStatus
-import net.aieat.netswissknife.core.network.traceroute.TracerouteProbeType
 import net.aieat.netswissknife.core.network.operation.OperationBudget
 import net.aieat.netswissknife.core.network.operation.CancellationReason
 import net.aieat.netswissknife.core.network.operation.OperationSession
-import net.aieat.netswissknife.core.network.traceroute.TracerouteOperation
+import net.aieat.netswissknife.core.network.operation.OperationRunner
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertInstanceOf
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class BoundedTracerouteReverseDnsLookupTest {
 
     @Test
-    fun `resolver-originated cancellation is optional failure and keeps numeric hop`() = runBlocking {
+    fun `resolver-originated cancellation is optional lookup failure`() = runBlocking {
         val executor = ThreadPoolExecutor(
             1,
             1,
@@ -40,21 +36,12 @@ class BoundedTracerouteReverseDnsLookupTest {
             ThreadPoolExecutor.AbortPolicy(),
         )
         try {
-            val repository = IcmpEnginTracerouteRepositoryImpl(
-                nativeTraceFactory = { _, _, _, _, _, _, _ ->
-                    flowOf(HopResult(1, "192.0.2.8", null, 3, HopStatus.SUCCESS))
-                },
-                reverseDnsLookup = BoundedTracerouteReverseDnsLookup(executor) {
-                    throw CancellationException("platform resolver cancelled internally")
-                },
-            )
+            val lookup = BoundedTracerouteReverseDnsLookup(executor) {
+                throw CancellationException("platform resolver cancelled internally")
+            }
 
-            val hop = repository.trace(
-                "192.0.2.1", 2, 500, 1, TracerouteProbeType.ICMP, 56,
-            ).first()
-
-            assertEquals("192.0.2.8", hop.ip)
-            assertEquals(null, hop.hostname)
+            val failure = runCatching { lookup.lookup("192.0.2.8", session()) }.exceptionOrNull()
+            assertInstanceOf(IllegalStateException::class.java, failure)
         } finally {
             executor.shutdownNow()
         }
@@ -114,7 +101,7 @@ class BoundedTracerouteReverseDnsLookupTest {
     }
 
     @Test
-    fun `owning session stop closes queued lookup lease and emits no late hop`() = runBlocking {
+    fun `owning session stop cancels queued lookup and releases its task`() = runBlocking {
         val workerStarted = CountDownLatch(1)
         val releaseWorker = CountDownLatch(1)
         val executor = ThreadPoolExecutor(
@@ -126,17 +113,11 @@ class BoundedTracerouteReverseDnsLookupTest {
             ThreadFactory { Thread(it, "reverse-dns-session-stop-test").apply { isDaemon = true } },
             ThreadPoolExecutor.AbortPolicy(),
         )
-        val session = TracerouteOperation.newSession(2, 500)
-        val repository = IcmpEnginTracerouteRepositoryImpl(
-            nativeTraceFactory = { _, _, _, _, _, _, _ ->
-                flowOf(HopResult(1, "192.0.2.9", null, 4, HopStatus.SUCCESS))
-            },
-            reverseDnsLookup = BoundedTracerouteReverseDnsLookup(executor) { "router.example" },
-        )
-        val output = mutableListOf<HopResult>()
+        val session = session()
+        val lookup = BoundedTracerouteReverseDnsLookup(executor) { "router.example" }
 
         try {
-            // Occupy the only worker so the repository's lookup lease is observably queued.
+            // Occupy the only worker so the lookup lease is observably queued.
             executor.execute {
                 workerStarted.countDown()
                 var released = false
@@ -150,9 +131,9 @@ class BoundedTracerouteReverseDnsLookupTest {
             }
             assertTrue(workerStarted.await(1, TimeUnit.SECONDS))
             val collection = async {
-                repository.trace(
-                    "192.0.2.1", 2, 500, 1, TracerouteProbeType.ICMP, 56, session,
-                ).toList(output)
+                OperationRunner.run(session) {
+                    lookup.lookup("192.0.2.9", session)
+                }
             }
             withTimeout(1_000) {
                 while (executor.queue.size != 1) kotlinx.coroutines.yield()
@@ -168,7 +149,6 @@ class BoundedTracerouteReverseDnsLookupTest {
             withTimeout(1_000) {
                 while (executor.activeCount != 0) kotlinx.coroutines.delay(5)
             }
-            assertTrue(output.isEmpty(), "a cancelled lookup must not emit its hop later")
         } finally {
             releaseWorker.countDown()
             executor.shutdownNow()
@@ -176,7 +156,7 @@ class BoundedTracerouteReverseDnsLookupTest {
     }
 
     @Test
-    fun `executor saturation falls back to numeric hop`() = runBlocking {
+    fun `executor saturation returns no optional reverse dns result`() = runBlocking {
         val workerStarted = CountDownLatch(1)
         val releaseWorker = CountDownLatch(1)
         val executor = ThreadPoolExecutor(
@@ -196,19 +176,9 @@ class BoundedTracerouteReverseDnsLookupTest {
             assertTrue(workerStarted.await(1, TimeUnit.SECONDS))
             executor.execute { /* Fill the sole waiting slot. */ }
 
-            val repository = IcmpEnginTracerouteRepositoryImpl(
-                nativeTraceFactory = { _, _, _, _, _, _, _ ->
-                    flowOf(HopResult(1, "192.0.2.9", null, 4, HopStatus.SUCCESS))
-                },
-                reverseDnsLookup = BoundedTracerouteReverseDnsLookup(executor) { "router.example" },
-            )
-
-            val hop = repository.trace(
-                "192.0.2.1", 2, 500, 1, TracerouteProbeType.ICMP, 56,
-            ).first()
-
-            assertEquals("192.0.2.9", hop.ip)
-            assertEquals(null, hop.hostname)
+            val lookup = BoundedTracerouteReverseDnsLookup(executor) { "router.example" }
+            val failure = runCatching { lookup.lookup("192.0.2.9", session()) }.exceptionOrNull()
+            assertInstanceOf(RejectedExecutionException::class.java, failure)
             assertEquals(1, executor.queue.size, "the unrelated queued task must remain intact")
         } finally {
             releaseWorker.countDown()

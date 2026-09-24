@@ -15,11 +15,10 @@ import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.InternalCoroutinesApi
 import kotlinx.coroutines.suspendCancellableCoroutine
 import net.aieat.netswissknife.core.network.operation.OperationSession
+import net.aieat.netswissknife.core.network.traceroute.TracerouteReverseDnsRepository
 
-/** Optional reverse-DNS enrichment seam. The numeric hop is kept when this lookup returns null. */
-fun interface TracerouteReverseDnsLookup {
-    suspend fun lookup(ip: String, operationSession: OperationSession): String?
-}
+/** Source-compatible app alias; the seam lives in core-network for use by the domain pipeline. */
+typealias TracerouteReverseDnsLookup = TracerouteReverseDnsRepository
 
 /**
  * Platform name-service lookups can ignore interruption. Keep them off the trace collector,
@@ -28,7 +27,7 @@ fun interface TracerouteReverseDnsLookup {
 internal class BoundedTracerouteReverseDnsLookup(
     private val executor: ThreadPoolExecutor = TracerouteNameResolutionWorkers.executor,
     private val resolver: (String) -> String? = ::resolveCanonicalHostname,
-) : TracerouteReverseDnsLookup {
+) : TracerouteReverseDnsRepository {
     @OptIn(InternalCoroutinesApi::class)
     override suspend fun lookup(ip: String, operationSession: OperationSession): String? {
         var leaseForCleanup: ReverseDnsLease? = null

@@ -6,6 +6,7 @@ import net.aieat.netswissknife.core.network.traceroute.HopResult
 import net.aieat.netswissknife.core.network.traceroute.HopStatus
 import net.aieat.netswissknife.core.network.traceroute.TracerouteRepository
 import net.aieat.netswissknife.core.network.traceroute.TracerouteOperation
+import net.aieat.netswissknife.core.network.traceroute.TracerouteReverseDnsRepository
 import net.aieat.netswissknife.core.network.operation.OperationSession
 import io.mockk.coEvery
 import io.mockk.every
@@ -14,9 +15,14 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertInstanceOf
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
@@ -138,18 +144,143 @@ class TracerouteUseCaseTest {
             coEvery { geoRepo.lookup("8.8.8.8", any())     } returns geo
 
             val results = useCase(TracerouteParams("google.com")).toList()
-            assertEquals(2, results.size)
-            assert(results.all { it is TracerouteFlowResult.Hop })
+            assertEquals(4, results.size)
+            assertEquals(listOf(1, 2), results.filterIsInstance<TracerouteFlowResult.Hop>().map { it.hop.hopNumber })
+            assertEquals(listOf(1, 2), results.filterIsInstance<TracerouteFlowResult.HopEnriched>().map { it.hopNumber })
         }
 
         @Test
-        fun `geo location is attached to hop with public IP`() = runTest {
+        fun `geo location is returned as a hop enrichment`() = runTest {
             every { tracerouteRepo.trace(any(), any(), any(), any(), any(), any(), any()) } returns flowOf(hop2)
             coEvery { geoRepo.lookup("8.8.8.8", any()) } returns geo
 
             val results = useCase(TracerouteParams("google.com")).toList()
-            val hopResult = (results[0] as TracerouteFlowResult.Hop).hop
-            assertEquals(geo, hopResult.geoLocation)
+            assertEquals(TracerouteFlowResult.HopEnriched(2, null, geo), results[1])
+        }
+
+        @Test
+        fun `raw hop is emitted before reverse DNS and GeoIP enrichment`() = runTest {
+            val reverseDns = mockk<TracerouteReverseDnsRepository>()
+            every { tracerouteRepo.trace(any(), any(), any(), any(), any(), any(), any()) } returns flowOf(hop2)
+            coEvery { reverseDns.lookup("8.8.8.8", any()) } returns "dns.google"
+            coEvery { geoRepo.lookup("8.8.8.8", any()) } returns geo
+
+            val results = TracerouteUseCase(tracerouteRepo, geoRepo, reverseDns)(TracerouteParams("google.com")).toList()
+
+            assertEquals(TracerouteFlowResult.Hop(hop2), results[0])
+            assertEquals(TracerouteFlowResult.HopEnriched(2, "dns.google", geo), results[1])
+        }
+
+        @Test
+        fun `ordinary enrichment lookup failures retain the raw hop and emit empty enrichment`() = runTest {
+            val reverseDns = mockk<TracerouteReverseDnsRepository>()
+            every { tracerouteRepo.trace(any(), any(), any(), any(), any(), any(), any()) } returns flowOf(hop2)
+            coEvery { reverseDns.lookup("8.8.8.8", any()) } throws java.io.IOException("reverse lookup failed")
+            coEvery { geoRepo.lookup("8.8.8.8", any()) } throws java.io.IOException("geo lookup failed")
+
+            val results = TracerouteUseCase(tracerouteRepo, geoRepo, reverseDns)(TracerouteParams("google.com")).toList()
+
+            assertEquals(TracerouteFlowResult.Hop(hop2), results[0])
+            assertEquals(TracerouteFlowResult.HopEnriched(2, null, null), results[1])
+        }
+
+        @Test
+        fun `reverse DNS lookup timeout does not drop the hop or delay GeoIP result`() = runTest {
+            val reverseDns = mockk<TracerouteReverseDnsRepository>()
+            every { tracerouteRepo.trace(any(), any(), any(), any(), any(), any(), any()) } returns flowOf(hop2)
+            coEvery { reverseDns.lookup("8.8.8.8", any()) } coAnswers {
+                delay(TracerouteOperation.MAX_REVERSE_DNS_WAIT_MILLIS + 1L)
+                "late.example"
+            }
+            coEvery { geoRepo.lookup("8.8.8.8", any()) } returns geo
+
+            val results = TracerouteUseCase(tracerouteRepo, geoRepo, reverseDns)(
+                TracerouteParams("google.com"),
+            ).toList()
+
+            assertEquals(TracerouteFlowResult.Hop(hop2), results.first())
+            assertEquals(TracerouteFlowResult.HopEnriched(2, null, geo), results.last())
+        }
+
+        @Test
+        fun `at most four GeoIP enrichment lookups are in flight`() = runTest {
+            val hops = (1..8).map { number ->
+                HopResult(number, "192.0.2.$number", null, number.toLong(), HopStatus.SUCCESS)
+            }
+            val releaseLookups = CompletableDeferred<Unit>()
+            var activeLookups = 0
+            var maximumActiveLookups = 0
+            every { tracerouteRepo.trace(any(), any(), any(), any(), any(), any(), any()) } returns flowOf(*hops.toTypedArray())
+            coEvery { geoRepo.lookup(any(), any()) } coAnswers {
+                activeLookups++
+                maximumActiveLookups = maxOf(maximumActiveLookups, activeLookups)
+                try {
+                    releaseLookups.await()
+                    null
+                } finally {
+                    activeLookups--
+                }
+            }
+
+            val collected = mutableListOf<TracerouteFlowResult>()
+            val collector = backgroundScope.launch {
+                useCase(TracerouteParams("google.com")).toList(collected)
+            }
+            runCurrent()
+
+            assertEquals(4, activeLookups)
+            assertEquals(4, maximumActiveLookups)
+            assertEquals(8, collected.filterIsInstance<TracerouteFlowResult.Hop>().size)
+            assertEquals(0, collected.filterIsInstance<TracerouteFlowResult.HopEnriched>().size)
+
+            releaseLookups.complete(Unit)
+            collector.join()
+
+            assert(maximumActiveLookups <= 4)
+            assertEquals(8, collected.filterIsInstance<TracerouteFlowResult.HopEnriched>().size)
+        }
+
+        @Test
+        fun `caller session concurrency budget further limits enrichment lookups`() = runTest {
+            val hops = (1..6).map { number ->
+                HopResult(number, "198.51.100.$number", null, number.toLong(), HopStatus.SUCCESS)
+            }
+            val releaseLookups = CompletableDeferred<Unit>()
+            var activeLookups = 0
+            var maximumActiveLookups = 0
+            val session = TracerouteOperation.newSession(
+                maxHops = hops.size,
+                timeoutMs = 500,
+                maxConcurrentProbes = 1,
+            )
+            every { tracerouteRepo.trace(any(), any(), any(), any(), any(), any(), any()) } returns flowOf(*hops.toTypedArray())
+            coEvery { geoRepo.lookup(any(), any()) } coAnswers {
+                activeLookups++
+                maximumActiveLookups = maxOf(maximumActiveLookups, activeLookups)
+                try {
+                    releaseLookups.await()
+                    null
+                } finally {
+                    activeLookups--
+                }
+            }
+
+            val collected = mutableListOf<TracerouteFlowResult>()
+            val collector = backgroundScope.launch {
+                useCase(TracerouteParams("google.com", maxHops = hops.size), session).toList(collected)
+            }
+            runCurrent()
+
+            assertEquals(1, activeLookups)
+            assertEquals(1, maximumActiveLookups)
+            assertEquals(hops.size, collected.filterIsInstance<TracerouteFlowResult.Hop>().size)
+            assertEquals(0, collected.filterIsInstance<TracerouteFlowResult.HopEnriched>().size)
+
+            releaseLookups.complete(Unit)
+            collector.join()
+
+            assert(maximumActiveLookups <= 1)
+            assertEquals(hops.size, collected.filterIsInstance<TracerouteFlowResult.HopEnriched>().size)
         }
 
         @Test
@@ -190,8 +321,7 @@ class TracerouteUseCaseTest {
             every { tracerouteRepo.trace(any(), any(), any(), any(), any(), any(), any()) } returns flowOf(timeoutHop)
 
             val results = useCase(TracerouteParams("google.com")).toList()
-            val hopResult = (results[0] as TracerouteFlowResult.Hop).hop
-            assertEquals(null, hopResult.geoLocation)
+            assertEquals(TracerouteFlowResult.Hop(timeoutHop), results[0])
         }
 
         @Test
@@ -215,11 +345,14 @@ class TracerouteUseCaseTest {
 
             val results = useCase(TracerouteParams("google.com")).toList()
 
-            assertEquals(2, results.size)
-            val failedHop = (results[0] as TracerouteFlowResult.Hop).hop
-            assertEquals(null, failedHop.geoLocation)
-            val okHop = (results[1] as TracerouteFlowResult.Hop).hop
-            assertEquals(geo, okHop.geoLocation)
+            assertEquals(4, results.size)
+            assertEquals(listOf(hop1, hop2), results.filterIsInstance<TracerouteFlowResult.Hop>().map { it.hop })
+            val enrichmentEvents = results.filterIsInstance<TracerouteFlowResult.HopEnriched>()
+            assertEquals(2, enrichmentEvents.size)
+            assertEquals(null, enrichmentEvents.single { it.hopNumber == 1 }.geoLocation)
+            assertEquals(geo, enrichmentEvents.single { it.hopNumber == 2 }.geoLocation)
+            assertTrue(results.indexOf(TracerouteFlowResult.Hop(hop1)) < results.indexOf(enrichmentEvents.single { it.hopNumber == 1 }))
+            assertTrue(results.indexOf(TracerouteFlowResult.Hop(hop2)) < results.indexOf(enrichmentEvents.single { it.hopNumber == 2 }))
         }
 
         @Test

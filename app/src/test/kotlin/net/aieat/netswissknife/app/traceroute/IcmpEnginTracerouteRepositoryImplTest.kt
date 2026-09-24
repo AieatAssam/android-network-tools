@@ -4,7 +4,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitCancellation
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
@@ -247,31 +246,10 @@ class IcmpEnginTracerouteRepositoryImplTest {
     }
 
     @Test
-    fun `reverse dns failure leaves numeric hop available`() = runBlocking {
+    fun `native hops stream immediately with numeric hostname unset for later enrichment`() = runBlocking {
         val repository = IcmpEnginTracerouteRepositoryImpl(
             nativeTraceFactory = { _, _, _, _, _, _, _ ->
                 flowOf(HopResult(1, "192.0.2.9", null, 4, HopStatus.SUCCESS))
-            },
-            reverseDnsLookup = TracerouteReverseDnsLookup { _, _ -> error("resolver unavailable") },
-        )
-
-        val hop = repository.trace(
-            "192.0.2.1", 2, 500, 1, TracerouteProbeType.ICMP, 56,
-        ).first()
-
-        assertEquals("192.0.2.9", hop.ip)
-        assertNull(hop.hostname)
-    }
-
-    @Test
-    fun `reverse dns timeout leaves numeric hop available`() = runBlocking {
-        val repository = IcmpEnginTracerouteRepositoryImpl(
-            nativeTraceFactory = { _, _, _, _, _, _, _ ->
-                flowOf(HopResult(1, "192.0.2.9", null, 4, HopStatus.SUCCESS))
-            },
-            reverseDnsLookup = TracerouteReverseDnsLookup { _, _ ->
-                delay(MAX_REVERSE_DNS_WAIT_MILLIS + 500)
-                "too-late.example"
             },
         )
 
@@ -283,56 +261,4 @@ class IcmpEnginTracerouteRepositoryImplTest {
         assertNull(hop.hostname)
     }
 
-    @Test
-    fun `reverse dns result enriches hop within caller session`() = runBlocking {
-        val session = TracerouteOperation.newSession(3, 500)
-        var receivedSession: net.aieat.netswissknife.core.network.operation.OperationSession? = null
-        val repository = IcmpEnginTracerouteRepositoryImpl(
-            nativeTraceFactory = { _, _, _, _, _, _, _ ->
-                flowOf(HopResult(1, "192.0.2.9", null, 4, HopStatus.SUCCESS))
-            },
-            reverseDnsLookup = TracerouteReverseDnsLookup { ip, operationSession ->
-                assertEquals("192.0.2.9", ip)
-                receivedSession = operationSession
-                "router.example"
-            },
-        )
-
-        val hop = repository.trace(
-            "192.0.2.1", 2, 500, 1, TracerouteProbeType.ICMP, 56, session,
-        ).first()
-
-        assertEquals(session, receivedSession)
-        assertEquals("192.0.2.9", hop.ip)
-        assertEquals("router.example", hop.hostname)
-    }
-
-    @Test
-    fun `Stop during reverse dns keeps typed reason and emits no late hop`() = runBlocking {
-        val lookupStarted = CompletableDeferred<Unit>()
-        val session = TracerouteOperation.newSession(3, 500)
-        val repository = IcmpEnginTracerouteRepositoryImpl(
-            nativeTraceFactory = { _, _, _, _, _, _, _ ->
-                flowOf(HopResult(1, "192.0.2.9", null, 4, HopStatus.SUCCESS))
-            },
-            reverseDnsLookup = TracerouteReverseDnsLookup { _, _ ->
-                lookupStarted.complete(Unit)
-                awaitCancellation()
-            },
-        )
-        val output = mutableListOf<HopResult>()
-        val collection = async {
-            repository.trace(
-                "192.0.2.1", 2, 500, 1, TracerouteProbeType.ICMP, 56, session,
-            ).toList(output)
-        }
-
-        lookupStarted.await()
-        session.cancel(CancellationReason.USER_STOP)
-        val failure = runCatching { withTimeout(1_000) { collection.await() } }.exceptionOrNull()
-
-        assertInstanceOf(OperationCancellationException::class.java, failure)
-        assertEquals(CancellationReason.USER_STOP, session.cancellationReason)
-        assertTrue(output.isEmpty())
-    }
 }
