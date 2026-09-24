@@ -397,6 +397,7 @@
     <string name="traceroute_packet_size_label">Packet size</string>
     <string name="traceroute_start_button">Start Trace</string>
     <string name="traceroute_stop_button">Stop</string>
+    <string name="traceroute_canceling_button">Stopping…</string>
     <string name="traceroute_retry_button">Retry</string>
     <string name="traceroute_clear_button">Clear</string>
 
@@ -404,6 +405,12 @@
     <string name="traceroute_idle_title">Enter a host to trace</string>
     <string name="traceroute_idle_subtitle">Supports hostnames and IPv4 addresses. Shows each hop with geolocation and journey statistics.</string>
     <string name="traceroute_running_title">Tracing to %1$s…</string>
+    <string name="traceroute_canceling_title">Stopping trace…</string>
+    <string name="traceroute_canceling_subtitle">Waiting for probe cleanup. Any hops found will be kept.</string>
+    <plurals name="traceroute_canceled_partial_status">
+        <item quantity="one">Trace canceled. %1$d hop retained as a partial result.</item>
+        <item quantity="other">Trace canceled. %1$d hops retained as partial results.</item>
+    </plurals>
     <plurals name="traceroute_running_subtitle">
         <item quantity="one">%1$d hop discovered so far</item>
         <item quantity="other">%1$d hops discovered so far</item>

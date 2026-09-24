@@ -193,6 +193,63 @@ class TracerouteScreenTest {
     }
 
     @Test
+    fun cancelingState_keepsPartialHopsAndShowsCleanupProgressBeforeCanceledResults() {
+        val hop = fakeHop(1, "10.0.0.1")
+        val stateFlow = MutableStateFlow<TracerouteUiState>(
+            TracerouteUiState.Canceling(
+                host = "example.com",
+                hops = listOf(hop),
+                operationId = 1,
+                elapsedMs = 120,
+            ),
+        )
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                TracerouteScreen(viewModel = fakeViewModel(flow = stateFlow, host = "example.com"))
+            }
+        }
+
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        composeRule.mainClock.autoAdvance = true
+        composeRule
+            .onNodeWithText(context.getString(R.string.traceroute_canceling_title))
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule
+            .onNodeWithText(context.getString(R.string.traceroute_canceling_subtitle))
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule.onNodeWithText("10.0.0.1").performScrollTo().assertIsDisplayed()
+        composeRule
+            .onNodeWithText(context.getString(R.string.traceroute_canceling_button))
+            .performScrollTo()
+            .assertIsNotEnabled()
+        composeRule
+            .onNodeWithContentDescription(context.getString(R.string.clear))
+            .assertIsNotEnabled()
+
+        val result = TracerouteResult(
+            host = "example.com",
+            resolvedIp = hop.ip,
+            hops = listOf(hop),
+            rawOutput = "traceroute output",
+            totalTimeMs = 120,
+        )
+        stateFlow.value = TracerouteUiState.Canceled(result)
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        composeRule
+            .onNodeWithText(context.resources.getQuantityString(
+                R.plurals.traceroute_canceled_partial_status,
+                1,
+                1,
+            ))
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule.onNodeWithText("10.0.0.1").performScrollTo().assertIsDisplayed()
+        composeRule.mainClock.autoAdvance = false
+    }
+
+    @Test
     fun offlineErrorState_showsMessageAndRecoveryActions() {
         val viewModel = fakeViewModel(TracerouteUiState.Error("No network connection"))
         composeRule.setContent {

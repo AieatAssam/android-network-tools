@@ -6,14 +6,15 @@ import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
-import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withContext
@@ -23,6 +24,8 @@ import net.aieat.netswissknife.app.platform.NetworkStatus
 import net.aieat.netswissknife.app.platform.NetworkStatusProvider
 import net.aieat.netswissknife.core.domain.TracerouteFlowResult
 import net.aieat.netswissknife.core.domain.TracerouteUseCase
+import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationSession
 import net.aieat.netswissknife.core.network.traceroute.HopResult
 import net.aieat.netswissknife.core.network.traceroute.HopStatus
 import org.junit.jupiter.api.AfterEach
@@ -179,27 +182,45 @@ class TracerouteViewModelTest {
     inner class CancelAndClear {
 
         @Test
-        fun `onStop with hops transitions to Finished`() = runTest {
-            val stopped = CountDownLatch(1)
-            every { tracerouteUseCase(any(), any()) } returns flow {
-                try {
+        fun `onStop holds Canceling until cleanup finishes then keeps partial hops`() = runTest {
+            val cleanupStarted = CountDownLatch(1)
+            val allowCleanupToFinish = CountDownLatch(1)
+            val cleanupFinished = CountDownLatch(1)
+            every { tracerouteUseCase(any(), any()) } answers {
+                val session = secondArg<OperationSession>()
+                flow {
+                    session.resources.register(AutoCloseable {
+                        cleanupStarted.countDown()
+                        check(allowCleanupToFinish.await(5, TimeUnit.SECONDS))
+                        cleanupFinished.countDown()
+                    })
                     emit(TracerouteFlowResult.Hop(stubHop))
-                    kotlinx.coroutines.delay(10_000L)
-                } finally {
-                    stopped.countDown()
+                    awaitCancellation()
                 }
             }
             viewModel.onHostChange("example.com")
             viewModel.startTrace()
-            // Hop was emitted synchronously by UnconfinedTestDispatcher
+            assertTrue((viewModel.uiState.value as TracerouteUiState.Running).hops.contains(stubHop))
+
             viewModel.onStop()
-            assertTrue(viewModel.uiState.value is TracerouteUiState.Finished ||
-                       viewModel.uiState.value is TracerouteUiState.Idle)
-            assertTrue(withContext(Dispatchers.IO) { stopped.await(2, TimeUnit.SECONDS) })
+            val canceling = viewModel.uiState.value as TracerouteUiState.Canceling
+            assertEquals(listOf(stubHop), canceling.hops)
+            assertTrue(withContext(Dispatchers.IO) { cleanupStarted.await(2, TimeUnit.SECONDS) })
+
+            viewModel.startTrace()
+            viewModel.onClear()
+            assertTrue(viewModel.uiState.value is TracerouteUiState.Canceling)
+            io.mockk.verify(exactly = 1) { tracerouteUseCase(any(), any()) }
+
+            allowCleanupToFinish.countDown()
+            assertTrue(withContext(Dispatchers.IO) { cleanupFinished.await(2, TimeUnit.SECONDS) })
+            val canceled = viewModel.uiState.first { it is TracerouteUiState.Canceled }
+                as TracerouteUiState.Canceled
+            assertEquals(listOf(stubHop), canceled.result.hops)
         }
 
         @Test
-        fun `offline restart invalidates prior emissions before returning`() = runTest {
+        fun `duplicate start during trace does not replace active operation`() = runTest {
             val firstChannel = Channel<TracerouteFlowResult>(Channel.UNLIMITED)
             val firstCollectorCancelled = CountDownLatch(1)
             every { tracerouteUseCase(any(), any()) } returnsMany listOf(
@@ -211,10 +232,36 @@ class TracerouteViewModelTest {
 
             networkStatus.value = NetworkStatus()
             viewModel.startTrace()
-            firstChannel.trySend(TracerouteFlowResult.Hop(stubHop.copy(ip = "203.0.113.1")))
-            runCurrent()
-            assertEquals(TracerouteUiState.Error("No network connection"), viewModel.uiState.value)
+            assertTrue(viewModel.uiState.value is TracerouteUiState.Running)
+            io.mockk.verify(exactly = 1) { tracerouteUseCase(any(), any()) }
+
+            viewModel.onStop()
             assertTrue(withContext(Dispatchers.IO) { firstCollectorCancelled.await(2, TimeUnit.SECONDS) })
+            val canceled = viewModel.uiState.first { it is TracerouteUiState.Canceled }
+                as TracerouteUiState.Canceled
+            assertEquals("example.com", canceled.result.host)
+            assertTrue(canceled.result.hops.isEmpty())
+        }
+
+        @Test
+        fun `stop after deadline preserves timeout error`() = runTest {
+            var session: OperationSession? = null
+            every { tracerouteUseCase(any(), any()) } answers {
+                session = secondArg()
+                flow {
+                    emit(TracerouteFlowResult.Hop(stubHop))
+                    awaitCancellation()
+                }
+            }
+            viewModel.onHostChange("example.com")
+            viewModel.startTrace()
+
+            checkNotNull(session).cancel(CancellationReason.DEADLINE_EXCEEDED)
+            viewModel.onStop()
+
+            val error = viewModel.uiState.first { it is TracerouteUiState.Error }
+                as TracerouteUiState.Error
+            assertEquals("Traceroute timed out", error.message)
         }
 
         @Test

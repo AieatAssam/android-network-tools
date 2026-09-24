@@ -87,6 +87,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
@@ -189,6 +190,7 @@ fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
                     probeType           = probeType,
                     packetSize          = packetSize,
                     isRunning           = uiState is TracerouteUiState.Running,
+                    isCanceling         = uiState is TracerouteUiState.Canceling,
                     recentHosts         = recentHosts,
                     onHostChange        = viewModel::onHostChange,
                     onMaxHopsChange     = viewModel::onMaxHopsChange,
@@ -217,11 +219,24 @@ fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
                     when (state) {
                         is TracerouteUiState.Idle     -> TracerouteIdlePrompt()
                         is TracerouteUiState.Running  -> TracerouteRunningPanel(state)
+                        is TracerouteUiState.Canceling -> TracerouteRunningPanel(
+                            host = state.host,
+                            hops = state.hops,
+                            canceling = true,
+                        )
+                        is TracerouteUiState.Canceled -> TracerouteFinishedPanel(
+                            result = state.result,
+                            viewMode = state.viewMode,
+                            canceled = true,
+                            onToggleMode = viewModel::onToggleViewMode,
+                            onClear = viewModel::onClear,
+                        )
                         is TracerouteUiState.Finished -> {
                             TracerouteFinishedPanel(
-                                state        = state,
+                                result       = state.result,
+                                viewMode     = state.viewMode,
                                 onToggleMode = viewModel::onToggleViewMode,
-                                onClear      = viewModel::onClear
+                                onClear      = viewModel::onClear,
                             )
                         }
                         is TracerouteUiState.Error    -> TracerouteErrorPanel(
@@ -312,6 +327,7 @@ private fun TracerouteInputCard(
     probeType: TracerouteProbeType,
     packetSize: Int,
     isRunning: Boolean,
+    isCanceling: Boolean,
     recentHosts: List<String>,
     onHostChange: (String) -> Unit,
     onMaxHopsChange: (Int) -> Unit,
@@ -329,6 +345,7 @@ private fun TracerouteInputCard(
     val mtuDiscovery = packetSize == 0
     val normalizedHost = HostValidator.normalize(host)
     val isHostInvalid = host.isNotBlank() && normalizedHost == null
+    val isBusy = isRunning || isCanceling
     val canStart = normalizedHost != null
 
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
@@ -350,7 +367,10 @@ private fun TracerouteInputCard(
                 leadingIcon   = { Icon(Icons.Default.Router, null) },
                 trailingIcon  = {
                     if (host.isNotEmpty()) {
-                        IconButton(onClick = { onHostChange("") }) {
+                        IconButton(
+                            onClick = { onHostChange("") },
+                            enabled = !isBusy,
+                        ) {
                             Icon(Icons.Default.Clear, stringResource(R.string.clear))
                         }
                     }
@@ -360,21 +380,23 @@ private fun TracerouteInputCard(
                     { Text(stringResource(R.string.error_invalid_host)) }
                 } else null,
                 singleLine    = true,
-                enabled       = !isRunning,
+                enabled       = !isBusy,
                 modifier      = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
                 keyboardActions = KeyboardActions(onGo = {
                     keyboard?.hide()
-                    if (!isRunning && canStart) onStart()
+                    if (!isBusy && canStart) onStart()
                 })
             )
 
-            RecentHostsRow(
-                recentHosts = recentHosts,
-                onHostSelected = onHostChange,
-                onRemoveHost = onRemoveRecentHost,
-                onClearAll = onClearRecentHosts
-            )
+            if (!isBusy) {
+                RecentHostsRow(
+                    recentHosts = recentHosts,
+                    onHostSelected = onHostChange,
+                    onRemoveHost = onRemoveRecentHost,
+                    onClearAll = onClearRecentHosts
+                )
+            }
 
             // Probe protocol selector (ICMP / UDP)
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -385,15 +407,15 @@ private fun TracerouteInputCard(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(
                         selected = probeType == TracerouteProbeType.ICMP,
-                        onClick  = { if (!isRunning) onProbeTypeChange(TracerouteProbeType.ICMP) },
+                        onClick  = { if (!isBusy) onProbeTypeChange(TracerouteProbeType.ICMP) },
                         label    = { Text(stringResource(R.string.traceroute_probe_icmp)) },
-                        enabled  = !isRunning
+                        enabled  = !isBusy
                     )
                     FilterChip(
                         selected = probeType == TracerouteProbeType.UDP,
-                        onClick  = { if (!isRunning) onProbeTypeChange(TracerouteProbeType.UDP) },
+                        onClick  = { if (!isBusy) onProbeTypeChange(TracerouteProbeType.UDP) },
                         label    = { Text(stringResource(R.string.traceroute_probe_udp)) },
-                        enabled  = !isRunning
+                        enabled  = !isBusy
                     )
                 }
             }
@@ -405,7 +427,7 @@ private fun TracerouteInputCard(
                 valueRange = 5f..64f,
                 steps    = 11,
                 display  = "$maxHops",
-                enabled  = !isRunning,
+                enabled  = !isBusy,
                 onValueChangeFinished = { onMaxHopsChange(it.toInt()) }
             )
 
@@ -416,7 +438,7 @@ private fun TracerouteInputCard(
                 valueRange = 500f..10_000f,
                 steps    = 0,
                 display  = "${timeoutMs / 1_000.0}s",
-                enabled  = !isRunning,
+                enabled  = !isBusy,
                 onValueChangeFinished = { onTimeoutChange(it.toInt()) }
             )
 
@@ -427,7 +449,7 @@ private fun TracerouteInputCard(
                 valueRange = 1f..5f,
                 steps    = 3,
                 display  = "$probesPerHop",
-                enabled  = !isRunning,
+                enabled  = !isBusy,
                 onValueChangeFinished = { onProbesPerHopChange(it.toInt()) }
             )
 
@@ -443,8 +465,8 @@ private fun TracerouteInputCard(
                 )
                 Switch(
                     checked         = mtuDiscovery,
-                    onCheckedChange = { if (!isRunning) onToggleMtuDiscovery(it) },
-                    enabled         = !isRunning
+                    onCheckedChange = { if (!isBusy) onToggleMtuDiscovery(it) },
+                    enabled         = !isBusy
                 )
             }
 
@@ -455,22 +477,37 @@ private fun TracerouteInputCard(
                     valueRange = 28f..1472f,
                     steps    = 0,
                     display  = "$packetSize B",
-                    enabled  = !isRunning,
+                    enabled  = !isBusy,
                     onValueChangeFinished = { onPacketSizeChange(it.toInt()) }
                 )
             }
 
             // Action button
-            if (isRunning) {
-                ToolStopButton(
-                    text = stringResource(R.string.traceroute_stop_button),
-                    onClick = onStop,
-                    modifier = Modifier.fillMaxWidth()
-                )
+            if (isBusy) {
+                if (isCanceling) {
+                    Button(
+                        onClick = {},
+                        enabled = false,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.traceroute_canceling_button))
+                    }
+                } else {
+                    ToolStopButton(
+                        text = stringResource(R.string.traceroute_stop_button),
+                        onClick = onStop,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             } else {
                 Button(
                     onClick  = hapticAction { keyboard?.hide(); onStart() },
-                    enabled  = canStart && !isRunning,
+                    enabled  = canStart && !isBusy,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Icon(Icons.Default.Public, null)
@@ -554,7 +591,11 @@ private fun TracerouteIdlePrompt() {
 // ── Running panel ─────────────────────────────────────────────────────────────
 
 @Composable
-private fun TracerouteRunningPanel(state: TracerouteUiState.Running) {
+private fun TracerouteRunningPanel(state: TracerouteUiState.Running) =
+    TracerouteRunningPanel(host = state.host, hops = state.hops)
+
+@Composable
+private fun TracerouteRunningPanel(host: String, hops: List<HopResult>, canceling: Boolean = false) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         // Status header
         ElevatedCard(modifier = Modifier.fillMaxWidth()) {
@@ -567,11 +608,13 @@ private fun TracerouteRunningPanel(state: TracerouteUiState.Running) {
                 Spacer(Modifier.width(12.dp))
                 Column {
                     Text(
-                        text  = stringResource(R.string.traceroute_running_title, state.host),
+                        text  = if (canceling) stringResource(R.string.traceroute_canceling_title)
+                            else stringResource(R.string.traceroute_running_title, host),
                         style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold)
                     )
                     Text(
-                        text  = pluralStringResource(R.plurals.traceroute_running_subtitle, state.hops.size, state.hops.size),
+                        text  = if (canceling) stringResource(R.string.traceroute_canceling_subtitle)
+                            else pluralStringResource(R.plurals.traceroute_running_subtitle, hops.size, hops.size),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -591,7 +634,7 @@ private fun TracerouteRunningPanel(state: TracerouteUiState.Running) {
         // a disposed State<Boolean>, causing IllegalStateException.  animateFloatAsState
         // is a plain value animation with no SubcomposeLayout of its own, so it is safe
         // to interrupt mid-animation when the outer AnimatedContent exits.
-        state.hops.sortedBy { it.hopNumber }.forEachIndexed { index, hop ->
+        hops.sortedBy { it.hopNumber }.forEachIndexed { index, hop ->
             key(hop.hopNumber) {
                 var shown by remember { mutableStateOf(false) }
                 LaunchedEffect(Unit) { shown = true }
@@ -612,12 +655,26 @@ private fun TracerouteRunningPanel(state: TracerouteUiState.Running) {
 
 @Composable
 private fun TracerouteFinishedPanel(
-    state: TracerouteUiState.Finished,
+    result: TracerouteResult,
+    viewMode: TracerouteViewMode,
+    canceled: Boolean = false,
     onToggleMode: () -> Unit,
     onClear: () -> Unit
 ) {
-    val result = state.result
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+
+        if (canceled) {
+            Text(
+                text = pluralStringResource(
+                    R.plurals.traceroute_canceled_partial_status,
+                    result.hops.size,
+                    result.hops.size,
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.secondary,
+                modifier = Modifier.testTag("traceroute_canceled_partial_status"),
+            )
+        }
 
         // Summary stats card
         TraceStatsSummary(result = result, onClear = onClear)
@@ -630,7 +687,7 @@ private fun TracerouteFinishedPanel(
         // nested inside the outer AnimatedContent (also SubcomposeLayout) during the
         // Running→Finished transition – same root cause as the Crossfade issue above.
         // Replaced with a plain Row of clickable surfaces; no SubcomposeLayout involved.
-        val tabIndex = if (state.viewMode == TracerouteViewMode.Visual) 0 else 1
+        val tabIndex = if (viewMode == TracerouteViewMode.Visual) 0 else 1
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -679,7 +736,7 @@ private fun TracerouteFinishedPanel(
         // the two SubcomposeLayout instances fight over the slot table and the outgoing
         // subcomposition reads a disposed State<T>, causing IllegalStateException.
         // Plain when-branch with no animation is safe and avoids the nesting entirely.
-        when (state.viewMode) {
+        when (viewMode) {
             TracerouteViewMode.Visual -> HopDetailList(result.hops)
             TracerouteViewMode.Raw    -> RawOutputCard(result.rawOutput)
         }

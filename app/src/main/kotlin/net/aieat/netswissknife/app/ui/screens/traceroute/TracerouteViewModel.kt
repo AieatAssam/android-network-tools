@@ -24,6 +24,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -39,6 +40,16 @@ sealed interface TracerouteUiState {
     data class Running(
         val host: String,
         val hops: List<HopResult>
+    ) : TracerouteUiState
+    data class Canceling(
+        val host: String,
+        val hops: List<HopResult>,
+        val operationId: Int,
+        val elapsedMs: Long,
+    ) : TracerouteUiState
+    data class Canceled(
+        val result: TracerouteResult,
+        val viewMode: TracerouteViewMode = TracerouteViewMode.Visual,
     ) : TracerouteUiState
     data class Finished(
         val result: TracerouteResult,
@@ -90,6 +101,7 @@ class TracerouteViewModel @Inject constructor(
 
     private var traceJob: Job? = null
     private var traceSession: OperationSession? = null
+    private var traceStartedAtNanos: Long? = null
     /** Incremented each time a new trace is started; guards against stale emissions. */
     private var traceGeneration = 0
 
@@ -111,26 +123,43 @@ class TracerouteViewModel @Inject constructor(
     }
 
     fun onToggleViewMode() {
-        val current = _uiState.value as? TracerouteUiState.Finished ?: return
-        val next = if (current.viewMode == TracerouteViewMode.Visual)
-            TracerouteViewMode.Raw else TracerouteViewMode.Visual
-        _uiState.value = current.copy(viewMode = next)
-    }
-
-    fun onStop() {
-        traceGeneration++
-        cancelActiveTrace(CancellationReason.USER_STOP)
-        val current = _uiState.value
-        if (current is TracerouteUiState.Running && current.hops.isNotEmpty()) {
-            _uiState.value = TracerouteUiState.Finished(buildResult(current.host, current.hops))
-        } else {
-            _uiState.value = TracerouteUiState.Idle
+        when (val current = _uiState.value) {
+            is TracerouteUiState.Finished -> {
+                val next = if (current.viewMode == TracerouteViewMode.Visual)
+                    TracerouteViewMode.Raw else TracerouteViewMode.Visual
+                _uiState.value = current.copy(viewMode = next)
+            }
+            is TracerouteUiState.Canceled -> {
+                val next = if (current.viewMode == TracerouteViewMode.Visual)
+                    TracerouteViewMode.Raw else TracerouteViewMode.Visual
+                _uiState.value = current.copy(viewMode = next)
+            }
+            else -> Unit
         }
     }
 
-    fun onClear() {
+    fun onStop() {
+        if (_uiState.value is TracerouteUiState.Canceling) return
+        val current = _uiState.value as? TracerouteUiState.Running ?: return
+        val operationId = traceGeneration
         traceGeneration++
+        val elapsedMs = elapsedSinceStartMs()
+        _uiState.value = TracerouteUiState.Canceling(
+            host = current.host,
+            hops = current.hops,
+            operationId = operationId,
+            elapsedMs = elapsedMs,
+        )
         cancelActiveTrace(CancellationReason.USER_STOP)
+    }
+
+    fun onClear() {
+        if (_uiState.value is TracerouteUiState.Canceling) return
+        if (_uiState.value is TracerouteUiState.Running) {
+            onStop()
+            return
+        }
+        traceGeneration++
         _uiState.value = TracerouteUiState.Idle
     }
 
@@ -149,8 +178,10 @@ class TracerouteViewModel @Inject constructor(
     }
 
     fun startTrace() {
+        if (traceSession != null || traceJob?.isActive == true ||
+            _uiState.value is TracerouteUiState.Running || _uiState.value is TracerouteUiState.Canceling
+        ) return
         val generation = ++traceGeneration
-        cancelActiveTrace(CancellationReason.USER_STOP)
 
         val status = networkStatus.value
         if (!status.hasInternet && !status.hasLocalNetwork && !status.vpnActive) {
@@ -177,8 +208,11 @@ class TracerouteViewModel @Inject constructor(
             packetSize    = _packetSize.value
         )
         val trimmedHost = params.host
-        val startTime   = System.currentTimeMillis()
+        val startedAtNanos = System.nanoTime()
+        traceStartedAtNanos = startedAtNanos
         val accumulated = mutableListOf<HopResult>()
+        var terminalError: String? = null
+        var terminalEventReceived = false
 
         // Transition to Running immediately so the UI responds before the first hop
         // arrives.  If validation fails the first emission will overwrite this with Error.
@@ -188,44 +222,61 @@ class TracerouteViewModel @Inject constructor(
             try {
                 tracerouteUseCase(params, session).collect { result ->
                     // Discard any emission that was dispatched before the cancel took effect.
-                    if (traceGeneration != generation) return@collect
+                    if (traceGeneration != generation || terminalEventReceived) return@collect
                     when (result) {
                         is TracerouteFlowResult.ValidationError -> {
-                            _uiState.value = TracerouteUiState.Error(result.message)
-                            return@collect
+                            terminalEventReceived = true
+                            terminalError = result.message
                         }
                         is TracerouteFlowResult.Hop -> {
                             accumulated.add(result.hop)
-                            _uiState.value = TracerouteUiState.Running(
-                                host = trimmedHost,
-                                hops = accumulated.toList()
+                            val current = _uiState.value
+                            if (current is TracerouteUiState.Running) {
+                                _uiState.value = current.copy(hops = accumulated.toList())
+                            }
+                        }
+                    }
+                }
+            } catch (e: CancellationException) {
+                // Cancellation is resolved from the operation reason after collection cleanup.
+                throw e
+            } catch (e: Exception) {
+                terminalError = e.message ?: "Traceroute failed"
+            } finally {
+                val cancellationReason = session.cancellationReason
+                val current = _uiState.value
+                if (traceSession === session) {
+                    traceSession = null
+                    traceJob = null
+                    traceStartedAtNanos = null
+                }
+                val errorMessage = terminalError ?: when (cancellationReason) {
+                    CancellationReason.DEADLINE_EXCEEDED -> "Traceroute timed out"
+                    null, CancellationReason.USER_STOP, CancellationReason.LIFECYCLE_PAUSE -> null
+                    else -> "Traceroute was interrupted"
+                }
+                when {
+                    current is TracerouteUiState.Canceling && current.operationId == generation &&
+                        (cancellationReason == null || cancellationReason == CancellationReason.USER_STOP) -> {
+                        _uiState.value = TracerouteUiState.Canceled(
+                            result = buildResult(current.host, current.hops, current.elapsedMs),
+                        )
+                    }
+                    cancellationReason != CancellationReason.LIFECYCLE_PAUSE &&
+                        cancellationReason != CancellationReason.USER_STOP && errorMessage != null -> {
+                        _uiState.value = TracerouteUiState.Error(errorMessage)
+                    }
+                    cancellationReason == null && traceGeneration == generation &&
+                        current is TracerouteUiState.Running -> {
+                        _uiState.value = when {
+                            errorMessage != null -> TracerouteUiState.Error(errorMessage)
+                            current.hops.isEmpty() -> TracerouteUiState.Error("No route found to ${current.host}")
+                            else -> TracerouteUiState.Finished(
+                                buildResult(current.host, current.hops, elapsedMsSince(startedAtNanos)),
                             )
                         }
                     }
                 }
-
-                if (traceGeneration != generation) return@launch
-                val current = _uiState.value
-                if (current is TracerouteUiState.Running) {
-                    _uiState.value = if (current.hops.isEmpty()) {
-                        TracerouteUiState.Error("No route found to $trimmedHost")
-                    } else {
-                        TracerouteUiState.Finished(
-                            buildResult(current.host, current.hops, System.currentTimeMillis() - startTime)
-                        )
-                    }
-                }
-            } catch (e: CancellationException) {
-                // Job was cancelled by onStop() or onClear(); those functions already set the
-                // correct UI state (Finished or Idle).  Re-throw so the coroutine machinery
-                // knows this coroutine ended due to cancellation, not a logic error.
-                throw e
-            } catch (e: Exception) {
-                if (traceGeneration == generation) {
-                    _uiState.value = TracerouteUiState.Error(e.message ?: "Traceroute failed")
-                }
-            } finally {
-                if (traceSession === session) traceSession = null
             }
         }
     }
@@ -233,12 +284,13 @@ class TracerouteViewModel @Inject constructor(
     private fun cancelActiveTrace(reason: CancellationReason) {
         val session = traceSession
         val job = traceJob
-        traceSession = null
-        traceJob = null
         if (session != null || job != null) {
             cancellationScope.launch {
-                session?.cancel(reason)
-                if (job?.isActive == true) job.cancel()
+                try {
+                    session?.cancel(reason)
+                } finally {
+                    job?.cancelAndJoin()
+                }
             }
         }
     }
@@ -277,4 +329,9 @@ class TracerouteViewModel @Inject constructor(
             appendLine("$num  $ip$host2$rtt$geo")
         }
     }
+
+    private fun elapsedSinceStartMs(): Long = traceStartedAtNanos?.let(::elapsedMsSince) ?: 0L
+
+    private fun elapsedMsSince(startedAtNanos: Long): Long =
+        ((System.nanoTime() - startedAtNanos).coerceAtLeast(0L) / 1_000_000L)
 }
