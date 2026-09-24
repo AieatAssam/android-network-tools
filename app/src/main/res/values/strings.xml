@@ -475,7 +475,14 @@
     <string name="topology_v3_priv_requires_auth">Privacy requires an authentication protocol.</string>
     <string name="topology_max_hops_label">Max Hops: %1$d</string>
     <string name="topology_discover_button">Discover Topology</string>
-    <string name="topology_cancel_button">Cancel / Reset</string>
+    <string name="topology_cancel_button">Cancel discovery</string>
+    <string name="topology_canceling_button">Canceling…</string>
+    <string name="topology_canceling_status">Canceling discovery. Keeping discovered nodes until cleanup finishes.</string>
+    <string name="topology_clear_partial_results">Clear results</string>
+    <plurals name="topology_canceled_partial_status">
+        <item quantity="one">Discovery canceled. %1$d discovered node retained as a partial result.</item>
+        <item quantity="other">Discovery canceled. %1$d discovered nodes retained as partial results.</item>
+    </plurals>
     <string name="topology_idle_tagline">Discover your network topology</string>
     <plurals name="topology_scanning_badge">
         <item quantity="one">Scanning… %1$d node found</item>

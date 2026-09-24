@@ -4,12 +4,15 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -33,6 +36,7 @@ import net.aieat.netswissknife.core.network.topology.SnmpWalkBudget
 import net.aieat.netswissknife.core.network.topology.SnmpWalkResult
 import net.aieat.netswissknife.core.network.topology.TopologyDiscoveryRepositoryImpl
 import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationRunner
 import net.aieat.netswissknife.core.network.operation.OperationSession
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -45,6 +49,7 @@ import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -113,11 +118,12 @@ class TopologyDiscoveryViewModelTest {
 
         @Test
         fun `accumulates nodes and links while discovering`() = runTest {
-            every { useCase.invoke(params, any()) } returns flowOf(
-                TopologyDiscoveryEvent.NodeDiscovered(stubNode),
-                TopologyDiscoveryEvent.LinkDiscovered(stubLink),
-                TopologyDiscoveryEvent.Progress("probing", 1)
-            )
+            every { useCase.invoke(params, any()) } returns flow {
+                emit(TopologyDiscoveryEvent.NodeDiscovered(stubNode))
+                emit(TopologyDiscoveryEvent.LinkDiscovered(stubLink))
+                emit(TopologyDiscoveryEvent.Progress("probing", 1))
+                awaitCancellation()
+            }
 
             viewModel.startDiscovery(params)
 
@@ -126,6 +132,8 @@ class TopologyDiscoveryViewModelTest {
             assertEquals(listOf(stubLink), state.links)
             assertEquals("probing", state.progressMessage)
             assertEquals(1, state.nodesDone)
+            viewModel.reset()
+            awaitTopologyState { it is TopologyUiState.Canceled }
         }
 
         @Test
@@ -264,9 +272,10 @@ class TopologyDiscoveryViewModelTest {
 
         @Test
         fun `selectNode and deselectNode work during Discovering state`() = runTest {
-            every { useCase.invoke(params, any()) } returns flowOf(
-                TopologyDiscoveryEvent.NodeDiscovered(stubNode)
-            )
+            every { useCase.invoke(params, any()) } returns flow {
+                emit(TopologyDiscoveryEvent.NodeDiscovered(stubNode))
+                awaitCancellation()
+            }
             viewModel.startDiscovery(params)
 
             viewModel.selectNode("192.168.1.1")
@@ -277,6 +286,8 @@ class TopologyDiscoveryViewModelTest {
 
             viewModel.deselectNode()
             assertNull((viewModel.uiState.value as TopologyUiState.Discovering).selectedNodeIp)
+            viewModel.reset()
+            awaitTopologyState { it is TopologyUiState.Canceled }
         }
 
         @Test
@@ -297,39 +308,124 @@ class TopologyDiscoveryViewModelTest {
     }
 
     @Test
-    fun `starting discovery again cancels the previous scan's collector`() = runTest {
+    fun `starting discovery again is ignored while the current scan is active`() = runTest {
         val nodeA = stubNode.copy(ip = "192.168.1.10")
         val nodeB = stubNode.copy(ip = "192.168.1.20")
-        val nodeC = stubNode.copy(ip = "192.168.1.30")
-
-        val firstChannel = Channel<TopologyDiscoveryEvent>(Channel.UNLIMITED)
-        val secondChannel = Channel<TopologyDiscoveryEvent>(Channel.UNLIMITED)
+        val channel = Channel<TopologyDiscoveryEvent>(Channel.UNLIMITED)
         val firstCollectorCancelled = CountDownLatch(1)
-        every { useCase.invoke(params, any()) } returnsMany listOf(
-            firstChannel.receiveAsFlow().onCompletion { firstCollectorCancelled.countDown() },
-            secondChannel.receiveAsFlow()
-        )
+        val invocationCount = AtomicInteger()
+        every { useCase.invoke(params, any()) } answers {
+            invocationCount.incrementAndGet()
+            channel.receiveAsFlow().onCompletion { firstCollectorCancelled.countDown() }
+        }
 
         viewModel.startDiscovery(params)
-        firstChannel.trySend(TopologyDiscoveryEvent.NodeDiscovered(nodeA))
+        channel.trySend(TopologyDiscoveryEvent.NodeDiscovered(nodeA))
         runCurrent()
 
         viewModel.startDiscovery(params)
-        assertTrue(
-            withContext(Dispatchers.IO) { firstCollectorCancelled.await(2, TimeUnit.SECONDS) },
-            "the prior discovery collector was not cancelled before the test ended",
-        )
-        secondChannel.trySend(TopologyDiscoveryEvent.NodeDiscovered(nodeB))
+        assertEquals(1, invocationCount.get(), "an active scan must not start a second use-case flow")
+        channel.trySend(TopologyDiscoveryEvent.NodeDiscovered(nodeB))
         runCurrent()
 
-        // The first scan's collector must be cancelled by the second startDiscovery
-        // call, so an event arriving late on its (stale) channel must not resurrect
-        // it and overwrite the second scan's state with the first scan's node list.
-        firstChannel.trySend(TopologyDiscoveryEvent.NodeDiscovered(nodeC))
-        runCurrent()
+        // The original scan remains the owner and can keep reporting nodes.
+        assertEquals(listOf(nodeA, nodeB), (viewModel.uiState.value as TopologyUiState.Discovering).nodes)
+        viewModel.reset()
+        assertTrue(withContext(Dispatchers.IO) { firstCollectorCancelled.await(2, TimeUnit.SECONDS) })
+    }
 
-        val finalNodes = (viewModel.uiState.value as TopologyUiState.Discovering).nodes
-        assertEquals(listOf(nodeB), finalNodes)
+    @Test
+    fun `retry waits until terminal error flow cleanup completes`() = runTest {
+        val cleanupStarted = CompletableDeferred<Unit>()
+        val releaseCleanup = CompletableDeferred<Unit>()
+        val invocationCount = AtomicInteger()
+        val graph = TopologyGraph(emptyList(), emptyList(), params.targetIp, 0L)
+        every { useCase.invoke(params, any()) } answers {
+            if (invocationCount.incrementAndGet() == 1) {
+                flow {
+                    emit(TopologyDiscoveryEvent.Error("SNMP request failed"))
+                    cleanupStarted.complete(Unit)
+                    releaseCleanup.await()
+                }
+            } else {
+                flowOf(TopologyDiscoveryEvent.Complete(graph))
+            }
+        }
+
+        viewModel.startDiscovery(params)
+        runCurrent()
+        cleanupStarted.await()
+        assertTrue(viewModel.uiState.value is TopologyUiState.Discovering)
+
+        viewModel.retryDiscovery(params)
+        runCurrent()
+        assertEquals(1, invocationCount.get(), "Retry must remain gated while the failed flow cleans up")
+        assertTrue(viewModel.uiState.value is TopologyUiState.Discovering)
+
+        releaseCleanup.complete(Unit)
+        runCurrent()
+        assertTrue(viewModel.uiState.value is TopologyUiState.Failure)
+
+        viewModel.retryDiscovery(params)
+        runCurrent()
+        assertEquals(2, invocationCount.get())
+        assertTrue(viewModel.uiState.value is TopologyUiState.Done)
+    }
+
+    @Test
+    fun `Stop during post-terminal flow cleanup remains Canceled after the session finished`() = runTest {
+        val sessionSlot = slot<OperationSession>()
+        val terminalEmitted = CompletableDeferred<Unit>()
+        val resourceClosed = CompletableDeferred<Unit>()
+        val graph = TopologyGraph(emptyList(), emptyList(), params.targetIp, 0L)
+        every { useCase.invoke(params, capture(sessionSlot)) } returns flow {
+            val completedGraph = OperationRunner.run(sessionSlot.captured) {
+                resources.register(AutoCloseable { resourceClosed.complete(Unit) })
+                graph
+            }
+            emit(TopologyDiscoveryEvent.NodeDiscovered(stubNode))
+            emit(TopologyDiscoveryEvent.Complete(completedGraph))
+            terminalEmitted.complete(Unit)
+            awaitCancellation()
+        }
+
+        viewModel.startDiscovery(params)
+        runCurrent()
+        terminalEmitted.await()
+        assertTrue(resourceClosed.isCompleted, "OperationRunner cleanup must finish before Complete")
+        assertTrue(viewModel.uiState.value is TopologyUiState.Discovering)
+
+        viewModel.reset()
+        assertTrue(viewModel.uiState.value is TopologyUiState.Canceling)
+        awaitTopologyState { it is TopologyUiState.Canceled }
+
+        assertNull(sessionSlot.captured.cancellationReason)
+        val canceled = viewModel.uiState.value as TopologyUiState.Canceled
+        assertEquals(listOf(stubNode), canceled.nodes)
+    }
+
+    @Test
+    fun `a won deadline remains an error when Stop is tapped during cleanup`() = runTest {
+        val sessionSlot = slot<OperationSession>()
+        val errorEmitted = CompletableDeferred<Unit>()
+        every { useCase.invoke(params, capture(sessionSlot)) } returns flow {
+            sessionSlot.captured.cancel(CancellationReason.DEADLINE_EXCEEDED)
+            emit(TopologyDiscoveryEvent.Error("Topology discovery timed out"))
+            errorEmitted.complete(Unit)
+            awaitCancellation()
+        }
+
+        viewModel.startDiscovery(params)
+        runCurrent()
+        errorEmitted.await()
+        assertTrue(viewModel.uiState.value is TopologyUiState.Discovering)
+
+        viewModel.reset()
+        assertTrue(viewModel.uiState.value is TopologyUiState.Canceling)
+        awaitTopologyState { it is TopologyUiState.Failure }
+
+        assertEquals(CancellationReason.DEADLINE_EXCEEDED, sessionSlot.captured.cancellationReason)
+        assertEquals("Topology discovery timed out", (viewModel.uiState.value as TopologyUiState.Failure).message)
     }
 
     @Test
@@ -345,22 +441,50 @@ class TopologyDiscoveryViewModelTest {
     }
 
     @Test
-    fun `reset records user stop and ignores a late completion`() = runTest {
+    fun `reset stays Canceling through cleanup then retains partial results and ignores late completion`() = runTest {
         val channel = Channel<TopologyDiscoveryEvent>(Channel.UNLIMITED)
         val sessionSlot = slot<OperationSession>()
-        val cancellationFinished = CountDownLatch(1)
+        val closeStarted = CountDownLatch(1)
+        val releaseClose = CountDownLatch(1)
+        val closeCount = AtomicInteger()
         every { useCase.invoke(params, capture(sessionSlot)) } returns channel.receiveAsFlow()
 
         viewModel.startDiscovery(params)
         runCurrent()
-        sessionSlot.captured.resources.register(AutoCloseable { cancellationFinished.countDown() })
+        channel.trySend(TopologyDiscoveryEvent.NodeDiscovered(stubNode))
+        channel.trySend(TopologyDiscoveryEvent.LinkDiscovered(stubLink))
+        channel.trySend(TopologyDiscoveryEvent.Progress("Querying neighbors", 1))
+        runCurrent()
+        sessionSlot.captured.resources.register(AutoCloseable {
+            closeCount.incrementAndGet()
+            closeStarted.countDown()
+            check(releaseClose.await(2, TimeUnit.SECONDS))
+        })
+
         viewModel.reset()
-        assertTrue(withContext(Dispatchers.IO) { cancellationFinished.await(2, TimeUnit.SECONDS) })
+        val canceling = viewModel.uiState.value as TopologyUiState.Canceling
+        assertEquals(listOf(stubNode), canceling.nodes)
+        assertEquals(listOf(stubLink), canceling.links)
+        assertEquals(1, canceling.nodesDone)
+
+        try {
+            assertTrue(withContext(Dispatchers.IO) { closeStarted.await(2, TimeUnit.SECONDS) })
+            viewModel.reset()
+            assertTrue(viewModel.uiState.value is TopologyUiState.Canceling)
+            assertEquals(1, closeCount.get(), "repeated Stop must not close resources twice")
+        } finally {
+            releaseClose.countDown()
+        }
+        awaitTopologyState { it is TopologyUiState.Canceled }
+
         channel.trySend(TopologyDiscoveryEvent.Complete(TopologyGraph(emptyList(), emptyList(), params.targetIp, 0L)))
         runCurrent()
 
         assertEquals(CancellationReason.USER_STOP, sessionSlot.captured.cancellationReason)
-        assertTrue(viewModel.uiState.value is TopologyUiState.Idle)
+        val canceled = viewModel.uiState.value as TopologyUiState.Canceled
+        assertEquals(listOf(stubNode), canceled.nodes)
+        assertEquals(listOf(stubLink), canceled.links)
+        assertEquals(1, canceled.nodesDone)
     }
 
     @Test
@@ -390,8 +514,19 @@ class TopologyDiscoveryViewModelTest {
         assertTrue(withContext(Dispatchers.IO) { requestStarted.await(2, TimeUnit.SECONDS) })
         viewModel.reset()
 
-        assertTrue(viewModel.uiState.value is TopologyUiState.Idle)
+        assertTrue(viewModel.uiState.value is TopologyUiState.Canceling)
         assertTrue(withContext(Dispatchers.IO) { clientClosed.await(2, TimeUnit.SECONDS) })
+        awaitTopologyState { it is TopologyUiState.Canceled }
         assertNotSame(callerThread, closeThread.get())
+    }
+
+    private suspend fun awaitTopologyState(predicate: (TopologyUiState) -> Boolean) {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2)
+        withContext(Dispatchers.IO) {
+            while (!predicate(viewModel.uiState.value) && System.nanoTime() < deadline) {
+                Thread.sleep(5)
+            }
+        }
+        assertTrue(predicate(viewModel.uiState.value), "topology state did not reach the expected terminal state")
     }
 }

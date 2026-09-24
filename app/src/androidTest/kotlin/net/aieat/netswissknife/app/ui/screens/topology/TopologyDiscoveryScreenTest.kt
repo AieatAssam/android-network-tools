@@ -155,6 +155,58 @@ class TopologyDiscoveryScreenTest {
         verify(exactly = 1) { viewModel.reset() }
     }
 
+    @Test
+    fun cancelingAndCanceledStates_keepProgressAndPartialResultsVisible() {
+        val node = fakeNode("10.0.0.1", "core-switch")
+        val stateFlow = MutableStateFlow<TopologyUiState>(
+            TopologyUiState.Canceling(
+                nodes = listOf(node),
+                links = emptyList(),
+                progressMessage = "Querying neighbors",
+                nodesDone = 1,
+                operationId = 7L,
+            ),
+        )
+        val viewModel = fakeViewModel(flow = stateFlow)
+        composeRule.setContent {
+            NetSwissKnifeTheme { TopologyDiscoveryScreen(viewModel = viewModel) }
+        }
+        composeRule.mainClock.advanceTimeBy(500L)
+
+        composeRule.onNodeWithText(context.getString(R.string.topology_canceling_status)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.topology_canceling_button))
+            .assertIsDisplayed()
+            .assertIsNotEnabled()
+
+        stateFlow.value = TopologyUiState.Canceled(
+            nodes = listOf(node),
+            links = emptyList(),
+            nodesDone = 1,
+        )
+        composeRule.mainClock.advanceTimeBy(500L)
+
+        val partialStatus = context.resources.getQuantityString(R.plurals.topology_canceled_partial_status, 1, 1)
+        composeRule.onNodeWithText(partialStatus).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.topology_clear_partial_results))
+            .performClick()
+        verify(exactly = 1) { viewModel.reset() }
+
+        // The canceled snapshot still supplies a selectable node to the details sheet.
+        stateFlow.value = TopologyUiState.Canceled(
+            nodes = listOf(node),
+            links = emptyList(),
+            nodesDone = 1,
+            selectedNodeIp = node.ip,
+        )
+        composeRule.mainClock.autoAdvance = true
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodes(androidx.compose.ui.test.isRoot())
+                .fetchSemanticsNodes().size > 1
+        }
+        composeRule.mainClock.autoAdvance = false
+        composeRule.onNodeWithText("core-switch").assertIsDisplayed()
+    }
+
     private fun scanningBadgeText(count: Int): String =
         context.resources.getQuantityString(R.plurals.topology_scanning_badge, count, count)
 

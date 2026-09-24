@@ -133,9 +133,11 @@ private fun TopologyScreenContent(
     var showPrivPassword by remember { mutableStateOf(false) }
 
     val isDiscovering = uiState is TopologyUiState.Discovering
+    val isCanceling = uiState is TopologyUiState.Canceling
+    val isInProgress = isDiscovering || isCanceling
     val normalizedTargetIp = HostValidator.normalize(targetIp)
     val isTargetIpInvalid = targetIp.isNotBlank() && normalizedTargetIp == null
-    val canStartDiscovery = !isDiscovering && normalizedTargetIp != null &&
+    val canStartDiscovery = !isInProgress && normalizedTargetIp != null &&
         !(v3PrivProto != V3PrivProtocol.NONE && v3AuthProto == V3AuthProtocol.NONE)
 
     fun currentTopologyParams() = TopologyParams(
@@ -154,6 +156,8 @@ private fun TopologyScreenContent(
 
     val selectedNode = when (uiState) {
         is TopologyUiState.Discovering -> uiState.nodes.find { it.ip == uiState.selectedNodeIp }
+        is TopologyUiState.Canceling -> uiState.nodes.find { it.ip == uiState.selectedNodeIp }
+        is TopologyUiState.Canceled -> uiState.nodes.find { it.ip == uiState.selectedNodeIp }
         is TopologyUiState.Done -> uiState.graph.nodes.find { it.ip == uiState.selectedNodeIp }
         else -> null
     }
@@ -441,7 +445,7 @@ private fun TopologyScreenContent(
                                 modifier = Modifier.fillMaxWidth(),
                                 enabled = canStartDiscovery
                             ) {
-                                if (isDiscovering) {
+                                if (isInProgress) {
                                     CircularProgressIndicator(
                                         modifier = Modifier.size(18.dp),
                                         strokeWidth = 2.dp,
@@ -456,14 +460,27 @@ private fun TopologyScreenContent(
 
                     // Keep cancellation available after Discover collapses the
                     // configuration fields for the active scan.
-                    AnimatedVisibility(visible = isDiscovering) {
+                    AnimatedVisibility(visible = isInProgress) {
                         OutlinedButton(
                             onClick = onReset,
+                            enabled = isDiscovering,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(top = 8.dp)
                         ) {
-                            Text(stringResource(R.string.topology_cancel_button))
+                            if (isCanceling) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
+                                )
+                                Spacer(Modifier.width(8.dp))
+                            }
+                            Text(
+                                stringResource(
+                                    if (isCanceling) R.string.topology_canceling_button
+                                    else R.string.topology_cancel_button
+                                )
+                            )
                         }
                     }
                 }
@@ -482,28 +499,39 @@ private fun TopologyScreenContent(
                             IdleContent()
                         }
                         is TopologyUiState.Discovering -> {
-                            Box(modifier = Modifier.fillMaxSize()) {
-                                TopologyCanvas(
-                                    nodes = state.nodes,
-                                    links = state.links,
-                                    selectedNodeIp = null,
-                                    onNodeTap = onSelectNode
-                                )
-                                Box(
-                                    modifier = Modifier
-                                        .align(Alignment.TopEnd)
-                                        .padding(12.dp)
-                                ) {
-                                    ScanningBadge(
-                                        countMessage = pluralStringResource(
-                                            R.plurals.topology_scanning_badge,
-                                            state.nodesDone,
-                                            state.nodesDone
-                                        ),
-                                        progressMessage = state.progressMessage
-                                    )
-                                }
-                            }
+                            TopologyProgressContent(
+                                nodes = state.nodes,
+                                links = state.links,
+                                nodesDone = state.nodesDone,
+                                progressMessage = state.progressMessage,
+                                selectedNodeIp = state.selectedNodeIp,
+                                onNodeTap = onSelectNode,
+                            )
+                        }
+                        is TopologyUiState.Canceling -> {
+                            TopologyProgressContent(
+                                nodes = state.nodes,
+                                links = state.links,
+                                nodesDone = state.nodesDone,
+                                statusMessage = stringResource(R.string.topology_canceling_status),
+                                selectedNodeIp = state.selectedNodeIp,
+                                onNodeTap = onSelectNode,
+                            )
+                        }
+                        is TopologyUiState.Canceled -> {
+                            TopologyProgressContent(
+                                nodes = state.nodes,
+                                links = state.links,
+                                nodesDone = state.nodesDone,
+                                statusMessage = pluralStringResource(
+                                    R.plurals.topology_canceled_partial_status,
+                                    state.nodesDone,
+                                    state.nodesDone,
+                                ),
+                                selectedNodeIp = state.selectedNodeIp,
+                                onNodeTap = onSelectNode,
+                                onClearPartialResults = onReset,
+                            )
                         }
                         is TopologyUiState.Done -> {
                             Box(modifier = Modifier.fillMaxSize()) {
@@ -571,11 +599,79 @@ private fun TopologyScreenContent(
                 is TopologyUiState.Done -> uiState.graph.links.filter {
                     it.fromIp == selectedNode.ip || it.toIp == selectedNode.ip
                 }
+                is TopologyUiState.Discovering -> uiState.links.filter {
+                    it.fromIp == selectedNode.ip || it.toIp == selectedNode.ip
+                }
+                is TopologyUiState.Canceling -> uiState.links.filter {
+                    it.fromIp == selectedNode.ip || it.toIp == selectedNode.ip
+                }
+                is TopologyUiState.Canceled -> uiState.links.filter {
+                    it.fromIp == selectedNode.ip || it.toIp == selectedNode.ip
+                }
                 else -> emptyList()
             },
             onDismiss = onDeselectNode,
             onNavigateToNeighbour = onSelectNode
         )
+    }
+}
+
+@Composable
+private fun TopologyProgressContent(
+    nodes: List<TopologyNode>,
+    links: List<TopologyLink>,
+    nodesDone: Int,
+    progressMessage: String? = null,
+    statusMessage: String? = null,
+    selectedNodeIp: String? = null,
+    onNodeTap: (String) -> Unit,
+    onClearPartialResults: (() -> Unit)? = null,
+) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        TopologyCanvas(
+            nodes = nodes,
+            links = links,
+            selectedNodeIp = selectedNodeIp,
+            onNodeTap = onNodeTap,
+        )
+        if (progressMessage != null) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(12.dp)
+            ) {
+                ScanningBadge(
+                    countMessage = pluralStringResource(
+                        R.plurals.topology_scanning_badge,
+                        nodesDone,
+                        nodesDone,
+                    ),
+                    progressMessage = progressMessage,
+                )
+            }
+        }
+        if (statusMessage != null) {
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(12.dp),
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.tertiaryContainer,
+                contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+            ) {
+                Row(
+                    modifier = Modifier.padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(text = statusMessage, style = MaterialTheme.typography.bodySmall)
+                    if (onClearPartialResults != null) {
+                        TextButton(onClick = onClearPartialResults) {
+                            Text(stringResource(R.string.topology_clear_partial_results))
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
