@@ -1,7 +1,8 @@
 plugins {
     alias(libs.plugins.kotlin.jvm)
-    alias(libs.plugins.kover)
 }
+
+apply(plugin = "org.jetbrains.kotlinx.kover")
 
 java {
     sourceCompatibility = JavaVersion.VERSION_21
@@ -32,7 +33,7 @@ tasks.withType<Test> {
 // build. Keep a meaningful floor here so new validation/use-case branches do
 // not quietly land without tests, while leaving Android-only UI coverage to
 // instrumented tests in :app.
-kover {
+extensions.configure<kotlinx.kover.gradle.plugin.dsl.KoverProjectExtension> {
     reports {
         verify {
             rule("Domain logic minimum coverage") {

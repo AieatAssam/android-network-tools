@@ -293,3 +293,60 @@ verification_rerun:
     debug_apk_sha256: "cde425a3ee3c055ea5f3651c480471a320671544c0fe9d7b32047b48d3dd81d7"
     unsigned_release_apk_sha256: "11bf0459aa314266ad2316e04f29ea9494f0d5a3791176c64c1c4e7747eed229"
   remaining_gate: "The local JVM, Kover, lint, and build gates pass. Six Dependabot alerts and a clean default-branch dependency submission are still required before P02.5 can close."
+
+current_follow_up_2026_09_24T2147Z:
+  checked_date: "2026-09-24"
+  branch: "plan/comprehensive-review-2026-09-22"
+  source_head_before_fix: "ecbe4835512d07c1f9ed0d99e7a4f9323d35c59a (pushed topic branch)"
+  live_dependabot_state:
+    total: 10
+    fixed: [3, 4, 7]
+    open: [1, 2, 5, 6, 8, 9, 10]
+    new_alert:
+      number: 10
+      state: open
+      severity: critical
+      package: "org.freemarker:freemarker"
+      cve: "CVE-2026-84939"
+      ghsa: "GHSA-27j2-h3m2-8237"
+      vulnerable: ">= 2.2.0, <= 2.3.34"
+      patched: "2.3.35"
+      manifest: "settings.gradle.kts"
+      created_at: "2026-09-24T20:22:40Z"
+    note: "The alert API was queried on 2026-09-24. Topic-branch evidence does not update the default-branch alert state."
+  prior_exact_head_submission:
+    run_id: 36059542138
+    ref: "refs/heads/plan/comprehensive-review-2026-09-22"
+    commit: "ecbe4835512d07c1f9ed0d99e7a4f9323d35c59a"
+    result: "The ADS graph selected FreeMarker 2.3.32 on the Kover 0.9.9 implementation path; this brought the newly reported critical alert into scope."
+  remediation:
+    files:
+      - "build.gradle.kts"
+      - "gradle/libs.versions.toml"
+      - "app/build.gradle.kts"
+      - "core-network/build.gradle.kts"
+      - "core-domain/build.gradle.kts"
+    approach: "Move Kover 0.9.9 from versioned plugin-DSL requests to the root buildscript classpath, force org.freemarker:freemarker:2.3.35 on that build-only configuration, and configure the public KoverProjectExtension explicitly after applying the plugin in each module. The FreeMarker and Kover artifacts do not enter app runtime dependencies."
+    root_build_environment:
+      command: "./gradlew buildEnvironment --no-daemon --no-parallel --max-workers=1 --console=plain"
+      artifact: "/tmp/p025-kover-buildenvironment-2026-09-24.txt"
+      sha256: "da07af82a2facbe842108f68543c9dee135cff173680a200b55704084a0f42bb"
+      result: "BUILD SUCCESSFUL. The Kover 0.9.9 dependency edge requested FreeMarker 2.3.32 and Gradle selected 2.3.35."
+      excerpt: "kover-gradle-plugin:0.9.9 -> kover-features-jvm:0.9.9 -> intellij-coverage-reporter:1.0.765 -> coverage-report:1.0.25 -> freemarker:2.3.32 -> 2.3.35"
+    runtime_graph:
+      command: "./gradlew :app:dependencyInsight --configuration releaseRuntimeClasspath --dependency org.freemarker:freemarker --no-daemon --no-parallel --max-workers=1 --console=plain"
+      result: "BUILD SUCCESSFUL; no dependencies matching FreeMarker were found in :app:releaseRuntimeClasspath."
+  verification:
+    first_combined_kover_run: "One PortScanRepositoryImplTest failed after the test framework's 60-second limit with UncompletedCoroutinesError."
+    focused_retry: "./gradlew :core-network:test --tests 'net.aieat.netswissknife.core.network.portscan.PortScanRepositoryImplTest.resolution phase cap expires within session budget and reports host resolution timeout' --no-daemon --no-parallel --max-workers=1 --console=plain — BUILD SUCCESSFUL."
+    complete_kover_command: "./gradlew :app:koverVerify :core-network:koverVerify :core-domain:koverVerify --no-daemon --no-parallel --max-workers=1 --console=plain"
+    complete_kover_result: "BUILD SUCCESSFUL. All three Kover verification tasks passed; the subsequent full core-network suite passed. JUnit reports: app 519 tests, core-network 1,109 tests with one skipped, core-domain 203 tests; zero failures or errors in all reports."
+    lint_and_assembly_command: "./gradlew :app:lintDebug :app:assembleDebug :app:assembleRelease --no-daemon --no-parallel --max-workers=1 --console=plain"
+    lint_and_assembly_result: "BUILD SUCCESSFUL in 12m17s. lintDebug, debug assembly, release lintVital, and unsigned release assembly passed. Existing release R8 warnings remain for dnsjava resolver service-provider classes. No emulator was used."
+    artifacts:
+      debug_apk_sha256: "e23a6a831f0d4533b788b5efb04491f8bc4d2df7b7e73417a4dc68b151e2cbb6"
+      unsigned_release_apk_sha256: "6de3a4235ad63c7c5aa4dccbfd5d1ac866438b2d0056870d2b6b8437ed1fff2c"
+  independent_reviews:
+    qa: "Static review found the plugin coordinate, patched buildscript force, typed extension configuration, and runtime scope consistent. Its requested Gradle proofs passed as recorded above."
+    adversarial: "No source blocker found. The reviewer noted the root :classpath force technically affects any FreeMarker requested by that classpath and that Kover is loaded through the shared buildscript classloader; exact build and task verification passed."
+  outcome: "Local dependency selection and quality gates pass for the new configuration. Exact-head ADS after push and a fresh default-branch submission/alert refresh remain required; keep P02.5/T4 in_progress."

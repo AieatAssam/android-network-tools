@@ -1,7 +1,8 @@
 plugins {
     alias(libs.plugins.kotlin.jvm)
-    alias(libs.plugins.kover)
 }
+
+apply(plugin = "org.jetbrains.kotlinx.kover")
 
 java {
     sourceCompatibility = JavaVersion.VERSION_21
@@ -32,7 +33,7 @@ tasks.withType<Test> {
 // Protocol parsers and repository orchestration are JVM-testable. Enforce a
 // module-level floor so coverage reports are actionable rather than merely
 // informational; Android framework adapters remain outside this module.
-kover {
+extensions.configure<kotlinx.kover.gradle.plugin.dsl.KoverProjectExtension> {
     reports {
         verify {
             rule("Network logic minimum coverage") {

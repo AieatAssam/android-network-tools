@@ -1,7 +1,17 @@
 import com.github.benmanes.gradle.versions.updates.DependencyUpdatesTask
 
 buildscript {
+    repositories {
+        gradlePluginPortal()
+        mavenCentral()
+    }
     dependencies {
+        // Kover 0.9.9 pins a vulnerable FreeMarker transitively in its plugin
+        // classpath. Keep the coverage plugin build-only and force the patched
+        // FreeMarker there; this does not add either library to app runtime.
+        classpath("org.jetbrains.kotlinx:kover-gradle-plugin:0.9.9")
+        classpath("org.freemarker:freemarker:2.3.35")
+
         // AGP currently brings these build-time libraries transitively at
         // vulnerable versions. Keep the patched resolution on the Gradle
         // classpath without adding any of them to the Android runtime graph.
@@ -11,6 +21,9 @@ buildscript {
         classpath("org.jdom:jdom2:2.0.6.1")
         classpath("org.apache.commons:commons-lang3:3.18.0")
         classpath("org.apache.httpcomponents:httpclient:4.5.14")
+    }
+    configurations.classpath {
+        resolutionStrategy.force("org.freemarker:freemarker:2.3.35")
     }
 }
 

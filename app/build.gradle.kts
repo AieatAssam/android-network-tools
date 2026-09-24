@@ -3,8 +3,9 @@ plugins {
     alias(libs.plugins.compose.compiler)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
-    alias(libs.plugins.kover)
 }
+
+apply(plugin = "org.jetbrains.kotlinx.kover")
 
 // ── CI-supplied properties ────────────────────────────────────────────────────
 // Pass via: ./gradlew :app:assembleRelease -PversionName=1.2.3 -PversionCode=100
@@ -219,7 +220,7 @@ tasks.withType<Test> {
 //
 //   ./gradlew :app:koverVerify        -- enforce the gate
 //   ./gradlew :app:koverHtmlReport    -- browse the scoped report
-kover {
+extensions.configure<kotlinx.kover.gradle.plugin.dsl.KoverProjectExtension> {
     reports {
         filters {
             includes {

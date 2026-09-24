@@ -22,8 +22,9 @@ phase:
 
 context:
   problem: |
-    GitHub Dependabot initially reported nine Maven alerts from settings.gradle.kts;
-    the 2026-09-23 check shows six still open. The
+    GitHub Dependabot initially reported nine Maven alerts from settings.gradle.kts.
+    A new critical FreeMarker alert appeared on 2026-09-24, bringing the live
+    inventory to ten alerts, seven of them open. The
     authenticated `gh api repos/AieatAssam/android-network-tools/dependabot/alerts`
     response identifies Kotlin Gradle Plugin as direct and the other packages as
     transitive. The manifest path is settings.gradle.kts, so identify the settings
@@ -32,6 +33,7 @@ context:
     isolated plugins-DSL classpath is patched. Do not add runtime dependencies merely
     to make Dependabot stop reporting a build-only dependency.
   alerts:
+    - { number: 10, severity: critical, package: "org.freemarker:freemarker", cve: "CVE-2026-84939", ghsa: "GHSA-27j2-h3m2-8237", vulnerable: ">= 2.2.0, <= 2.3.34", patched: "2.3.35", relationship: transitive }
     - { number: 8, severity: critical, package: "org.bouncycastle:bcprov-jdk18on", cve: "CVE-2026-8763", ghsa: "GHSA-9pwp-9qqc-pr26", vulnerable: "< 1.85", patched: "1.85", relationship: transitive }
     - { number: 9, severity: high, package: "org.bouncycastle:bcprov-jdk18on", cve: "CVE-2026-13506", ghsa: "GHSA-qp49-qgx5-5m26", vulnerable: "< 1.85", patched: "1.85", relationship: transitive }
     - { number: 4, severity: high, package: "org.bitbucket.b_c:jose4j", cve: "CVE-2024-29371", ghsa: "GHSA-3677-xxcr-wjqv", vulnerable: "< 0.9.6", patched: "0.9.6", relationship: transitive }
@@ -43,7 +45,7 @@ context:
     - { number: 1, severity: medium, package: "org.apache.httpcomponents:httpclient", cve: "CVE-2020-13956", ghsa: "GHSA-7r82-7xv7-xcpj", vulnerable: "< 4.5.13", patched: "4.5.13", relationship: transitive }
 
 desired_behaviour: |
-  All nine alerts are either remediated in the resolved dependency graph or have a
+  All ten alerts are either remediated in the resolved dependency graph or have a
   documented, time-bounded exception backed by a concrete upstream issue. The
   critical/high alerts must be resolved first. The app's runtime graph must not gain
   unnecessary libraries solely for build-time alert suppression.
@@ -62,8 +64,10 @@ implementation_status: |
   contains none of the affected packages. The retained review artifact records the
   commands and hashes.
 
-  The current API state checked 2026-09-24 still has six open alerts (#1/#2/#5/#6/#8/#9)
-  and three fixed (#3/#4/#7). The latest repository SBOM response (generated
+  The live API check on 2026-09-24 reports seven open alerts (#1/#2/#5/#6/#8/#9/#10)
+  and three fixed (#3/#4/#7). Alert #10 is critical FreeMarker CVE-2026-84939,
+  reported via settings.gradle.kts; its vulnerable range ends at 2.3.34 and its
+  patched version is 2.3.35. The latest repository SBOM response (generated
   2026-09-24T09:07:59Z) still lists vulnerable and patched versions together;
   the latest default-branch dependency-submission run remains 35601558226 at
   commit 5e18372, before this remediation. The latest topic-branch submission,
@@ -74,6 +78,16 @@ implementation_status: |
   submission and GitHub reports no actionable alerts, or approved, time-bounded
   dispositions are recorded.
 
+  The latest topic-branch ADS snapshot (run 36059542138 for ecbe483) included
+  FreeMarker 2.3.32 through Kover 0.9.9. This release has no newer Kover plugin
+  version in the project's version catalog, so Kover is now loaded from the root
+  buildscript classpath with FreeMarker 2.3.35 forced on that build-only
+  configuration. All module coverage scripts apply Kover from this classpath and
+  configure the public Kover project extension directly. Local `buildEnvironment`
+  resolves the Kover dependency edge from FreeMarker 2.3.32 to 2.3.35; the app
+  `releaseRuntimeClasspath` contains no FreeMarker. Exact-head ADS remains pending
+  until this change is pushed.
+
   An initial debug-lint run crashed in `:app:lintAnalyzeDebug` while the Ping
   ViewModel change was in progress: AGP Lint's
   `androidx.annotation.experimental.lint.ExperimentalDetector` reported
@@ -83,7 +97,7 @@ implementation_status: |
   release assembly also passed, with release `lintVital` included. The earlier
   crash remains recorded as a transient tool failure, not the current gate
   result. P02.5 stays open because main still has stale dependency submission,
-  the live alert API has six open alerts, and the repository SBOM contains both
+  the live alert API has seven open alerts, and the repository SBOM contains both
   old and patched build coordinates.
 
 assumptions:
@@ -115,7 +129,7 @@ design:
   verification:
     - "Run dependencyInsight again and confirm no vulnerable version remains in the relevant configuration."
     - "Run JVM tests, Kover gates, lint, debug/release builds, and the existing SNMP4J APK class check."
-    - "Re-query Dependabot after GitHub rescans; current API state is six open alerts (#1/#2/#5/#6/#8/#9) and three fixed (#3/#4/#7). Record any remaining alert as accepted risk only with an approved, time-bounded exception if it is not actionable upstream."
+    - "Re-query Dependabot after GitHub rescans; current API state is seven open alerts (#1/#2/#5/#6/#8/#9/#10) and three fixed (#3/#4/#7). Record any remaining alert as accepted risk only with an approved, time-bounded exception if it is not actionable upstream."
 
 files_to_modify:
   - gradle/libs.versions.toml
@@ -128,7 +142,7 @@ files_to_modify:
 
 tasks:
   - id: P02.5-T1
-    title: "Trace all nine alerts to resolved configurations and shipped artifacts"
+    title: "Trace all ten alerts to resolved configurations and shipped artifacts"
     status: done
     steps:
       - "Record alert JSON/SBOM and project buildEnvironment plus app/runtime dependency graphs."
@@ -136,6 +150,7 @@ tasks:
       - "Project buildEnvironment alone omits plugin DSL dependencies. The retained `help --debug` trace proves the invocation loaded patched artifacts, but it does not isolate the settings-plugin classpath or provide configuration-scoped selection reasons; capture a direct report or narrow the alert ownership classification with equivalent evidence."
       - "Standalone settings-plugin resolution contains none of the alerted coordinates. A SimpleDependencyGraphPlugin 1.5.0 resolution report on the current source maps vulnerable bcprov/bcpkix 1.80.2, commons-lang3 3.16.0, and httpclient 4.5.6 to `:app:androidLintTool`; the root `:classpath` selects 1.85, 3.18.0, and 4.5.14. JDOM 2.0.6.1, jose4j 0.9.6, and KGP 2.4.20 resolve on root `:classpath`. `:app:releaseRuntimeClasspath` has none of the affected packages."
       - "The API/SBOM and Gradle submission are build dependency graphs, not release APK SBOMs. The vulnerable `androidLintTool` selection is real build-time exposure, but it is not evidence that those packages ship in the app runtime."
+      - "The 2026-09-24 live inventory added alert #10 for FreeMarker through the Kover plugin graph. The root buildscript classpath resolves Kover 0.9.9 and forces FreeMarker 2.3.35; verify this configuration graph directly and confirm no FreeMarker dependency enters releaseRuntimeClasspath."
       - "Check in a concise, reproducible review artifact with the exact commands, dates, hashes, configuration scope, and alert/SBOM state; do not rely on temporary `/tmp` logs as the retained graph record."
     acceptance_criteria: ["Every alert has an owning dependency path and a runtime/build scope classification, including plugins-DSL configurations."]
 
@@ -157,7 +172,7 @@ tasks:
       - "Align Bouncy Castle modules to a patched compatible line."
       - "Remediate jose4j, JDOM, Commons Lang, and Apache HttpClient through their owning plugin/dependency path."
       - "Use explicit Gradle constraints only where the parent upgrade cannot resolve the alert cleanly; document why."
-      - "The root buildscript pins did not constrain `:app:androidLintTool`; the pre-change configuration-scoped report proved old versions were selected there. Added narrowly scoped app constraints for bcprov/bcpkix 1.85, commons-lang3 3.18.0, and httpclient 4.5.14. Post-change `:app:dependencies --configuration androidLintTool` and `dependencyInsight` show all affected requests redirected to patched versions. ADS run 35979037038 for topic-branch HEAD 98d2fa9 confirms only patched versions for every alerted coordinate across 410 resolved components; see plan/reviews/2026-09-23-p025-dependency-state.yaml prior_recheck_2026_09_24T0908. The newer exact implementation-head snapshot is recorded in exact_head_recheck. Main-branch resubmission and refreshed alert status remain T4 gates."
+      - "The root buildscript pins did not constrain `:app:androidLintTool`; the pre-change configuration-scoped report proved old versions were selected there. Added narrowly scoped app constraints for bcprov/bcpkix 1.85, commons-lang3 3.18.0, and httpclient 4.5.14. Post-change `:app:dependencies --configuration androidLintTool` and `dependencyInsight` show all affected requests redirected to patched versions. ADS run 35979037038 for topic-branch HEAD 98d2fa9 confirms only patched versions for the then-known alerted coordinates across 410 resolved components. The later ADS run 36059542138 exposed the new FreeMarker 2.3.32 selection; the current fix moves Kover onto root buildscript classpath and forces FreeMarker 2.3.35. See the dated evidence in plan/reviews/2026-09-23-p025-dependency-state.yaml. Main-branch resubmission and refreshed alert status remain T4 gates."
     acceptance_criteria: ["No vulnerable package version remains in any shipped runtime graph; build-only exceptions are explicitly documented."]
 
   - id: P02.5-T4
@@ -172,8 +187,8 @@ tasks:
       - "2026-09-24 current-worktree rerun: ./gradlew :core-network:test :core-domain:test :app:testDebugUnitTest --no-daemon --no-parallel --console=plain; then ./gradlew :core-network:koverVerify :core-domain:koverVerify :app:koverVerify :app:lintDebug :app:assembleDebug :app:assembleRelease --no-daemon --no-parallel --console=plain. Both invocations passed. App JVM tests ran 448/448 with zero failures/errors; core-network and core-domain test tasks were UP-TO-DATE (latest reports: 1,023 with one skipped, and 188). All three Kover verifications passed, lintDebug passed, and debug plus unsigned release APK assembly passed. R8 emitted the existing dnsjava service-provider warnings. No emulator was used."
       - "gh api repos/AieatAssam/android-network-tools/dependabot/alerts --paginate"
       - "gh api repos/AieatAssam/android-network-tools/dependency-graph/sbom"
-      - "On 2026-09-23, post-constraint `:app:dependencies --configuration androidLintTool`, targeted dependencyInsight, and `:app:dependencies --configuration releaseRuntimeClasspath` passed. The earlier full core-network/core-domain/app JVM suites, Kover verification, lintDebug, and debug/release assembly passed; see the dated verification records below. On 2026-09-24, ADS run 35979037038 for pushed branch HEAD 98d2fa9 selected patched versions for all alerted coordinates across 410 components; main still points to run 35601558226 at 5e18372. The alert API was refreshed at 09:08Z and still reports six open alerts [1, 2, 5, 6, 8, 9]; the 09:07Z repository SBOM still lists old and patched build coordinates. The combined attempt before fixes exposed topology test races and Wi-Fi test cleanup/permission issues, then stalled; those failures and recovery are documented in plan/reviews/2026-09-23-p025-dependency-state.yaml. Following the fixes, the serialized full JVM invocation passed on the source committed as 98d2fa9: app 448/448, with unchanged core module test tasks UP-TO-DATE and latest reports of 1,023 (one skipped) and 188. The Wi-Fi and topology test classes passed 38/38 and 19/19. All Kover verification tasks, `:app:lintDebug`, `:app:assembleDebug`, and `:app:assembleRelease` passed. Release R8 emitted dnsjava service-provider warnings. No emulator was used. Main still needs a fresh dependency submission and the six open alerts need closure or approved time-bounded dispositions. T4 and P02.5 remain open for those external gates. Device/lab release-QA checks are separate from this dependency gate. Detailed counts, hashes, and external state are retained in plan/reviews/2026-09-23-p025-dependency-state.yaml."
-    acceptance_criteria: ["The reviewed source tree's JVM, Kover, lint, debug, and release gates pass; all nine alerts have a recorded disposition, and every remaining actionable alert is covered by an explicit, approved, time-bounded exception."]
+      - "On 2026-09-23, post-constraint `:app:dependencies --configuration androidLintTool`, targeted dependencyInsight, and `:app:dependencies --configuration releaseRuntimeClasspath` passed. Earlier JVM, Kover, lint, and build verification is retained in the dated review below. On 2026-09-24, the live alert API reports seven open alerts [1, 2, 5, 6, 8, 9, 10], including the new critical FreeMarker alert; three alerts [3, 4, 7] are fixed. Previous exact-head ADS run 36059542138 for ecbe483 selected FreeMarker 2.3.32. The current `buildEnvironment` graph selects 2.3.35 on root `:classpath`, and `dependencyInsight` finds no FreeMarker in `:app:releaseRuntimeClasspath`. The complete Kover rerun passed all three gates; test reports show app 519/519, core-network 1,109 with one skipped, and core-domain 203, all with zero failures/errors. The initial combined Kover run had a 60-second timeout in one port-scan test; its focused retry passed, and the later complete core-network suite passed. `:app:lintDebug`, `:app:assembleDebug`, and `:app:assembleRelease` passed; R8 emitted the existing dnsjava service-provider warnings. A post-push ADS submission and a fresh main-branch scan remain outstanding; keep T4/P02.5 open until those external gates are addressed. No emulator was used. Device/lab release-QA checks are separate. Detailed graph output and its hash are retained in plan/reviews/2026-09-23-p025-dependency-state.yaml."
+    acceptance_criteria: ["The reviewed source tree's JVM, Kover, lint, debug, and release gates pass; all ten alerts have a recorded disposition, and every remaining actionable alert is covered by an explicit, approved, time-bounded exception."]
 
 qa_validation:
   - "Keep the pre-upgrade and post-upgrade dependency graphs as review artifacts."
@@ -190,5 +205,5 @@ risks:
 
 definition_of_done:
   - "Critical and high Dependabot alerts are closed or have a documented, approved exception."
-  - "All nine alerts have a recorded disposition."
+  - "All ten alerts have a recorded disposition."
   - "Repository-wide tests, coverage gates, lint, debug build, and release build pass."

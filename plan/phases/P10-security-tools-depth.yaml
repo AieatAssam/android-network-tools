@@ -8,7 +8,7 @@ expansion_tasks:
   rule: "Coordinate with these expansion tasks; do not duplicate existing scope or block independent regression fixes on optional enhancements. See comprehensive_expansion.regression_delivery for fresh follow-up ownership."
 
 second_pass_follow_up:
-  status: in_progress
+  status: done
   report: plan/reviews/2026-09-22-second-pass.yaml
   findings: [R2-001, R2-009, R2-012]
   rule: "Apply report recommendations and regression acceptance before closing the listed follow-ups; historical phase completion does not close new findings."
@@ -26,12 +26,12 @@ phase:
 
 review_follow_up:
   reviewed_on: "2026-09-21"
-  status: in_progress
+  status: done
   findings: [RNET006, RUI006]
   reports:
     - plan/reviews/2026-09-21-network.yaml
     - plan/reviews/2026-09-21-ui-domain.yaml
-  note: "RNET006 is closed: WHOIS cancellation closes active sockets, bounds blocking workers and total operation time, and preserves cancellation; platform DNS may still occupy one bounded worker if the OS resolver ignores interruption. RUI006 remains open. See report evidence, recommended_action, and validation."
+  note: "RNET006 is closed: WHOIS cancellation closes active sockets, bounds blocking workers and total operation time, and preserves cancellation; platform DNS may still occupy one bounded worker if the OS resolver ignores interruption. RUI006 is closed: TLS validates ports 1..65535 and clears stale results. See report evidence, recommended_action, and validation."
 
 context:
   problem: |
