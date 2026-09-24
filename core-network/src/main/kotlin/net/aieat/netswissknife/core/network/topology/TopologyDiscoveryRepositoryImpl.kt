@@ -113,6 +113,7 @@ class TopologyDiscoveryRepositoryImpl(
 
                     val target = SnmpTarget(ip = currentIp, params = effectiveParams)
                     val walkBudget = SnmpWalkBudget(limits)
+                    val tableObservations = TableObservationCollector()
 
                     val sysDescrAttempt = attemptGet(snmpClient, target, "1.3.6.1.2.1.1.1.0", sessionRequestLimiter)
                     val sysNameAttempt = attemptGet(snmpClient, target, "1.3.6.1.2.1.1.5.0", sessionRequestLimiter)
@@ -149,21 +150,21 @@ class TopologyDiscoveryRepositoryImpl(
                     val firmware = TopologyNodeParser.parseFirmwareVersion(sysDescr, null)
                     val (interfaces, vlans, lldpResult, cdpResult) = coroutineScope {
                         val interfaces = async {
-                            queryInterfaces(snmpClient, target, walkBudget, truncationReasons, snmpErrors, sessionRequestLimiter)
+                            queryInterfaces(snmpClient, target, walkBudget, truncationReasons, snmpErrors, sessionRequestLimiter, tableObservations)
                         }
                         val vlans = async {
-                            queryVlans(snmpClient, target, walkBudget, truncationReasons, snmpErrors, sessionRequestLimiter)
+                            queryVlans(snmpClient, target, walkBudget, truncationReasons, snmpErrors, sessionRequestLimiter, tableObservations)
                         }
                         val lldp = async {
                             queryLldpNeighbours(
                                 snmpClient, target, currentIp, currentHop, params.maxHops,
-                                walkBudget, truncationReasons, snmpErrors, linkBudget, sessionRequestLimiter
+                                walkBudget, truncationReasons, snmpErrors, linkBudget, sessionRequestLimiter, tableObservations
                             )
                         }
                         val cdp = async {
                             queryCdpNeighbours(
                                 snmpClient, target, currentIp, currentHop, params.maxHops,
-                                walkBudget, truncationReasons, snmpErrors, linkBudget, sessionRequestLimiter
+                                walkBudget, truncationReasons, snmpErrors, linkBudget, sessionRequestLimiter, tableObservations
                             )
                         }
                         Quadruple(interfaces.await(), vlans.await(), lldp.await(), cdp.await())
@@ -183,23 +184,41 @@ class TopologyDiscoveryRepositoryImpl(
                         capabilities = inferCapabilities(sysDescr, vendor),
                         interfaces = interfaces,
                         vlans = vlans,
-                        snmpReachable = snmpReachable
+                        snmpReachable = snmpReachable,
+                        tableObservations = tableObservations.snapshot()
                     )
 
                     if (!graphBudget.tryReserve(node)) {
                         truncationReasons.add(TopologyTruncationReason.GRAPH_BYTE_LIMIT)
                         break
                     }
-                    allNodes.add(node)
-                    send(TopologyDiscoveryEvent.NodeDiscovered(node))
-
                     var graphByteLimitReached = false
-                    for (link in lldpLinks + cdpLinks) {
-                        if (!graphBudget.tryReserve(link)) {
-                            truncationReasons.add(TopologyTruncationReason.GRAPH_BYTE_LIMIT)
-                            graphByteLimitReached = true
+                    val retainedLinks = mutableListOf<TopologyLink>()
+                    val linkTables = listOf(
+                        TopologyDataTable.LLDP_NEIGHBORS to lldpLinks,
+                        TopologyDataTable.CDP_NEIGHBORS to cdpLinks,
+                    )
+                    for (tableIndex in linkTables.indices) {
+                        val (table, links) = linkTables[tableIndex]
+                        for (link in links) {
+                            if (!graphBudget.tryReserve(link)) {
+                                truncationReasons.add(TopologyTruncationReason.GRAPH_BYTE_LIMIT)
+                                tableObservations.recordTruncation(table)
+                                graphByteLimitReached = true
+                                break
+                            }
+                            retainedLinks.add(link)
+                        }
+                        if (graphByteLimitReached) {
+                            linkTables.drop(tableIndex + 1).filter { it.second.isNotEmpty() }
+                                .forEach { (omittedTable, _) -> tableObservations.recordTruncation(omittedTable) }
                             break
                         }
+                    }
+                    val retainedNode = node.copy(tableObservations = tableObservations.snapshot())
+                    allNodes.add(retainedNode)
+                    send(TopologyDiscoveryEvent.NodeDiscovered(retainedNode))
+                    retainedLinks.forEach { link ->
                         allLinks.add(link)
                         send(TopologyDiscoveryEvent.LinkDiscovered(link))
                     }
@@ -256,6 +275,60 @@ class TopologyDiscoveryRepositoryImpl(
     }
 
     private data class GetAttempt(val value: String?, val error: Exception?)
+
+    /** Aggregates every walk contributing to one semantic table on this node. */
+    private class TableObservationCollector {
+        private data class Counts(var successful: Int = 0, var failed: Int = 0, val failures: MutableSet<TopologyTableFailure> = mutableSetOf())
+        private val counts = TopologyDataTable.entries.associateWith { Counts() }
+
+        @Synchronized
+        fun record(table: TopologyDataTable, result: SnmpWalkResult) {
+            val tableCounts = counts.getValue(table)
+            if (result.hadError) {
+                tableCounts.failed++
+                tableCounts.failures.add(TopologyTableFailure.SNMP_RESPONSE)
+                if (result.entries.isNotEmpty()) tableCounts.successful++
+            } else {
+                tableCounts.successful++
+            }
+            if (result.truncationReasons.isNotEmpty()) {
+                tableCounts.failures.add(TopologyTableFailure.TRUNCATED)
+            }
+        }
+
+        @Synchronized
+        fun recordFailure(table: TopologyDataTable, error: Exception) {
+            val tableCounts = counts.getValue(table)
+            tableCounts.failed++
+            tableCounts.failures.add(error.topologyTableFailure())
+        }
+
+        private fun Exception.topologyTableFailure(): TopologyTableFailure {
+            val message = message.orEmpty().lowercase()
+            return when {
+                this is java.net.SocketTimeoutException || "timeout" in message || "timed out" in message -> TopologyTableFailure.TIMEOUT
+                "auth" in message || "credential" in message || "community" in message -> TopologyTableFailure.AUTHENTICATION
+                else -> TopologyTableFailure.REQUEST_FAILED
+            }
+        }
+
+        @Synchronized
+        fun recordTruncation(table: TopologyDataTable) {
+            counts.getValue(table).failures.add(TopologyTableFailure.TRUNCATED)
+        }
+
+        @Synchronized
+        fun snapshot(): Map<TopologyDataTable, TopologyTableObservation> = counts.mapNotNull { (table, tableCounts) ->
+            if (tableCounts.successful == 0 && tableCounts.failed == 0) return@mapNotNull null
+            val failures = tableCounts.failures.toSet()
+            val completeness = when {
+                failures.isEmpty() -> TopologyTableCompleteness.COMPLETE
+                tableCounts.successful > 0 -> TopologyTableCompleteness.PARTIAL
+                else -> TopologyTableCompleteness.FAILED
+            }
+            table to TopologyTableObservation(completeness, failures)
+        }.toMap()
+    }
 
     private suspend fun attemptGet(
         client: SnmpClient,
@@ -317,6 +390,8 @@ class TopologyDiscoveryRepositoryImpl(
         truncationReasons: MutableSet<TopologyTruncationReason>,
         snmpErrors: AtomicBoolean,
         sessionRequestLimiter: Semaphore,
+        table: TopologyDataTable,
+        tableObservations: TableObservationCollector,
     ): Map<String, String> =
         sessionRequestLimiter.withPermit {
             requestLimiter.withPermit {
@@ -324,12 +399,14 @@ class TopologyDiscoveryRepositoryImpl(
                     val result = client.walk(target, oid, budget)
                     truncationReasons.addAll(result.truncationReasons)
                     if (result.hadError) snmpErrors.set(true)
+                    tableObservations.record(table, result)
                     result.entries
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
                     if (e.containsLocalNetworkPermissionDenied()) throw e
                     snmpErrors.set(true)
+                    tableObservations.recordFailure(table, e)
                     emptyMap()
                 }
             }
@@ -342,13 +419,15 @@ class TopologyDiscoveryRepositoryImpl(
         truncationReasons: MutableSet<TopologyTruncationReason>,
         snmpErrors: AtomicBoolean,
         sessionRequestLimiter: Semaphore,
+        tableObservations: TableObservationCollector,
     ): List<SnmpInterface> {
         val (descrWalk, speedWalk, highSpeedWalk, statusWalk, macWalk) = coroutineScope {
-            val descr = async { safeWalk(client, target, "1.3.6.1.2.1.2.2.1.2", budget, truncationReasons, snmpErrors, sessionRequestLimiter) }
-            val speed = async { safeWalk(client, target, "1.3.6.1.2.1.2.2.1.5", budget, truncationReasons, snmpErrors, sessionRequestLimiter) }
-            val highSpeed = async { safeWalk(client, target, "1.3.6.1.2.1.31.1.1.1.15", budget, truncationReasons, snmpErrors, sessionRequestLimiter) }
-            val status = async { safeWalk(client, target, "1.3.6.1.2.1.2.2.1.8", budget, truncationReasons, snmpErrors, sessionRequestLimiter) }
-            val mac = async { safeWalk(client, target, "1.3.6.1.2.1.2.2.1.6", budget, truncationReasons, snmpErrors, sessionRequestLimiter) }
+            val table = TopologyDataTable.INTERFACES
+            val descr = async { safeWalk(client, target, "1.3.6.1.2.1.2.2.1.2", budget, truncationReasons, snmpErrors, sessionRequestLimiter, table, tableObservations) }
+            val speed = async { safeWalk(client, target, "1.3.6.1.2.1.2.2.1.5", budget, truncationReasons, snmpErrors, sessionRequestLimiter, table, tableObservations) }
+            val highSpeed = async { safeWalk(client, target, "1.3.6.1.2.1.31.1.1.1.15", budget, truncationReasons, snmpErrors, sessionRequestLimiter, table, tableObservations) }
+            val status = async { safeWalk(client, target, "1.3.6.1.2.1.2.2.1.8", budget, truncationReasons, snmpErrors, sessionRequestLimiter, table, tableObservations) }
+            val mac = async { safeWalk(client, target, "1.3.6.1.2.1.2.2.1.6", budget, truncationReasons, snmpErrors, sessionRequestLimiter, table, tableObservations) }
             Quintuple(descr.await(), speed.await(), highSpeed.await(), status.await(), mac.await())
         }
 
@@ -373,6 +452,7 @@ class TopologyDiscoveryRepositoryImpl(
         }.take(limits.maxInterfacesPerNode + 1).toList()
         if (parsed.size > limits.maxInterfacesPerNode) {
             truncationReasons.add(TopologyTruncationReason.INTERFACE_LIMIT)
+            tableObservations.recordTruncation(TopologyDataTable.INTERFACES)
         }
         return parsed.take(limits.maxInterfacesPerNode)
     }
@@ -384,17 +464,20 @@ class TopologyDiscoveryRepositoryImpl(
         truncationReasons: MutableSet<TopologyTruncationReason>,
         snmpErrors: AtomicBoolean,
         sessionRequestLimiter: Semaphore,
+        tableObservations: TableObservationCollector,
     ): List<VlanInfo> {
         val vlans = mutableListOf<VlanInfo>()
         val (vtpWalk, vtpStateWalk) = coroutineScope {
-            val names = async { safeWalk(client, target, "1.3.6.1.4.1.9.9.46.1.3.1.1.4", budget, truncationReasons, snmpErrors, sessionRequestLimiter) }
-            val states = async { safeWalk(client, target, "1.3.6.1.4.1.9.9.46.1.3.1.1.2", budget, truncationReasons, snmpErrors, sessionRequestLimiter) }
+            val table = TopologyDataTable.VLANS
+            val names = async { safeWalk(client, target, "1.3.6.1.4.1.9.9.46.1.3.1.1.4", budget, truncationReasons, snmpErrors, sessionRequestLimiter, table, tableObservations) }
+            val states = async { safeWalk(client, target, "1.3.6.1.4.1.9.9.46.1.3.1.1.2", budget, truncationReasons, snmpErrors, sessionRequestLimiter, table, tableObservations) }
             names.await() to states.await()
         }
 
         vtpWalk.forEach { (oid, name) ->
             if (vlans.size >= limits.maxVlansPerNode) {
                 truncationReasons.add(TopologyTruncationReason.VLAN_LIMIT)
+                tableObservations.recordTruncation(TopologyDataTable.VLANS)
                 return@forEach
             }
             val vlanId = oid.substringAfterLast(".").toIntOrNull() ?: return@forEach
@@ -403,9 +486,10 @@ class TopologyDiscoveryRepositoryImpl(
         }
 
         if (vlans.isEmpty()) {
-            safeWalk(client, target, "1.3.6.1.2.1.17.7.1.4.3.1.1", budget, truncationReasons, snmpErrors, sessionRequestLimiter).forEach { (oid, name) ->
+            safeWalk(client, target, "1.3.6.1.2.1.17.7.1.4.3.1.1", budget, truncationReasons, snmpErrors, sessionRequestLimiter, TopologyDataTable.VLANS, tableObservations).forEach { (oid, name) ->
                 if (vlans.size >= limits.maxVlansPerNode) {
                     truncationReasons.add(TopologyTruncationReason.VLAN_LIMIT)
+                    tableObservations.recordTruncation(TopologyDataTable.VLANS)
                     return@forEach
                 }
                 val vlanId = oid.substringAfterLast(".").toIntOrNull() ?: return@forEach
@@ -426,8 +510,9 @@ class TopologyDiscoveryRepositoryImpl(
         snmpErrors: AtomicBoolean,
         linkBudget: LinkBudget,
         sessionRequestLimiter: Semaphore,
+        tableObservations: TableObservationCollector,
     ): Pair<List<TopologyLink>, List<String>> {
-        val lldpWalk = safeWalk(client, target, "1.0.8802.1.1.2.1.4", budget, truncationReasons, snmpErrors, sessionRequestLimiter)
+        val lldpWalk = safeWalk(client, target, "1.0.8802.1.1.2.1.4", budget, truncationReasons, snmpErrors, sessionRequestLimiter, TopologyDataTable.LLDP_NEIGHBORS, tableObservations)
         if (lldpWalk.isEmpty()) return emptyList<TopologyLink>() to emptyList()
 
         val remoteEntries = TopologyMibParser.parseLldpRemTable(lldpWalk)
@@ -437,7 +522,7 @@ class TopologyDiscoveryRepositoryImpl(
 
         remoteEntries.forEach { entry ->
             val neighbourIp = managementAddresses[entry.key] ?: return@forEach
-            if (!linkBudget.tryReserve()) return@forEach
+            if (!linkBudget.tryReserve(TopologyDataTable.LLDP_NEIGHBORS, tableObservations)) return@forEach
             links.add(
                 TopologyLink(
                     fromIp = fromIp,
@@ -464,14 +549,15 @@ class TopologyDiscoveryRepositoryImpl(
         snmpErrors: AtomicBoolean,
         linkBudget: LinkBudget,
         sessionRequestLimiter: Semaphore,
+        tableObservations: TableObservationCollector,
     ): Pair<List<TopologyLink>, List<String>> {
-        val cdpWalk = safeWalk(client, target, "1.3.6.1.4.1.9.9.23.1.2.1", budget, truncationReasons, snmpErrors, sessionRequestLimiter)
+        val cdpWalk = safeWalk(client, target, "1.3.6.1.4.1.9.9.23.1.2.1", budget, truncationReasons, snmpErrors, sessionRequestLimiter, TopologyDataTable.CDP_NEIGHBORS, tableObservations)
         if (cdpWalk.isEmpty()) return emptyList<TopologyLink>() to emptyList()
 
         val links = mutableListOf<TopologyLink>()
         val neighbourIps = mutableListOf<String>()
         TopologyMibParser.parseCdpCache(cdpWalk).forEach { entry ->
-            if (!linkBudget.tryReserve()) return@forEach
+            if (!linkBudget.tryReserve(TopologyDataTable.CDP_NEIGHBORS, tableObservations)) return@forEach
             links.add(
                 TopologyLink(
                     fromIp = fromIp,
@@ -506,9 +592,13 @@ class TopologyDiscoveryRepositoryImpl(
         private var admitted = 0
 
         @Synchronized
-        fun tryReserve(): Boolean {
+        fun tryReserve(
+            table: TopologyDataTable,
+            tableObservations: TableObservationCollector,
+        ): Boolean {
             if (admitted >= maxLinks) {
                 truncationReasons.add(TopologyTruncationReason.LINK_LIMIT)
+                tableObservations.recordTruncation(table)
                 return false
             }
             admitted++
@@ -552,6 +642,9 @@ class TopologyDiscoveryRepositoryImpl(
                 128L + stringBytes(node.ip) + stringBytes(node.sysName) +
                     stringBytes(node.sysDescr) + stringBytes(node.vendor) + stringBytes(node.model) +
                     stringBytes(node.firmwareVersion) + stringBytes(node.sysLocation) + stringBytes(node.uptimeHuman) +
+                    // Reserve room for every typed failure marker because graph-level
+                    // link-budget checks may add TRUNCATED after the base node is built.
+                    node.tableObservations.size * (24L + TopologyTableFailure.entries.size * 8L) +
                     node.interfaces.sumOf { 64L + stringBytes(it.name) + stringBytes(it.macAddress) } +
                     node.vlans.sumOf { 48L + stringBytes(it.name) }
 

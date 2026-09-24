@@ -28,6 +28,7 @@ import net.aieat.netswissknife.core.network.net.LocalNetworkPermissionDeniedExce
 import net.aieat.netswissknife.app.platform.NetworkErrorKind
 import net.aieat.netswissknife.core.network.mdns.DiscoveredService
 import net.aieat.netswissknife.core.network.mdns.MdnsUpdate
+import net.aieat.netswissknife.core.network.mdns.MdnsTruncationReason
 import net.aieat.netswissknife.core.network.operation.CancellationReason
 import net.aieat.netswissknife.core.network.operation.OperationRequirement
 import net.aieat.netswissknife.core.network.operation.OperationSession
@@ -129,6 +130,23 @@ class MdnsDiscoveryViewModelTest {
             assertTrue(state.scanComplete)
             assertTrue(!state.isScanning)
             assertEquals(1, state.totalFound)
+        }
+
+        @Test
+        fun `retains explicit truncation reasons with partial services`() = runTest {
+            val svc = stubService()
+            every { useCase(any(), any()) } returns flowOf(
+                MdnsUpdate.ServiceFound(svc),
+                MdnsUpdate.DiscoveryComplete(
+                    totalFound = 1,
+                    truncationReasons = setOf(MdnsTruncationReason.QUERY_LIMIT),
+                ),
+            )
+
+            viewModel.startScan()
+
+            assertEquals(listOf(svc), viewModel.uiState.value.services)
+            assertEquals(setOf(MdnsTruncationReason.QUERY_LIMIT), viewModel.uiState.value.truncationReasons)
         }
 
         @Test

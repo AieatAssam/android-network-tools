@@ -19,7 +19,10 @@ data class DiscoveredService(
 
 sealed class MdnsUpdate {
     data class ServiceFound(val service: DiscoveredService) : MdnsUpdate()
-    data class DiscoveryComplete(val totalFound: Int) : MdnsUpdate()
+    data class DiscoveryComplete(
+        val totalFound: Int,
+        val truncationReasons: Set<MdnsTruncationReason> = emptySet(),
+    ) : MdnsUpdate()
 }
 
 interface MdnsRepository {
@@ -52,4 +55,12 @@ object MdnsOperation {
 
     fun clampScanDuration(timeoutMs: Long): Long =
         timeoutMs.coerceIn(1L, MAX_SCAN_DURATION_MILLIS)
+
+    /** Rejects caller timeouts outside the published operation window. */
+    fun requireValidScanDuration(timeoutMs: Long): Long {
+        require(timeoutMs in 1L..MAX_SCAN_DURATION_MILLIS) {
+            "mDNS scan duration must be between 1 and $MAX_SCAN_DURATION_MILLIS ms"
+        }
+        return timeoutMs
+    }
 }

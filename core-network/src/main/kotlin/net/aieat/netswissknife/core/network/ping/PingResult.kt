@@ -4,8 +4,8 @@ package net.aieat.netswissknife.core.network.ping
  * The complete result of a ping session after all probes have been sent.
  *
  * @param host      Target host that was pinged
- * @param packets   Ordered list of individual probe results
- * @param stats     Aggregated statistics computed from [packets]
+ * @param packets   Ordered list of individual probe results; continuous sessions may retain only the latest window
+ * @param stats     Aggregated statistics for the full session, including probes outside a retained packet window
  * @param rawOutput Human-readable "raw" view of the ping session (like the CLI output)
  */
 data class PingResult(

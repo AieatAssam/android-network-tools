@@ -146,6 +146,47 @@ class TopologyDiscoveryRepositoryTest {
     }
 
     @Test
+    fun `failed table walk is typed as incomplete while successful topology is retained`() = runTest {
+        coEvery { snmpClient.get(any(), "1.3.6.1.2.1.1.1.0") } returns "Cisco IOS switch"
+        coEvery { snmpClient.get(any(), "1.3.6.1.2.1.1.5.0") } returns "seed-switch"
+        coEvery { snmpClient.walk(any(), any(), any()) } returns SnmpWalkResult(emptyMap())
+        coEvery {
+            snmpClient.walk(any(), "1.3.6.1.2.1.2.2.1.2", any())
+        } throws java.net.SocketTimeoutException("interface names timed out")
+        coEvery {
+            snmpClient.walk(any(), "1.3.6.1.2.1.2.2.1.5", any())
+        } returns SnmpWalkResult(
+            entries = mapOf("1.3.6.1.2.1.2.2.1.5.1" to "10000000"),
+            hadError = true
+        )
+        coEvery {
+            snmpClient.walk(any(), "1.3.6.1.4.1.9.9.23.1.2.1", any())
+        } returns SnmpWalkResult(mapOf(
+            "1.3.6.1.4.1.9.9.23.1.2.1.1.3.1.1" to "1",
+            "1.3.6.1.4.1.9.9.23.1.2.1.1.4.1.1" to "c0:a8:01:03",
+            "1.3.6.1.4.1.9.9.23.1.2.1.1.6.1.1" to "edge-switch",
+            "1.3.6.1.4.1.9.9.23.1.2.1.1.7.1.1" to "Gi1/0/3"
+        ))
+
+        val events = repository.discover(defaultParams.copy(maxHops = 0)).toList()
+        val graph = events.filterIsInstance<TopologyDiscoveryEvent.Complete>().single().graph
+        val node = graph.nodes.single()
+        val interfaceObservation = node.tableObservations.getValue(TopologyDataTable.INTERFACES)
+
+        assertTrue(node.interfaces.isEmpty())
+        assertEquals(TopologyTableCompleteness.PARTIAL, interfaceObservation.completeness)
+        assertTrue(TopologyTableFailure.TIMEOUT in interfaceObservation.failures)
+        assertTrue(TopologyTableFailure.SNMP_RESPONSE in interfaceObservation.failures)
+        assertEquals(1, graph.links.size)
+        assertEquals("192.168.1.3", graph.links.single().toIp)
+        assertEquals(
+            TopologyTableCompleteness.COMPLETE,
+            node.tableObservations.getValue(TopologyDataTable.CDP_NEIGHBORS).completeness
+        )
+        assertTrue(graph.hadSnmpErrors)
+    }
+
+    @Test
     fun `BFS stops at maxHops boundary`() = runTest {
         // Set maxHops to 0 - only seed node
         coEvery { snmpClient.get(any(), "1.3.6.1.2.1.1.1.0") } returns "Cisco"
@@ -614,10 +655,21 @@ class TopologyDiscoveryRepositoryTest {
         val graph = boundedRepository.discover(defaultParams.copy(maxHops = 0))
             .toList().filterIsInstance<TopologyDiscoveryEvent.Complete>().single().graph
 
-        assertEquals(1, graph.nodes.single().interfaces.size)
-        assertEquals(1, graph.nodes.single().vlans.size)
+        val node = graph.nodes.single()
+        assertEquals(1, node.interfaces.size)
+        assertEquals(1, node.vlans.size)
         assertTrue(TopologyTruncationReason.INTERFACE_LIMIT in graph.truncationReasons)
         assertTrue(TopologyTruncationReason.VLAN_LIMIT in graph.truncationReasons)
+        assertEquals(
+            TopologyTableCompleteness.PARTIAL,
+            node.tableObservations.getValue(TopologyDataTable.INTERFACES).completeness
+        )
+        assertTrue(TopologyTableFailure.TRUNCATED in node.tableObservations.getValue(TopologyDataTable.INTERFACES).failures)
+        assertEquals(
+            TopologyTableCompleteness.PARTIAL,
+            node.tableObservations.getValue(TopologyDataTable.VLANS).completeness
+        )
+        assertTrue(TopologyTableFailure.TRUNCATED in node.tableObservations.getValue(TopologyDataTable.VLANS).failures)
     }
 
     @Test
@@ -668,6 +720,45 @@ class TopologyDiscoveryRepositoryTest {
     }
 
     @Test
+    fun `graph byte rejection marks the affected neighbor table incomplete`() = runTest {
+        val firstNeighborLink = TopologyLink(
+            fromIp = defaultParams.targetIp,
+            fromPort = null,
+            toIp = "192.168.1.20",
+            toPort = null,
+            protocol = LinkProtocol.CDP,
+            neighbourSysName = "edge-20"
+        )
+        val baselineNode = discoverWithCdp(TopologyResourceLimits(), emptyMap()).nodes.single()
+        val maxGraphBytes = (
+            TopologyDiscoveryRepositoryImpl.GraphByteBudget.estimateBytes(baselineNode) +
+                TopologyDiscoveryRepositoryImpl.GraphByteBudget.estimateBytes(firstNeighborLink)
+            ).toInt()
+        val events = discoverEventsWithCdp(
+            TopologyResourceLimits(maxBytesPerGraph = maxGraphBytes),
+            cdpNeighbours(listOf(20, 21))
+        )
+        val graph = events.filterIsInstance<TopologyDiscoveryEvent.Complete>().single().graph
+        val node = graph.nodes.single()
+        val observation = node.tableObservations.getValue(TopologyDataTable.CDP_NEIGHBORS)
+        assertEquals(1, events.count { it is TopologyDiscoveryEvent.NodeDiscovered })
+        val nodeEventIndex = events.indexOfFirst { it is TopologyDiscoveryEvent.NodeDiscovered }
+        val linkEvents = events.withIndex().filter { it.value is TopologyDiscoveryEvent.LinkDiscovered }
+
+        assertEquals(listOf("192.168.1.20"), graph.links.map { it.toIp })
+        assertEquals(listOf("192.168.1.20"), linkEvents.map {
+            (it.value as TopologyDiscoveryEvent.LinkDiscovered).link.toIp
+        })
+        assertTrue(linkEvents.all { nodeEventIndex < it.index })
+        assertFalse(linkEvents.any {
+            (it.value as TopologyDiscoveryEvent.LinkDiscovered).link.toIp == "192.168.1.21"
+        })
+        assertTrue(TopologyTruncationReason.GRAPH_BYTE_LIMIT in graph.truncationReasons)
+        assertEquals(TopologyTableCompleteness.PARTIAL, observation.completeness)
+        assertTrue(TopologyTableFailure.TRUNCATED in observation.failures)
+    }
+
+    @Test
     fun `oversized system strings are capped before being retained in the graph`() = runTest {
         val boundedRepository = TopologyDiscoveryRepositoryImpl(
             snmpClient,
@@ -704,8 +795,15 @@ class TopologyDiscoveryRepositoryTest {
 
         assertEquals(1, exactGraph.links.size)
         assertFalse(TopologyTruncationReason.LINK_LIMIT in exactGraph.truncationReasons)
+        assertEquals(
+            TopologyTableCompleteness.COMPLETE,
+            exactGraph.nodes.single().tableObservations.getValue(TopologyDataTable.CDP_NEIGHBORS).completeness
+        )
         assertEquals(1, partialGraph.links.size)
         assertTrue(TopologyTruncationReason.LINK_LIMIT in partialGraph.truncationReasons)
+        val partialObservation = partialGraph.nodes.single().tableObservations.getValue(TopologyDataTable.CDP_NEIGHBORS)
+        assertEquals(TopologyTableCompleteness.PARTIAL, partialObservation.completeness)
+        assertTrue(TopologyTableFailure.TRUNCATED in partialObservation.failures)
     }
 
     @Test
@@ -776,7 +874,16 @@ class TopologyDiscoveryRepositoryTest {
         limits: TopologyResourceLimits,
         neighbours: Map<String, String>,
         maxHops: Int = 0
-    ): TopologyGraph {
+    ): TopologyGraph = discoverEventsWithCdp(limits, neighbours, maxHops)
+        .filterIsInstance<TopologyDiscoveryEvent.Complete>()
+        .single()
+        .graph
+
+    private suspend fun discoverEventsWithCdp(
+        limits: TopologyResourceLimits,
+        neighbours: Map<String, String>,
+        maxHops: Int = 0
+    ): List<TopologyDiscoveryEvent> {
         val client = mockk<SnmpClient>(relaxed = true)
         coEvery { client.get(any(), any()) } returns null
         coEvery { client.walk(any(), any(), any()) } coAnswers {
@@ -789,8 +896,5 @@ class TopologyDiscoveryRepositoryTest {
         return TopologyDiscoveryRepositoryImpl(client, limits)
             .discover(defaultParams.copy(maxHops = maxHops))
             .toList()
-            .filterIsInstance<TopologyDiscoveryEvent.Complete>()
-            .single()
-            .graph
     }
 }

@@ -21,6 +21,12 @@ internal object PingCsvSerializer {
                 )
             )
         }
+        if (result.packets.size < result.stats.sent) {
+            append(
+                "# Packet rows are limited to the most recent ${result.packets.size} of " +
+                    "${result.stats.sent} sent probes; statistics cover the full session.\n"
+            )
+        }
         append('\n')
         append("# Stats\n")
         appendCsvRow(listOf("sent", "received", "loss_percent", "min_ms", "avg_ms", "max_ms", "jitter_ms"))

@@ -486,18 +486,43 @@ class PingViewModelTest {
         }
 
         @Test
-        fun `rolling window is capped at 100 packets`() = runTest {
+        fun `continuous statistics cover all packets while the result window stays capped`() = runTest {
+            val allPacketsEmitted = CompletableDeferred<Unit>()
             coEvery { continuousPingUseCase(any(), any()) } returns flow {
-                repeat(150) { i -> emit(PingFlowResult.Packet(successPacket.copy(sequence = i + 1))) }
+                repeat(150) { i ->
+                    val packet = if (i < 50) {
+                        successPacket.copy(
+                            sequence = i + 1,
+                            status = PingStatus.TIMEOUT,
+                            rtTimeMs = null,
+                        )
+                    } else {
+                        successPacket.copy(sequence = i + 1)
+                    }
+                    emit(PingFlowResult.Packet(packet))
+                }
+                allPacketsEmitted.complete(Unit)
+                suspendCancellableCoroutine<Nothing> { }
             }
             viewModel.startPing()
-            // After all 150 emitted the flow completes; state may be Finished
-            val packets = when (val s = viewModel.uiState.value) {
-                is PingUiState.Running -> s.packets
-                is PingUiState.Finished -> s.result.packets
-                else -> emptyList()
-            }
-            assertTrue(packets.size <= 100)
+            allPacketsEmitted.await()
+            val running = viewModel.uiState.value as PingUiState.Running
+
+            assertEquals(150, running.pingsSent)
+            assertEquals(100, running.packets.size)
+            assertEquals(51, running.packets.first().sequence)
+            assertEquals(150, running.packets.last().sequence)
+            assertEquals(150, running.stats?.sent)
+            assertEquals(100, running.stats?.received)
+            assertEquals(33.333336f, running.stats?.lossPercent ?: -1f, 0.001f)
+
+            viewModel.onStop()
+            val finished = awaitFinished()
+            assertEquals(150, finished.result.stats.sent)
+            assertEquals(100, finished.result.stats.received)
+            assertEquals(33.333336f, finished.result.stats.lossPercent, 0.001f)
+            assertEquals(100, finished.result.packets.size)
+            assertEquals(51, finished.result.packets.first().sequence)
         }
 
         @Test

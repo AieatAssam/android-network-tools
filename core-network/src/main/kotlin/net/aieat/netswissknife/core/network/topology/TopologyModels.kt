@@ -7,6 +7,29 @@ enum class DeviceCapability { ROUTER, SWITCH, AP, PHONE, OTHER }
 enum class InterfaceStatus { UP, DOWN, UNKNOWN }
 enum class LinkProtocol { LLDP, CDP }
 
+/** A table whose completeness matters when comparing topology observations. */
+enum class TopologyDataTable { INTERFACES, VLANS, LLDP_NEIGHBORS, CDP_NEIGHBORS }
+
+enum class TopologyTableCompleteness { COMPLETE, PARTIAL, FAILED }
+
+/** Typed reasons a table cannot be treated as a complete observation. */
+enum class TopologyTableFailure {
+    TIMEOUT,
+    AUTHENTICATION,
+    REQUEST_FAILED,
+    SNMP_RESPONSE,
+    TRUNCATED
+}
+
+data class TopologyTableObservation(
+    val completeness: TopologyTableCompleteness,
+    val failures: Set<TopologyTableFailure> = emptySet()
+) {
+    init {
+        require((completeness == TopologyTableCompleteness.COMPLETE) == failures.isEmpty())
+    }
+}
+
 enum class TopologyTruncationReason {
     NODE_LIMIT,
     LINK_LIMIT,
@@ -86,7 +109,9 @@ data class TopologyNode(
     val capabilities: Set<DeviceCapability>,
     val interfaces: List<SnmpInterface>,
     val vlans: List<VlanInfo>,
-    val snmpReachable: Boolean
+    val snmpReachable: Boolean,
+    /** Missing entries mean that this source was not queried by an older producer. */
+    val tableObservations: Map<TopologyDataTable, TopologyTableObservation> = emptyMap()
 )
 
 data class TopologyLink(

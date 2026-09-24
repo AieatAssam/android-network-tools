@@ -15,6 +15,7 @@ import net.aieat.netswissknife.core.domain.MdnsDiscoveryUseCase
 import net.aieat.netswissknife.core.network.mdns.DiscoveredService
 import net.aieat.netswissknife.core.network.mdns.MdnsOperation
 import net.aieat.netswissknife.core.network.mdns.MdnsUpdate
+import net.aieat.netswissknife.core.network.mdns.MdnsTruncationReason
 import net.aieat.netswissknife.core.network.SystemMonotonicClock
 import net.aieat.netswissknife.core.network.operation.CancellationReason
 import net.aieat.netswissknife.core.network.operation.OperationCancellationException
@@ -36,6 +37,7 @@ data class MdnsDiscoveryUiState(
     val error: String? = null,
     val elapsedMs: Long = 0,
     val totalFound: Int = 0,
+    val truncationReasons: Set<MdnsTruncationReason> = emptySet(),
     val scanComplete: Boolean = false,
     val networkErrorKind: NetworkErrorKind = NetworkErrorKind.GENERAL,
 )
@@ -114,7 +116,11 @@ class MdnsDiscoveryViewModel @Inject constructor(
                         is MdnsUpdate.DiscoveryComplete -> {
                             _uiState.update { state ->
                                 if (activeScanGeneration != generation || state.isCanceling) state
-                                else state.copy(scanComplete = true, totalFound = update.totalFound)
+                                else state.copy(
+                                    scanComplete = true,
+                                    totalFound = update.totalFound,
+                                    truncationReasons = update.truncationReasons,
+                                )
                             }
                         }
                     }

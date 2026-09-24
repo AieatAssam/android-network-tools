@@ -42,6 +42,7 @@ import net.aieat.netswissknife.core.network.ping.PingPacketResult
 import net.aieat.netswissknife.core.network.ping.PingRequest
 import net.aieat.netswissknife.core.network.ping.PingResult
 import net.aieat.netswissknife.core.network.ping.PingStats
+import net.aieat.netswissknife.core.network.ping.PingStatsAccumulator
 import net.aieat.netswissknife.core.network.ping.PingStatus
 import net.aieat.netswissknife.core.network.ping.PingEngineKind
 import net.aieat.netswissknife.core.network.HostValidator
@@ -128,7 +129,9 @@ sealed interface PingUiState {
         val packets: List<PingPacketResult>,
         val totalCount: Int,
         val isContinuous: Boolean = false,
-        val pingsSent: Int = 0
+        val pingsSent: Int = 0,
+        /** All-session statistics in continuous mode, independent of [packets]' rolling window. */
+        val stats: PingStats? = null
     ) : PingUiState
     data class Finished(
         val result: PingResult,
@@ -484,11 +487,12 @@ class PingViewModel @Inject constructor(
 
         _uiState.value = PingUiState.Running(
             host = trimmedHost, packets = emptyList(), totalCount = 0,
-            isContinuous = true, pingsSent = 0
+            isContinuous = true, pingsSent = 0, stats = PingStatsAccumulator().snapshot()
         )
 
         val producer = viewModelScope.launch(start = CoroutineStart.LAZY) {
             val window = ArrayDeque<PingPacketResult>(ROLLING_WINDOW)
+            val stats = PingStatsAccumulator()
             var seq = 0
             var savedToRecents = false
 
@@ -505,6 +509,7 @@ class PingViewModel @Inject constructor(
                                 recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_PING_HOSTS, trimmedHost)
                             }
                             session.logWriter.append(seq, result.packet)
+                            stats.add(result.packet)
                             if (window.size >= ROLLING_WINDOW) window.removeFirst()
                             window.addLast(result.packet)
                             _uiState.value = PingUiState.Running(
@@ -512,7 +517,8 @@ class PingViewModel @Inject constructor(
                                 packets = window.toList(),
                                 totalCount = 0,
                                 isContinuous = true,
-                                pingsSent = seq
+                                pingsSent = seq,
+                                stats = stats.snapshot()
                             )
                         }
                     }
@@ -553,7 +559,12 @@ class PingViewModel @Inject constructor(
     ) {
         if (continuousSession !== session) return
         val pingsSent = current.pingsSent
-        val result = buildResult(current.host, current.packets, pingsSent)
+        val result = buildResult(
+            current.host,
+            current.packets,
+            pingsSent,
+            statsOverride = current.stats ?: PingStats.compute(current.packets),
+        )
         val logFile = session.file.takeIf { pingsSent > 0 && logAvailable }
         if (logFile == null) {
             continuousSession = null
@@ -622,8 +633,13 @@ class PingViewModel @Inject constructor(
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
-    private fun buildResult(host: String, packets: List<PingPacketResult>, totalCount: Int): PingResult {
-        val stats = PingStats.compute(packets)
+    private fun buildResult(
+        host: String,
+        packets: List<PingPacketResult>,
+        totalCount: Int,
+        statsOverride: PingStats? = null,
+    ): PingResult {
+        val stats = statsOverride ?: PingStats.compute(packets)
         val raw = buildRawOutput(host, packets, stats)
         return PingResult(
             host = host,

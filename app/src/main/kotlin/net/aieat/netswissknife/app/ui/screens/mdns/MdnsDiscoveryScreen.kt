@@ -150,6 +150,15 @@ fun MdnsDiscoveryScreen(
                 onGrantPermission = requestLocalNetworkPermission,
             )
 
+            if (uiState.truncationReasons.isNotEmpty()) {
+                Text(
+                    text = stringResource(R.string.mdns_partial_results_status),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+
             ControlRow(
                 isScanning = uiState.isScanning,
                 isCanceling = uiState.isCanceling,

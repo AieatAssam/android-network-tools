@@ -13,12 +13,14 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import net.aieat.netswissknife.core.network.MonotonicClock
 import net.aieat.netswissknife.core.network.SystemMonotonicClock
-import net.aieat.netswissknife.core.network.mdns.MdnsOperation
+import net.aieat.netswissknife.core.network.mdns.MdnsDiscoveryLimits
 import net.aieat.netswissknife.core.network.mdns.MdnsDiscoverySession
+import net.aieat.netswissknife.core.network.mdns.MdnsOperation
 import net.aieat.netswissknife.core.network.mdns.MdnsPacketParser
 import net.aieat.netswissknife.core.network.mdns.MdnsQueryType
 import net.aieat.netswissknife.core.network.mdns.MdnsRepository
 import net.aieat.netswissknife.core.network.mdns.MdnsSessionRecord
+import net.aieat.netswissknife.core.network.mdns.MdnsTruncationReason
 import net.aieat.netswissknife.core.network.mdns.MdnsUpdate
 import net.aieat.netswissknife.core.network.net.LocalNetworkPermissionDeniedException
 import net.aieat.netswissknife.core.network.net.NetworkBinder
@@ -46,7 +48,7 @@ import java.net.NetworkInterface
 import java.net.SocketException
 import java.net.SocketTimeoutException
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
 import javax.inject.Inject
 
 internal interface MdnsMulticastLock {
@@ -147,6 +149,7 @@ class MdnsRepositoryImpl @Inject constructor(
         }
     }
     internal var monotonicClock: MonotonicClock = SystemMonotonicClock
+    internal var discoveryLimits: MdnsDiscoveryLimits = MdnsDiscoveryLimits()
 
     companion object {
         private const val MDNS_PORT = 5353
@@ -159,16 +162,17 @@ class MdnsRepositoryImpl @Inject constructor(
     }
 
     override fun discover(timeoutMs: Long): Flow<MdnsUpdate> = flow {
-        val scanWindowMs = MdnsOperation.clampScanDuration(timeoutMs)
+        val scanWindowMs = MdnsOperation.requireValidScanDuration(timeoutMs)
         emitAll(discover(scanWindowMs, MdnsOperation.newSession(timeoutMs = scanWindowMs, clock = monotonicClock)))
     }
 
     override fun discover(timeoutMs: Long, operationSession: OperationSession): Flow<MdnsUpdate> = channelFlow {
-        val scanWindowMs = MdnsOperation.clampScanDuration(timeoutMs)
-        val observedTotal = AtomicInteger(0)
-        val totalFound = try {
+        val scanWindowMs = MdnsOperation.requireValidScanDuration(timeoutMs)
+        val emptyOutcome = MdnsDiscoveryOutcome(0, emptySet())
+        val observedOutcome = AtomicReference(emptyOutcome)
+        val outcome = try {
             OperationRunner.run(operationSession) {
-                runDiscovery(scanWindowMs, this@channelFlow, observedTotal::set)
+                runDiscovery(scanWindowMs, this@channelFlow, observedOutcome::set)
             }
         } catch (deadline: OperationDeadlineExceededException) {
             // A requested scan-window deadline is normal completion for this bounded scan. The
@@ -177,7 +181,7 @@ class MdnsRepositoryImpl @Inject constructor(
                 throw deadline
             }
             if (deadline.hasCleanupFailures()) throw deadline
-            observedTotal.get()
+            observedOutcome.get()
         } catch (cancelled: OperationCancellationException) {
             // A blocking socket call may surface the deadline watcher as job cancellation.
             // Treat only the scan's own expected deadline as normal completion.
@@ -187,18 +191,23 @@ class MdnsRepositoryImpl @Inject constructor(
                 throw cancelled
             }
             if (cancelled.hasCleanupFailures()) throw cancelled
-            observedTotal.get()
+            observedOutcome.get()
         }
         // Publish terminal success only after OperationRunner has closed the group,
         // socket, and multicast lock successfully.
-        send(MdnsUpdate.DiscoveryComplete(totalFound))
+        send(MdnsUpdate.DiscoveryComplete(outcome.totalFound, outcome.truncationReasons))
     }.flowOn(Dispatchers.IO)
+
+    private data class MdnsDiscoveryOutcome(
+        val totalFound: Int,
+        val truncationReasons: Set<MdnsTruncationReason>,
+    )
 
     private suspend fun OperationContext.runDiscovery(
         scanWindowMs: Long,
         collector: SendChannel<MdnsUpdate>,
-        updateTotalFound: (Int) -> Unit,
-    ): Int {
+        updateOutcome: (MdnsDiscoveryOutcome) -> Unit,
+    ): MdnsDiscoveryOutcome {
         // The requested scan duration includes lock/socket setup and the initial query.
         val startNanos = monotonicClock.nowNanos()
         var greatestElapsedNanos = 0L
@@ -245,11 +254,21 @@ class MdnsRepositoryImpl @Inject constructor(
         ensureOperationActive()
         mdnsSocket.soTimeout = SOCKET_TIMEOUT_MS
 
-        if (elapsedMillis() < scanWindowMs) {
-            sendQuery(mdnsSocket, multicastAddress, META_QUERY, Type.PTR, useUnicastResponse)
+        val discovery = MdnsDiscoverySession(discoveryLimits)
+        var sentQueries = 0
+        suspend fun sendBoundedQuery(name: String, type: Int) {
+            if (sentQueries >= discoveryLimits.maxQueries) {
+                discovery.markQueryLimitReached()
+                return
+            }
+            sendQuery(mdnsSocket, multicastAddress, name, type, useUnicastResponse)
+            sentQueries++
         }
 
-        val discovery = MdnsDiscoverySession()
+        if (elapsedMillis() < scanWindowMs) {
+            sendBoundedQuery(META_QUERY, Type.PTR)
+        }
+
         var lastRequeryMs = 0L
         while (true) {
             ensureOperationActive()
@@ -263,19 +282,27 @@ class MdnsRepositoryImpl @Inject constructor(
 
             if (nowMs - lastRequeryMs > REQUERY_INTERVAL_MS && discovery.serviceTypes.isNotEmpty()) {
                 for (type in discovery.serviceTypes) {
-                    sendQuery(mdnsSocket, multicastAddress, "$type.local.", Type.PTR, useUnicastResponse)
+                    if (sentQueries >= discoveryLimits.maxQueries) {
+                        discovery.markQueryLimitReached()
+                        break
+                    }
+                    sendBoundedQuery("$type.local.", Type.PTR)
                 }
                 lastRequeryMs = nowMs
+                updateOutcome(MdnsDiscoveryOutcome(discovery.totalFound, discovery.truncationReasons))
             }
 
             val packet = receivePacket(mdnsSocket) ?: continue
             ensureOperationActive()
             val message = MdnsPacketParser.parsePacket(packet) ?: continue
 
-            val allSections = listOf(Section.ANSWER, Section.AUTHORITY, Section.ADDITIONAL)
             val records = mutableListOf<MdnsSessionRecord>()
-            for (section in allSections) {
+            recordsLoop@ for (section in listOf(Section.ANSWER, Section.AUTHORITY, Section.ADDITIONAL)) {
                 for (record in message.getSection(section)) {
+                    if (records.size >= discoveryLimits.maxRecordsPerPacket) {
+                        discovery.markPacketRecordLimitReached()
+                        break@recordsLoop
+                    }
                     when (record.type) {
                         Type.PTR -> {
                             val ptr = record as PTRRecord
@@ -308,29 +335,26 @@ class MdnsRepositoryImpl @Inject constructor(
             }
 
             val result = discovery.process(records)
-            updateTotalFound(discovery.totalFound)
+            updateOutcome(MdnsDiscoveryOutcome(discovery.totalFound, discovery.truncationReasons))
             for (query in result.queries) {
-                sendQuery(
-                    mdnsSocket,
-                    multicastAddress,
-                    query.name,
-                    query.type.toDnsType(),
-                    useUnicastResponse,
-                )
+                sendBoundedQuery(query.name, query.type.toDnsType())
             }
+            updateOutcome(MdnsDiscoveryOutcome(discovery.totalFound, discovery.truncationReasons))
             for (service in result.services) {
                 ensureOperationActive()
                 collector.send(MdnsUpdate.ServiceFound(service))
             }
         }
 
+        updateOutcome(MdnsDiscoveryOutcome(discovery.totalFound, discovery.truncationReasons))
         for (service in discovery.finish()) {
             ensureOperationActive()
             collector.send(MdnsUpdate.ServiceFound(service))
         }
-        updateTotalFound(discovery.totalFound)
+        val outcome = MdnsDiscoveryOutcome(discovery.totalFound, discovery.truncationReasons)
+        updateOutcome(outcome)
         ensureOperationActive()
-        return discovery.totalFound
+        return outcome
     }
 
     private suspend fun <T : AutoCloseable> OperationContext.registerResource(resource: T): T =

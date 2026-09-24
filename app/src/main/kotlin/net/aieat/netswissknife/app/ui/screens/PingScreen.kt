@@ -720,7 +720,7 @@ private fun PingRunningPanel(state: PingUiState.Running) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 if (state.packets.isNotEmpty()) {
-                    val liveStats = PingStats.compute(state.packets)
+                    val liveStats = state.stats ?: PingStats.compute(state.packets)
                     HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -819,6 +819,17 @@ private fun PingFinishedPanel(
                     }) {
                         Icon(Icons.Default.ContentCopy, contentDescription = stringResource(R.string.ping_copy_csv))
                     }
+                }
+                if (result.packets.size < result.stats.sent) {
+                    Text(
+                        text = stringResource(
+                            R.string.ping_showing_recent,
+                            result.packets.size,
+                            result.stats.sent,
+                        ),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
                 Spacer(modifier = Modifier.height(4.dp))
                 result.packets.forEach { packet ->

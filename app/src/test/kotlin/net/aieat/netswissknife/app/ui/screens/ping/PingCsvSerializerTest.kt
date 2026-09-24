@@ -5,6 +5,7 @@ import net.aieat.netswissknife.core.network.ping.PingResult
 import net.aieat.netswissknife.core.network.ping.PingStats
 import net.aieat.netswissknife.core.network.ping.PingStatus
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
@@ -76,6 +77,42 @@ class PingCsvSerializerTest {
 
         assertEquals(7, rows[statsHeaderIndex + 1].size)
         assertEquals(listOf("1", "1", "NaN", "0", "Infinity", "0", "-Infinity"), rows[statsHeaderIndex + 1])
+    }
+
+    @Test
+    fun `truncated packet rows are labeled while statistics retain full session totals`() {
+        val result = resultWithFractionalStats()
+
+        val csv = PingCsvSerializer.serialize(result)
+        val rows = parseCsv(csv)
+        val statsHeaderIndex = rows.indexOf(
+            listOf("sent", "received", "loss_percent", "min_ms", "avg_ms", "max_ms", "jitter_ms")
+        )
+
+        assertTrue(
+            csv.contains(
+                "# Packet rows are limited to the most recent 2 of 8 sent probes; " +
+                    "statistics cover the full session."
+            )
+        )
+        assertEquals(listOf("8", "7", "12.5", "1", "3.125", "9", "0.125"), rows[statsHeaderIndex + 1])
+    }
+
+    @Test
+    fun `complete packet rows keep the existing CSV without truncation marker`() {
+        val result = resultWithFractionalStats().copy(
+            stats = PingStats(
+                sent = 2,
+                received = 1,
+                lossPercent = 50f,
+                minMs = 9,
+                maxMs = 9,
+                avgMs = 9.0,
+                jitterMs = 0.0,
+            ),
+        )
+
+        assertFalse(PingCsvSerializer.serialize(result).contains("Packet rows are limited"))
     }
 
     private fun resultWithFractionalStats() = PingResult(

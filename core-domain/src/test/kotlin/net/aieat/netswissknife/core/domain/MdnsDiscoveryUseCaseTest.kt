@@ -12,6 +12,7 @@ import net.aieat.netswissknife.core.network.mdns.MdnsOperation
 import net.aieat.netswissknife.core.network.mdns.MdnsUpdate
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertInstanceOf
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 
 class MdnsDiscoveryUseCaseTest {
@@ -71,5 +72,26 @@ class MdnsDiscoveryUseCaseTest {
         useCase(3_000L, session).toList()
 
         verify { repository.discover(3_000L, session) }
+    }
+
+    @Test
+    fun `rejects negative zero and oversized scan windows before repository call`() {
+        listOf(Long.MIN_VALUE, -1L, 0L, MdnsOperation.MAX_SCAN_DURATION_MILLIS + 1L, Long.MAX_VALUE)
+            .forEach { timeout ->
+                assertThrows(IllegalArgumentException::class.java) { useCase(timeout) }
+            }
+
+        verify(exactly = 0) { repository.discover(any()) }
+    }
+
+    @Test
+    fun `session overload also rejects invalid durations before repository call`() {
+        val session = MdnsOperation.newSession()
+        listOf(Long.MIN_VALUE, -1L, 0L, MdnsOperation.MAX_SCAN_DURATION_MILLIS + 1L, Long.MAX_VALUE)
+            .forEach { timeout ->
+                assertThrows(IllegalArgumentException::class.java) { useCase(timeout, session) }
+            }
+
+        verify(exactly = 0) { repository.discover(any(), any()) }
     }
 }

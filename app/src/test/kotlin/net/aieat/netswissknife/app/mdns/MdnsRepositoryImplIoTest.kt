@@ -19,10 +19,14 @@ import kotlinx.coroutines.withTimeout
 import net.aieat.netswissknife.app.ui.screens.mdns.MdnsDiscoveryViewModel
 import net.aieat.netswissknife.core.domain.MdnsDiscoveryUseCase
 import net.aieat.netswissknife.core.network.mdns.MdnsOperation
+import net.aieat.netswissknife.core.network.mdns.MdnsDiscoveryLimits
+import net.aieat.netswissknife.core.network.mdns.MdnsTruncationReason
 import net.aieat.netswissknife.core.network.mdns.MdnsUpdate
 import net.aieat.netswissknife.core.network.net.NetworkBinder
 import net.aieat.netswissknife.core.network.net.NoOpNetworkBinder
 import net.aieat.netswissknife.core.network.MonotonicClock
+import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationCancellationException
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -216,6 +220,79 @@ class MdnsRepositoryImplIoTest {
                 .map { it::class },
         )
         assertEquals(1, (updates.last() as MdnsUpdate.DiscoveryComplete).totalFound)
+        assertTrue(fixture.socket.closed.get())
+        assertTrue(fixture.lock.released.get())
+    }
+
+    @Test
+    fun `query cap preserves discovered services and reports partial completion`() = runBlocking {
+        val receiveCount = AtomicInteger()
+        val fixture = fixture(receive = { packet ->
+            val response = when (receiveCount.incrementAndGet()) {
+                1 -> serviceTypeResponse()
+                2 -> resolvedServiceResponse()
+                else -> throw SocketTimeoutException("quiet network")
+            }
+            System.arraycopy(response, 0, packet.data, packet.offset, response.size)
+            packet.length = response.size
+        }).also { it.repository.discoveryLimits = MdnsDiscoveryLimits(maxQueries = 3) }
+
+        val updates = fixture.repository.discover(timeoutMs = 20).toList()
+
+        assertEquals(3, fixture.socket.sentQueries.size, "initial, type, and one follow-up query fit the cap")
+        assertEquals(1, updates.filterIsInstance<MdnsUpdate.ServiceFound>().size)
+        val complete = updates.filterIsInstance<MdnsUpdate.DiscoveryComplete>().single()
+        assertEquals(1, complete.totalFound)
+        assertTrue(complete.truncationReasons.contains(MdnsTruncationReason.QUERY_LIMIT))
+        assertTrue(fixture.socket.closed.get())
+        assertTrue(fixture.lock.released.get())
+    }
+
+    @Test
+    fun `periodic query cap is retained when operation deadline wins during next receive`() = runBlocking {
+        val clock = FakeClock()
+        val receiveCount = AtomicInteger()
+        val typeResponse = serviceTypeResponse()
+        val fixture = fixture(clock = clock, receive = { packet ->
+            if (receiveCount.incrementAndGet() == 1) {
+                System.arraycopy(typeResponse, 0, packet.data, packet.offset, typeResponse.size)
+                packet.length = typeResponse.size
+                clock.advanceBy(1_600_000_000L)
+            } else {
+                clock.advanceBy(500_000_000L)
+                throw OperationCancellationException(CancellationReason.DEADLINE_EXCEEDED)
+            }
+        }).also { it.repository.discoveryLimits = MdnsDiscoveryLimits(maxQueries = 2) }
+        val operationSession = MdnsOperation.newSession(timeoutMs = 2_000L, clock = clock)
+
+        val updates = fixture.repository.discover(5_000L, operationSession).toList()
+
+        assertEquals(2, fixture.socket.sentQueries.size)
+        val complete = updates.filterIsInstance<MdnsUpdate.DiscoveryComplete>().single()
+        assertTrue(complete.truncationReasons.contains(MdnsTruncationReason.QUERY_LIMIT))
+        assertTrue(fixture.socket.closed.get())
+        assertTrue(fixture.lock.released.get())
+    }
+
+    @Test
+    fun `packet record conversion stops at its producer cap and reports partial results`() = runBlocking {
+        val owner = Name.fromString("_services._dns-sd._udp.local.")
+        val target = Name.fromString("_http._tcp.local.")
+        val noisyResponse = Message().apply {
+            repeat(MdnsDiscoveryLimits.DEFAULT_MAX_RECORDS_PER_PACKET + 20) {
+                addRecord(PTRRecord(owner, DClass.IN, 60, target), Section.ANSWER)
+            }
+        }.toWire()
+        val fixture = fixture(receive = { packet ->
+            System.arraycopy(noisyResponse, 0, packet.data, packet.offset, noisyResponse.size)
+            packet.length = noisyResponse.size
+        })
+
+        val updates = fixture.repository.discover(timeoutMs = 20).toList()
+
+        val complete = updates.filterIsInstance<MdnsUpdate.DiscoveryComplete>().single()
+        assertTrue(complete.truncationReasons.contains(MdnsTruncationReason.PACKET_RECORD_LIMIT))
+        assertEquals(2, fixture.socket.sentQueries.size, "initial query and one deduplicated type follow-up")
         assertTrue(fixture.socket.closed.get())
         assertTrue(fixture.lock.released.get())
     }
