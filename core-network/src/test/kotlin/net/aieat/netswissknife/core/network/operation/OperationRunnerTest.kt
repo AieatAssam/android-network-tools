@@ -188,6 +188,60 @@ class OperationRunnerTest {
     }
 
     @Test
+    fun `user stop closes every registered socket joins both workers and emits no terminal outcome`() = runTest {
+        val session = OperationSession(OperationBudget.start(timeoutMillis = 10_000, clock = FakeClock()))
+        val sockets = List(3) { ScriptedSocket() }
+        val workersFinished = CountDownLatch(2)
+        val operationCompleted = CountDownLatch(1)
+        val events = CopyOnWriteArrayList<String>()
+        val operation = backgroundScope.launch {
+            flow {
+                emit("started")
+                OperationRunner.run(session) {
+                    sockets.forEach(resources::register)
+                    val operationContext = this
+                    sockets.take(2).forEach { socket ->
+                        launch(Dispatchers.IO) {
+                            try {
+                                socket.getInputStream().read()
+                                operationContext.ensureOperationActive()
+                                events += "late-success"
+                            } finally {
+                                workersFinished.countDown()
+                            }
+                        }
+                    }
+                    awaitCancellation()
+                }
+                emit("success")
+            }.catch { failure ->
+                events += "caught:${failure::class.simpleName}"
+            }.collect(events::add)
+        }
+        operation.invokeOnCompletion { operationCompleted.countDown() }
+
+        runCurrent()
+        sockets.take(2).forEach { socket ->
+            assertTrue(socket.awaitBlockingRead(5, TimeUnit.SECONDS), "worker did not block in read")
+        }
+
+        session.cancel(CancellationReason.USER_STOP)
+        session.cancel(CancellationReason.NETWORK_LOST)
+        assertTrue(
+            withContext(Dispatchers.IO) { operationCompleted.await(5, TimeUnit.SECONDS) },
+            "operation did not finish after stop cleanup",
+        )
+        runCurrent()
+
+        assertEquals(CancellationReason.USER_STOP, session.cancellationReason)
+        assertEquals(0L, workersFinished.count, "operation completed before both workers finished")
+        assertTrue(sockets.all { it.isClosed })
+        assertTrue(sockets.all { it.closeCallCount == 1 })
+        assertEquals(listOf("started"), events, "stop must not emit success or another terminal outcome")
+        assertTrue(operation.isCancelled)
+    }
+
+    @Test
     fun `user stop selected before deadline remains the terminal reason`() = runTest {
         val clock = FakeClock()
         val session = OperationSession(OperationBudget.start(timeoutMillis = 100, clock = clock))
