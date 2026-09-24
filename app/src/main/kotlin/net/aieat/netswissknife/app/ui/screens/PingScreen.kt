@@ -233,6 +233,16 @@ fun PingScreen(
                     )
                 }
             }
+            if (sourceContext == net.aieat.netswissknife.app.ui.navigation.ToolSource.MDNS) {
+                item {
+                    Text(
+                        text = stringResource(R.string.ping_source_mdns),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.testTag(PingScreenTestTags.SOURCE_CONTEXT),
+                    )
+                }
+            }
 
             // ── Input card ──────────────────────────────────────────────────
             item {

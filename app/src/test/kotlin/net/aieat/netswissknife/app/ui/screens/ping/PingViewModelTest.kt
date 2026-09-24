@@ -734,6 +734,38 @@ class PingViewModelTest {
         }
 
         @Test
+        fun `valid mDNS host pre-fills without starting and edits survive recreation`() {
+            val mdnsIntent = ToolIntentCodec.encode(
+                ToolIntent(
+                    ToolDestination.HostTarget(
+                        HostTool.PING,
+                        requireNotNull(ToolHost.parse("printer.local")),
+                    ),
+                    ToolSource.MDNS,
+                ),
+            )
+            val routeState = SavedStateHandle(mapOf("intent" to mdnsIntent, "host" to "printer.local"))
+            val handoff = handoffViewModel(routeState)
+
+            assertEquals("printer.local", handoff.host.value)
+            assertEquals(ToolSource.MDNS, handoff.sourceContext)
+            assertFalse(handoff.hasInvalidHandoff.value)
+            assertTrue(handoff.uiState.value is PingUiState.Idle)
+            coVerify(exactly = 0) { pingUseCase(any(), any()) }
+
+            handoff.onHostChange("edited.local")
+            val recreated = handoffViewModel(
+                SavedStateHandle(
+                    mapOf("intent" to mdnsIntent, "host" to "printer.local", "editedHost" to "edited.local"),
+                ),
+            )
+            assertEquals("edited.local", recreated.host.value)
+            assertEquals(ToolSource.MDNS, recreated.sourceContext)
+            assertTrue(recreated.uiState.value is PingUiState.Idle)
+            coVerify(exactly = 0) { pingUseCase(any(), any()) }
+        }
+
+        @Test
         fun `malformed or wrong destination typed arguments show blank recovery form`() {
             val portsIntent = ToolIntentCodec.encode(
                 ToolIntent(

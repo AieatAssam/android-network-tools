@@ -1,6 +1,7 @@
 package net.aieat.netswissknife.app.ui.screens.mdns
 
 import android.Manifest
+import android.net.Uri
 import android.os.Build
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
@@ -16,12 +17,19 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.ui.navigation.HostTool
+import net.aieat.netswissknife.app.ui.navigation.ToolDestination
+import net.aieat.netswissknife.app.ui.navigation.ToolHost
+import net.aieat.netswissknife.app.ui.navigation.ToolIntentCodec
+import net.aieat.netswissknife.app.ui.navigation.ToolSource
 import net.aieat.netswissknife.app.ui.theme.NetSwissKnifeTheme
 import net.aieat.netswissknife.core.network.mdns.DiscoveredService
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 
 /**
  * Covers mDNS Browser's help sheet, incremental service discovery, Scan/Stop
@@ -176,6 +184,75 @@ class MdnsDiscoveryScreenTest {
         composeRule.mainClock.advanceTimeBy(1_000L)
 
         composeRule.onNodeWithText("_http._tcp").assertIsDisplayed()
+    }
+
+    @Test
+    fun pingHostnameAction_navigatesWithValidatedMdnsIntentWithoutStartingProbe() {
+        val service = fakeService("_http._tcp", "printer")
+        val navigatedRoutes = mutableListOf<String>()
+        val viewModel = fakeViewModel(
+            state = MdnsDiscoveryUiState(
+                services = listOf(service),
+                servicesByType = mapOf(service.serviceType to listOf(service)),
+            ),
+        )
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                MdnsDiscoveryScreen(viewModel = viewModel, onNavigate = navigatedRoutes::add)
+            }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        assertTrue(navigatedRoutes.isEmpty())
+        composeRule.onNodeWithContentDescription(
+            context.getString(R.string.mdns_ping_hostname_description, "printer.local"),
+        ).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.mdns_ping_hostname))
+            .performScrollTo().performClick()
+
+        val uri = Uri.parse(navigatedRoutes.single())
+        val intent = ToolIntentCodec.decode(requireNotNull(uri.getQueryParameter("intent")))
+        val target = intent?.destination as? ToolDestination.HostTarget
+        assertEquals(HostTool.PING, target?.tool)
+        assertEquals(requireNotNull(ToolHost.parse("printer.local")), target?.host)
+        assertEquals(ToolSource.MDNS, intent?.source)
+    }
+
+    @Test
+    fun pingResolvedAddressAction_ignoresInvalidServiceHostAndCarriesSelectedIp() {
+        val service = fakeService("_http._tcp", "printer").copy(
+            hostname = "192.168.1.52",
+            ipAddresses = listOf("invalid address", "example.com", "192.168.1.51"),
+        )
+        val navigatedRoutes = mutableListOf<String>()
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                MdnsDiscoveryScreen(
+                    viewModel = fakeViewModel(
+                        state = MdnsDiscoveryUiState(
+                            services = listOf(service),
+                            servicesByType = mapOf(service.serviceType to listOf(service)),
+                        ),
+                    ),
+                    onNavigate = navigatedRoutes::add,
+                )
+            }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        assertTrue(navigatedRoutes.isEmpty())
+        composeRule.onNodeWithText(context.getString(R.string.mdns_ping_hostname))
+            .assertDoesNotExist()
+        composeRule.onNodeWithText(context.getString(R.string.mdns_ping_address, "192.168.1.51"))
+            .performScrollTo().performClick()
+        composeRule.onNodeWithText(context.getString(R.string.mdns_ping_address, "example.com"))
+            .assertDoesNotExist()
+
+        val uri = Uri.parse(navigatedRoutes.single())
+        val intent = ToolIntentCodec.decode(requireNotNull(uri.getQueryParameter("intent")))
+        val target = intent?.destination as? ToolDestination.HostTarget
+        assertEquals(requireNotNull(ToolHost.parse("192.168.1.51")), target?.host)
+        assertEquals(ToolSource.MDNS, intent?.source)
     }
 
     private fun fakeService(serviceType: String, name: String) = DiscoveredService(

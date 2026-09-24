@@ -167,7 +167,9 @@ fun AppNavHost(navController: NavHostController, modifier: Modifier = Modifier) 
         composable(NavRoutes.WhoisLookup.route)       { WhoisScreen() }
         composable(NavRoutes.HttpProbe.route)         { HttpProbeScreen() }
         composable(NavRoutes.SubnetCalculator.route)  { SubnetCalculatorScreen() }
-        composable(NavRoutes.MdnsDiscovery.route)     { MdnsDiscoveryScreen() }
+        composable(NavRoutes.MdnsDiscovery.route)     {
+            MdnsDiscoveryScreen(onNavigate = { route -> navController.navigateFromToolHandoff(route) })
+        }
         composable(NavRoutes.SpeedTest.route)         { SpeedTestScreen() }
         composable(NavRoutes.WakeOnLan.route)         { WakeOnLanScreen() }
         composable(

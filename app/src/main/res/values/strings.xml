@@ -85,6 +85,7 @@
     <string name="ping_screen_title">Ping</string>
     <string name="ping_screen_subtitle">Measure round-trip time and packet loss to any host</string>
     <string name="ping_source_lan">Prefilled from LAN Scanner</string>
+    <string name="ping_source_mdns">Prefilled from mDNS Browser</string>
     <string name="ping_invalid_handoff">The supplied destination could not be verified. Enter a host to continue.</string>
 
     <!-- Ping Input -->
@@ -797,6 +798,9 @@
     <string name="mdns_empty_title">No services found</string>
     <string name="mdns_empty_body">No mDNS services responded. Ensure devices are on the same network and try again.</string>
     <string name="mdns_txt_records_label">TXT Records</string>
+    <string name="mdns_ping_hostname">Ping hostname</string>
+    <string name="mdns_ping_hostname_description">Ping hostname %1$s</string>
+    <string name="mdns_ping_address">Ping %1$s</string>
 
     <!-- Onboarding -->
     <string name="onboarding_subtitle">Your all-in-one Android networking toolkit</string>

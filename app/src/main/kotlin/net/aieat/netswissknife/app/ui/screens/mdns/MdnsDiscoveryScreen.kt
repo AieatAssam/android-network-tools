@@ -100,10 +100,20 @@ import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
 import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
 import net.aieat.netswissknife.app.platform.NetworkErrorKind
 import net.aieat.netswissknife.core.network.mdns.DiscoveredService
+import net.aieat.netswissknife.app.ui.navigation.HostTool
+import net.aieat.netswissknife.app.ui.navigation.NavRoutes
+import net.aieat.netswissknife.app.ui.navigation.ToolDestination
+import net.aieat.netswissknife.app.ui.navigation.ToolHost
+import net.aieat.netswissknife.app.ui.navigation.ToolIntent
+import net.aieat.netswissknife.app.ui.navigation.ToolSource
+import net.aieat.netswissknife.core.network.HostValidator
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MdnsDiscoveryScreen(viewModel: MdnsDiscoveryViewModel = hiltViewModel()) {
+fun MdnsDiscoveryScreen(
+    viewModel: MdnsDiscoveryViewModel = hiltViewModel(),
+    onNavigate: (String) -> Unit = {},
+) {
     val requestLocalNetworkPermission = rememberLocalNetworkPermissionRequester()
     LaunchedEffect(Unit) { requestLocalNetworkPermission() }
 
@@ -167,7 +177,19 @@ fun MdnsDiscoveryScreen(viewModel: MdnsDiscoveryViewModel = hiltViewModel()) {
                     "error" -> ErrorCard(uiState.error ?: "Unknown error") { viewModel.reset() }
                     else -> ServiceList(
                         servicesByType = uiState.servicesByType,
-                        isScanning = uiState.isScanning
+                        isScanning = uiState.isScanning,
+                        onPingHost = { host ->
+                            ToolHost.parse(host)?.let { validatedHost ->
+                                onNavigate(
+                                    NavRoutes.Ping.createRoute(
+                                        ToolIntent(
+                                            destination = ToolDestination.HostTarget(HostTool.PING, validatedHost),
+                                            source = ToolSource.MDNS,
+                                        ),
+                                    ),
+                                )
+                            }
+                        },
                     )
                 }
             }
@@ -439,7 +461,8 @@ private fun ErrorCard(message: String, onRetry: () -> Unit) {
 @Composable
 private fun ServiceList(
     servicesByType: Map<String, List<DiscoveredService>>,
-    isScanning: Boolean
+    isScanning: Boolean,
+    onPingHost: (String) -> Unit,
 ) {
     val expandedTypes = remember { mutableStateMapOf<String, Boolean>() }
 
@@ -486,7 +509,7 @@ private fun ServiceList(
                         enter = fadeIn() + expandVertically(),
                         exit = fadeOut() + shrinkVertically()
                     ) {
-                        ServiceItem(service)
+                        ServiceItem(service, onPingHost)
                     }
                 }
             }
@@ -558,7 +581,7 @@ private fun ServiceTypeHeader(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun ServiceItem(service: DiscoveredService) {
+private fun ServiceItem(service: DiscoveredService, onPingHost: (String) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
 
     OutlinedCard(
@@ -591,25 +614,45 @@ private fun ServiceItem(service: DiscoveredService) {
                 }
             }
 
-            if (service.hostname.isNotEmpty()) {
+            val validHostname = ToolHost.parse(service.hostname)?.takeUnless {
+                HostValidator.isValidIpv4(it.value) || HostValidator.isValidIpv6(it.value)
+            }
+            if (validHostname != null) {
+                val pingHostnameDescription = stringResource(
+                    R.string.mdns_ping_hostname_description,
+                    validHostname.value,
+                )
                 Text(
-                    text = service.hostname,
+                    text = validHostname.value,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                     fontFamily = FontFamily.Monospace,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                FilledTonalButton(
+                    onClick = { onPingHost(validHostname.value) },
+                    modifier = Modifier.semantics { contentDescription = pingHostnameDescription },
+                ) {
+                    Icon(Icons.Default.NetworkPing, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(stringResource(R.string.mdns_ping_hostname))
+                }
             }
 
-            if (service.ipAddresses.isNotEmpty()) {
+            val validAddresses = service.ipAddresses.mapNotNull { address ->
+                ToolHost.parse(address)?.takeIf {
+                    HostValidator.isValidIpv4(it.value) || HostValidator.isValidIpv6(it.value)
+                }
+            }.distinctBy { it.canonical }
+            if (validAddresses.isNotEmpty()) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    service.ipAddresses.forEach { ip ->
+                    validAddresses.forEach { ip ->
                         SuggestionChip(
-                            onClick = {},
+                            onClick = { onPingHost(ip.value) },
                             label = {
                                 Text(
-                                    ip,
+                                    stringResource(R.string.mdns_ping_address, ip.value),
                                     style = MaterialTheme.typography.labelSmall,
                                     fontFamily = FontFamily.Monospace
                                 )

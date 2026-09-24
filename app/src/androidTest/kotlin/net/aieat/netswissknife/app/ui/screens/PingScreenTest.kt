@@ -8,6 +8,7 @@ import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -195,6 +196,25 @@ class PingScreenTest {
 
         composeRule.onNodeWithTag(PingScreenTestTags.SOURCE_CONTEXT).assertIsDisplayed()
         composeRule.onNodeWithText("192.0.2.8").assertIsDisplayed()
+        verify(exactly = 0) { viewModel.startPing() }
+    }
+
+    @Test
+    fun mdnsHandoff_showsProvenanceAndDoesNotStartPing() {
+        val viewModel = fakePingViewModel(
+            PingUiState.Idle,
+            host = "printer.local",
+            sourceContext = ToolSource.MDNS,
+        )
+        composeRule.setContent {
+            NetSwissKnifeTheme { PingScreen(viewModel = viewModel) }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        composeRule.onNodeWithTag(PingScreenTestTags.SOURCE_CONTEXT)
+            .assertIsDisplayed()
+            .assertTextEquals(context.getString(R.string.ping_source_mdns))
+        composeRule.onNodeWithText("printer.local").assertIsDisplayed()
         verify(exactly = 0) { viewModel.startPing() }
     }
 
