@@ -58,6 +58,9 @@
     <string name="dns_idle_subtitle">Supports A, AAAA, MX, TXT, CNAME, NS, SOA, PTR and more</string>
     <string name="dns_querying">Querying DNS…</string>
     <string name="dns_querying_subtitle">Sending query to DNS server</string>
+    <string name="dns_canceling">Stopping DNS lookup…</string>
+    <string name="dns_canceled">DNS lookup canceled</string>
+    <string name="dns_canceled_subtitle">The lookup stopped and cleanup has finished.</string>
     <string name="dns_error_title">Lookup failed</string>
     <string name="dns_retry">Retry</string>
     <string name="dns_use_cloudflare">Use Cloudflare</string>

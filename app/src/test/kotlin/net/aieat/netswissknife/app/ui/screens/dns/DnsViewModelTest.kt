@@ -15,6 +15,8 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.job
 import kotlinx.coroutines.runBlocking
 import androidx.lifecycle.viewModelScope
@@ -28,9 +30,12 @@ import net.aieat.netswissknife.core.network.dns.DnsResult
 import net.aieat.netswissknife.core.network.dns.DnsServer
 import net.aieat.netswissknife.core.network.operation.CancellationReason
 import net.aieat.netswissknife.core.network.operation.OperationSession
+import net.aieat.netswissknife.core.network.operation.OperationRunner
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
+import java.util.concurrent.CountDownLatch
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
@@ -199,7 +204,50 @@ class DnsViewModelTest {
         }
 
         @Test
-        fun `Stop cancels caller-owned operation and returns UI to Idle`() = runTest {
+        fun `Stop waits for cleanup then shows canceled and blocks duplicate starts`() = runTest {
+            var session: OperationSession? = null
+            val cleanupStarted = CompletableDeferred<Unit>()
+            val cleanupGate = CountDownLatch(1)
+            val runnerFinished = CompletableDeferred<Unit>()
+            coEvery { useCase(any(), any()) } coAnswers {
+                session = secondArg()
+                try {
+                    OperationRunner.run(checkNotNull(session)) {
+                        resources.register(AutoCloseable {
+                            cleanupStarted.complete(Unit)
+                            cleanupGate.await()
+                        })
+                        awaitCancellation()
+                    }
+                } finally {
+                    runnerFinished.complete(Unit)
+                }
+            }
+            viewModel.onDomainChange("example.com")
+            viewModel.performLookup()
+
+            viewModel.onStopLookup()
+            cleanupStarted.await()
+
+            assertEquals(CancellationReason.USER_STOP, session?.cancellationReason)
+            assertTrue(viewModel.uiState.value is DnsUiState.Canceling)
+            assertFalse(session?.resources?.isClosed ?: true)
+            viewModel.onDomainChange("preserved.example")
+            viewModel.performLookup()
+            coVerify(exactly = 1) { useCase(any(), any()) }
+            assertEquals("preserved.example", viewModel.domain.value)
+
+            cleanupGate.countDown()
+            withContext(Dispatchers.IO) { runnerFinished.await() }
+            runCurrent()
+            assertTrue(session?.resources?.isClosed == true)
+            assertTrue(viewModel.uiState.value is DnsUiState.Canceled)
+            viewModel.onClearResults()
+            assertTrue(viewModel.uiState.value is DnsUiState.Idle)
+        }
+
+        @Test
+        fun `lifecycle cancellation does not present user canceled state`() = runTest {
             var session: OperationSession? = null
             coEvery { useCase(any(), any()) } coAnswers {
                 session = secondArg()
@@ -207,11 +255,14 @@ class DnsViewModelTest {
             }
             viewModel.onDomainChange("example.com")
             viewModel.performLookup()
+            androidx.lifecycle.ViewModelStore().also { store ->
+                store.put("dns", viewModel)
+                store.clear()
+            }
 
-            viewModel.onStopLookup()
-
-            assertEquals(CancellationReason.USER_STOP, session?.cancellationReason)
-            assertTrue(viewModel.uiState.value is DnsUiState.Idle)
+            assertEquals(CancellationReason.LIFECYCLE_PAUSE, session?.cancellationReason)
+            assertTrue(viewModel.uiState.value !is DnsUiState.Canceled)
+            assertTrue(viewModel.uiState.value !is DnsUiState.Canceling)
         }
 
         @Test
@@ -288,12 +339,17 @@ class DnsViewModelTest {
 
             viewModel.onDomainChange("second.example")
             viewModel.performLookup()
-            val latest = viewModel.uiState.first { it is DnsUiState.Success } as DnsUiState.Success
-            assertEquals("second.example", latest.result.domain)
+            coVerify(exactly = 0) { useCase(match { it.domain == "second.example" }, any()) }
 
             runCatching {
                 completeFirst!!(NetworkResult.Success(stubResult.copy(domain = "first.example")))
             }
+            runCurrent()
+            assertTrue(viewModel.uiState.value is DnsUiState.Idle)
+
+            viewModel.performLookup()
+            val latest = viewModel.uiState.first { it is DnsUiState.Success } as DnsUiState.Success
+            assertEquals("second.example", latest.result.domain)
             assertEquals(latest, viewModel.uiState.value)
             coVerify(exactly = 0) {
                 recentHostsRepository.addRecent(

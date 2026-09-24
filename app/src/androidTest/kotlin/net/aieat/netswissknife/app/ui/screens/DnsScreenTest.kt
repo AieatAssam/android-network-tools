@@ -1,6 +1,7 @@
 package net.aieat.netswissknife.app.ui.screens
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -118,6 +119,55 @@ class DnsScreenTest {
     }
 
     @Test
+    fun cancelingState_showsCleanupProgress() {
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                DnsScreen(viewModel = fakeDnsViewModel(DnsUiState.Canceling))
+            }
+        }
+
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        scrollToStatePanel()
+        composeRule.onNodeWithText(context.getString(R.string.dns_canceling)).assertIsDisplayed()
+    }
+
+    @Test
+    fun cancelingState_disablesControls_untilCanceledStateRestoresLookup() {
+        val state = MutableStateFlow<DnsUiState>(DnsUiState.Canceling)
+        val viewModel = fakeDnsViewModel(
+            DnsUiState.Canceling,
+            domainValue = "query.example",
+            uiStateFlow = state
+        )
+        composeRule.setContent {
+            NetSwissKnifeTheme { DnsScreen(viewModel = viewModel) }
+        }
+
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        composeRule.onNodeWithTag(DnsScreenTestTags.DOMAIN_INPUT).assertIsNotEnabled()
+        composeRule.onNodeWithTag(DnsScreenTestTags.CANCEL_LOOKUP).assertIsNotEnabled()
+
+        state.value = DnsUiState.Canceled
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        composeRule.onNodeWithTag(DnsScreenTestTags.DOMAIN_INPUT).assertIsEnabled()
+        composeRule.onNodeWithTag(DnsScreenTestTags.CANCEL_LOOKUP).assertIsEnabled()
+    }
+
+    @Test
+    fun canceledState_showsStatusAndClearReturnsToIdle() {
+        val viewModel = fakeDnsViewModel(DnsUiState.Canceled)
+        composeRule.setContent {
+            NetSwissKnifeTheme { DnsScreen(viewModel = viewModel) }
+        }
+
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        scrollToStatePanel()
+        composeRule.onNodeWithText(context.getString(R.string.dns_canceled)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.clear)).performClick()
+        verify(exactly = 1) { viewModel.onClearResults() }
+    }
+
+    @Test
     fun loadingState_cancelStopsLookup() {
         val viewModel = fakeDnsViewModel(DnsUiState.Loading)
         composeRule.setContent {
@@ -225,10 +275,11 @@ class DnsScreenTest {
         selectedServer: DnsServer = DnsServer.System(),
         customServerAddress: String = "",
         domainValue: String = "",
-        recentHostsValue: List<String> = emptyList()
+        recentHostsValue: List<String> = emptyList(),
+        uiStateFlow: MutableStateFlow<DnsUiState> = MutableStateFlow(state)
     ): DnsViewModel {
         val viewModel = mockk<DnsViewModel>(relaxed = true)
-        every { viewModel.uiState } returns MutableStateFlow(state)
+        every { viewModel.uiState } returns uiStateFlow
         every { viewModel.domain } returns MutableStateFlow(domainValue)
         every { viewModel.recordType } returns MutableStateFlow(DnsRecordType.A)
         every { viewModel.selectedServer } returns MutableStateFlow(selectedServer)

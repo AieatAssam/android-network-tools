@@ -191,6 +191,7 @@ fun DnsScreen(viewModel: DnsViewModel = hiltViewModel()) {
                     selectedServer = selectedServer,
                     customServerAddress = customServerAddress,
                     isLoading = uiState is DnsUiState.Loading,
+                    isCanceling = uiState is DnsUiState.Canceling,
                     recentHosts = recentHosts,
                     onDomainChange = viewModel::onDomainChange,
                     onRecordTypeChange = viewModel::onRecordTypeChange,
@@ -219,6 +220,13 @@ fun DnsScreen(viewModel: DnsViewModel = hiltViewModel()) {
                         )
                         is DnsUiState.Loading -> DnsLoadingPanel(
                             modifier = Modifier.padding(vertical = 8.dp)
+                        )
+                        is DnsUiState.Canceling -> DnsCancelingPanel(
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        )
+                        is DnsUiState.Canceled -> DnsCanceledPanel(
+                            modifier = Modifier.padding(vertical = 8.dp),
+                            onClear = viewModel::onClearResults
                         )
                         is DnsUiState.Error -> DnsErrorPanel(
                             message = state.message,
@@ -311,6 +319,7 @@ private fun DnsInputCard(
     selectedServer: DnsServer,
     customServerAddress: String,
     isLoading: Boolean,
+    isCanceling: Boolean,
     recentHosts: List<String>,
     onDomainChange: (String) -> Unit,
     onRecordTypeChange: (DnsRecordType) -> Unit,
@@ -322,6 +331,7 @@ private fun DnsInputCard(
     onClearRecentHosts: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val isBusy = isLoading || isCanceling
     ElevatedCard(
         modifier = modifier.fillMaxWidth(),
         shape = AppShapes.large
@@ -344,7 +354,7 @@ private fun DnsInputCard(
                     )
                 },
                 trailingIcon = {
-                    if (domain.isNotEmpty() && !isLoading) {
+                    if (domain.isNotEmpty() && !isBusy) {
                         IconButton(onClick = { onDomainChange("") }) {
                             Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.clear))
                         }
@@ -357,10 +367,10 @@ private fun DnsInputCard(
                 ),
                 keyboardActions = KeyboardActions(
                     onSearch = {
-                        if (!isLoading && domain.isNotBlank()) onLookup()
+                        if (!isBusy && domain.isNotBlank()) onLookup()
                     }
                 ),
-                enabled = !isLoading,
+                enabled = !isBusy,
                 modifier = Modifier.fillMaxWidth().testTag(DnsScreenTestTags.DOMAIN_INPUT),
                 shape = AppShapes.medium
             )
@@ -370,7 +380,7 @@ private fun DnsInputCard(
                 onHostSelected = onDomainChange,
                 onRemoveHost = onRemoveRecentHost,
                 onClearAll = onClearRecentHosts,
-                selectionEnabled = !isLoading
+                selectionEnabled = !isBusy
             )
 
             // Record type selector
@@ -383,7 +393,7 @@ private fun DnsInputCard(
                 RecordTypeChips(
                     selected = recordType,
                     onSelect = onRecordTypeChange,
-                    enabled = !isLoading
+                    enabled = !isBusy
                 )
                 // Description of selected record type
                 RecordTypeDescription(recordType = recordType)
@@ -396,14 +406,14 @@ private fun DnsInputCard(
                     customServerAddress = customServerAddress,
                     onServerChange = onServerChange,
                     onCustomAddressChange = onCustomServerAddressChange,
-                    enabled = !isLoading
+                    enabled = !isBusy
                 )
             }
 
             // Lookup button
             Button(
                 onClick = hapticAction(if (isLoading) onCancelLookup else onLookup),
-                enabled = isLoading || domain.isNotBlank(),
+                enabled = isLoading || (!isCanceling && domain.isNotBlank()),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp)
@@ -415,6 +425,8 @@ private fun DnsInputCard(
             ) {
                 if (isLoading) {
                     Text(stringResource(R.string.cancel))
+                } else if (isCanceling) {
+                    Text(stringResource(R.string.dns_canceling))
                 } else {
                     Icon(
                         imageVector = Icons.Default.Search,
@@ -724,6 +736,39 @@ private fun DnsLoadingPanel(modifier: Modifier = Modifier) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
+    }
+}
+
+@Composable
+private fun DnsCancelingPanel(modifier: Modifier = Modifier) {
+    ElevatedCard(modifier = modifier.fillMaxWidth(), shape = AppShapes.large) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            CircularProgressIndicator(modifier = Modifier.size(32.dp), strokeWidth = 3.dp)
+            Text(stringResource(R.string.dns_canceling), style = MaterialTheme.typography.titleMedium)
+        }
+    }
+}
+
+@Composable
+private fun DnsCanceledPanel(onClear: () -> Unit, modifier: Modifier = Modifier) {
+    ElevatedCard(modifier = modifier.fillMaxWidth(), shape = AppShapes.large) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(stringResource(R.string.dns_canceled), style = MaterialTheme.typography.titleMedium)
+            Text(
+                text = stringResource(R.string.dns_canceled_subtitle),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            TextButton(onClick = onClear) { Text(stringResource(R.string.clear)) }
         }
     }
 }

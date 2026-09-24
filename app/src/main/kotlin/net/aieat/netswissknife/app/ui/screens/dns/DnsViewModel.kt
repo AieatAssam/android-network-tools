@@ -33,6 +33,8 @@ import javax.inject.Inject
 sealed interface DnsUiState {
     object Idle : DnsUiState
     object Loading : DnsUiState
+    object Canceling : DnsUiState
+    object Canceled : DnsUiState
     data class Success(val result: DnsResult, val showRaw: Boolean = false) : DnsUiState
     data class Error(
         val message: String,
@@ -54,10 +56,11 @@ class DnsViewModel @Inject constructor(
     private var lookupJob: Job? = null
     private var lookupGeneration = 0L
     private var operationSession: OperationSession? = null
+    private var cancelRequestGeneration = 0L
 
     init {
         addCloseable(LIFECYCLE_CLOSEABLE_KEY, AutoCloseable {
-            cancelLookup(CancellationReason.LIFECYCLE_PAUSE, resetState = false)
+            cancelLookup(CancellationReason.LIFECYCLE_PAUSE, terminalState = null)
         })
     }
 
@@ -106,11 +109,12 @@ class DnsViewModel @Inject constructor(
     }
 
     fun onClearResults() {
-        cancelLookup(CancellationReason.USER_STOP, resetState = true)
+        cancelLookup(CancellationReason.USER_STOP, terminalState = DnsUiState.Idle)
     }
 
     fun onStopLookup() {
-        cancelLookup(CancellationReason.USER_STOP, resetState = true)
+        if (_uiState.value !is DnsUiState.Loading) return
+        cancelLookup(CancellationReason.USER_STOP, terminalState = DnsUiState.Canceled)
     }
 
     fun onRetry() {
@@ -118,7 +122,9 @@ class DnsViewModel @Inject constructor(
     }
 
     fun onUseCloudflare() {
-        if (_uiState.value is DnsUiState.Loading) return
+        if (lookupJob != null || _uiState.value is DnsUiState.Loading ||
+            _uiState.value is DnsUiState.Canceling
+        ) return
         _selectedServer.value = DnsServer.Cloudflare
         performLookup()
     }
@@ -136,7 +142,9 @@ class DnsViewModel @Inject constructor(
     }
 
     fun performLookup() {
-        if (_uiState.value is DnsUiState.Loading) return
+        if (lookupJob != null || _uiState.value is DnsUiState.Loading ||
+            _uiState.value is DnsUiState.Canceling
+        ) return
 
         val server = when (val s = _selectedServer.value) {
             is DnsServer.Custom -> DnsServer.Custom(_customServerAddress.value)
@@ -213,19 +221,40 @@ class DnsViewModel @Inject constructor(
         }
     }
 
-    private fun cancelLookup(reason: CancellationReason, resetState: Boolean) {
-        lookupGeneration++
-        operationSession?.let { session ->
-            operationSession = null
-            runCatching { session.cancel(reason) }
+    private fun cancelLookup(reason: CancellationReason, terminalState: DnsUiState?) {
+        val job = lookupJob
+        if (job == null) {
+            if (terminalState != null) _uiState.value = terminalState
+            return
         }
-        lookupJob?.cancel()
-        lookupJob = null
-        if (resetState) _uiState.value = DnsUiState.Idle
+
+        val requestGeneration = ++lookupGeneration
+        val cancellationGeneration = ++cancelRequestGeneration
+        val session = operationSession
+        operationSession = null
+        if (terminalState === DnsUiState.Canceled) _uiState.value = DnsUiState.Canceling
+        else if (terminalState != null) _uiState.value = terminalState
+
+        runCatching { session?.cancel(reason) }
+        job.cancel()
+
+        // Keep lookupJob populated until the canceled operation's finally blocks and resource
+        // cleanup have completed. This also prevents a new lookup from racing that cleanup.
+        if (terminalState != null) {
+            viewModelScope.launch {
+                job.join()
+                if (lookupJob === job) lookupJob = null
+                if (cancellationGeneration == cancelRequestGeneration &&
+                    requestGeneration == lookupGeneration
+                ) {
+                    _uiState.value = terminalState
+                }
+            }
+        }
     }
 
     override fun onCleared() {
-        cancelLookup(CancellationReason.LIFECYCLE_PAUSE, resetState = false)
+        cancelLookup(CancellationReason.LIFECYCLE_PAUSE, terminalState = null)
     }
 
     private companion object {

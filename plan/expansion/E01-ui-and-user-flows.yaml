@@ -338,7 +338,7 @@ tasks:
 
   - id: E01-T07
     priority: high
-    status: todo
+    status: in_progress
     kind: actual_gap_plus_refinement
     title: "Standardize operation states: idle, validating, running, canceling, canceled, partial, success, empty, and error"
     source_evidence:
@@ -375,6 +375,8 @@ tasks:
       - "Do not force all domain repositories into one hierarchy; use UI adapters around existing StateFlows."
       - "P04/P05/P11 own underlying cancellation correctness; E01 must not mask a repository that fails to cancel."
     effort: "L (3-5 agent sessions)"
+    checkpoint:
+      status: "DNS Stop/Clear vertical slice adds visible Canceling until the lookup job and session cleanup finish, then Canceled; Clear returns to Idle, input is preserved, duplicate starts are blocked, and ViewModel teardown cancellation stays silent. Focused ViewModel tests and Android-test Kotlin compilation pass. E01-T07 remains open for LAN/Topology and other tools, actual background lifecycle policy, integrated UI checks, and phase-wide operation-state migration."
 
   - id: E01-T08
     priority: high
