@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.theme.NetSwissKnifeTheme
 import net.aieat.netswissknife.core.network.lan.LanHost
+import net.aieat.netswissknife.core.network.lan.MacSource
 import net.aieat.netswissknife.core.network.lan.LanScanDiagnostic
 import net.aieat.netswissknife.core.network.lan.LanScanDiagnosticReason
 import net.aieat.netswissknife.core.network.lan.LanScanSummary
@@ -345,6 +346,80 @@ class LanScanScreenTest {
         composeRule.mainClock.advanceTimeBy(500L)
         composeRule.onNodeWithText("Probe HTTP (port 80)").performScrollTo().assertIsDisplayed().performClick()
         verify(exactly = 1) { viewModel.onProbeHttp(unknownIp, 80) }
+    }
+
+    @Test
+    fun expandedHost_offersWakeActionOnlyForObservedUnicastMac() {
+        val ip = "192.168.1.55"
+        val observedMac = "02-23-45-67-89-ab"
+        val viewModel = fakeViewModel(
+            flow = MutableStateFlow(
+                LanScanUiState.Finished(
+                    LanScanSummary(
+                        subnet = "192.168.1.0/24",
+                        totalScanned = 254,
+                        aliveHosts = 1,
+                        scanDurationMs = 500L,
+                        hosts = listOf(fakeHost(ip).copy(macAddress = observedMac, macSource = MacSource.ARP)),
+                    ),
+                    expandedHostIp = ip,
+                ),
+            ),
+        )
+
+        composeRule.setContent { NetSwissKnifeTheme { LanScreen(viewModel = viewModel) } }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        composeRule.onNodeWithTag("lan_action_wake_device")
+            .performScrollTo()
+            .assertIsDisplayed()
+            .performClick()
+        verify(exactly = 1) { viewModel.onWakeDevice("02:23:45:67:89:AB") }
+
+        val invalidIp = "192.168.1.56"
+        val stateFlow = viewModel.uiState as MutableStateFlow<LanScanUiState>
+        stateFlow.value = LanScanUiState.Finished(
+            LanScanSummary(
+                subnet = "192.168.1.0/24",
+                totalScanned = 254,
+                aliveHosts = 1,
+                scanDurationMs = 500L,
+                hosts = listOf(fakeHost(invalidIp).copy(macAddress = "01:23:45:67:89:AB", macSource = MacSource.ARP)),
+            ),
+            expandedHostIp = invalidIp,
+        )
+        composeRule.mainClock.advanceTimeBy(500L)
+        composeRule.onNodeWithTag("lan_action_wake_device").assertDoesNotExist()
+        verify(exactly = 0) { viewModel.onWakeDevice("01:23:45:67:89:AB") }
+
+        val unknownIp = "192.168.1.57"
+        stateFlow.value = LanScanUiState.Finished(
+            LanScanSummary(
+                subnet = "192.168.1.0/24",
+                totalScanned = 254,
+                aliveHosts = 1,
+                scanDurationMs = 500L,
+                hosts = listOf(fakeHost(unknownIp)),
+            ),
+            expandedHostIp = unknownIp,
+        )
+        composeRule.mainClock.advanceTimeBy(500L)
+        composeRule.onNodeWithTag("lan_action_wake_device").assertDoesNotExist()
+
+        val unverifiedIp = "192.168.1.58"
+        stateFlow.value = LanScanUiState.Finished(
+            LanScanSummary(
+                subnet = "192.168.1.0/24",
+                totalScanned = 254,
+                aliveHosts = 1,
+                scanDurationMs = 500L,
+                hosts = listOf(
+                    fakeHost(unverifiedIp).copy(macAddress = "02:23:45:67:89:AC", macSource = MacSource.NONE),
+                ),
+            ),
+            expandedHostIp = unverifiedIp,
+        )
+        composeRule.mainClock.advanceTimeBy(500L)
+        composeRule.onNodeWithTag("lan_action_wake_device").assertDoesNotExist()
     }
 
     @Test

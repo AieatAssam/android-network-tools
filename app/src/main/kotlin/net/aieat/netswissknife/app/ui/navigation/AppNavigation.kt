@@ -204,7 +204,21 @@ fun AppNavHost(navController: NavHostController, modifier: Modifier = Modifier) 
             MdnsDiscoveryScreen(onNavigate = { route -> navController.navigateFromToolHandoff(route) })
         }
         composable(NavRoutes.SpeedTest.route)         { SpeedTestScreen() }
-        composable(NavRoutes.WakeOnLan.route)         { WakeOnLanScreen() }
+        composable(
+            route = NavRoutes.WakeOnLan.route,
+            arguments = listOf(
+                navArgument("intent") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+                navArgument("mac") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+            ),
+        ) { WakeOnLanScreen() }
         composable(
             route            = NavRoutes.Settings.route,
             enterTransition  = { fadeIn(AppMotion.enter()) },

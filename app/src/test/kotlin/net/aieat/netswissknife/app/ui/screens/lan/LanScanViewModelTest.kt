@@ -31,6 +31,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import net.aieat.netswissknife.core.network.operation.CancellationReason
 import net.aieat.netswissknife.core.network.operation.OperationSession
+import net.aieat.netswissknife.app.ui.navigation.ToolMacAddress
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
 import net.aieat.netswissknife.app.platform.NetworkErrorKind
@@ -131,6 +132,16 @@ class LanScanViewModelTest {
         assertEquals(8888, preferredHttpProbePort(listOf(8888)))
         assertEquals(80, preferredHttpProbePort(listOf(443, 8443)))
         assertEquals(80, preferredHttpProbePort(emptyList()))
+    }
+
+    @Test
+    fun `Wake-on-LAN handoff event canonicalizes observed unicast MAC`() = runTest {
+        viewModel.onWakeDevice("02-23-45-67-89-ab")
+
+        assertEquals(
+            LanNavEvent.NavigateToWakeOnLan(requireNotNull(ToolMacAddress.parse("02:23:45:67:89:AB"))),
+            viewModel.navigationEvents.first(),
+        )
     }
 
     @Nested

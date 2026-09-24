@@ -19,6 +19,7 @@ import net.aieat.netswissknife.core.domain.LanScanUseCase
 import net.aieat.netswissknife.core.network.lan.LanHost
 import net.aieat.netswissknife.core.network.lan.LanScanDiagnostic
 import net.aieat.netswissknife.core.network.lan.LanScanSummary
+import net.aieat.netswissknife.app.ui.navigation.ToolMacAddress
 import net.aieat.netswissknife.core.network.lan.SubnetUtils
 import net.aieat.netswissknife.core.network.operation.CancellationReason
 import net.aieat.netswissknife.core.network.operation.OperationBudget
@@ -86,6 +87,7 @@ sealed interface LanNavEvent {
     data class NavigateToPing(val host: String) : LanNavEvent
     data class NavigateToHttp(val host: String, val port: Int) : LanNavEvent
     data class NavigateToTls(val host: String, val port: Int) : LanNavEvent
+    data class NavigateToWakeOnLan(val mac: ToolMacAddress) : LanNavEvent
 }
 
 @HiltViewModel
@@ -396,6 +398,12 @@ class LanScanViewModel @Inject constructor(
 
     fun onInspectTls(host: String, port: Int) {
         navigationEventsChannel.trySend(LanNavEvent.NavigateToTls(host, port))
+    }
+
+    fun onWakeDevice(macAddress: String) {
+        ToolMacAddress.parse(macAddress)?.let { mac ->
+            navigationEventsChannel.trySend(LanNavEvent.NavigateToWakeOnLan(mac))
+        }
     }
 
     private fun cancelScan(reason: CancellationReason) {

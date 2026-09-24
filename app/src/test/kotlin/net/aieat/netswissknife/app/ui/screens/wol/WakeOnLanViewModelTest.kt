@@ -1,5 +1,6 @@
 package net.aieat.netswissknife.app.ui.screens.wol
 
+import androidx.lifecycle.SavedStateHandle
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -12,6 +13,13 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import net.aieat.netswissknife.app.platform.NetworkErrorKind
+import net.aieat.netswissknife.app.ui.navigation.HostTool
+import net.aieat.netswissknife.app.ui.navigation.ToolDestination
+import net.aieat.netswissknife.app.ui.navigation.ToolHost
+import net.aieat.netswissknife.app.ui.navigation.ToolIntent
+import net.aieat.netswissknife.app.ui.navigation.ToolIntentCodec
+import net.aieat.netswissknife.app.ui.navigation.ToolMacAddress
+import net.aieat.netswissknife.app.ui.navigation.ToolSource
 import net.aieat.netswissknife.core.domain.WakeOnLanParams
 import net.aieat.netswissknife.core.domain.WakeOnLanUseCase
 import net.aieat.netswissknife.core.network.NetworkResult
@@ -22,6 +30,7 @@ import net.aieat.netswissknife.core.network.wol.WolSendReport
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
@@ -64,12 +73,98 @@ class WakeOnLanViewModelTest {
     }
 
     @Test
-    fun `isMacInvalid true for partial input, false when valid or blank`() {
+    fun `typed LAN WOL handoff pre-fills normalized MAC without sending`() {
+        val mac = requireNotNull(ToolMacAddress.parse("02-23-45-67-89-ab"))
+        val intent = ToolIntent(ToolDestination.WakeOnLan(mac), ToolSource.LAN)
+        val handoff = WakeOnLanViewModel(
+            useCase,
+            savedStateHandle = SavedStateHandle(
+                mapOf("intent" to ToolIntentCodec.encode(intent), "mac" to mac.value),
+            ),
+        )
+
+        assertEquals("02:23:45:67:89:AB", handoff.macAddress.value)
+        assertEquals(ToolSource.LAN, handoff.sourceContext)
+        assertFalse(handoff.hasInvalidHandoff.value)
+        assertEquals(WolUiState.Idle, handoff.uiState.value)
+        assertTrue(handoff.canSend)
+        coVerify(exactly = 0) { useCase(any(), any()) }
+    }
+
+    @Test
+    fun `edited handoff MAC survives recreation and invalid payload is recoverable`() {
+        val mac = requireNotNull(ToolMacAddress.parse("02:23:45:67:89:AB"))
+        val intent = ToolIntent(ToolDestination.WakeOnLan(mac), ToolSource.LAN)
+        val routeArgs = mapOf("intent" to ToolIntentCodec.encode(intent), "mac" to mac.value)
+        val savedState = SavedStateHandle(routeArgs)
+        val first = WakeOnLanViewModel(useCase, savedStateHandle = savedState)
+        first.onMacAddressChange("02:23:45:67:89:AC")
+        assertEquals("02:23:45:67:89:AC", savedState.get<String>("editedWolMac"))
+
+        val restored = WakeOnLanViewModel(
+            useCase,
+            savedStateHandle = SavedStateHandle(routeArgs + ("editedWolMac" to "02:23:45:67:89:AC")),
+        )
+        assertEquals("02:23:45:67:89:AC", restored.macAddress.value)
+        assertFalse(restored.hasInvalidHandoff.value)
+
+        val invalidState = SavedStateHandle(mapOf("intent" to "ti1.invalid", "mac" to mac.value))
+        val invalid = WakeOnLanViewModel(useCase, savedStateHandle = invalidState)
+        assertTrue(invalid.hasInvalidHandoff.value)
+        assertEquals("", invalid.macAddress.value)
+        assertNull(invalid.sourceContext)
+
+        listOf("01:23:45:67:89:AB", "FF:FF:FF:FF:FF:FF", "00:00:00:00:00:00").forEach { rejectedMac ->
+            invalid.onMacAddressChange(rejectedMac)
+            assertTrue(invalid.hasInvalidHandoff.value, "$rejectedMac must not dismiss invalid handoff")
+            assertTrue(invalid.isMacInvalid, "$rejectedMac must fail unicast validation")
+            assertFalse(invalid.canSend, "$rejectedMac must not enable Send")
+        }
+
+        invalid.onMacAddressChange("02:23:45:67:89:AD")
+        assertFalse(invalid.hasInvalidHandoff.value)
+        assertEquals(true, invalidState.get<Boolean>("wolHandoffRecovered"))
+        coVerify(exactly = 0) { useCase(any(), any()) }
+    }
+
+    @Test
+    fun `typed WOL route rejects wrong destination mismatched and incomplete arguments`() {
+        val mac = requireNotNull(ToolMacAddress.parse("02:23:45:67:89:AB"))
+        val wrongDestination = ToolIntent(
+            ToolDestination.HostTarget(HostTool.PING, requireNotNull(ToolHost.parse("192.0.2.8"))),
+            ToolSource.LAN,
+        )
+        val wrongSource = ToolIntent(ToolDestination.WakeOnLan(mac), ToolSource.MDNS)
+        val missingSource = ToolIntent(ToolDestination.WakeOnLan(mac))
+        listOf(
+            mapOf("intent" to "ti1.invalid", "mac" to mac.value),
+            mapOf("intent" to ToolIntentCodec.encode(ToolIntent(ToolDestination.WakeOnLan(mac), ToolSource.LAN)), "mac" to "02:23:45:67:89:AC"),
+            mapOf("intent" to ToolIntentCodec.encode(wrongDestination), "mac" to mac.value),
+            mapOf("intent" to ToolIntentCodec.encode(wrongSource), "mac" to mac.value),
+            mapOf("intent" to ToolIntentCodec.encode(missingSource), "mac" to mac.value),
+            mapOf("intent" to ToolIntentCodec.encode(ToolIntent(ToolDestination.WakeOnLan(mac), ToolSource.LAN))),
+        ).forEach { arguments ->
+            val invalid = WakeOnLanViewModel(useCase, savedStateHandle = SavedStateHandle(arguments))
+            assertTrue(invalid.hasInvalidHandoff.value)
+            assertEquals("", invalid.macAddress.value)
+            assertNull(invalid.sourceContext)
+            assertFalse(invalid.canSend)
+        }
+        coVerify(exactly = 0) { useCase(any(), any()) }
+    }
+
+    @Test
+    fun `isMacInvalid rejects partial and non-unicast input, accepts valid unicast or blank`() {
         viewModel.onMacAddressChange("AA:BB")
         assertTrue(viewModel.isMacInvalid)
 
         viewModel.onMacAddressChange("AA:BB:CC:DD:EE:FF")
         assertFalse(viewModel.isMacInvalid)
+        assertTrue(viewModel.canSend)
+
+        viewModel.onMacAddressChange("01:23:45:67:89:AB")
+        assertTrue(viewModel.isMacInvalid)
+        assertFalse(viewModel.canSend)
 
         viewModel.onMacAddressChange("")
         assertFalse(viewModel.isMacInvalid)

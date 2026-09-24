@@ -52,6 +52,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
@@ -77,11 +78,17 @@ import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.ui.theme.AppShapes
 import net.aieat.netswissknife.app.ui.theme.AppSpacing
+import net.aieat.netswissknife.app.ui.navigation.ToolSource
 import net.aieat.netswissknife.core.domain.WakeOnLanParams
-import net.aieat.netswissknife.core.network.wol.WolMagicPacket
 import net.aieat.netswissknife.core.network.wol.WolSendReport
+import net.aieat.netswissknife.app.ui.navigation.ToolMacAddress
 
 // ── Screen ────────────────────────────────────────────────────────────────────
+
+object WakeOnLanScreenTestTags {
+    const val SOURCE_CONTEXT = "wol_source_context"
+    const val INVALID_HANDOFF = "wol_invalid_handoff"
+}
 
 @Composable
 fun WakeOnLanScreen(viewModel: WakeOnLanViewModel = hiltViewModel()) {
@@ -91,6 +98,8 @@ fun WakeOnLanScreen(viewModel: WakeOnLanViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val networkStatus by viewModel.networkStatus.collectAsStateWithLifecycle()
     val macAddress by viewModel.macAddress.collectAsStateWithLifecycle()
+    val hasInvalidHandoff by viewModel.hasInvalidHandoff.collectAsStateWithLifecycle()
+    val sourceContext = viewModel.sourceContext
     val broadcastAddress by viewModel.broadcastAddress.collectAsStateWithLifecycle()
     val port by viewModel.port.collectAsStateWithLifecycle()
 
@@ -123,6 +132,23 @@ fun WakeOnLanScreen(viewModel: WakeOnLanViewModel = hiltViewModel()) {
                 permissionDenied = (uiState as? WolUiState.Error)?.networkErrorKind == NetworkErrorKind.LOCAL_NETWORK_PERMISSION_DENIED,
                 onGrantPermission = requestLocalNetworkPermission,
             )
+
+            if (sourceContext == ToolSource.LAN) {
+                Text(
+                    text = stringResource(R.string.wol_source_lan),
+                    color = MaterialTheme.colorScheme.secondary,
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.testTag(WakeOnLanScreenTestTags.SOURCE_CONTEXT),
+                )
+            }
+            if (hasInvalidHandoff) {
+                Text(
+                    text = stringResource(R.string.wol_invalid_handoff),
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.testTag(WakeOnLanScreenTestTags.INVALID_HANDOFF),
+                )
+            }
 
             WolInputCard(
                 macAddress = macAddress,
@@ -190,10 +216,10 @@ private fun WolInputCard(
     val focusManager = LocalFocusManager.current
     var showAdvanced by remember { mutableStateOf(false) }
 
-    val isMacInvalid = macAddress.isNotBlank() && !WolMagicPacket.isValidMac(macAddress)
+    val isMacInvalid = macAddress.isNotBlank() && ToolMacAddress.parse(macAddress) == null
     val isPortInvalid = port.toIntOrNull() !in WakeOnLanParams.MIN_PORT..WakeOnLanParams.MAX_PORT
     val canSend = !isSending && !isPortInvalid &&
-        broadcastAddress.isNotBlank() && WolMagicPacket.isValidMac(macAddress)
+        broadcastAddress.isNotBlank() && ToolMacAddress.parse(macAddress) != null
 
     ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = AppShapes.large) {
         Column(

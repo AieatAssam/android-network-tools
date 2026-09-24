@@ -264,6 +264,7 @@
     <string name="lan_action_ping">Ping host</string>
     <string name="lan_action_probe_http_port">Probe HTTP (port %1$d)</string>
     <string name="lan_action_inspect_tls_port">Inspect TLS on open port %1$d</string>
+    <string name="lan_action_wake_device">Wake device</string>
     <string name="lan_discovery_icmp">ICMP</string>
     <string name="lan_discovery_tcp_open">TCP open</string>
     <string name="lan_discovery_tcp_refused">TCP refused</string>
@@ -1183,9 +1184,11 @@
     <!-- Wake-on-LAN -->
     <string name="wol_screen_title">Wake-on-LAN</string>
     <string name="wol_screen_subtitle">Wake sleeping devices with a magic packet</string>
+    <string name="wol_source_lan">MAC address from LAN Scanner</string>
+    <string name="wol_invalid_handoff">The supplied MAC could not be verified. Enter a valid MAC address to continue.</string>
     <string name="wol_mac_label">MAC address</string>
     <string name="wol_mac_placeholder">AA:BB:CC:DD:EE:FF</string>
-    <string name="wol_mac_invalid">Enter a valid MAC address (AA:BB:CC:DD:EE:FF)</string>
+    <string name="wol_mac_invalid">Enter a valid unicast MAC address (AA:BB:CC:DD:EE:FF)</string>
     <string name="wol_advanced_options">Advanced options</string>
     <string name="wol_broadcast_label">Broadcast address</string>
     <string name="wol_broadcast_hint">255.255.255.255 reaches the whole local network</string>

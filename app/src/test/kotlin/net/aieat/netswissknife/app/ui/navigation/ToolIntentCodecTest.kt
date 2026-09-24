@@ -48,13 +48,13 @@ class ToolIntentCodecTest {
     fun `port MAC and subnet values round trip`() {
         val intents = listOf(
             ToolIntent(ToolDestination.HostTarget(HostTool.PORTS, host("router.local"), port(65535))),
-            ToolIntent(ToolDestination.WakeOnLan(mac("01-23-45-67-89-ab")), ToolSource.LAN),
+            ToolIntent(ToolDestination.WakeOnLan(mac("02-23-45-67-89-ab")), ToolSource.LAN),
             ToolIntent(ToolDestination.Subnet(subnet("192.168.1.0/24"))),
             ToolIntent(ToolDestination.Subnet(subnet("2001:db8::/48"))),
         )
 
         intents.forEach { assertEquals(it, ToolIntentCodec.decode(ToolIntentCodec.encode(it))) }
-        assertEquals("01:23:45:67:89:AB", mac("01-23-45-67-89-ab").value)
+        assertEquals("02:23:45:67:89:AB", mac("02-23-45-67-89-ab").value)
     }
 
     @Test
@@ -80,6 +80,9 @@ class ToolIntentCodecTest {
         assertNull(ToolHost.parse("fe80::1%wlan/0"))
         assertNull(ToolHost.parse("fe80::1%wlan0%2Fother"))
         assertNull(ToolMacAddress.parse("01:23-45:67-89:AB"))
+        assertNull(ToolMacAddress.parse("00:00:00:00:00:00"))
+        assertNull(ToolMacAddress.parse("FF:FF:FF:FF:FF:FF"))
+        assertNull(ToolMacAddress.parse("01:23:45:67:89:AB"))
         assertThrows(IllegalArgumentException::class.java) {
             ToolMacAddress("01-23-45-67-89-AB")
         }

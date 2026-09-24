@@ -136,9 +136,11 @@ import net.aieat.netswissknife.app.ui.navigation.NavRoutes
 import net.aieat.netswissknife.app.ui.navigation.ToolDestination
 import net.aieat.netswissknife.app.ui.navigation.ToolHost
 import net.aieat.netswissknife.app.ui.navigation.ToolIntent
+import net.aieat.netswissknife.app.ui.navigation.ToolMacAddress
 import net.aieat.netswissknife.app.ui.navigation.ToolPort
 import net.aieat.netswissknife.app.ui.navigation.ToolSource
 import net.aieat.netswissknife.core.network.lan.LanHost
+import net.aieat.netswissknife.core.network.lan.MacSource
 import net.aieat.netswissknife.core.network.lan.LanScanSummary
 import net.aieat.netswissknife.core.network.lan.DiscoveryMethod
 import net.aieat.netswissknife.core.network.lan.LanScanDiagnosticReason
@@ -216,6 +218,14 @@ fun LanScreen(
                         )
                     }
                 }
+                is LanNavEvent.NavigateToWakeOnLan -> onNavigate(
+                    NavRoutes.WakeOnLan.createRoute(
+                        ToolIntent(
+                            destination = ToolDestination.WakeOnLan(event.mac),
+                            source = ToolSource.LAN,
+                        ),
+                    ),
+                )
             }
         }
     }
@@ -303,6 +313,7 @@ fun LanScreen(
                         onPingHost = viewModel::onPingHost,
                         onProbeHttp = viewModel::onProbeHttp,
                         onInspectTls = viewModel::onInspectTls,
+                        onWakeDevice = viewModel::onWakeDevice,
                         onClear = viewModel::onClear,
                         onRescan = viewModel::startScan,
                         onToggleDiagnostics = viewModel::onToggleDiagnostics,
@@ -321,6 +332,7 @@ fun LanScreen(
                         onPingHost = viewModel::onPingHost,
                         onProbeHttp = viewModel::onProbeHttp,
                         onInspectTls = viewModel::onInspectTls,
+                        onWakeDevice = viewModel::onWakeDevice,
                         onClear = viewModel::onClear,
                         onRescan = viewModel::startScan,
                         onToggleDiagnostics = viewModel::onToggleDiagnostics,
@@ -649,6 +661,7 @@ private fun LanScanningContent(state: LanScanUiState.Scanning) {
                             onPingHost = {},
                             onProbeHttp = { _, _ -> },
                             onInspectTls = { _, _ -> },
+                            onWakeDevice = {},
                         )
                     }
                 }
@@ -749,6 +762,7 @@ private fun LanFinishedContent(
     onPingHost: (String) -> Unit,
     onProbeHttp: (String, Int) -> Unit,
     onInspectTls: (String, Int) -> Unit,
+    onWakeDevice: (String) -> Unit,
     onClear: () -> Unit,
     onRescan: () -> Unit,
     onToggleDiagnostics: () -> Unit,
@@ -1005,6 +1019,7 @@ private fun LanFinishedContent(
                             onPingHost = onPingHost,
                             onProbeHttp = onProbeHttp,
                             onInspectTls = onInspectTls,
+                            onWakeDevice = onWakeDevice,
                         )
                     }
                 }
@@ -1197,6 +1212,7 @@ private fun HostCard(
     onPingHost: (String) -> Unit,
     onProbeHttp: (String, Int) -> Unit,
     onInspectTls: (String, Int) -> Unit,
+    onWakeDevice: (String) -> Unit,
 ) {
     val containerColor by animateColorAsState(
         targetValue = if (expanded)
@@ -1342,6 +1358,7 @@ private fun HostCard(
                         onPingHost = onPingHost,
                         onProbeHttp = onProbeHttp,
                         onInspectTls = onInspectTls,
+                        onWakeDevice = onWakeDevice,
                     )
                 }
             }
@@ -1394,6 +1411,7 @@ private fun HostDetailPanel(
     onPingHost: (String) -> Unit,
     onProbeHttp: (String, Int) -> Unit,
     onInspectTls: (String, Int) -> Unit,
+    onWakeDevice: (String) -> Unit,
 ) {
     Column(
         modifier = Modifier.padding(top = 8.dp),
@@ -1413,6 +1431,15 @@ private fun HostDetailPanel(
         }
         host.macAddress?.let { macAddress ->
             DetailRow(label = stringResource(R.string.lan_detail_mac), value = macAddress)
+            val wakeMac = macAddress.takeIf { host.macSource == MacSource.ARP }?.let(ToolMacAddress::parse)
+            if (wakeMac != null) {
+                TextButton(
+                    onClick = { onWakeDevice(wakeMac.value) },
+                    modifier = Modifier.testTag("lan_action_wake_device"),
+                ) {
+                    Text(stringResource(R.string.lan_action_wake_device))
+                }
+            }
         } ?: if (!macResolutionSupported) {
             DetailRow(
                 label = stringResource(R.string.lan_detail_mac),

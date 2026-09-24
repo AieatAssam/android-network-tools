@@ -32,6 +32,7 @@ import net.aieat.netswissknife.app.ui.navigation.AppNavHost
 import net.aieat.netswissknife.app.ui.navigation.AppNavigationViewModel
 import net.aieat.netswissknife.app.ui.navigation.MoreToolsSheet
 import net.aieat.netswissknife.app.ui.navigation.NavRoutes
+import net.aieat.netswissknife.app.ui.navigation.navigationRouteIdentity
 import net.aieat.netswissknife.app.ui.navigation.navigateToTool
 import net.aieat.netswissknife.app.ui.screens.onboarding.OnboardingSheet
 import net.aieat.netswissknife.app.ui.screens.onboarding.OnboardingViewModel
@@ -80,7 +81,7 @@ fun NetSwissKnifeApp(navController: NavHostController) {
     val shouldShowOnboarding by onboardingViewModel.shouldShowOnboarding.collectAsStateWithLifecycle()
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = navBackStackEntry?.destination?.route
+    val currentRoute = navigationRouteIdentity(navBackStackEntry?.destination?.route)
     val windowAdaptiveInfo = currentWindowAdaptiveInfoV2()
     NavigationSuiteScaffold(
         layoutType = NavigationSuiteScaffoldDefaults.calculateFromAdaptiveInfo(windowAdaptiveInfo),

@@ -1,5 +1,6 @@
 package net.aieat.netswissknife.app.ui.screens.wol
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -11,7 +12,6 @@ import kotlinx.coroutines.launch
 import net.aieat.netswissknife.core.domain.WakeOnLanParams
 import net.aieat.netswissknife.core.domain.WakeOnLanUseCase
 import net.aieat.netswissknife.core.network.NetworkResult
-import net.aieat.netswissknife.core.network.wol.WolMagicPacket
 import net.aieat.netswissknife.core.network.wol.WolSendReport
 import net.aieat.netswissknife.core.network.operation.CancellationReason
 import net.aieat.netswissknife.core.network.operation.OperationSession
@@ -21,6 +21,10 @@ import net.aieat.netswissknife.app.platform.NetworkStatus
 import net.aieat.netswissknife.app.platform.NetworkStatusProvider
 import net.aieat.netswissknife.app.platform.NoOpNetworkStatusProvider
 import net.aieat.netswissknife.app.platform.toNetworkErrorKind
+import net.aieat.netswissknife.app.ui.navigation.ToolDestination
+import net.aieat.netswissknife.app.ui.navigation.ToolIntentCodec
+import net.aieat.netswissknife.app.ui.navigation.ToolMacAddress
+import net.aieat.netswissknife.app.ui.navigation.ToolSource
 import javax.inject.Inject
 
 sealed interface WolUiState {
@@ -37,14 +41,31 @@ sealed interface WolUiState {
 class WakeOnLanViewModel @Inject constructor(
     private val wakeOnLan: WakeOnLanUseCase,
     networkStatusProvider: NetworkStatusProvider = NoOpNetworkStatusProvider,
+    private val savedStateHandle: SavedStateHandle = SavedStateHandle(),
 ) : ViewModel() {
+
+    private val routeMac = savedStateHandle.get<String>("mac")?.let(ToolMacAddress::parse)
+    private val rawIntentArgument = savedStateHandle.get<String>("intent")
+    private val typedIntent = rawIntentArgument?.let(ToolIntentCodec::decode)
+    private val handoffMac = (typedIntent?.destination as? ToolDestination.WakeOnLan)
+        ?.mac
+        ?.takeIf { routeMac != null && it == routeMac && typedIntent.source == ToolSource.LAN }
+    private val _hasInvalidHandoff = MutableStateFlow(
+        (rawIntentArgument != null || savedStateHandle.get<String>("mac") != null) &&
+            handoffMac == null && savedStateHandle.get<Boolean>(HANDOFF_RECOVERED_KEY) != true,
+    )
+    val hasInvalidHandoff: StateFlow<Boolean> = _hasInvalidHandoff.asStateFlow()
+    val sourceContext: ToolSource? = handoffMac?.let { typedIntent?.source }
 
     val networkStatus: StateFlow<NetworkStatus> = networkStatusProvider.status
 
     private val _uiState = MutableStateFlow<WolUiState>(WolUiState.Idle)
     val uiState: StateFlow<WolUiState> = _uiState.asStateFlow()
 
-    private val _macAddress = MutableStateFlow("")
+    private val _macAddress = MutableStateFlow(
+        savedStateHandle.get<String>(EDITED_MAC_KEY)
+            ?: if (_hasInvalidHandoff.value) "" else handoffMac?.value.orEmpty(),
+    )
     val macAddress: StateFlow<String> = _macAddress.asStateFlow()
 
     private val _broadcastAddress = MutableStateFlow(DEFAULT_BROADCAST)
@@ -58,16 +79,21 @@ class WakeOnLanViewModel @Inject constructor(
 
     /** True when the user has typed something that is not a valid MAC yet. */
     val isMacInvalid: Boolean
-        get() = _macAddress.value.isNotBlank() && !WolMagicPacket.isValidMac(_macAddress.value)
+        get() = _macAddress.value.isNotBlank() && ToolMacAddress.parse(_macAddress.value) == null
 
     val canSend: Boolean
-        get() = WolMagicPacket.isValidMac(_macAddress.value) &&
+        get() = ToolMacAddress.parse(_macAddress.value) != null &&
             _broadcastAddress.value.isNotBlank() &&
             _port.value.toIntOrNull() in WakeOnLanParams.MIN_PORT..WakeOnLanParams.MAX_PORT &&
             _uiState.value !is WolUiState.Sending
 
     fun onMacAddressChange(value: String) {
         _macAddress.value = value
+        savedStateHandle[EDITED_MAC_KEY] = value
+        if (_hasInvalidHandoff.value && ToolMacAddress.parse(value) != null) {
+            savedStateHandle[HANDOFF_RECOVERED_KEY] = true
+            _hasInvalidHandoff.value = false
+        }
     }
 
     fun onBroadcastAddressChange(value: String) {
@@ -131,5 +157,7 @@ class WakeOnLanViewModel @Inject constructor(
     companion object {
         const val DEFAULT_BROADCAST = "255.255.255.255"
         const val DEFAULT_PORT = 9
+        private const val EDITED_MAC_KEY = "editedWolMac"
+        private const val HANDOFF_RECOVERED_KEY = "wolHandoffRecovered"
     }
 }

@@ -99,7 +99,17 @@ sealed class NavRoutes(
     object SubnetCalculator : NavRoutes("subnet", "Subnet Calc", Icons.Default.Calculate)
     object MdnsDiscovery : NavRoutes("mdns", "mDNS Browser", Icons.Default.CellTower)
     object SpeedTest : NavRoutes("speedtest", "Speed Test", Icons.Default.Speed)
-    object WakeOnLan : NavRoutes("wol", "Wake-on-LAN", Icons.Default.PowerSettingsNew)
+    object WakeOnLan : NavRoutes("wol?intent={intent}&mac={mac}", "Wake-on-LAN", Icons.Default.PowerSettingsNew) {
+        const val baseRoute = "wol"
+
+        fun createRoute(intent: ToolIntent): String {
+            val destination = intent.destination as? ToolDestination.WakeOnLan
+                ?: throw IllegalArgumentException("Wake-on-LAN route requires a WOL destination")
+            require(intent.source == ToolSource.LAN)
+            return "$baseRoute?intent=${Uri.encode(ToolIntentCodec.encode(intent))}" +
+                "&mac=${Uri.encode(destination.mac.value)}"
+        }
+    }
     object Settings : NavRoutes("settings", "Settings", Icons.Default.Settings)
 
     companion object {

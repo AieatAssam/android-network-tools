@@ -20,10 +20,12 @@ import net.aieat.netswissknife.app.ui.navigation.ToolDestination
 import net.aieat.netswissknife.app.ui.navigation.ToolHost
 import net.aieat.netswissknife.app.ui.navigation.ToolIntent
 import net.aieat.netswissknife.app.ui.navigation.ToolIntentCodec
+import net.aieat.netswissknife.app.ui.navigation.ToolMacAddress
 import net.aieat.netswissknife.app.ui.navigation.ToolPort
 import net.aieat.netswissknife.app.ui.navigation.ToolSource
 import net.aieat.netswissknife.app.ui.theme.NetSwissKnifeTheme
 import org.junit.Rule
+import org.junit.Assert.assertThrows
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -245,5 +247,75 @@ class ToolHandoffNavigationTest {
         composeRule.onNodeWithText("Encoded intent: $encodedIntent").assertIsDisplayed()
         composeRule.onNodeWithText("Back to LAN").performClick()
         composeRule.onNodeWithText("LAN scan result").assertIsDisplayed()
+    }
+
+    @Test
+    fun lanWakeOnLanHandoffCarriesUnicastMacAndBackReturnsToLanResult() {
+        val mac = requireNotNull(ToolMacAddress.parse("02-23-45-67-89-ab"))
+        val intent = ToolIntent(ToolDestination.WakeOnLan(mac), ToolSource.LAN)
+        val encodedIntent = ToolIntentCodec.encode(intent)
+
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                val navController = rememberNavController()
+                NavHost(navController = navController, startDestination = "lan") {
+                    composable("lan") {
+                        Column {
+                            Text("LAN scan result")
+                            Button(onClick = {
+                                navController.navigateFromToolHandoff(NavRoutes.WakeOnLan.createRoute(intent))
+                            }) { Text("Wake device") }
+                        }
+                    }
+                    composable(
+                        route = NavRoutes.WakeOnLan.route,
+                        arguments = listOf(
+                            navArgument("intent") {
+                                type = NavType.StringType
+                                nullable = true
+                                defaultValue = null
+                            },
+                            navArgument("mac") {
+                                type = NavType.StringType
+                                nullable = true
+                                defaultValue = null
+                            },
+                        ),
+                    ) { entry ->
+                        val rawMac = entry.arguments?.getString("mac")
+                        val decoded = entry.arguments?.getString("intent")?.let(ToolIntentCodec::decode)
+                        val targetMac = (decoded?.destination as? ToolDestination.WakeOnLan)
+                            ?.mac
+                            ?.takeIf { rawMac?.let(ToolMacAddress::parse) == it }
+                        Column {
+                            Text("MAC: $rawMac")
+                            Text("Typed MAC: ${targetMac?.value}")
+                            Text("Source: ${decoded?.source}")
+                            Text("Encoded intent: ${entry.arguments?.getString("intent")}")
+                            Button(onClick = { navController.popBackStack() }) { Text("Back to LAN") }
+                        }
+                    }
+                }
+            }
+        }
+
+        composeRule.onNodeWithText("Wake device").performClick()
+        composeRule.onNodeWithText("MAC: 02:23:45:67:89:AB").assertIsDisplayed()
+        composeRule.onNodeWithText("Typed MAC: 02:23:45:67:89:AB").assertIsDisplayed()
+        composeRule.onNodeWithText("Source: LAN").assertIsDisplayed()
+        composeRule.onNodeWithText("Encoded intent: $encodedIntent").assertIsDisplayed()
+        composeRule.onNodeWithText("Back to LAN").performClick()
+        composeRule.onNodeWithText("LAN scan result").assertIsDisplayed()
+    }
+
+    @Test
+    fun wakeOnLanRouteBuilderRejectsNonLanSource() {
+        val mac = requireNotNull(ToolMacAddress.parse("02:23:45:67:89:AB"))
+        assertThrows(IllegalArgumentException::class.java) {
+            NavRoutes.WakeOnLan.createRoute(ToolIntent(ToolDestination.WakeOnLan(mac), ToolSource.MDNS))
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            NavRoutes.WakeOnLan.createRoute(ToolIntent(ToolDestination.WakeOnLan(mac)))
+        }
     }
 }

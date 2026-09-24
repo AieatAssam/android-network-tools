@@ -42,9 +42,13 @@ value class ToolPort private constructor(val value: Int) {
     }
 }
 
+/** A unicast Wake-on-LAN target in canonical uppercase colon notation. */
 data class ToolMacAddress(val value: String) {
     init {
-        require(pattern.matches(value) && ':' in value && '-' !in value && value == value.uppercase(Locale.ROOT))
+        require(
+            pattern.matches(value) && ':' in value && '-' !in value &&
+                value == value.uppercase(Locale.ROOT) && isWolUnicast(value),
+        )
     }
 
     companion object {
@@ -54,7 +58,13 @@ data class ToolMacAddress(val value: String) {
             if (!pattern.matches(value)) return null
             if (':' in value && '-' in value) return null
             val normalized = value.replace('-', ':').uppercase(Locale.ROOT)
+            if (!isWolUnicast(normalized)) return null
             return ToolMacAddress(normalized)
+        }
+
+        private fun isWolUnicast(value: String): Boolean {
+            val firstOctet = value.substringBefore(':').toIntOrNull(16) ?: return false
+            return (firstOctet and 0x01) == 0 && value != "00:00:00:00:00:00"
         }
     }
 }
