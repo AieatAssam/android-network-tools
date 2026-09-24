@@ -19,6 +19,7 @@ import java.net.InetAddress
 import java.net.Socket
 import java.net.SocketAddress
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -203,6 +204,70 @@ class WhoisCancellationTest {
     }
 
     @Test
+    fun `overlapping lookups tag shared progress with their own operation ids`() = runTest {
+        val firstSocket = GatedResponseSocket("NetName: FIRST-NET\r\n".toByteArray())
+        val secondSocket = GatedResponseSocket("NetName: SECOND-NET\r\n".toByteArray())
+        val socketIndex = AtomicInteger()
+        val repository = WhoisRepositoryImpl(
+            resolver = WhoisHostResolver { publicAddress },
+            socketFactory = WhoisSocketFactory {
+                when (socketIndex.getAndIncrement()) {
+                    0 -> firstSocket
+                    1 -> secondSocket
+                    else -> error("unexpected third WHOIS socket")
+                }
+            },
+        )
+        val firstSession = OperationSession(OperationBudget.start(timeoutMillis = 20_000, maxConcurrentProbes = 1))
+        val secondSession = OperationSession(OperationBudget.start(timeoutMillis = 20_000, maxConcurrentProbes = 1))
+        val progressEvents = LinkedBlockingQueue<WhoisHop>()
+        val collector = launch(Dispatchers.Default, start = CoroutineStart.UNDISPATCHED) {
+            repository.hopProgress.collect(progressEvents::put)
+        }
+        val firstLookup = async(Dispatchers.Default) {
+            repository.lookup("8.8.8.8", 10_000, firstSession)
+        }
+        var secondLookup: kotlinx.coroutines.Deferred<NetworkResult<WhoisResult>>? = null
+
+        try {
+            awaitLatch(firstSocket.readEntered, timeoutMillis = 10_000)
+            val activeSecondLookup = async(Dispatchers.Default) {
+                repository.lookup("1.1.1.1", 10_000, secondSession)
+            }
+            secondLookup = activeSecondLookup
+            awaitLatch(secondSocket.readEntered, timeoutMillis = 10_000)
+
+            secondSocket.releaseResponse.countDown()
+            val secondResult = withContext(Dispatchers.IO) { activeSecondLookup.await() }
+            assertTrue(secondResult is NetworkResult.Success)
+            assertEquals("1.1.1.1", (secondResult as NetworkResult.Success).data.query)
+            val secondHop = withContext(Dispatchers.IO) { progressEvents.poll(10, TimeUnit.SECONDS) }
+            assertEquals(secondSession.budget.operationId, secondHop?.operationId)
+            assertTrue(secondHop?.rawResponse.orEmpty().contains("SECOND-NET"))
+
+            firstSocket.releaseResponse.countDown()
+            val firstResult = withContext(Dispatchers.IO) { firstLookup.await() }
+            assertTrue(firstResult is NetworkResult.Success)
+            assertEquals("8.8.8.8", (firstResult as NetworkResult.Success).data.query)
+            val firstHop = withContext(Dispatchers.IO) { progressEvents.poll(10, TimeUnit.SECONDS) }
+            assertEquals(firstSession.budget.operationId, firstHop?.operationId)
+            assertTrue(firstHop?.rawResponse.orEmpty().contains("FIRST-NET"))
+            assertTrue(firstSession.budget.operationId != secondSession.budget.operationId)
+            assertTrue(progressEvents.isEmpty(), "each one-hop lookup should emit exactly one tagged event")
+            assertTrue(firstSocket.closed.get())
+            assertTrue(secondSocket.closed.get())
+        } finally {
+            firstSocket.releaseResponse.countDown()
+            secondSocket.releaseResponse.countDown()
+            firstSession.cancel(CancellationReason.USER_STOP)
+            secondSession.cancel(CancellationReason.USER_STOP)
+            firstLookup.cancelAndJoin()
+            secondLookup?.cancelAndJoin()
+            collector.cancelAndJoin()
+        }
+    }
+
+    @Test
     fun `operation deadline maps to the existing total deadline error`() = runTest {
         val socket = BlockingReadSocket()
         val repository = repositoryWith(socket)
@@ -307,8 +372,8 @@ class WhoisCancellationTest {
         socketFactory = WhoisSocketFactory { socket }
     )
 
-    private suspend fun awaitLatch(latch: CountDownLatch) {
-        val entered = withContext(Dispatchers.IO) { latch.await(2, TimeUnit.SECONDS) }
+    private suspend fun awaitLatch(latch: CountDownLatch, timeoutMillis: Long = 2_000) {
+        val entered = withContext(Dispatchers.IO) { latch.await(timeoutMillis, TimeUnit.MILLISECONDS) }
         assertTrue(entered, "operation did not start")
     }
 
@@ -371,5 +436,42 @@ class WhoisCancellationTest {
         override fun getOutputStream() = ByteArrayOutputStream()
         override fun getInputStream(): InputStream = response.inputStream()
         override fun close() { closeCalls.incrementAndGet() }
+    }
+
+    private class GatedResponseSocket(private val response: ByteArray) : Socket() {
+        val readEntered = CountDownLatch(1)
+        val releaseResponse = CountDownLatch(1)
+        val closed = AtomicBoolean(false)
+        private val responseStream = response.inputStream()
+
+        override fun connect(endpoint: SocketAddress?, timeout: Int) = Unit
+        override fun getOutputStream() = ByteArrayOutputStream()
+        override fun getInputStream(): InputStream = object : InputStream() {
+            private val gateUsed = AtomicBoolean(false)
+
+            private fun awaitResponseGate() {
+                if (gateUsed.compareAndSet(false, true)) {
+                    readEntered.countDown()
+                    if (!releaseResponse.await(10, TimeUnit.SECONDS)) {
+                        throw IOException("timed out waiting for the test to release the WHOIS response")
+                    }
+                }
+            }
+
+            override fun read(): Int {
+                awaitResponseGate()
+                return responseStream.read()
+            }
+
+            override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
+                awaitResponseGate()
+                return responseStream.read(buffer, offset, length)
+            }
+        }
+
+        override fun close() {
+            closed.set(true)
+            releaseResponse.countDown()
+        }
     }
 }

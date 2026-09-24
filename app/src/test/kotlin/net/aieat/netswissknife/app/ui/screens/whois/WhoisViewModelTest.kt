@@ -176,6 +176,99 @@ class WhoisViewModelTest {
     }
 
     @Test
+    fun `replacement lookup ignores delayed hop from previous operation`() = runTest {
+        val progress = MutableSharedFlow<WhoisHop>(extraBufferCapacity = 4)
+        every { whoisLookupUseCase.hopProgress } returns progress
+        val sessions = mutableMapOf<String, OperationSession>()
+        coEvery { whoisLookupUseCase(any(), any()) } coAnswers {
+            sessions[firstArg<WhoisParams>().query] = secondArg()
+            kotlinx.coroutines.awaitCancellation()
+        }
+
+        try {
+            viewModel.onQueryChange("first.com")
+            viewModel.lookup()
+            runCurrent()
+            val firstSession = checkNotNull(sessions["first.com"])
+            val firstHop = stubHop.copy(
+                server = WhoisServer("whois.first.test", WhoisServerRole.IANA),
+                operationId = firstSession.budget.operationId,
+            )
+            progress.emit(firstHop)
+            runCurrent()
+            assertEquals(listOf(firstHop.server), viewModel.uiState.value.hopStates.map { it.server })
+
+            viewModel.onQueryChange("second.com")
+            viewModel.lookup()
+            runCurrent()
+            val secondSession = checkNotNull(sessions["second.com"])
+            assertEquals(CancellationReason.USER_STOP, firstSession.cancellationReason)
+            assertTrue(viewModel.uiState.value.hopStates.isEmpty(), "replacement starts with a fresh hop list")
+
+            progress.emit(firstHop.copy(server = WhoisServer("late.first.test", WhoisServerRole.REGISTRY)))
+            runCurrent()
+            assertTrue(viewModel.uiState.value.hopStates.isEmpty(), "a delayed old-operation hop must be ignored")
+
+            val secondHop = stubHop.copy(
+                server = WhoisServer("whois.second.test", WhoisServerRole.IANA),
+                operationId = secondSession.budget.operationId,
+            )
+            progress.emit(secondHop)
+            runCurrent()
+            assertEquals(listOf(secondHop.server), viewModel.uiState.value.hopStates.map { it.server })
+        } finally {
+            viewModel.stopLookup()
+            runCurrent()
+        }
+    }
+
+    @Test
+    fun `independent view models filter shared progress by their operation ids`() = runTest {
+        val progress = MutableSharedFlow<WhoisHop>(extraBufferCapacity = 4)
+        every { whoisLookupUseCase.hopProgress } returns progress
+        val sessions = mutableMapOf<String, OperationSession>()
+        coEvery { whoisLookupUseCase(any(), any()) } coAnswers {
+            sessions[firstArg<WhoisParams>().query] = secondArg()
+            kotlinx.coroutines.awaitCancellation()
+        }
+        val secondViewModel = WhoisViewModel(whoisLookupUseCase, recentHostsRepository)
+
+        try {
+            viewModel.onQueryChange("first.com")
+            viewModel.lookup()
+            secondViewModel.onQueryChange("second.com")
+            secondViewModel.lookup()
+            runCurrent()
+            assertEquals(2, sessions.size)
+            val firstSession = checkNotNull(sessions["first.com"])
+            val secondSession = checkNotNull(sessions["second.com"])
+
+            val firstHop = stubHop.copy(
+                server = WhoisServer("whois.first.test", WhoisServerRole.IANA),
+                operationId = firstSession.budget.operationId,
+            )
+            val secondHop = stubHop.copy(
+                server = WhoisServer("whois.second.test", WhoisServerRole.IANA),
+                operationId = secondSession.budget.operationId,
+            )
+
+            progress.emit(firstHop)
+            runCurrent()
+            assertEquals(listOf(firstHop.server), viewModel.uiState.value.hopStates.map { it.server })
+            assertTrue(secondViewModel.uiState.value.hopStates.isEmpty())
+
+            progress.emit(secondHop)
+            runCurrent()
+            assertEquals(listOf(firstHop.server), viewModel.uiState.value.hopStates.map { it.server })
+            assertEquals(listOf(secondHop.server), secondViewModel.uiState.value.hopStates.map { it.server })
+        } finally {
+            viewModel.stopLookup()
+            secondViewModel.stopLookup()
+            runCurrent()
+        }
+    }
+
+    @Test
     fun `stop cancels caller-owned session with USER_STOP and ignores late progress`() = runTest {
         val progress = MutableSharedFlow<WhoisHop>(extraBufferCapacity = 4)
         every { whoisLookupUseCase.hopProgress } returns progress

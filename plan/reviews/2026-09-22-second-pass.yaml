@@ -140,16 +140,19 @@ findings:
   - id: R2-009
     severity: medium
     kind: isolation_gap
-    status: todo
-    title: "WHOIS progress is repository-global rather than lookup-scoped"
+    status: done
+    title: "WHOIS shared progress needed overlap and consumer-isolation coverage"
     related_phase: P10
     implementation_task: E03-T03
     evidence:
-      - { file: core-network/src/main/kotlin/net/aieat/netswissknife/core/network/whois/WhoisRepositoryImpl.kt, line: 14, detail: "All lookups emit WhoisHop into one SharedFlow, without request identity." }
-      - { file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/whois/WhoisViewModel.kt, line: 95, detail: "The new progress collector appends every repository event; cancelling old jobs is not an event-origin filter." }
-    impact: "Overlapping consumers or delayed work can mix hop events between lookup sessions, even if terminal results are guarded. This is especially relevant to the planned combined diagnostics runner."
-    recommended_action: "Prefer a per-call event flow, or tag every progress and terminal event with an opaque lookup ID and filter at consumers. Do not rely solely on cancellation of a UI collector."
-    validation: "Interleave two lookups sharing one repository and delay A's hop until B starts; each consumer sees only its own hops. Cover replacement, cancellation and a second independent consumer."
+      - { file: core-network/src/main/kotlin/net/aieat/netswissknife/core/network/whois/WhoisRepositoryImpl.kt, line: 58, detail: "Each lookup passes its caller-owned operation ID into progress construction before emitting on the repository SharedFlow." }
+      - { file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/whois/WhoisViewModel.kt, line: 110, detail: "The collector accepts a hop only while its session is current and the hop operation ID matches that session." }
+    impact: "Without overlap and consumer-isolation coverage, future changes could mix delayed hop events between lookups even while terminal results remain guarded."
+    recommended_action: "Keep operation IDs on every progress event and filter by current session at each consumer; retain regression coverage for overlap, replacement, cancellation, and independent consumers."
+    validation: "WhoisCancellationTest passed 14/14, including two concurrent real repository lookups released in reverse order; each hop's operation ID and raw socket-response marker matched its own result. WhoisViewModelTest and its nested lookup-state suite passed 12/12, covering delayed events after replacement and two independent ViewModels consuming the shared stream. Separate QA and adversarial reviews found no blocker."
+    completion_evidence:
+      - { file: core-network/src/test/kotlin/net/aieat/netswissknife/core/network/whois/WhoisCancellationTest.kt, detail: "Gated sockets force two concurrent repository lookups to overlap and complete in reverse order; assertions bind each event to its operation ID and unique raw response." }
+      - { file: app/src/test/kotlin/net/aieat/netswissknife/app/ui/screens/whois/WhoisViewModelTest.kt, detail: "Replacement lookup drops delayed old-session progress, and independent ViewModels display only their own operation's hops." }
 
   - id: R2-010
     severity: high
