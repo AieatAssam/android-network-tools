@@ -29,6 +29,7 @@ import net.aieat.netswissknife.app.ui.navigation.ToolIntentCodec
 import net.aieat.netswissknife.app.ui.navigation.ToolPort
 import net.aieat.netswissknife.app.ui.navigation.ToolSource
 import net.aieat.netswissknife.core.domain.TlsInspectorUseCase
+import net.aieat.netswissknife.core.domain.TlsInspectorErrorKeys
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.operation.OperationRunner
 import net.aieat.netswissknife.core.network.tls.TlsCertificate
@@ -528,6 +529,76 @@ class TlsInspectorViewModelTest {
         coVerify { useCase(match { it.host == "example.com" && it.port == 8443 }, any()) }
         coVerify { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_TLS_HOSTS, "example.com") }
         assertNull(viewModel.uiState.value.error)
+    }
+
+    @Test
+    fun `inspect forwards advanced protocol probe and normalized optional pin`() = runTest {
+        coEvery { useCase(any(), any()) } returns NetworkResult.Success(stubResult)
+        viewModel.onHostChange("example.com")
+        viewModel.onProbeProtocolsChange(true)
+        viewModel.onExpectedPinChange("  AA:BB:CC  ")
+
+        viewModel.inspect()
+
+        coVerify {
+            useCase(match {
+                it.host == "example.com" && it.probeProtocols && it.expectedPinSha256 == "AA:BB:CC"
+            }, any())
+        }
+    }
+
+    @Test
+    fun `editing after typed pin error clears its description key`() = runTest {
+        coEvery { useCase(any(), any()) } returns NetworkResult.Error(
+            message = "invalid pin",
+            code = TlsInspectorErrorKeys.PIN_INVALID_CODE,
+            descriptionKey = TlsInspectorErrorKeys.PIN_INVALID_DESCRIPTION,
+        )
+        viewModel.onHostChange("example.com")
+        viewModel.onExpectedPinChange("bad")
+
+        viewModel.inspect()
+
+        assertEquals(TlsInspectorErrorKeys.PIN_INVALID_DESCRIPTION, viewModel.uiState.value.errorDescriptionKey)
+        viewModel.onExpectedPinChange("corrected")
+        assertNull(viewModel.uiState.value.errorDescriptionKey)
+        assertNull(viewModel.uiState.value.error)
+    }
+
+    @Test
+    fun `share summary and explicit PEM output are separate`() {
+        val pem = "-----BEGIN CERTIFICATE-----\nQUJD\n-----END CERTIFICATE-----"
+        val result = stubResult.copy(
+            chain = listOf(stubCert.copy(pemEncoded = pem)),
+            hostnameMatches = false,
+            chainIssues = listOf(net.aieat.netswissknife.core.network.tls.ChainIssue.HOSTNAME_MISMATCH),
+            connectTimeMs = 15,
+            alpn = "h2",
+            protocolSupport = mapOf("TLSv1.2" to true),
+            pinMatch = false,
+        )
+
+        val shareText = buildTlsShareText(result)
+
+        assertTrue(shareText.contains("Hostname match: false"))
+        assertTrue(shareText.contains("ALPN: h2"))
+        assertTrue(shareText.contains("TLSv1.2: supported"))
+        assertTrue(shareText.contains("HOSTNAME_MISMATCH"))
+        assertFalse(shareText.contains(pem))
+        assertEquals(pem + "\n", buildTlsPemShareText(result))
+    }
+
+    @Test
+    fun `advanced inspection options survive view model recreation`() {
+        val savedState = SavedStateHandle()
+        val first = TlsInspectorViewModel(useCase, recentHostsRepository, savedStateHandle = savedState)
+        first.onProbeProtocolsChange(true)
+        first.onExpectedPinChange("11".repeat(32))
+
+        val recreated = TlsInspectorViewModel(useCase, recentHostsRepository, savedStateHandle = savedState)
+
+        assertTrue(recreated.uiState.value.probeProtocols)
+        assertEquals("11".repeat(32), recreated.uiState.value.expectedPinSha256)
     }
 
     @Test

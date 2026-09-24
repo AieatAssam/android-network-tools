@@ -522,6 +522,14 @@
     <string name="tls_host_label">Host or IP address</string>
     <string name="tls_host_placeholder">e.g. example.com or 192.168.1.1</string>
     <string name="tls_port_label">Port (default 443)</string>
+    <string name="tls_probe_protocols_label">Probe older TLS versions</string>
+    <string name="tls_probe_protocols_help">Try supported protocol versions separately; this adds connection attempts.</string>
+    <string name="tls_expected_pin_label">Expected SHA-256 certificate pin (optional)</string>
+    <string name="tls_expected_pin_placeholder">64 hexadecimal characters</string>
+    <string name="tls_expected_pin_help">Compare against the leaf certificate fingerprint. Colons are optional.</string>
+    <string name="tls_pin_invalid">Enter a valid 64-character SHA-256 certificate pin.</string>
+    <string name="tls_share_pem">Share PEM</string>
+    <string name="tls_share_pem_subject">TLS certificate PEM for %1$s:%2$d</string>
     <string name="error_invalid_port">Port must be a number from 1 to 65535</string>
     <string name="tls_inspect_button">Inspect</string>
     <string name="tls_inspecting">Inspecting…</string>
@@ -544,6 +552,26 @@
     <string name="tls_cipher_suite">Cipher Suite</string>
     <string name="tls_handshake_time">Handshake</string>
     <string name="tls_ms_format">%1$d ms</string>
+    <string name="tls_connect_time">Connect time</string>
+    <string name="tls_hostname_match">Hostname</string>
+    <string name="tls_match">Match</string>
+    <string name="tls_no_match">Mismatch</string>
+    <string name="tls_alpn">ALPN</string>
+    <string name="tls_pin_match">Expected pin</string>
+    <string name="tls_supported">Supported</string>
+    <string name="tls_not_supported">Not supported</string>
+    <string name="tls_probe_unknown">Could not determine</string>
+    <string name="tls_probe_not_testable">Not testable on this device</string>
+    <string name="tls_findings">Certificate findings</string>
+    <string name="tls_issue_expired">A certificate has expired</string>
+    <string name="tls_issue_not_yet_valid">A certificate is not yet valid</string>
+    <string name="tls_issue_expires_soon">A certificate expires soon</string>
+    <string name="tls_issue_self_signed">The chain contains a self-signed certificate</string>
+    <string name="tls_issue_untrusted">The certificate chain is not trusted</string>
+    <string name="tls_issue_hostname_mismatch">The certificate does not match this hostname</string>
+    <string name="tls_issue_weak_signature">A weak signature algorithm was found</string>
+    <string name="tls_issue_weak_key">A weak public key was found</string>
+    <string name="tls_issue_incomplete_chain">The supplied certificate chain appears incomplete</string>
 
     <!-- TLS Certificate Labels -->
     <string name="tls_cert_leaf">Leaf</string>
@@ -566,6 +594,9 @@
     <string name="tls_issuer_org">Issuer Org</string>
     <string name="tls_valid_from">Valid From</string>
     <string name="tls_valid_to">Valid To</string>
+    <string name="tls_not_yet_valid">NOT YET VALID</string>
+    <string name="tls_ca_certificate">Certificate Authority</string>
+    <string name="tls_key_usage">Key Usage</string>
     <string name="tls_self_signed">Self-Signed</string>
     <string name="tls_sans_label">Subject Alternative Names</string>
     <string name="tls_serial">Serial Number</string>

@@ -173,19 +173,28 @@ tasks:
 
   - id: P10-T2
     title: "TLS repository: two-phase timing, hostname/chain results, ALPN, optional protocol probe, pin check; UI"
-    status: todo
+    status: in_progress
     depends_on: [P10-T1]
+    progress:
+      - "Refactored TLS inspection around an injectable handshake engine while retaining the OperationRunner/OperationSession cancellation and resource-close boundary. Connect and handshake durations are measured separately; result mapping now includes hostname match, chain findings, trust, ALPN, pin match, certificate metadata, and PEM."
+      - "Protocol probes use one fresh connection for each locally enabled candidate. Only an explicit fatal `protocol_version` alert is reported unsupported; ambiguous failures are shown as unknown, and locally disabled candidates as not testable. Pin validation returns TLS_PIN_INVALID with a localized description key. The UI has advanced controls, findings, timing/protocol details, a localized typed-pin error, compact report sharing, and a separate Share PEM action."
+      - "The API 33/manual badssl endpoint checks remain open; no emulator or live endpoint was used."
     tdd:
       red:
         tests:
-          - "TlsInspectorRepositoryImplTest: inject a `HandshakeEngine` fake returning session data (protocol, cipher, certs, alpn) -> result.hostnameMatches computed via matcher; chainIssues from analyzer; pinMatch true/false when expectedPin given"
-          - "probeProtocols=true -> engine invoked once per candidate protocol; unsupported when engine throws SSLHandshakeException"
-          - "TlsInspectorUseCaseTest: pin string normalised (strip ':' , case) and validated (64 hex) -> else error code TLS_PIN_INVALID"
-          - "TlsInspectorViewModelTest: advanced toggles; share PEM builds text from result"
-          - "TlsInspectorScreenTest: issues card lists EXPIRED chip; ALPN chip; pin field"
+          - "TlsInspectorRepositoryFakeEngineTest: inject handshake/session data -> hostname match, chain issues, pin true/false, ALPN, PEM, separate timings, and connections closed without opening sockets"
+          - "probeProtocols=true -> fresh engine connection for each locally enabled candidate; explicit fatal protocol_version alert -> unsupported; ambiguous handshake -> unknown; local-disabled versions -> not testable"
+          - "TlsInspectorUseCaseTest: pin input trims outer whitespace, strips colons, uppercases, validates 64 hex characters, and otherwise returns TLS_PIN_INVALID plus descriptionKey before repository access"
+          - "TlsInspectorViewModelTest: advanced options persist/forward; pin description key clears on edit; compact report and explicit PEM output remain separate"
+          - "TlsInspectorScreenTest: findings include an EXPIRED badge and localized detail; ALPN, protocol true/false/unknown/not-testable rows, pin field, and localized pin error are covered"
         expect: "RED"
-      green: { steps: ["Refactor repository around HandshakeEngine (default = SSLSocket impl) so the JVM test never opens sockets; UI per design."], expect: "PASS" }
+      green: { steps: ["Implement injectable SSLSocket handshake engine; keep each connection in OperationSession resources through blocking work; analyze trust, hostname, and chain separately; add explicit supported/unknown/not-testable protocol outcomes, typed pin error metadata, and UI per design."], expect: "PASS" }
     acceptance_criteria: ["Manual: badssl.com hosts – expired.badssl.com (EXPIRED), wrong.host.badssl.com (HOSTNAME_MISMATCH), self-signed.badssl.com, incomplete-chain.badssl.com, tls-v1-0.badssl.com:1010 (probe)"]
+    validation:
+      - "Latest serialized ./gradlew :core-network:test :core-domain:test :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin --no-daemon --no-parallel --max-workers=1 --console=plain -> PASS (core-network 1,141 tests/1 skipped; core-domain 206; app 523; zero failures/errors)."
+      - "Serialized :app:lintDebug --no-daemon --no-parallel --max-workers=1 -> PASS."
+      - "Android-test Kotlin sources compiled; instrumentation and manual badssl/API 33 checks were not run. `adb devices` showed no attached or running emulator."
+      - "Independent QA and adversarial source reviews found no remaining source blocker after the probe-result, localized-error, EXPIRED-badge, and PEM assertions were tightened."
 
   - id: P10-T3
     second_pass_review:

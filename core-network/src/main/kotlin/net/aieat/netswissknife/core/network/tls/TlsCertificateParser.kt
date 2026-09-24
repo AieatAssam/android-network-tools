@@ -113,7 +113,7 @@ object TlsCertificateParser {
     }
 
     /** Parses a full [X509Certificate] into a [TlsCertificate]. */
-    fun parse(cert: X509Certificate): TlsCertificate {
+    fun parse(cert: X509Certificate, nowMillis: Long = System.currentTimeMillis()): TlsCertificate {
         val subjectDn = cert.subjectX500Principal.name
         val issuerDn  = cert.issuerX500Principal.name
 
@@ -147,15 +147,36 @@ object TlsCertificateParser {
             issuerOrg           = parseOrg(issuerDn),
             notBefore           = notBefore,
             notAfter            = notAfter,
-            isExpired           = isExpired(notAfter),
+            isExpired           = notAfter <= nowMillis,
             isSelfSigned        = isSelfSigned(subjectDn, issuerDn),
             sans                = sans,
             serialNumber        = cert.serialNumber.toString(16).uppercase(),
             signatureAlgorithm  = cert.sigAlgName,
             publicKeyAlgorithm  = cert.publicKey.algorithm,
             publicKeyBits       = publicKeyBits,
-            sha256Fingerprint   = sha256Fingerprint(cert.encoded)
+            sha256Fingerprint   = sha256Fingerprint(cert.encoded),
+            notYetValid         = notBefore > nowMillis,
+            daysUntilExpiry     = if (notAfter <= nowMillis) 0 else (notAfter - nowMillis) / MILLIS_PER_DAY,
+            isCa                = cert.basicConstraints >= 0,
+            keyUsage            = keyUsageNames(cert.keyUsage),
+            pemEncoded          = PemEncoder.encode(cert),
         )
+    }
+
+    private fun keyUsageNames(usage: BooleanArray?): List<String> {
+        if (usage == null) return emptyList()
+        val names = listOf(
+            "Digital signature",
+            "Non-repudiation",
+            "Key encipherment",
+            "Data encipherment",
+            "Key agreement",
+            "Certificate signing",
+            "CRL signing",
+            "Encipher only",
+            "Decipher only",
+        )
+        return names.filterIndexed { index, _ -> usage.getOrNull(index) == true }
     }
 
     private fun parseIpSanValue(value: Any): String? {
@@ -172,4 +193,5 @@ object TlsCertificateParser {
 
     private const val IPV4_BYTES = 4
     private const val IPV6_BYTES = 16
+    private const val MILLIS_PER_DAY = 24L * 60 * 60 * 1_000
 }

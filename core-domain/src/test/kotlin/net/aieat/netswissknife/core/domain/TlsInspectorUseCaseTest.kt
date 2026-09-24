@@ -8,6 +8,8 @@ import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.tls.TlsInspectorRepository
 import net.aieat.netswissknife.core.network.tls.TlsInspectorResult
 import net.aieat.netswissknife.core.network.tls.TlsInspectorOperation
+import net.aieat.netswissknife.core.network.tls.TlsInspectorOptions
+import net.aieat.netswissknife.core.network.operation.OperationSession
 import net.aieat.netswissknife.core.network.tls.TlsCertificate
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -106,6 +108,50 @@ class TlsInspectorUseCaseTest {
         }
 
         @Test
+        fun `invalid pin returns typed error without calling repository`() = runTest {
+            val result = useCase(TlsInspectorParams(host = "example.com", expectedPinSha256 = "not-a-pin"))
+
+            assertTrue(result is NetworkResult.Error)
+            val error = result as NetworkResult.Error
+            assertEquals("TLS_PIN_INVALID", error.code)
+            assertEquals("tls_pin_invalid", error.descriptionKey)
+            coVerify(exactly = 0) { repository.inspect(any(), any(), any(), any<TlsInspectorOptions>()) }
+        }
+
+        @Test
+        fun `pin is trimmed colon-stripped and uppercased before repository call`() = runTest {
+            val normalizedPin = "AB".repeat(32)
+            coEvery { repository.inspect(any(), any(), any(), any<TlsInspectorOptions>()) } returns
+                NetworkResult.Success(successResult)
+
+            useCase(TlsInspectorParams(
+                host = "example.com",
+                expectedPinSha256 = "  ${"ab:".repeat(31)}ab  ",
+            ))
+
+            coVerify(exactly = 1) {
+                repository.inspect(
+                    "example.com",
+                    443,
+                    10_000,
+                    match<TlsInspectorOptions> { it == TlsInspectorOptions(expectedPinSha256 = normalizedPin) },
+                )
+            }
+        }
+
+        @Test
+        fun `protocol probe option is forwarded`() = runTest {
+            coEvery { repository.inspect(any(), any(), any(), any<TlsInspectorOptions>()) } returns
+                NetworkResult.Success(successResult)
+
+            useCase(TlsInspectorParams(host = "example.com", probeProtocols = true))
+
+            coVerify(exactly = 1) {
+                repository.inspect("example.com", 443, 10_000, TlsInspectorOptions(probeProtocols = true))
+            }
+        }
+
+        @Test
         fun `host is trimmed before validation`() = runTest {
             coEvery { repository.inspect(any(), any(), any()) } returns NetworkResult.Success(successResult)
             useCase(TlsInspectorParams(host = "  example.com  "))
@@ -136,7 +182,7 @@ class TlsInspectorUseCaseTest {
         fun `caller operation session is forwarded to repository`() = runTest {
             val expected = NetworkResult.Success(successResult)
             val session = TlsInspectorOperation.newSession(10_000)
-            coEvery { repository.inspect(any(), any(), any(), any()) } returns expected
+            coEvery { repository.inspect(any(), any(), any(), any<OperationSession>()) } returns expected
 
             val actual = useCase(TlsInspectorParams(host = "example.com"), session)
 

@@ -255,6 +255,8 @@ class TlsInspectorRepositoryImplTest {
         every { certificate.subjectAlternativeNames } returns listOf(listOf(2, "example.com"))
         every { certificate.serialNumber } returns BigInteger.ONE
         every { certificate.sigAlgName } returns "SHA256withRSA"
+        every { certificate.basicConstraints } returns -1
+        every { certificate.keyUsage } returns null
         every { certificate.publicKey } returns publicKey
         every { publicKey.algorithm } returns "RSA"
         every { certificate.encoded } returns byteArrayOf(1, 2, 3)

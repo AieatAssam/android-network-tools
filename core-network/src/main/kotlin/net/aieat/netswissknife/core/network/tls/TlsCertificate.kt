@@ -14,5 +14,10 @@ data class TlsCertificate(
     val signatureAlgorithm: String,
     val publicKeyAlgorithm: String,
     val publicKeyBits: Int,
-    val sha256Fingerprint: String
+    val sha256Fingerprint: String,
+    val notYetValid: Boolean = false,
+    val daysUntilExpiry: Long = 0,
+    val isCa: Boolean = false,
+    val keyUsage: List<String> = emptyList(),
+    val pemEncoded: String = "",
 )

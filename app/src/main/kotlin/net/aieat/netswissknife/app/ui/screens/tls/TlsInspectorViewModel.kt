@@ -35,11 +35,14 @@ import javax.inject.Inject
 data class TlsInspectorUiState(
     val host: String = "",
     val port: String = "443",
+    val probeProtocols: Boolean = false,
+    val expectedPinSha256: String = "",
     val isLoading: Boolean = false,
     val isCanceling: Boolean = false,
     val isCanceled: Boolean = false,
     val result: TlsInspectorResult? = null,
-    val error: String? = null
+    val error: String? = null,
+    val errorDescriptionKey: String? = null,
 )
 
 @HiltViewModel
@@ -91,6 +94,8 @@ class TlsInspectorViewModel @Inject constructor(
                 savedStateHandle.get<String>(EDITED_PORT_KEY)
                     ?: if (_hasInvalidHandoff.value) "443" else handoffTarget?.port?.value?.toString() ?: "443"
             },
+            probeProtocols = savedStateHandle[PROBE_PROTOCOLS_KEY] ?: false,
+            expectedPinSha256 = savedStateHandle[EXPECTED_PIN_KEY] ?: "",
         ),
     )
     val uiState: StateFlow<TlsInspectorUiState> = _uiState.asStateFlow()
@@ -121,15 +126,37 @@ class TlsInspectorViewModel @Inject constructor(
     fun onHostChange(value: String) {
         if (_uiState.value.isLoading) return
         savedStateHandle[EDITED_HOST_KEY] = value
-        _uiState.value = _uiState.value.copy(host = value, error = null, result = null)
+        _uiState.value = _uiState.value.copy(host = value, error = null, errorDescriptionKey = null, result = null)
         recoverInvalidHandoffIfReady()
     }
 
     fun onPortChange(value: String) {
         if (_uiState.value.isLoading) return
         savedStateHandle[EDITED_PORT_KEY] = value
-        _uiState.value = _uiState.value.copy(port = value, error = null, result = null)
+        _uiState.value = _uiState.value.copy(port = value, error = null, errorDescriptionKey = null, result = null)
         recoverInvalidHandoffIfReady()
+    }
+
+    fun onProbeProtocolsChange(enabled: Boolean) {
+        if (_uiState.value.isLoading) return
+        savedStateHandle[PROBE_PROTOCOLS_KEY] = enabled
+        _uiState.value = _uiState.value.copy(
+            probeProtocols = enabled,
+            error = null,
+            errorDescriptionKey = null,
+            result = null,
+        )
+    }
+
+    fun onExpectedPinChange(value: String) {
+        if (_uiState.value.isLoading) return
+        savedStateHandle[EXPECTED_PIN_KEY] = value
+        _uiState.value = _uiState.value.copy(
+            expectedPinSha256 = value,
+            error = null,
+            errorDescriptionKey = null,
+            result = null,
+        )
     }
 
     /** Clears the incoming TLS handoff as one host/port edit that survives recreation. */
@@ -146,6 +173,7 @@ class TlsInspectorViewModel @Inject constructor(
             isLoading = false,
             result = null,
             error = null,
+            errorDescriptionKey = null,
         )
     }
 
@@ -179,7 +207,8 @@ class TlsInspectorViewModel @Inject constructor(
             _uiState.value = state.copy(
                 isLoading = false,
                 result = null,
-                error = if (state.host.isBlank()) "Host must not be blank" else "Invalid hostname or IP address"
+                error = if (state.host.isBlank()) "Host must not be blank" else "Invalid hostname or IP address",
+                errorDescriptionKey = null,
             )
             return
         }
@@ -188,7 +217,8 @@ class TlsInspectorViewModel @Inject constructor(
             _uiState.value = state.copy(
                 isLoading = false,
                 result = null,
-                error = "Port must be a number from 1 to 65535"
+                error = "Port must be a number from 1 to 65535",
+                errorDescriptionKey = null,
             )
             return
         }
@@ -198,6 +228,7 @@ class TlsInspectorViewModel @Inject constructor(
             isCanceling = false,
             isCanceled = false,
             error = null,
+            errorDescriptionKey = null,
             result = null,
         )
         val session = TlsInspectorOperation.newSession(INSPECTION_TIMEOUT_MS)
@@ -210,7 +241,9 @@ class TlsInspectorViewModel @Inject constructor(
                 val params = TlsInspectorParams(
                     host      = normalizedHost,
                     port      = port,
-                    timeoutMs = INSPECTION_TIMEOUT_MS
+                    timeoutMs = INSPECTION_TIMEOUT_MS,
+                    probeProtocols = state.probeProtocols,
+                    expectedPinSha256 = state.expectedPinSha256.trim().ifEmpty { null },
                 )
                 when (val res = useCase(params, session)) {
                     is NetworkResult.Success -> _uiState.value = _uiState.value.copy(
@@ -218,14 +251,16 @@ class TlsInspectorViewModel @Inject constructor(
                         isCanceling = false,
                         isCanceled = false,
                         result    = res.data,
-                        error     = null
+                        error     = null,
+                        errorDescriptionKey = null,
                     )
                     is NetworkResult.Error   -> _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         isCanceling = false,
                         isCanceled = false,
                         result    = null,
-                        error     = res.message
+                        error     = res.message,
+                        errorDescriptionKey = res.descriptionKey,
                     )
                 }
             } catch (e: CancellationException) {
@@ -253,7 +288,8 @@ class TlsInspectorViewModel @Inject constructor(
                     isCanceling = false,
                     isCanceled = false,
                     result = null,
-                    error = "TLS inspection failed: $detail"
+                    error = "TLS inspection failed: $detail",
+                    errorDescriptionKey = null,
                 )
             } finally {
                 if (operationSession === session) operationSession = null
@@ -283,6 +319,8 @@ class TlsInspectorViewModel @Inject constructor(
         const val LIFECYCLE_CLOSEABLE_KEY = "tls_operation_lifecycle"
         const val EDITED_HOST_KEY = "editedTlsHost"
         const val EDITED_PORT_KEY = "editedTlsPort"
+        const val PROBE_PROTOCOLS_KEY = "tlsProbeProtocols"
+        const val EXPECTED_PIN_KEY = "tlsExpectedPinSha256"
         const val HANDOFF_CONSUMED_KEY = "tlsHandoffConsumed"
         const val HANDOFF_SOURCE_KEY = "tlsHandoffSource"
         const val HANDOFF_RECOVERED_KEY = "tlsHandoffRecovered"

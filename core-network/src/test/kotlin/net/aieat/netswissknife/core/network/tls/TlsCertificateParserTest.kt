@@ -137,6 +137,22 @@ class TlsCertificateParserTest {
     }
 
     @Test
+    fun `parse exposes validity CA usage and PEM details from an injected clock`() {
+        val leaf = TlsTestCertificates.read("valid-leaf")
+        val now = leaf.notBefore.time + 1_000
+        val parsedLeaf = TlsCertificateParser.parse(leaf, now)
+        val parsedRoot = TlsCertificateParser.parse(TlsTestCertificates.read("root"), now)
+
+        assertFalse(parsedLeaf.notYetValid)
+        assertFalse(parsedLeaf.isExpired)
+        assertTrue(parsedLeaf.daysUntilExpiry > 0)
+        assertFalse(parsedLeaf.isCa)
+        assertEquals(PemEncoder.encode(leaf), parsedLeaf.pemEncoded)
+        assertTrue(parsedRoot.isCa)
+        assertTrue("Certificate signing" in parsedRoot.keyUsage)
+    }
+
+    @Test
     fun `parse handles byte-array IP SANs and skips malformed SAN entries`() {
         val parsed = TlsCertificateParser.parse(certificate(
             sans = listOf(
@@ -188,6 +204,8 @@ class TlsCertificateParserTest {
         every { certificate.publicKey } returns publicKey
         every { certificate.serialNumber } returns BigInteger.ONE
         every { certificate.sigAlgName } returns "SHA256withRSA"
+        every { certificate.basicConstraints } returns -1
+        every { certificate.keyUsage } returns null
         every { certificate.encoded } returns byteArrayOf(1, 2, 3)
         return certificate
     }

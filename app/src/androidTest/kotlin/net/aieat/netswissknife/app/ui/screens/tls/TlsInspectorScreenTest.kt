@@ -23,6 +23,7 @@ import net.aieat.netswissknife.app.ui.navigation.ToolSource
 import net.aieat.netswissknife.app.ui.theme.NetSwissKnifeTheme
 import net.aieat.netswissknife.core.network.tls.TlsCertificate
 import net.aieat.netswissknife.core.network.tls.TlsInspectorResult
+import net.aieat.netswissknife.core.domain.TlsInspectorErrorKeys
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -279,6 +280,24 @@ class TlsInspectorScreenTest {
     }
 
     @Test
+    fun pinValidationError_usesLocalizedDescriptionKey() {
+        val viewModel = fakeViewModel(
+            TlsInspectorUiState(
+                host = "example.com",
+                error = "developer-only pin validation message",
+                errorDescriptionKey = TlsInspectorErrorKeys.PIN_INVALID_DESCRIPTION,
+            ),
+        )
+        composeRule.setContent {
+            NetSwissKnifeTheme { TlsInspectorScreen(viewModel = viewModel) }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        composeRule.onNodeWithText(context.getString(R.string.tls_pin_invalid)).assertIsDisplayed()
+        composeRule.onNodeWithText("developer-only pin validation message").assertDoesNotExist()
+    }
+
+    @Test
     fun successState_displaysCertificateSubject() {
         val cert = TlsCertificate(
             subjectCN = "example.com",
@@ -318,6 +337,76 @@ class TlsInspectorScreenTest {
         composeRule.onNodeWithText("TLSv1.3", substring = true).performScrollTo().assertIsDisplayed()
     }
 
+    @Test
+    fun advancedOptions_areVisibleAndForwardUserSelections() {
+        val viewModel = fakeViewModel(TlsInspectorUiState(host = "example.com"))
+        composeRule.setContent {
+            NetSwissKnifeTheme { TlsInspectorScreen(viewModel = viewModel) }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        composeRule.onNodeWithTag(TlsInspectorScreenTestTags.PROTOCOL_PROBE_TOGGLE)
+            .performScrollTo()
+            .assertIsDisplayed()
+            .performClick()
+        composeRule.onNodeWithTag(TlsInspectorScreenTestTags.EXPECTED_PIN_FIELD)
+            .performScrollTo()
+            .assertIsDisplayed()
+            .performTextInput("AA")
+        verify(exactly = 1) { viewModel.onProbeProtocolsChange(true) }
+        verify(exactly = 1) { viewModel.onExpectedPinChange("AA") }
+    }
+
+    @Test
+    fun successState_displaysProtocolTimingAndCertificateFindings() {
+        val cert = TlsCertificate(
+            subjectCN = "example.com", subjectOrg = null, issuerCN = "Test CA", issuerOrg = null,
+            notBefore = 0L, notAfter = Long.MAX_VALUE / 2, isExpired = true, isSelfSigned = false,
+            sans = listOf("example.com"), serialNumber = "01", signatureAlgorithm = "SHA256withRSA",
+            publicKeyAlgorithm = "RSA", publicKeyBits = 2048, sha256Fingerprint = "AA:BB:CC",
+            pemEncoded = "-----BEGIN CERTIFICATE-----\\nTEST\\n-----END CERTIFICATE-----",
+        )
+        val result = TlsInspectorResult(
+            host = "example.com", port = 443, tlsVersion = "TLSv1.3", cipherSuite = "TLS_AES_128_GCM_SHA256",
+            chain = listOf(cert), isChainTrusted = false, handshakeTimeMs = 123,
+            hostnameMatches = false,
+            chainIssues = listOf(
+                net.aieat.netswissknife.core.network.tls.ChainIssue.EXPIRED,
+                net.aieat.netswissknife.core.network.tls.ChainIssue.HOSTNAME_MISMATCH,
+            ),
+            connectTimeMs = 42,
+            alpn = "h2",
+            protocolSupport = mapOf("TLSv1.2" to true, "TLSv1.0" to false),
+            protocolProbeUnknown = setOf("TLSv1.1"),
+            protocolProbeNotTestable = setOf("TLSv1"),
+            pinMatch = false,
+        )
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                TlsInspectorScreen(viewModel = fakeViewModel(TlsInspectorUiState(host = "example.com", result = result)))
+            }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        listOf(
+            context.getString(R.string.tls_connect_time),
+            context.getString(R.string.tls_hostname_match),
+            context.getString(R.string.tls_alpn),
+            context.getString(R.string.tls_pin_match),
+            context.getString(R.string.tls_findings),
+            "EXPIRED",
+            context.getString(R.string.tls_issue_expired),
+            context.getString(R.string.tls_issue_hostname_mismatch),
+            context.getString(R.string.tls_share_pem),
+            context.getString(R.string.tls_probe_unknown),
+            context.getString(R.string.tls_probe_not_testable),
+            "TLSv1.2",
+            "TLSv1.0",
+        ).forEach { label ->
+            composeRule.onNodeWithText(label, substring = true).performScrollTo().assertIsDisplayed()
+        }
+    }
+
     private fun fakeViewModel(
         state: TlsInspectorUiState,
         sourceContext: ToolSource? = null,
@@ -335,6 +424,12 @@ class TlsInspectorScreenTest {
         // the captured flow so the Inspect button's enabled-state can react to input.
         every { viewModel.onHostChange(any()) } answers {
             stateFlow.value = stateFlow.value.copy(host = firstArg())
+        }
+        every { viewModel.onProbeProtocolsChange(any()) } answers {
+            stateFlow.value = stateFlow.value.copy(probeProtocols = firstArg())
+        }
+        every { viewModel.onExpectedPinChange(any()) } answers {
+            stateFlow.value = stateFlow.value.copy(expectedPinSha256 = firstArg())
         }
         return viewModel
     }
