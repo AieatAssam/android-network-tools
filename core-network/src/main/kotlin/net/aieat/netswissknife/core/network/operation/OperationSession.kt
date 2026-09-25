@@ -12,6 +12,9 @@ class OperationSession(
     val budget: OperationBudget,
     val resources: ResourceScope = ResourceScope(),
 ) {
+    /** Shared cap for native probes and optional work such as traceroute enrichment. */
+    val concurrencyLimiter = OperationConcurrencyLimiter(budget.maxConcurrentProbes)
+
     private val lock = Any()
     private var operationJob: Job? = null
     private var callerJob: Job? = null

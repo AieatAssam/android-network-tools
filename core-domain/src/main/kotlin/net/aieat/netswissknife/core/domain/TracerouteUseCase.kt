@@ -109,7 +109,11 @@ class TracerouteUseCase(
                                         optionalEnrichment(
                                             session,
                                             TracerouteOperation.MAX_REVERSE_DNS_WAIT_MILLIS,
-                                        ) { reverseDnsRepository.lookup(hopIp, session) }
+                                        ) {
+                                            session.concurrencyLimiter.withPermit {
+                                                reverseDnsRepository.lookup(hopIp, session)
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -118,7 +122,11 @@ class TracerouteUseCase(
                                     optionalEnrichment(
                                         session,
                                         TracerouteOperation.MAX_GEO_IP_WAIT_MILLIS,
-                                    ) { geoIpRepository.lookup(hopIp, session) }
+                                    ) {
+                                        session.concurrencyLimiter.withPermit {
+                                            geoIpRepository.lookup(hopIp, session)
+                                        }
+                                    }
                                 }
                             }
                             output.send(

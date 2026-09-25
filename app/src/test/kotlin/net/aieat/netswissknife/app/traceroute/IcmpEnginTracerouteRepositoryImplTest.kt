@@ -83,8 +83,10 @@ class IcmpEnginTracerouteRepositoryImplTest {
         )
         val cases = listOf(
             1 to 5,
+            2 to 5,
             5 to 2,
-            5 to 20,
+            5 to 5,
+            20 to 20,
         )
 
         for ((sessionLimit, probesPerHop) in cases) {
@@ -96,7 +98,7 @@ class IcmpEnginTracerouteRepositoryImplTest {
             ).toList()
         }
 
-        assertEquals(listOf(1, 2, 5), capturedConcurrency)
+        assertEquals(listOf(1, 1, 2, 4, 5), capturedConcurrency)
         assertEquals(5, TracerouteOperation.MAX_CONCURRENT_PROBES)
     }
 

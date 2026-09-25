@@ -100,6 +100,10 @@ class IcmpEnginTracerouteRepositoryImpl(
             }
             currentCoroutineContext().ensureActive()
             operationSession.budget.throwIfExpired()
+            val nativeConcurrency = nativeTraceConcurrency(
+                probesPerHop,
+                operationSession.budget.maxConcurrentProbes,
+            )
             val nativeFlow = try {
                 nativeTraceFactory(
                     resolvedHost,
@@ -108,20 +112,22 @@ class IcmpEnginTracerouteRepositoryImpl(
                     probesPerHop,
                     probeType,
                     packetSize,
-                    nativeTraceConcurrency(probesPerHop, operationSession.budget.maxConcurrentProbes),
+                    nativeConcurrency,
                 )
             } catch (_: LinkageError) {
                 throw NativeTracerouteUnavailableException()
             }
-            nativeFlow.catch { failure ->
+            operationSession.concurrencyLimiter.withPermits(nativeConcurrency) {
+                nativeFlow.catch { failure ->
                     if (failure is LinkageError) throw NativeTracerouteUnavailableException()
                     throw failure
                 }
-                .collect { hop ->
-                    currentCoroutineContext().ensureActive()
-                    operationSession.budget.throwIfExpired()
-                    this@channelFlow.send(hop)
-                }
+                    .collect { hop ->
+                        currentCoroutineContext().ensureActive()
+                        operationSession.budget.throwIfExpired()
+                        this@channelFlow.send(hop)
+                    }
+            }
         }
     }.flowOn(dispatcher)
 
@@ -174,13 +180,18 @@ internal fun mapNativeHop(icmpHop: me.impa.icmpenguin.trace.HopStatus): HopResul
     )
 }
 
-/** Keep the native worker count within requested probes, caller budget, and tool ceiling. */
+/** Reserve one session slot for concurrent enrichment when the budget has room for both. */
 internal fun nativeTraceConcurrency(probesPerHop: Int, sessionLimit: Int): Int =
     minOf(
         probesPerHop.coerceAtLeast(1),
-        sessionLimit.coerceAtLeast(1),
+        nativeSessionConcurrency(sessionLimit),
         TracerouteOperation.MAX_CONCURRENT_PROBES,
     )
+
+private fun nativeSessionConcurrency(sessionLimit: Int): Int {
+    val normalizedLimit = sessionLimit.coerceAtLeast(1)
+    return if (normalizedLimit > 1) normalizedLimit - 1 else 1
+}
 
 
 /** A stable, user-displayable failure when the optional JNI traceroute engine cannot load. */

@@ -53,7 +53,9 @@ class TraceroutePartialEnrichmentDeadlineTest {
         val session = OperationSession(
             OperationBudget.start(
                 timeoutMillis = DEADLINE_MILLIS,
-                maxConcurrentProbes = 2,
+                // Keep both optional lookups runnable alongside one native worker; this test
+                // exercises deadline retention, while aggregate limiting has its own test.
+                maxConcurrentProbes = 3,
                 clock = clock,
             ),
         )
