@@ -232,7 +232,7 @@ tasks:
         remaining: "The test uses a factory-built isolated executor and the shared runWithExecutor path; keep production singleton integration visible in source review. E03-T01 remains in_progress for other adapter boundaries, phase-wide resource ownership, device behavior, and the <=500 ms cleanup measurement."
       checkpoint:
         task_id: "E03-T01"
-        baseline_or_current_commit: "a6d6dc1 (tested worktree changes; source commit pending)"
+        baseline_or_current_commit: "84e37af"
         status: "in_progress"
         files_changed:
           - "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/topology/TopologyBlockingCall.kt"
