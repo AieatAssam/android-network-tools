@@ -17,12 +17,15 @@ dependencies {
     implementation(libs.coroutines.core)
     implementation(libs.dnsjava)
     implementation(libs.snmp4j)
+    implementation(libs.okhttp)
 
     testImplementation(libs.junit5.api)
     testImplementation(libs.junit5.params)
     testRuntimeOnly(libs.junit5.engine)
     testRuntimeOnly(libs.junit5.launcher)
     testImplementation(libs.mockk)
+    testImplementation(libs.mockwebserver3)
+    testImplementation(libs.okhttpTls)
     testImplementation(libs.coroutines.test)
 }
 

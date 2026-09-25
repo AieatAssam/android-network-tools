@@ -1,10 +1,10 @@
 review:
   id: P02.5-dependency-state
-  checked_at: "2026-09-24T09:55:22Z"
+  checked_at: "2026-09-25T00:23:31Z"
   branch: "plan/comprehensive-review-2026-09-22"
-  commit: "931425185f3fffe4d25fcb6b1357c04895d5ad51"
+  commit: "bb10833cea79b05a1b4754cb5d8f3152567d6215"
   status: "open"
-  worktree_delta: "Commit 9314251 adds topology per-session SNMP walk limiting and handoff UI/view-model/tests, with no dependency declaration changes. Exact-head Automatic Dependency Submission completed successfully and is recorded in exact_head_recheck below."
+  worktree_delta: "At bb10833, exact-head Automatic Dependency Submission confirms patched versions for all alerted coordinates. The current worktree has uncommitted P10-T3 OkHttp 5.5.0 changes that are not included in that submission snapshot."
   initial_snapshot: { checked_at: "2026-09-23T22:37:21Z", commit: "7106a5bafa21bf0b30b91afb98470d8d10b184c8", worktree_delta: "Uncommitted app/build.gradle.kts constraints for :app:androidLintTool; this source change had not yet been submitted to GitHub." }
   sources:
     alerts_command: "gh api --paginate repos/AieatAssam/android-network-tools/dependabot/alerts"
@@ -90,6 +90,46 @@ disposition:
   closure_rule: "Do not close P02.5 based only on local artifact-resolution evidence or the expectation of a later rescan."
 
 artifact_note: "Compact evidence, source run IDs, and artifact hashes are retained here. Raw submission JSON and Gradle logs remain under /tmp and are not committed."
+
+current_recheck_2026_09_25T0023Z:
+  checked_at: "2026-09-25T00:23:31Z"
+  topic_branch_head: "bb10833cea79b05a1b4754cb5d8f3152567d6215"
+  default_branch_head: "5e183721e64ce8a8946f1a0b50f52b83544e8898"
+  default_branch_ads:
+    run_id: 35601558226
+    url: "https://github.com/AieatAssam/android-network-tools/actions/runs/35601558226"
+    result: "Still the newest successful main submission, created 2026-09-21 at the pre-remediation SHA; 415 components. Its artifact retains vulnerable build-graph selections alongside patched duplicates."
+    vulnerable_versions: { "org.freemarker:freemarker": "2.3.32", "org.bouncycastle:bcprov-jdk18on": "1.80.2", "org.bouncycastle:bcpkix-jdk18on": "1.80.2", "org.apache.commons:commons-lang3": "3.16.0", "org.apache.httpcomponents:httpclient": "4.5.6" }
+  topic_branch_ads:
+    run_id: 36076957560
+    url: "https://github.com/AieatAssam/android-network-tools/actions/runs/36076957560"
+    commit: "bb10833cea79b05a1b4754cb5d8f3152567d6215"
+    result: "Exact-head submission succeeded with 410 components and only patched versions for every alerted coordinate. This confirms P02.5-T3 for the pushed branch snapshot, not for main; it does not include current uncommitted P10 changes."
+    patched_versions: { "org.freemarker:freemarker": "2.3.35", "org.bouncycastle:bcprov-jdk18on": "1.85", "org.bouncycastle:bcpkix-jdk18on": "1.85", "org.apache.commons:commons-lang3": "3.18.0", "org.apache.httpcomponents:httpclient": "4.5.14", "org.bitbucket.b_c:jose4j": "0.9.6", "org.jdom:jdom2": "2.0.6.1", "org.jetbrains.kotlin:kotlin-gradle-plugin": "2.4.20" }
+  repository_sbom:
+    command: "gh api repos/AieatAssam/android-network-tools/dependency-graph/sbom"
+    generated_at: "2026-09-25T00:23:31Z"
+    format: "SPDX-2.3"
+    package_count: 425
+    sha256: "426ed3ba67d3d241110fded63d31b188e5a0cf941a6a1d3ea45080df86a339a6"
+    interpretation: "The repository SBOM still reflects the default-branch graph and includes the vulnerable build-time versions; it is not the exact-head topic-branch submission artifact or a release APK SBOM."
+  dependabot_alerts:
+    checked_at: "2026-09-25"
+    total: 10
+    open: [1, 2, 5, 6, 8, 9, 10]
+    fixed: [3, 4, 7]
+    open_alerts:
+      - { id: 10, severity: critical, package: "org.freemarker:freemarker", version: "2.3.32", advisory: "CVE-2026-84939 / GHSA-27j2-h3m2-8237", patched: "2.3.35" }
+      - { id: 9, severity: high, package: "org.bouncycastle:bcprov-jdk18on", version: "1.80.2", advisory: "CVE-2026-13506 / GHSA-qp49-qgx5-5m26", patched: "1.85" }
+      - { id: 8, severity: critical, package: "org.bouncycastle:bcprov-jdk18on", version: "1.80.2", advisory: "CVE-2026-8763 / GHSA-9pwp-9qqc-pr26", patched: "1.85" }
+      - { id: 6, severity: medium, package: "org.bouncycastle:bcprov-jdk18on", version: "1.80.2", advisory: "CVE-2026-0636 / GHSA-c3fc-8qff-9hwx", patched: "1.84" }
+      - { id: 5, severity: medium, package: "org.bouncycastle:bcpkix-jdk18on", version: "1.80.2", advisory: "CVE-2026-5588 / GHSA-wg6q-6289-32hp", patched: "1.84" }
+      - { id: 2, severity: medium, package: "org.apache.commons:commons-lang3", version: "3.16.0", advisory: "CVE-2025-48924 / GHSA-j288-q9x7-2f5v", patched: "3.18.0" }
+      - { id: 1, severity: medium, package: "org.apache.httpcomponents:httpclient", version: "4.5.6", advisory: "CVE-2020-13956 / GHSA-7r82-7xv7-xcpj", patched: "4.5.13" }
+    note: "All seven alerts are currently visible in the live GitHub alert API. No dismissal or time-bounded exception is recorded."
+  pull_request_state:
+    result: "No pull request exists for this topic branch."
+    disposition: "P02.5 remains in progress until the reviewed changes reach protected main, a fresh main ADS/SBOM and alert scan runs, and every still-actionable alert is closed or has an approved time-bounded disposition."
 
 prior_recheck_2026_09_23:
   checked_at: "2026-09-23T22:34:40Z"

@@ -282,7 +282,10 @@ fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
                         is DisplayState.Error   -> HttpProbeErrorContent(state.message) { viewModel.send() }
                         is DisplayState.BlockedRedirect -> HttpProbeBlockedRedirectContent(state.warning)
                         is DisplayState.Success -> {
-                            val shareSubject = stringResource(R.string.share_subject_http, state.result.request.url)
+                            val shareSubject = stringResource(
+                                R.string.share_subject_http,
+                                safeRedirectDisplayValue(state.result.request.url),
+                            )
                             val shareSizeText = responseSizeText(
                                 state.result,
                                 stringResource(R.string.httprobe_response_size_at_least)
@@ -416,22 +419,6 @@ private fun RedirectEvidenceLine(label: Int, value: String) {
         fontFamily = FontFamily.Monospace,
     )
 }
-
-/** Keep visible redirect evidence useful without exposing credentials or token-bearing paths. */
-internal fun safeRedirectDisplayValue(value: String): String = runCatching {
-    val uri = java.net.URI(value)
-    val authority = uri.rawAuthority ?: return@runCatching "[redirect address omitted]"
-    val host = uri.host ?: return@runCatching "[redirect address omitted]"
-    val safeAuthority = buildString {
-        append(host)
-        if (uri.port >= 0) append(":${uri.port}")
-    }
-    when {
-        uri.isAbsolute -> "${uri.scheme}://$safeAuthority/[path omitted]"
-        value.startsWith("//") -> "//$safeAuthority/[path omitted]"
-        else -> "[relative redirect address omitted]"
-    }
-}.getOrElse { "[redirect address omitted]" }
 
 // ── Header card ───────────────────────────────────────────────────────────────
 
@@ -902,7 +889,7 @@ private fun StatusBannerCard(result: HttpProbeResult) {
                         )
                     }
                     Text(
-                        text = result.finalUrl,
+                        text = safeRedirectDisplayValue(result.finalUrl),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
@@ -956,7 +943,8 @@ private fun OverviewTabContent(result: HttpProbeResult) {
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         LabeledValue(stringResource(R.string.httprobe_method_used), result.request.method.name)
-        LabeledValue(stringResource(R.string.httprobe_final_url), result.finalUrl)
+        LabeledValue(stringResource(R.string.httprobe_protocol_label), result.protocol)
+        LabeledValue(stringResource(R.string.httprobe_final_url), safeRedirectDisplayValue(result.finalUrl))
         LabeledValue(
             stringResource(R.string.httprobe_response_size),
             responseSizeText(result, stringResource(R.string.httprobe_response_size_at_least))
@@ -972,7 +960,9 @@ private fun OverviewTabContent(result: HttpProbeResult) {
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            result.redirectChain.forEachIndexed { index, url ->
+            val hops = result.redirectHops
+            val sources = if (hops.isNotEmpty()) hops.map { it.url } else result.redirectChain
+            sources.forEachIndexed { index, url ->
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Surface(
                         shape = MaterialTheme.shapes.small,
@@ -985,8 +975,15 @@ private fun OverviewTabContent(result: HttpProbeResult) {
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                         )
                     }
+                    if (hops.isNotEmpty()) {
+                        Text(
+                            text = hops[index].statusCode.toString(),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                     Text(
-                        text = url,
+                        text = safeRedirectDisplayValue(url),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.weight(1f),
@@ -1032,7 +1029,7 @@ private fun HeadersTabContent(result: HttpProbeResult) {
             expanded = showResponse,
             onToggle = { showResponse = !showResponse }
         ) {
-            val displayHeaders = result.responseHeaders
+            val displayHeaders = visibleHttpResponseHeaders(result.responseHeaders)
             if (displayHeaders.isEmpty()) {
                 Text(
                     text = stringResource(R.string.httprobe_no_headers),
@@ -1382,29 +1379,5 @@ private fun responseSizeText(result: HttpProbeResult, atLeastFormat: String): St
         !result.responseBodyTruncated -> formatBytes(result.responseBodyBytes)
         declared != null -> formatBytes(declared)
         else -> atLeastFormat.format(formatBytes(result.responseBodyBytes))
-    }
-}
-
-private fun buildHttpShareText(result: HttpProbeResult, sizeText: String): String = buildString {
-    appendLine("HTTP – ${result.request.url}")
-    appendLine("Status: ${result.statusCode} ${result.statusMessage}")
-    appendLine("Time: ${result.responseTimeMs}ms")
-    appendLine("Size: $sizeText")
-    if (result.redirectChain.isNotEmpty()) {
-        appendLine()
-        appendLine("Redirects:")
-        result.redirectChain.forEach { url -> appendLine("  → $url") }
-    }
-    if (result.responseHeaders.isNotEmpty()) {
-        appendLine()
-        appendLine("Response Headers:")
-        result.responseHeaders.forEach { (k, v) -> appendLine("  $k: ${v.joinToString(", ")}") }
-    }
-    if (result.securityChecks.isNotEmpty()) {
-        appendLine()
-        appendLine("Security Checks:")
-        result.securityChecks.forEach { check ->
-            appendLine("  ${check.headerName}: ${check.rating.name}")
-        }
     }
 }

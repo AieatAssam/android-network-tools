@@ -32,6 +32,8 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 
 /**
  * Covers the Security tab rendering the Cross-Origin-Opener-Policy and
@@ -165,6 +167,51 @@ class HttpProbeScreenTest {
             "source-secret", "destination-secret", "source-token", "redirect-token", "consent-token", "frag"
         ).forEach { secret ->
             composeRule.onAllNodesWithText(secret, substring = true).assertCountEquals(0)
+        }
+    }
+
+    @Test
+    fun successfulResult_redactsOverviewUrlsAndShareSecrets() {
+        val sourceUrl = "https://alice:source-secret@source.example/start?source-token=private#source-fragment"
+        val finalUrl = "https://bob:destination-secret@target.example/final?final-token=private#final-fragment"
+        val result = HttpProbeResult(
+            request = HttpProbeRequest(url = sourceUrl),
+            statusCode = 200,
+            statusMessage = "OK",
+            responseTimeMs = 42,
+            responseHeaders = mapOf(
+                "Content-Type" to listOf("application/json"),
+                "Location" to listOf("https://next.example/path?location-token=private"),
+                "Set-Cookie" to listOf("sid=cookie-secret; Secure"),
+                "Authorization" to listOf("Bearer auth-secret"),
+                "Proxy-Authorization" to listOf("Basic proxy-secret"),
+            ),
+            responseBody = "{}",
+            responseBodyBytes = 2,
+            finalUrl = finalUrl,
+            redirectChain = listOf(sourceUrl),
+            securityChecks = emptyList(),
+        )
+        val shareText = buildHttpShareText(result, "2 B")
+
+        assertTrue(shareText.contains("https://source.example/[path omitted]"))
+        assertTrue(shareText.contains("https://target.example/[path omitted]"))
+        assertTrue(shareText.contains("https://next.example/[path omitted]"))
+        listOf("source-secret", "destination-secret", "source-token", "final-token", "location-token", "cookie-secret", "auth-secret", "proxy-secret", "fragment").forEach {
+            assertFalse("share text leaked $it", shareText.contains(it))
+        }
+        assertTrue(shareText.contains("Content-Type: application/json"))
+
+        composeRule.setContent {
+            NetSwissKnifeTheme { HttpProbeScreen(viewModel = fakeViewModel(HttpProbeUiState(result = result, selectedTab = 0))) }
+        }
+        composeRule.mainClock.advanceTimeBy(2_000L)
+        composeRule.onNodeWithTag(HttpProbeScreenTestTags.CONTENT_LIST)
+            .performScrollToIndex(HttpProbeScreenTestTags.RESULT_PANEL_INDEX)
+        composeRule.onAllNodesWithText("https://target.example/[path omitted]")
+            .onFirst().performScrollTo().assertIsDisplayed()
+        listOf("source-secret", "destination-secret", "source-token", "final-token", "cookie-secret", "auth-secret").forEach {
+            composeRule.onAllNodesWithText(it, substring = true).assertCountEquals(0)
         }
     }
 
@@ -464,7 +511,7 @@ class HttpProbeScreenTest {
             .performScrollTo()
             .assertIsDisplayed()
         composeRule
-            .onAllNodesWithText("https://example.com/final")
+            .onAllNodesWithText("https://example.com/[path omitted]")
             .onFirst()
             .performScrollTo()
             .assertIsDisplayed()

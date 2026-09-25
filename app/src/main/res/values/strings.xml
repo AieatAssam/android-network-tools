@@ -699,6 +699,7 @@
         <item quantity="other">%1$d redirects</item>
     </plurals>
     <string name="httprobe_method_used">Method</string>
+    <string name="httprobe_protocol_label">Protocol</string>
     <string name="httprobe_final_url">Final URL</string>
     <string name="httprobe_response_size">Body size</string>
     <string name="httprobe_content_type">Content-Type</string>

@@ -1,5 +1,8 @@
 package net.aieat.netswissknife.core.network.httprobe
 
+import net.aieat.netswissknife.core.network.httprobe.engine.HttpTimings
+import net.aieat.netswissknife.core.network.httprobe.engine.RedirectHop
+
 enum class HttpMethod(val supportsBody: Boolean) {
     GET(false),
     POST(true),
@@ -57,7 +60,10 @@ data class HttpProbeResult(
     val responseBodyTruncated: Boolean = false,
     val finalUrl: String,
     val redirectChain: List<String>,
-    val securityChecks: List<SecurityHeaderCheck>
+    val securityChecks: List<SecurityHeaderCheck>,
+    val timings: HttpTimings = HttpTimings(totalMs = responseTimeMs),
+    val protocol: String = "unknown",
+    val redirectHops: List<RedirectHop> = emptyList(),
 )
 
 /** Structured evidence for a redirect refused before the destination is opened. */

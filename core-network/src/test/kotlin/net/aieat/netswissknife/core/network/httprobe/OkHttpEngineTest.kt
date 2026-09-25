@@ -1,0 +1,330 @@
+package net.aieat.netswissknife.core.network.httprobe
+
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
+import mockwebserver3.MockResponse
+import mockwebserver3.MockWebServer
+import net.aieat.netswissknife.core.network.NetworkResult
+import net.aieat.netswissknife.core.network.MonotonicClock
+import okhttp3.OkHttpClient
+import okhttp3.Protocol
+import okhttp3.Authenticator
+import okhttp3.Cookie
+import okhttp3.CookieJar
+import okhttp3.tls.HandshakeCertificates
+import okhttp3.tls.HeldCertificate
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Test
+import net.aieat.netswissknife.core.network.httprobe.engine.HttpEngine
+import net.aieat.netswissknife.core.network.httprobe.engine.HttpEngineCall
+import net.aieat.netswissknife.core.network.httprobe.engine.HttpEngineRequest
+import net.aieat.netswissknife.core.network.httprobe.engine.HttpEngineResponse
+import net.aieat.netswissknife.core.network.httprobe.engine.HttpTimings
+import net.aieat.netswissknife.core.network.httprobe.engine.OkHttpEngine
+import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationCancellationException
+import java.io.ByteArrayInputStream
+import java.util.concurrent.atomic.AtomicLong
+import java.nio.file.Files
+import java.io.IOException
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
+
+class OkHttpEngineTest {
+    private val servers = mutableListOf<MockWebServer>()
+
+    @AfterEach
+    fun tearDown() {
+        servers.forEach(MockWebServer::close)
+    }
+
+    private fun server(protocols: List<Protocol> = listOf(Protocol.HTTP_1_1)): MockWebServer =
+        MockWebServer().also { it.protocols = protocols; it.start(); servers += it }
+
+    @Test
+    fun `adapter reports HTTP1 protocol timing and identity encoding with bounded body`() = runTest {
+        val server = server()
+        server.enqueue(MockResponse.Builder().code(200).addHeader("Content-Type", "text/plain; charset=UTF-8").body("abcdefgh").build())
+
+        val result = HttpProbeRepositoryImpl().probe(HttpProbeRequest(url = server.url("/").toString(), maxResponseBodyBytes = 4))
+
+        assertTrue(result is net.aieat.netswissknife.core.network.NetworkResult.Success<*>)
+        val data = (result as net.aieat.netswissknife.core.network.NetworkResult.Success<*>).data as HttpProbeResult
+        assertEquals("abcd", data.responseBody)
+        assertEquals(4L, data.responseBodyBytes)
+        assertTrue(data.responseBodyTruncated)
+        assertEquals("http/1.1", data.protocol)
+        assertTrue(data.timings.totalMs >= (data.timings.ttfbMs ?: 0L))
+        assertTrue(data.timings.dnsMs == null || data.timings.dnsMs >= 0L)
+        assertTrue(data.timings.connectMs == null || data.timings.connectMs >= 0L)
+        assertTrue(data.timings.ttfbMs == null || data.timings.ttfbMs >= 0L)
+        assertEquals("identity", server.takeRequest()!!.headers["Accept-Encoding"])
+    }
+
+    @Test
+    fun `adapter maps HTTP2 prior knowledge and returns error response body`() = runTest {
+        val server = server(listOf(Protocol.H2_PRIOR_KNOWLEDGE))
+        server.enqueue(MockResponse.Builder().code(418).body("teapot").build())
+
+        val result = HttpProbeRepositoryImpl(OkHttpEngine(OkHttpClient.Builder().protocols(listOf(Protocol.H2_PRIOR_KNOWLEDGE)).build()))
+            .probe(HttpProbeRequest(url = server.url("/").toString()))
+
+        assertTrue(result is net.aieat.netswissknife.core.network.NetworkResult.Success<*>)
+        val data = (result as net.aieat.netswissknife.core.network.NetworkResult.Success<*>).data as HttpProbeResult
+        assertEquals(418, data.statusCode)
+        assertEquals("teapot", data.responseBody)
+        assertTrue(data.protocol.startsWith("h2"), "reported protocol was ${data.protocol}")
+        assertNotNull(server.takeRequest())
+    }
+
+    @Test
+    fun `TLS adapter negotiates HTTP2 through ALPN and reports protocol`() = runTest {
+        val heldCertificate = HeldCertificate.Builder()
+            .commonName("localhost")
+            .addSubjectAlternativeName("localhost")
+            .build()
+        val serverTls = HandshakeCertificates.Builder().heldCertificate(heldCertificate).build()
+        val clientTls = HandshakeCertificates.Builder().addTrustedCertificate(heldCertificate.certificate).build()
+        val server = MockWebServer().also {
+            it.protocols = listOf(Protocol.HTTP_2, Protocol.HTTP_1_1)
+            it.useHttps(serverTls.sslSocketFactory())
+            it.start()
+            servers += it
+        }
+        server.enqueue(MockResponse.Builder().code(200).body("secure").build())
+        val client = OkHttpClient.Builder()
+            .sslSocketFactory(clientTls.sslSocketFactory(), clientTls.trustManager)
+            .protocols(listOf(Protocol.HTTP_2, Protocol.HTTP_1_1))
+            .build()
+
+        val result = HttpProbeRepositoryImpl(OkHttpEngine(client)).probe(
+            HttpProbeRequest(url = server.url("/").toString())
+        )
+
+        assertTrue(result is NetworkResult.Success<*>)
+        val data = (result as NetworkResult.Success<*>).data as HttpProbeResult
+        assertEquals("secure", data.responseBody)
+        assertEquals("h2", data.protocol)
+        assertTrue((data.timings.tlsMs ?: -1L) >= 0L)
+    }
+
+    @Test
+    fun `OkHttp HTTPS downgrade block never sends request to HTTP destination`() = runTest {
+        val heldCertificate = HeldCertificate.Builder()
+            .commonName("localhost")
+            .addSubjectAlternativeName("localhost")
+            .build()
+        val serverTls = HandshakeCertificates.Builder().heldCertificate(heldCertificate).build()
+        val clientTls = HandshakeCertificates.Builder().addTrustedCertificate(heldCertificate.certificate).build()
+        val source = MockWebServer().also {
+            it.protocols = listOf(Protocol.HTTP_1_1)
+            it.useHttps(serverTls.sslSocketFactory())
+            it.start()
+            servers += it
+        }
+        val destination = server()
+        source.enqueue(MockResponse.Builder().code(302).addHeader("Location", destination.url("/private?token=secret").toString()).build())
+        val client = OkHttpClient.Builder()
+            .sslSocketFactory(clientTls.sslSocketFactory(), clientTls.trustManager)
+            .protocols(listOf(Protocol.HTTP_1_1))
+            .build()
+
+        val result = HttpProbeRepositoryImpl(OkHttpEngine(client)).probe(
+            HttpProbeRequest(url = source.url("/start").toString())
+        )
+
+        assertTrue(result is NetworkResult.Error)
+        val error = result as NetworkResult.Error
+        assertEquals(HttpProbeBlockedRedirectException.CODE, error.code)
+        assertEquals(302, (error.cause as HttpProbeBlockedRedirectException).statusCode)
+        assertEquals(1, source.requestCount)
+        assertEquals(0, destination.requestCount)
+    }
+
+    @Test
+    fun `adapter manual redirect preserves status and Location evidence`() = runTest {
+        val server = server()
+        server.enqueue(MockResponse.Builder().code(302).addHeader("Location", "/final").build())
+        server.enqueue(MockResponse.Builder().code(200).body("done").build())
+
+        val result = HttpProbeRepositoryImpl().probe(HttpProbeRequest(url = server.url("/start").toString()))
+
+        assertTrue(result is net.aieat.netswissknife.core.network.NetworkResult.Success<*>)
+        val data = (result as net.aieat.netswissknife.core.network.NetworkResult.Success<*>).data as HttpProbeResult
+        assertEquals("done", data.responseBody)
+        assertEquals(1, data.redirectHops.size)
+        assertEquals(302, data.redirectHops.single().statusCode)
+        assertEquals("/final", data.redirectHops.single().location)
+        assertEquals(2, server.requestCount)
+    }
+
+    @Test
+    fun `bodyless POST PUT and PATCH send valid empty request entities`() = runTest {
+        val server = server()
+        listOf(HttpMethod.POST, HttpMethod.PUT, HttpMethod.PATCH).forEach { method ->
+            server.enqueue(MockResponse.Builder().code(200).body("ok").build())
+            val result = HttpProbeRepositoryImpl().probe(
+                HttpProbeRequest(url = server.url("/$method").toString(), method = method, body = null)
+            )
+            assertTrue(result is NetworkResult.Success<*>, "$method should accept an absent body")
+            val recorded = server.takeRequest()!!
+            assertEquals(method.name, recorded.method)
+            assertEquals(0L, recorded.bodySize)
+        }
+    }
+
+    @Test
+    fun `cross origin redirect strips URL userinfo`() = runTest {
+        val source = server()
+        val destination = server()
+        val credentialedDestination = destination.url("/target").newBuilder()
+            .username("bob").password("destination-secret").build()
+        source.enqueue(MockResponse.Builder().code(307).addHeader("Location", credentialedDestination.toString()).build())
+        destination.enqueue(MockResponse.Builder().code(200).body("ok").build())
+
+        val result = HttpProbeRepositoryImpl().probe(
+            HttpProbeRequest(
+                url = source.url("/start").toString().replace("http://", "http://alice:source-secret@"),
+                method = HttpMethod.POST,
+                body = "payload",
+                approveCrossOriginEntityReplay = { true },
+            )
+        )
+
+        assertTrue(result is net.aieat.netswissknife.core.network.NetworkResult.Success<*>)
+        assertEquals(null, source.takeRequest()!!.headers["Authorization"])
+        val destinationRequest = destination.takeRequest()!!
+        assertEquals(null, destinationRequest.headers["Authorization"])
+        assertEquals("POST", destinationRequest.method)
+        assertEquals("payload", destinationRequest.body!!.utf8())
+    }
+
+    @Test
+    fun `engine does not inherit ambient cookies or authenticator credentials`() = runTest {
+        val server = server()
+        server.enqueue(MockResponse.Builder().code(401).body("unauthorized").build())
+        var authenticatorCalls = 0
+        val ambientClient = OkHttpClient.Builder()
+            .cookieJar(object : CookieJar {
+                override fun saveFromResponse(url: okhttp3.HttpUrl, cookies: List<Cookie>) = Unit
+                override fun loadForRequest(url: okhttp3.HttpUrl) = listOf(
+                    Cookie.Builder().name("ambient").value("cookie-secret").domain("localhost").path("/").build()
+                )
+            })
+            .authenticator(Authenticator { _, response ->
+                authenticatorCalls++
+                response.request.newBuilder().header("Authorization", "Bearer ambient-secret").build()
+            })
+            .build()
+
+        val result = HttpProbeRepositoryImpl(OkHttpEngine(ambientClient)).probe(
+            HttpProbeRequest(url = server.url("/").toString())
+        )
+
+        assertTrue(result is NetworkResult.Success<*>)
+        val recorded = server.takeRequest()!!
+        assertEquals(null, recorded.headers["Cookie"])
+        assertEquals(null, recorded.headers["Authorization"])
+        assertEquals(0, authenticatorCalls)
+    }
+
+    @Test
+    fun `engine ignores configured cache`() = runTest {
+        val server = server()
+        repeat(2) {
+            server.enqueue(
+                MockResponse.Builder().code(200).addHeader("Cache-Control", "public, max-age=600")
+                    .addHeader("ETag", "cached-response").body("ok").build()
+            )
+        }
+        val cacheDirectory = Files.createTempDirectory("httprobe-cache-test").toFile()
+        val cache = okhttp3.Cache(cacheDirectory, 1_000_000L)
+        try {
+            val engine = OkHttpEngine(OkHttpClient.Builder().cache(cache).build())
+            val repository = HttpProbeRepositoryImpl(engine)
+            repeat(2) {
+                val result = repository.probe(HttpProbeRequest(url = server.url("/cache").toString()))
+                assertTrue(result is NetworkResult.Success<*>)
+            }
+            assertEquals(2, server.requestCount, "HTTP probe calls must not read or populate an ambient cache")
+        } finally {
+            cache.close()
+            cacheDirectory.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `malformed URL parser errors stay URL free`() = runTest {
+        val result = HttpProbeRepositoryImpl().probe(HttpProbeRequest(url = "http://example.test/[private-token"))
+        assertTrue(result is net.aieat.netswissknife.core.network.NetworkResult.Error)
+        assertFalse((result as net.aieat.netswissknife.core.network.NetworkResult.Error).message.contains("private-token"))
+    }
+
+    @Test
+    fun `manual redirect timing sums per-call values and limits each call to request timeout`() = runTest {
+        val now = AtomicLong(0L)
+        val fake = SequenceEngine(
+            listOf(
+                HttpEngineResponse(302, "Found", mapOf("Location" to listOf("/next")), null, "http/1.1", HttpTimings(1, 2, null, 3, 4, 10)),
+                HttpEngineResponse(200, "OK", emptyMap(), ByteArrayInputStream(byteArrayOf(1)), "h2", HttpTimings(5, 6, 7, 8, 9, 20)),
+            )
+        ) { callIndex -> if (callIndex == 0) now.addAndGet(200_000_000L) }
+        val repository = HttpProbeRepositoryImpl(fake).also { it.clock = MonotonicClock { now.get() } }
+        val result = repository.probe(HttpProbeRequest(url = "http://example.test/start", timeoutMs = 700))
+
+        assertTrue(result is NetworkResult.Success<*>)
+        val data = (result as NetworkResult.Success<*>).data as HttpProbeResult
+        val timings = data.timings
+        assertEquals(6L, timings.dnsMs)
+        assertEquals(8L, timings.connectMs)
+        assertEquals(7L, timings.tlsMs)
+        assertEquals(11L, timings.ttfbMs)
+        assertEquals(9L, timings.transferMs)
+        assertEquals(listOf(700, 500), fake.requests.map { it.timeoutMs })
+        assertEquals("h2", data.protocol)
+    }
+
+    @Test
+    fun `session stop cancels OkHttp call and closes its response body`() = runTest {
+        val server = server()
+        server.enqueue(
+            MockResponse.Builder().code(200).body("x".repeat(100)).throttleBody(1, 1, java.util.concurrent.TimeUnit.SECONDS).build()
+        )
+        val session = HttpProbeOperation.newSession(timeoutMillis = 5_000)
+        val repository = HttpProbeRepositoryImpl()
+        val probe = async(Dispatchers.IO) {
+            runCatching { repository.probe(HttpProbeRequest(url = server.url("/").toString()), session) }.exceptionOrNull()
+        }
+
+        withContext(Dispatchers.IO) { withTimeout(5_000) { server.takeRequest() } }
+        session.cancel(CancellationReason.USER_STOP)
+        val failure = withContext(Dispatchers.IO) { withTimeout(5_000) { probe.await() } }
+        assertTrue(failure is OperationCancellationException)
+        assertEquals(CancellationReason.USER_STOP, (failure as OperationCancellationException).reason)
+    }
+
+    private class SequenceEngine(
+        responses: List<HttpEngineResponse>,
+        private val afterExecute: (callIndex: Int) -> Unit = {},
+    ) : HttpEngine {
+        private val pending = ArrayDeque(responses)
+        val requests = mutableListOf<HttpEngineRequest>()
+        override fun newCall(request: HttpEngineRequest): HttpEngineCall {
+            requests += request
+            val callIndex = requests.lastIndex
+            val response = pending.removeFirst()
+            return object : HttpEngineCall {
+                override suspend fun execute(): HttpEngineResponse = response.also { afterExecute(callIndex) }
+                override fun close() = Unit
+            }
+        }
+    }
+}

@@ -31,6 +31,12 @@ import java.nio.charset.Charset
 import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.atomic.AtomicBoolean
+import net.aieat.netswissknife.core.network.httprobe.engine.HttpEngine
+import net.aieat.netswissknife.core.network.httprobe.engine.HttpEngineCall
+import net.aieat.netswissknife.core.network.httprobe.engine.HttpEngineRequest
+import net.aieat.netswissknife.core.network.httprobe.engine.HttpEngineResponse
+import net.aieat.netswissknife.core.network.httprobe.engine.HttpTimings
 
 @DisplayName("HttpProbeRepositoryImpl – input validation")
 class HttpProbeRepositoryValidationTest {
@@ -71,6 +77,55 @@ class HttpProbeRepositoryValidationTest {
     fun `probe returns Error for timeout above 60000ms`() = runTest {
         val result = repo.probe(HttpProbeRequest(url = "https://example.com", timeoutMs = 60_001))
         assertTrue(result is NetworkResult.Error)
+    }
+}
+
+private fun interface HttpProbeConnectionFactory {
+    fun open(url: URL): HttpURLConnection
+}
+
+/** Unit-test engine fake that adapts controllable connections to the repository transport API. */
+private class ConnectionFakeEngine(
+    private val connectionFactory: HttpProbeConnectionFactory,
+) : HttpEngine {
+    override fun newCall(request: HttpEngineRequest): HttpEngineCall {
+        val connection = connectionFactory.open(URL(request.url))
+        return object : HttpEngineCall {
+            private val closed = AtomicBoolean(false)
+            private var stream: InputStream? = null
+
+            override suspend fun execute(): HttpEngineResponse = withContext(Dispatchers.IO) {
+                connection.instanceFollowRedirects = false
+                connection.requestMethod = request.method
+                connection.connectTimeout = request.timeoutMs
+                connection.readTimeout = request.timeoutMs
+                request.headers.forEach { (name, value) -> connection.setRequestProperty(name, value) }
+                request.body?.let { bytes ->
+                    connection.doOutput = true
+                    connection.outputStream.use { it.write(bytes) }
+                }
+                connection.connect()
+                val code = connection.responseCode
+                val headers = buildMap<String, List<String>> {
+                    connection.headerFields.forEach { (name, values) -> if (name != null) put(name, values) }
+                }
+                stream = if (code >= 400) connection.errorStream else runCatching { connection.inputStream }.getOrNull()
+                HttpEngineResponse(
+                    statusCode = code,
+                    statusMessage = connection.responseMessage ?: "",
+                    headers = headers,
+                    body = stream,
+                    protocol = "http/1.1",
+                    timings = HttpTimings(),
+                )
+            }
+
+            override fun close() {
+                if (!closed.compareAndSet(false, true)) return
+                runCatching { stream?.close() }
+                connection.disconnect()
+            }
+        }
     }
 }
 
@@ -494,11 +549,11 @@ class HttpProbeRepositoryRedirectTest {
         val sourceUrl = URL("https://alice:source-secret@source.test/start?source-token=private#source-fragment")
         val location = "http://bob:destination-secret@destination.test/danger?redirect-token=private#destination-fragment"
         val openedUrls = mutableListOf<String>()
-        val repository = HttpProbeRepositoryImpl(HttpProbeConnectionFactory { url ->
+        val repository = HttpProbeRepositoryImpl(ConnectionFakeEngine(HttpProbeConnectionFactory { url ->
             openedUrls += url.toString()
             check(url.toString() == sourceUrl.toString()) { "HTTP destination must never be opened: $url" }
             RecordingHttpConnection(url, 302, location)
-        })
+        }))
 
         val result = repository.probe(HttpProbeRequest(url = sourceUrl.toString()))
 
@@ -523,10 +578,10 @@ class HttpProbeRepositoryRedirectTest {
         val sourceUrl = URL("https://source.test/start")
         val location = "http://[broken?redirect-token=private"
         val openedUrls = mutableListOf<String>()
-        val repository = HttpProbeRepositoryImpl(HttpProbeConnectionFactory { url ->
+        val repository = HttpProbeRepositoryImpl(ConnectionFakeEngine(HttpProbeConnectionFactory { url ->
             openedUrls += url.toString()
             RecordingHttpConnection(url, 302, location)
-        })
+        }))
 
         val result = repository.probe(HttpProbeRequest(url = sourceUrl.toString()))
 
@@ -666,7 +721,7 @@ class HttpProbeRepositoryRedirectTest {
             }
             val replayRequest = CompletableDeferred<CrossOriginEntityReplay>()
             val userDecision = CompletableDeferred<Boolean>()
-            val fakeRepo = HttpProbeRepositoryImpl(connectionFactory)
+            val fakeRepo = HttpProbeRepositoryImpl(ConnectionFakeEngine(connectionFactory))
             val probe = async(Dispatchers.IO) {
                 fakeRepo.probe(
                     HttpProbeRequest(
@@ -711,11 +766,11 @@ class HttpProbeRepositoryRedirectTest {
         val sourceUrl = URL("http://source.test/start")
         val targetUrl = "http://alice:destination-secret@target.test/reset-token/path?redirect-token=private#frag"
         val openedUrls = mutableListOf<String>()
-        val repository = HttpProbeRepositoryImpl(HttpProbeConnectionFactory { url ->
+        val repository = HttpProbeRepositoryImpl(ConnectionFakeEngine(HttpProbeConnectionFactory { url ->
             openedUrls += url.toString()
             check(url.toString() == sourceUrl.toString()) { "Unapproved destination must never be opened" }
             RecordingHttpConnection(url, 307, targetUrl)
-        })
+        }))
 
         val result = repository.probe(
             HttpProbeRequest(url = sourceUrl.toString(), method = HttpMethod.POST, body = "secret"),
@@ -736,11 +791,11 @@ class HttpProbeRepositoryRedirectTest {
         val sourceUrl = URL("http://source.test/start")
         val targetUrl = URL("http://target.test/private?token=private")
         val openedUrls = mutableListOf<String>()
-        val repository = HttpProbeRepositoryImpl(HttpProbeConnectionFactory { url ->
+        val repository = HttpProbeRepositoryImpl(ConnectionFakeEngine(HttpProbeConnectionFactory { url ->
             openedUrls += url.toString()
             check(url.toString() == sourceUrl.toString()) { "Denied destination must never be opened" }
             RecordingHttpConnection(url, 307, targetUrl.toString())
-        })
+        }))
 
         val result = repository.probe(
             HttpProbeRequest(
@@ -925,7 +980,7 @@ class HttpProbeOperationTest {
                 }
             }
         }
-        val repository = HttpProbeRepositoryImpl(HttpProbeConnectionFactory { connection })
+        val repository = HttpProbeRepositoryImpl(ConnectionFakeEngine(HttpProbeConnectionFactory { connection }))
         val session = HttpProbeOperation.newSession(timeoutMillis = 5_000)
         val probe = async(Dispatchers.IO) {
             repository.probe(HttpProbeRequest(url = url.toString()), session)
@@ -966,7 +1021,7 @@ class HttpProbeOperationTest {
                 }
             }
         }
-        val repository = HttpProbeRepositoryImpl(HttpProbeConnectionFactory { connection })
+        val repository = HttpProbeRepositoryImpl(ConnectionFakeEngine(HttpProbeConnectionFactory { connection }))
         val session = HttpProbeOperation.newSession(timeoutMillis = 500)
         val probe = async(Dispatchers.IO) {
             repository.probe(HttpProbeRequest(url = url.toString()), session)

@@ -75,7 +75,7 @@ non_goals:
 
 dependency_decision:
   add_dependencies:
-    - { lib: "com.squareup.okhttp3:okhttp", version: "latest stable 5.x (verify)", module: ":core-network", reason: "HTTP/2, ALPN, EventListener timing, connection pooling; pure JVM; also reused by P11 speed test and P15 API tools" }
+    - { lib: "com.squareup.okhttp3:okhttp", version: "5.5.0 (verified 2026-09-25 from Square's OkHttp repository and Maven Central)", module: ":core-network", reason: "HTTP/2, ALPN, EventListener timing, connection pooling; pure JVM; also reused by P11 speed test and P15 API tools" }
     - { lib: "org.jetbrains.kotlinx:kotlinx-serialization-json", version: "latest stable", module: ":core-network", reason: "RDAP/GeoIP/CT/BGP JSON parsing without hand-rolled regexes; requires kotlin('plugin.serialization') in core-network" }
   proguard: "OkHttp ships consumer rules; kotlinx-serialization needs `-keep,includedescriptorclasses class net.aieat.netswissknife.**$$serializer { *; }` + standard rules (add to app/proguard-rules.pro; verify in release-smoke job from P09)."
   size_impact: "~1.2 MB dex before shrinking; acceptable for a diagnostics app – record delta in PR."
@@ -87,7 +87,7 @@ assumptions:
     if_false: "Protocol probe stays optional/hidden; ALPN shown only on API 29+."
   - id: A2
     statement: "OkHttp EventListener callbacks (dnsStart/dnsEnd, connectStart/secureConnectStart/secureConnectEnd/connectEnd, responseHeadersStart, responseBodyEnd) allow computing dns/connect/tls/ttfb/transfer durations."
-    verify_with: "OkHttp docs; unit test with MockWebServer. NOTE: for OkHttp 5.x the test artifact is `com.squareup.okhttp3:mockwebserver3` (package mockwebserver3), for 4.x it is `com.squareup.okhttp3:mockwebserver`. Pin whichever OkHttp line is chosen and record it in libs.versions.toml."
+    verify_with: "Square's current OkHttp repository and Maven Central list stable OkHttp and MockWebServer 5.5.0. The test artifact is `com.squareup.okhttp3:mockwebserver3` (package mockwebserver3). Version is pinned in libs.versions.toml."
   - id: A5
     statement: "R2-002 overrides the original proposal: keep allowInsecureDowngrade=false. Report a blocked downgrade as evidence; an explicit separately configured cleartext probe requires destination/data disclosure. No automatic replay of the original URL secrets, headers or body."
     verify_with: "Grep usages after implementation; no dead enum entries without a comment."
@@ -202,11 +202,16 @@ tasks:
       findings: [R2-001]
       rule: "Treat each linked finding as a required independently verified acceptance case; urgent regression slices do not wait for optional task breadth."
     title: "HTTP: OkHttp engine + timings + protocol; RedirectPolicy pure; explicit downgrade diagnostics; redirect hops"
-    status: in_progress
+    status: done
     progress:
       - "Completed the R2-001 security slice: cross-origin body redirects require per-hop approval; source connection closes before the prompt suspends; default behavior denies replay; same-origin semantics and cross-origin header stripping remain intact."
       - "Added typed evidence for HTTPS-to-HTTP downgrade blocks, retaining source, resolved destination, HTTP status, and Location while never opening the cleartext destination. The app shows a localized warning with credentials, paths, queries, and fragments redacted; malformed-Location and cross-origin replay errors also avoid echoing URL text."
-      - "Focused repository tests passed 14/14 and ViewModel tests 30/30; Android-test Kotlin compilation and lintDebug passed. QA and adversarial re-reviews found no blocker. No emulator or live endpoint was used. The broader OkHttp adapter/timing/protocol and status-bearing redirect-hop acceptance remains open."
+      - "Added OkHttp 5.5.0 as the default manual-redirect transport. EventListener captures DNS/connect/TLS/TTFB/transfer timing, response protocol is preserved, per-hop timeouts use the remaining operation budget, and result timing fields aggregate across redirect calls. Accept-Encoding defaults to identity; body reads remain bounded and preserve charset and 4xx bodies. OkHttp is configured without ambient cookies, cache, or authenticators."
+      - "Extracted pure RedirectPolicy and migrated repository transport tests to HttpEngine fakes. The internal LegacyHttpEngine remains as a non-default one-release fallback. RedirectHop records source URL, response status, and Location."
+      - "OkHttp 5.5.0 MockWebServer coverage exercises HTTP/1.1, h2c protocol mapping and TLS+ALPN HTTP/2, bounded and error bodies, redirect evidence, bodyless POST/PUT/PATCH, source/destination URL-userinfo isolation, cache/cookie/authenticator isolation, operation cancellation, remaining-budget timeout aggregation, and an HTTPS-to-HTTP block with zero requests received by the HTTP destination."
+      - "Successful-result UI/share URLs now use the same credential/path/query redaction; sensitive Cookie, Set-Cookie, Authorization, and Proxy-Authorization headers are omitted, and Location values are sanitized. JVM helper tests and Compose redaction tests cover the output."
+      - "Validation: one serialized invocation passed :core-network:test (1,159 tests, 0 failures, 1 skipped), :core-domain:test (211/211), :app:testDebugUnitTest (526/526), :app:compileDebugAndroidTestKotlin, :app:lintDebug, and :core-network:koverVerify. Core-network overall Kover line coverage is 89.9%. Compose instrumentation tests compiled but were not run because no emulator/device was used; manual live endpoint/device checks remain outstanding."
+      - "Exact validation command: ./gradlew :core-network:test :core-domain:test :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:lintDebug :core-network:koverVerify --no-daemon --no-parallel --max-workers=1 --console=plain (final incremental run BUILD SUCCESSFUL; 4m 54s, 70 actionable tasks, 15 executed, 55 up-to-date)."
     tdd:
       red:
         tests:
