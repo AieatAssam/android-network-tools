@@ -6,6 +6,8 @@ import io.mockk.verify
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.edit
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -17,6 +19,8 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.cancel
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.platform.NetworkStatus
@@ -26,10 +30,12 @@ import net.aieat.netswissknife.core.domain.SpeedTestUseCase
 import net.aieat.netswissknife.core.network.speedtest.LatencySample
 import net.aieat.netswissknife.core.network.speedtest.LatencyStats
 import net.aieat.netswissknife.core.network.speedtest.SpeedTestEvent
+import net.aieat.netswissknife.core.network.speedtest.SpeedTestConfig
 import net.aieat.netswissknife.core.network.speedtest.SpeedTestPhase
 import net.aieat.netswissknife.core.network.speedtest.ThroughputResult
 import net.aieat.netswissknife.core.network.speedtest.ThroughputSample
 import net.aieat.netswissknife.core.network.speedtest.ServerInfo
+import net.aieat.netswissknife.core.network.operation.OperationSession
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -175,12 +181,46 @@ class SpeedTestViewModelTest {
 
             viewModel.startTest()
 
-            verify { useCase(any(), match { it.downloadStreams == 6 && it.uploadStreams == 3 }) }
+            verify {
+                useCase(
+                    match { it.budget.maxConcurrentProbes == 7 },
+                    match { it.downloadStreams == 6 && it.uploadStreams == 3 }
+                )
+            }
             val finished = viewModel.uiState.value as SpeedTestUiState.Finished
             assertEquals(6, finished.result.config.downloadStreams)
             assertEquals(3, finished.result.config.uploadStreams)
             assertEquals(latencyStats, finished.result.loadedLatencyDown)
             assertEquals(latencyStats, finished.result.loadedLatencyUp)
+        }
+
+        @Test
+        fun `first run waits for persisted stream settings before creating its session`() = runTest {
+            val coldStartStore = PreferenceDataStoreFactory.create(
+                scope = testScope,
+                produceFile = { File(tempDir, "speedtest-cold-start.preferences_pb") }
+            )
+            coldStartStore.edit { preferences ->
+                preferences[AppPreferenceKeys.SPEEDTEST_DOWN_STREAMS] = 8
+                preferences[AppPreferenceKeys.SPEEDTEST_UP_STREAMS] = 4
+            }
+            val capturedRun = CompletableDeferred<Pair<OperationSession, SpeedTestConfig>>()
+            every { useCase(any(), any()) } answers {
+                val session = firstArg<OperationSession>()
+                val runConfig = secondArg<SpeedTestConfig>()
+                capturedRun.complete(session to runConfig)
+                flowOf(SpeedTestEvent.Failed(SpeedTestPhase.LATENCY, "test complete"))
+            }
+            val coldStartViewModel = SpeedTestViewModel(useCase, coldStartStore)
+
+            coldStartViewModel.startTest()
+
+            val (session, config) = withContext(Dispatchers.IO) {
+                withTimeout(3_000) { capturedRun.await() }
+            }
+            assertEquals(8, config.downloadStreams)
+            assertEquals(4, config.uploadStreams)
+            assertEquals(9, session.budget.maxConcurrentProbes)
         }
 
         @Test

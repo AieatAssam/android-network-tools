@@ -39,19 +39,31 @@ internal typealias ByteStreamFn = suspend (durationMs: Long, onChunk: suspend (b
 /** Shared limits and per-run session factory for a full speed test. */
 object SpeedTestOperation {
     const val DEFAULT_TIMEOUT_MILLIS = 120_000L
+    private const val LOADED_LATENCY_REQUESTS = 1
 
     fun newSession(
         timeoutMs: Long = DEFAULT_TIMEOUT_MILLIS,
         clock: MonotonicClock = SystemMonotonicClock,
-    ): OperationSession = OperationSession(
-        OperationBudget.start(
-            requirement = OperationRequirement.ANY_NETWORK,
-            timeoutMillis = timeoutMs.coerceIn(1L, OperationBudget.DEFAULT_INTERACTIVE_TIMEOUT_MILLIS),
-            maxConcurrentProbes = 1,
-            maxResponseBytes = OperationBudget.DEFAULT_MAX_RESPONSE_BYTES,
-            clock = clock,
+    ): OperationSession = newSession(SpeedTestConfig(), timeoutMs, clock)
+
+    /** Creates a session whose default capacity covers the largest transfer plus loaded RTT. */
+    fun newSession(
+        config: SpeedTestConfig,
+        timeoutMs: Long = DEFAULT_TIMEOUT_MILLIS,
+        clock: MonotonicClock = SystemMonotonicClock,
+    ): OperationSession {
+        val normalized = config.normalized()
+        val transferStreams = maxOf(normalized.downloadStreams, normalized.uploadStreams)
+        return OperationSession(
+            OperationBudget.start(
+                requirement = OperationRequirement.ANY_NETWORK,
+                timeoutMillis = timeoutMs.coerceIn(1L, OperationBudget.DEFAULT_INTERACTIVE_TIMEOUT_MILLIS),
+                maxConcurrentProbes = transferStreams + LOADED_LATENCY_REQUESTS,
+                maxResponseBytes = OperationBudget.DEFAULT_MAX_RESPONSE_BYTES,
+                clock = clock,
+            )
         )
-    )
+    }
 }
 
 /**
@@ -234,7 +246,7 @@ class SpeedTestRepositoryImpl(
 
     override fun runSpeedTest(): Flow<SpeedTestEvent> = flow {
         // The default budget belongs to each collection, not to the cold Flow value.
-        emitAll(runSpeedTest(SpeedTestOperation.newSession()))
+        emitAll(runSpeedTest(SpeedTestOperation.newSession(speedTestConfig)))
     }
 
     override fun runSpeedTest(operationSession: OperationSession): Flow<SpeedTestEvent> =
@@ -360,9 +372,10 @@ class SpeedTestRepositoryImpl(
                 currentPhase = SpeedTestPhase.DOWNLOAD
                 val (download, loadedDown) = measureEnginePhase(
                     engine = engine,
+                    operationSession = operationSession,
                     config = config,
                     baseUrl = baseUrl,
-                    transfer = engine.download("$baseUrl/__down?bytes=$DOWNLOAD_PAYLOAD_BYTES", config.downloadStreams, config.phaseDurationMs),
+                    transfer = engine.download("$baseUrl/__down?bytes=$DOWNLOAD_PAYLOAD_BYTES", config.downloadStreams, config.phaseDurationMs, operationSession),
                     report = { send(SpeedTestEvent.DownloadProgress(it)) },
                     loadedReport = { send(SpeedTestEvent.LoadedLatencySample(currentPhase, it)) }
                 )
@@ -372,9 +385,10 @@ class SpeedTestRepositoryImpl(
                 currentPhase = SpeedTestPhase.UPLOAD
                 val (upload, loadedUp) = measureEnginePhase(
                     engine = engine,
+                    operationSession = operationSession,
                     config = config,
                     baseUrl = baseUrl,
-                    transfer = engine.upload("$baseUrl/__up", config.uploadStreams, config.phaseDurationMs),
+                    transfer = engine.upload("$baseUrl/__up", config.uploadStreams, config.phaseDurationMs, operationSession),
                     report = { send(SpeedTestEvent.UploadProgress(it)) },
                     loadedReport = { send(SpeedTestEvent.LoadedLatencySample(currentPhase, it)) }
                 )
@@ -397,6 +411,7 @@ class SpeedTestRepositoryImpl(
 
     private suspend fun measureEnginePhase(
         engine: TransferEngine,
+        operationSession: OperationSession,
         config: SpeedTestConfig,
         baseUrl: String,
         transfer: Flow<ChunkEvent>,
@@ -409,7 +424,9 @@ class SpeedTestRepositoryImpl(
             while (true) {
                 delay(config.loadedLatencyIntervalMs)
                 ensureCurrentOperationActive()
-                val sample = engine.httpRtt("$baseUrl/__down?bytes=0").correctedMs
+                val sample = operationSession.concurrencyLimiter.withPermit {
+                    engine.httpRtt("$baseUrl/__down?bytes=0").correctedMs
+                }
                 ensureCurrentOperationActive()
                 loadedSequence++
                 loadedReport(sample)

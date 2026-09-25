@@ -17,6 +17,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
+import net.aieat.netswissknife.core.network.operation.OperationSession
 import java.net.InetSocketAddress
 import java.net.InetAddress
 import java.net.Socket
@@ -91,12 +92,32 @@ class OkHttpTransferEngine(
     }
 
     override fun download(url: String, streams: Int, durationMs: Long): Flow<ChunkEvent> =
-        transfer(url, streams, durationMs, upload = false)
+        transfer(url, streams, durationMs, upload = false, operationSession = null)
+
+    override fun download(
+        url: String,
+        streams: Int,
+        durationMs: Long,
+        operationSession: OperationSession,
+    ): Flow<ChunkEvent> = transfer(url, streams, durationMs, upload = false, operationSession = operationSession)
 
     override fun upload(url: String, streams: Int, durationMs: Long): Flow<ChunkEvent> =
-        transfer(url, streams, durationMs, upload = true)
+        transfer(url, streams, durationMs, upload = true, operationSession = null)
 
-    private fun transfer(url: String, streams: Int, durationMs: Long, upload: Boolean): Flow<ChunkEvent> = channelFlow {
+    override fun upload(
+        url: String,
+        streams: Int,
+        durationMs: Long,
+        operationSession: OperationSession,
+    ): Flow<ChunkEvent> = transfer(url, streams, durationMs, upload = true, operationSession = operationSession)
+
+    private fun transfer(
+        url: String,
+        streams: Int,
+        durationMs: Long,
+        upload: Boolean,
+        operationSession: OperationSession?,
+    ): Flow<ChunkEvent> = channelFlow {
         val startedAt = monotonicTimeNs()
         val safeStreams = streams.coerceAtLeast(1)
         repeat(safeStreams) { streamIndex ->
@@ -110,23 +131,27 @@ class OkHttpTransferEngine(
                     } else {
                         requestBuilder.get().build()
                     }
-                    withResponse(request) { response ->
-                        if (!response.isSuccessful) throw java.io.IOException("HTTP ${response.code}")
-                        val body = response.body ?: return@withResponse
-                        if (upload) {
-                            body.byteStream().use { drainUploadResponse(it) }
-                            send(ChunkEvent(streamIndex, CHUNK_BYTES.toLong(), elapsedSince(startedAt)))
-                        } else {
-                            body.byteStream().use { input ->
-                                while ((monotonicTimeNs() - startedAt) / 1_000_000L < durationMs) {
-                                    currentCoroutineContext().ensureActive()
-                                    val count = input.read(buffer)
-                                    if (count < 0) break
-                                    send(ChunkEvent(streamIndex, count.toLong(), elapsedSince(startedAt)))
+                    suspend fun executeRequest() {
+                        withResponse(request) { response ->
+                            if (!response.isSuccessful) throw java.io.IOException("HTTP ${response.code}")
+                            val body = response.body ?: return@withResponse
+                            if (upload) {
+                                body.byteStream().use { drainUploadResponse(it) }
+                                send(ChunkEvent(streamIndex, CHUNK_BYTES.toLong(), elapsedSince(startedAt)))
+                            } else {
+                                body.byteStream().use { input ->
+                                    while ((monotonicTimeNs() - startedAt) / 1_000_000L < durationMs) {
+                                        currentCoroutineContext().ensureActive()
+                                        val count = input.read(buffer)
+                                        if (count < 0) break
+                                        send(ChunkEvent(streamIndex, count.toLong(), elapsedSince(startedAt)))
+                                    }
                                 }
                             }
                         }
                     }
+                    if (operationSession == null) executeRequest()
+                    else operationSession.concurrencyLimiter.withPermit { executeRequest() }
                 }
             }
         }

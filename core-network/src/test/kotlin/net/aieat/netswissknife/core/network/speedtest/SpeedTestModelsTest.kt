@@ -4,9 +4,26 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
+import net.aieat.netswissknife.core.network.operation.OperationRequirement
 
 @DisplayName("SpeedTest model helpers")
 class SpeedTestModelsTest {
+
+    @Test
+    fun `default operation session includes the largest transfer and loaded latency request`() {
+        val config = SpeedTestConfig(downloadStreams = 7, uploadStreams = 3)
+        val session = SpeedTestOperation.newSession(config)
+
+        assertEquals(8, session.budget.maxConcurrentProbes)
+        assertEquals(OperationRequirement.ANY_NETWORK, session.budget.requirement)
+    }
+
+    @Test
+    fun `operation session sizes concurrency from normalized stream counts`() {
+        val session = SpeedTestOperation.newSession(SpeedTestConfig(downloadStreams = 50, uploadStreams = 0))
+
+        assertEquals(9, session.budget.maxConcurrentProbes)
+    }
 
     @Nested
     @DisplayName("LatencyStats.compute")

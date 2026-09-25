@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -62,25 +63,40 @@ class SpeedTestViewModel @Inject constructor(
 
     private val _config = MutableStateFlow(SpeedTestConfig())
     val config: StateFlow<SpeedTestConfig> = _config.asStateFlow()
+    private val configInitialized = CompletableDeferred<Unit>()
+    private var downloadStreamsOverride: Int? = null
+    private var uploadStreamsOverride: Int? = null
 
     private var testJob: Job? = null
     private var operationSession: OperationSession? = null
 
     init {
         viewModelScope.launch {
-            val preferences = dataStore.data.first()
-            _config.value = SpeedTestConfig(
-                downloadStreams = preferences[AppPreferenceKeys.SPEEDTEST_DOWN_STREAMS] ?: SpeedTestConfig().downloadStreams,
-                uploadStreams = preferences[AppPreferenceKeys.SPEEDTEST_UP_STREAMS] ?: SpeedTestConfig().uploadStreams,
-            ).normalized()
+            try {
+                val preferences = dataStore.data.first()
+                _config.value = SpeedTestConfig(
+                    downloadStreams = downloadStreamsOverride
+                        ?: preferences[AppPreferenceKeys.SPEEDTEST_DOWN_STREAMS]
+                        ?: SpeedTestConfig().downloadStreams,
+                    uploadStreams = uploadStreamsOverride
+                        ?: preferences[AppPreferenceKeys.SPEEDTEST_UP_STREAMS]
+                        ?: SpeedTestConfig().uploadStreams,
+                ).normalized()
+                configInitialized.complete(Unit)
+            } catch (cancelled: CancellationException) {
+                configInitialized.cancel(cancelled)
+                throw cancelled
+            } catch (failure: Exception) {
+                configInitialized.completeExceptionally(failure)
+            }
         }
     }
 
     fun startTest() {
         operationSession?.cancel(CancellationReason.USER_STOP)
+        operationSession = null
         testJob?.cancel()
-        val session = SpeedTestOperation.newSession()
-        operationSession = session
+        var session: OperationSession? = null
 
         val latencySamples = mutableListOf<LatencySample>()
         val downloadSamples = mutableListOf<ThroughputSample>()
@@ -96,16 +112,17 @@ class SpeedTestViewModel @Inject constructor(
 
         testJob = viewModelScope.launch {
             try {
-                val preferences = dataStore.data.first()
-                val runConfig = _config.value.copy(
-                    downloadStreams = (preferences[AppPreferenceKeys.SPEEDTEST_DOWN_STREAMS] ?: _config.value.downloadStreams).coerceIn(1, 8),
-                    uploadStreams = (preferences[AppPreferenceKeys.SPEEDTEST_UP_STREAMS] ?: _config.value.uploadStreams).coerceIn(1, 4),
-                ).normalized()
+                // Wait for persisted settings, then use one snapshot for both capacity and run.
+                configInitialized.await()
+                val runConfig = _config.value.normalized()
                 _config.value = runConfig
+                val runSession = SpeedTestOperation.newSession(runConfig)
+                session = runSession
+                operationSession = runSession
                 var serverInfo: ServerInfo? = null
                 var loadedDown = mutableListOf<LatencySample>()
                 var loadedUp = mutableListOf<LatencySample>()
-                speedTestUseCase(session, runConfig).collect { event ->
+                speedTestUseCase(runSession, runConfig).collect { event ->
                     when (event) {
                         is SpeedTestEvent.ServerInfoReceived -> {
                             serverInfo = event.info
@@ -172,7 +189,7 @@ class SpeedTestViewModel @Inject constructor(
             } catch (e: Exception) {
                 _uiState.value = SpeedTestUiState.Error(current.phase, e.message ?: "Unknown error")
             } finally {
-                if (operationSession === session) operationSession = null
+                if (session != null && operationSession === session) operationSession = null
             }
         }
     }
@@ -189,12 +206,14 @@ class SpeedTestViewModel @Inject constructor(
 
     fun setDownloadStreams(value: Int) {
         val streams = value.coerceIn(1, 8)
+        downloadStreamsOverride = streams
         _config.value = _config.value.copy(downloadStreams = streams)
         viewModelScope.launch { dataStore.edit { it[AppPreferenceKeys.SPEEDTEST_DOWN_STREAMS] = streams } }
     }
 
     fun setUploadStreams(value: Int) {
         val streams = value.coerceIn(1, 4)
+        uploadStreamsOverride = streams
         _config.value = _config.value.copy(uploadStreams = streams)
         viewModelScope.launch { dataStore.edit { it[AppPreferenceKeys.SPEEDTEST_UP_STREAMS] = streams } }
     }
