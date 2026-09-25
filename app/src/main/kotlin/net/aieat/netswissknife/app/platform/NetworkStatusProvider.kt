@@ -12,7 +12,12 @@ interface NetworkStatusProvider {
 
 object NoOpNetworkStatusProvider : NetworkStatusProvider {
     private val state = MutableStateFlow(
-        NetworkStatus(hasInternet = true, hasLocalNetwork = true, transport = Transport.OTHER)
+        NetworkStatus(
+            hasInternet = true,
+            hasValidatedInternet = true,
+            hasLocalNetwork = true,
+            transport = Transport.OTHER,
+        )
     ).asStateFlow()
     override val status: StateFlow<NetworkStatus> = state
 }

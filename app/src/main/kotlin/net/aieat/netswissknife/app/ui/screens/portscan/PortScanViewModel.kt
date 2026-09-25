@@ -130,6 +130,9 @@ class PortScanViewModel @Inject constructor(
     private val _concurrency = MutableStateFlow(PortScanDefaults.CONCURRENCY)
     val concurrency: StateFlow<Int> = _concurrency.asStateFlow()
 
+    private val _aggressiveProbes = MutableStateFlow(true)
+    val aggressiveProbes: StateFlow<Boolean> = _aggressiveProbes.asStateFlow()
+
     val recentHosts: StateFlow<List<String>> = recentHostsRepository
         .getRecents(AppPreferenceKeys.RECENT_PORTS_HOSTS)
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
@@ -209,6 +212,7 @@ class PortScanViewModel @Inject constructor(
     fun onTimeoutChange(value: Int) { _timeoutMs.value = value }
 
     fun onConcurrencyChange(value: Int) { _concurrency.value = value.coerceIn(1, 500) }
+    fun onAggressiveProbesChange(value: Boolean) { _aggressiveProbes.value = value }
 
     fun removeRecentHost(host: String) {
         viewModelScope.launch {
@@ -308,7 +312,8 @@ class PortScanViewModel @Inject constructor(
             startPort = _startPort.value.toIntOrNull() ?: 1,
             endPort = _endPort.value.toIntOrNull() ?: 1024,
             timeoutMs = _timeoutMs.value,
-            concurrency = _concurrency.value
+            concurrency = _concurrency.value,
+            aggressiveProbes = _aggressiveProbes.value,
         )
 
         val totalPorts = if (_selectedPreset.value == PortScanPreset.CUSTOM) {

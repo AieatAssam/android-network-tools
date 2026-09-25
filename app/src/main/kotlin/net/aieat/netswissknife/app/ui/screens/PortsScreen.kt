@@ -67,6 +67,7 @@ import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RangeSlider
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -82,6 +83,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import android.content.ClipData
@@ -128,6 +130,7 @@ import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.portscan.PortScanResult
 import net.aieat.netswissknife.core.network.portscan.PortScanSummary
 import net.aieat.netswissknife.core.network.portscan.PortStatus
+import net.aieat.netswissknife.core.network.portscan.TlsSubjectSanitizer
 
 object PortsScreenTestTags {
     const val PRESET_FIELD = "ports_preset_field"
@@ -135,6 +138,7 @@ object PortsScreenTestTags {
     const val CONCURRENCY_SLIDER = "ports_concurrency_slider"
     const val SOURCE_CONTEXT = "ports_source_context"
     const val INVALID_HANDOFF = "ports_invalid_handoff"
+    const val AGGRESSIVE_PROBES_SWITCH = "ports_aggressive_probes_switch"
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -161,6 +165,7 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
     val endPort by viewModel.endPort.collectAsStateWithLifecycle()
     val timeoutMs by viewModel.timeoutMs.collectAsStateWithLifecycle()
     val concurrency by viewModel.concurrency.collectAsStateWithLifecycle()
+    val aggressiveProbes by viewModel.aggressiveProbes.collectAsStateWithLifecycle()
     val recentHosts by viewModel.recentHosts.collectAsStateWithLifecycle()
     val sourceContext = viewModel.sourceContext
     val hasInvalidHandoff by viewModel.hasInvalidHandoff.collectAsStateWithLifecycle()
@@ -226,6 +231,7 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
                     endPort = endPort,
                     timeoutMs = timeoutMs,
                     concurrency = concurrency,
+                    aggressiveProbes = aggressiveProbes,
                     isScanning = uiState is PortScanUiState.Scanning,
                     recentHosts = recentHosts,
                     onHostChange = viewModel::onHostChange,
@@ -234,6 +240,7 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
                     onEndPortChange = viewModel::onEndPortChange,
                     onTimeoutChange = viewModel::onTimeoutChange,
                     onConcurrencyChange = viewModel::onConcurrencyChange,
+                    onAggressiveProbesChange = viewModel::onAggressiveProbesChange,
                     onStartScan = {
                         keyboardController?.hide()
                         viewModel.startScan()
@@ -419,6 +426,7 @@ private fun PortScanInputCard(
     endPort: String,
     timeoutMs: Int,
     concurrency: Int,
+    aggressiveProbes: Boolean,
     isScanning: Boolean,
     recentHosts: List<String>,
     onHostChange: (String) -> Unit,
@@ -427,6 +435,7 @@ private fun PortScanInputCard(
     onEndPortChange: (String) -> Unit,
     onTimeoutChange: (Int) -> Unit,
     onConcurrencyChange: (Int) -> Unit,
+    onAggressiveProbesChange: (Boolean) -> Unit,
     onStartScan: () -> Unit,
     onStopScan: () -> Unit,
     onRemoveRecentHost: (String) -> Unit,
@@ -434,6 +443,11 @@ private fun PortScanInputCard(
 ) {
     val normalizedHost = HostValidator.normalize(host)
     val isHostInvalid = host.isNotBlank() && normalizedHost == null
+    val probeSwitchA11yLabel = stringResource(R.string.ports_aggressive_probes_a11y_label)
+    val probeSwitchA11yState = stringResource(
+        if (aggressiveProbes) R.string.ports_aggressive_probes_enabled_a11y
+        else R.string.ports_aggressive_probes_disabled_a11y,
+    )
 
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -628,6 +642,35 @@ private fun PortScanInputCard(
                         )
                     }
                 }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.ports_aggressive_probes_label),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Text(
+                        text = stringResource(R.string.ports_aggressive_probes_description),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(
+                    checked = aggressiveProbes,
+                    onCheckedChange = onAggressiveProbesChange,
+                    enabled = !isScanning,
+                    modifier = Modifier
+                        .testTag(PortsScreenTestTags.AGGRESSIVE_PROBES_SWITCH)
+                        .semantics {
+                            contentDescription = probeSwitchA11yLabel
+                            stateDescription = probeSwitchA11yState
+                        },
+                )
             }
 
             // Action buttons
@@ -1041,6 +1084,16 @@ private fun PortResultRow(result: PortScanResult) {
                     )
                 }
 
+                result.tlsSubject?.let(TlsSubjectSanitizer::sanitize)?.takeIf(String::isNotBlank)?.let { subject ->
+                    Text(
+                        text = stringResource(R.string.ports_tls_subject, subject),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+
                 // Banner
                 if (result.banner != null || result.bannerTruncated) {
                     val banner = result.banner.orEmpty()
@@ -1078,7 +1131,7 @@ private fun PortResultRow(result: PortScanResult) {
 
 // ── Report builder ────────────────────────────────────────────────────────────
 
-private fun buildScanReport(summary: PortScanSummary): String = buildString {
+internal fun buildScanReport(summary: PortScanSummary): String = buildString {
     appendLine("=== Port Scan Report ===")
     appendLine("Host: ${summary.host}")
     summary.resolvedIp?.let { appendLine("IP: $it") }
@@ -1100,6 +1153,9 @@ private fun buildScanReport(summary: PortScanSummary): String = buildString {
                 else -> ""
             }
             appendLine("  ${r.port.toString().padEnd(6)} $service${banner}")
+            r.tlsSubject?.let(TlsSubjectSanitizer::sanitize)?.takeIf(String::isNotBlank)?.let {
+                appendLine("         TLS subject CN: $it")
+            }
         }
     } else {
         appendLine("No open ports found.")

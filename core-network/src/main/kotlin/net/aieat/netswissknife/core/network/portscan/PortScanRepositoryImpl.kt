@@ -27,6 +27,12 @@ import net.aieat.netswissknife.core.network.operation.OperationDeadlineExceededE
 import net.aieat.netswissknife.core.network.operation.OperationRequirement
 import net.aieat.netswissknife.core.network.operation.OperationRunner
 import net.aieat.netswissknife.core.network.operation.OperationSession
+import net.aieat.netswissknife.core.network.tls.SocketTlsHandshakeEngine
+import net.aieat.netswissknife.core.network.tls.TlsCertificateParser
+import net.aieat.netswissknife.core.network.tls.TlsHandshakeEngine
+import net.aieat.netswissknife.core.network.tls.TlsHandshakeConnection
+import net.aieat.netswissknife.core.network.tls.TlsInspectorSocketFactory
+import javax.net.ssl.SSLSocket
 
 /** Functional type for a single TCP port probe. Injected for testability. */
 typealias PortConnectChecker = (address: InetAddress, port: Int) -> PortConnectResult
@@ -37,7 +43,77 @@ data class PortConnectResult(
     val responseTimeMs: Long,
     val banner: String?,
     val bannerTruncated: Boolean = false,
+    val tlsSubject: String? = null,
+    val probeKind: ProbeKind = ProbeKind.PASSIVE,
 )
+
+fun interface TlsSubjectProbe {
+    fun inspect(
+        connectAddress: InetAddress,
+        peerHost: String,
+        port: Int,
+        timeoutMs: Int,
+        operationSession: OperationSession,
+    ): String?
+}
+
+/** A short certificate peek that shares operation cancellation and deadline ownership. */
+internal class P10TlsSubjectProbe(
+    private val binder: NetworkBinder = NoOpNetworkBinder,
+    private val socketFactory: () -> Socket = { Socket() },
+    private val engine: TlsHandshakeEngine = SocketTlsHandshakeEngine(
+        TlsInspectorSocketFactory { context -> context.socketFactory.createSocket() as SSLSocket },
+    ),
+) : TlsSubjectProbe {
+    override fun inspect(
+        connectAddress: InetAddress,
+        peerHost: String,
+        port: Int,
+        timeoutMs: Int,
+        operationSession: OperationSession,
+    ): String? {
+        if (timeoutMs < 2) return null
+        // P10 applies this timeout to both connect and handshake independently. Split
+        // the remaining aggregate budget across those two blocking phases.
+        val phaseTimeoutMs = minOf(timeoutMs, MAX_TLS_PEEK_MILLIS) / 2
+        val rawSocket = try {
+            binder.newTcpSocket(connectAddress.hostAddress) { socketFactory() }
+        } catch (denied: LocalNetworkPermissionDeniedException) {
+            throw denied
+        } catch (security: SecurityException) {
+            throw LocalNetworkPermissionDeniedException(security)
+        }
+        operationSession.resources.register(rawSocket)
+        var connection: TlsHandshakeConnection? = null
+        try {
+            operationSession.budget.throwIfExpired()
+            try {
+                rawSocket.connect(InetSocketAddress(connectAddress, port), phaseTimeoutMs)
+            } catch (security: SecurityException) {
+                throw LocalNetworkPermissionDeniedException(security)
+            }
+            operationSession.budget.throwIfExpired()
+            connection = engine.openConnectionOverSocket(peerHost, port, phaseTimeoutMs, rawSocket)
+            operationSession.resources.register(connection)
+            connection.connect()
+            operationSession.budget.throwIfExpired()
+            connection.handshake()
+            operationSession.budget.throwIfExpired()
+            return connection.snapshot().peerCertificates.firstOrNull()?.let { certificate ->
+                TlsCertificateParser.parseCN(certificate.subjectX500Principal.name)
+                    .let(TlsSubjectSanitizer::sanitize)
+                    .takeIf(String::isNotBlank)
+            }
+        } finally {
+            connection?.let { tls ->
+                if (operationSession.resources.release(tls)) runCatching { tls.close() }
+            }
+            if (operationSession.resources.release(rawSocket)) runCatching { rawSocket.close() }
+        }
+    }
+
+    private companion object { const val MAX_TLS_PEEK_MILLIS = 2_000 }
+}
 
 /**
  * Production [PortScanRepository] that uses TCP socket connections to determine port status.
@@ -59,6 +135,11 @@ class PortScanRepositoryImpl(
     private val socketFactory: () -> Socket = { Socket() },
     private val operationTimeoutMillis: Long = OperationBudget.DEFAULT_INTERACTIVE_TIMEOUT_MILLIS,
     private val resolverExecutor: java.util.concurrent.ThreadPoolExecutor = PortScanBlockingResolver.productionExecutor,
+    private val tlsSubjectProbe: TlsSubjectProbe = if (checker == null) {
+        P10TlsSubjectProbe(binder, socketFactory)
+    } else {
+        TlsSubjectProbe { _, _, _, _, _ -> null }
+    },
 ) : PortScanRepository {
 
     companion object {
@@ -71,6 +152,8 @@ class PortScanRepositoryImpl(
             binder: NetworkBinder,
             socketFactory: () -> Socket,
             activeSocket: ActivePortScanSocket,
+            host: String,
+            aggressiveProbes: Boolean,
         ): PortConnectChecker = { address, port ->
             val start = clock.nowNanos()
             var socket: Socket? = null
@@ -95,12 +178,21 @@ class PortScanRepositoryImpl(
                     remainingNanos.coerceAtLeast(0L) / NANOS_PER_MILLISECOND,
                 ).toInt()
 
-                // Attempt a short banner grab only while the per-port budget remains.
+                val probeKind = if (aggressiveProbes) ServiceProbes.kindFor(port) else ProbeKind.PASSIVE
+                // Optional exchanges happen only after TCP accepts the connection. Their
+                // reads share the existing per-port deadline and a 300 ms banner cap.
                 val bannerRead = try {
                     if (bannerTimeoutMs <= 0) {
                         BannerReadResult(banner = null, truncated = false)
                     } else {
-                        BannerReader.read(socket.getInputStream()) {
+                        val input = socket.getInputStream()
+                        val activeProbe = aggressiveProbes && probeKind in setOf(ProbeKind.HTTP, ProbeKind.SMTP)
+                        if (activeProbe && probeKind == ProbeKind.HTTP) {
+                            val output = socket.getOutputStream()
+                            output.write(checkNotNull(ServiceProbes.request(port, host)))
+                            output.flush()
+                        }
+                        fun prepareRead(): Boolean {
                             // SO_TIMEOUT applies to each individual read. Recompute it
                             // before every partial read so a slow banner cannot spend
                             // the full cap repeatedly and overrun the per-port budget.
@@ -112,12 +204,67 @@ class PortScanRepositoryImpl(
                                 PortScanOperationBudget.MAX_BANNER_READ_TIMEOUT_MILLIS,
                                 remainingMillis,
                             ).toInt()
-                            if (nextReadTimeoutMs <= 0) {
+                            return if (nextReadTimeoutMs <= 0) {
                                 false
                             } else {
                                 socket.soTimeout = nextReadTimeoutMs
                                 true
                             }
+                        }
+                        if (activeProbe && probeKind == ProbeKind.SMTP) {
+                            val statusLine = Regex("^(\\d{3})([ -])")
+                            var smtpReplyCode: String? = null
+                            var finalSmtpReplyCode: String? = null
+                            val greeting = BannerReader.read(
+                                input,
+                                stopWhenLine = { line ->
+                                    val match = statusLine.find(line)
+                                    if (match == null) {
+                                        true
+                                    } else {
+                                        val code = match.groupValues[1]
+                                        val separator = match.groupValues[2]
+                                        val firstCode = smtpReplyCode
+                                        if (firstCode == null) {
+                                            smtpReplyCode = code
+                                            if (separator != "-") finalSmtpReplyCode = code
+                                            separator != "-"
+                                        } else if (code != firstCode) {
+                                            finalSmtpReplyCode = code
+                                            true
+                                        } else if (separator == " ") {
+                                            finalSmtpReplyCode = code
+                                            true
+                                        } else {
+                                            false
+                                        }
+                                    }
+                                },
+                                lineSeparator = " ",
+                                prepareRead = ::prepareRead,
+                            )
+                            val isComplete220Greeting = greeting.stopConditionMet &&
+                                smtpReplyCode == "220" && finalSmtpReplyCode == "220"
+                            val bytesRemaining = BannerReader.MAX_BYTES - greeting.bytesRead
+                            if (isComplete220Greeting && bytesRemaining > 0 && prepareRead()) {
+                                val output = socket.getOutputStream()
+                                output.write(checkNotNull(ServiceProbes.request(port, host)))
+                                output.flush()
+                                val reply = BannerReader.read(
+                                    input,
+                                    maxBytes = bytesRemaining,
+                                    prepareRead = ::prepareRead,
+                                )
+                                val combinedBanner = listOfNotNull(greeting.banner, reply.banner).joinToString(" ")
+                                val sanitizedCombined = BannerSanitizer.sanitizeWithTruncation(combinedBanner)
+                                BannerReadResult(
+                                    banner = sanitizedCombined.text.takeIf(String::isNotBlank),
+                                    truncated = greeting.truncated || reply.truncated || sanitizedCombined.truncated,
+                                    bytesRead = greeting.bytesRead + reply.bytesRead,
+                                )
+                            } else greeting
+                        } else {
+                            BannerReader.read(input, prepareRead = ::prepareRead)
                         }
                     }
                 } catch (error: SecurityException) {
@@ -126,7 +273,13 @@ class PortScanRepositoryImpl(
                     throw cancelled
                 } catch (_: Exception) { BannerReadResult(banner = null, truncated = false) }
 
-                PortConnectResult(PortStatus.OPEN, responseTime, bannerRead.banner, bannerRead.truncated)
+                PortConnectResult(
+                    status = PortStatus.OPEN,
+                    responseTimeMs = responseTime,
+                    banner = bannerRead.banner,
+                    bannerTruncated = bannerRead.truncated,
+                    probeKind = if (aggressiveProbes) ServiceProbes.kindFor(port) else ProbeKind.PASSIVE,
+                )
             } catch (e: ConnectException) {
                 PortConnectResult(PortStatus.CLOSED, clock.elapsedMillisSince(start), null)
             } catch (e: SocketTimeoutException) {
@@ -146,6 +299,7 @@ class PortScanRepositoryImpl(
         }
 
         private const val NANOS_PER_MILLISECOND = 1_000_000L
+        private const val MAX_TLS_PEEK_TIMEOUT_MILLIS = 2_000L
     }
 
     override fun scan(
@@ -189,12 +343,22 @@ class PortScanRepositoryImpl(
         operationSession: OperationSession,
     ): Flow<PortScanUpdate> = scanInternal(host, ports, timeoutMs, concurrency, operationSession)
 
+    override fun scan(
+        host: String,
+        ports: List<Int>,
+        timeoutMs: Int,
+        concurrency: Int,
+        aggressiveProbes: Boolean,
+        operationSession: OperationSession,
+    ): Flow<PortScanUpdate> = scanInternal(host, ports, timeoutMs, concurrency, operationSession, aggressiveProbes)
+
     private fun scanInternal(
         host: String,
         ports: List<Int>,
         timeoutMs: Int,
         concurrency: Int,
         callerSession: OperationSession?,
+        aggressiveProbes: Boolean = false,
     ): Flow<PortScanUpdate> = channelFlow {
         require(timeoutMs > 0) { "Per-port timeout must be positive" }
         val startTime = clock.nowNanos()
@@ -267,9 +431,12 @@ class PortScanRepositoryImpl(
                             binder = binder,
                             socketFactory = socketFactory,
                             activeSocket = socketSlot,
+                            host = host,
+                            aggressiveProbes = aggressiveProbes,
                         )
                         for (port in pending) {
                             ensureOperationActive()
+                            val probeStartedAt = clock.nowNanos()
                             val connectResult = try {
                                 effectiveChecker(resolvedAddress, port)
                             } catch (cancelled: CancellationException) {
@@ -287,6 +454,31 @@ class PortScanRepositoryImpl(
                             // A close during connect/read can look like a normal filtered
                             // result; cancellation/deadline must win before result mapping.
                             ensureOperationActive()
+                            val probeKind = if (aggressiveProbes && connectResult.status == PortStatus.OPEN) {
+                                ServiceProbes.kindFor(port)
+                            } else ProbeKind.PASSIVE
+                            val tlsSubject = if (probeKind == ProbeKind.TLS_PEEK) {
+                                val elapsedNanos = (clock.nowNanos() - probeStartedAt).coerceAtLeast(0L)
+                                val perPortRemainingNanos = (
+                                    timeoutMs.toLong() * NANOS_PER_MILLISECOND - elapsedNanos
+                                ).coerceAtLeast(0L)
+                                val peekBudgetNanos = minOf(
+                                    MAX_TLS_PEEK_TIMEOUT_MILLIS * NANOS_PER_MILLISECOND,
+                                    perPortRemainingNanos,
+                                    session.budget.remainingNanos(),
+                                )
+                                val peekTimeout = (peekBudgetNanos / NANOS_PER_MILLISECOND).toInt()
+                                if (peekTimeout > 0) try {
+                                    tlsSubjectProbe.inspect(resolvedAddress, host, port, peekTimeout, session)
+                                } catch (denied: LocalNetworkPermissionDeniedException) {
+                                    throw denied
+                                } catch (cancelled: CancellationException) {
+                                    throw cancelled
+                                } catch (security: SecurityException) {
+                                    throw LocalNetworkPermissionDeniedException(security)
+                                } catch (_: Exception) { null } else null
+                            } else null
+                            ensureOperationActive()
                             val portInfo = WellKnownPorts.getInfo(port)
                             completed.send(
                                 PortScanResult(
@@ -297,6 +489,10 @@ class PortScanRepositoryImpl(
                                     banner = connectResult.banner,
                                     responseTimeMs = connectResult.responseTimeMs,
                                     bannerTruncated = connectResult.bannerTruncated,
+                                    tlsSubject = (tlsSubject ?: connectResult.tlsSubject)
+                                        ?.let(TlsSubjectSanitizer::sanitize)
+                                        ?.takeIf(String::isNotBlank),
+                                    probeKind = connectResult.probeKind.takeIf { it != ProbeKind.PASSIVE } ?: probeKind,
                                 )
                             )
                         }

@@ -3,6 +3,7 @@ package net.aieat.netswissknife.core.network.tls
 import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.operation.OperationSession
 import java.net.InetSocketAddress
+import java.net.Socket
 import java.security.KeyStore
 import java.security.cert.X509Certificate
 import javax.net.ssl.SSLContext
@@ -21,6 +22,14 @@ internal interface TlsHandshakeEngine {
         timeoutMs: Int,
         protocol: String? = null,
     ): TlsHandshakeConnection
+
+    /** Wraps an already-connected, network-bound transport without resolving [host] again. */
+    fun openConnectionOverSocket(
+        host: String,
+        port: Int,
+        timeoutMs: Int,
+        transportSocket: Socket,
+    ): TlsHandshakeConnection = throw UnsupportedOperationException("Bound transport wrapping is unavailable")
 }
 
 internal interface TlsHandshakeConnection : AutoCloseable {
@@ -64,7 +73,28 @@ internal class SocketTlsHandshakeEngine(
             socket.soTimeout = timeoutMs
             if (protocol != null) socket.enabledProtocols = arrayOf(protocol)
             configureTlsParameters(socket, host)
-            return SocketConnection(socket, host, port, timeoutMs)
+            return SocketConnection(socket, host, port, timeoutMs, transportConnected = false)
+        } catch (failure: Throwable) {
+            try {
+                socket.close()
+            } catch (closeFailure: Throwable) {
+                if (failure !== closeFailure) failure.addSuppressed(closeFailure)
+            }
+            throw failure
+        }
+    }
+
+    override fun openConnectionOverSocket(
+        host: String,
+        port: Int,
+        timeoutMs: Int,
+        transportSocket: Socket,
+    ): TlsHandshakeConnection {
+        val socket = context.socketFactory.createSocket(transportSocket, host, port, true) as SSLSocket
+        try {
+            socket.soTimeout = timeoutMs
+            configureTlsParameters(socket, host)
+            return SocketConnection(socket, host, port, timeoutMs, transportConnected = true)
         } catch (failure: Throwable) {
             try {
                 socket.close()
@@ -97,9 +127,10 @@ internal class SocketTlsHandshakeEngine(
         private val host: String,
         private val port: Int,
         private val timeoutMs: Int,
+        private val transportConnected: Boolean,
     ) : TlsHandshakeConnection {
         override fun connect() {
-            socket.connect(InetSocketAddress(host, port), timeoutMs)
+            if (!transportConnected) socket.connect(InetSocketAddress(host, port), timeoutMs)
         }
 
         override fun handshake() {

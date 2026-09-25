@@ -7,6 +7,8 @@ import java.net.SocketTimeoutException
 internal data class BannerReadResult(
     val banner: String?,
     val truncated: Boolean,
+    val bytesRead: Int = 0,
+    val stopConditionMet: Boolean = false,
 )
 
 /** Reads a bounded banner without mistaking a short socket read for end-of-stream. */
@@ -14,13 +16,23 @@ internal object BannerReader {
     const val MAX_BYTES = 1_024
 
     /** [prepareRead] configures the next socket read and returns false when its budget is gone. */
-    fun read(input: InputStream, prepareRead: () -> Boolean = { true }): BannerReadResult {
-        val bytes = ByteArray(MAX_BYTES)
+    fun read(
+        input: InputStream,
+        maxBytes: Int = MAX_BYTES,
+        stopAfterLine: Boolean = false,
+        stopWhenLine: ((String) -> Boolean)? = null,
+        lineSeparator: String = "",
+        prepareRead: () -> Boolean = { true },
+    ): BannerReadResult {
+        require(maxBytes in 1..MAX_BYTES)
+        val bytes = ByteArray(maxBytes)
         var total = 0
+        var lastLineStart = 0
+        var stopConditionMet = false
         while (total < bytes.size) {
             if (!prepareRead()) break
             val count = try {
-                input.read(bytes, total, bytes.size - total)
+                input.read(bytes, total, if (stopAfterLine || stopWhenLine != null) 1 else bytes.size - total)
             } catch (_: SocketTimeoutException) {
                 break
             } catch (_: IOException) {
@@ -45,12 +57,27 @@ internal object BannerReader {
                 }
                 else -> total += count
             }
+            if ((stopAfterLine || stopWhenLine != null) && total > 0 && bytes[total - 1] == '\n'.code.toByte()) {
+                val line = String(bytes, lastLineStart, total - lastLineStart)
+                    .removeSuffix("\n")
+                    .removeSuffix("\r")
+                lastLineStart = total
+                if (stopAfterLine || stopWhenLine?.invoke(line) == true) {
+                    stopConditionMet = true
+                    break
+                }
+            }
         }
 
-        val sanitized = BannerSanitizer.sanitizeWithTruncation(String(bytes, 0, total))
+        val rawText = String(bytes, 0, total).let { raw ->
+            if (lineSeparator.isEmpty()) raw else raw.replace("\r\n", lineSeparator).replace("\n", lineSeparator)
+        }
+        val sanitized = BannerSanitizer.sanitizeWithTruncation(rawText)
         return BannerReadResult(
             banner = sanitized.text.takeIf(String::isNotEmpty),
             truncated = total == bytes.size || sanitized.truncated,
+            bytesRead = total,
+            stopConditionMet = stopConditionMet,
         )
     }
 }

@@ -46,6 +46,13 @@ class HostValidatorTest {
             assertEquals("192.168.1.1", HostValidator.normalize("192.168.1.1"))
             assertEquals("[fe80::1%wlan0]", HostValidator.normalize("[fe80::1%wlan0]"))
         }
+
+        @Test
+        fun `canonicalizes leading zero IPv4 octets as decimal`() {
+            assertEquals("8.8.8.8", HostValidator.normalize("008.008.008.008"))
+            assertEquals("10.0.0.1", HostValidator.normalize("010.000.000.001"))
+            assertFalse(HostValidator.isValidIpv4("008.008.008.008"))
+        }
     }
 
     @Nested

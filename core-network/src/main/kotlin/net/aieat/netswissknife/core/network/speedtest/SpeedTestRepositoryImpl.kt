@@ -9,6 +9,10 @@ import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.net.HttpURLConnection
 import java.net.URI
 import java.security.SecureRandom
@@ -70,6 +74,9 @@ class SpeedTestRepositoryImpl(
     private val monotonicTimeNs: () -> Long = { System.nanoTime() },
     private val connectionFactory: (url: String, method: String) -> HttpURLConnection =
         { url, method -> openConnection(url, method) },
+    private val transferEngine: TransferEngine? = null,
+    private val speedTestConfig: SpeedTestConfig = SpeedTestConfig(),
+    private val testBaseUrl: String = BASE_URL,
 ) : SpeedTestRepository {
 
     /** Keeps the existing full-argument JVM constructor available to compiled callers. */
@@ -96,6 +103,44 @@ class SpeedTestRepositoryImpl(
         { url, method -> openConnection(url, method) },
     )
 
+    /** Preserves the former explicit connection-factory constructor for compiled integrations. */
+    constructor(
+        latencyProbeCount: Int,
+        latencyTimeoutMs: Int,
+        downloadDurationMs: Long,
+        uploadDurationMs: Long,
+        sampleIntervalMs: Long,
+        latencyProbe: suspend (timeoutMs: Int) -> Long,
+        downloadStream: ByteStreamFn,
+        uploadStream: ByteStreamFn,
+        monotonicTimeNs: () -> Long,
+        connectionFactory: (url: String, method: String) -> HttpURLConnection,
+    ) : this(
+        latencyProbeCount,
+        latencyTimeoutMs,
+        downloadDurationMs,
+        uploadDurationMs,
+        sampleIntervalMs,
+        latencyProbe,
+        downloadStream,
+        uploadStream,
+        monotonicTimeNs,
+        connectionFactory,
+        null,
+        SpeedTestConfig(),
+    )
+
+    /** Engine-backed implementation used by production and deterministic fake-engine tests. */
+    constructor(
+        transferEngine: TransferEngine,
+        config: SpeedTestConfig = SpeedTestConfig(),
+        baseUrl: String = BASE_URL
+    ) : this(
+        transferEngine = transferEngine,
+        speedTestConfig = config.normalized(),
+        testBaseUrl = baseUrl.trimEnd('/')
+    )
+
     companion object {
         const val BASE_URL = "https://speed.cloudflare.com"
         const val DEFAULT_LATENCY_PROBE_COUNT = 10
@@ -104,6 +149,7 @@ class SpeedTestRepositoryImpl(
         const val DEFAULT_SAMPLE_INTERVAL_MS = 200L
 
         private const val CONNECT_TIMEOUT_MS = 15_000
+        private const val WARMUP_REQUESTS = 2
         private const val CHUNK_SIZE = 64 * 1024
         private const val DOWNLOAD_PAYLOAD_BYTES = 25_000_000L
         private const val UPLOAD_PAYLOAD_BYTES = 10_000_000L
@@ -189,7 +235,15 @@ class SpeedTestRepositoryImpl(
         emitAll(runSpeedTest(SpeedTestOperation.newSession()))
     }
 
-    override fun runSpeedTest(operationSession: OperationSession): Flow<SpeedTestEvent> = channelFlow {
+    override fun runSpeedTest(operationSession: OperationSession): Flow<SpeedTestEvent> =
+        if (transferEngine != null) runWithTransferEngine(operationSession, transferEngine, speedTestConfig.normalized(), testBaseUrl)
+        else runLegacy(operationSession)
+
+    override fun runSpeedTest(operationSession: OperationSession, config: SpeedTestConfig): Flow<SpeedTestEvent> =
+        if (transferEngine != null) runWithTransferEngine(operationSession, transferEngine, config.normalized(), testBaseUrl)
+        else runLegacy(operationSession)
+
+    private fun runLegacy(operationSession: OperationSession): Flow<SpeedTestEvent> = channelFlow {
         var currentPhase = SpeedTestPhase.LATENCY
         try {
             OperationRunner.run(operationSession) {
@@ -263,6 +317,148 @@ class SpeedTestRepositoryImpl(
             }
         }
     }.flowOn(Dispatchers.IO)
+
+    private fun runWithTransferEngine(
+        operationSession: OperationSession,
+        engine: TransferEngine,
+        config: SpeedTestConfig,
+        baseUrl: String
+    ): Flow<SpeedTestEvent> = channelFlow {
+        var currentPhase = SpeedTestPhase.LATENCY
+        try {
+            OperationRunner.run(operationSession) {
+                // Optional metadata is best-effort and deliberately precedes measurements.
+                runCatching { engine.serverInfo("$baseUrl/meta") }
+                    .getOrNull()?.let { info ->
+                        ensureCurrentOperationActive()
+                        send(SpeedTestEvent.ServerInfoReceived(info))
+                    }
+
+                val connectRtt = runCatching {
+                    val endpoint = URI(baseUrl)
+                    engine.connectRtt(endpoint.host, if (endpoint.port > 0) endpoint.port else if (endpoint.scheme == "https") 443 else 80)
+                }.getOrNull()
+                repeat(WARMUP_REQUESTS) {
+                    ensureCurrentOperationActive()
+                    runCatching { engine.httpRtt("$baseUrl/__down?bytes=0") }
+                }
+
+                val latencySamples = mutableListOf<LatencySample>()
+                repeat(config.latencyProbes) { index ->
+                    ensureCurrentOperationActive()
+                    val rtt = engine.httpRtt("$baseUrl/__down?bytes=0").correctedMs
+                    ensureCurrentOperationActive()
+                    val sample = LatencySample(index + 1, rtt)
+                    latencySamples += sample
+                    send(SpeedTestEvent.LatencyProgress(sample, config.latencyProbes))
+                }
+                val idleStats = LatencyStats.compute(latencySamples).copy(connectRttMs = connectRtt)
+                send(SpeedTestEvent.LatencyFinished(idleStats))
+
+                currentPhase = SpeedTestPhase.DOWNLOAD
+                val (download, loadedDown) = measureEnginePhase(
+                    engine = engine,
+                    config = config,
+                    baseUrl = baseUrl,
+                    transfer = engine.download("$baseUrl/__down?bytes=$DOWNLOAD_PAYLOAD_BYTES", config.downloadStreams, config.phaseDurationMs),
+                    report = { send(SpeedTestEvent.DownloadProgress(it)) },
+                    loadedReport = { send(SpeedTestEvent.LoadedLatencySample(currentPhase, it)) }
+                )
+                send(SpeedTestEvent.LoadedLatencyFinished(currentPhase, loadedDown))
+                send(SpeedTestEvent.DownloadFinished(download))
+
+                currentPhase = SpeedTestPhase.UPLOAD
+                val (upload, loadedUp) = measureEnginePhase(
+                    engine = engine,
+                    config = config,
+                    baseUrl = baseUrl,
+                    transfer = engine.upload("$baseUrl/__up", config.uploadStreams, config.phaseDurationMs),
+                    report = { send(SpeedTestEvent.UploadProgress(it)) },
+                    loadedReport = { send(SpeedTestEvent.LoadedLatencySample(currentPhase, it)) }
+                )
+                send(SpeedTestEvent.LoadedLatencyFinished(currentPhase, loadedUp))
+                send(SpeedTestEvent.UploadFinished(upload))
+            }
+        } catch (cancelled: CancellationException) {
+            if (operationSession.cancellationReason == CancellationReason.DEADLINE_EXCEEDED) {
+                send(SpeedTestEvent.Failed(currentPhase, "Speed test timed out"))
+            } else throw cancelled
+        } catch (failure: Exception) {
+            if (operationSession.cancellationReason == CancellationReason.DEADLINE_EXCEEDED) {
+                send(SpeedTestEvent.Failed(currentPhase, "Speed test timed out"))
+            } else {
+                ensureCurrentOperationActive()
+                send(SpeedTestEvent.Failed(currentPhase, failure.message ?: "Speed test failed"))
+            }
+        }
+    }
+
+    private suspend fun measureEnginePhase(
+        engine: TransferEngine,
+        config: SpeedTestConfig,
+        baseUrl: String,
+        transfer: Flow<ChunkEvent>,
+        report: suspend (ThroughputSample) -> Unit,
+        loadedReport: suspend (Long) -> Unit
+    ): Pair<ThroughputResult, LatencyStats> = coroutineScope {
+        val loadedSamples = mutableListOf<LatencySample>()
+        var loadedSequence = 0
+        val loadedJob = launch {
+            while (true) {
+                delay(config.loadedLatencyIntervalMs)
+                ensureCurrentOperationActive()
+                val sample = engine.httpRtt("$baseUrl/__down?bytes=0").correctedMs
+                ensureCurrentOperationActive()
+                loadedSequence++
+                loadedReport(sample)
+                loadedSamples += LatencySample(loadedSequence, sample)
+            }
+        }
+
+        try {
+            var totalBytes = 0L
+            var intervalBytes = 0L
+            var previousElapsed = 0L
+            var lastSampleElapsed = 0L
+            val samples = mutableListOf<ThroughputSample>()
+            val startNs = monotonicTimeNs()
+            transfer.collect { chunk ->
+                ensureCurrentOperationActive()
+                totalBytes += chunk.bytes
+                intervalBytes += chunk.bytes
+                val elapsed = maxOf(previousElapsed, chunk.elapsedMs.coerceAtLeast(0L))
+                previousElapsed = elapsed
+                if (elapsed - lastSampleElapsed >= config.sampleIntervalMs) {
+                    val duration = elapsed - lastSampleElapsed
+                    val sample = ThroughputSample(
+                        elapsedMs = elapsed,
+                        bytesTransferred = totalBytes,
+                        instantMbps = (intervalBytes * 8.0 / 1_000_000.0) / (duration / 1000.0)
+                    )
+                    samples += sample
+                    report(sample)
+                    intervalBytes = 0L
+                    lastSampleElapsed = elapsed
+                }
+            }
+            loadedJob.cancelAndJoin()
+            val durationMs = maxOf(previousElapsed, ((monotonicTimeNs() - startNs) / 1_000_000L).coerceAtLeast(0L))
+            if (intervalBytes > 0L) {
+                val intervalMs = (durationMs - lastSampleElapsed).coerceAtLeast(1L)
+                val finalSample = ThroughputSample(
+                    elapsedMs = durationMs,
+                    bytesTransferred = totalBytes,
+                    instantMbps = (intervalBytes * 8.0 / 1_000_000.0) / (intervalMs / 1000.0)
+                )
+                samples += finalSample
+                report(finalSample)
+            }
+            val stats = LatencyStats.compute(loadedSamples)
+            ThroughputResult.from(totalBytes, durationMs, samples) to stats
+        } finally {
+            loadedJob.cancelAndJoin()
+        }
+    }
 
     private suspend fun runManagedLatencyProbe(context: OperationContext, timeoutMs: Int): Long {
         val lease = openOwnedConnection(context, "$BASE_URL/__down?bytes=0", "GET").apply {

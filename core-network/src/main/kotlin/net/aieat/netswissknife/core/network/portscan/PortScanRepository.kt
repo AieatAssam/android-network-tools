@@ -32,6 +32,16 @@ interface PortScanRepository {
         concurrency: Int
     ): Flow<PortScanUpdate>
 
+    /** Optional protocol-aware scan. Implementations may keep legacy passive behavior. */
+    fun scan(
+        host: String,
+        ports: List<Int>,
+        timeoutMs: Int,
+        concurrency: Int,
+        aggressiveProbes: Boolean,
+        operationSession: OperationSession,
+    ): Flow<PortScanUpdate> = scan(host, ports, timeoutMs, concurrency, operationSession)
+
     /** Creates a caller-owned session for one scan. */
     fun newSession(
         concurrency: Int,

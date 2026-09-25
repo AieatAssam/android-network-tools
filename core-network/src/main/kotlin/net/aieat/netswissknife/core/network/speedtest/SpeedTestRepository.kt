@@ -19,4 +19,8 @@ interface SpeedTestRepository {
 
     /** Caller-owned operation variant; legacy implementations keep working by delegating. */
     fun runSpeedTest(operationSession: OperationSession): Flow<SpeedTestEvent> = runSpeedTest()
+
+    /** Optional per-run settings; existing repositories remain source-compatible. */
+    fun runSpeedTest(operationSession: OperationSession, config: SpeedTestConfig): Flow<SpeedTestEvent> =
+        runSpeedTest(operationSession)
 }

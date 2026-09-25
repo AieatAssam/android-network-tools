@@ -12,6 +12,7 @@ data class CapabilitySnapshot(
     val transports: Set<Transport>,
     val hasInternet: Boolean,
     val notVpn: Boolean,
+    val hasValidatedInternet: Boolean = false,
 )
 
 data class NetworkSnapshot(
@@ -21,6 +22,7 @@ data class NetworkSnapshot(
 
 data class NetworkStatus(
     val hasInternet: Boolean = false,
+    val hasValidatedInternet: Boolean = false,
     val hasLocalNetwork: Boolean = false,
     val vpnActive: Boolean = false,
     val transport: Transport? = null,
@@ -53,6 +55,8 @@ object NetworkSelection {
         return NetworkStatus(
             hasInternet = active?.capabilities?.hasInternet
                 ?: networks.any { it.capabilities.hasInternet },
+            hasValidatedInternet = active?.capabilities?.hasValidatedInternet
+                ?: networks.any { it.capabilities.hasValidatedInternet },
             hasLocalNetwork = localNetwork != null,
             vpnActive = networks.any { Transport.VPN in it.capabilities.transports },
             transport = localNetwork?.capabilities?.let(::preferredTransport)

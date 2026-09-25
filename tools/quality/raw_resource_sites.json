@@ -12,16 +12,6 @@
       "status": "scope_registered_reviewed"
     },
     {
-      "id": "RR-002",
-      "file": "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/httprobe/HttpProbeRepositoryImpl.kt",
-      "kind": "HttpURLConnection.openConnection",
-      "occurrence": 1,
-      "scope_seam": "HttpProbeRepositoryImpl registers each active connection as a close-once lease in the caller-owned OperationSession ResourceScope; injectable HttpProbeConnectionFactory seam",
-      "test_path": "core-network/src/test/kotlin/net/aieat/netswissknife/core/network/httprobe/HttpProbeRepositoryTest.kt",
-      "migration_owner": "E03-T01 / HTTP probe owner",
-      "status": "scope_registered_reviewed"
-    },
-    {
       "id": "RR-003",
       "file": "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/DiscoveryProbes.kt",
       "kind": "Socket",
@@ -65,10 +55,50 @@
       "id": "RR-009",
       "file": "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/portscan/PortScanRepositoryImpl.kt",
       "kind": "Socket",
-      "occurrence": 1,
+      "occurrence": 2,
       "scope_seam": "Repository scan passes this default factory to a checker with a registered ActivePortScanSocket slot; cancellation closes the attached socket",
       "test_path": "core-network/src/test/kotlin/net/aieat/netswissknife/core/network/portscan/PortScanRepositoryImplTest.kt",
       "migration_owner": "E03-T01 / Port Scan adapter",
+      "status": "scope_registered_reviewed"
+    },
+    {
+      "id": "RR-018",
+      "file": "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/portscan/PortScanRepositoryImpl.kt",
+      "kind": "Socket",
+      "occurrence": 1,
+      "scope_seam": "P10TlsSubjectProbe creates the route-bound raw transport socket and registers it in OperationSession.resources before connect; its wrapped TLS connection is registered for handshake cancellation and cleanup",
+      "test_path": "core-network/src/test/kotlin/net/aieat/netswissknife/core/network/portscan/PortScanRepositoryImplTest.kt",
+      "migration_owner": "E03-T01 / Port Scan TLS peek",
+      "status": "scope_registered_reviewed"
+    },
+    {
+      "id": "RR-019",
+      "file": "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/portscan/PortScanRepositoryImpl.kt",
+      "kind": "SSLSocketFactory.createSocket",
+      "occurrence": 1,
+      "scope_seam": "P10TlsSubjectProbe injects the TLS wrapper factory, registers the returned handshake connection in OperationSession.resources, and closes it before releasing the registered transport socket",
+      "test_path": "core-network/src/test/kotlin/net/aieat/netswissknife/core/network/portscan/PortScanRepositoryImplTest.kt",
+      "migration_owner": "E03-T01 / Port Scan TLS peek",
+      "status": "scope_registered_reviewed"
+    },
+    {
+      "id": "RR-020",
+      "file": "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/speedtest/OkHttpTransferEngine.kt",
+      "kind": "Socket",
+      "occurrence": 1,
+      "scope_seam": "connectRtt owns the temporary TCP socket with use and installs a coroutine-completion handler that closes a blocked connect on cancellation",
+      "test_path": "core-network/src/test/kotlin/net/aieat/netswissknife/core/network/speedtest/OkHttpTransferEngineTest.kt",
+      "migration_owner": "E03-T01 / speed-test connect RTT",
+      "status": "scope_registered_reviewed"
+    },
+    {
+      "id": "RR-021",
+      "file": "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/tls/TlsHandshakeEngine.kt",
+      "kind": "SSLSocketFactory.createSocket",
+      "occurrence": 1,
+      "scope_seam": "openConnectionOverSocket layers the TLS socket over the caller-owned, session-registered transport and closes the wrapper if setup fails; P10TlsSubjectProbe registers the returned connection before handshake",
+      "test_path": "core-network/src/test/kotlin/net/aieat/netswissknife/core/network/portscan/PortScanRepositoryImplTest.kt",
+      "migration_owner": "E03-T01 / Port Scan TLS peek",
       "status": "scope_registered_reviewed"
     },
     {

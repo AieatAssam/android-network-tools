@@ -13,7 +13,7 @@ import java.util.Locale
  */
 object HostValidator {
     private val ipv4Regex = Regex(
-        """^((25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(25[0-5]|2[0-4]\d|[01]?\d\d?)$"""
+        """^((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$"""
     )
     private val hostnameRegex = Regex(
         """^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$"""
@@ -26,6 +26,7 @@ object HostValidator {
     /** A trailing dotted-quad occupies the last two 16-bit groups. */
     private const val IPV4_TAIL_GROUPS = 2
 
+    /** Accepts canonical dotted-decimal IPv4 only; use [normalize] to canonicalize zero-padded octets. */
     fun isValidIpv4(address: String): Boolean = ipv4Regex.matches(address)
 
     /**
@@ -93,8 +94,9 @@ object HostValidator {
      * Returns the canonical value accepted by network clients.
      *
      * Hostnames are trimmed, lower-cased, converted to ASCII (IDNA), and have
-     * one optional DNS root dot removed. Literal IP addresses are returned as
-     * entered apart from surrounding whitespace and the root dot.
+     * one optional DNS root dot removed. IPv4 octets with leading zeroes are
+     * interpreted as decimal and returned without those zeroes; other literal
+     * IP addresses are returned as entered apart from surrounding whitespace.
      */
     fun normalize(input: String): String? {
         var host = input.trim()
@@ -102,7 +104,7 @@ object HostValidator {
         if (host.isEmpty()) return null
 
         if (looksLikeIpv4.matches(host)) {
-            return host.takeIf(::isValidIpv4)
+            return parseIpv4Octets(host)?.joinToString(".")
         }
         if (host.contains(':')) {
             return host.takeIf(::isValidIpv6)
@@ -114,6 +116,15 @@ object HostValidator {
                 .takeIf { hostnameRegex.matches(it) }
         } catch (_: IllegalArgumentException) {
             null
+        }
+    }
+
+    private fun parseIpv4Octets(address: String): List<Int>? {
+        val parts = address.split('.')
+        if (parts.size != 4) return null
+        return parts.map { part ->
+            if (part.isEmpty() || part.length > 3 || part.any { it !in '0'..'9' }) return null
+            part.toIntOrNull()?.takeIf { it in 0..255 } ?: return null
         }
     }
 

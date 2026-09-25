@@ -120,6 +120,7 @@ class PortScanUseCase(private val repository: PortScanRepository) {
             ports = portsToScan,
             timeoutMs = params.timeoutMs,
             concurrency = params.concurrency,
+            aggressiveProbes = params.aggressiveProbes,
             operationSession = operationSession,
         )
         updates.collect { update ->

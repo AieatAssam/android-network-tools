@@ -11,6 +11,17 @@ import java.net.SocketTimeoutException
 
 class BannerReaderTest {
     @Test
+    fun `line mode stops at service greeting terminator without marking truncation`() {
+        val input = ByteArrayInputStream("220 ready\r\n250 later\r\n".toByteArray())
+
+        val result = BannerReader.read(input, stopAfterLine = true)
+
+        assertEquals("220 ready", result.banner)
+        assertFalse(result.truncated)
+        assertEquals('2'.code, input.read())
+    }
+
+    @Test
     fun `short banner reads through partial reads until eof without marking truncated`() {
         val input = PartialReadInputStream("SSH-2.0-OpenSSH_9.0".toByteArray(), maxChunk = 3)
 

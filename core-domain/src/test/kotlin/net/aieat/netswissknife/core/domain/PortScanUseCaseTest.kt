@@ -30,7 +30,7 @@ class PortScanUseCaseTest {
         val repository = mockk<PortScanRepository>()
         val session = OperationSession(OperationBudget.start())
         every {
-            repository.scan("example.com", PortScanPreset.WEB.ports, 2_000, 100, session)
+            repository.scan("example.com", PortScanPreset.WEB.ports, 2_000, 100, true, session)
         } returns flowOf()
 
         PortScanUseCase(repository).invoke(
@@ -39,7 +39,25 @@ class PortScanUseCaseTest {
         ).toList()
 
         verify(exactly = 1) {
-            repository.scan("example.com", PortScanPreset.WEB.ports, 2_000, 100, session)
+            repository.scan("example.com", PortScanPreset.WEB.ports, 2_000, 100, true, session)
+        }
+    }
+
+    @Test
+    fun `passive probe opt out is forwarded to repository`() = runTest {
+        val repository = mockk<PortScanRepository>()
+        val session = OperationSession(OperationBudget.start())
+        every {
+            repository.scan("example.com", PortScanPreset.WEB.ports, 2_000, 100, false, session)
+        } returns flowOf()
+
+        PortScanUseCase(repository).invoke(
+            PortScanParams(host = "example.com", preset = PortScanPreset.WEB, aggressiveProbes = false),
+            session,
+        ).toList()
+
+        verify(exactly = 1) {
+            repository.scan("example.com", PortScanPreset.WEB.ports, 2_000, 100, false, session)
         }
     }
 

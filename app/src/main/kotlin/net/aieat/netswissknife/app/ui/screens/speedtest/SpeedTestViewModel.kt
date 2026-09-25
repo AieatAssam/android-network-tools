@@ -2,17 +2,22 @@ package net.aieat.netswissknife.app.ui.screens.speedtest
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.edit
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import net.aieat.netswissknife.core.domain.SpeedTestUseCase
 import net.aieat.netswissknife.app.platform.NetworkStatus
 import net.aieat.netswissknife.app.platform.NetworkStatusProvider
 import net.aieat.netswissknife.app.platform.NoOpNetworkStatusProvider
+import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.core.network.speedtest.LatencySample
 import net.aieat.netswissknife.core.network.speedtest.LatencyStats
 import net.aieat.netswissknife.core.network.speedtest.SpeedTestEvent
@@ -20,6 +25,8 @@ import net.aieat.netswissknife.core.network.speedtest.SpeedTestPhase
 import net.aieat.netswissknife.core.network.speedtest.SpeedTestResult
 import net.aieat.netswissknife.core.network.speedtest.ThroughputResult
 import net.aieat.netswissknife.core.network.speedtest.ThroughputSample
+import net.aieat.netswissknife.core.network.speedtest.ServerInfo
+import net.aieat.netswissknife.core.network.speedtest.SpeedTestConfig
 import net.aieat.netswissknife.core.network.operation.CancellationReason
 import net.aieat.netswissknife.core.network.operation.OperationSession
 import net.aieat.netswissknife.core.network.speedtest.SpeedTestOperation
@@ -31,9 +38,12 @@ sealed interface SpeedTestUiState {
     data class Running(
         val phase: SpeedTestPhase,
         val latencyStats: LatencyStats = LatencyStats.EMPTY,
+        val serverInfo: ServerInfo? = null,
         val downloadSamples: List<ThroughputSample> = emptyList(),
         val downloadResult: ThroughputResult? = null,
-        val uploadSamples: List<ThroughputSample> = emptyList()
+        val uploadSamples: List<ThroughputSample> = emptyList(),
+        val loadedLatencyDown: LatencyStats = LatencyStats.EMPTY,
+        val loadedLatencyUp: LatencyStats = LatencyStats.EMPTY
     ) : SpeedTestUiState
     data class Finished(val result: SpeedTestResult) : SpeedTestUiState
     data class Error(val phase: SpeedTestPhase, val message: String) : SpeedTestUiState
@@ -42,6 +52,7 @@ sealed interface SpeedTestUiState {
 @HiltViewModel
 class SpeedTestViewModel @Inject constructor(
     private val speedTestUseCase: SpeedTestUseCase,
+    private val dataStore: DataStore<Preferences>,
     private val networkStatusProvider: NetworkStatusProvider = NoOpNetworkStatusProvider,
 ) : ViewModel() {
 
@@ -49,8 +60,21 @@ class SpeedTestViewModel @Inject constructor(
     val uiState: StateFlow<SpeedTestUiState> = _uiState.asStateFlow()
     val networkStatus: StateFlow<NetworkStatus> = networkStatusProvider.status
 
+    private val _config = MutableStateFlow(SpeedTestConfig())
+    val config: StateFlow<SpeedTestConfig> = _config.asStateFlow()
+
     private var testJob: Job? = null
     private var operationSession: OperationSession? = null
+
+    init {
+        viewModelScope.launch {
+            val preferences = dataStore.data.first()
+            _config.value = SpeedTestConfig(
+                downloadStreams = preferences[AppPreferenceKeys.SPEEDTEST_DOWN_STREAMS] ?: SpeedTestConfig().downloadStreams,
+                uploadStreams = preferences[AppPreferenceKeys.SPEEDTEST_UP_STREAMS] ?: SpeedTestConfig().uploadStreams,
+            ).normalized()
+        }
+    }
 
     fun startTest() {
         operationSession?.cancel(CancellationReason.USER_STOP)
@@ -72,8 +96,21 @@ class SpeedTestViewModel @Inject constructor(
 
         testJob = viewModelScope.launch {
             try {
-                speedTestUseCase(session).collect { event ->
+                val preferences = dataStore.data.first()
+                val runConfig = _config.value.copy(
+                    downloadStreams = (preferences[AppPreferenceKeys.SPEEDTEST_DOWN_STREAMS] ?: _config.value.downloadStreams).coerceIn(1, 8),
+                    uploadStreams = (preferences[AppPreferenceKeys.SPEEDTEST_UP_STREAMS] ?: _config.value.uploadStreams).coerceIn(1, 4),
+                ).normalized()
+                _config.value = runConfig
+                var serverInfo: ServerInfo? = null
+                var loadedDown = mutableListOf<LatencySample>()
+                var loadedUp = mutableListOf<LatencySample>()
+                speedTestUseCase(session, runConfig).collect { event ->
                     when (event) {
+                        is SpeedTestEvent.ServerInfoReceived -> {
+                            serverInfo = event.info
+                            emit(current.copy(serverInfo = event.info))
+                        }
                         is SpeedTestEvent.LatencyProgress -> {
                             latencySamples.add(event.sample)
                             emit(current.copy(
@@ -91,6 +128,20 @@ class SpeedTestViewModel @Inject constructor(
                         is SpeedTestEvent.DownloadFinished -> {
                             emit(current.copy(phase = SpeedTestPhase.UPLOAD, downloadResult = event.result))
                         }
+                        is SpeedTestEvent.LoadedLatencySample -> {
+                            val list = if (event.phase == SpeedTestPhase.DOWNLOAD) loadedDown else loadedUp
+                            list.add(LatencySample(list.size + 1, event.rttMs))
+                            emit(if (event.phase == SpeedTestPhase.DOWNLOAD) {
+                                current.copy(loadedLatencyDown = LatencyStats.compute(list))
+                            } else current.copy(loadedLatencyUp = LatencyStats.compute(list)))
+                        }
+                        is SpeedTestEvent.LoadedLatencyFinished -> {
+                            if (event.phase == SpeedTestPhase.DOWNLOAD) loadedDown = event.stats.samples.toMutableList()
+                            else loadedUp = event.stats.samples.toMutableList()
+                            emit(if (event.phase == SpeedTestPhase.DOWNLOAD) {
+                                current.copy(loadedLatencyDown = event.stats)
+                            } else current.copy(loadedLatencyUp = event.stats))
+                        }
                         is SpeedTestEvent.UploadProgress -> {
                             uploadSamples.add(event.sample)
                             emit(current.copy(uploadSamples = uploadSamples.toList()))
@@ -103,7 +154,11 @@ class SpeedTestViewModel @Inject constructor(
                                 SpeedTestResult(
                                     latency = current.latencyStats,
                                     download = download,
-                                    upload = event.result
+                                    upload = event.result,
+                                    serverInfo = serverInfo,
+                                    loadedLatencyDown = current.loadedLatencyDown,
+                                    loadedLatencyUp = current.loadedLatencyUp,
+                                    config = runConfig
                                 )
                             )
                         }
@@ -131,6 +186,18 @@ class SpeedTestViewModel @Inject constructor(
     }
 
     fun onRetry() = startTest()
+
+    fun setDownloadStreams(value: Int) {
+        val streams = value.coerceIn(1, 8)
+        _config.value = _config.value.copy(downloadStreams = streams)
+        viewModelScope.launch { dataStore.edit { it[AppPreferenceKeys.SPEEDTEST_DOWN_STREAMS] = streams } }
+    }
+
+    fun setUploadStreams(value: Int) {
+        val streams = value.coerceIn(1, 4)
+        _config.value = _config.value.copy(uploadStreams = streams)
+        viewModelScope.launch { dataStore.edit { it[AppPreferenceKeys.SPEEDTEST_UP_STREAMS] = streams } }
+    }
 
     override fun onCleared() {
         operationSession?.cancel(CancellationReason.LIFECYCLE_PAUSE)

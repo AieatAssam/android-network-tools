@@ -24,6 +24,9 @@ import net.aieat.netswissknife.core.network.operation.OperationBudget
 import net.aieat.netswissknife.core.network.operation.OperationDeadlineExceededException
 import net.aieat.netswissknife.core.network.operation.OperationSession
 import net.aieat.netswissknife.core.network.operation.OperationRunner
+import net.aieat.netswissknife.core.network.tls.TlsHandshakeConnection
+import net.aieat.netswissknife.core.network.tls.TlsHandshakeEngine
+import net.aieat.netswissknife.core.network.tls.TlsHandshakeSnapshot
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertThrows
@@ -37,14 +40,285 @@ import java.net.Socket
 import java.net.SocketAddress
 import java.net.SocketTimeoutException
 import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import java.security.cert.X509Certificate
+import javax.security.auth.x500.X500Principal
+import net.aieat.netswissknife.core.network.tls.TlsCertificateParser
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @DisplayName("PortScanRepositoryImpl")
 class PortScanRepositoryImplTest {
+
+    @Test
+    fun `SMTP waits for the complete multiline 220 greeting before EHLO`() = runTest {
+        val greeting = "220-first line\r\n220-second line\r\n220 ready\r\n".toByteArray()
+        val input = CountingInputStream(greeting + "250 hello\r\n".toByteArray())
+        val capturedRequest = ByteArrayOutputStream()
+        val socket = responseSocket(input, capturedRequest) {
+            assertEquals(greeting.size, input.bytesRead, "EHLO must wait for the final 220 line")
+        }
+        val repo = PortScanRepositoryImpl(
+            hostResolver = { InetAddress.getLoopbackAddress() },
+            socketFactory = { socket },
+        )
+        val session = repo.newSession(portCount = 1, timeoutMs = 1_000, concurrency = 1)
+
+        val result = repo.scan(
+            "mail.example", listOf(25), 1_000, 1, true, session,
+        ).filterIsInstance<PortScanUpdate.PortResult>().toList().single().result
+
+        assertEquals("EHLO netswissknife\r\n", capturedRequest.toString(Charsets.US_ASCII))
+        assertTrue(result.banner.orEmpty().contains("220-first line 220-second line 220 ready"))
+        assertTrue(result.banner.orEmpty().contains("250 hello"))
+        assertEquals(ProbeKind.SMTP, result.probeKind)
+    }
+
+    @Test
+    fun `partial SMTP greeting at EOF does not trigger EHLO`() = runTest {
+        val capturedRequest = ByteArrayOutputStream()
+        val socket = responseSocket(
+            CountingInputStream("220-incomplete continuation\r\n".toByteArray()),
+            capturedRequest,
+        )
+        val repo = PortScanRepositoryImpl(
+            hostResolver = { InetAddress.getLoopbackAddress() },
+            socketFactory = { socket },
+        )
+        val session = repo.newSession(portCount = 1, timeoutMs = 1_000, concurrency = 1)
+
+        repo.scan("mail.example", listOf(25), 1_000, 1, true, session).toList()
+
+        assertEquals(0, capturedRequest.size())
+    }
+
+    @Test
+    fun `partial SMTP greeting at timeout does not trigger EHLO`() = runTest {
+        val capturedRequest = ByteArrayOutputStream()
+        val socket = responseSocket(
+            TimeoutAfterBytesInputStream("220-incomplete continuation\r\n".toByteArray()),
+            capturedRequest,
+        )
+        val repo = PortScanRepositoryImpl(
+            hostResolver = { InetAddress.getLoopbackAddress() },
+            socketFactory = { socket },
+        )
+        val session = repo.newSession(portCount = 1, timeoutMs = 1_000, concurrency = 1)
+
+        repo.scan("mail.example", listOf(25), 1_000, 1, true, session).toList()
+
+        assertEquals(0, capturedRequest.size())
+    }
+
+    @Test
+    fun `passive HTTP SMTP and TLS results produce no writes or TLS peek`() = runTest {
+        val outputs = mutableListOf<ByteArrayOutputStream>()
+        var tlsPeekInvoked = false
+        val repo = PortScanRepositoryImpl(
+            hostResolver = { InetAddress.getLoopbackAddress() },
+            socketFactory = {
+                ByteArrayOutputStream().also { output ->
+                    outputs += output
+                }.let { output ->
+                    responseSocket(CountingInputStream("service banner\r\n".toByteArray()), output)
+                }
+            },
+            tlsSubjectProbe = TlsSubjectProbe { _, _, _, _, _ -> tlsPeekInvoked = true; null },
+        )
+        val session = repo.newSession(portCount = 3, timeoutMs = 1_000, concurrency = 1)
+
+        repo.scan("host.example", listOf(80, 25, 443), 1_000, 1, false, session).toList()
+
+        assertEquals(listOf(0, 0, 0), outputs.map(ByteArrayOutputStream::size))
+        assertTrue(!tlsPeekInvoked)
+    }
+
+    @Test
+    fun `SMTP greeting and response share the 1024 raw byte cap`() = runTest {
+        val firstLine = "220-" + "a".repeat(1_000) + "\r\n"
+        val finalLine = "220 ready\r\n"
+        val greeting = (firstLine + finalLine).toByteArray()
+        assertTrue(greeting.size < BannerReader.MAX_BYTES)
+        val input = CountingInputStream(greeting + ("250 " + "b".repeat(100) + "\r\n").toByteArray())
+        val capturedRequest = ByteArrayOutputStream()
+        val socket = responseSocket(input, capturedRequest)
+        val repo = PortScanRepositoryImpl(
+            hostResolver = { InetAddress.getLoopbackAddress() },
+            socketFactory = { socket },
+        )
+        val session = repo.newSession(portCount = 1, timeoutMs = 1_000, concurrency = 1)
+
+        val result = repo.scan("mail.example", listOf(25), 1_000, 1, true, session)
+            .filterIsInstance<PortScanUpdate.PortResult>().toList().single().result
+
+        assertTrue(result.bannerTruncated)
+        assertEquals(BannerReader.MAX_BYTES, input.bytesRead)
+    }
+
+    @Test
+    fun `combined SMTP text is sanitized to the display cap and reports truncation`() = runTest {
+        val input = CountingInputStream(
+            ("220 " + "a".repeat(150) + "\r\n" + "250 " + "b".repeat(100) + "\r\n").toByteArray(),
+        )
+        val socket = responseSocket(input, ByteArrayOutputStream())
+        val repo = PortScanRepositoryImpl(
+            hostResolver = { InetAddress.getLoopbackAddress() },
+            socketFactory = { socket },
+        )
+        val session = repo.newSession(portCount = 1, timeoutMs = 1_000, concurrency = 1)
+
+        val result = repo.scan("mail.example", listOf(25), 1_000, 1, true, session)
+            .filterIsInstance<PortScanUpdate.PortResult>().toList().single().result
+
+        assertEquals(200, result.banner?.length)
+        assertTrue(result.bannerTruncated)
+    }
+
+    @Test
+    fun `TLS subject probe connects to resolved IP through binder but retains hostname identity`() {
+        val connectAddress = InetAddress.getByName("192.0.2.20")
+        val transportSocket = object : Socket() {
+            var remote: SocketAddress? = null
+            override fun isBound(): Boolean = true
+            override fun connect(endpoint: SocketAddress?, timeout: Int) { remote = endpoint }
+        }
+        val binder = FakeNetworkBinder(shouldBindResult = true)
+        var tlsPeerHost: String? = null
+        var wrappedSocket: Socket? = null
+        val engine = object : TlsHandshakeEngine {
+            override fun enabledProtocols(): Set<String> = setOf("TLSv1.2")
+            override fun openConnection(host: String, port: Int, timeoutMs: Int, protocol: String?) =
+                error("TLS probe must wrap the bound transport")
+            override fun openConnectionOverSocket(
+                host: String,
+                port: Int,
+                timeoutMs: Int,
+                transportSocket: Socket,
+            ): TlsHandshakeConnection {
+                tlsPeerHost = host
+                wrappedSocket = transportSocket
+                return object : TlsHandshakeConnection {
+                    override fun connect() = Unit
+                    override fun handshake() = Unit
+                    override fun snapshot() = TlsHandshakeSnapshot("TLSv1.3", "cipher", emptyList<X509Certificate>())
+                    override fun close() = Unit
+                }
+            }
+        }
+        val session = OperationSession(OperationBudget.start())
+        val probe = P10TlsSubjectProbe(binder, { transportSocket }, engine)
+
+        probe.inspect(connectAddress, "service.example", 443, 1_000, session)
+
+        assertEquals("service.example", tlsPeerHost)
+        assertEquals(connectAddress, (transportSocket.remote as java.net.InetSocketAddress).address)
+        assertEquals(1, binder.boundTcpSockets.size)
+        assertTrue(binder.boundTcpSockets.single() === transportSocket)
+        assertTrue(wrappedSocket === transportSocket)
+    }
+
+    @Test
+    fun `open web port sends one HTTP greeting and captures response`() = runTest {
+        val capturedRequest = ByteArrayOutputStream()
+        val socket = object : Socket() {
+            override fun connect(endpoint: java.net.SocketAddress?, timeout: Int) = Unit
+            override fun setSoTimeout(timeout: Int) = Unit
+            override fun getInputStream() = ByteArrayInputStream("HTTP/1.0 200 OK\r\n".toByteArray())
+            override fun getOutputStream() = capturedRequest
+        }
+        val repo = PortScanRepositoryImpl(
+            hostResolver = { InetAddress.getLoopbackAddress() },
+            socketFactory = { socket },
+        )
+        val session = repo.newSession(portCount = 1, timeoutMs = 1_000, concurrency = 1)
+
+        val result = repo.scan(
+            host = "example.test",
+            ports = listOf(80),
+            timeoutMs = 1_000,
+            concurrency = 1,
+            aggressiveProbes = true,
+            operationSession = session,
+        ).filterIsInstance<PortScanUpdate.PortResult>().toList().single().result
+
+        val request = capturedRequest.toString(Charsets.US_ASCII)
+        assertTrue(request.startsWith("HEAD / HTTP/1.0\r\nHost: example.test\r\n"))
+        assertTrue(result.banner.orEmpty().startsWith("HTTP/1.0 200 OK"))
+        assertEquals(ProbeKind.HTTP, result.probeKind)
+    }
+
+    @Test
+    fun `aggressive open TLS port gets bounded subject peek and result metadata`() = runTest {
+        var requestedTimeout = 0
+        val repo = PortScanRepositoryImpl(
+            checker = { _, _ -> PortConnectResult(PortStatus.OPEN, 4L, null) },
+            hostResolver = { InetAddress.getLoopbackAddress() },
+            tlsSubjectProbe = TlsSubjectProbe { address, peerHost, port, timeout, _ ->
+                assertEquals(InetAddress.getLoopbackAddress(), address)
+                assertEquals("target", peerHost)
+                assertEquals(443, port)
+                requestedTimeout = timeout
+                "example"
+            },
+        )
+        val session = repo.newSession(portCount = 1, timeoutMs = 1_000, concurrency = 1)
+
+        val result = repo.scan(
+            host = "target",
+            ports = listOf(443),
+            timeoutMs = 1_000,
+            concurrency = 1,
+            aggressiveProbes = true,
+            operationSession = session,
+        ).filterIsInstance<PortScanUpdate.PortResult>().toList().single().result
+
+        assertEquals("example", result.tlsSubject)
+        assertEquals(ProbeKind.TLS_PEEK, result.probeKind)
+        assertTrue(requestedTimeout in 2..1_000)
+    }
+
+    @Test
+    fun `TLS subject is sanitized before entering scan results`() = runTest {
+        val hostileCn = TlsCertificateParser.parseCN(X500Principal("CN=server\\0AInjected\\09row").name)
+        val repo = PortScanRepositoryImpl(
+            checker = { _, _ -> PortConnectResult(PortStatus.OPEN, 4L, null, tlsSubject = hostileCn) },
+            hostResolver = { InetAddress.getLoopbackAddress() },
+        )
+        val session = repo.newSession(portCount = 1, timeoutMs = 1_000, concurrency = 1)
+
+        val result = repo.scan("target", listOf(80), 1_000, 1, session)
+            .filterIsInstance<PortScanUpdate.PortResult>().toList().single().result
+
+        assertEquals("server Injected row", result.tlsSubject)
+        assertTrue(result.tlsSubject.orEmpty().none { Character.isISOControl(it) })
+    }
+
+    @Test
+    fun `passive scan does not invoke TLS peek`() = runTest {
+        var invoked = false
+        val repo = PortScanRepositoryImpl(
+            checker = { _, _ -> PortConnectResult(PortStatus.OPEN, 4L, null) },
+            hostResolver = { InetAddress.getLoopbackAddress() },
+            tlsSubjectProbe = TlsSubjectProbe { _, _, _, _, _ -> invoked = true; "unexpected" },
+        )
+        val session = repo.newSession(portCount = 1, timeoutMs = 1_000, concurrency = 1)
+
+        val result = repo.scan(
+            host = "target",
+            ports = listOf(443),
+            timeoutMs = 1_000,
+            concurrency = 1,
+            aggressiveProbes = false,
+            operationSession = session,
+        ).filterIsInstance<PortScanUpdate.PortResult>().toList().single().result
+
+        assertTrue(!invoked)
+        assertEquals(ProbeKind.PASSIVE, result.probeKind)
+        assertEquals(null, result.tlsSubject)
+    }
 
     @Test
     fun `direct no-session scan derives its deadline from the requested work`() = runTest {
@@ -311,7 +585,9 @@ class PortScanRepositoryImplTest {
         try {
             runCurrent()
             resolverEntered.await()
-            advanceTimeBy(25)
+            // Advance beyond the exact timeout tick so the scheduler runs the
+            // phase-timeout continuation deterministically.
+            advanceTimeBy(26)
             runCurrent()
 
             val failure = operation.await()
@@ -1188,6 +1464,45 @@ class PortScanRepositoryImplTest {
         @Test
         fun `getServiceName for unknown port returns non-null fallback`() {
             assertTrue(WellKnownPorts.getServiceName(12345).isNotBlank())
+        }
+    }
+
+    private fun responseSocket(
+        input: InputStream,
+        output: ByteArrayOutputStream,
+        onWrite: () -> Unit = {},
+    ): Socket = object : Socket() {
+        override fun connect(endpoint: SocketAddress?, timeout: Int) = Unit
+        override fun setSoTimeout(timeout: Int) = Unit
+        override fun getInputStream(): InputStream = input
+        override fun getOutputStream(): java.io.OutputStream = object : java.io.OutputStream() {
+            override fun write(value: Int) {
+                onWrite()
+                output.write(value)
+            }
+
+            override fun write(bytes: ByteArray, offset: Int, length: Int) {
+                onWrite()
+                output.write(bytes, offset, length)
+            }
+        }
+    }
+
+    private class CountingInputStream(bytes: ByteArray) : InputStream() {
+        private val source = ByteArrayInputStream(bytes)
+        var bytesRead: Int = 0
+            private set
+
+        override fun read(): Int = source.read().also { if (it >= 0) bytesRead++ }
+
+        override fun read(buffer: ByteArray, offset: Int, length: Int): Int =
+            source.read(buffer, offset, length).also { if (it > 0) bytesRead += it }
+    }
+
+    private class TimeoutAfterBytesInputStream(bytes: ByteArray) : InputStream() {
+        private val source = ByteArrayInputStream(bytes)
+        override fun read(): Int = source.read().let { value ->
+            if (value >= 0) value else throw SocketTimeoutException("test timeout")
         }
     }
 }

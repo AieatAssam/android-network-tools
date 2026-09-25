@@ -108,5 +108,6 @@ internal fun NetworkCapabilities.toCapabilitySnapshot(): CapabilitySnapshot {
         transports = transports,
         hasInternet = hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET),
         notVpn = hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN),
+        hasValidatedInternet = hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED),
     )
 }

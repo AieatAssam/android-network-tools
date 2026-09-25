@@ -49,6 +49,7 @@ enum class PortScanPreset(
  * @param endPort     Custom range end (only used when preset is [PortScanPreset.CUSTOM]).
  * @param timeoutMs   Per-port connection timeout in milliseconds.
  * @param concurrency Max simultaneous port probes.
+ * @param aggressiveProbes Whether open ports receive one bounded protocol greeting or TLS peek.
  */
 data class PortScanParams(
     val host: String,
@@ -56,5 +57,6 @@ data class PortScanParams(
     val startPort: Int = 1,
     val endPort: Int = 1024,
     val timeoutMs: Int = 2000,
-    val concurrency: Int = 100
+    val concurrency: Int = 100,
+    val aggressiveProbes: Boolean = true,
 )

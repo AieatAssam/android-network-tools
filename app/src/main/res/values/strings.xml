@@ -159,6 +159,12 @@
     <string name="ports_timeout_label">Timeout (ms)</string>
     <string name="ports_concurrency_label">Concurrency</string>
     <string name="ports_concurrency_high_warning">High concurrency may overwhelm devices on the local network</string>
+    <string name="ports_aggressive_probes_label">Protocol greetings and TLS subject</string>
+    <string name="ports_aggressive_probes_description">Send a bounded greeting or TLS probe to open services; turn off for passive banners only.</string>
+    <string name="ports_aggressive_probes_a11y_label">Active service probes</string>
+    <string name="ports_aggressive_probes_enabled_a11y">Enabled. Sends bounded HTTP or SMTP greetings and TLS handshakes to open ports.</string>
+    <string name="ports_aggressive_probes_disabled_a11y">Disabled. Reads passive service banners only.</string>
+    <string name="ports_tls_subject">TLS subject CN: %1$s</string>
     <string name="ports_scan_button">Scan Ports</string>
     <string name="ports_stop_button">Stop Scan</string>
     <string name="ports_clear_button">Clear</string>
@@ -1246,6 +1252,15 @@
 
     <string name="speedtest_idle_title">Ready to test your connection</string>
     <string name="speedtest_idle_subtitle">Measures latency, download, and upload speed in sequence</string>
+    <string name="speedtest_download_streams">Download streams: %1$d</string>
+    <string name="speedtest_upload_streams">Upload streams: %1$d</string>
+    <string name="speedtest_server_info">Cloudflare %1$s · %2$s</string>
+    <string name="speedtest_server_global_edge">Global edge</string>
+    <string name="speedtest_server_unknown_asn">ASN unavailable</string>
+    <string name="speedtest_connect_latency">Connect</string>
+    <string name="speedtest_idle_latency_header">Idle latency</string>
+    <string name="speedtest_loaded_latency_download">Latency under download load</string>
+    <string name="speedtest_loaded_latency_upload">Latency under upload load</string>
     <string name="speedtest_start_button">Start Test</string>
     <string name="speedtest_cancel_button">Cancel</string>
     <string name="speedtest_retry">Run again</string>

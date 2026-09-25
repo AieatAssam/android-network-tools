@@ -1,7 +1,21 @@
 package net.aieat.netswissknife.core.network.traceroute
 
 /** Pure numeric-literal validation and global-reachability filter for GeoIP lookups. */
-internal object ReservedRanges {
+object ReservedRanges {
+
+    /** True for private, loopback, link-local, ULA, or node/link-local multicast literals. */
+    fun isLocalNetworkLiteral(value: String): Boolean {
+        parseIpv4(value)?.let { return isLocalIpv4(it) }
+        val groups = parseIpv6(value) ?: return false
+        mappedIpv4(groups)?.let { return isLocalIpv4(it) }
+        val loopback = groups.take(7).all { it == 0 } && groups[7] == 1
+        val first = groups[0]
+        val multicastScope = groups[0] and 0x000f
+        return loopback ||
+            (first and 0xfe00) == 0xfc00 || // Unique-local fc00::/7
+            (first and 0xffc0) == 0xfe80 || // Link-local fe80::/10
+            ((first and 0xff00) == 0xff00 && multicastScope in 1..2) // Node-/link-local multicast
+    }
 
     /** Returns true only for a syntactically valid, globally reachable IPv4/IPv6 literal. */
     fun isPublicGlobalLiteral(value: String): Boolean {
@@ -38,6 +52,15 @@ internal object ReservedRanges {
             a >= 240 -> false                       // Reserved, including limited broadcast
             else -> true
         }
+    }
+
+    private fun isLocalIpv4(address: IntArray): Boolean {
+        val a = address[0]
+        val b = address[1]
+        return a == 10 || a == 127 ||
+            (a == 169 && b == 254) ||
+            (a == 172 && b in 16..31) ||
+            (a == 192 && b == 168)
     }
 
     private fun isPublicIpv6(groups: IntArray): Boolean {

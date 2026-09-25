@@ -52,10 +52,11 @@ class NetworkSelectionTest {
 
     @Test
     fun `reports the active transport when no local network exists`() {
-        val cellular = network("cellular", Transport.CELLULAR, hasInternet = true)
+        val cellular = network("cellular", Transport.CELLULAR, hasInternet = true, hasValidatedInternet = true)
         val status = NetworkSelection.status(listOf(cellular), activeNetworkId = "cellular")
 
         assertTrue(status.hasInternet)
+        assertTrue(status.hasValidatedInternet)
         assertFalse(status.vpnActive)
         assertFalse(status.hasLocalNetwork)
         assertEquals(Transport.CELLULAR, status.transport)
@@ -74,15 +75,36 @@ class NetworkSelectionTest {
                 transports = setOf(Transport.OTHER),
                 hasInternet = true,
                 notVpn = true,
+                hasValidatedInternet = true,
             ),
         )
 
         val status = NetworkSelection.status(listOf(other), activeNetworkId = "unknown")
 
         assertTrue(status.hasInternet)
+        assertTrue(status.hasValidatedInternet)
         assertFalse(status.hasLocalNetwork)
         assertFalse(status.vpnActive)
         assertEquals(Transport.OTHER, status.transport)
+    }
+
+    @Test
+    fun `keeps Internet capability separate from validation`() {
+        val captivePortalWifi = NetworkSnapshot(
+            id = "wifi",
+            capabilities = CapabilitySnapshot(
+                transports = setOf(Transport.WIFI),
+                hasInternet = true,
+                hasValidatedInternet = false,
+                notVpn = true,
+            ),
+        )
+
+        val status = NetworkSelection.status(listOf(captivePortalWifi), activeNetworkId = "wifi")
+
+        assertTrue(status.hasInternet)
+        assertFalse(status.hasValidatedInternet)
+        assertTrue(status.hasLocalNetwork)
     }
 
     private fun network(
@@ -90,12 +112,14 @@ class NetworkSelectionTest {
         transport: Transport,
         notVpn: Boolean = true,
         hasInternet: Boolean = false,
+        hasValidatedInternet: Boolean = hasInternet,
     ) = NetworkSnapshot(
         id = id,
         capabilities = CapabilitySnapshot(
             transports = setOf(transport),
             hasInternet = hasInternet,
             notVpn = notVpn,
+            hasValidatedInternet = hasValidatedInternet,
         ),
     )
 }

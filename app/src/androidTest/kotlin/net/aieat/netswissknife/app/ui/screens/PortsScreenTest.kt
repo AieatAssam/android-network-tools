@@ -4,6 +4,7 @@ import android.Manifest
 import android.net.Uri
 import android.os.Build
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertContentDescriptionEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -20,6 +21,9 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.assert
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.rule.GrantPermissionRule
@@ -258,6 +262,7 @@ class PortsScreenTest {
     @Test
     fun truncatedBanner_showsEllipsisAndAccessibleDisclosure() {
         val banner = "SSH-2.0-OpenSSH_9.0"
+        val smtpBanner = "220 " + "x".repeat(196)
         val result = PortScanResult(
             port = 22,
             status = PortStatus.OPEN,
@@ -267,15 +272,34 @@ class PortsScreenTest {
             responseTimeMs = 12L,
             bannerTruncated = true,
         )
+        val tlsResult = PortScanResult(
+            port = 443,
+            status = PortStatus.OPEN,
+            serviceName = "HTTPS",
+            serviceDescription = "HTTP over TLS/SSL",
+            banner = null,
+            responseTimeMs = 14L,
+            tlsSubject = "example.com\r\nInjected host",
+            probeKind = net.aieat.netswissknife.core.network.portscan.ProbeKind.TLS_PEEK,
+        )
+        val smtpResult = PortScanResult(
+            port = 25,
+            status = PortStatus.OPEN,
+            serviceName = "SMTP",
+            serviceDescription = "Simple Mail Transfer Protocol",
+            banner = smtpBanner,
+            responseTimeMs = 13L,
+            bannerTruncated = true,
+        )
         val summary = PortScanSummary(
             host = "example.com",
             resolvedIp = "192.0.2.10",
-            scannedPorts = listOf(22),
-            openPorts = 1,
+            scannedPorts = listOf(22, 25, 443),
+            openPorts = 3,
             closedPorts = 0,
             filteredPorts = 0,
             scanDurationMs = 12L,
-            results = listOf(result),
+            results = listOf(result, smtpResult, tlsResult),
         )
         composeRule.setContent {
             NetSwissKnifeTheme {
@@ -288,6 +312,30 @@ class PortsScreenTest {
             context.getString(R.string.ports_banner_truncated_content_description, banner)
         ).performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("$banner…").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithContentDescription(
+            context.getString(R.string.ports_banner_truncated_content_description, smtpBanner),
+        ).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("$smtpBanner…").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.ports_tls_subject, "example.com Injected host"))
+            .performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun aggressiveProbeSwitch_exposesLabelAndStateDescription() {
+        composeRule.setContent {
+            NetSwissKnifeTheme { PortsScreen(viewModel = fakePortScanViewModel(aggressiveProbes = false)) }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        composeRule.onNodeWithTag(PortsScreenTestTags.AGGRESSIVE_PROBES_SWITCH)
+            .performScrollTo()
+            .assertContentDescriptionEquals(context.getString(R.string.ports_aggressive_probes_a11y_label))
+            .assert(
+                SemanticsMatcher.expectValue(
+                    SemanticsProperties.StateDescription,
+                    context.getString(R.string.ports_aggressive_probes_disabled_a11y),
+                ),
+            )
     }
 
     @Test
@@ -379,6 +427,7 @@ class PortsScreenTest {
         host: String = "",
         concurrency: Int = 50,
         state: PortScanUiState = PortScanUiState.Idle,
+        aggressiveProbes: Boolean = true,
         selectedPreset: PortScanPreset = PortScanPreset.COMMON,
         startPort: String = "1",
         endPort: String = "1024",
@@ -398,6 +447,7 @@ class PortsScreenTest {
         every { viewModel.endPort } returns MutableStateFlow(endPort)
         every { viewModel.timeoutMs } returns MutableStateFlow(1000)
         every { viewModel.concurrency } returns MutableStateFlow(concurrency)
+        every { viewModel.aggressiveProbes } returns MutableStateFlow(aggressiveProbes)
         every { viewModel.recentHosts } returns MutableStateFlow(emptyList())
         every { viewModel.hasInvalidHandoff } returns invalidHandoffState
         return viewModel

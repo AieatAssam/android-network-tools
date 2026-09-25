@@ -38,6 +38,10 @@ object AppPreferenceKeys {
     /** Default number of concurrent probes (1–500). */
     val DEFAULT_CONCURRENCY = intPreferencesKey("default_concurrency")
 
+    /** Number of parallel Cloudflare speed-test transfer streams. */
+    val SPEEDTEST_DOWN_STREAMS = intPreferencesKey("speedtest_down_streams")
+    val SPEEDTEST_UP_STREAMS = intPreferencesKey("speedtest_up_streams")
+
     /** Wi-Fi auto-refresh interval in milliseconds; -1 means explicitly disabled. */
     val WIFI_REFRESH_INTERVAL_MS = longPreferencesKey("wifi_refresh_interval_ms")
 
