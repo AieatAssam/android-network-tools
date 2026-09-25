@@ -3,41 +3,41 @@ review:
   status: current_source_and_jvm_audited_device_gates_open
   source: "User-provided Net Swiss Knife QA brief v2026.09.21.1 (API 33, host snmpd at 10.0.2.2)."
   release_baseline_commit: "5e183721e64ce8a8946f1a0b50f52b83544e8898"
-  checked_commit: "74e2c50"
-  checked_worktree_commit: "74e2c50"
-  checked_scope: "The supplied release baseline remains origin/main at 5e18372. Source commit 74e2c50 retains the previously audited ISS-01/02/03/04/08/09/15 and off-main-thread SNMP behaviors, and includes typed core errors, the reviewed TLS protocol classification, banner route advisories, strengthened merged-card activation assertions, a real PortsScreen handoff source test, and lint cleanups. Current serialized checks passed core-network/core-domain/app 1,306 (one skipped)/216/574 with zero failures/errors; Android-test Kotlin compilation, lintDebug (0 errors, 30 warnings), and assembleDebug passed. The supplied issue findings remain source-covered as recorded below; API 33/TalkBack, integrated Skip dismissal, dead-route layout, live SNMP/mDNS, and physical Wi-Fi/no-ANR behavior remain device/lab gates. No emulator or live lab endpoint was used. ISS-20 outer-whitespace trim versus embedded-space rejection is retained as the documented wording conflict."
+  checked_commit: "5406406"
+  checked_worktree_commit: "5406406"
+  checked_scope: "The supplied release baseline remains origin/main at 5e18372. Current source is checked at 5406406, including the Wi-Fi lifecycle/refresh fixes since 74e2c50 and the compiled stateful-host Skip dismissal assertion. Those changes do not reopen the fixed-list behaviors or other audited tool findings. Serialized suites after the latest source changes passed core-network 1,327 tests (one skipped) and app 586 tests, with zero failures/errors; :app:compileDebugAndroidTestKotlin passes. The Skip test proves component-to-test-host removal, but does not exercise MainActivity/DataStore persistence. API 33/TalkBack, connected execution, dead-route layout, live SNMP/mDNS, and physical Wi-Fi/no-ANR behavior remain device/lab gates. No emulator or live lab endpoint was used. ISS-20's trailing-space error repro conflicts with its trim() fix; current behavior trims outer whitespace and rejects embedded whitespace."
   current_branch_recheck:
-    commit: "74e2c50"
+    commit: "5406406"
     release_baseline: "origin/main at 5e183721e64ce8a8946f1a0b50f52b83544e8898"
-    result: "The prior full audit against origin/main at 5e18372 remains the baseline. The 74e2c50 changes were reviewed and compiled: ISS-05 tests now activate each visible Home/More label and assert its destination; ISS-17 banner states distinguish offline errors from route advisories; E01-T01 source coverage uses the production AppNavHost and real PortsScreen with a directly constructed ViewModel. Typed core errors, TLS protocol classification, and lint changes also pass their module/build checks. API 33/TalkBack, integrated Skip dismissal, dead-route layout/behavior, live SNMP cancellation/canvas usability, API 33 ENODEV, physical wlan0, and measured no-ANR responsiveness remain device/lab checks. No emulator or live lab endpoint was used."
+    result: "The prior full audit against origin/main at 5e18372 remains the baseline. Rechecked current source commit 5406406: the 037181c Wi-Fi refresh/cleanup changes do not reopen the supplied fixed-list or issue findings. The existing ISS-05 title-activation/navigation test and ISS-17 offline/progress/retry coverage remain in source. ISS-06's stateful-host test renders Welcome, clicks Skip, and asserts Welcome content is removed; it does not exercise MainActivity/DataStore persistence. Android test sources compile, but no connected test ran. ISS-20 remains fixed by trimming surrounding whitespace and rejecting embedded whitespace, as requested by the proposed normalization fix; the brief's requested trailing-space error remains contradictory. API 33/TalkBack, execution of the Skip test, dead-route layout/behavior, live SNMP cancellation/canvas usability, API 33 ENODEV, physical wlan0, and measured no-ANR responsiveness remain device/lab checks. No emulator or live lab endpoint was used."
   latest_source_recheck:
     date: "2026-09-25"
-    commit: "74e2c50"
+    commit: "5406406"
     release_baseline: "origin/main at 5e183721e64ce8a8946f1a0b50f52b83544e8898"
-    result: "The item-by-item baseline audit remains against origin/main 5e18372. Source commit 74e2c50 retains the checked fixed behaviors and adds typed core error information, TLS protocol-failure classification tests, advisory messaging for unvalidated/VPN-only/unknown-route connectivity, merged title activation checks for Home and More, and a production-graph LAN-to-real-Ports source test. No listed source defect is newly missing. ISS-20 wording remains internally inconsistent: its repro asks for a trailing-space error and disabled Start, while its proposed fix asks to trim; current behavior trims outer whitespace and keeps Start enabled, while embedded whitespace remains invalid. API 33/TalkBack, integrated Skip dismissal, dead-route behavior and initial-viewport layout, live SNMP cancellation and sparse-canvas usability, API 33 ENODEV, physical wlan0, Speed Test link accuracy, live HTTP/SMTP/TLS servers, and measured no-ANR responsiveness remain device/lab checks."
-    validation: "On 74e2c50, serialized module runs passed core-network 1,306 tests (1 skipped), core-domain 216, and app 574 with zero failures/errors. Android-test Kotlin compilation, lintDebug (0 errors, 30 warnings), and assembleDebug passed. No emulator, host snmpd, physical Wi-Fi device, or live protocol/link probe was used."
-    latest_app_change_validation: "Source commit 74e2c50 passed the app unit suite (574), Android-test Kotlin compilation, lintDebug (0 errors, 30 warnings), and assembleDebug. Instrumentation was not executed; no emulator or live lab endpoint was used."
+    result: "The item-by-item release-baseline audit remains against origin/main 5e18372. The latest source check at 5406406 found no newly missing implementation in the supplied issue list. ISS-20 trims outer whitespace and rejects embedded whitespace; its expected-error repro still conflicts with its trim() fix. ISS-06 coverage asserts that Skip removes Welcome under a stateful test host; it does not cover MainActivity/DataStore persistence. API 33/TalkBack, execution of that test, dead-route behavior and initial-viewport layout, live SNMP cancellation and sparse-canvas usability, API 33 ENODEV, physical wlan0, Speed Test link accuracy, live HTTP/SMTP/TLS servers, and measured no-ANR responsiveness remain device/lab checks."
+    validation: "The latest source suites passed core-network 1,327 tests (1 skipped) and app 586 tests with zero failures/errors; :app:compileDebugAndroidTestKotlin passed after the Skip dismissal assertion was added. The instrumentation was not run. No emulator, host snmpd, physical Wi-Fi device, or live protocol/link probe was used."
+    latest_app_change_validation: "The latest source suite passed the app JVM suite (586); Android-test Kotlin compilation passed for the stateful Skip dismissal assertion. Instrumentation was not executed; no emulator or live lab endpoint was used."
   latest_code_commit_validation:
-    commit: "74e2c50"
-    unit_tests: { core_network: 1306, core_network_skipped: 1, core_domain: 216, app: 574, skipped: 1, failures: 0, errors: 0 }
-    android_test_sources: "./gradlew :app:compileDebugAndroidTestKotlin passed"
-    quality_gates: "`:app:compileDebugAndroidTestKotlin`, `:app:lintDebug` (0 errors, 30 warnings), and `:app:assembleDebug` passed. Other Kover/release/ktlint/Detekt checks from prior commits were not rerun on 74e2c50."
+    commit: "5406406"
+    unit_tests: { core_network: 1327, core_network_skipped: 1, app: 586, failures: 0, errors: 0 }
+    android_test_sources: "`./gradlew :app:compileDebugAndroidTestKotlin --no-daemon` passed after adding the stateful-host Skip dismissal assertion."
+    quality_gates: "Current core-network/app suite results and Android-test source compilation are recorded above. `:app:lintDebug`, Kover, and debug/release assembly have not been rerun on 5406406; prior passes are recorded with their source commits."
     device_validation: "No emulator, live SNMP/mDNS endpoint, physical Wi-Fi device, live protocol server, or link-accuracy probe was used; API 33, TalkBack, connected instrumentation, cancellation, and no-ANR checks remain open."
   followup_recheck:
     date: "2026-09-25"
-    checked_source_commit: "037181c"
+    checked_source_commit: "5406406"
     release_baseline: "Freshly fetched origin/main remains 5e183721e64ce8a8946f1a0b50f52b83544e8898."
-    scope: "Rechecked the supplied QA brief without reopening its fixed-list items. This pass confirms the prior source findings still apply; it does not claim API 33, TalkBack, live SNMP, mDNS-on-device, or no-ANR validation."
+    scope: "Rechecked the supplied QA brief at current source HEAD without reopening its fixed-list items. This pass confirms the prior source findings and adds a compiled stateful-host Skip assertion that Welcome disappears; it does not claim MainActivity/DataStore integration, API 33, TalkBack, live SNMP, mDNS-on-device, or no-ANR validation."
     item_recheck:
       fixed_list: "ISS-01/02/03/04/08/09/15 and SNMP-threading remain source-supported as in the item evidence above; this follow-up made no device claim or requested retest for them."
       ISS-05: "Not a current source defect: merged clickable card semantics and label activation/navigation assertions are present. TalkBack traversal and activation on API 33 remain unverified."
-      ISS-06: "The Skip callback and Compose callback test are present; integrated Welcome-sheet dismissal on the release target remains unverified."
+      ISS-06: "The Compose test renders Welcome under stateful test-host control, clicks Skip, and asserts the Welcome title disappears. Android-test Kotlin compilation passes. It does not exercise MainActivity/DataStore persistence; executing the test on the release target remains open."
       ISS-17: "Retry/Clear, offline state, progress, Canceling/Canceled, retained partial hops, and a connectivity banner are source-covered. Dead-route behavior and initial-viewport layout remain API 33/device checks."
       ISS-20: "Confirmed as a release-baseline defect and fixed on this branch: outer whitespace is normalized before start eligibility, while embedded whitespace remains invalid. This differs from the brief's trailing-space error/disabled-Start repro; the repro and trim() fix request conflict, so the plan records accepted trimming as the chosen behavior."
       ISS-21: "The brief's claimed missing controls were already present on the release baseline; the current branch keeps Cancel available after config collapse, reports progress/counts, labels nodes and shows details, and bounds SNMP requests. The live 10.0.2.2/community-public v2c cancellation and sparse-canvas usability check was unavailable."
       ISS-22: "Graceful error plus Dismiss and injected ENODEV cleanup are source-covered; API 33 ENODEV and discovery over physical wlan0 remain unverified."
-    validation: "Current source suites passed :core-network:test (1,327 tests, one skipped) and :app:testDebugUnitTest (586 tests, zero failures/errors). A first app-suite run had a Wi-Fi teardown assertion with a cascading Wake-on-LAN Main-dispatcher error; focused Wi-Fi/WOL tests and a full app rerun passed. No emulator, device, host snmpd, or physical Wi-Fi was used for this follow-up."
-    remaining_release_gates: [API-33, TalkBack, integrated-Skip-dismissal, dead-route-Traceroute-layout, live-SNMP-cancel-and-canvas, API-33-mDNS-ENODEV, physical-wlan0, measured-no-ANR]
+    validation: "Current source suites passed :core-network:test (1,327 tests, one skipped) and :app:testDebugUnitTest (586 tests, zero failures/errors). A first app-suite run had a Wi-Fi teardown assertion with a cascading Wake-on-LAN Main-dispatcher error; focused Wi-Fi/WOL tests and a full app rerun passed. After the Skip test change, :app:compileDebugAndroidTestKotlin passed. No emulator, device, host snmpd, or physical Wi-Fi was used for this follow-up."
+    remaining_release_gates: [API-33, TalkBack, execute-Skip-dismissal-test, dead-route-Traceroute-layout, live-SNMP-cancel-and-canvas, API-33-mDNS-ENODEV, physical-wlan0, measured-no-ANR]
   branch: "plan/comprehensive-review-2026-09-22"
   release_metadata:
     app: "Net Swiss Knife"
@@ -141,12 +141,12 @@ items:
     needed_validation: "The prior API 36 connected instrumentation attempt stopped during APK install before tests started; the Compose source compiles but has not been executed. Run TracerouteScreenTest and the reported airplane-mode/dead-or-ICMP-blocked target scenario on API 33; confirm progress/Stop is visible promptly without scrolling. The shared-deadline case during reverse-DNS/GeoIP enrichment is now covered by deterministic source tests; initial-viewport, offline/dead-route, and live-network behavior still need device validation."
 
   - id: ISS-06
-    classification: skip_callback_covered_integrated_dismissal_verification_open
+    classification: stateful_host_dismissal_asserted_in_compiled_compose_test_device_execution_open
     release_baseline_status: "The Welcome sheet Skip callback already invokes dismissal on origin/main. The report is an integration-verification request, not a confirmed missing callback."
     evidence:
       - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/onboarding/OnboardingSheet.kt", lines: "93-96", detail: "The top-right Skip action invokes onDismiss directly from the Welcome sheet (the resource key retains its older 'don't show again' name)." }
-      - { file: "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/NavigationAccessibilityTest.kt", lines: "173-188", detail: "Onboarding test clicks Skip and asserts the dismiss callback fired." }
-    needed_validation: "The Compose test asserts that Skip invokes the dismissal callback, but the fresh API 36 instrumentation attempt stopped before test execution. Verify the integrated Welcome sheet disappears on the release target; no API 33 run was available."
+      - { file: "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/NavigationAccessibilityTest.kt", lines: "173-194", detail: "Stateful Compose host renders OnboardingSheet while Welcome is enabled, clicks Skip, then asserts the Welcome title no longer exists after onDismiss updates host state. This proves component-to-host removal, not DataStore persistence or the full NetSwissKnifeApp wiring." }
+    needed_validation: "`:app:compileDebugAndroidTestKotlin` passes with the dismissal assertion. Execute the test on API 33/release target; no connected test ran in this follow-up."
 
   - id: ISS-20
     classification: reproduced_on_release_baseline_fixed_in_current_branch
