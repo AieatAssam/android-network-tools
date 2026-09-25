@@ -135,6 +135,7 @@ jobs:
 
       # ── 6. Check signing configuration ────────────────────────────────────
       - name: Check signing configuration
+        id: signing
         env:
           KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
@@ -142,17 +143,31 @@ jobs:
           KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: |
           missing=()
+          present=0
+          for value in "$KEYSTORE_B64" "$KEYSTORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD"; do
+            if [ -n "$value" ]; then
+              present=$((present + 1))
+            fi
+          done
           [ -n "$KEYSTORE_B64" ] || missing+=(RELEASE_KEYSTORE_BASE64)
           [ -n "$KEYSTORE_PASSWORD" ] || missing+=(RELEASE_KEYSTORE_PASSWORD)
           [ -n "$KEY_ALIAS" ] || missing+=(RELEASE_KEY_ALIAS)
           [ -n "$KEY_PASSWORD" ] || missing+=(RELEASE_KEY_PASSWORD)
-          if [ "${#missing[@]}" -gt 0 ]; then
-            echo "::error::Release signing is required; missing secret(s): ${missing[*]}"
+          if [ "$present" -eq 0 ]; then
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "store_file=" >> "$GITHUB_OUTPUT"
+            echo "Release signing secrets are absent; building unsigned artifacts."
+          elif [ "$present" -ne 4 ]; then
+            echo "::error::Release signing secrets must be supplied together; missing secret(s): ${missing[*]}"
             exit 1
+          else
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+            echo "store_file=$RUNNER_TEMP/release.keystore" >> "$GITHUB_OUTPUT"
           fi
 
       # ── 7. Decode keystore ────────────────────────────────────────────────
       - name: Decode release keystore
+        if: steps.signing.outputs.signed == 'true'
         env:
           KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
@@ -169,19 +184,20 @@ jobs:
           # right after this reports the real error, and a keytool quirk must
           # not become a new way for the release to die at the decode step.
           keytool -list -keystore "$RUNNER_TEMP/release.keystore" \
-            -storepass "$KEYSTORE_PASSWORD" >/dev/null 2>&1 \
+            -storepass:env KEYSTORE_PASSWORD >/dev/null 2>&1 \
             || echo "::warning::keytool could not read the decoded keystore."
 
       # ── 8. Build release APK ──────────────────────────────────────────────
-      - name: Build signed release APK
+      - name: Build release APK
+        env:
+          ORG_GRADLE_PROJECT_storeFile: ${{ steps.signing.outputs.store_file }}
+          ORG_GRADLE_PROJECT_storePassword: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          ORG_GRADLE_PROJECT_keyAlias: ${{ secrets.RELEASE_KEY_ALIAS }}
+          ORG_GRADLE_PROJECT_keyPassword: ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: |
           ./gradlew :app:assembleRelease \
             -PversionName="${{ steps.version.outputs.name }}" \
             -PversionCode="${{ steps.version.outputs.code }}" \
-            -PstoreFile="$RUNNER_TEMP/release.keystore" \
-            -PstorePassword="${{ secrets.RELEASE_KEYSTORE_PASSWORD }}" \
-            -PkeyAlias="${{ secrets.RELEASE_KEY_ALIAS }}" \
-            -PkeyPassword="${{ secrets.RELEASE_KEY_PASSWORD }}" \
             --no-daemon
 
       # P02: fail the release if R8 removes SNMP4J's reflectively-loaded USM
@@ -203,15 +219,16 @@ jobs:
           python3 tools/release/check_snmp_classes.py "$RUNNER_TEMP/apk-packages.txt"
 
       # ── 9. Build release AAB ──────────────────────────────────────────────
-      - name: Build signed release AAB
+      - name: Build release AAB
+        env:
+          ORG_GRADLE_PROJECT_storeFile: ${{ steps.signing.outputs.store_file }}
+          ORG_GRADLE_PROJECT_storePassword: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          ORG_GRADLE_PROJECT_keyAlias: ${{ secrets.RELEASE_KEY_ALIAS }}
+          ORG_GRADLE_PROJECT_keyPassword: ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: |
           ./gradlew :app:bundleRelease \
             -PversionName="${{ steps.version.outputs.name }}" \
             -PversionCode="${{ steps.version.outputs.code }}" \
-            -PstoreFile="$RUNNER_TEMP/release.keystore" \
-            -PstorePassword="${{ secrets.RELEASE_KEYSTORE_PASSWORD }}" \
-            -PkeyAlias="${{ secrets.RELEASE_KEY_ALIAS }}" \
-            -PkeyPassword="${{ secrets.RELEASE_KEY_PASSWORD }}" \
             --no-daemon
 
       # ── 9. Locate artefacts ───────────────────────────────────────────────
@@ -409,9 +426,9 @@ jobs:
 
             ### Build info
             - Version code: `${{ steps.version.outputs.code }}`
-            - Signed: Yes (release key)
+            - Signed: ${{ steps.signing.outputs.signed == 'true' && 'Yes (release key)' || 'No (unsigned)' }}
 
-            Install the signed `.apk` directly, or use the signed `.aab` for Play Store upload.
+            When signed, install the `.apk` directly or use the `.aab` for Play Store upload.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

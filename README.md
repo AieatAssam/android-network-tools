@@ -284,14 +284,14 @@ apkanalyzer dex packages app/build/outputs/apk/release/app-release-unsigned.apk 
 ## CI & Automation
 
 ### Standard CI (`ci.yml`)
-Runs on every push to `main` and every PR targeting `main`:
-1. Sets up JDK 21 (Temurin)
-2. Caches Gradle
-3. Runs `./gradlew test`
-4. Runs `./gradlew :app:assembleDebug`
+Runs on every push to `main` and every PR targeting `main`. The `build-and-test` job runs the repository quality checks, Android Lint, unit tests, Kover verification, and a debug APK build; CodeQL analyzes Java and Kotlin separately.
+
+The `release-smoke` job builds the unsigned, minified release APK and checks that R8 retained the SNMP and native traceroute classes, the arm64 native library, and the OUI and public-suffix resources. It uploads the unsigned APK and R8 `mapping.txt` for seven days. This is a packaging smoke check; SNMP reflective loading still needs the documented release-build functional check.
+
+Firebase Test Lab runs on pushes to `main`. To opt a trusted pull request from a branch in this repository into Test Lab, apply the `run-instrumented` label. Fork pull requests cannot receive the Firebase service-account secret and therefore do not run that job. Newer Test Lab runs cancel older runs for the same Git ref. The job uses the `FIREBASE_SERVICE_ACCOUNT_KEY` Actions secret; the workflow does not print it.
 
 ### Release (`release.yml`)
-Triggered by a new `vYYYY.MM.DD.N` tag (where `N` is 1–99) or manual dispatch. Manual dispatch allocates the next unused daily suffix and reserves the immutable tag before building. The version code is `YYYYMMDD × 100 + N`. The workflow signs and publishes the release APK and AAB to GitHub Releases.
+Triggered by a new `vYYYY.MM.DD.N` tag (where `N` is 1–99) or manual dispatch. Manual dispatch allocates the next unused daily suffix and reserves the immutable tag before building. The version code is `YYYYMMDD × 100 + N`. When all four release-signing secrets are configured, the workflow signs and publishes the APK and AAB to GitHub Releases. If none are configured, it publishes unsigned artifacts; a partial signing configuration fails before the build.
 
 Required GitHub Actions secrets:
 

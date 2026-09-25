@@ -5,10 +5,13 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+    types: [ opened, synchronize, reopened, labeled, unlabeled ]
 
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout repository
@@ -73,10 +76,20 @@ jobs:
         run: ./gradlew :app:assembleDebug --no-daemon --no-parallel
 
   instrumented-tests:
-    # Firebase Test Lab is quota-limited on the free tier. Keep cloud device
-    # runs for pushes to main; pull requests retain the local build/test gates.
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Firebase Test Lab is quota-limited on the free tier. Run on main pushes
+    # or when a trusted same-repository PR opts in with the run-instrumented
+    # label. Fork PRs cannot receive the service-account secret.
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'pull_request' &&
+       github.event.pull_request.head.repo.full_name == github.repository &&
+       contains(github.event.pull_request.labels.*.name, 'run-instrumented'))
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    concurrency:
+      group: testlab-${{ github.ref }}
+      cancel-in-progress: true
     # Runs on Firebase Test Lab instead of a GitHub-hosted emulator. The
     # reactivecircus/android-emulator-runner + local KVM/nested-virtualization
     # combination proved unreliable on GitHub-hosted runners (hangs at boot, mid-test,
@@ -149,6 +162,70 @@ jobs:
       - name: Fail job if Test Lab run failed
         if: steps.test_lab.outcome == 'failure'
         run: exit 1
+
+  release-smoke:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Cache Gradle packages
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle/libs.versions.toml', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      # Build without signing secrets: this checks the minified release variant
+      # and keeps signing material out of the release-smoke job entirely.
+      - name: Build unsigned release APK
+        run: ./gradlew :app:assembleRelease --no-daemon --no-parallel
+
+      - name: Verify R8-retained classes and resources
+        shell: bash
+        run: |
+          apk=app/build/outputs/apk/release/app-release-unsigned.apk
+          sdk_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          apkanalyzer_bin="$(command -v apkanalyzer || true)"
+          if [[ -z "$apkanalyzer_bin" && -n "$sdk_root" ]]; then
+            apkanalyzer_bin="$(find "$sdk_root" -type f -name apkanalyzer -print -quit)"
+          fi
+          if [[ -z "$apkanalyzer_bin" ]]; then
+            echo "apkanalyzer was not found on PATH or under the Android SDK"
+            exit 1
+          fi
+          "$apkanalyzer_bin" dex packages --defined-only "$apk" > /tmp/release-packages.txt
+          python3 tools/release/check_snmp_classes.py /tmp/release-packages.txt
+          grep -q 'me\.impa\.icmpenguin' /tmp/release-packages.txt
+          unzip -Z1 "$apk" > /tmp/release-apk-files.txt
+          grep -q '^lib/arm64-v8a/libicmpenguin\.so$' /tmp/release-apk-files.txt
+          grep -q '^oui/oui-prefixes\.tsv$' /tmp/release-apk-files.txt
+          grep -q '^psl/public_suffix_list\.index$' /tmp/release-apk-files.txt
+
+      - name: Upload unsigned APK and R8 mapping
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-smoke-outputs
+          path: |
+            app/build/outputs/apk/release/app-release-unsigned.apk
+            app/build/outputs/mapping/release/mapping.txt
+          if-no-files-found: warn
+          retention-days: 7
 
   codeql:
     runs-on: ubuntu-latest

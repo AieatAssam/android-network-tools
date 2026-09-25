@@ -177,7 +177,12 @@ tasks:
 
   - id: P09-T4
     title: "CI: release smoke job + Test Lab gating + concurrency"
-    status: todo
+    status: in_progress
+    current_progress:
+      date: "2026-09-25"
+      implemented: "CI now runs an unsigned release-smoke build with exact SNMP4J class checks, traceroute package/native library checks, OUI/PSL resource checks, and seven-day APK/mapping artifacts. Test Lab is limited to main pushes or opted-in same-repository PRs carrying `run-instrumented`, with label events enabled, fork PRs excluded before Firebase authentication, and same-ref cancellation. README documents the gate and artifacts."
+      validation: "The existing unsigned release APK passed the exact SNMP class helper, native library, and resource-path checks. `git diff --check` passed. QA and adversarial source review cleared event gating, fork exclusion, artifact configuration, and the exact-class check. No workflow run or Gradle build was executed; no YAML parser/actionlint was available."
+      remaining: "Verify unlabeled/labeled PR event behavior, main-push Test Lab, Firebase auth, and uploaded artifact contents on a live workflow run."
     steps:
       - "Add `release-smoke` job per design; upload mapping.txt and the unsigned APK as artifacts (retention 7 days)."
       - "Gate instrumented-tests; add concurrency group; README CI docs."
@@ -185,7 +190,12 @@ tasks:
 
   - id: P09-T5
     title: "release.yml secrets via ORG_GRADLE_PROJECT_ env"
-    status: todo
+    status: in_progress
+    current_progress:
+      date: "2026-09-25"
+      implemented: "Signing values now reach Gradle only through ORG_GRADLE_PROJECT_* environment variables. No configured signing secrets produces unsigned artifacts; all four secrets enables signing; a partial set fails before decoding or building. The release note reports signed or unsigned status."
+      validation: "`git diff --check` and source checks confirmed no signing secret appears in a Gradle -P argument or run command line. Independent QA and adversarial source reviews found no blocker; local keytool accepted the environment-based store-password syntax. No GitHub workflow run or secret access was performed."
+      remaining: "Verify unsigned, fully signed, and partial-secret failure paths through controlled workflow runs, including `apksigner verify --print-certs` for a signed artifact."
     steps: ["Edit steps 8/9; verify on a workflow_dispatch run with create_github_release=false that the APK is signed (`apksigner verify --print-certs`)."]
     acceptance_criteria: ["No password appears in any `run:` command line."]
 
