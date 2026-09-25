@@ -7,12 +7,14 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withContext
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.operation.CancellationReason
 import net.aieat.netswissknife.core.network.operation.OperationBudget
 import net.aieat.netswissknife.core.network.operation.OperationRequirement
 import net.aieat.netswissknife.core.network.operation.OperationSession
 import org.junit.jupiter.api.Assertions.assertArrayEquals
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -37,11 +39,13 @@ import java.net.ServerSocket
 import java.net.Socket
 import java.time.Duration
 import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executor
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
-import java.util.concurrent.Executor
 
 class DnsRepositoryOperationSessionTest {
 
@@ -126,6 +130,107 @@ class DnsRepositoryOperationSessionTest {
             releaseWorker.countDown()
             executor.shutdownNow()
             executor.awaitTermination(2, TimeUnit.SECONDS)
+        }
+    }
+
+    @Test
+    fun `production dns executor caps workers and queue and rejects before opening a socket`() = runBlocking {
+        val executor = createDnsIoExecutor()
+        val resolver = DatagramSocket(InetSocketAddress(InetAddress.getLoopbackAddress(), 0))
+        val sessions = mutableListOf<OperationSession>()
+        val futures = mutableListOf<CompletableFuture<ByteArray>>()
+        val openedSockets = CopyOnWriteArrayList<Closeable>()
+        val activeWorkersEntered = CountDownLatch(DNS_IO_WORKER_COUNT)
+        val query = Message.newQuery(Record.newRecord(Name.fromString("example.com."), Type.A, DClass.IN))
+        val remote = InetSocketAddress(InetAddress.getLoopbackAddress(), resolver.localPort)
+
+        fun submit(): Pair<OperationSession, CompletableFuture<ByteArray>> {
+            val session = OperationSession(
+                OperationBudget.start(
+                    requirement = OperationRequirement.INTERNET,
+                    timeoutMillis = 60_000,
+                    maxConcurrentProbes = 1,
+                ),
+            )
+            sessions += session
+            val future = SessionIoClientFactory(
+                session = session,
+                onSocketRegistered = {
+                    openedSockets += it
+                    activeWorkersEntered.countDown()
+                },
+                taskExecutor = executor,
+            ).createOrGetUdpClient().sendAndReceiveUdp(
+                null,
+                remote,
+                query,
+                query.toWire(),
+                512,
+                Duration.ofSeconds(30),
+            )
+            futures += future
+            return session to future
+        }
+
+        try {
+            assertEquals(DNS_IO_WORKER_COUNT, executor.corePoolSize)
+            assertEquals(DNS_IO_WORKER_COUNT, executor.maximumPoolSize)
+            assertEquals(DNS_IO_QUEUE_CAPACITY, executor.queue.remainingCapacity())
+            assertTrue(executor.rejectedExecutionHandler is ThreadPoolExecutor.AbortPolicy)
+
+            repeat(DNS_IO_WORKER_COUNT) { submit() }
+            assertTrue(
+                withContext(Dispatchers.IO) { activeWorkersEntered.await(3, TimeUnit.SECONDS) },
+                "all production workers should enter socket-backed DNS work",
+            )
+            val queued = List(DNS_IO_QUEUE_CAPACITY) { submit() }
+            withTimeout(3_000) {
+                while (executor.queue.size != DNS_IO_QUEUE_CAPACITY) kotlinx.coroutines.yield()
+            }
+            assertEquals(DNS_IO_WORKER_COUNT, executor.activeCount)
+            assertEquals(DNS_IO_QUEUE_CAPACITY, executor.queue.size)
+            assertEquals(DNS_IO_WORKER_COUNT, openedSockets.size)
+
+            val overflow = submit()
+            assertTrue(overflow.second.isCompletedExceptionally, "the first task beyond workers plus queue must be rejected")
+            assertEquals(
+                DNS_IO_WORKER_COUNT,
+                openedSockets.size,
+                "rejected transport work must not open or register a socket",
+            )
+
+            queued.first().first.cancel(CancellationReason.USER_STOP)
+            assertTrue(queued.first().second.isCancelled, "cancelling queued operation should cancel its transport future")
+            withTimeout(3_000) {
+                while (executor.queue.size != DNS_IO_QUEUE_CAPACITY - 1) kotlinx.coroutines.yield()
+            }
+
+            val recovered = submit()
+            assertFalse(recovered.second.isCompletedExceptionally, "a cancelled queue entry should free capacity for a new operation")
+            assertEquals(DNS_IO_QUEUE_CAPACITY, executor.queue.size)
+            assertEquals(
+                DNS_IO_WORKER_COUNT,
+                openedSockets.size,
+                "the replacement remains queued while every bounded worker is blocked",
+            )
+        } finally {
+            try {
+                sessions.forEach { it.cancel(CancellationReason.USER_STOP) }
+                withTimeout(3_000) {
+                    while (futures.any { !it.isDone } || executor.activeCount != 0 || executor.queue.isNotEmpty()) {
+                        kotlinx.coroutines.yield()
+                    }
+                }
+                assertTrue(openedSockets.all { (it as DatagramSocket).isClosed }, "all active DNS sockets should close during cleanup")
+                assertTrue(sessions.all { it.resources.isClosed }, "all operation scopes should release their task and socket leases")
+            } finally {
+                try {
+                    resolver.close()
+                } finally {
+                    executor.shutdownNow()
+                    executor.awaitTermination(2, TimeUnit.SECONDS)
+                }
+            }
         }
     }
 

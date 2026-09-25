@@ -222,14 +222,20 @@ internal class SessionIoClientFactory(
     private companion object {
         // DNS queries are single-flight per UI operation; the bounded worker pool keeps a
         // caller-owned resolver from creating unbounded blocking workers under cancellation.
-        val DEFAULT_EXECUTOR: Executor = ThreadPoolExecutor(
-            4,
-            4,
-            0L,
-            TimeUnit.MILLISECONDS,
-            ArrayBlockingQueue(16),
-            { task -> Thread(task, "dns-query-io").apply { isDaemon = true } },
-            ThreadPoolExecutor.AbortPolicy(),
-        )
+        val DEFAULT_EXECUTOR: Executor = createDnsIoExecutor()
     }
 }
+
+/** Same bounded pool factory used by the production shared executor and saturation regression. */
+internal fun createDnsIoExecutor(): ThreadPoolExecutor = ThreadPoolExecutor(
+    DNS_IO_WORKER_COUNT,
+    DNS_IO_WORKER_COUNT,
+    0L,
+    TimeUnit.MILLISECONDS,
+    ArrayBlockingQueue(DNS_IO_QUEUE_CAPACITY),
+    { task -> Thread(task, "dns-query-io").apply { isDaemon = true } },
+    ThreadPoolExecutor.AbortPolicy(),
+)
+
+internal const val DNS_IO_WORKER_COUNT = 4
+internal const val DNS_IO_QUEUE_CAPACITY = 16
