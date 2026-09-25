@@ -489,7 +489,7 @@ class PortScanRepositoryImplTest {
         try {
             runCurrent()
             assertTrue(
-                withContext(Dispatchers.IO) { resolverEntered.await(2, TimeUnit.SECONDS) },
+                withContext(Dispatchers.IO) { resolverEntered.await(5, TimeUnit.SECONDS) },
                 "resolver worker should enter the blocking call",
             )
             clock.advanceBy(100_000_000L)

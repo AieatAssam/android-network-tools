@@ -22,6 +22,7 @@ import net.aieat.netswissknife.core.network.operation.OperationResourcesContext
 import net.aieat.netswissknife.core.network.operation.OperationRunner
 import net.aieat.netswissknife.core.network.operation.OperationSession
 import net.aieat.netswissknife.core.network.operation.ensureCurrentOperationActive
+import net.aieat.netswissknife.core.network.net.NetworkBinder
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import okhttp3.ResponseHeaderLimitException
@@ -39,6 +40,8 @@ class HttpProbeRepositoryImpl internal constructor(
     internal var clock: MonotonicClock = SystemMonotonicClock
 
     constructor() : this(OkHttpEngine())
+
+    constructor(networkBinder: NetworkBinder) : this(OkHttpEngine(networkBinder = networkBinder))
 
     companion object {
         private const val MAX_RESPONSE_BODY_BYTES = 10_485_760L

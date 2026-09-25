@@ -51,7 +51,23 @@ class AndroidNetworkBinder(
         get() = selectedLocalNetwork != null
 
     override fun localSubnet(): String? {
-        val properties = selectedLocalNetwork?.linkProperties ?: return null
+        val selected = selectedLocalNetwork ?: return null
+        return localSubnet(selected)
+    }
+
+    override fun bindIfLocal(socket: Socket, destinationIp: String): Boolean {
+        // Keep network selection and subnet classification on one immutable observation. If the
+        // selected network disappears after the caller's initial local-route check, return false
+        // so the caller can fail closed instead of silently using the process default route.
+        val selected = selectedLocalNetwork ?: return false
+        val subnet = localSubnet(selected) ?: return false
+        if (!LocalDestinationPolicy(subnet).isLocal(destinationIp)) return false
+        selected.network.bindSocket(socket)
+        return true
+    }
+
+    private fun localSubnet(selected: ObservedNetwork): String? {
+        val properties = selected.linkProperties ?: return null
         val address = properties.linkAddresses.firstOrNull { it.address is Inet4Address } ?: return null
         return LinkInfoMapper.cidrOf(address.address.hostAddress ?: return null, address.prefixLength)
     }

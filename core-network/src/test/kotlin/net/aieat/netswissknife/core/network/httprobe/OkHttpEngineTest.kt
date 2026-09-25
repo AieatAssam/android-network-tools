@@ -34,11 +34,15 @@ import net.aieat.netswissknife.core.network.httprobe.engine.HttpTimings
 import net.aieat.netswissknife.core.network.httprobe.engine.OkHttpEngine
 import net.aieat.netswissknife.core.network.operation.CancellationReason
 import net.aieat.netswissknife.core.network.operation.OperationCancellationException
+import net.aieat.netswissknife.core.network.net.FakeNetworkBinder
+import net.aieat.netswissknife.core.network.net.LocalNetworkBindingUnavailableException
+import net.aieat.netswissknife.core.network.net.containsLocalNetworkPermissionDenied
 import net.aieat.netswissknife.core.network.ErrorCode
 import java.io.ByteArrayInputStream
 import java.util.concurrent.atomic.AtomicLong
 import java.nio.file.Files
 import java.io.IOException
+import java.net.InetAddress
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
@@ -66,6 +70,93 @@ class OkHttpEngineTest {
         while (cause != null && cause !is ResponseHeaderLimitException) cause = cause.cause
         assertNotNull(cause, "typed parser rejection should reach the repository")
         assertEquals(kind, (cause as ResponseHeaderLimitException).kind)
+    }
+
+    @Test
+    fun `HTTP binds selected local destination before connect`() = runTest {
+        val server = server()
+        server.enqueue(MockResponse.Builder().code(200).body("local").build())
+        val binder = FakeNetworkBinder(shouldBindResult = true)
+
+        val result = HttpProbeRepositoryImpl(OkHttpEngine(networkBinder = binder))
+            .probe(HttpProbeRequest(url = server.url("/").toString()))
+
+        assertTrue(result is NetworkResult.Success<*>, "$result")
+        assertTrue(binder.boundTcpSockets.isNotEmpty())
+        assertTrue(binder.tcpSocketConnectedStatesAtBind.all { connected -> !connected })
+    }
+
+    @Test
+    fun `HTTP public destination keeps the default route`() = runTest {
+        val server = server()
+        server.enqueue(MockResponse.Builder().code(200).body("public-route").build())
+        val binder = FakeNetworkBinder(shouldBindResult = false)
+
+        val result = HttpProbeRepositoryImpl(OkHttpEngine(networkBinder = binder))
+            .probe(HttpProbeRequest(url = server.url("/").toString()))
+
+        assertTrue(result is NetworkResult.Success<*>, "$result")
+        assertTrue(binder.boundTcpSockets.isEmpty())
+    }
+
+    @Test
+    fun `HTTP preserves typed local permission denial from socket binding`() = runTest {
+        val server = server()
+        server.enqueue(MockResponse.Builder().code(200).body("unreachable").build())
+        val binder = FakeNetworkBinder(
+            shouldBindResult = true,
+            throwTcpBindSecurityException = true,
+        )
+
+        val result = HttpProbeRepositoryImpl(OkHttpEngine(networkBinder = binder))
+            .probe(HttpProbeRequest(url = server.url("/").toString()))
+
+        assertTrue(result is NetworkResult.Error, "$result")
+        assertTrue((result as NetworkResult.Error).cause.containsLocalNetworkPermissionDenied())
+        assertTrue(binder.tcpSocketConnectedStatesAtBind.isNotEmpty())
+        assertTrue(binder.tcpSocketConnectedStatesAtBind.all { connected -> !connected })
+    }
+
+    @Test
+    fun `HTTP re-evaluates local binding for each redirect destination`() = runTest {
+        val server = MockWebServer().also {
+            it.start(InetAddress.getByName("0.0.0.0"), 0)
+            servers += it
+        }
+        val localUrl = "http://127.0.0.1:${server.port}/local"
+        val publicUrl = "http://127.0.0.2:${server.port}/public"
+        server.enqueue(MockResponse.Builder().code(302).addHeader("Location", publicUrl).build())
+        server.enqueue(MockResponse.Builder().code(200).body("redirected").build())
+        val binder = FakeNetworkBinder(localDestinationIps = setOf("127.0.0.1"))
+
+        val result = HttpProbeRepositoryImpl(OkHttpEngine(networkBinder = binder))
+            .probe(HttpProbeRequest(url = localUrl))
+
+        assertTrue(result is NetworkResult.Success<*>, "$result")
+        assertEquals(listOf("127.0.0.1", "127.0.0.2"), binder.shouldBindDestinations)
+        assertEquals(listOf("127.0.0.1"), binder.atomicBindDestinations)
+        assertEquals(1, binder.boundTcpSockets.size)
+        assertEquals(2, server.requestCount)
+    }
+
+    @Test
+    fun `HTTP fails closed if selected local network disappears before bind`() = runTest {
+        val server = server()
+        server.enqueue(MockResponse.Builder().code(200).body("must-not-connect").build())
+        val binder = FakeNetworkBinder(
+            shouldBindResult = true,
+            tcpBindIfLocalReturnsFalse = true,
+        )
+
+        val result = HttpProbeRepositoryImpl(OkHttpEngine(networkBinder = binder))
+            .probe(HttpProbeRequest(url = server.url("/").toString()))
+
+        assertTrue(result is NetworkResult.Error, "$result")
+        var cause = (result as NetworkResult.Error).cause
+        while (cause != null && cause !is LocalNetworkBindingUnavailableException) cause = cause.cause
+        assertNotNull(cause, "local selection loss must not fall back to the default route")
+        assertEquals(0, binder.boundTcpSockets.size)
+        assertEquals(0, server.requestCount)
     }
 
     @Test

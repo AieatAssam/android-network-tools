@@ -18,6 +18,11 @@ phase:
   enables: [P11, P12, P13]
   findings: [F012, F013]
   target_modules: [":core-network", ":app"]
+  current_progress:
+    date: "2026-09-25"
+    implemented: "Added P05-T7 source wiring for HTTP Probe and TLS Inspector: TCP sockets bind through an atomic NetworkBinder.bindIfLocal operation only when the selected local subnet contains the destination. AndroidNetworkBinder uses one captured network/subnet snapshot, and an initially local route that disappears before binding now fails closed. App DI supplies AndroidNetworkBinder; JVM construction retains NoOpNetworkBinder defaults."
+    validation: "Fake-binder regressions cover local/public routing, HTTP redirect re-evaluation from local to public, selected-network loss between classification and bind, and SecurityException preservation as LocalNetworkPermissionDeniedException. Targeted HTTP/TLS/GeoIP tests passed; the full core-network report executed 1,350 tests (1 skipped) with all P05/GeoIP cases passing and one unrelated existing Speed Test overlap test failing under shared-host load. The isolated Port Scan repository class passed. App and domain suites passed, app main and Android-test Kotlin compilation passed; no emulator/device was used."
+    remaining: "The implementation slice is complete. Physical Wi-Fi/VPN route behavior remains in the phase-level device matrix. TLS uses the process resolver; if the selected network disappears during DNS before any address is classified as local, the current route decision follows the network state observed after resolution."
 
 review_follow_up:
   reviewed_on: "2026-09-21"
@@ -299,6 +304,25 @@ tasks:
     steps:
       - "README: add 'Networking behavior' with subnet-aware Wi-Fi/Ethernet binding, banners, mDNS fallback, and the Android 16 local-network permission flow."
       - "PRIVACY_POLICY.md permissions table: NEARBY_WIFI_DEVICES also gates local-network access on Android 16+ when Local Network Protections are enabled."
+
+  - id: P05-T7
+    title: "Bind HTTP Probe and TLS Inspector sockets for selected local destinations"
+    status: done
+    depends_on: [P05-T2, P05-T3]
+    steps:
+      - "HTTP Probe uses a per-client socket factory that checks the resolved connect address immediately before connect; only a destination matched by NetworkBinder.shouldBind() is bound."
+      - "TLS Inspector resolves the endpoint on its existing I/O path, binds its SSLSocket before connecting only when the chosen address matches the selected local subnet, and preserves the hostname for SNI/certificate matching."
+      - "App DI passes AndroidNetworkBinder to both repositories; direct/JVM repository constructors keep NoOpNetworkBinder defaults."
+    acceptance_criteria:
+      - "Fake-binder tests for both tools show selected local sockets are passed to bind while unconnected, before their connect attempt."
+      - "Public/default-route tests for both tools show the binder is not called when shouldBind() is false."
+      - "TCP bind SecurityException tests verify HTTP repository errors preserve LocalNetworkPermissionDeniedException in the cause chain and TLS connect exposes that typed exception."
+      - "HTTP redirects make a fresh route decision for each request; no network-wide/default-route behavior changes for public destinations."
+      - "If a destination is classified local but atomic binding finds the selected network gone, HTTP and TLS fail instead of falling back to the default route."
+    validation:
+      - "Focused HTTP/TLS binding and GeoIP cache regression tests passed. The full core-network report covered all new P05-T7 cases; its single failure was the unrelated existing `OkHttpTransferEngineTest` caller-concurrency/loaded-RTT timing case under shared-host load. Isolated `PortScanRepositoryImplTest` passed."
+      - "Full `:core-domain:test` passed (216 tests); full `:app:testDebugUnitTest` passed (594 tests); `:app:compileDebugAndroidTestKotlin` passed."
+      - "No emulator/device used for this source slice; physical Wi-Fi/VPN behavior remains in the phase-level device matrix."
 
 qa_validation:
   automated:

@@ -1,6 +1,10 @@
 package net.aieat.netswissknife.core.network.tls
 
 import net.aieat.netswissknife.core.network.HostValidator
+import net.aieat.netswissknife.core.network.net.LocalNetworkBindingUnavailableException
+import net.aieat.netswissknife.core.network.net.NetworkBinder
+import net.aieat.netswissknife.core.network.net.NoOpNetworkBinder
+import net.aieat.netswissknife.core.network.net.bindTcpSocketIfLocal
 import net.aieat.netswissknife.core.network.operation.OperationSession
 import java.net.InetSocketAddress
 import java.net.Socket
@@ -48,6 +52,7 @@ internal data class TlsHandshakeSnapshot(
 /** Production SSLSocket adapter. It accepts chains during handshake so diagnostics can inspect them. */
 internal class SocketTlsHandshakeEngine(
     private val socketFactory: TlsInspectorSocketFactory,
+    private val networkBinder: NetworkBinder = NoOpNetworkBinder,
 ) : TlsHandshakeEngine {
     private val context: SSLContext = SSLContext.getInstance("TLS").apply {
         init(null, arrayOf(TrustAllManager), null)
@@ -73,7 +78,14 @@ internal class SocketTlsHandshakeEngine(
             socket.soTimeout = timeoutMs
             if (protocol != null) socket.enabledProtocols = arrayOf(protocol)
             configureTlsParameters(socket, host)
-            return SocketConnection(socket, host, port, timeoutMs, transportConnected = false)
+            return SocketConnection(
+                socket,
+                host,
+                port,
+                timeoutMs,
+                transportConnected = false,
+                networkBinder = networkBinder,
+            )
         } catch (failure: Throwable) {
             try {
                 socket.close()
@@ -94,7 +106,14 @@ internal class SocketTlsHandshakeEngine(
         try {
             socket.soTimeout = timeoutMs
             configureTlsParameters(socket, host)
-            return SocketConnection(socket, host, port, timeoutMs, transportConnected = true)
+            return SocketConnection(
+                socket,
+                host,
+                port,
+                timeoutMs,
+                transportConnected = true,
+                networkBinder = networkBinder,
+            )
         } catch (failure: Throwable) {
             try {
                 socket.close()
@@ -128,9 +147,27 @@ internal class SocketTlsHandshakeEngine(
         private val port: Int,
         private val timeoutMs: Int,
         private val transportConnected: Boolean,
+        private val networkBinder: NetworkBinder,
     ) : TlsHandshakeConnection {
         override fun connect() {
-            if (!transportConnected) socket.connect(InetSocketAddress(host, port), timeoutMs)
+            if (!transportConnected) {
+                if (!networkBinder.isAvailable) {
+                    socket.connect(InetSocketAddress(host, port), timeoutMs)
+                    return
+                }
+                val addresses = java.net.InetAddress.getAllByName(host)
+                val localDestination = addresses.firstOrNull { address ->
+                    networkBinder.shouldBind(address.hostAddress ?: return@firstOrNull false)
+                }
+                val destination = localDestination ?: addresses.firstOrNull()
+                    ?: throw java.net.UnknownHostException(host)
+                if (localDestination != null &&
+                    !networkBinder.bindTcpSocketIfLocal(socket, destination.hostAddress)
+                ) {
+                    throw LocalNetworkBindingUnavailableException(destination.hostAddress)
+                }
+                socket.connect(InetSocketAddress(destination, port), timeoutMs)
+            }
         }
 
         override fun handshake() {

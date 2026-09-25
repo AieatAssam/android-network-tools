@@ -19,6 +19,9 @@ import java.io.IOException
 import java.io.FilterInputStream
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resumeWithException
+import net.aieat.netswissknife.core.network.net.NetworkBinder
+import net.aieat.netswissknife.core.network.net.NetworkBindingSocketFactory
+import net.aieat.netswissknife.core.network.net.NoOpNetworkBinder
 
 private const val RESPONSE_HEADER_FIELD_LIMIT = ResponseHeaderLimitException.MAX_FIELD_OCCURRENCES
 private const val RESPONSE_HEADER_AGGREGATE_BYTE_LIMIT = ResponseHeaderLimitException.MAX_AGGREGATE_METADATA_BYTES
@@ -26,7 +29,10 @@ private const val RESPONSE_HEADER_VALUE_BYTE_LIMIT = ResponseHeaderLimitExceptio
 private const val RESPONSE_HEADER_FIELD_OVERHEAD_BYTES = ResponseHeaderLimitException.FIELD_FRAMING_BYTES
 
 /** Default manual-redirect HTTP transport for the HTTP probe. */
-class OkHttpEngine(client: OkHttpClient = OkHttpClient()) : HttpEngine {
+class OkHttpEngine(
+    client: OkHttpClient = OkHttpClient(),
+    private val networkBinder: NetworkBinder = NoOpNetworkBinder,
+) : HttpEngine {
     private val client = client.newBuilder()
         .followRedirects(false)
         .followSslRedirects(false)
@@ -36,6 +42,11 @@ class OkHttpEngine(client: OkHttpClient = OkHttpClient()) : HttpEngine {
         .authenticator(Authenticator.NONE)
         .proxyAuthenticator(Authenticator.NONE)
         .cache(null)
+        .apply {
+            if (networkBinder !== NoOpNetworkBinder) {
+                socketFactory(NetworkBindingSocketFactory(networkBinder))
+            }
+        }
         .eventListenerFactory { call -> call.request().tag(TimingRecorder::class.java) ?: EventListener.NONE }
         .build()
 

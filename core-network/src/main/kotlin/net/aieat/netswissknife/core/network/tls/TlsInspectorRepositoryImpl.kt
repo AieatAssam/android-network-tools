@@ -9,6 +9,8 @@ import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.SystemMonotonicClock
 import net.aieat.netswissknife.core.network.elapsedMillisSince
+import net.aieat.netswissknife.core.network.net.NetworkBinder
+import net.aieat.netswissknife.core.network.net.NoOpNetworkBinder
 import net.aieat.netswissknife.core.network.operation.CancellationReason
 import net.aieat.netswissknife.core.network.operation.OperationCancellationException
 import net.aieat.netswissknife.core.network.operation.OperationRunner
@@ -27,7 +29,9 @@ internal fun interface TlsInspectorSocketFactory {
     fun create(context: SSLContext): SSLSocket
 }
 
-class TlsInspectorRepositoryImpl : TlsInspectorRepository {
+class TlsInspectorRepositoryImpl(
+    private val networkBinder: NetworkBinder = NoOpNetworkBinder,
+) : TlsInspectorRepository {
 
     internal var clock: MonotonicClock = SystemMonotonicClock
     internal var wallClockMillis: () -> Long = System::currentTimeMillis
@@ -92,7 +96,7 @@ class TlsInspectorRepositoryImpl : TlsInspectorRepository {
         return withContext(Dispatchers.IO) {
             try {
                 OperationRunner.run(operationSession) {
-                    val engine = handshakeEngine ?: SocketTlsHandshakeEngine(socketFactory)
+                    val engine = handshakeEngine ?: SocketTlsHandshakeEngine(socketFactory, networkBinder)
                     val primary = performHandshake(engine, host, port, timeoutMs, operationSession, protocol = null)
                     val certificates = primary.snapshot.peerCertificates
                     val trusted = checkTrust(certificates)

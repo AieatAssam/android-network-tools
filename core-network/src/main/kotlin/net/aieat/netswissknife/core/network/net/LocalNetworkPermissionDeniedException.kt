@@ -1,8 +1,14 @@
 package net.aieat.netswissknife.core.network.net
 
+import java.io.IOException
+
 /** Indicates Android denied a socket operation targeting the selected local network. */
 class LocalNetworkPermissionDeniedException(cause: SecurityException) :
-    Exception("Local network permission denied", cause)
+    IOException("Local network permission denied", cause)
+
+/** A destination was classified as local but its selected network disappeared before binding. */
+class LocalNetworkBindingUnavailableException(destinationIp: String) :
+    IOException("Selected local network became unavailable before connecting to $destinationIp")
 
 /** Checks wrapped transport failures without assuming repository layers preserve the top-level type. */
 fun Throwable?.containsLocalNetworkPermissionDenied(): Boolean {

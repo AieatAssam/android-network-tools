@@ -11,7 +11,24 @@ internal fun NetworkBinder.newTcpSocket(
     destinationIp: String,
     socketFactory: () -> Socket,
 ): Socket = createBoundSocket(socketFactory) { socket ->
-    if (shouldBind(destinationIp)) bind(socket)
+    bindTcpSocket(socket, destinationIp)
+}
+
+/** Binds an already-created, still-unconnected TCP socket only for a selected local destination. */
+internal fun NetworkBinder.bindTcpSocket(socket: Socket, destinationIp: String) {
+    if (!shouldBind(destinationIp)) return
+    if (!bindTcpSocketIfLocal(socket, destinationIp)) {
+        throw LocalNetworkBindingUnavailableException(destinationIp)
+    }
+}
+
+/** Performs the atomic platform bind and maps Android permission failures to a typed I/O error. */
+internal fun NetworkBinder.bindTcpSocketIfLocal(socket: Socket, destinationIp: String): Boolean = try {
+    bindIfLocal(socket, destinationIp)
+} catch (permissionDenied: LocalNetworkPermissionDeniedException) {
+    throw permissionDenied
+} catch (error: SecurityException) {
+    throw LocalNetworkPermissionDeniedException(error)
 }
 
 /**

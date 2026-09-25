@@ -7,6 +7,7 @@ import dagger.hilt.components.SingletonComponent
 import net.aieat.netswissknife.core.domain.TlsInspectorUseCase
 import net.aieat.netswissknife.core.network.tls.TlsInspectorRepository
 import net.aieat.netswissknife.core.network.tls.TlsInspectorRepositoryImpl
+import net.aieat.netswissknife.core.network.net.NetworkBinder
 import javax.inject.Singleton
 
 @Module
@@ -15,7 +16,8 @@ object TlsInspectorModule {
 
     @Provides
     @Singleton
-    fun provideTlsInspectorRepository(): TlsInspectorRepository = TlsInspectorRepositoryImpl()
+    fun provideTlsInspectorRepository(networkBinder: NetworkBinder): TlsInspectorRepository =
+        TlsInspectorRepositoryImpl(networkBinder)
 
     @Provides
     @Singleton
