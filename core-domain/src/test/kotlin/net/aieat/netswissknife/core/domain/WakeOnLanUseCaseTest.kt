@@ -80,7 +80,9 @@ class WakeOnLanUseCaseTest {
         for (port in listOf(0, 65_536)) {
             val result = useCase(WakeOnLanParams(macAddress = "AA:BB:CC:DD:EE:FF", port = port))
             assertTrue(result is NetworkResult.Error, "Expected port $port to be rejected")
-            assertEquals(ErrorCode.PORT_OUT_OF_RANGE, (result as NetworkResult.Error).info?.code)
+            val error = result as NetworkResult.Error
+            assertEquals(ErrorCode.PORT_OUT_OF_RANGE, error.info?.code)
+            assertEquals(listOf(port, WakeOnLanParams.MIN_PORT, WakeOnLanParams.MAX_PORT), error.info?.args)
         }
         coVerify(exactly = 0) { repository.sendMagicPacket(any(), any(), any(), any()) }
     }

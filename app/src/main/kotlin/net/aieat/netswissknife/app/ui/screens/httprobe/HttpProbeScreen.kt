@@ -93,13 +93,12 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.liveRegion
-import androidx.compose.ui.semantics.semantics
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
+import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
+import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
 import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
 import net.aieat.netswissknife.app.ui.components.ToolErrorCard
@@ -160,6 +159,14 @@ fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
     val recentHosts by viewModel.recentHosts.collectAsStateWithLifecycle()
     val hasInvalidHandoff by viewModel.hasInvalidHandoff.collectAsStateWithLifecycle()
     val sourceContext by viewModel.sourceContextState.collectAsStateWithLifecycle()
+    val announcementPhase = when {
+        uiState.isLoading -> ToolAnnouncementPhase.RUNNING
+        uiState.isCanceled -> ToolAnnouncementPhase.CANCELED
+        uiState.error != null || uiState.blockedRedirectWarning != null -> ToolAnnouncementPhase.ERROR
+        uiState.result != null -> ToolAnnouncementPhase.FINISHED
+        else -> null
+    }
+    ToolStateAnnouncer(stringResource(R.string.help_httprobe_title), announcementPhase)
     val context = LocalContext.current
     val clipboard = LocalClipboard.current
     val clipboardScope = rememberCoroutineScope()
@@ -768,8 +775,7 @@ private fun HttpProbeCanceledContent() {
             text = stringResource(R.string.httprobe_request_canceled),
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(20.dp)
-                .semantics { liveRegion = LiveRegionMode.Polite },
+                .padding(20.dp),
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

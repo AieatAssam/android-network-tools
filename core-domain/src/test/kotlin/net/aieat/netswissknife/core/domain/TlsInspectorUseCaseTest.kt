@@ -80,12 +80,18 @@ class TlsInspectorUseCaseTest {
         fun `invalid host returns Error`() = runTest {
             val result = useCase(TlsInspectorParams(host = "not a valid host!!"))
             assertTrue(result is NetworkResult.Error)
+            val error = result as NetworkResult.Error
+            assertEquals(ErrorCode.HOST_INVALID, error.info?.code)
+            assertEquals(listOf("not a valid host!!"), error.info?.args)
         }
 
         @Test
         fun `port 0 returns Error`() = runTest {
             val result = useCase(TlsInspectorParams(host = "example.com", port = 0))
             assertTrue(result is NetworkResult.Error)
+            val error = result as NetworkResult.Error
+            assertEquals(ErrorCode.PORT_OUT_OF_RANGE, error.info?.code)
+            assertEquals(listOf(0, 1, 65_535), error.info?.args)
             coVerify(exactly = 0) { repository.inspect(any(), any(), any()) }
         }
 

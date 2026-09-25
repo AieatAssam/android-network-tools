@@ -39,7 +39,9 @@ class TlsInspectorUseCase(private val repository: TlsInspectorRepository) {
     ): NetworkResult<TlsInspectorResult> {
         val host = HostValidator.normalize(params.host) ?: params.host.trim()
         if (host.isBlank()) return NetworkResult.error(ErrorCode.HOST_BLANK, "Host must not be blank")
-        if (!HostValidator.isValidHostname(host)) return NetworkResult.error(ErrorCode.HOST_INVALID, "Invalid host or IP address")
+        if (!HostValidator.isValidHostname(host)) {
+            return NetworkResult.error(ErrorCode.HOST_INVALID, "Invalid host or IP address", args = listOf(host))
+        }
         if (params.port !in 1..65_535) return NetworkResult.error(ErrorCode.PORT_OUT_OF_RANGE, "Port must be between 1 and 65535", args = listOf(params.port, 1, 65_535))
         if (params.timeoutMs !in 500..30_000) return NetworkResult.error(ErrorCode.TIMEOUT_OUT_OF_RANGE, "Timeout must be between 500 ms and 30 000 ms", args = listOf(500, 30_000))
 

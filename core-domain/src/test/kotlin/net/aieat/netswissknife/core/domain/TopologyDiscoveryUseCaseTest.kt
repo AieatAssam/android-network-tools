@@ -85,6 +85,32 @@ class TopologyDiscoveryUseCaseTest {
     }
 
     @Test
+    fun `invalid target ErrorInfo includes the offending host argument`() = runTest {
+        val invalidParams = validParams.copy(targetIp = "not a host!!")
+
+        val event = useCase(invalidParams).toList().single() as TopologyDiscoveryEvent.Error
+
+        assertEquals(ErrorCode.HOST_INVALID, event.errors.single().code)
+        assertEquals(listOf("not a host!!"), event.errors.single().args)
+        verify(exactly = 0) { repository.discover(any()) }
+    }
+
+    @Test
+    fun `invalid target ErrorInfo includes offending host with caller-owned session`() = runTest {
+        val invalidParams = validParams.copy(targetIp = "not a host!!")
+        val session = OperationSession(
+            OperationBudget.start(requirement = OperationRequirement.LOCAL_NETWORK)
+        )
+
+        val event = useCase(invalidParams, session).toList().single() as TopologyDiscoveryEvent.Error
+
+        assertEquals(ErrorCode.HOST_INVALID, event.errors.single().code)
+        assertEquals(listOf("not a host!!"), event.errors.single().args)
+        verify(exactly = 0) { repository.discover(any()) }
+        verify(exactly = 0) { repository.discover(any(), any()) }
+    }
+
+    @Test
     fun `out of range resource params emit Error without calling repository`() = runTest {
         val invalidParams = listOf(
             validParams.copy(maxHops = TopologyParamsValidator.MIN_MAX_HOPS - 1),

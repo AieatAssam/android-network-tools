@@ -64,6 +64,9 @@ class TlsInspectorRepositoryImplTest {
         val result = repository.inspect("example.com", 0, 5_000)
         assertTrue(result is NetworkResult.Error,
             "Port 0 is out of range, expected Error")
+        val error = result as NetworkResult.Error
+        assertEquals(ErrorCode.PORT_OUT_OF_RANGE, error.info?.code)
+        assertEquals(listOf(0, 1, 65_535), error.info?.args)
     }
 
     @Test
@@ -71,6 +74,9 @@ class TlsInspectorRepositoryImplTest {
         val result = repository.inspect("example.com", 65_536, 5_000)
         assertTrue(result is NetworkResult.Error,
             "Port 65536 is out of range, expected Error")
+        val error = result as NetworkResult.Error
+        assertEquals(ErrorCode.PORT_OUT_OF_RANGE, error.info?.code)
+        assertEquals(listOf(65_536, 1, 65_535), error.info?.args)
     }
 
     @Test

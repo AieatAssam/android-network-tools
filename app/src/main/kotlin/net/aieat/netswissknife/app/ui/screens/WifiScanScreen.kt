@@ -138,11 +138,14 @@ import net.aieat.netswissknife.app.ui.screens.wifi.WifiRefreshIntervalPicker
 import net.aieat.netswissknife.app.ui.screens.wifi.WifiScanFreshnessStatus
 import net.aieat.netswissknife.core.network.wifi.WifiAccessPoint
 import net.aieat.netswissknife.core.network.wifi.WifiNetwork
+import net.aieat.netswissknife.core.network.wifi.WifiScanRefreshStatus
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.IconButton
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
+import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
+import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.core.network.wifi.WifiBand
 import net.aieat.netswissknife.core.network.wifi.WifiSecurity
@@ -193,6 +196,29 @@ fun WifiScanScreen(
     val expandedNetworks by viewModel.expandedNetworks.collectAsStateWithLifecycle()
     val apDisappearedEvent by viewModel.apDisappearedEvent.collectAsStateWithLifecycle()
     val apDisappearedMessage = apDisappearedEvent?.let { stringResource(it.messageResId) }
+    val announcementPhase = when (val state = uiState) {
+        WifiScanUiState.Idle -> null
+        WifiScanUiState.Scanning -> ToolAnnouncementPhase.RUNNING
+        WifiScanUiState.Cancelled, WifiScanUiState.Paused -> ToolAnnouncementPhase.CANCELED
+        is WifiScanUiState.Success -> if (state.result.refreshStatus in setOf(
+                WifiScanRefreshStatus.NOT_UPDATED,
+                WifiScanRefreshStatus.TIMED_OUT,
+                WifiScanRefreshStatus.REJECTED,
+                WifiScanRefreshStatus.FAILED,
+                WifiScanRefreshStatus.PERMISSION_DENIED,
+            )
+        ) {
+            ToolAnnouncementPhase.PARTIAL
+        } else {
+            ToolAnnouncementPhase.FINISHED
+        }
+        WifiScanUiState.NoPermission,
+        WifiScanUiState.NotSupported,
+        WifiScanUiState.WifiDisabled,
+        WifiScanUiState.LocationDisabled,
+        is WifiScanUiState.Error -> ToolAnnouncementPhase.ERROR
+    }
+    ToolStateAnnouncer(stringResource(R.string.help_wifi_title), announcementPhase)
 
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(apDisappearedEvent) {

@@ -120,6 +120,8 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
+import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
+import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
 import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
 import net.aieat.netswissknife.app.ui.components.ToolErrorCard
@@ -161,6 +163,13 @@ fun PingScreen(
     val requestLocalNetworkPermission = rememberLocalNetworkPermissionRequester(viewModel::startPing)
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val announcementPhase = when (uiState) {
+        is PingUiState.Idle -> null
+        is PingUiState.Running -> ToolAnnouncementPhase.RUNNING
+        // Packet loss is a measured result, not an incomplete operation.
+        is PingUiState.Finished -> ToolAnnouncementPhase.FINISHED
+        is PingUiState.Error -> ToolAnnouncementPhase.ERROR
+    }
     val networkStatus by viewModel.networkStatus.collectAsStateWithLifecycle()
     val host by viewModel.host.collectAsStateWithLifecycle()
     val count by viewModel.count.collectAsStateWithLifecycle()
@@ -214,9 +223,12 @@ fun PingScreen(
         ) {
             // ── Hero header ─────────────────────────────────────────────────
             item {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    PingHeroHeader(onHelpClick = { showHelp = true })
-                    NetworkStatusBanner(networkStatus, scope = NetworkStatusScope.INTERNET)
+                Box {
+                    ToolStateAnnouncer(stringResource(R.string.help_ping_title), announcementPhase)
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        PingHeroHeader(onHelpClick = { showHelp = true })
+                        NetworkStatusBanner(networkStatus, scope = NetworkStatusScope.INTERNET)
+                    }
                 }
             }
 

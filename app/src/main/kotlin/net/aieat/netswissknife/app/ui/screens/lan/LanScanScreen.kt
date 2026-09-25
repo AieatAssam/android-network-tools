@@ -119,6 +119,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
+import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
+import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
 import net.aieat.netswissknife.app.ui.components.ToolStopButton
@@ -238,6 +240,19 @@ fun LanScreen(
     val isSubnetLoading by viewModel.isSubnetLoading.collectAsStateWithLifecycle()
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val recentSubnets by viewModel.recentSubnets.collectAsStateWithLifecycle()
+
+    val announcementPhase = when (val state = uiState) {
+        LanScanUiState.Idle -> null
+        is LanScanUiState.Scanning, is LanScanUiState.Canceling -> ToolAnnouncementPhase.RUNNING
+        is LanScanUiState.Canceled -> ToolAnnouncementPhase.PARTIAL
+        is LanScanUiState.Finished -> if (state.partial) {
+            ToolAnnouncementPhase.PARTIAL
+        } else {
+            ToolAnnouncementPhase.FINISHED
+        }
+        is LanScanUiState.Error -> ToolAnnouncementPhase.ERROR
+    }
+    ToolStateAnnouncer(stringResource(R.string.help_lan_title), announcementPhase)
 
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }

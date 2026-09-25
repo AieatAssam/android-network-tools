@@ -3,6 +3,7 @@ package net.aieat.netswissknife.app.ui.screens
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertContentDescriptionEquals
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
@@ -111,6 +112,24 @@ class DnsScreenTest {
             DnsUiState.Idle,
             selectedServer = DnsServer.Custom("resolver.example"),
             customServerAddress = "resolver.example",
+            domainValue = "example.com"
+        )
+        composeRule.setContent {
+            NetSwissKnifeTheme { DnsScreen(viewModel = viewModel) }
+        }
+
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        composeRule.onNodeWithTag(DnsScreenTestTags.CANCEL_LOOKUP).assertIsNotEnabled()
+        composeRule.onNodeWithTag(DnsScreenTestTags.DOMAIN_INPUT).performImeAction()
+        verify(exactly = 0) { viewModel.performLookup() }
+    }
+
+    @Test
+    fun customServerWithPort_disablesLookupAndImeSubmit() {
+        val viewModel = fakeDnsViewModel(
+            DnsUiState.Idle,
+            selectedServer = DnsServer.Custom("dns.google:53"),
+            customServerAddress = "dns.google:53",
             domainValue = "example.com"
         )
         composeRule.setContent {
@@ -258,6 +277,41 @@ class DnsScreenTest {
         scrollToStatePanel()
         composeRule.onAllNodesWithText("example.com").onFirst().assertIsDisplayed()
         composeRule.onNodeWithText("93.184.216.34", substring = true).performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun successState_announcesLocalizedRecordCount() {
+        val result = DnsResult(
+            domain = "example.com",
+            recordType = DnsRecordType.A,
+            server = DnsServer.System(),
+            records = (1..3).map { index ->
+                DnsRecord(
+                    type = DnsRecordType.A,
+                    name = "example.com",
+                    value = "192.0.2.$index",
+                    ttl = 300,
+                    rawLine = "example.com. 300 IN A 192.0.2.$index",
+                )
+            },
+            queryTimeMs = 42,
+            rawResponse = "raw dns response",
+        )
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                DnsScreen(viewModel = fakeDnsViewModel(DnsUiState.Success(result)))
+            }
+        }
+
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        val detail = context.resources.getQuantityString(R.plurals.a11y_dns_record_count, 3, 3)
+        composeRule.onNodeWithContentDescription(
+            context.getString(R.string.a11y_tool_finished_detail, context.getString(R.string.help_dns_title), detail),
+            useUnmergedTree = true,
+        ).assertContentDescriptionEquals(
+            context.getString(R.string.a11y_tool_finished_detail, context.getString(R.string.help_dns_title), detail),
+        )
     }
 
     @Test

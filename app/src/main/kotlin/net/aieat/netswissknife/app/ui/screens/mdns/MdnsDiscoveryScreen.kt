@@ -97,6 +97,8 @@ import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.theme.AppShapes
 import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
+import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
+import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
 import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
 import net.aieat.netswissknife.app.platform.NetworkErrorKind
@@ -121,6 +123,21 @@ fun MdnsDiscoveryScreen(
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val networkStatus by viewModel.networkStatus.collectAsStateWithLifecycle()
+    val announcementPhase = when {
+        uiState.error != null -> ToolAnnouncementPhase.ERROR
+        uiState.isScanning || uiState.isCanceling -> ToolAnnouncementPhase.RUNNING
+        uiState.scanCanceled -> if (
+            uiState.services.isNotEmpty() || uiState.truncationReasons.isNotEmpty()
+        ) {
+            ToolAnnouncementPhase.PARTIAL
+        } else {
+            ToolAnnouncementPhase.CANCELED
+        }
+        uiState.truncationReasons.isNotEmpty() -> ToolAnnouncementPhase.PARTIAL
+        uiState.scanComplete -> ToolAnnouncementPhase.FINISHED
+        else -> null
+    }
+    ToolStateAnnouncer(stringResource(R.string.help_mdns_title), announcementPhase)
 
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }

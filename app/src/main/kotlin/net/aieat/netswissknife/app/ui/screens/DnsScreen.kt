@@ -93,6 +93,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -105,6 +106,8 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
+import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
+import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
 import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
 import net.aieat.netswissknife.app.ui.components.ToolErrorCard
@@ -146,6 +149,21 @@ object DnsScreenTestTags {
 @Composable
 fun DnsScreen(viewModel: DnsViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val announcementPhase = when (uiState) {
+        DnsUiState.Idle -> null
+        DnsUiState.Loading, DnsUiState.Canceling -> ToolAnnouncementPhase.RUNNING
+        DnsUiState.Canceled -> ToolAnnouncementPhase.CANCELED
+        is DnsUiState.Error -> ToolAnnouncementPhase.ERROR
+        is DnsUiState.Success -> ToolAnnouncementPhase.FINISHED
+    }
+    val announcementDetail = when (val state = uiState) {
+        is DnsUiState.Success -> pluralStringResource(
+            R.plurals.a11y_dns_record_count,
+            state.result.records.size,
+            state.result.records.size,
+        )
+        else -> null
+    }
     val networkStatus by viewModel.networkStatus.collectAsStateWithLifecycle()
     val domain by viewModel.domain.collectAsStateWithLifecycle()
     val recordType by viewModel.recordType.collectAsStateWithLifecycle()
@@ -179,9 +197,16 @@ fun DnsScreen(viewModel: DnsViewModel = hiltViewModel()) {
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
             item {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    DnsHeroHeader(onHelpClick = { showHelp = true })
-                    NetworkStatusBanner(networkStatus, scope = NetworkStatusScope.INTERNET)
+                Box {
+                    ToolStateAnnouncer(
+                        stringResource(R.string.help_dns_title),
+                        announcementPhase,
+                        detail = announcementDetail,
+                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        DnsHeroHeader(onHelpClick = { showHelp = true })
+                        NetworkStatusBanner(networkStatus, scope = NetworkStatusScope.INTERNET)
+                    }
                 }
             }
 

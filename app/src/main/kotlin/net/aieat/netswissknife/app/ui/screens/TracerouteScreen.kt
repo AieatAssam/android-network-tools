@@ -97,6 +97,8 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
+import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
+import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
 import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
 import net.aieat.netswissknife.app.ui.components.ToolErrorCard
@@ -155,6 +157,22 @@ fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
     val requestLocalNetworkPermission = rememberLocalNetworkPermissionRequester(viewModel::startTrace)
 
     val uiState      by viewModel.uiState.collectAsStateWithLifecycle()
+    val announcementPhase = when (val state = uiState) {
+        TracerouteUiState.Idle -> null
+        is TracerouteUiState.Running, is TracerouteUiState.Canceling -> ToolAnnouncementPhase.RUNNING
+        is TracerouteUiState.Canceled -> {
+            if (state.result.hops.isNotEmpty()) ToolAnnouncementPhase.PARTIAL
+            else ToolAnnouncementPhase.CANCELED
+        }
+        is TracerouteUiState.Finished -> {
+            if (state.timeLimitReached || !state.result.reachedDestination) {
+                ToolAnnouncementPhase.PARTIAL
+            } else {
+                ToolAnnouncementPhase.FINISHED
+            }
+        }
+        is TracerouteUiState.Error -> ToolAnnouncementPhase.ERROR
+    }
     val networkStatus by viewModel.networkStatus.collectAsStateWithLifecycle()
     val host         by viewModel.host.collectAsStateWithLifecycle()
     val maxHops      by viewModel.maxHops.collectAsStateWithLifecycle()
@@ -191,9 +209,12 @@ fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
             item {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    TracerouteHeroHeader(onHelpClick = { showHelp = true })
-                    NetworkStatusBanner(networkStatus, scope = NetworkStatusScope.ANY_NETWORK)
+                Box {
+                    ToolStateAnnouncer(stringResource(R.string.help_traceroute_title), announcementPhase)
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        TracerouteHeroHeader(onHelpClick = { showHelp = true })
+                        NetworkStatusBanner(networkStatus, scope = NetworkStatusScope.ANY_NETWORK)
+                    }
                 }
             }
 

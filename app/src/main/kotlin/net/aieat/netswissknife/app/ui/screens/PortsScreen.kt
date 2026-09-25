@@ -112,6 +112,8 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.runtime.DisposableEffect
 import kotlinx.coroutines.launch
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
+import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
+import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.components.ToolErrorCard
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
@@ -159,6 +161,19 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
     val requestLocalNetworkPermission = rememberLocalNetworkPermissionRequester(viewModel::startScan)
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val announcementPhase = when (val state = uiState) {
+        PortScanUiState.Idle -> null
+        is PortScanUiState.Scanning -> ToolAnnouncementPhase.RUNNING
+        is PortScanUiState.Error -> ToolAnnouncementPhase.ERROR
+        is PortScanUiState.Finished -> {
+            when {
+                state.completion == PortScanUiState.Completion.COMPLETE -> ToolAnnouncementPhase.FINISHED
+                state.completion == PortScanUiState.Completion.USER_STOPPED && state.summary.totalPorts == 0 ->
+                    ToolAnnouncementPhase.CANCELED
+                else -> ToolAnnouncementPhase.PARTIAL
+            }
+        }
+    }
     val host by viewModel.host.collectAsStateWithLifecycle()
     val selectedPreset by viewModel.selectedPreset.collectAsStateWithLifecycle()
     val startPort by viewModel.startPort.collectAsStateWithLifecycle()
@@ -192,12 +207,15 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
     ) {
             // ── Header ──────────────────────────────────────────────────────────
             item {
-                ToolHeroHeader(
-                    title = stringResource(R.string.ports_screen_title),
-                    subtitle = stringResource(R.string.ports_screen_subtitle),
-                    icon = Icons.Default.Search,
-                    onHelpClick = { showHelp = true }
-                )
+                Box {
+                    ToolStateAnnouncer(stringResource(R.string.help_portscan_title), announcementPhase)
+                    ToolHeroHeader(
+                        title = stringResource(R.string.ports_screen_title),
+                        subtitle = stringResource(R.string.ports_screen_subtitle),
+                        icon = Icons.Default.Search,
+                        onHelpClick = { showHelp = true }
+                    )
+                }
             }
 
             if (hasInvalidHandoff) {

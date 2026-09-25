@@ -114,6 +114,9 @@ class PortScanUseCaseTest {
         fun `invalid host emits ValidationError`() = runTest {
             val results = makeUseCase().invoke(PortScanParams(host = "not a valid host!!")).toList()
             assertTrue(results.first() is PortScanFlowResult.ValidationError)
+            val error = results.first() as PortScanFlowResult.ValidationError
+            assertEquals(ErrorCode.HOST_INVALID, error.info.code)
+            assertEquals(listOf("not a valid host!!"), error.info.args)
         }
 
         @Test

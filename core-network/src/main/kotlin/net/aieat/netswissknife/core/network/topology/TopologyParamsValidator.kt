@@ -26,7 +26,7 @@ object TopologyParamsValidator {
         if (params.targetIp.isBlank()) {
             errors.add(error(ErrorCode.HOST_BLANK, "Target IP or hostname must not be blank"))
         } else if (!isValidTarget(params.targetIp)) {
-            errors.add(error(ErrorCode.HOST_INVALID, "Target IP or hostname must be valid"))
+            errors.add(error(ErrorCode.HOST_INVALID, "Target IP or hostname must be valid", params.targetIp))
         }
 
         if (params.maxHops !in MIN_MAX_HOPS..MAX_MAX_HOPS) {

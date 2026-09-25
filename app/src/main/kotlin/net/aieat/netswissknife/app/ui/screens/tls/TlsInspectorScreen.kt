@@ -61,8 +61,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -80,6 +78,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
+import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
+import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
 import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
 import net.aieat.netswissknife.app.ui.components.ToolErrorCard
@@ -119,6 +119,14 @@ fun TlsInspectorScreen(viewModel: TlsInspectorViewModel = hiltViewModel()) {
     val recentHosts by viewModel.recentHosts.collectAsStateWithLifecycle()
     val hasInvalidHandoff by viewModel.hasInvalidHandoff.collectAsStateWithLifecycle()
     val sourceContext by viewModel.sourceContextState.collectAsStateWithLifecycle()
+    val announcementPhase = when {
+        uiState.isLoading -> ToolAnnouncementPhase.RUNNING
+        uiState.isCanceled -> ToolAnnouncementPhase.CANCELED
+        uiState.error != null -> ToolAnnouncementPhase.ERROR
+        uiState.result != null -> ToolAnnouncementPhase.FINISHED
+        else -> null
+    }
+    ToolStateAnnouncer(stringResource(R.string.help_tls_title), announcementPhase)
 
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
@@ -491,8 +499,7 @@ private fun TlsCanceledContent() {
             text = stringResource(R.string.tls_inspection_canceled),
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(20.dp)
-                .semantics { liveRegion = LiveRegionMode.Polite },
+                .padding(20.dp),
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

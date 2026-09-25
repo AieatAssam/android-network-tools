@@ -53,6 +53,9 @@ class TracerouteUseCaseTest {
         fun `invalid host emits ValidationError`() = runTest {
             val results = useCase(TracerouteParams(host = "not a host!!")).toList()
             assertInstanceOf(TracerouteFlowResult.ValidationError::class.java, results[0])
+            val error = results[0] as TracerouteFlowResult.ValidationError
+            assertEquals(ErrorCode.HOST_INVALID, error.info.code)
+            assertEquals(listOf("not a host!!"), error.info.args)
         }
 
         @Test

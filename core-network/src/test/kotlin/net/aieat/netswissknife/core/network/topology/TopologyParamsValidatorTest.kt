@@ -95,6 +95,7 @@ class TopologyParamsValidatorTest {
             assertFalse(result.isValid, "expected $ip to be rejected")
             assertEquals(listOf(invalidIpError), result.messages)
             assertEquals(ErrorCode.HOST_INVALID, result.errors.single().code)
+            assertEquals(listOf(ip), result.errors.single().args)
         }
 
         @ParameterizedTest

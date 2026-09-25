@@ -71,6 +71,8 @@ import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
+import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
+import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
 import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
 import net.aieat.netswissknife.app.platform.NetworkErrorKind
@@ -103,6 +105,13 @@ fun WakeOnLanScreen(viewModel: WakeOnLanViewModel = hiltViewModel()) {
     val sourceContext by viewModel.sourceContextState.collectAsStateWithLifecycle()
     val broadcastAddress by viewModel.broadcastAddress.collectAsStateWithLifecycle()
     val port by viewModel.port.collectAsStateWithLifecycle()
+    val announcementPhase = when (uiState) {
+        WolUiState.Idle -> null
+        WolUiState.Sending -> ToolAnnouncementPhase.RUNNING
+        is WolUiState.Success -> ToolAnnouncementPhase.FINISHED
+        is WolUiState.Error -> ToolAnnouncementPhase.ERROR
+    }
+    ToolStateAnnouncer(stringResource(R.string.wol_screen_title), announcementPhase)
 
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }

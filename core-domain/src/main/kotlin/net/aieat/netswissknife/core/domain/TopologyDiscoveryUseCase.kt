@@ -21,7 +21,11 @@ class TopologyDiscoveryUseCase(
         val normalizedTarget = HostValidator.normalize(params.targetIp)
             ?: return flow {
                 emit(TopologyDiscoveryEvent.Error(listOf(
-                    ErrorInfo(ErrorCode.HOST_INVALID, developerMessage = "Target IP or hostname must be valid"),
+                    ErrorInfo(
+                        ErrorCode.HOST_INVALID,
+                        args = listOf(params.targetIp),
+                        developerMessage = "Target IP or hostname must be valid",
+                    ),
                 )))
             }
         return repository.discover(params.copy(targetIp = normalizedTarget))
@@ -37,7 +41,11 @@ class TopologyDiscoveryUseCase(
         val normalizedTarget = HostValidator.normalize(params.targetIp)
             ?: return flow {
                 emit(TopologyDiscoveryEvent.Error(listOf(
-                    ErrorInfo(ErrorCode.HOST_INVALID, developerMessage = "Target IP or hostname must be valid"),
+                    ErrorInfo(
+                        ErrorCode.HOST_INVALID,
+                        args = listOf(params.targetIp),
+                        developerMessage = "Target IP or hostname must be valid",
+                    ),
                 )))
             }
         return repository.discover(params.copy(targetIp = normalizedTarget), session)

@@ -55,7 +55,11 @@ class TracerouteUseCase(
 
         val errorInfo = when {
             trimmedHost.isBlank()                        -> validationError(ErrorCode.HOST_BLANK, "Host must not be empty")
-            !HostValidator.isValidHostname(trimmedHost)  -> validationError(ErrorCode.HOST_INVALID, "Invalid host or IP address")
+            !HostValidator.isValidHostname(trimmedHost)  -> validationError(
+                ErrorCode.HOST_INVALID,
+                "Invalid host or IP address",
+                trimmedHost,
+            )
             params.maxHops !in 1..64                     -> validationError(ErrorCode.MAX_HOPS_OUT_OF_RANGE, "Max hops must be between 1 and 64", 1, 64)
             params.timeoutMs !in 500..30_000             -> validationError(ErrorCode.TIMEOUT_OUT_OF_RANGE, "Timeout must be between 500 ms and 30 000 ms", 500, 30_000)
             params.probesPerHop !in 1..5                 -> validationError(ErrorCode.PROBES_OUT_OF_RANGE, "Probes per hop must be between 1 and 5", 1, 5)

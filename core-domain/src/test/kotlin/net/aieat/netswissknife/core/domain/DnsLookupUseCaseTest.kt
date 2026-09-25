@@ -120,6 +120,18 @@ class DnsLookupUseCaseTest {
             )
 
             assertTrue(result is NetworkResult.Error)
+            assertEquals(ErrorCode.CUSTOM_DNS_INVALID, (result as NetworkResult.Error).info?.code)
+            coVerify(exactly = 0) { repository.lookup(any(), any(), any()) }
+        }
+
+        @Test
+        fun `custom server resolver hostname is rejected without system lookup`() = runTest {
+            val result = useCase(
+                DnsLookupParams(domain = "example.com", server = DnsServer.Custom("dns.google"))
+            )
+
+            assertTrue(result is NetworkResult.Error)
+            assertEquals(ErrorCode.CUSTOM_DNS_INVALID, (result as NetworkResult.Error).info?.code)
             coVerify(exactly = 0) { repository.lookup(any(), any(), any()) }
         }
 
@@ -132,6 +144,8 @@ class DnsLookupUseCaseTest {
             )
 
             assertTrue(result is NetworkResult.Error)
+            assertEquals(ErrorCode.CUSTOM_DNS_INVALID, (result as NetworkResult.Error).info?.code)
+            coVerify(exactly = 0) { repository.lookup(any(), any(), any()) }
             coVerify(exactly = 0) { repository.lookup(any(), any(), any(), any()) }
         }
 
@@ -142,6 +156,18 @@ class DnsLookupUseCaseTest {
             )
 
             assertTrue(result is NetworkResult.Error)
+            assertEquals(ErrorCode.CUSTOM_DNS_INVALID, (result as NetworkResult.Error).info?.code)
+            coVerify(exactly = 0) { repository.lookup(any(), any(), any()) }
+        }
+
+        @Test
+        fun `custom server hostname with port is rejected without repository dispatch`() = runTest {
+            val result = useCase(
+                DnsLookupParams(domain = "example.com", server = DnsServer.Custom("dns.google:53"))
+            )
+
+            assertTrue(result is NetworkResult.Error)
+            assertEquals(ErrorCode.CUSTOM_DNS_INVALID, (result as NetworkResult.Error).info?.code)
             coVerify(exactly = 0) { repository.lookup(any(), any(), any()) }
         }
 
@@ -209,6 +235,15 @@ class DnsLookupUseCaseTest {
             useCase(DnsLookupParams(domain = "example.com", server = DnsServer.Custom("  2001:db8::53  ")))
 
             coVerify(exactly = 1) { repository.lookup("example.com", DnsRecordType.A, DnsServer.Custom("2001:db8::53")) }
+        }
+
+        @Test
+        fun `custom IPv4 server surrounding whitespace is trimmed before repository lookup`() = runTest {
+            coEvery { repository.lookup(any(), any(), any()) } returns NetworkResult.Success(successResult)
+
+            useCase(DnsLookupParams(domain = "example.com", server = DnsServer.Custom("  1.1.1.1  ")))
+
+            coVerify(exactly = 1) { repository.lookup("example.com", DnsRecordType.A, DnsServer.Custom("1.1.1.1")) }
         }
     }
 }

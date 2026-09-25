@@ -92,6 +92,8 @@ import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
+import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
+import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
 import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
 import net.aieat.netswissknife.app.ui.theme.AppMotion
@@ -128,6 +130,13 @@ fun SpeedTestScreen(viewModel: SpeedTestViewModel = hiltViewModel()) {
             is SpeedTestUiState.Error -> DisplayPhase.ERROR
         }
     }
+    val announcementPhase = when (uiState) {
+        is SpeedTestUiState.Idle -> null
+        is SpeedTestUiState.Running -> ToolAnnouncementPhase.RUNNING
+        is SpeedTestUiState.Finished -> ToolAnnouncementPhase.FINISHED
+        is SpeedTestUiState.Error -> ToolAnnouncementPhase.ERROR
+    }
+    ToolStateAnnouncer(stringResource(R.string.help_speedtest_title), announcementPhase)
 
     AnimatedVisibility(
         visible = visible,

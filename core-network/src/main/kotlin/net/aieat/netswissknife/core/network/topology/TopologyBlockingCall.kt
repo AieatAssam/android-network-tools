@@ -21,25 +21,31 @@ import kotlin.coroutines.resumeWithException
  * because cancelling a Future cannot guarantee that a native DNS resolver stops immediately.
  */
 internal object TopologyBlockingCall {
-    private const val WORKER_COUNT = 4
-    private const val QUEUE_CAPACITY = 32
+    internal const val WORKER_COUNT = 4
+    internal const val QUEUE_CAPACITY = 32
 
-    private val workers = ThreadPoolExecutor(
-        WORKER_COUNT,
-        WORKER_COUNT,
-        0L,
-        TimeUnit.MILLISECONDS,
-        ArrayBlockingQueue(QUEUE_CAPACITY),
-        ThreadFactory { runnable ->
-            Thread(runnable, "topology-blocking-call").apply { isDaemon = true }
-        },
-        ThreadPoolExecutor.AbortPolicy(),
-    )
+    private val workers = createTopologyBlockingExecutor()
 
     suspend fun <T> run(
         deadline: OperationDeadline,
         requestTimeoutMillis: Long = Long.MAX_VALUE,
         timeoutMessage: String = "Topology blocking call timed out",
+        block: () -> T,
+    ): T = runWithExecutor(
+        executor = workers,
+        deadline = deadline,
+        requestTimeoutMillis = requestTimeoutMillis,
+        timeoutMessage = timeoutMessage,
+        block = block,
+    )
+
+    /** Test seam that keeps the exact production executor policy while isolating pool state. */
+    internal suspend fun <T> runWithExecutor(
+        executor: ThreadPoolExecutor,
+        deadline: OperationDeadline,
+        requestTimeoutMillis: Long = Long.MAX_VALUE,
+        timeoutMessage: String = "Topology blocking call timed out",
+        beforeExecuteSubmission: () -> Unit = {},
         block: () -> T,
     ): T {
         deadline.throwIfExpired()
@@ -63,11 +69,16 @@ internal object TopologyBlockingCall {
                     }
                     continuation.invokeOnCancellation {
                         task.cancel(true)
-                        workers.remove(task)
+                        executor.remove(task)
                     }
                     if (continuation.isActive) {
                         try {
-                            workers.execute(task)
+                            beforeExecuteSubmission()
+                            executor.execute(task)
+                            // Cancellation may win after the active check and remove the task
+                            // before execute enqueues it. Remove again after enqueue so a
+                            // cancelled future cannot occupy a bounded queue slot indefinitely.
+                            if (!continuation.isActive) executor.remove(task)
                         } catch (rejected: RejectedExecutionException) {
                             continuation.resumeWithException(rejected)
                         }
@@ -85,3 +96,16 @@ internal object TopologyBlockingCall {
         }
     }
 }
+
+/** Same bounded pool factory used by the production singleton and saturation regression. */
+internal fun createTopologyBlockingExecutor(): ThreadPoolExecutor = ThreadPoolExecutor(
+    TopologyBlockingCall.WORKER_COUNT,
+    TopologyBlockingCall.WORKER_COUNT,
+    0L,
+    TimeUnit.MILLISECONDS,
+    ArrayBlockingQueue(TopologyBlockingCall.QUEUE_CAPACITY),
+    ThreadFactory { runnable ->
+        Thread(runnable, "topology-blocking-call").apply { isDaemon = true }
+    },
+    ThreadPoolExecutor.AbortPolicy(),
+)

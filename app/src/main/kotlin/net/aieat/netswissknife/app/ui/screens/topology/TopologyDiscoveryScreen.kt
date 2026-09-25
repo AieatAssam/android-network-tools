@@ -39,6 +39,8 @@ import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
 import net.aieat.netswissknife.app.platform.NetworkErrorKind
 import net.aieat.netswissknife.app.ui.components.RecentHostsRow
+import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
+import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.ui.theme.AppShapes
 import net.aieat.netswissknife.core.network.HostValidator
@@ -162,6 +164,23 @@ private fun TopologyScreenContent(
         is TopologyUiState.Done -> uiState.graph.nodes.find { it.ip == uiState.selectedNodeIp }
         else -> null
     }
+    val announcementPhase = when (val state = uiState) {
+        is TopologyUiState.Idle -> null
+        is TopologyUiState.Discovering, is TopologyUiState.Canceling -> ToolAnnouncementPhase.RUNNING
+        is TopologyUiState.Canceled -> {
+            if (state.nodes.isNotEmpty() || state.links.isNotEmpty()) ToolAnnouncementPhase.PARTIAL
+            else ToolAnnouncementPhase.CANCELED
+        }
+        is TopologyUiState.TimeLimit -> ToolAnnouncementPhase.PARTIAL
+        is TopologyUiState.Done -> {
+            if (state.graph.truncationReasons.isNotEmpty() || state.graph.hadSnmpErrors) {
+                ToolAnnouncementPhase.PARTIAL
+            } else {
+                ToolAnnouncementPhase.FINISHED
+            }
+        }
+        is TopologyUiState.Failure -> ToolAnnouncementPhase.ERROR
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         // ── Hero header ───────────────────────────────────────────────────────
@@ -183,6 +202,7 @@ private fun TopologyScreenContent(
                     )
                     .padding(20.dp)
             ) {
+                ToolStateAnnouncer(stringResource(R.string.help_topology_title), announcementPhase)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         modifier = Modifier

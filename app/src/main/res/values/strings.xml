@@ -1471,4 +1471,18 @@
     <string name="network_error_local_permission">Local network permission was denied. Grant access, then retry.</string>
     <string name="network_action_grant_permission">Grant</string>
 
+    <!-- Polite accessibility announcements for tool operation state changes -->
+    <string name="a11y_tool_running">%1$s is running</string>
+    <string name="a11y_tool_canceled">%1$s stopped</string>
+    <string name="a11y_tool_finished">%1$s finished</string>
+    <string name="a11y_tool_finished_detail">%1$s finished. %2$s</string>
+    <string name="a11y_tool_partial">%1$s stopped with partial results</string>
+    <string name="a11y_tool_partial_detail">%1$s stopped with partial results. %2$s</string>
+    <string name="a11y_tool_error">%1$s failed</string>
+    <string name="a11y_tool_error_detail">%1$s failed. %2$s</string>
+    <plurals name="a11y_dns_record_count">
+        <item quantity="one">%1$d record found</item>
+        <item quantity="other">%1$d records found</item>
+    </plurals>
+
 </resources>

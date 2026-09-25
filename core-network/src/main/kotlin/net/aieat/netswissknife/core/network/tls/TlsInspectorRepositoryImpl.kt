@@ -75,7 +75,7 @@ class TlsInspectorRepositoryImpl(
         if (port !in 1..65_535) return NetworkResult.error(
             ErrorCode.PORT_OUT_OF_RANGE,
             developerMessage = "Port must be between 1 and 65535",
-            args = listOf(1, 65_535),
+            args = listOf(port, 1, 65_535),
         )
         if (timeoutMs !in TlsInspectorOperation.MIN_TIMEOUT_MILLIS..TlsInspectorOperation.MAX_TIMEOUT_MILLIS) {
             return NetworkResult.error(

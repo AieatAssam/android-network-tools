@@ -97,6 +97,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
+import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
+import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.R
@@ -120,6 +122,21 @@ import java.util.concurrent.TimeUnit
 @Composable
 fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val lookupResult = uiState.result
+    val announcementPhase = when {
+        uiState.isLoading -> ToolAnnouncementPhase.RUNNING
+        uiState.error != null -> ToolAnnouncementPhase.ERROR
+        uiState.isCanceled -> if (uiState.hopStates.isEmpty()) {
+            ToolAnnouncementPhase.CANCELED
+        } else {
+            ToolAnnouncementPhase.PARTIAL
+        }
+        lookupResult != null -> {
+            if (lookupResult.hops.any { it.error != null }) ToolAnnouncementPhase.PARTIAL
+            else ToolAnnouncementPhase.FINISHED
+        }
+        else -> null
+    }
     val networkStatus by viewModel.networkStatus.collectAsStateWithLifecycle()
     val recentHosts by viewModel.recentHosts.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -147,6 +164,7 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
         onRefresh = { if (canRefresh) viewModel.lookup() },
         modifier = Modifier.fillMaxSize()
     ) {
+    ToolStateAnnouncer(stringResource(R.string.help_whois_title), announcementPhase)
     AnimatedVisibility(
         visible = visible,
         enter = fadeIn(AppMotion.enter(300)) + slideInVertically(AppMotion.enter(300)) { it / 4 }

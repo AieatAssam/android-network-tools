@@ -76,6 +76,9 @@ class HttpProbeUseCaseTest {
             "URL port must be between 1 and 65535",
             validateHttpProbeUrl("https://example.com:0")
         )
+        val error = validateHttpProbeUrlInfo("https://example.com:0")
+        assertEquals(ErrorCode.PORT_OUT_OF_RANGE, error?.code)
+        assertEquals(listOf(0, 1, 65_535), error?.args)
     }
 
     @Test

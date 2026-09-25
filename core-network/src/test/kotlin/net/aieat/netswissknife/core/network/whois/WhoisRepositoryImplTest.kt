@@ -93,6 +93,43 @@ class WhoisRepositoryImplTest {
     }
 }
 
+@DisplayName("WhoisRepositoryImpl – wire-safe input")
+class WhoisRepositoryWireInputTest {
+
+    @Test
+    @DisplayName("direct IDN lookup sends lowercase A-labels to every WHOIS hop")
+    fun `direct IDN lookup sends lowercase A-labels to every WHOIS hop`() = runTest {
+        val queries = mutableListOf<ByteArrayOutputStream>()
+        val responses = listOf(
+            "refer: whois.verisign-grs.com\r\n".toByteArray(),
+            "Domain Name: XN--BCHER-KVA.DE\r\n".toByteArray(),
+        )
+        var socketIndex = 0
+        val repository = WhoisRepositoryImpl(
+            resolver = WhoisHostResolver { InetAddress.getByAddress(byteArrayOf(8, 8, 8, 8)) },
+            socketFactory = WhoisSocketFactory {
+                val index = socketIndex++
+                val query = ByteArrayOutputStream().also(queries::add)
+                object : Socket() {
+                    override fun connect(endpoint: SocketAddress?, timeout: Int) = Unit
+                    override fun getOutputStream() = query
+                    override fun getInputStream(): InputStream = responses[index].inputStream()
+                    override fun close() = Unit
+                }
+            },
+        )
+
+        val result = withContext(Dispatchers.IO) { repository.lookup(" BÜCHER.DE. ", 1_000) }
+
+        assertTrue(result is NetworkResult.Success, "$result")
+        assertEquals(2, queries.size)
+        assertEquals(
+            listOf("xn--bcher-kva.de\r\n", "xn--bcher-kva.de\r\n"),
+            queries.map { it.toString(Charsets.UTF_8) },
+        )
+    }
+}
+
 @DisplayName("WhoisRepositoryImpl – referred RIR failures")
 class WhoisReferredRirFailureTest {
 

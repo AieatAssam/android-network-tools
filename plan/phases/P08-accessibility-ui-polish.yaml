@@ -131,19 +131,24 @@ tasks:
 
   - id: P08-T2
     title: "ToolStateAnnouncer (live region) in all tool screens"
-    status: todo
+    status: in_progress
     depends_on: [P07-T3]
+    current_progress:
+      date: "2026-09-25"
+      implemented: "Added a shared polite live-region component with RUNNING, CANCELED, FINISHED, PARTIAL, and ERROR summaries, wired once into all 14 shipped tool screens. DNS success includes a localized plural record count. Wi-Fi canceled/paused states and empty mDNS cancellation announce CANCELED; retained mDNS results/truncation announce PARTIAL. Subnet remains silent while its form is idle because it has no operation state."
+      validation: "The Android component test covers all five phases and stable detail semantics; DnsScreenTest composes a Success result with three records and asserts the localized count in the production announcer semantics. ToolStateAnnouncerCoverageTest discovers every Screen.kt, checks the 14 tool/4 non-tool inventory, and requires exactly one state-derived phase call per tool screen. The focused :app:testDebugUnitTest coverage guard passed; :app:compileDebugAndroidTestKotlin passed after replacing an unsupported assertExists import with supported semantics assertions (two existing deprecation warnings only). Focused core-network and core-domain suites pass, including TopologyBlockingCall saturation/cancellation, WHOIS wire normalization, validation argument schemas, and both DNS/Topology repository overload dispatch guards. Independent QA/adversarial source reviews checked all current mappings and cleared the corrected Wi-Fi/mDNS empty-result cases. No emulator or device was used; connected TalkBack behavior is not claimed."
+      remaining: "Run connected Compose semantics tests and verify actual TalkBack announcements on API 33/release hardware. The structural source guard proves inventory and state-derived wiring, not each branch's exact phase; add pure mapping regression tests for the branch-heavy screens as they are refined."
     tdd:
       red:
-        test_file: app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/a11y/LiveRegionTest.kt
+        test_file: app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/components/ToolStateAnnouncerTest.kt
         tests:
-          - "PingScreen with fake VM state Running -> node with LiveRegion Polite exists and text contains a11y_state_running"
-          - "DnsScreen Success(3 records) -> live region text contains '3'"
-          - "Error state -> live region text starts with error prefix"
-        run: "device/Test Lab"
-        expect: "RED"
-      green: { steps: ["Implement announcer; wire into each screen's AnimatedContent target block (one call per screen)."], run: "device/Test Lab", expect: "PASS" }
-    acceptance_criteria: ["14 screens call ToolStateAnnouncer; unit test `AnnouncerCoverageTest` scans screens for the call (source scan)."]
+          - "ToolStateAnnouncer semantics transition through Running, Partial, Canceled, Finished, and Error with polite live-region metadata"
+          - "DnsScreen Success(3 records) announces the localized plural record count"
+          - "ToolStateAnnouncerCoverageTest discovers all Screen.kt files and checks exactly one state-derived call on each of the 14 tool screens"
+        run: "./gradlew :app:testDebugUnitTest --tests '*ToolStateAnnouncerCoverageTest' :app:compileDebugAndroidTestKotlin --no-daemon --no-parallel --max-workers=1"
+        expect: "PASS; connected execution remains an API 33/release-device check"
+      green: { steps: ["Implement the shared live-region component and wire a state-derived summary into each shipped tool screen; provide stable localized detail where useful."], run: "same", expect: "PASS" }
+    acceptance_criteria: ["All 14 shipped tool screens have one shared state-derived ToolStateAnnouncer; the source inventory guard checks tool and non-tool Screen.kt paths; Compose semantics tests cover all five phases and the DNS record-count detail; API 33/release TalkBack verification remains a device gate."]
 
   - id: P08-T3
     title: "Wi-Fi chart text via TextMeasurer + chart contentDescriptions"
