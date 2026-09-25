@@ -242,7 +242,9 @@ tasks:
 
   - id: P10-T5
     title: "WHOIS: MonotonicClock, PublicSuffix, RDAP client with bootstrap + fallback; UI protocol toggle"
-    status: todo
+    status: in_progress
+    progress:
+      - "Closed the R3-009 registry-failure evidence gap: ordinary TLD registry connect failures now preserve the IANA hop and add/emit one failed REGISTRY hop with error text, zero query time, empty raw response, and operation ID. Cancellation and operation deadlines remain terminal. The broader RDAP, public-suffix, and UI protocol-toggle work remains open."
     tdd:
       red:
         tests:
@@ -250,9 +252,15 @@ tasks:
           - "RdapMapperTest: domain JSON fixture -> registrar (entities role registrar, vcard fn), events (registration/expiration/last changed) -> epoch ms, nameservers ldhName, status list, secureDNS.delegationSigned -> dnssec; ip fixture -> netName(name), netRange(startAddress-endAddress), country; asn fixture -> orgName/handle"
           - "RdapClientTest (MockWebServer): bootstrap dns.json served -> base URL chosen for 'com'; 404 -> RdapUnsupported -> repository falls back to WHOIS chain (fake port-43 transport)"
           - "WhoisRepositoryImplTest: hops timing uses injected clock (deterministic ms)"
+          - "R3-009 regression: fake IANA response + registry connect failure preserves the IANA hop and appends a failed REGISTRY hop; assert live progress emits that hop exactly once with the operation ID"
+          - "R3-009 guards: registry CancellationException remains cancellation; OperationDeadlineExceededException remains a deadline error and neither becomes a failed REGISTRY hop"
           - "WhoisViewModelTest: protocol selection forwarded; hop chain shows RDAP node"
         expect: "RED"
-      green: { steps: ["Implement per design; RDAP raw JSON pretty-printed in the raw view."], expect: "PASS" }
+      green:
+        steps:
+          - "Implement per design; RDAP raw JSON pretty-printed in the raw view."
+          - "Verified registry-hop failure slice: serialized `./gradlew :core-network:test --tests '*Whois*' --no-daemon --no-parallel --max-workers=1 --console=plain` passed all 54 WHOIS tests (0 failures/errors/skips). Fake IANA/registry coverage confirms preserved prior data, one failed REGISTRY hop and one matching live progress emission; cancellation/deadline guards pass."
+        expect: "PASS"
     acceptance_criteria: ["Manual: example.com, google.com, 8.8.8.8, AS15169, a .de domain (DENIC RDAP) – parsed fields non-empty."]
 
   - id: P10-T6

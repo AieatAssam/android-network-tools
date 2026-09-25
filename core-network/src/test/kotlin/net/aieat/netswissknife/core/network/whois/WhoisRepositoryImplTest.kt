@@ -1,11 +1,18 @@
 package net.aieat.netswissknife.core.network.whois
 
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.take
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.withContext
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.operation.OperationBudget
+import net.aieat.netswissknife.core.network.operation.OperationDeadlineExceededException
 import net.aieat.netswissknife.core.network.operation.OperationSession
+import net.aieat.netswissknife.core.network.whois.WhoisResult
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -122,6 +129,105 @@ class WhoisReferredRirFailureTest {
         assertNotNull(failedReferral.operationId)
         assertEquals("", failedReferral.rawResponse)
         assertEquals("ARIN-NET", data.netName, "keep fields parsed from the last successful hop")
+    }
+}
+
+@DisplayName("WhoisRepositoryImpl – registry failures")
+class WhoisRegistryFailureTest {
+
+    private val publicAddress = InetAddress.getByName("8.8.8.8")
+
+    @Test
+    @DisplayName("registry connect failure is retained and emitted once as a failed hop")
+    fun `registry connect failure is retained and emitted once as a failed hop`() = runTest {
+        val socketCreates = AtomicInteger()
+        val ianaSocket = object : Socket() {
+            override fun connect(endpoint: SocketAddress?, timeout: Int) = Unit
+            override fun getOutputStream() = ByteArrayOutputStream()
+            override fun getInputStream(): InputStream =
+                "refer: whois.verisign-grs.com\nDomain Name: example.com\n".byteInputStream()
+            override fun close() = Unit
+        }
+        val registrySocket = object : Socket() {
+            override fun connect(endpoint: SocketAddress?, timeout: Int) {
+                throw IOException("registry connect failed")
+            }
+            override fun close() = Unit
+        }
+        val repository = WhoisRepositoryImpl(
+            resolver = WhoisHostResolver { publicAddress },
+            socketFactory = WhoisSocketFactory {
+                if (socketCreates.incrementAndGet() == 1) ianaSocket else registrySocket
+            },
+        )
+        val session = OperationSession(OperationBudget.start())
+        val liveProgress = async(start = CoroutineStart.UNDISPATCHED) {
+            repository.hopProgress.take(2).toList()
+        }
+
+        val result = withContext(Dispatchers.IO) {
+            repository.lookup("example.com", 1_000, session)
+        }
+
+        assertTrue(result is NetworkResult.Success)
+        val data = (result as NetworkResult.Success).data
+        assertTrue(data.hops.first().rawResponse.contains("Domain Name: example.com"))
+        assertEquals(2, data.hops.size)
+        val failedRegistry = data.hops.last()
+        assertEquals("whois.verisign-grs.com", failedRegistry.server.host)
+        assertEquals(WhoisServerRole.REGISTRY, failedRegistry.server.role)
+        assertEquals("", failedRegistry.rawResponse)
+        assertEquals(0L, failedRegistry.queryTimeMs)
+        assertTrue(failedRegistry.error.orEmpty().contains("registry connect failed"))
+        assertEquals(session.budget.operationId, failedRegistry.operationId)
+
+        val progress = liveProgress.await()
+        assertEquals(data.hops, progress)
+        assertEquals(1, progress.count { it.server.role == WhoisServerRole.REGISTRY })
+    }
+
+    @Test
+    @DisplayName("registry cancellation and deadline exceptions do not become failure hops")
+    fun `registry cancellation and deadline exceptions do not become failure hops`() = runTest {
+        suspend fun runWithRegistryFailure(failure: Exception): Pair<NetworkResult<WhoisResult>?, List<WhoisHop>> {
+            val repository = WhoisRepositoryImpl(
+                resolver = WhoisHostResolver { host ->
+                    if (host == "whois.verisign-grs.com") throw failure
+                    publicAddress
+                },
+                socketFactory = WhoisSocketFactory {
+                    object : Socket() {
+                        override fun connect(endpoint: SocketAddress?, timeout: Int) = Unit
+                        override fun getOutputStream() = ByteArrayOutputStream()
+                        override fun getInputStream(): InputStream =
+                            "refer: whois.verisign-grs.com\n".byteInputStream()
+                        override fun close() = Unit
+                    }
+                },
+            )
+            val liveProgress = async(start = CoroutineStart.UNDISPATCHED) {
+                repository.hopProgress.take(1).toList()
+            }
+            val result = try {
+                withContext(Dispatchers.IO) { repository.lookup("example.com", 1_000) }
+            } catch (caught: CancellationException) {
+                assertTrue(failure is CancellationException)
+                assertEquals(failure.message, caught.message)
+                null
+            }
+            return result to liveProgress.await()
+        }
+
+        val (cancelledResult, cancellationProgress) = runWithRegistryFailure(
+            CancellationException("registry cancelled"),
+        )
+        assertEquals(null, cancelledResult)
+        assertEquals(listOf(WhoisServerRole.IANA), cancellationProgress.map { it.server.role })
+
+        val (deadlineResult, deadlineProgress) = runWithRegistryFailure(OperationDeadlineExceededException())
+        assertTrue(deadlineResult is NetworkResult.Error)
+        assertTrue((deadlineResult as NetworkResult.Error).message.contains("deadline", ignoreCase = true))
+        assertEquals(listOf(WhoisServerRole.IANA), deadlineProgress.map { it.server.role })
     }
 }
 

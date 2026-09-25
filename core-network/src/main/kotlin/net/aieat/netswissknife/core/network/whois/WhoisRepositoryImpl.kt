@@ -141,6 +141,17 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
         } catch (e: OperationDeadlineExceededException) {
             throw e
         } catch (e: Exception) {
+            val failedHop = WhoisHop(
+                server = WhoisServer(registryHost, WhoisServerRole.REGISTRY),
+                rawResponse = "",
+                queryTimeMs = 0L,
+                referral = null,
+                error = e.message ?: "Connection failed",
+                operationId = operationId,
+            )
+            hops.add(failedHop)
+            ensureCurrentOperationActive()
+            _hopProgress.emit(failedHop)
             return buildDomainResult(domain, WhoisQueryType.DOMAIN, hops, overallStart)
         }
         val registrarWhoisServer = WhoisResponseParser.parseRegistrarWhoisServer(registryHop.second)
