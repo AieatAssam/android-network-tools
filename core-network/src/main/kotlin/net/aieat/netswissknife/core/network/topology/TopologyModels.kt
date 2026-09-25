@@ -84,7 +84,12 @@ data class TopologyParams(
     val v3PrivProtocol: V3PrivProtocol = V3PrivProtocol.NONE,
     val maxHops: Int = 3,
     val timeoutMs: Int = 3000,
-    val retries: Int = 1
+    val retries: Int = 1,
+    /**
+     * Optional opaque, non-secret profile token. Never derive it from credentials; null means
+     * snapshots cannot be safely compared across credential scopes.
+     */
+    val credentialScopeId: String? = null
 )
 
 data class SnmpInterface(
@@ -129,5 +134,7 @@ data class TopologyGraph(
     val seedIp: String,
     val queriedAt: Long,
     val truncationReasons: Set<TopologyTruncationReason> = emptySet(),
-    val hadSnmpErrors: Boolean = false
+    val hadSnmpErrors: Boolean = false,
+    /** Null for graphs produced before comparison context was captured. */
+    val scanContext: TopologyScanContext? = null
 )

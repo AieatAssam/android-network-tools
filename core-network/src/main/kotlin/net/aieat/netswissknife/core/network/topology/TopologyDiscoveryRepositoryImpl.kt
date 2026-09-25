@@ -86,12 +86,19 @@ class TopologyDiscoveryRepositoryImpl(
             send(TopologyDiscoveryEvent.Error(TopologyOperationBudget.OVER_CEILING_MESSAGE))
             return@channelFlow
         }
+        val normalizedTarget = HostValidator.normalize(params.targetIp) ?: params.targetIp
+        val effectiveParams = params.copy(targetIp = normalizedTarget)
+        val scanContext = TopologyScanContext.from(effectiveParams.targetIp, effectiveParams)
         val partialGraph = AtomicReference(
-            TopologyGraph(emptyList(), emptyList(), params.targetIp, System.currentTimeMillis())
+            TopologyGraph(
+                emptyList(),
+                emptyList(),
+                effectiveParams.targetIp,
+                System.currentTimeMillis(),
+                scanContext = scanContext
+            )
         )
         try {
-            val normalizedTarget = HostValidator.normalize(params.targetIp) ?: params.targetIp
-            val effectiveParams = params.copy(targetIp = normalizedTarget)
             val graph = OperationRunner.run(session) {
                 currentCoroutineContext().ensureActive()
                 val sessionRequestLimiter = Semaphore(
@@ -239,6 +246,7 @@ class TopologyDiscoveryRepositoryImpl(
                             queriedAt = System.currentTimeMillis(),
                             truncationReasons = truncationReasons.toSet(),
                             hadSnmpErrors = snmpErrors.get(),
+                            scanContext = scanContext,
                         )
                     )
                     send(TopologyDiscoveryEvent.NodeDiscovered(retainedNode))
@@ -270,7 +278,8 @@ class TopologyDiscoveryRepositoryImpl(
                     seedIp = effectiveParams.targetIp,
                     queriedAt = System.currentTimeMillis(),
                     truncationReasons = truncationReasons.toSet(),
-                    hadSnmpErrors = snmpErrors.get()
+                    hadSnmpErrors = snmpErrors.get(),
+                    scanContext = scanContext
                 )
             }
             // OperationRunner closes the registered client before returning; a cleanup error

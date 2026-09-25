@@ -56,6 +56,7 @@ class TopologyDiscoveryRepositoryTest {
 
     @Test
     fun `single node no LLDP or CDP neighbours emits NodeDiscovered then Complete`() = runTest {
+        val requestedParams = defaultParams.copy(targetIp = " 192.168.001.001 ")
         // System info
         coEvery { snmpClient.get(any(), "1.3.6.1.2.1.1.1.0") } returns "Cisco IOS Software"
         coEvery { snmpClient.get(any(), "1.3.6.1.2.1.1.5.0") } returns "switch1"
@@ -64,7 +65,7 @@ class TopologyDiscoveryRepositoryTest {
         // No LLDP/CDP neighbours (empty walks for everything)
         coEvery { snmpClient.walk(any(), any(), any()) } returns SnmpWalkResult(emptyMap())
 
-        val events = repository.discover(defaultParams).toList()
+        val events = repository.discover(requestedParams).toList()
 
         val nodeEvents = events.filterIsInstance<TopologyDiscoveryEvent.NodeDiscovered>()
         val completeEvents = events.filterIsInstance<TopologyDiscoveryEvent.Complete>()
@@ -74,6 +75,10 @@ class TopologyDiscoveryRepositoryTest {
         assertEquals(1, completeEvents.size)
         assertEquals(1, completeEvents[0].graph.nodes.size)
         assertEquals(0, completeEvents[0].graph.links.size)
+        assertEquals(
+            TopologyScanContext.from("192.168.1.1", requestedParams),
+            completeEvents.single().graph.scanContext
+        )
     }
 
     @Test
@@ -266,7 +271,11 @@ class TopologyDiscoveryRepositoryTest {
         collector.join()
 
         assertEquals(CancellationReason.DEADLINE_EXCEEDED, session.cancellationReason)
-        assertTrue(events.any { it is TopologyDiscoveryEvent.TimeLimit })
+        val partialGraph = events.filterIsInstance<TopologyDiscoveryEvent.TimeLimit>().single().partialGraph
+        assertEquals(
+            TopologyScanContext.from(defaultParams.targetIp, defaultParams),
+            partialGraph.scanContext
+        )
         assertTrue(events.none { it is TopologyDiscoveryEvent.Error })
         assertTrue(events.none { it is TopologyDiscoveryEvent.Complete })
         verify(exactly = 1) { snmpClient.close() }

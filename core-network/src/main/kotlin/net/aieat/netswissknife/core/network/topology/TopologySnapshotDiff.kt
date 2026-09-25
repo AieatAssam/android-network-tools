@@ -12,7 +12,9 @@ data class TopologySnapshot(
     val truncationReasons: Set<TopologyTruncationReason>,
     val hadSnmpErrors: Boolean,
     /** IPs whose duplicate records disagree and therefore cannot safely identify one device. */
-    val conflictingNodeIps: Set<String>
+    val conflictingNodeIps: Set<String>,
+    /** Null means the producer did not retain enough scope to make a safe comparison. */
+    val scanContext: TopologyScanContext? = null
 ) {
     companion object {
         fun from(graph: TopologyGraph): TopologySnapshot {
@@ -32,9 +34,42 @@ data class TopologySnapshot(
                 links = links,
                 truncationReasons = graph.truncationReasons.toSet(),
                 hadSnmpErrors = graph.hadSnmpErrors,
-                conflictingNodeIps = conflicts.toSortedSet()
+                conflictingNodeIps = conflicts.toSortedSet(),
+                scanContext = graph.scanContext
             )
         }
+
+    }
+}
+
+/** Safe material scope for deciding whether two topology observations can be compared. */
+data class TopologyScanContext(
+    val snmpVersion: SnmpVersion,
+    val seedIp: String,
+    val targetIp: String,
+    val maxHops: Int,
+    val timeoutMs: Int,
+    val retries: Int,
+    val v3AuthProtocol: V3AuthProtocol,
+    val v3PrivProtocol: V3PrivProtocol,
+    /**
+     * Opaque caller-provided profile token. It can correlate scans, so it must not identify a
+     * person or contain/derive from credentials. Raw credentials and their hashes are never kept.
+     */
+    val credentialScopeId: String?
+) {
+    companion object {
+        fun from(seedIp: String, params: TopologyParams) = TopologyScanContext(
+            snmpVersion = params.snmpVersion,
+            seedIp = seedIp.snapshotIdentity(),
+            targetIp = params.targetIp.snapshotIdentity(),
+            maxHops = params.maxHops,
+            timeoutMs = params.timeoutMs,
+            retries = params.retries,
+            v3AuthProtocol = params.v3AuthProtocol,
+            v3PrivProtocol = params.v3PrivProtocol,
+            credentialScopeId = params.credentialScopeId
+        )
     }
 }
 
@@ -144,6 +179,7 @@ private fun TopologySnapshot.canonicalized(): TopologySnapshot {
     }.sortedWith(TopologyLinkSnapshot.ORDER)
     return copy(
         seedIp = seedIp.snapshotIdentity(),
+        scanContext = scanContext?.canonicalized(),
         nodes = canonicalNodes,
         links = canonicalLinks,
         truncationReasons = truncationReasons.toSet(),
@@ -151,6 +187,12 @@ private fun TopologySnapshot.canonicalized(): TopologySnapshot {
             .toSortedSet()
     )
 }
+
+private fun TopologyScanContext.canonicalized() = copy(
+    seedIp = seedIp.snapshotIdentity(),
+    targetIp = targetIp.snapshotIdentity(),
+    credentialScopeId = credentialScopeId?.trim()?.takeIf(String::isNotEmpty)
+)
 
 private fun String.snapshotIdentity(): String {
     val value = trim()
@@ -251,7 +293,10 @@ enum class TopologyIncomparabilityReason {
     GRAPH_TRUNCATED,
     CONFLICTING_NODE_IDENTITY,
     REUSED_NODE_IDENTITY,
-    CONFLICTING_ROW_IDENTITY
+    CONFLICTING_ROW_IDENTITY,
+    UNKNOWN_SCAN_CONTEXT,
+    UNKNOWN_CREDENTIAL_SCOPE,
+    DIFFERENT_SCAN_CONTEXT
 }
 
 data class TopologyTableChanges(
@@ -320,16 +365,36 @@ object TopologySnapshotDiffer {
     fun compare(before: TopologySnapshot, after: TopologySnapshot): TopologySnapshotDiff {
         val oldSnapshot = before.canonicalized()
         val newSnapshot = after.canonicalized()
+        val contextReasons = buildSet {
+            if (oldSnapshot.scanContext == null || newSnapshot.scanContext == null) {
+                add(TopologyIncomparabilityReason.UNKNOWN_SCAN_CONTEXT)
+            }
+            if (oldSnapshot.scanContext?.credentialScopeId.isNullOrBlank() ||
+                newSnapshot.scanContext?.credentialScopeId.isNullOrBlank()
+            ) {
+                add(TopologyIncomparabilityReason.UNKNOWN_CREDENTIAL_SCOPE)
+            }
+            if (oldSnapshot.scanContext != null && newSnapshot.scanContext != null &&
+                oldSnapshot.scanContext != newSnapshot.scanContext
+            ) {
+                add(TopologyIncomparabilityReason.DIFFERENT_SCAN_CONTEXT)
+            }
+        }
         val beforeNodes = oldSnapshot.nodes.associateBy { it.ip }
         val afterNodes = newSnapshot.nodes.associateBy { it.ip }
         val conflicts = oldSnapshot.conflictingNodeIps + newSnapshot.conflictingNodeIps
         val reused = detectReusedIdentities(beforeNodes, afterNodes, conflicts)
         val baseChanges = TopologyDataTable.entries.associateWith { table ->
-            tableChanges(table, oldSnapshot, newSnapshot, beforeNodes, afterNodes, conflicts, reused)
+            tableChanges(
+                table, oldSnapshot, newSnapshot, beforeNodes, afterNodes, conflicts, reused,
+                contextReasons
+            )
         }.toSortedMap(compareBy { it.name })
-        val changes = classifyProtocolChanges(baseChanges, oldSnapshot.links, newSnapshot.links)
+        val changes = if (contextReasons.isEmpty()) {
+            classifyProtocolChanges(baseChanges, oldSnapshot.links, newSnapshot.links)
+        } else baseChanges
         val common = beforeNodes.keys.intersect(afterNodes.keys) - conflicts - reused
-        val nodeChanges = common.mapNotNull { ip ->
+        val nodeChanges = if (contextReasons.isNotEmpty()) emptyList() else common.mapNotNull { ip ->
             val old = beforeNodes.getValue(ip)
             val new = afterNodes.getValue(ip)
             val changed = changedFields(old, new)
@@ -340,9 +405,13 @@ object TopologySnapshotDiffer {
         return TopologySnapshotDiff(
             tableChanges = changes,
             nodeChanges = nodeChanges,
-            unknownNodeAbsences = (beforeIps - afterIps).toSortedSet(),
-            unknownNodeAppearances = (afterIps - beforeIps).toSortedSet(),
-            reusedNodeIdentities = reused.toSortedSet()
+            unknownNodeAbsences = if (contextReasons.isEmpty()) {
+                (beforeIps - afterIps).toSortedSet()
+            } else emptySet(),
+            unknownNodeAppearances = if (contextReasons.isEmpty()) {
+                (afterIps - beforeIps).toSortedSet()
+            } else emptySet(),
+            reusedNodeIdentities = if (contextReasons.isEmpty()) reused.toSortedSet() else emptySet()
         )
     }
 
@@ -353,9 +422,11 @@ object TopologySnapshotDiffer {
         beforeNodes: Map<String, TopologyNodeSnapshot>,
         afterNodes: Map<String, TopologyNodeSnapshot>,
         conflicts: Set<String>,
-        reused: Set<String>
+        reused: Set<String>,
+        contextReasons: Set<TopologyIncomparabilityReason>
     ): TopologyTableChanges {
         val reasons = buildSet {
+            addAll(contextReasons)
             if (before.hadSnmpErrors || after.hadSnmpErrors) {
                 add(TopologyIncomparabilityReason.GRAPH_SNMP_ERRORS)
             }

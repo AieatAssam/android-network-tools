@@ -401,6 +401,209 @@ class TopologySnapshotDiffTest {
             .compare(graph(new64), graph(anotherValid64)).reusedNodeIdentities)
     }
 
+    @Test
+    fun `different SNMP versions make every table and node comparison incomparable`() {
+        val graph = graph(node(
+            name = "before",
+            interfaces = listOf(iface(1)),
+            vlans = listOf(VlanInfo(10, "users", true))
+        ))
+        val changedGraph = graph(node(
+            name = "after",
+            interfaces = emptyList(),
+            vlans = emptyList()
+        ))
+        val before = snapshot(graph, TopologyParams("10.0.0.1"))
+        val after = snapshot(
+            changedGraph,
+            TopologyParams("10.0.0.1", snmpVersion = SnmpVersion.V3)
+        )
+
+        val diff = TopologySnapshotDiffer.compare(before, after)
+
+        assertTrue(TopologyDataTable.entries.all { table ->
+            val changes = diff.changesFor(table)
+            changes.status == TopologyComparisonStatus.INCOMPARABLE &&
+                changes.reasons.contains(TopologyIncomparabilityReason.DIFFERENT_SCAN_CONTEXT) &&
+                changes.interfaceChanges.isEmpty() && changes.vlanChanges.isEmpty() &&
+                changes.linkChanges.isEmpty()
+        })
+        assertTrue(diff.nodeChanges.isEmpty())
+        assertTrue(diff.unknownNodeAbsences.isEmpty())
+        assertTrue(diff.unknownNodeAppearances.isEmpty())
+    }
+
+    @Test
+    fun `changed target hops timeout or retries make contexts incomparable`() {
+        val graph = graph(node(name = "old", interfaces = listOf(iface(1))))
+        val base = TopologyParams("10.0.0.1", maxHops = 3, timeoutMs = 2_000, retries = 1)
+        val changed = listOf(
+            base.copy(targetIp = "10.0.0.2"),
+            base.copy(maxHops = 4),
+            base.copy(timeoutMs = 2_001),
+            base.copy(retries = 2)
+        )
+        val before = snapshot(graph, base)
+
+        changed.forEach { params ->
+            val after = snapshot(graph(node(name = "new")), params)
+            val diff = TopologySnapshotDiffer.compare(before, after)
+            assertTrue(TopologyDataTable.entries.all { table ->
+                diff.changesFor(table).status == TopologyComparisonStatus.INCOMPARABLE &&
+                    diff.changesFor(table).reasons.contains(
+                        TopologyIncomparabilityReason.DIFFERENT_SCAN_CONTEXT
+                    )
+            })
+            assertTrue(diff.nodeChanges.isEmpty())
+        }
+    }
+
+    @Test
+    fun `matching normalized contexts retain existing change classifications`() {
+        val beforeGraph = graph(node(name = "old", interfaces = listOf(iface(1))))
+        val afterGraph = graph(node(name = "new", interfaces = emptyList()))
+        val before = snapshot(
+            beforeGraph.copy(seedIp = " 10.0.0.1 "),
+            TopologyParams(
+                " ROUTER.Example ",
+                maxHops = 3,
+                credentialScopeId = "router-profile"
+            )
+        )
+        val after = snapshot(
+            afterGraph.copy(seedIp = "10.0.0.1"),
+            TopologyParams(
+                "router.example",
+                maxHops = 3,
+                credentialScopeId = "router-profile"
+            )
+        )
+
+        val diff = TopologySnapshotDiffer.compare(before, after)
+
+        assertEquals(TopologyComparisonStatus.COMPARABLE,
+            diff.changesFor(TopologyDataTable.INTERFACES).status)
+        assertEquals(TopologyChangeKind.REMOVED,
+            diff.changesFor(TopologyDataTable.INTERFACES).interfaceChanges.single().kind)
+        assertEquals(setOf(TopologyNodeField.SYS_NAME), diff.nodeChanges.single().changedFields)
+    }
+
+    @Test
+    fun `unknown legacy context suppresses change classifications`() {
+        val beforeGraph = graph(node(name = "old", interfaces = listOf(iface(1))))
+            .copy(scanContext = null)
+        val afterGraph = graph(node(name = "new", interfaces = emptyList()))
+            .copy(scanContext = null)
+
+        val diff = TopologySnapshotDiffer.compare(beforeGraph, afterGraph)
+
+        assertTrue(TopologyDataTable.entries.all { table ->
+            val changes = diff.changesFor(table)
+            changes.status == TopologyComparisonStatus.INCOMPARABLE &&
+                changes.reasons.contains(TopologyIncomparabilityReason.UNKNOWN_SCAN_CONTEXT) &&
+                changes.reasons.contains(TopologyIncomparabilityReason.UNKNOWN_CREDENTIAL_SCOPE) &&
+                changes.interfaceChanges.isEmpty() && changes.vlanChanges.isEmpty() &&
+                changes.linkChanges.isEmpty()
+        })
+        assertTrue(diff.nodeChanges.isEmpty())
+        assertTrue(diff.unknownNodeAbsences.isEmpty())
+    }
+
+    @Test
+    fun `scan context and snapshot omit community and v3 secret sentinels`() {
+        val communitySentinel = "COMMUNITY_SECRET_SENTINEL"
+        val usernameSentinel = "V3_USERNAME_SECRET_SENTINEL"
+        val passwordSentinel = "V3_PASSWORD_SECRET_SENTINEL"
+        val params = TopologyParams(
+            targetIp = "10.0.0.1",
+            snmpVersion = SnmpVersion.V3,
+            communityString = communitySentinel,
+            v3Username = usernameSentinel,
+            v3AuthPassword = passwordSentinel,
+            v3PrivPassword = passwordSentinel
+        )
+
+        val saved = snapshot(graph(node()), params)
+        val rendered = "${saved.scanContext} ${saved}"
+
+        assertFalse(rendered.contains(communitySentinel))
+        assertFalse(rendered.contains(usernameSentinel))
+        assertFalse(rendered.contains(passwordSentinel))
+        assertTrue(rendered.contains("V3"))
+    }
+
+    @Test
+    fun `unknown credential scope keeps v2c and v3 snapshots incomparable`() {
+        val beforeParams = TopologyParams(
+            "10.0.0.1",
+            snmpVersion = SnmpVersion.V2C,
+            communityString = "COMMUNITY_SENTINEL_A"
+        )
+        val afterParams = TopologyParams(
+            "10.0.0.1",
+            snmpVersion = SnmpVersion.V3,
+            v3Username = "V3_USERNAME_SENTINEL_B",
+            v3AuthPassword = "V3_PASSWORD_SENTINEL_B"
+        )
+        val before = snapshot(graph(node(name = "old")), beforeParams)
+        val after = snapshot(graph(node(name = "new")), afterParams)
+
+        val diff = TopologySnapshotDiffer.compare(before, after)
+
+        assertTrue(TopologyDataTable.entries.all { table ->
+            val changes = diff.changesFor(table)
+            changes.status == TopologyComparisonStatus.INCOMPARABLE &&
+                TopologyIncomparabilityReason.UNKNOWN_CREDENTIAL_SCOPE in changes.reasons
+        })
+        assertTrue(diff.nodeChanges.isEmpty())
+        val rendered = "${before.scanContext} ${after.scanContext}"
+        assertFalse(rendered.contains("COMMUNITY_SENTINEL_A"))
+        assertFalse(rendered.contains("V3_USERNAME_SENTINEL_B"))
+        assertFalse(rendered.contains("V3_PASSWORD_SENTINEL_B"))
+    }
+
+    @Test
+    fun `matching explicit credential profile identifiers retain change classifications`() {
+        val graphBefore = graph(node(name = "old", interfaces = listOf(iface(1))))
+        val graphAfter = graph(node(name = "new", interfaces = emptyList()))
+        val params = TopologyParams("10.0.0.1", credentialScopeId = "credential-profile-7")
+
+        val diff = TopologySnapshotDiffer.compare(
+            snapshot(graphBefore, params),
+            snapshot(graphAfter, params)
+        )
+
+        assertEquals(TopologyComparisonStatus.COMPARABLE,
+            diff.changesFor(TopologyDataTable.INTERFACES).status)
+        assertEquals(TopologyChangeKind.REMOVED,
+            diff.changesFor(TopologyDataTable.INTERFACES).interfaceChanges.single().kind)
+        assertEquals(setOf(TopologyNodeField.SYS_NAME), diff.nodeChanges.single().changedFields)
+    }
+
+    @Test
+    fun `different explicit credential profile identifiers make contexts incomparable`() {
+        val graphBefore = graph(node(name = "old", interfaces = listOf(iface(1))))
+        val graphAfter = graph(node(name = "new", interfaces = emptyList()))
+        val before = snapshot(
+            graphBefore,
+            TopologyParams("10.0.0.1", credentialScopeId = "credential-profile-7")
+        )
+        val after = snapshot(
+            graphAfter,
+            TopologyParams("10.0.0.1", credentialScopeId = "credential-profile-8")
+        )
+
+        val diff = TopologySnapshotDiffer.compare(before, after)
+
+        assertTrue(TopologyDataTable.entries.all { table ->
+            val changes = diff.changesFor(table)
+            changes.status == TopologyComparisonStatus.INCOMPARABLE &&
+                TopologyIncomparabilityReason.DIFFERENT_SCAN_CONTEXT in changes.reasons &&
+                changes.interfaceChanges.isEmpty()
+        })
+        assertTrue(diff.nodeChanges.isEmpty())
+    }
+
     private fun graph(
         vararg nodes: TopologyNode,
         links: List<TopologyLink> = emptyList(),
@@ -413,8 +616,17 @@ class TopologySnapshotDiffTest {
         seedIp = "10.0.0.1",
         queriedAt = 123,
         truncationReasons = truncation,
-        hadSnmpErrors = hadSnmpErrors
+        hadSnmpErrors = hadSnmpErrors,
+        scanContext = TopologyScanContext.from(
+            "10.0.0.1",
+            TopologyParams("10.0.0.1", credentialScopeId = "fixture-profile")
+        )
     )
+
+    private fun snapshot(graph: TopologyGraph, params: TopologyParams): TopologySnapshot =
+        TopologySnapshot.from(
+            graph.copy(scanContext = TopologyScanContext.from(graph.seedIp, params))
+        )
 
     private fun node(
         ip: String = "10.0.0.1",
