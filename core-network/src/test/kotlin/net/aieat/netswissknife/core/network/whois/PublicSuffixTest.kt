@@ -3,6 +3,10 @@ package net.aieat.netswissknife.core.network.whois
 import java.net.IDN
 import java.text.Normalizer
 import java.util.Locale
+import java.util.HexFormat
+import java.security.MessageDigest
+import java.util.zip.GZIPInputStream
+import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -71,15 +75,25 @@ class PublicSuffixTest {
 
     @Test
     fun `bundled list retains upstream provenance and both rule sections`() {
-        val lines = javaClass.getResourceAsStream("/psl/public_suffix_list.dat")!!
-            .bufferedReader(Charsets.UTF_8)
-            .use { it.readLines() }
+        val upstreamBytes = javaClass.getResourceAsStream("/psl/public_suffix_list.dat")!!
+            .use { it.readBytes() }
+        assertEquals(
+            "257b298daca42f6d8ec964e238c2a55518e14f09d3117917ec8acee6f188503e",
+            HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(upstreamBytes)),
+        )
+        val runtimeBytes = GZIPInputStream(javaClass.getResourceAsStream("/psl/public_suffix_list.dat.gz")!!)
+            .use { it.readBytes() }
+        assertArrayEquals(upstreamBytes, runtimeBytes)
+        val lines = upstreamBytes.toString(Charsets.UTF_8).lines()
 
         assertTrue(lines.first().contains("Mozilla Public"))
         assertTrue(lines.any { it.startsWith("// VERSION:") })
         assertTrue(lines.any { it == "// ===BEGIN ICANN DOMAINS===" })
         assertTrue(lines.any { it == "// ===BEGIN PRIVATE DOMAINS===" })
         assertTrue(lines.count { it.isNotBlank() && !it.trimStart().startsWith("//") } > 10_000)
+        val rules = lines.filter { it.isNotBlank() && !it.trimStart().startsWith("//") }
+        assertTrue(rules.none { it.contains("//") })
+        assertTrue(rules.all { it == it.lowercase(Locale.ROOT) })
         val unicodeRules = lines.mapNotNull { line ->
             var rule = line.substringBefore("//").trim().removePrefix("!")
             if (rule.startsWith("*.")) rule = rule.removePrefix("*.")

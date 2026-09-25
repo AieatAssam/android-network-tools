@@ -3,6 +3,7 @@ package net.aieat.netswissknife.core.network.whois
 import java.net.IDN
 import java.text.Normalizer
 import java.util.Locale
+import java.util.zip.GZIPInputStream
 
 /**
  * Resolves a host's registrable domain (effective TLD + one label) using the
@@ -20,7 +21,7 @@ object PublicSuffix {
     private val rules: Rules by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         val stream = PublicSuffix::class.java.getResourceAsStream(RESOURCE_PATH)
             ?: error("Bundled Public Suffix List is missing: $RESOURCE_PATH")
-        val contents = stream.use { it.readBytes().toString(Charsets.UTF_8) }
+        val contents = GZIPInputStream(stream).use { it.readBytes().toString(Charsets.UTF_8) }
         Rules.parse(contents)
     }
 
@@ -105,12 +106,23 @@ object PublicSuffix {
 
         companion object {
             fun parse(contents: String): Rules {
-                // Capacities are based on the bundled 2026-09-24 snapshot.
-                // Keep sections separate without duplicating their rule sets.
-                val icann = RuleSet(exactCapacity = 8_192, wildcardCapacity = 320,
-                    exceptionCapacity = 8, unicodeCapacity = 384)
-                val privateRules = RuleSet(exactCapacity = 5_120, wildcardCapacity = 96,
-                    exceptionCapacity = 8, unicodeCapacity = 256)
+                // Capacities fit the bundled 2026-09-24 section counts without HashSet rehashes.
+                val icann = RuleSet(
+                    exactCapacity = 10_240,
+                    wildcardCapacity = 32,
+                    exceptionCapacity = 16,
+                    exactUnicodeCapacity = 640,
+                    wildcardUnicodeCapacity = 16,
+                    exceptionsUnicodeCapacity = 16,
+                )
+                val privateRules = RuleSet(
+                    exactCapacity = 5_120,
+                    wildcardCapacity = 400,
+                    exceptionCapacity = 1,
+                    exactUnicodeCapacity = 32,
+                    wildcardUnicodeCapacity = 16,
+                    exceptionsUnicodeCapacity = 1,
+                )
                 var inPrivateSection = false
 
                 var lineStart = 0
@@ -135,16 +147,6 @@ object PublicSuffix {
                         continue
                     }
 
-                    var inlineComment = -1
-                    var scan = ruleStart
-                    while (scan + 1 < ruleEnd) {
-                        if (contents[scan] == '/' && contents[scan + 1] == '/') {
-                            inlineComment = scan
-                            break
-                        }
-                        scan++
-                    }
-                    if (inlineComment >= 0) ruleEnd = inlineComment
                     while (ruleEnd > ruleStart && contents[ruleEnd - 1].isWhitespace()) ruleEnd--
                     if (ruleStart >= ruleEnd) continue
 
@@ -160,12 +162,7 @@ object PublicSuffix {
                         else -> '='
                     }
                     if (ruleStart >= ruleEnd) continue
-                    try {
-                        addRule(contents, ruleStart, ruleEnd, marker, if (inPrivateSection) privateRules else icann)
-                    } catch (_: IllegalArgumentException) {
-                        // Ignore malformed entries rather than making the full
-                        // bundled table unavailable due to one bad rule.
-                    }
+                    addRule(contents, ruleStart, ruleEnd, marker, if (inPrivateSection) privateRules else icann)
                 }
                 return Rules(icann, privateRules)
             }
@@ -177,61 +174,18 @@ object PublicSuffix {
                 marker: Char,
                 rules: RuleSet,
             ) {
-                var unicode = false
-                var validAscii = true
-                var hasUppercase = false
-                var labelLength = 0
-                var previousWasHyphen = false
-
-                for (index in start until end) {
-                    val char = contents[index]
-                    if (char.code > 127) {
-                        unicode = true
-                        continue
-                    }
-                    if (char in 'A'..'Z') hasUppercase = true
-                    when {
-                        char == '.' -> {
-                            if (labelLength == 0 || labelLength > 63 || previousWasHyphen) validAscii = false
-                            labelLength = 0
-                            previousWasHyphen = false
-                        }
-                        char in 'a'..'z' || char in 'A'..'Z' || char in '0'..'9' -> {
-                            labelLength++
-                            previousWasHyphen = false
-                        }
-                        char == '-' -> {
-                            if (labelLength == 0) validAscii = false
-                            labelLength++
-                            previousWasHyphen = true
-                        }
-                        else -> validAscii = false
-                    }
-                }
-                if (labelLength == 0 || labelLength > 63 || previousWasHyphen) validAscii = false
-
                 val rule = contents.substring(start, end)
-                val canonical = when {
-                    unicode -> {
-                        // The bundled official rules are lowercase NFC. Preserve
-                        // them directly on the cold path; test the invariant.
-                        if (hasUppercase) rule.lowercase(Locale.ROOT) else rule
-                    }
-                    validAscii -> if (hasUppercase) rule.lowercase(Locale.ROOT) else rule
-                    else -> rule.split('.').joinToString(".") { label ->
-                        require(label.isNotEmpty())
-                        canonicalLabel(label)
-                    }
-                }
-
-                val isUnicode = unicode
+                // The vendored, SHA-recorded source is lowercase NFC with no
+                // inline comments, so retain each official rule without a
+                // second normalization/validation pass on the cold path.
+                val isUnicode = rule.any { it.code > 127 }
                 when {
-                    isUnicode && marker == '!' -> rules.exceptionsUnicode += canonical
-                    isUnicode && marker == '*' -> rules.wildcardUnicode += canonical
-                    isUnicode -> rules.exactUnicode += canonical
-                    marker == '!' -> rules.exceptions += canonical
-                    marker == '*' -> rules.wildcard += canonical
-                    else -> rules.exact += canonical
+                    isUnicode && marker == '!' -> rules.exceptionsUnicode += rule
+                    isUnicode && marker == '*' -> rules.wildcardUnicode += rule
+                    isUnicode -> rules.exactUnicode += rule
+                    marker == '!' -> rules.exceptions += rule
+                    marker == '*' -> rules.wildcard += rule
+                    else -> rules.exact += rule
                 }
             }
         }
@@ -241,14 +195,16 @@ object PublicSuffix {
         exactCapacity: Int,
         wildcardCapacity: Int,
         exceptionCapacity: Int,
-        unicodeCapacity: Int,
+        exactUnicodeCapacity: Int,
+        wildcardUnicodeCapacity: Int,
+        exceptionsUnicodeCapacity: Int,
     ) {
         val exact = HashSet<String>(exactCapacity)
         val wildcard = HashSet<String>(wildcardCapacity)
         val exceptions = HashSet<String>(exceptionCapacity)
-        val exactUnicode = HashSet<String>(unicodeCapacity)
-        val wildcardUnicode = HashSet<String>(unicodeCapacity / 32)
-        val exceptionsUnicode = HashSet<String>(unicodeCapacity / 128)
+        val exactUnicode = HashSet<String>(exactUnicodeCapacity)
+        val wildcardUnicode = HashSet<String>(wildcardUnicodeCapacity)
+        val exceptionsUnicode = HashSet<String>(exceptionsUnicodeCapacity)
     }
 
     private fun String.toUnicodeRuleCandidate(): String? =
@@ -269,7 +225,7 @@ object PublicSuffix {
         return label.all { it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9' || it == '-' }
     }
 
-    private const val RESOURCE_PATH = "/psl/public_suffix_list.dat"
+    private const val RESOURCE_PATH = "/psl/public_suffix_list.dat.gz"
     private const val PRIVATE_BEGIN = "// ===BEGIN PRIVATE DOMAINS==="
     private const val PRIVATE_END = "// ===END PRIVATE DOMAINS==="
 }
