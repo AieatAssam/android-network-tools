@@ -35,7 +35,8 @@ typealias PortConnectChecker = (address: InetAddress, port: Int) -> PortConnectR
 data class PortConnectResult(
     val status: PortStatus,
     val responseTimeMs: Long,
-    val banner: String?
+    val banner: String?,
+    val bannerTruncated: Boolean = false,
 )
 
 /**
@@ -95,23 +96,37 @@ class PortScanRepositoryImpl(
                 ).toInt()
 
                 // Attempt a short banner grab only while the per-port budget remains.
-                val banner: String? = try {
+                val bannerRead = try {
                     if (bannerTimeoutMs <= 0) {
-                        null
+                        BannerReadResult(banner = null, truncated = false)
                     } else {
-                        socket.soTimeout = bannerTimeoutMs
-                        val inputStream = socket.getInputStream()
-                        val bytes = ByteArray(256)
-                        val read = inputStream.read(bytes)
-                        if (read > 0) BannerSanitizer.sanitize(String(bytes, 0, read)) else null
+                        BannerReader.read(socket.getInputStream()) {
+                            // SO_TIMEOUT applies to each individual read. Recompute it
+                            // before every partial read so a slow banner cannot spend
+                            // the full cap repeatedly and overrun the per-port budget.
+                            val elapsedNanos = (clock.nowNanos() - start).coerceAtLeast(0L)
+                            val remainingMillis = (
+                                timeoutMs.toLong() * NANOS_PER_MILLISECOND - elapsedNanos
+                            ).coerceAtLeast(0L) / NANOS_PER_MILLISECOND
+                            val nextReadTimeoutMs = minOf(
+                                PortScanOperationBudget.MAX_BANNER_READ_TIMEOUT_MILLIS,
+                                remainingMillis,
+                            ).toInt()
+                            if (nextReadTimeoutMs <= 0) {
+                                false
+                            } else {
+                                socket.soTimeout = nextReadTimeoutMs
+                                true
+                            }
+                        }
                     }
                 } catch (error: SecurityException) {
                     throw LocalNetworkPermissionDeniedException(error)
                 } catch (cancelled: CancellationException) {
                     throw cancelled
-                } catch (_: Exception) { null }
+                } catch (_: Exception) { BannerReadResult(banner = null, truncated = false) }
 
-                PortConnectResult(PortStatus.OPEN, responseTime, banner)
+                PortConnectResult(PortStatus.OPEN, responseTime, bannerRead.banner, bannerRead.truncated)
             } catch (e: ConnectException) {
                 PortConnectResult(PortStatus.CLOSED, clock.elapsedMillisSince(start), null)
             } catch (e: SocketTimeoutException) {
@@ -280,7 +295,8 @@ class PortScanRepositoryImpl(
                                     serviceName = portInfo?.serviceName ?: WellKnownPorts.getServiceName(port),
                                     serviceDescription = portInfo?.description,
                                     banner = connectResult.banner,
-                                    responseTimeMs = connectResult.responseTimeMs
+                                    responseTimeMs = connectResult.responseTimeMs,
+                                    bannerTruncated = connectResult.bannerTruncated,
                                 )
                             )
                         }

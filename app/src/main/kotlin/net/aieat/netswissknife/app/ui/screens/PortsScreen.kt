@@ -1042,14 +1042,24 @@ private fun PortResultRow(result: PortScanResult) {
                 }
 
                 // Banner
-                result.banner?.let { banner ->
+                if (result.banner != null || result.bannerTruncated) {
+                    val banner = result.banner.orEmpty()
+                    val visibleBanner = banner + if (result.bannerTruncated) "…" else ""
+                    val bannerDescription = if (result.bannerTruncated) {
+                        stringResource(R.string.ports_banner_truncated_content_description, banner)
+                    } else {
+                        banner
+                    }
                     Text(
-                        text = banner,
+                        text = visibleBanner,
                         style = MaterialTheme.typography.labelSmall,
                         fontFamily = FontFamily.Monospace,
                         color = MaterialTheme.colorScheme.secondary,
                         maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.semantics {
+                            contentDescription = bannerDescription
+                        },
                     )
                 }
             }
@@ -1084,7 +1094,11 @@ private fun buildScanReport(summary: PortScanSummary): String = buildString {
         appendLine("--- Open Ports ---")
         openPorts.forEach { r ->
             val service = r.serviceName ?: "unknown"
-            val banner = r.banner?.let { " | $it" } ?: ""
+            val banner = when {
+                r.banner != null -> " | ${r.banner}${if (r.bannerTruncated) "…" else ""}"
+                r.bannerTruncated -> " | …"
+                else -> ""
+            }
             appendLine("  ${r.port.toString().padEnd(6)} $service${banner}")
         }
     } else {

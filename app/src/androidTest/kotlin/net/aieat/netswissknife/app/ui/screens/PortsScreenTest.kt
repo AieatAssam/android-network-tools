@@ -39,6 +39,9 @@ import net.aieat.netswissknife.app.ui.navigation.ToolIntentCodec
 import net.aieat.netswissknife.app.ui.theme.NetSwissKnifeTheme
 import net.aieat.netswissknife.core.domain.PortScanPreset
 import net.aieat.netswissknife.core.network.HostValidator
+import net.aieat.netswissknife.core.network.portscan.PortScanResult
+import net.aieat.netswissknife.core.network.portscan.PortScanSummary
+import net.aieat.netswissknife.core.network.portscan.PortStatus
 import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Rule
@@ -250,6 +253,41 @@ class PortsScreenTest {
         composeRule
             .onNodeWithText(context.getString(R.string.ports_scanning_title))
             .assertIsDisplayed()
+    }
+
+    @Test
+    fun truncatedBanner_showsEllipsisAndAccessibleDisclosure() {
+        val banner = "SSH-2.0-OpenSSH_9.0"
+        val result = PortScanResult(
+            port = 22,
+            status = PortStatus.OPEN,
+            serviceName = "SSH",
+            serviceDescription = "Secure Shell",
+            banner = banner,
+            responseTimeMs = 12L,
+            bannerTruncated = true,
+        )
+        val summary = PortScanSummary(
+            host = "example.com",
+            resolvedIp = "192.0.2.10",
+            scannedPorts = listOf(22),
+            openPorts = 1,
+            closedPorts = 0,
+            filteredPorts = 0,
+            scanDurationMs = 12L,
+            results = listOf(result),
+        )
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                PortsScreen(viewModel = fakePortScanViewModel(state = PortScanUiState.Finished(summary)))
+            }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        composeRule.onNodeWithContentDescription(
+            context.getString(R.string.ports_banner_truncated_content_description, banner)
+        ).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("$banner…").performScrollTo().assertIsDisplayed()
     }
 
     @Test

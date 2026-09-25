@@ -493,6 +493,55 @@ class PortScanRepositoryImplTest {
     }
 
     @Test
+    fun `default socket checker reduces timeout for each partial banner read`() = runTest {
+        val clock = FakeClock()
+        val configuredTimeouts = mutableListOf<Int>()
+        val socket = object : Socket() {
+            private var timeout = 0
+
+            override fun connect(endpoint: SocketAddress?, timeout: Int) = Unit
+
+            override fun setSoTimeout(timeout: Int) {
+                this.timeout = timeout
+                configuredTimeouts += timeout
+            }
+
+            override fun getSoTimeout(): Int = timeout
+
+            override fun getInputStream(): InputStream = object : InputStream() {
+                private var readCount = 0
+
+                override fun read(): Int = error("read(byte[], ...) should be used")
+
+                override fun read(bytes: ByteArray, offset: Int, length: Int): Int {
+                    if (readCount++ == 0) {
+                        clock.advanceBy(100_000_000L)
+                        bytes[offset] = 'S'.code.toByte()
+                        return 1
+                    }
+                    clock.advanceBy(timeout * 1_000_000L)
+                    throw SocketTimeoutException("remaining banner budget elapsed")
+                }
+            }
+        }
+        val repo = PortScanRepositoryImpl(
+            clock = clock,
+            hostResolver = { InetAddress.getLoopbackAddress() },
+            socketFactory = { socket },
+        )
+
+        val result = repo.scan("localhost", listOf(22), timeoutMs = 250, concurrency = 1)
+            .filterIsInstance<PortScanUpdate.PortResult>()
+            .toList()
+            .single()
+            .result
+
+        assertEquals(listOf(250, 150), configuredTimeouts)
+        assertEquals("S", result.banner)
+        assertTrue(clock.nowNanos() <= 250_000_000L)
+    }
+
+    @Test
     fun `default socket checker skips banner read when connect exhausts per-port timeout`() = runTest {
         val timeoutMs = 100
         val clock = FakeClock()
@@ -518,6 +567,29 @@ class PortScanRepositoryImplTest {
         assertTrue(!streamRequested, "banner input must not be opened after the timeout budget is exhausted")
         assertEquals(PortStatus.OPEN, updates.filterIsInstance<PortScanUpdate.PortResult>().single().result.status)
         assertTrue(clock.nowNanos() <= timeoutMs * 1_000_000L)
+    }
+
+    @Test
+    fun `default socket checker marks byte capped banner as truncated`() = runTest {
+        val socket = object : Socket() {
+            override fun connect(endpoint: SocketAddress?, timeout: Int) = Unit
+
+            override fun getInputStream(): InputStream =
+                ByteArrayInputStream(ByteArray(BannerReader.MAX_BYTES) { 'A'.code.toByte() })
+        }
+        val repo = PortScanRepositoryImpl(
+            hostResolver = { InetAddress.getLoopbackAddress() },
+            socketFactory = { socket },
+        )
+
+        val result = repo.scan("localhost", listOf(22), timeoutMs = 1000, concurrency = 1)
+            .filterIsInstance<PortScanUpdate.PortResult>()
+            .toList()
+            .single()
+            .result
+
+        assertTrue(result.bannerTruncated)
+        assertEquals("A".repeat(200), result.banner)
     }
 
     @Test
@@ -872,6 +944,22 @@ class PortScanRepositoryImplTest {
             val updates = repo.scan("host", listOf(22), timeoutMs = 1000, concurrency = 10).toList()
             val result = updates.filterIsInstance<PortScanUpdate.PortResult>().first().result
             assertEquals("SSH-2.0-OpenSSH_9.0", result.banner)
+        }
+
+        @Test
+        fun `banner truncation flag from checker is propagated to result`() = runTest {
+            val repo = testRepository(checker = { _, _ ->
+                PortConnectResult(
+                    status = PortStatus.OPEN,
+                    responseTimeMs = 10L,
+                    banner = "HTTP/1.0 200 OK",
+                    bannerTruncated = true,
+                )
+            })
+
+            val updates = repo.scan("host", listOf(80), timeoutMs = 1000, concurrency = 10).toList()
+            val result = updates.filterIsInstance<PortScanUpdate.PortResult>().first().result
+            assertTrue(result.bannerTruncated)
         }
 
         @Test

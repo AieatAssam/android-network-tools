@@ -9,6 +9,7 @@ package net.aieat.netswissknife.core.network.portscan
  * @param serviceDescription Human-readable description of the service, or null.
  * @param banner          Protocol banner grabbed from the port (e.g. SSH version string), or null.
  * @param responseTimeMs  Round-trip time for the connection probe in milliseconds.
+ * @param bannerTruncated Whether the retained banner was cut off by a byte or display safety cap.
  */
 data class PortScanResult(
     val port: Int,
@@ -16,5 +17,6 @@ data class PortScanResult(
     val serviceName: String?,
     val serviceDescription: String?,
     val banner: String?,
-    val responseTimeMs: Long
+    val responseTimeMs: Long,
+    val bannerTruncated: Boolean = false,
 )

@@ -183,6 +183,7 @@
         <item quantity="other">%1$d / %2$d ports</item>
     </plurals>
     <string name="ports_ms_suffix">ms</string>
+    <string name="ports_banner_truncated_content_description">Banner truncated: %1$s</string>
     <string name="ports_no_open_ports">No open ports found</string>
     <string name="ports_open_label">OPEN</string>
     <string name="ports_closed_label">CLOSED</string>
