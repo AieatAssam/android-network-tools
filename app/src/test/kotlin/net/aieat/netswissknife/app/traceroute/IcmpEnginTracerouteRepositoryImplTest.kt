@@ -3,6 +3,7 @@ package net.aieat.netswissknife.app.traceroute
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.flow.flow
@@ -15,9 +16,11 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.supervisorScope
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import net.aieat.netswissknife.core.network.traceroute.TracerouteProbeType
 import net.aieat.netswissknife.core.network.traceroute.TracerouteOperation
 import net.aieat.netswissknife.core.network.traceroute.HopResult
@@ -26,6 +29,7 @@ import net.aieat.netswissknife.core.network.operation.CancellationReason
 import net.aieat.netswissknife.core.network.operation.OperationCancellationException
 import net.aieat.netswissknife.core.network.operation.OperationBudget
 import net.aieat.netswissknife.core.network.operation.OperationSession
+import net.aieat.netswissknife.core.network.operation.OperationRunner
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertInstanceOf
 import org.junit.jupiter.api.Assertions.assertThrows
@@ -121,6 +125,143 @@ class IcmpEnginTracerouteRepositoryImplTest {
 
         assertEquals("example.com", resolverHost)
         assertEquals("93.184.216.34", nativeHost)
+    }
+
+    @Test
+    fun `hostname resolution shares reverse dns production pool capacity and recovers after queued cancellation`() = runBlocking {
+        supervisorScope {
+            val executor = TracerouteNameResolutionWorkers.createExecutor()
+            val releaseResolvers = CountDownLatch(1)
+            val activeResolversEntered = CountDownLatch(REVERSE_DNS_WORKER_COUNT)
+            val reverseResolverCalls = AtomicInteger()
+            val reverseLookup = BoundedTracerouteReverseDnsLookup(executor) {
+                reverseResolverCalls.incrementAndGet()
+                activeResolversEntered.countDown()
+                var released = false
+                while (!released) {
+                    try {
+                        released = releaseResolvers.await(10, TimeUnit.MILLISECONDS)
+                    } catch (_: InterruptedException) {
+                        // Simulate platform name service work that outlives interruption.
+                    }
+                }
+                "router.example"
+            }
+            val reverseCount = REVERSE_DNS_WORKER_COUNT + REVERSE_DNS_QUEUE_CAPACITY
+            val reverseSessions = List(reverseCount) {
+                OperationSession(OperationBudget.startUnbounded(maxConcurrentProbes = 1))
+            }
+            val reverseJobs = mutableListOf<kotlinx.coroutines.Deferred<String?>>()
+
+            fun startReverseLookup(index: Int) {
+                val session = reverseSessions[index]
+                reverseJobs += async(Dispatchers.IO) {
+                    OperationRunner.run(session) {
+                        reverseLookup.lookup("192.0.2.$index", session)
+                    }
+                }
+            }
+            val hostnameResolverCalls = AtomicInteger()
+            val nativeFactoryCalls = AtomicInteger()
+            val repository = IcmpEnginTracerouteRepositoryImpl(
+                nativeTraceFactory = { host, _, _, _, _, _, _ ->
+                    nativeFactoryCalls.incrementAndGet()
+                    assertEquals("198.51.100.8", host)
+                    flowOf()
+                },
+                hostResolver = BoundedTracerouteHostResolver(executor) {
+                    hostnameResolverCalls.incrementAndGet()
+                    "198.51.100.8"
+                },
+            )
+            val deniedSession = OperationSession(OperationBudget.start(timeoutMillis = 60_000))
+            val cancelledQueueIndex = REVERSE_DNS_WORKER_COUNT
+            var deniedTrace: kotlinx.coroutines.Deferred<List<HopResult>>? = null
+            var recoveredTrace: kotlinx.coroutines.Deferred<List<HopResult>>? = null
+            var hostnameSession: OperationSession? = null
+
+            try {
+                // Occupy both workers before submitting any queued reverse lookups. This makes
+                // the session chosen for cancellation provably queued, independent of dispatcher
+                // scheduling order.
+                repeat(REVERSE_DNS_WORKER_COUNT) { startReverseLookup(it) }
+                assertTrue(activeResolversEntered.await(2, TimeUnit.SECONDS))
+                repeat(REVERSE_DNS_QUEUE_CAPACITY) { offset ->
+                    startReverseLookup(REVERSE_DNS_WORKER_COUNT + offset)
+                }
+                withTimeout(2_000) {
+                    while (executor.queue.size != REVERSE_DNS_QUEUE_CAPACITY) kotlinx.coroutines.yield()
+                }
+                assertEquals(REVERSE_DNS_WORKER_COUNT, executor.activeCount)
+                assertEquals(REVERSE_DNS_QUEUE_CAPACITY, executor.queue.size)
+                assertEquals(REVERSE_DNS_WORKER_COUNT, reverseResolverCalls.get())
+
+                val deniedTraceJob = async(Dispatchers.IO) {
+                    repository.trace(
+                        "switch.example", 2, 500, 1, TracerouteProbeType.ICMP, 56, deniedSession,
+                    ).toList()
+                }
+                deniedTrace = deniedTraceJob
+                val rejection = runCatching {
+                    withTimeout(2_000) { deniedTraceJob.await() }
+                }.exceptionOrNull()
+                assertInstanceOf(RejectedExecutionException::class.java, rejection)
+                assertEquals(0, hostnameResolverCalls.get(), "a rejected hostname task must not enter DNS resolution")
+                assertEquals(0, nativeFactoryCalls.get(), "native trace construction must wait for hostname resolution")
+                assertTrue(deniedSession.resources.isClosed)
+                assertEquals(REVERSE_DNS_QUEUE_CAPACITY, executor.queue.size)
+
+                reverseSessions[cancelledQueueIndex].cancel(CancellationReason.USER_STOP)
+                val cancelledLookupFailure = runCatching {
+                    withTimeout(2_000) { reverseJobs[cancelledQueueIndex].await() }
+                }.exceptionOrNull()
+                assertInstanceOf(OperationCancellationException::class.java, cancelledLookupFailure)
+                withTimeout(2_000) {
+                    while (executor.queue.size != REVERSE_DNS_QUEUE_CAPACITY - 1) kotlinx.coroutines.yield()
+                }
+
+                val recoveredSession = OperationSession(OperationBudget.start(timeoutMillis = 60_000))
+                hostnameSession = recoveredSession
+                val recoveredTraceJob = async(Dispatchers.IO) {
+                    repository.trace(
+                        "switch.example", 2, 500, 1, TracerouteProbeType.ICMP, 56, recoveredSession,
+                    ).toList()
+                }
+                recoveredTrace = recoveredTraceJob
+                withTimeout(2_000) {
+                    while (executor.queue.size != REVERSE_DNS_QUEUE_CAPACITY) kotlinx.coroutines.yield()
+                }
+                assertEquals(0, hostnameResolverCalls.get(), "the recovered task should remain queued behind active work")
+                assertEquals(0, nativeFactoryCalls.get())
+
+                releaseResolvers.countDown()
+                recoveredTraceJob.await()
+                reverseJobs.filterIndexed { index, _ -> index != cancelledQueueIndex }.awaitAll()
+
+                assertEquals(1, hostnameResolverCalls.get())
+                assertEquals(1, nativeFactoryCalls.get())
+                assertEquals(reverseCount - 1, reverseResolverCalls.get())
+                assertEquals(CancellationReason.USER_STOP, reverseSessions[cancelledQueueIndex].cancellationReason)
+                assertTrue(reverseSessions.all { it.resources.isClosed })
+                assertTrue(recoveredSession.resources.isClosed)
+                withTimeout(2_000) {
+                    while (executor.activeCount != 0 || executor.queue.isNotEmpty()) kotlinx.coroutines.yield()
+                }
+            } finally {
+                releaseResolvers.countDown()
+                deniedSession.cancel(CancellationReason.USER_STOP)
+                hostnameSession?.cancel(CancellationReason.USER_STOP)
+                reverseSessions.forEach { it.cancel(CancellationReason.USER_STOP) }
+                reverseJobs.forEach { it.cancel() }
+                reverseJobs.forEach { runCatching { it.await() } }
+                deniedTrace?.cancel()
+                recoveredTrace?.cancel()
+                deniedTrace?.let { runCatching { it.await() } }
+                recoveredTrace?.let { runCatching { it.await() } }
+                executor.shutdownNow()
+                assertTrue(executor.awaitTermination(2, TimeUnit.SECONDS))
+            }
+        }
     }
 
     @Test

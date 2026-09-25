@@ -106,6 +106,34 @@ class PortsScreenTest {
     }
 
     @Test
+    fun presetSelectorRendersLocalizedResourceLabels() {
+        composeRule.setContent {
+            NetSwissKnifeTheme { PortsScreen(viewModel = fakePortScanViewModel()) }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        composeRule.onNodeWithText(context.getString(R.string.ports_preset_common_services))
+            .assertIsDisplayed()
+        composeRule.onNodeWithTag(PortsScreenTestTags.PRESET_FIELD).performClick()
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        listOf(
+            R.string.ports_preset_common_services,
+            R.string.ports_preset_well_known,
+            R.string.ports_preset_web_services,
+            R.string.ports_preset_databases,
+            R.string.ports_preset_mail_services,
+            R.string.ports_preset_remote_access,
+            R.string.ports_preset_custom_range,
+        ).forEach { resourceId ->
+            composeRule
+                .onAllNodesWithText(context.getString(resourceId))
+                .onLast()
+                .assertIsDisplayed()
+        }
+    }
+
+    @Test
     fun lanHandoff_prefillsHostAndShowsSourceWithoutStartingScan() {
         val viewModel = fakePortScanViewModel(host = "192.0.2.8")
         every { viewModel.sourceContext } answers {
@@ -372,7 +400,7 @@ class PortsScreenTest {
         composeRule.mainClock.advanceTimeBy(1_000L)
         composeRule.onNodeWithTag(PortsScreenTestTags.PRESET_FIELD).performClick()
         composeRule
-            .onAllNodesWithText(PortScanPreset.COMMON.label)
+            .onAllNodesWithText(context.getString(R.string.ports_preset_common_services))
             .onLast()
             .performClick()
 

@@ -224,6 +224,13 @@
     <string name="ports_host_label">Host or IP address</string>
     <string name="ports_host_placeholder">e.g. example.com or 192.168.1.1</string>
     <string name="ports_preset_label">Port preset</string>
+    <string name="ports_preset_common_services">Common services</string>
+    <string name="ports_preset_well_known">Well-known (1–1024)</string>
+    <string name="ports_preset_web_services">Web services</string>
+    <string name="ports_preset_databases">Databases</string>
+    <string name="ports_preset_mail_services">Mail services</string>
+    <string name="ports_preset_remote_access">Remote access</string>
+    <string name="ports_preset_custom_range">Custom range</string>
     <string name="ports_start_port_label">Start port</string>
     <string name="ports_end_port_label">End port</string>
     <string name="ports_range_error">1–65535</string>

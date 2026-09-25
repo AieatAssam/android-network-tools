@@ -44,7 +44,7 @@ class ToolStateAnnouncerCoverageTest {
             val source = file.readText()
             val calls = Regex("\\bToolStateAnnouncer\\s*\\(").findAll(source).count()
             assertEquals(1, calls, "$relativePath must call ToolStateAnnouncer once")
-            val mappingStart = source.indexOf("val announcementPhase = when")
+            val mappingStart = source.indexOf("val announcementPhase =")
             assertTrue(mappingStart >= 0, "$relativePath must derive announcementPhase from tool state")
             val callStart = source.indexOf("ToolStateAnnouncer(", mappingStart)
             assertTrue(callStart > mappingStart, "$relativePath must pass its derived phase to the announcer")

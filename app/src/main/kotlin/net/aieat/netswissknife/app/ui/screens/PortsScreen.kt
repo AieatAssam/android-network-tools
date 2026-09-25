@@ -118,6 +118,8 @@ import net.aieat.netswissknife.app.ui.components.ToolErrorCard
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
 import net.aieat.netswissknife.app.ui.components.ToolStopButton
+import net.aieat.netswissknife.app.ui.i18n.asString
+import net.aieat.netswissknife.app.ui.i18n.uiText
 import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
@@ -517,7 +519,7 @@ private fun PortScanInputCard(
                 onExpandedChange = { presetExpanded = !presetExpanded }
             ) {
                 OutlinedTextField(
-                    value = selectedPreset.label,
+                    value = selectedPreset.uiText().asString(),
                     onValueChange = {},
                     readOnly = true,
                     label = { Text(stringResource(R.string.ports_preset_label)) },
@@ -533,7 +535,7 @@ private fun PortScanInputCard(
                 ) {
                     PortScanPreset.entries.forEach { preset ->
                         DropdownMenuItem(
-                            text = { Text(preset.label) },
+                            text = { Text(preset.uiText().asString()) },
                             onClick = {
                                 onPresetChange(preset)
                                 presetExpanded = false
