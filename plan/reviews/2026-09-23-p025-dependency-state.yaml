@@ -1,10 +1,10 @@
 review:
   id: P02.5-dependency-state
-  checked_at: "2026-09-25T00:23:31Z"
+  checked_at: "2026-09-25T01:04:27Z"
   branch: "plan/comprehensive-review-2026-09-22"
-  commit: "bb10833cea79b05a1b4754cb5d8f3152567d6215"
+  commit: "8b902c7de20182581849eed13aa16cb2b9e218e4"
   status: "open"
-  worktree_delta: "At bb10833, exact-head Automatic Dependency Submission confirms patched versions for all alerted coordinates. The current worktree has uncommitted P10-T3 OkHttp 5.5.0 changes that are not included in that submission snapshot."
+  worktree_delta: "At pushed HEAD 8b902c7, exact-head Automatic Dependency Submission confirms patched versions for all alerted coordinates, including the new OkHttp 5.5.0 dependencies. Only the pre-existing untracked comprehensive-review YAML remains outside the commit."
   initial_snapshot: { checked_at: "2026-09-23T22:37:21Z", commit: "7106a5bafa21bf0b30b91afb98470d8d10b184c8", worktree_delta: "Uncommitted app/build.gradle.kts constraints for :app:androidLintTool; this source change had not yet been submitted to GitHub." }
   sources:
     alerts_command: "gh api --paginate repos/AieatAssam/android-network-tools/dependabot/alerts"
@@ -130,6 +130,39 @@ current_recheck_2026_09_25T0023Z:
   pull_request_state:
     result: "No pull request exists for this topic branch."
     disposition: "P02.5 remains in progress until the reviewed changes reach protected main, a fresh main ADS/SBOM and alert scan runs, and every still-actionable alert is closed or has an approved time-bounded disposition."
+
+current_recheck_2026_09_25T0103Z:
+  checked_at: "2026-09-25T01:03:45Z"
+  topic_branch_head: "8b902c7de20182581849eed13aa16cb2b9e218e4"
+  exact_head_ads:
+    run_id: 36080254374
+    url: "https://github.com/AieatAssam/android-network-tools/actions/runs/36080254374"
+    completed_at: "2026-09-25T01:03:26Z"
+    artifact_id: 10841039981
+    artifact_bytes: 13248
+    component_count: 417
+    result: "Successful exact-HEAD submission; artifact SHA/ref match 8b902c7. Includes com.squareup.okhttp3:okhttp:5.5.0 and mockwebserver3:5.5.0; okhttp:4.12.0 also appears as a separate resolved version. Every currently alerted coordinate resolves to a patched version. Confirms P02.5-T3 for this pushed snapshot, not local P02.5-T4 gates."
+    patched_alert_coordinates: { "org.freemarker:freemarker": "2.3.35", "org.bouncycastle:bcprov-jdk18on": "1.85", "org.bouncycastle:bcpkix-jdk18on": "1.85", "org.apache.commons:commons-lang3": "3.18.0", "org.apache.httpcomponents:httpclient": "4.5.14", "org.bitbucket.b_c:jose4j": "0.9.6", "org.jdom:jdom2": "2.0.6.1", "org.jetbrains.kotlin:kotlin-gradle-plugin": "2.4.20" }
+  default_branch_state:
+    head: "5e183721e64ce8a8946f1a0b50f52b83544e8898"
+    latest_successful_ads_run: 35601558226
+    ads_component_count: 415
+    note: "No newer main ADS run exists; the default branch remains on the pre-remediation snapshot."
+  repository_sbom:
+    generated_at: "2026-09-25T01:03:45Z"
+    format: "SPDX-2.3"
+    package_count: 425
+    sha256: "6ac004f29b222256a21d841b44c83a26f3206709234348035cc4e7e5f2b70dda"
+    interpretation: "This remains the main/default-branch graph: it shows okhttp:4.12.0 but not topic-only okhttp/mockwebserver3 5.5.0, and retains old plus patched versions of alerted coordinates."
+  dependabot_alerts:
+    checked_at: "2026-09-25T01:03:45Z"
+    total: 10
+    open: [1, 2, 5, 6, 8, 9, 10]
+    fixed: [3, 4, 7]
+    changed_since_prior_recheck: false
+  pull_request_state:
+    result: "No pull request exists for this topic branch."
+    disposition: "P02.5-T3 is confirmed for 8b902c7. P02.5-T4 and the phase remain open until reviewed changes reach protected main, a fresh main ADS/SBOM/alert scan completes, and each actionable alert is closed or has an approved time-bounded disposition."
 
 prior_recheck_2026_09_23:
   checked_at: "2026-09-23T22:34:40Z"
