@@ -56,7 +56,7 @@ class GeoIpRepositoryImpl internal constructor(
 
     override suspend fun lookup(ip: String): HopGeoLocation? {
         currentCoroutineContext().ensureActive()
-        if (isPrivateOrReserved(ip)) return null
+        if (!ReservedRanges.isPublicGlobalLiteral(ip)) return null
         cache[ip]?.let { return it }
         val session = newOperationSession(clock)
         val result = executeLookup(ip, session, mapDeadlineToNull = true)
@@ -71,7 +71,7 @@ class GeoIpRepositoryImpl internal constructor(
             throw OperationCancellationException(reason)
         }
         operationSession.budget.throwIfExpired()
-        if (isPrivateOrReserved(ip)) return null
+        if (!ReservedRanges.isPublicGlobalLiteral(ip)) return null
         cache[ip]?.let { return it }
         val result = executeLookup(ip, operationSession, mapDeadlineToNull = false)
         if (result != null) cache[ip] = result
@@ -317,21 +317,6 @@ class GeoIpRepositoryImpl internal constructor(
                 else -> return false
             }
         }
-    }
-
-    // ── Private IP detection ──────────────────────────────────────────────────
-
-    private fun isPrivateOrReserved(ip: String): Boolean {
-        val parts = ip.split(".").mapNotNull { it.toIntOrNull() }
-        if (parts.size != 4) return true
-        val (a, b) = parts
-        return a == 10 ||
-               (a == 172 && b in 16..31) ||
-               (a == 192 && b == 168) ||
-               a == 127 ||
-               (a == 169 && b == 254) ||
-               a == 0 ||
-               a >= 240
     }
 
     // ── Country code → full name (ISO 3166-1 alpha-2 for common countries) ───

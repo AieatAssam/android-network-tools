@@ -138,19 +138,20 @@ findings:
     title: "Stopped traceroute results discard elapsed-time metadata"
     evidence:
       - file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/traceroute/TracerouteViewModel.kt
-        line: 106
-        detail: "onStop() cancels the trace and builds a Finished result from accumulated hops without passing elapsed time, so buildResult() uses its default totalMs = 0L."
-      - file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/traceroute/TracerouteViewModel.kt
         line: 157
-        detail: "startTrace() already records startTime for normal completion, but that timestamp is local to the coroutine setup and is unavailable to onStop()."
+        detail: "onStop() snapshots elapsed time from the trace's monotonic start timestamp into the Canceling state."
+      - file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/traceroute/TracerouteViewModel.kt
+        line: 313
+        detail: "After cleanup, the Canceled result passes the captured elapsedMs into TracerouteResult.totalTimeMs. This source fix landed in 08816411."
       - file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/TracerouteScreen.kt
-        line: 720
-        detail: "The Finished view renders totalTimeMs == 0 as N/A, so a user-stopped route with visible hops loses the timing metric even though the stop moment is known."
-    impact: "Partial traceroute diagnostics are less useful and differ from naturally completed traces; reports/screens cannot distinguish an instantaneous route from a stopped run with unknown timing."
-    recommended_action: "Retain a start timestamp alongside the Running state and compute elapsed time on stop (or explicitly model unknown duration rather than conflating it with zero); add stopped-trace assertions for totalTimeMs and report output."
-    validation: "Start a deferred trace, emit one hop, stop it, and assert Finished.result.totalTimeMs is positive/nonnegative according to the chosen contract and is rendered consistently with normal completion."
+        line: 230
+        detail: "Canceled state is rendered through TracerouteFinishedPanel, where the result's totalTimeMs is displayed at line 802."
+    impact: "The original finding was stale against the current branch: elapsed time had already been retained in the canceled partial result, but no deterministic regression proved it."
+    recommended_action: "Verify and preserve elapsed-time metadata through stop, cleanup, and partial-result rendering."
+    resolution: "Source behavior was already fixed in 08816411. This follow-up added an injectable monotonic clock and a deterministic regression that advances 2,350 ms, stops after one hop, waits for cleanup, and checks Canceling.elapsedMs and Canceled.result.totalTimeMs are both 2,350 while the partial hop is retained. The test also waits for a preceding cancellation test's collector cleanup to avoid cross-test dispatcher races."
+    validation: "`./gradlew :app:testDebugUnitTest --tests '*TracerouteViewModelTest' --no-daemon --no-parallel --max-workers=1 --console=plain` passed 23 tests with zero failures/errors. QA and adversarial review found no blocker. No emulator was used; the display path was source-checked, not instrumented."
     related_phase: P11
-    status: todo
+    status: done
 
   - id: RUI008
     severity: medium

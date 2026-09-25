@@ -26,12 +26,12 @@ phase:
 
 review_follow_up:
   reviewed_on: "2026-09-21"
-  status: in_progress
+  status: done
   findings: [RNET007, RNET008, RUI002, RUI007]
   reports:
     - plan/reviews/2026-09-21-network.yaml
     - plan/reviews/2026-09-21-ui-domain.yaml
-  note: "RNET007 and RNET008 are closed with regression coverage. RUI002 and RUI007 remain open. See report evidence, resolution, and validation."
+  note: "RNET007, RNET008, RUI002, and RUI007 are closed with regression coverage. See report evidence, resolution, and validation."
 
 context:
   problem: |
@@ -146,16 +146,16 @@ tasks:
     status: in_progress
     current_progress:
       date: "2026-09-25"
-      implemented: "The E03-T01 traceroute slice emits raw hops immediately, performs reverse-DNS and GeoIP enrichment asynchronously under the caller session with bounded concurrency and lookup timeouts, and merges enrichment by hop number without changing row order. Per-probe RTTs now retain nullable ordered slots, show localized success/no-reply markers with accessible numbered descriptions, and display success-only min/average/max. A deadline during enrichment preserves the raw partial hop."
-      fixed_in: "766519b5db6a89b70522b2a5f882501a4c2ba95f"
-      validation: "Serialized current-tree gates passed: core-network 1,206 (one skipped), core-domain 214, app 536; Android-test Kotlin compilation, all three Kover gates, lintDebug, assembleDebug, and assembleRelease passed. Independent QA/adversarial review cleared probe status wording. No emulator or live-network trace was used."
-      remaining: "P11-T2 remains in_progress: provider fallback/cache/breaker, reserved-range classification, IPv6 enrichment, country flags, and the manual 1.1.1.1 three-probe validation remain open."
+      implemented: "The E03-T01 traceroute slice emits raw hops immediately, performs reverse-DNS and GeoIP enrichment asynchronously under the caller session with bounded concurrency and lookup timeouts, and merges enrichment by hop number without changing row order. Per-probe RTTs retain nullable ordered slots, show localized success/no-reply markers with accessible numbered descriptions, and display success-only min/average/max. A deadline during enrichment preserves the raw partial hop. GeoIP now uses strict numeric IPv4/IPv6 parsing and filters non-global ranges before transport, including mapped IPv4 and NAT64 embedded destinations; public IPv4 and IPv6 literals pass through. Stopped partial results retain measured elapsed time through cleanup."
+      fixed_in: "pending commit hash"
+      validation: "Serialized focused gates passed: core GeoIpRepositoryImplTest and ReservedRangesTest 23/23; app TracerouteViewModelTest 23/23, all zero failures/errors. Independent QA and adversarial reviews cleared address parsing/classification, mapped/NAT64 behavior, no-DNS fail-closed handling, and canceled-result timing. The supplied release QA brief was re-audited against this diff; no listed source regression surfaced. No emulator, live network trace, host snmpd, or physical Wi-Fi device was used."
+      remaining: "P11-T2 remains in_progress: provider fallback and breaker, bounded/evicting cache policy, country flags, and the manual 1.1.1.1 three-probe validation remain open. Public IPv6 lookup eligibility and reserved-range classification are implemented; provider-backed live IPv6 enrichment remains unverified."
     tdd:
       red:
         tests:
           - "TracerouteHopMapperTest (app, pure mirror): probes [1500us, no reply, 2500us] -> probes [1, null, 2], min 1 avg 1.5 max 2"
           - "TracerouteUseCaseTest: hops emitted before enrichment; HopEnriched arrives with hostname and geo; enrichment failure never drops a hop; parallelism bounded (fake resolver counts concurrent calls <= 4)"
-          - "ReservedRangesTest: 100.64.0.1 reserved; 192.0.2.5 reserved; 8.8.8.8 public; fe80::1 reserved; 2001:4860:4860::8888 public; ::ffff:10.0.0.1 reserved"
+          - "ReservedRangesTest: IPv4 special-use boundaries and exceptions; IPv6 ULA/link-local/docs/dummy/transition/future-use ranges; globally reachable IPv6 exceptions; mapped and NAT64-embedded IPv4 targets; malformed literals rejected"
           - "GeoIpRepositoryImplTest: provider 1 fails -> provider 2 used; 3 consecutive failures open the breaker for 60 s (virtual clock); cache hit avoids network"
           - "Provider parsers: fixtures for each provider -> HopGeoLocation; CountryFlags('GB') == '🇬🇧'; countryName('DE') == 'Germany'"
           - "TracerouteViewModelTest: HopEnriched merges into Running/Finished hop lists without reordering"

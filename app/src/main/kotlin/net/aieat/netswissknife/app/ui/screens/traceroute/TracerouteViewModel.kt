@@ -103,6 +103,7 @@ class TracerouteViewModel @Inject constructor(
     private var traceJob: Job? = null
     private var traceSession: OperationSession? = null
     private var traceStartedAtNanos: Long? = null
+    internal var monotonicTimeNs: () -> Long = System::nanoTime
     /** Incremented each time a new trace is started; guards against stale emissions. */
     private var traceGeneration = 0
 
@@ -224,7 +225,7 @@ class TracerouteViewModel @Inject constructor(
         val session = operationSessionFactory(params)
         traceSession = session
         val trimmedHost = params.host
-        val startedAtNanos = System.nanoTime()
+        val startedAtNanos = monotonicTimeNs()
         traceStartedAtNanos = startedAtNanos
         val accumulated = mutableListOf<HopResult>()
         var terminalError: String? = null
@@ -395,5 +396,5 @@ class TracerouteViewModel @Inject constructor(
     private fun elapsedSinceStartMs(): Long = traceStartedAtNanos?.let(::elapsedMsSince) ?: 0L
 
     private fun elapsedMsSince(startedAtNanos: Long): Long =
-        ((System.nanoTime() - startedAtNanos).coerceAtLeast(0L) / 1_000_000L)
+        ((monotonicTimeNs() - startedAtNanos).coerceAtLeast(0L) / 1_000_000L)
 }

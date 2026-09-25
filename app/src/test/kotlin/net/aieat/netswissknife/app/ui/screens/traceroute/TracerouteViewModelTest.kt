@@ -235,6 +235,41 @@ class TracerouteViewModelTest {
     inner class CancelAndClear {
 
         @Test
+        fun `user stop preserves elapsed duration in canceled partial result`() = runTest {
+            val cleanupStarted = CountDownLatch(1)
+            val allowCleanupToFinish = CountDownLatch(1)
+            var nowNanos = 5_000_000_000L
+            viewModel.monotonicTimeNs = { nowNanos }
+            every { tracerouteUseCase(any(), any()) } answers {
+                val session = secondArg<OperationSession>()
+                flow {
+                    session.resources.register(AutoCloseable {
+                        cleanupStarted.countDown()
+                        check(allowCleanupToFinish.await(5, TimeUnit.SECONDS))
+                    })
+                    emit(TracerouteFlowResult.Hop(stubHop))
+                    awaitCancellation()
+                }
+            }
+            viewModel.onHostChange("example.com")
+            viewModel.startTrace()
+            assertEquals(listOf(stubHop), (viewModel.uiState.value as TracerouteUiState.Running).hops)
+
+            nowNanos += 2_350_000_000L
+            viewModel.onStop()
+
+            val canceling = viewModel.uiState.value as TracerouteUiState.Canceling
+            assertEquals(2_350L, canceling.elapsedMs)
+            assertTrue(withContext(Dispatchers.IO) { cleanupStarted.await(2, TimeUnit.SECONDS) })
+            allowCleanupToFinish.countDown()
+
+            val canceled = viewModel.uiState.first { it is TracerouteUiState.Canceled }
+                as TracerouteUiState.Canceled
+            assertEquals(2_350L, canceled.result.totalTimeMs)
+            assertEquals(listOf(stubHop), canceled.result.hops)
+        }
+
+        @Test
         fun `onStop holds Canceling until cleanup finishes then keeps partial hops`() = runTest {
             val cleanupStarted = CountDownLatch(1)
             val allowCleanupToFinish = CountDownLatch(1)
@@ -275,13 +310,14 @@ class TracerouteViewModelTest {
         @Test
         fun `first hop remains visible and in partial results while recent write is suspended`() = runTest {
             val recentWrite = CompletableDeferred<Unit>()
+            val traceCollectorFinished = CountDownLatch(1)
             coEvery {
                 recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_TRACEROUTE_HOSTS, "example.com")
             } coAnswers { recentWrite.await() }
             every { tracerouteUseCase(any(), any()) } returns kotlinx.coroutines.flow.flow {
                 emit(TracerouteFlowResult.Hop(stubHop))
                 awaitCancellation()
-            }
+            }.onCompletion { traceCollectorFinished.countDown() }
             viewModel.onHostChange("example.com")
 
             viewModel.startTrace()
@@ -291,6 +327,10 @@ class TracerouteViewModelTest {
             val canceling = viewModel.uiState.value as TracerouteUiState.Canceling
             assertEquals(listOf(stubHop), canceling.hops)
             recentWrite.complete(Unit)
+            assertTrue(withContext(Dispatchers.IO) { traceCollectorFinished.await(2, TimeUnit.SECONDS) })
+            val canceled = viewModel.uiState.first { it is TracerouteUiState.Canceled }
+                as TracerouteUiState.Canceled
+            assertEquals(listOf(stubHop), canceled.result.hops)
         }
 
         @Test

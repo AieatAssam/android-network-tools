@@ -206,6 +206,104 @@ class GeoIpRepositoryImplTest {
     }
 
     @Test
+    @DisplayName("all non-public IPv4 special-use ranges are skipped before opening a connection")
+    fun `special use IPv4 ranges short circuit lookup`() = runTest {
+        val connectionAttempts = AtomicInteger()
+        val repo = GeoIpRepositoryImpl("https://example.invalid") {
+            connectionAttempts.incrementAndGet()
+            error("Must not connect")
+        }
+
+        listOf(
+            "100.64.0.1",     // Shared address space / CGNAT (100.64.0.0/10)
+            "100.127.255.254",
+            "192.0.2.5",      // Documentation (TEST-NET-1)
+            "198.51.100.7",   // Documentation (TEST-NET-2)
+            "203.0.113.9",    // Documentation (TEST-NET-3)
+            "198.18.0.1",     // Benchmarking (198.18.0.0/15)
+            "198.19.255.254",
+            "224.0.0.1",      // Multicast (224.0.0.0/4)
+            "239.255.255.250",
+        ).forEach { ip ->
+            assertNull(repo.lookup(ip), "Expected special-use address $ip to be skipped")
+        }
+
+        assertEquals(0, connectionAttempts.get(), "Special-use IPv4 addresses must not open connections")
+    }
+
+    @Test
+    @DisplayName("non-public IPv6 ranges and IPv4-mapped private addresses are skipped")
+    fun `special use IPv6 and mapped IPv4 ranges short circuit lookup`() = runTest {
+        val connectionAttempts = AtomicInteger()
+        val repo = GeoIpRepositoryImpl("https://example.invalid") {
+            connectionAttempts.incrementAndGet()
+            error("Must not connect")
+        }
+
+        listOf(
+            "::1",                    // IPv6 loopback
+            "fe80::1",                // IPv6 link-local
+            "febf:ffff::1",           // Last address in fe80::/10
+            "fc00::1",                // IPv6 unique-local
+            "fdff:ffff::1",           // Last address in fc00::/7
+            "2001:db8::1",            // IPv6 documentation (2001:db8::/32)
+            "::ffff:10.0.0.1",        // IPv4-mapped RFC 1918 address
+            "::ffff:100.64.0.1",      // IPv4-mapped CGNAT address
+            "::ffff:192.0.2.1",       // IPv4-mapped documentation address
+            "64:ff9b::a00:1",         // NAT64 with embedded RFC 1918 address
+            "64:ff9b::c000:201",      // NAT64 with embedded documentation address
+        ).forEach { ip ->
+            assertNull(repo.lookup(ip), "Expected special-use IPv6/mapped address $ip to be skipped")
+        }
+
+        assertEquals(0, connectionAttempts.get(), "Special-use IPv6 addresses must not open connections")
+    }
+
+    @Test
+    @DisplayName("public IPv4 and IPv6 literals reach the injected connection factory")
+    fun `public address literals are passed to the connection factory`() = runTest {
+        val requestedPaths = mutableListOf<String>()
+        val repo = GeoIpRepositoryImpl(
+            baseUrl = "https://geo.test",
+            connectionFactory = GeoIpConnectionFactory { url ->
+                requestedPaths += url.path
+                ResponseGeoIpConnection(url)
+            },
+        )
+
+        assertEquals("United States", repo.lookup("8.8.8.8")?.country)
+        assertEquals("United States", repo.lookup("2001:4860:4860::8888")?.country)
+        assertEquals("United States", repo.lookup("::ffff:8.8.8.8")?.country)
+        assertEquals(
+            listOf("/8.8.8.8/json", "/2001:4860:4860::8888/json", "/::ffff:8.8.8.8/json"),
+            requestedPaths,
+            "Public IPv4, IPv6, and IPv4-mapped IPv6 literals must reach the injected transport",
+        )
+    }
+
+    @Test
+    @DisplayName("malformed address input fails closed before opening a connection")
+    fun `malformed address inputs do not reach DNS or connection factory`() = runTest {
+        val connectionAttempts = AtomicInteger()
+        val repo = GeoIpRepositoryImpl("https://example.invalid") {
+            connectionAttempts.incrementAndGet()
+            error("Malformed addresses must be rejected before transport")
+        }
+
+        listOf(
+            "not-an-address.example",
+            "bad host",
+            "256.1.1.1",
+            "8.8.8.999",
+            "2001:::1",
+        ).forEach { input ->
+            assertNull(repo.lookup(input), "Malformed input $input must fail closed")
+        }
+
+        assertEquals(0, connectionAttempts.get(), "Malformed addresses must not cause DNS/network activity")
+    }
+
+    @Test
     @DisplayName("Stop disconnects a blocked GeoIP response and remains typed cancellation")
     fun `stop closes blocked response once without a late location`() = runTest {
         val connection = BlockingGeoIpConnection()
@@ -290,6 +388,11 @@ class GeoIpRepositoryImplTest {
         override fun disconnect() { disconnectCount.incrementAndGet() }
         override fun usingProxy(): Boolean = false
         override fun getResponseCode(): Int = HTTP_OK
+    }
+
+    private class ResponseGeoIpConnection(url: URL) : FakeGeoIpConnection(url) {
+        override fun getInputStream(): InputStream =
+            """{"country":"US","loc":"37.38,-122.08"}""".byteInputStream()
     }
 
     private class BlockingGeoIpConnection : FakeGeoIpConnection(URL("https://ipinfo.io/8.8.8.8/json")) {
