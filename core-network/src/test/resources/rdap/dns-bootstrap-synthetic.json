@@ -1,0 +1,10 @@
+{
+  "description": "Synthetic fixture for RFC 9224 client tests",
+  "publication": {"url": "https://example.invalid/bootstrap", "timestamp": "2026-09-25T00:00:00Z"},
+  "services": [
+    [["com", "net"], ["http://rdap.example.invalid/shared", "https://rdap.example.invalid/shared/" ]],
+    [["example.com"], ["https://registry.example.invalid/rdap"]],
+    [["xn--bcher-kva"], ["https://idn.example.invalid/rdap/"]],
+    [[""], ["https://fallback.example.invalid/rdap/"]]
+  ]
+}
