@@ -147,7 +147,7 @@ tasks:
     current_progress:
       date: "2026-09-25"
       implemented: "The E03-T01 traceroute slice emits raw hops immediately, performs reverse-DNS and GeoIP enrichment asynchronously under the caller session with bounded concurrency and lookup timeouts, and merges enrichment by hop number without changing row order. Per-probe RTTs now retain nullable ordered slots, show localized success/no-reply markers with accessible numbered descriptions, and display success-only min/average/max. A deadline during enrichment preserves the raw partial hop."
-      fixed_in: "pending commit hash"
+      fixed_in: "766519b5db6a89b70522b2a5f882501a4c2ba95f"
       validation: "Serialized current-tree gates passed: core-network 1,206 (one skipped), core-domain 214, app 536; Android-test Kotlin compilation, all three Kover gates, lintDebug, assembleDebug, and assembleRelease passed. Independent QA/adversarial review cleared probe status wording. No emulator or live-network trace was used."
       remaining: "P11-T2 remains in_progress: provider fallback/cache/breaker, reserved-range classification, IPv6 enrichment, country flags, and the manual 1.1.1.1 three-probe validation remain open."
     tdd:
