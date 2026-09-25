@@ -166,14 +166,20 @@ tasks:
 
   - id: P11-T3
     title: "Port scanner: banner v2 + service probes + TLS peek"
-    status: todo
+    status: in_progress
+    current_progress:
+      date: "2026-09-25"
+      implemented: "The scanner now reads up to 1,024 bytes across partial reads, recomputes the socket timeout before each read to stay within the remaining per-port budget, preserves partial banners on EOF/timeout/read failure, and propagates byte/display-cap truncation to results. Truncated banners display an ellipsis with an accessible disclosure, including in exported reports."
+      fixed_in: "1f703260485172ff5b7ffa2a5e2625333c68d111"
+      validation: "Focused core-network BannerReaderTest (4) and BannerSanitizerTest (12) passed; PortScanRepositoryImplTest passed with regressions for cap propagation and per-read remaining-budget enforcement. app compileDebugAndroidTestKotlin passed for the PortsScreen ellipsis/accessibility test; instrumentation was not run because no emulator was started."
+      remaining: "Protocol-aware HTTP/SMTP/FTP/SSH/POP/IMAP probes, TLS subject inspection, and live-server acceptance remain open."
     tdd:
       red:
         tests:
           - "ServiceProbesTest: greeting for 80 contains 'HEAD / HTTP/1.0' and Host header; 25 has passive-then-EHLO; 443 -> TLS_PEEK kind"
-          - "BannerReadTest: 1024 bytes read -> truncated=true; 100 bytes -> false; sanitizer applied"
+          - "BannerReaderTest: 1,024-byte cap and sanitizer truncation are disclosed; shorter EOF/timeout reads remain untruncated and partial reads are accumulated"
           - "PortScanRepositoryImplTest: aggressiveProbes=false -> passive only; OPEN 443 with fake handshake engine -> tlsSubject 'CN=example'"
-          - "PortsScreenTest: truncated banner shows '…' indicator; TLS subject row"
+          - "PortsScreenTest: truncated banner shows accessible '…' indicator; TLS subject row"
         expect: "RED"
       green: { steps: ["Implement; keep BannerSanitizer."], expect: "PASS" }
     acceptance_criteria: ["Scanning a web server shows 'HTTP/1.0 200 OK …' banner; 443 shows subject."]

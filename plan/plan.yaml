@@ -480,7 +480,7 @@ phases:
     status: in_progress
     depends_on: [P04, P05]
     findings: [F026, F027]
-    summary: "Traceroute now retains and presents per-probe RTTs with accessible success/no-reply status and min/average/max; bounded asynchronous enrichment is in place. Remaining P11 work includes speed-test engine/loaded latency, GeoIP provider fallback/cache/breaker, reserved-range and IPv6 handling, country flags, port-scan protocol-aware banners, and live/device acceptance."
+    summary: "Traceroute now retains and presents per-probe RTTs with accessible success/no-reply status and min/average/max; bounded asynchronous enrichment, reserved-range filtering, and country flags are in place. Port scanning now reads bounded banners and discloses truncation accessibly. Remaining P11 work includes speed-test engine/loaded latency, GeoIP provider fallback/cache/breaker and live IPv6 enrichment, protocol-aware port probes/TLS subject, and live/device acceptance."
 
   - id: P12
     file: plan/phases/P12-lan-utilities-and-settings-depth.yaml
