@@ -1,0 +1,32 @@
+review:
+  area: "E03-T01 Speed Test DNS cancellation and LAN scan backpressure"
+  date: "2026-09-25"
+  implementation_commit: "836953be72f254dde85e5aa56012264a591a0795"
+  status: "source-tests-passed-device-and-remaining-adapter-gates-open"
+  findings:
+    - "Speed Test TCP connect RTT previously resolved the host synchronously inside the adapter and had no caller-session lease until socket creation."
+    - "The LAN Scan slow-collector regression needed an exact finite plateau and stronger proof that every subnet target was probed once."
+  changes:
+    - "Speed Test name resolution runs on a shared fixed two-worker/eight-queue executor with AbortPolicy. Resolver FutureTasks are registered with the caller OperationSession, canceled/interrupted on cancellation, and removed from the queue when possible."
+    - "The caller session concurrency permit covers DNS resolution and TCP connect. The socket is only created after DNS succeeds; cancellation/deadline are rechecked before that boundary, and socket closure is idempotently registered with the session."
+    - "TransferEngine keeps its two-argument connectRtt contract and gains a default session-aware adapter for legacy implementations. CancellationException is preserved by the repository instead of being swallowed by best-effort connect RTT handling."
+    - "LAN Scan uses a fused buffer(0) output boundary. With effective concurrency c, the test derives a 2c+2 start plateau and gates the final probe after the plateau, then resumes the collector. It verifies each target IP exactly once, progress counts 1..N without loss/duplication, one completion, and N scanned hosts."
+  validation:
+    command: "./gradlew :core-network:test :core-domain:test --no-daemon --no-parallel --max-workers=1 --console=plain"
+    result: "BUILD SUCCESSFUL; core-network 1,317 tests (one skipped), core-domain 216 tests, zero failures/errors."
+    review: "Independent Speed Test QA/adversarial reviews cleared resolver cancellation, deadline handling, production pool bounds, and caller-session propagation. Independent LAN QA/adversarial reviews cleared Flow fusion, the 2c+2 derivation, deterministic plateau, exact target coverage, resume/no-loss assertions, and cleanup."
+    initial_attempt: "The first combined attempt exposed two test defects: it expected 2c+1 instead of counting the merger-held event, and the deadline exception escaped the runBlocking child. The bound is corrected to 2c+2 and the child captures the OperationRunner result. The final full run passed."
+    static_analysis: "Both :core-network:ktlintMainSourceSetCheck and :core-network:ktlintTestSourceSetCheck fail on existing formatting violations in legacy module files. The new SpeedTestHostResolver source/test and added LAN backpressure block have no reported KtLint findings; modified legacy files contain pre-existing surrounding violations. git diff --check passes."
+  release_qa_brief:
+    record: "plan/reviews/2026-09-23-release-qa-brief.yaml"
+    checked_release_baseline: "origin/main at 5e183721e64ce8a8946f1a0b50f52b83544e8898"
+    source_recheck_commit: "74e2c50"
+    note: "The supplied v2026.09.21.1 issue-by-issue source audit remains recorded there. This slice adds E03 resolver/backpressure coverage and does not claim API 33 instrumentation, TalkBack, integrated Skip, dead-route Traceroute, live SNMP/canvas usability, mDNS ENODEV on an emulator, physical WLAN, or a no-ANR measurement."
+  device_validation:
+    emulator_started_or_used: false
+    live_lab_endpoint_used: false
+    remaining: "API 33/TalkBack and integrated Skip; Traceroute dead-route progress/layout; live SNMP cancellation and sparse-canvas usability; mDNS ENODEV and physical wlan0; Speed Test link accuracy; measured no-ANR response and <=500 ms cleanup latency."
+  remaining_e03_t01:
+    - "Exercise the production reverse-DNS pool boundaries for LAN Scan and Traceroute."
+    - "Complete remaining adapter queue/worker assertions and phase-wide operation/resource coverage."
+    - "Measure cleanup latency and device responsiveness."
