@@ -489,6 +489,56 @@ class HttpProbeRepositoryRedirectTest {
     }
 
     @Test
+    @DisplayName("blocked HTTPS downgrade preserves source evidence without opening HTTP destination")
+    fun `blocked https downgrade returns structured evidence and never opens destination`() = runTest {
+        val sourceUrl = URL("https://alice:source-secret@source.test/start?source-token=private#source-fragment")
+        val location = "http://bob:destination-secret@destination.test/danger?redirect-token=private#destination-fragment"
+        val openedUrls = mutableListOf<String>()
+        val repository = HttpProbeRepositoryImpl(HttpProbeConnectionFactory { url ->
+            openedUrls += url.toString()
+            check(url.toString() == sourceUrl.toString()) { "HTTP destination must never be opened: $url" }
+            RecordingHttpConnection(url, 302, location)
+        })
+
+        val result = repository.probe(HttpProbeRequest(url = sourceUrl.toString()))
+
+        assertTrue(result is NetworkResult.Error)
+        val error = result as NetworkResult.Error
+        val evidence = error.cause as HttpProbeBlockedRedirectException
+        assertEquals(sourceUrl.toString(), evidence.sourceUrl)
+        assertEquals("http://bob:destination-secret@destination.test/danger?redirect-token=private#destination-fragment", evidence.destinationUrl)
+        assertEquals(302, evidence.statusCode)
+        assertEquals(location, evidence.location)
+        assertEquals("INSECURE_REDIRECT", error.code)
+        assertEquals(listOf(sourceUrl.toString()), openedUrls)
+        listOf("source-secret", "source-token", "redirect-token", "destination-secret").forEach { secret ->
+            assertFalse(error.message.contains(secret))
+            assertFalse(evidence.message.orEmpty().contains(secret))
+        }
+    }
+
+    @Test
+    @DisplayName("malformed Location errors do not echo attacker-controlled URI text")
+    fun `malformed redirect location is not included in error text`() = runTest {
+        val sourceUrl = URL("https://source.test/start")
+        val location = "http://[broken?redirect-token=private"
+        val openedUrls = mutableListOf<String>()
+        val repository = HttpProbeRepositoryImpl(HttpProbeConnectionFactory { url ->
+            openedUrls += url.toString()
+            RecordingHttpConnection(url, 302, location)
+        })
+
+        val result = repository.probe(HttpProbeRequest(url = sourceUrl.toString()))
+
+        assertTrue(result is NetworkResult.Error)
+        val error = result as NetworkResult.Error
+        assertEquals("Malformed redirect URL", error.message)
+        assertNull(error.cause)
+        assertFalse(error.message.contains("redirect-token"))
+        assertEquals(listOf(sourceUrl.toString()), openedUrls)
+    }
+
+    @Test
     @DisplayName("probe follows a normal http redirect to completion")
     fun `probe follows http redirect`() = runTest {
         lateinit var baseUrl: String
@@ -658,21 +708,55 @@ class HttpProbeRepositoryRedirectTest {
     @Test
     @DisplayName("cross-origin entity redirects default to deny when no approval flow is supplied")
     fun `cross-origin entity redirect without approval never contacts destination`() = runTest {
-        val destinationRequests = AtomicInteger()
-        val targetUrl = startRecordingServer { _ ->
-            destinationRequests.incrementAndGet()
-            Triple(200, "should not be reached", null)
-        }
-        val sourceUrl = startRecordingServer { exchange ->
-            exchange.responseHeaders.add("Location", targetUrl)
-            Triple(307, "", null)
-        }
+        val sourceUrl = URL("http://source.test/start")
+        val targetUrl = "http://alice:destination-secret@target.test/reset-token/path?redirect-token=private#frag"
+        val openedUrls = mutableListOf<String>()
+        val repository = HttpProbeRepositoryImpl(HttpProbeConnectionFactory { url ->
+            openedUrls += url.toString()
+            check(url.toString() == sourceUrl.toString()) { "Unapproved destination must never be opened" }
+            RecordingHttpConnection(url, 307, targetUrl)
+        })
 
-        val result = repo.probe(HttpProbeRequest(url = sourceUrl, method = HttpMethod.POST, body = "secret"))
+        val result = repository.probe(
+            HttpProbeRequest(url = sourceUrl.toString(), method = HttpMethod.POST, body = "secret"),
+        )
 
         assertTrue(result is NetworkResult.Error)
-        assertTrue((result as NetworkResult.Error).message.contains("requires approval"))
-        assertEquals(0, destinationRequests.get())
+        val error = result as NetworkResult.Error
+        assertTrue(error.message.contains("requires approval"))
+        listOf("target.test", "destination-secret", "reset-token", "redirect-token", "frag").forEach { secret ->
+            assertFalse(error.message.contains(secret))
+        }
+        assertEquals(listOf(sourceUrl.toString()), openedUrls)
+    }
+
+    @Test
+    @DisplayName("explicitly denied entity replay does not disclose destination and never opens it")
+    fun `denied cross-origin entity replay keeps destination private`() = runTest {
+        val sourceUrl = URL("http://source.test/start")
+        val targetUrl = URL("http://target.test/private?token=private")
+        val openedUrls = mutableListOf<String>()
+        val repository = HttpProbeRepositoryImpl(HttpProbeConnectionFactory { url ->
+            openedUrls += url.toString()
+            check(url.toString() == sourceUrl.toString()) { "Denied destination must never be opened" }
+            RecordingHttpConnection(url, 307, targetUrl.toString())
+        })
+
+        val result = repository.probe(
+            HttpProbeRequest(
+                url = sourceUrl.toString(),
+                method = HttpMethod.POST,
+                body = "private body",
+                approveCrossOriginEntityReplay = { false },
+            ),
+        )
+
+        assertTrue(result is NetworkResult.Error)
+        val error = result as NetworkResult.Error
+        assertTrue(error.message.contains("was not approved"))
+        assertFalse(error.message.contains("target.test"))
+        assertFalse(error.message.contains("token"))
+        assertEquals(listOf(sourceUrl.toString()), openedUrls)
     }
 
     @Test

@@ -35,6 +35,7 @@ import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.httprobe.HttpMethod
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeOperation
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeResult
+import net.aieat.netswissknife.core.network.httprobe.HttpProbeBlockedRedirectException
 import net.aieat.netswissknife.core.network.httprobe.CrossOriginEntityReplay
 import net.aieat.netswissknife.core.network.operation.CancellationReason
 import net.aieat.netswissknife.core.network.operation.OperationSession
@@ -51,6 +52,13 @@ data class PendingEntityReplayApproval(
     val statusCode: Int
 )
 
+data class BlockedHttpRedirectWarning(
+    val sourceUrl: String,
+    val destinationUrl: String,
+    val statusCode: Int,
+    val location: String,
+)
+
 data class HttpProbeUiState(
     val url: String = "",
     val method: HttpMethod = HttpMethod.GET,
@@ -62,6 +70,7 @@ data class HttpProbeUiState(
     val isCanceled: Boolean = false,
     val result: HttpProbeResult? = null,
     val error: String? = null,
+    val blockedRedirectWarning: BlockedHttpRedirectWarning? = null,
     val pendingEntityReplayApproval: PendingEntityReplayApproval? = null,
     val selectedTab: Int = 0,
     val headersExpanded: Boolean = false
@@ -251,6 +260,7 @@ class HttpProbeViewModel @Inject constructor(
                 isCanceled = false,
                 result = null,
                 error = null,
+                blockedRedirectWarning = null,
                 selectedTab = 0,
             )
         }
@@ -310,16 +320,28 @@ class HttpProbeViewModel @Inject constructor(
                             isCanceling = false,
                             isCanceled = false,
                             result = result.data,
+                            blockedRedirectWarning = null,
                             pendingEntityReplayApproval = null,
                             selectedTab = 0
                         )
-                        is NetworkResult.Error -> current.copy(
-                            isLoading = false,
-                            isCanceling = false,
-                            isCanceled = false,
-                            pendingEntityReplayApproval = null,
-                            error = result.message
-                        )
+                        is NetworkResult.Error -> {
+                            val blocked = result.cause as? HttpProbeBlockedRedirectException
+                            current.copy(
+                                isLoading = false,
+                                isCanceling = false,
+                                isCanceled = false,
+                                pendingEntityReplayApproval = null,
+                                error = result.message.takeUnless { blocked != null },
+                                blockedRedirectWarning = blocked?.let {
+                                    BlockedHttpRedirectWarning(
+                                        sourceUrl = it.sourceUrl,
+                                        destinationUrl = it.destinationUrl,
+                                        statusCode = it.statusCode,
+                                        location = it.location,
+                                    )
+                                },
+                            )
+                        }
                     }
                 }
             } catch (e: CancellationException) {
@@ -378,6 +400,7 @@ class HttpProbeViewModel @Inject constructor(
                 isCanceled = false,
                 result = null,
                 error = null,
+                blockedRedirectWarning = null,
                 pendingEntityReplayApproval = null,
                 selectedTab = 0,
             )

@@ -182,8 +182,8 @@ class HttpProbeRepositoryImpl internal constructor(
                         }
                         val nextUrl = try {
                             resolveUrl(currentUrl, location)
-                        } catch (e: Exception) {
-                            return NetworkResult.Error("Malformed redirect URL: ${e.message}", e)
+                        } catch (_: Exception) {
+                            return NetworkResult.Error("Malformed redirect URL")
                         }
                         if (nextUrl.protocol !in listOf("http", "https")) {
                             return NetworkResult.Error(
@@ -193,8 +193,16 @@ class HttpProbeRepositoryImpl internal constructor(
                         if (currentUrl.protocol.equals("https", ignoreCase = true) &&
                             nextUrl.protocol.equals("http", ignoreCase = true)
                         ) {
+                            val blockedRedirect = HttpProbeBlockedRedirectException(
+                                sourceUrl = currentUrl.toString(),
+                                destinationUrl = nextUrl.toString(),
+                                statusCode = statusCode,
+                                location = location,
+                            )
                             return NetworkResult.Error(
-                                "Refusing insecure HTTPS-to-HTTP redirect to $nextUrl"
+                                "Refusing insecure HTTPS-to-HTTP redirect",
+                                blockedRedirect,
+                                code = HttpProbeBlockedRedirectException.CODE,
                             )
                         }
                         redirectChain.add(currentUrl.toString())
@@ -208,7 +216,7 @@ class HttpProbeRepositoryImpl internal constructor(
                             lease.close()
                             val approval = request.approveCrossOriginEntityReplay
                                 ?: return NetworkResult.Error(
-                                    "Cross-origin HTTP $statusCode redirect to $nextUrl requires approval before replaying ${redirectedRequest.first} body"
+                                    "Cross-origin HTTP $statusCode redirect requires approval before replaying ${redirectedRequest.first} body"
                                 )
                             val approved = approval(
                                 CrossOriginEntityReplay(
@@ -219,7 +227,7 @@ class HttpProbeRepositoryImpl internal constructor(
                             )
                             if (!approved) {
                                 return NetworkResult.Error(
-                                    "HTTP $statusCode redirect body replay to $nextUrl was not approved"
+                                    "HTTP $statusCode redirect body replay was not approved"
                                 )
                             }
                         }

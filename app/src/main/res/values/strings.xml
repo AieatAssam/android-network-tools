@@ -678,6 +678,11 @@
     <string name="httprobe_idle_title">Enter a URL to probe</string>
     <string name="httprobe_idle_subtitle">Supports GET, POST, PUT, PATCH, DELETE, HEAD, and OPTIONS. Includes security header analysis.</string>
     <string name="httprobe_error_title">Request failed</string>
+    <string name="httprobe_blocked_redirect_title">Insecure redirect blocked</string>
+    <string name="httprobe_blocked_redirect_message">The HTTPS server returned HTTP %1$d and pointed to an insecure HTTP address. The destination was not contacted.</string>
+    <string name="httprobe_blocked_redirect_source">Source: %1$s</string>
+    <string name="httprobe_blocked_redirect_destination">Resolved destination: %1$s</string>
+    <string name="httprobe_blocked_redirect_location">Location header: %1$s</string>
     <string name="httprobe_retry">Retry</string>
     <string name="httprobe_request_canceled">Request canceled</string>
 

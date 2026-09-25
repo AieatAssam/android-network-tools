@@ -59,3 +59,15 @@ data class HttpProbeResult(
     val redirectChain: List<String>,
     val securityChecks: List<SecurityHeaderCheck>
 )
+
+/** Structured evidence for a redirect refused before the destination is opened. */
+class HttpProbeBlockedRedirectException(
+    val sourceUrl: String,
+    val destinationUrl: String,
+    val statusCode: Int,
+    val location: String,
+) : Exception("Refusing insecure HTTPS-to-HTTP redirect") {
+    companion object {
+        const val CODE = "INSECURE_REDIRECT"
+    }
+}

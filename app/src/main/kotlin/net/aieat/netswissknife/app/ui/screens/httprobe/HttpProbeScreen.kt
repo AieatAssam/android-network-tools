@@ -137,6 +137,7 @@ object HttpProbeScreenTestTags {
     const val SOURCE_CONTEXT = "httprobe_source_context"
     const val CLEAR_PREFILL_ACTION = "httprobe_clear_prefill_action"
     const val INVALID_HANDOFF = "httprobe_invalid_handoff"
+    const val BLOCKED_REDIRECT_WARNING = "httprobe_blocked_redirect_warning"
 
     /** Index of the idle/loading/error/success result panel within [CONTENT_LIST]. */
     const val RESULT_PANEL_INDEX = 2
@@ -262,6 +263,8 @@ fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
                 val displayState: DisplayState = when {
                     uiState.isLoading     -> DisplayState.Loading
                     uiState.isCanceled    -> DisplayState.Canceled
+                    uiState.blockedRedirectWarning != null ->
+                        DisplayState.BlockedRedirect(requireNotNull(uiState.blockedRedirectWarning))
                     uiState.error != null -> DisplayState.Error(uiState.error!!)
                     uiState.result != null -> DisplayState.Success(uiState.result!!)
                     else                  -> DisplayState.Idle
@@ -277,6 +280,7 @@ fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
                         is DisplayState.Loading -> HttpProbeLoadingContent()
                         is DisplayState.Canceled -> HttpProbeCanceledContent()
                         is DisplayState.Error   -> HttpProbeErrorContent(state.message) { viewModel.send() }
+                        is DisplayState.BlockedRedirect -> HttpProbeBlockedRedirectContent(state.warning)
                         is DisplayState.Success -> {
                             val shareSubject = stringResource(R.string.share_subject_http, state.result.request.url)
                             val shareSizeText = responseSizeText(
@@ -351,7 +355,7 @@ private fun CrossOriginEntityReplayApprovalCard(
                 approval.method.name
             ))
             Text(
-                text = approval.destinationUrl,
+                text = safeRedirectDisplayValue(approval.destinationUrl),
                 style = MaterialTheme.typography.bodyMedium,
                 fontFamily = FontFamily.Monospace
             )
@@ -374,8 +378,60 @@ private sealed class DisplayState {
     object Loading : DisplayState()
     object Canceled : DisplayState()
     data class Error(val message: String) : DisplayState()
+    data class BlockedRedirect(val warning: BlockedHttpRedirectWarning) : DisplayState()
     data class Success(val result: HttpProbeResult) : DisplayState()
 }
+
+@Composable
+private fun HttpProbeBlockedRedirectContent(warning: BlockedHttpRedirectWarning) {
+    OutlinedCard(
+        modifier = Modifier.fillMaxWidth().testTag(HttpProbeScreenTestTags.BLOCKED_REDIRECT_WARNING),
+        colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.httprobe_blocked_redirect_title),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+            )
+            Text(
+                text = stringResource(R.string.httprobe_blocked_redirect_message, warning.statusCode),
+                color = MaterialTheme.colorScheme.onErrorContainer,
+            )
+            RedirectEvidenceLine(R.string.httprobe_blocked_redirect_source, warning.sourceUrl)
+            RedirectEvidenceLine(R.string.httprobe_blocked_redirect_destination, warning.destinationUrl)
+            RedirectEvidenceLine(R.string.httprobe_blocked_redirect_location, warning.location)
+        }
+    }
+}
+
+@Composable
+private fun RedirectEvidenceLine(label: Int, value: String) {
+    Text(
+        text = stringResource(label, safeRedirectDisplayValue(value)),
+        style = MaterialTheme.typography.bodySmall,
+        fontFamily = FontFamily.Monospace,
+    )
+}
+
+/** Keep visible redirect evidence useful without exposing credentials or token-bearing paths. */
+internal fun safeRedirectDisplayValue(value: String): String = runCatching {
+    val uri = java.net.URI(value)
+    val authority = uri.rawAuthority ?: return@runCatching "[redirect address omitted]"
+    val host = uri.host ?: return@runCatching "[redirect address omitted]"
+    val safeAuthority = buildString {
+        append(host)
+        if (uri.port >= 0) append(":${uri.port}")
+    }
+    when {
+        uri.isAbsolute -> "${uri.scheme}://$safeAuthority/[path omitted]"
+        value.startsWith("//") -> "//$safeAuthority/[path omitted]"
+        else -> "[relative redirect address omitted]"
+    }
+}.getOrElse { "[redirect address omitted]" }
 
 // ── Header card ───────────────────────────────────────────────────────────────
 

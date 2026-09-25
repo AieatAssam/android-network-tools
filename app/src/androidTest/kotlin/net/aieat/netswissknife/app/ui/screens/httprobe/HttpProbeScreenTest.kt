@@ -3,6 +3,7 @@ package net.aieat.netswissknife.app.ui.screens.httprobe
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -115,6 +116,56 @@ class HttpProbeScreenTest {
             .performClick()
 
         verify { viewModel.cancel() }
+    }
+
+    @Test
+    fun blockedRedirectWarning_showsStatusAndRedactedEvidence() {
+        val warning = BlockedHttpRedirectWarning(
+            sourceUrl = "https://alice:source-secret@source.example/start?source-token=private#frag",
+            destinationUrl = "http://bob:destination-secret@target.example/reset?redirect-token=private#frag",
+            statusCode = 302,
+            location = "//bob:destination-secret@target.example/reset?redirect-token=private#frag",
+        )
+        val approval = PendingEntityReplayApproval(
+            runId = "run",
+            approvalId = "approval",
+            destinationUrl = "http://bob:destination-secret@target.example/reset?consent-token=private#frag",
+            method = HttpMethod.POST,
+            statusCode = 307,
+        )
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                HttpProbeScreen(viewModel = fakeViewModel(HttpProbeUiState(
+                    blockedRedirectWarning = warning,
+                    pendingEntityReplayApproval = approval,
+                )))
+            }
+        }
+
+        composeRule.mainClock.advanceTimeBy(2_000L)
+        composeRule
+            .onNodeWithTag(HttpProbeScreenTestTags.CONTENT_LIST)
+            .performScrollToIndex(HttpProbeScreenTestTags.RESULT_PANEL_INDEX)
+        composeRule.onNodeWithTag(HttpProbeScreenTestTags.BLOCKED_REDIRECT_WARNING)
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.httprobe_blocked_redirect_title))
+            .performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.httprobe_blocked_redirect_message, 302))
+            .performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("https://source.example/[path omitted]")
+            .performScrollTo().assertIsDisplayed()
+        composeRule.onAllNodesWithText("http://target.example/[path omitted]")
+            .assertCountEquals(2)
+        composeRule.onNodeWithText("//target.example/[path omitted]")
+            .performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("http://target.example/[path omitted]")
+            .performScrollTo().assertIsDisplayed()
+        listOf(
+            "source-secret", "destination-secret", "source-token", "redirect-token", "consent-token", "frag"
+        ).forEach { secret ->
+            composeRule.onAllNodesWithText(secret, substring = true).assertCountEquals(0)
+        }
     }
 
     @Test

@@ -33,6 +33,7 @@ import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.httprobe.HttpMethod
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeRequest
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeResult
+import net.aieat.netswissknife.core.network.httprobe.HttpProbeBlockedRedirectException
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeRepository
 import net.aieat.netswissknife.core.network.httprobe.CrossOriginEntityReplay
 import net.aieat.netswissknife.core.network.operation.CancellationReason
@@ -436,6 +437,53 @@ class HttpProbeViewModelTest {
             val state = viewModel.uiState.value
             assertNull(state.result)
             assertEquals("timeout", state.error)
+        }
+
+        @Test
+        fun `blocked downgrade keeps structured warning instead of generic error`() = runTest {
+            val evidence = HttpProbeBlockedRedirectException(
+                sourceUrl = "https://source.example/start?source-token=private",
+                destinationUrl = "http://target.example/path?redirect-token=private",
+                statusCode = 302,
+                location = "http://target.example/path?redirect-token=private",
+            )
+            coEvery { useCase(any(), any()) } returns NetworkResult.Error(
+                "Refusing insecure HTTPS-to-HTTP redirect",
+                evidence,
+                code = HttpProbeBlockedRedirectException.CODE,
+            )
+
+            viewModel.onUrlChange("https://source.example/start")
+            viewModel.send()
+
+            val warning = viewModel.uiState.value.blockedRedirectWarning
+            assertNotNull(warning)
+            assertEquals("https://source.example/start?source-token=private", warning!!.sourceUrl)
+            assertEquals("http://target.example/path?redirect-token=private", warning.destinationUrl)
+            assertEquals(302, warning.statusCode)
+            assertEquals("http://target.example/path?redirect-token=private", warning.location)
+            assertNull(viewModel.uiState.value.error)
+            assertNull(viewModel.uiState.value.result)
+        }
+
+        @Test
+        fun `redirect evidence display sanitizer redacts absolute and protocol relative values`() {
+            val safeSource = safeRedirectDisplayValue("https://alice:secret@source.example/start?token=private#frag")
+            val safeDestination = safeRedirectDisplayValue("http://bob:secret@target.example/path?token=private#frag")
+            val safeLocation = safeRedirectDisplayValue("//bob:secret@target.example/path?token=private#frag")
+            val unsafeMalformedLocation = safeRedirectDisplayValue("//bob:secret@[broken/path?token=private")
+
+            assertEquals("https://source.example/[path omitted]", safeSource)
+            assertEquals("http://target.example/[path omitted]", safeDestination)
+            // This protocol-relative string is a display-sanitizer input only; under HTTPS it
+            // inherits HTTPS and is not itself a downgrade redirect.
+            assertEquals("//target.example/[path omitted]", safeLocation)
+            assertEquals("[redirect address omitted]", unsafeMalformedLocation)
+            listOf(safeSource, safeDestination, safeLocation, unsafeMalformedLocation).forEach { display ->
+                assertFalse(display.contains("secret"))
+                assertFalse(display.contains("token"))
+                assertFalse(display.contains("frag"))
+            }
         }
 
         @Test
