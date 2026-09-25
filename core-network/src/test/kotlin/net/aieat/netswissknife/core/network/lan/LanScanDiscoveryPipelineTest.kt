@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
@@ -68,6 +69,63 @@ class LanScanDiscoveryPipelineTest {
         assertEquals("192.168.1.1", summary.hosts.single().ip)
         assertEquals(setOf(DiscoveryMethod.TCP_OPEN), summary.hosts.single().discoveredVia)
         assertEquals(1, summary.uncertainHosts.size)
+    }
+
+    @Test
+    fun `correlated local protocol reply confirms endpoint after non-positive tcp`() = runTest {
+        val targetIp = "192.168.1.1"
+        val nameResolutionIps = CopyOnWriteArrayList<String>()
+        val macResolutionIps = CopyOnWriteArrayList<String>()
+        val portProbeIps = CopyOnWriteArrayList<String>()
+        val presenceProbe = object : PresenceNameProbe {
+            override suspend fun resolveName(ip: String, timeoutMs: Int): String? {
+                nameResolutionIps += ip
+                return null
+            }
+
+            override suspend fun probePresence(ip: String, timeoutMs: Int): LocalProtocolReply? =
+                if (ip == targetIp) {
+                    LocalProtocolReply(DiscoveryMethod.NETBIOS, "device-1")
+                } else {
+                    null
+                }
+        }
+
+        val summary = LanScanRepositoryImpl(
+            icmpProbe = IcmpProbe { _, _ -> null },
+            tcpProbe = TcpPresenceProbe { ip, _, _ ->
+                if (ip == targetIp) TcpPresence.Refused(445, "ambiguous reset") else TcpPresence.None
+            },
+            nameProbes = listOf(presenceProbe),
+            macResolver = object : MacResolver {
+                override val supported = true
+                override suspend fun resolve(ip: String): String? {
+                    macResolutionIps += ip
+                    return null
+                }
+            },
+            portChecker = { ip, _, _ ->
+                portProbeIps += ip
+                false
+            },
+        ).scan(LanScanRequest("192.168.1.0/30"))
+            .filterIsInstance<LanScanUpdate.ScanComplete>()
+            .first()
+            .summary
+
+        assertEquals(1, summary.aliveHosts)
+        assertEquals(1, summary.hosts.size)
+        val host = summary.hosts.single()
+        assertEquals(targetIp, host.ip)
+        assertEquals("device-1", host.hostname)
+        assertEquals(setOf(DiscoveryMethod.NETBIOS), host.discoveredVia)
+        assertEquals(0, summary.uncertainCount)
+        assertTrue(summary.uncertainHosts.isEmpty())
+        assertTrue(nameResolutionIps.isEmpty())
+        assertTrue(macResolutionIps.isNotEmpty())
+        assertTrue(macResolutionIps.all { it == targetIp })
+        assertEquals(16, portProbeIps.size)
+        assertTrue(portProbeIps.all { it == targetIp })
     }
 
     @Test
