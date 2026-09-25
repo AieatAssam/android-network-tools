@@ -348,10 +348,26 @@ class SpeedTestRepositoryImpl(
                         send(SpeedTestEvent.ServerInfoReceived(info))
                     }
 
-                val connectRtt = runCatching {
-                    val endpoint = URI(baseUrl)
-                    engine.connectRtt(endpoint.host, if (endpoint.port > 0) endpoint.port else if (endpoint.scheme == "https") 443 else 80)
-                }.getOrNull()
+                val connectRtt =
+                    try {
+                        val endpoint = URI(baseUrl)
+                        val port =
+                            when {
+                                endpoint.port > 0 -> endpoint.port
+                                endpoint.scheme == "https" -> 443
+                                else -> 80
+                            }
+                        engine.connectRtt(
+                            endpoint.host,
+                            port,
+                            operationSession,
+                        )
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (_: Exception) {
+                        null
+                    }
+                ensureCurrentOperationActive()
                 repeat(WARMUP_REQUESTS) {
                     ensureCurrentOperationActive()
                     runCatching { engine.httpRtt("$baseUrl/__down?bytes=0") }

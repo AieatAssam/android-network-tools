@@ -128,6 +128,8 @@ class OkHttpTransferEngineTest {
             val delegate = OkHttpTransferEngine(observedClient)
             val observingEngine = object : TransferEngine {
                 override suspend fun connectRtt(host: String, port: Int) = delegate.connectRtt(host, port)
+                override suspend fun connectRtt(host: String, port: Int, operationSession: OperationSession) =
+                    delegate.connectRtt(host, port, operationSession)
                 override suspend fun httpRtt(url: String) = delegate.httpRtt(url)
                 override suspend fun serverInfo(url: String) = delegate.serverInfo(url)
                 override fun download(url: String, streams: Int, durationMs: Long) = delegate.download(url, streams, durationMs)
@@ -163,7 +165,7 @@ class OkHttpTransferEngineTest {
             assertTrue(maxActive.get() <= session.budget.maxConcurrentProbes)
             assertEquals((0 until config.downloadStreams).toSet(), observedDownloadStreams)
             assertEquals((0 until config.uploadStreams).toSet(), observedUploadStreams)
-            assertTrue(events.none { it is SpeedTestEvent.Failed })
+            assertTrue(events.none { it is SpeedTestEvent.Failed }, "speed test failed: ${events.filterIsInstance<SpeedTestEvent.Failed>()}")
         } finally {
             server.close()
         }
@@ -232,6 +234,8 @@ class OkHttpTransferEngineTest {
             val observedUploadStreams = Collections.synchronizedSet(mutableSetOf<Int>())
             val engine = object : TransferEngine {
                 override suspend fun connectRtt(host: String, port: Int) = delegate.connectRtt(host, port)
+                override suspend fun connectRtt(host: String, port: Int, operationSession: OperationSession) =
+                    delegate.connectRtt(host, port, operationSession)
                 override suspend fun httpRtt(url: String) = delegate.httpRtt(url)
                 override suspend fun serverInfo(url: String) = delegate.serverInfo(url)
                 override fun download(url: String, streams: Int, durationMs: Long) = delegate.download(url, streams, durationMs)

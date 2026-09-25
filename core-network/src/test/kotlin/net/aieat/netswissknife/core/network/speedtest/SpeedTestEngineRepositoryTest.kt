@@ -16,6 +16,8 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import net.aieat.netswissknife.core.network.operation.OperationBudget
+import net.aieat.netswissknife.core.network.operation.OperationSession
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -27,6 +29,7 @@ class SpeedTestEngineRepositoryTest {
         var info: ServerInfo? = ServerInfo(colo = "LHR", asn = "AS13335", country = "GB")
         var infoFails = false
         var connect: Long? = 7
+        var connectSession: OperationSession? = null
         var streamsDown = 0
         var streamsUp = 0
         var cancelledDownload = false
@@ -34,6 +37,15 @@ class SpeedTestEngineRepositoryTest {
         var serverDuration = 12.5
 
         override suspend fun connectRtt(host: String, port: Int) = connect
+
+        override suspend fun connectRtt(
+            host: String,
+            port: Int,
+            operationSession: OperationSession,
+        ): Long? {
+            connectSession = operationSession
+            return connectRtt(host, port)
+        }
 
         override suspend fun httpRtt(url: String): HttpRtt {
             return HttpRtt(totalMs = 15, serverMs = serverDuration)
@@ -82,6 +94,22 @@ class SpeedTestEngineRepositoryTest {
         assertEquals(4, engine.streamsDown)
         assertEquals(2, engine.streamsUp)
     }
+
+    @Test
+    fun `repository passes caller session to connect RTT adapter`() =
+        runTest {
+            val engine = FakeEngine()
+            val session = OperationSession(OperationBudget.start(timeoutMillis = 10_000))
+
+            val events =
+                SpeedTestRepositoryImpl(
+                    engine,
+                    SpeedTestConfig(latencyProbes = 1, phaseDurationMs = 1_000),
+                ).runSpeedTest(session).toList()
+
+            assertTrue(events.any { it is SpeedTestEvent.LatencyFinished })
+            assertEquals(session, engine.connectSession)
+        }
 
     @Test
     fun `server time larger than request time floors corrected sample at zero`() = runTest {

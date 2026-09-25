@@ -1,8 +1,11 @@
 package net.aieat.netswissknife.core.network.speedtest
 
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.sync.withPermit
 import net.aieat.netswissknife.core.network.operation.OperationSession
 
 data class HttpRtt(val totalMs: Long, val serverMs: Double?) {
@@ -15,6 +18,23 @@ data class ChunkEvent(val streamIndex: Int, val bytes: Long, val elapsedMs: Long
 /** Network boundary for a speed test run; kept injectable for deterministic repository tests. */
 interface TransferEngine {
     suspend fun connectRtt(host: String, port: Int): Long?
+
+    /** Caller-owned operation variant; legacy transfer engines remain source-compatible. */
+    suspend fun connectRtt(
+        host: String,
+        port: Int,
+        operationSession: OperationSession,
+    ): Long? {
+        operationSession.throwIfCancelled()
+        operationSession.budget.throwIfExpired()
+        return operationSession.concurrencyLimiter.withPermit {
+            currentCoroutineContext().ensureActive()
+            operationSession.throwIfCancelled()
+            operationSession.budget.throwIfExpired()
+            connectRtt(host, port)
+        }
+    }
+
     suspend fun httpRtt(url: String): HttpRtt
     suspend fun serverInfo(url: String): ServerInfo?
     fun download(url: String, streams: Int, durationMs: Long): Flow<ChunkEvent>

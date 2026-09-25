@@ -6,6 +6,8 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.flow.buffer
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.onEach
@@ -28,6 +30,7 @@ import org.junit.jupiter.api.Test
 import java.net.Socket
 import java.net.SocketAddress
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -126,6 +129,101 @@ class LanScanRepositoryImplTest {
         assertEquals(6, startedProbes.get())
         assertEquals(sessionLimit, maximumActiveProbes.get())
     }
+
+    @Test
+    fun `slow collector backpressures completed hosts and scan resumes without loss`() =
+        runTest {
+            val concurrency = 2
+            val finiteProbeBound = 2 * concurrency + 2
+            val request =
+                LanScanRequest(
+                    subnet = "192.168.1.0/27",
+                    timeoutMs = 100,
+                    concurrency = 6,
+                    presencePorts = emptyList(),
+                    enableNameProbes = false,
+                )
+            val targetIps = SubnetUtils.parseSubnet(request.subnet)
+            val targetCount = targetIps.size
+            val icmpStarts = AtomicInteger()
+            val resultPathFilled = CountDownLatch(finiteProbeBound)
+            val firstProgress = CompletableDeferred<Unit>()
+            val resumeCollector = CompletableDeferred<Unit>()
+            val releaseLastProbe = CompletableDeferred<Unit>()
+            val probedIps = CopyOnWriteArrayList<String>()
+            val updates = CopyOnWriteArrayList<LanScanUpdate>()
+            val session =
+                OperationSession(
+                    OperationBudget.start(
+                        requirement = OperationRequirement.LOCAL_NETWORK,
+                        maxConcurrentProbes = concurrency,
+                    ),
+                )
+            val repo =
+                LanScanRepositoryImpl(
+                    arpTableReader = emptyArpReader,
+                    icmpProbe =
+                        IcmpProbe { ip, _ ->
+                            probedIps += ip
+                            val starts = icmpStarts.incrementAndGet()
+                            if (starts <= finiteProbeBound) {
+                                resultPathFilled.countDown()
+                            }
+                            if (starts == finiteProbeBound) releaseLastProbe.await()
+                            null
+                        },
+                    tcpProbe = TcpPresenceProbe { _, _, _ -> TcpPresence.None },
+                    nameProbes = emptyList(),
+                    operationDispatcher = Dispatchers.Default,
+                )
+            val scan =
+                backgroundScope.launch(Dispatchers.Default) {
+                    repo.scan(request, session).buffer(0).collect { update ->
+                        updates += update
+                        if (update is LanScanUpdate.ScanProgress) {
+                            firstProgress.complete(Unit)
+                            resumeCollector.await()
+                        }
+                    }
+                }
+
+            try {
+                withContext(Dispatchers.Default) {
+                    withTimeout(3_000) { firstProgress.await() }
+                }
+                assertTrue(
+                    withContext(Dispatchers.Default) {
+                        resultPathFilled.await(3, TimeUnit.SECONDS)
+                    },
+                    "the bounded completed-host path should fill while progress collection is blocked",
+                )
+
+                // The collector has received the first progress event and is blocked
+                // inside its handler. The merger can hold a second host at its blocked
+                // progress send, `completed` can hold `concurrency` hosts, and the
+                // workers can each have started one more probe: 2 * concurrency + 2.
+                assertEquals(finiteProbeBound, icmpStarts.get())
+                assertEquals(1, updates.count { it is LanScanUpdate.ScanProgress })
+
+                resumeCollector.complete(Unit)
+                releaseLastProbe.complete(Unit)
+                withContext(Dispatchers.Default) { withTimeout(5_000) { scan.join() } }
+            } finally {
+                resumeCollector.complete(Unit)
+                releaseLastProbe.complete(Unit)
+                withContext(Dispatchers.Default) { withTimeout(5_000) { scan.cancelAndJoin() } }
+            }
+
+            val progress = updates.filterIsInstance<LanScanUpdate.ScanProgress>()
+            val complete = updates.filterIsInstance<LanScanUpdate.ScanComplete>()
+            assertEquals(targetCount, progress.size)
+            assertEquals((1..targetCount).toList(), progress.map { it.scannedCount }.sorted())
+            assertTrue(progress.all { it.totalCount == targetCount })
+            assertEquals(1, complete.size)
+            assertEquals(targetCount, complete.single().summary.totalScanned)
+            assertEquals(targetCount, icmpStarts.get())
+            assertEquals(targetIps.sorted(), probedIps.sorted())
+        }
 
     @Test
     fun `cancelling a blocked TCP presence connect closes its socket before scan ends`() = runTest {

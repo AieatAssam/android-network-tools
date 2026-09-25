@@ -19,10 +19,11 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import net.aieat.netswissknife.core.network.operation.OperationSession
 import java.net.InetSocketAddress
-import java.net.InetAddress
 import java.net.Socket
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.coroutineContext
+import kotlinx.coroutines.sync.withPermit
 
 /** Pooled Cloudflare transport. A shared client lets the latency requests reuse TLS/HTTP connections. */
 class OkHttpTransferEngine(
@@ -34,24 +35,56 @@ class OkHttpTransferEngine(
     private val monotonicTimeNs: () -> Long = System::nanoTime
 ) : TransferEngine {
 
+    internal var hostResolver: SpeedTestHostResolver = SpeedTestHostResolver()
+    internal var socketFactory: () -> Socket = ::Socket
+
     @OptIn(InternalCoroutinesApi::class)
-    override suspend fun connectRtt(host: String, port: Int): Long? = withContext(Dispatchers.IO) {
-        val address = InetAddress.getByName(host)
-        currentCoroutineContext().ensureActive()
-        val start = monotonicTimeNs()
-        Socket().use { socket ->
-            // Register cancellation against the active socket so a blocked connect is closed promptly.
-            val socketHandler = currentCoroutineContext().job.invokeOnCompletion(onCancelling = true, invokeImmediately = true) {
-                runCatching { socket.close() }
-            }
-            try {
-                socket.connect(InetSocketAddress(address, port), 5_000)
-            } finally {
-                socketHandler.dispose()
+    override suspend fun connectRtt(
+        host: String,
+        port: Int,
+    ): Long? = connectRtt(host, port, SpeedTestOperation.newSession())
+
+    @OptIn(InternalCoroutinesApi::class)
+    override suspend fun connectRtt(
+        host: String,
+        port: Int,
+        operationSession: OperationSession,
+    ): Long? =
+        withContext(Dispatchers.IO) {
+            operationSession.concurrencyLimiter.withPermit {
+                currentCoroutineContext().ensureActive()
+                operationSession.throwIfCancelled()
+                operationSession.budget.throwIfExpired()
+                val address = hostResolver.resolve(host, operationSession)
+                currentCoroutineContext().ensureActive()
+                operationSession.throwIfCancelled()
+                operationSession.budget.throwIfExpired()
+                val start = monotonicTimeNs()
+                val socket = socketFactory()
+                val socketLease = SocketLease(socket)
+                operationSession.resources.register(socketLease)
+                try {
+                    // Register cancellation against the active socket so a blocked connect closes promptly.
+                    val socketHandler =
+                        currentCoroutineContext()
+                            .job
+                            .invokeOnCompletion(
+                                onCancelling = true,
+                                invokeImmediately = true,
+                            ) {
+                                runCatching { socketLease.close() }
+                            }
+                    try {
+                        socket.connect(InetSocketAddress(address, port), 5_000)
+                    } finally {
+                        socketHandler.dispose()
+                    }
+                } finally {
+                    if (operationSession.resources.release(socketLease)) socketLease.close()
+                }
+                ((monotonicTimeNs() - start) / 1_000_000L).coerceAtLeast(0L)
             }
         }
-        ((monotonicTimeNs() - start) / 1_000_000L).coerceAtLeast(0L)
-    }
 
     override suspend fun httpRtt(url: String): HttpRtt = withContext(Dispatchers.IO) {
         currentCoroutineContext().ensureActive()
@@ -239,5 +272,17 @@ class OkHttpTransferEngine(
                     else part.substringAfter('=').toDoubleOrNull()?.takeIf { it.isFinite() && it >= 0.0 }
                 }
             }
+    }
+
+    private class SocketLease(
+        private val socket: Socket,
+    ) : AutoCloseable {
+        private val closed = AtomicBoolean(false)
+
+        override fun close() {
+            if (closed.compareAndSet(false, true)) {
+                socket.close()
+            }
+        }
     }
 }
