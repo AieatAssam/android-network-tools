@@ -205,7 +205,8 @@ tasks:
     status: in_progress
     progress:
       - "Completed the R2-001 security slice: cross-origin body redirects require per-hop approval; source connection closes before the prompt suspends; default behavior denies replay; same-origin semantics and cross-origin header stripping remain intact."
-      - "Focused repository and ViewModel tests plus app compilation pass; the broader OkHttp adapter/timing acceptance remains open."
+      - "Added typed evidence for HTTPS-to-HTTP downgrade blocks, retaining source, resolved destination, HTTP status, and Location while never opening the cleartext destination. The app shows a localized warning with credentials, paths, queries, and fragments redacted; malformed-Location and cross-origin replay errors also avoid echoing URL text."
+      - "Focused repository tests passed 14/14 and ViewModel tests 30/30; Android-test Kotlin compilation and lintDebug passed. QA and adversarial re-reviews found no blocker. No emulator or live endpoint was used. The broader OkHttp adapter/timing/protocol and status-bearing redirect-hop acceptance remains open."
     tdd:
       red:
         tests:
