@@ -5,7 +5,6 @@ import java.text.Normalizer
 import java.util.Locale
 import java.util.HexFormat
 import java.security.MessageDigest
-import java.util.zip.GZIPInputStream
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -81,10 +80,11 @@ class PublicSuffixTest {
             "257b298daca42f6d8ec964e238c2a55518e14f09d3117917ec8acee6f188503e",
             HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(upstreamBytes)),
         )
-        val runtimeBytes = GZIPInputStream(javaClass.getResourceAsStream("/psl/public_suffix_list.dat.gz")!!)
-            .use { it.readBytes() }
-        assertArrayEquals(upstreamBytes, runtimeBytes)
         val lines = upstreamBytes.toString(Charsets.UTF_8).lines()
+        val expectedRuntimeBytes = encodeRuntimeIndex(lines)
+        val runtimeBytes = javaClass.getResourceAsStream("/psl/public_suffix_list.index")!!
+            .use { it.readBytes() }
+        assertArrayEquals(expectedRuntimeBytes, runtimeBytes)
 
         assertTrue(lines.first().contains("Mozilla Public"))
         assertTrue(lines.any { it.startsWith("// VERSION:") })
@@ -101,5 +101,38 @@ class PublicSuffixTest {
         }
         assertTrue(unicodeRules.all { it == it.lowercase(Locale.ROOT) })
         assertTrue(unicodeRules.all { Normalizer.isNormalized(it, Normalizer.Form.NFC) })
+    }
+
+    private fun encodeRuntimeIndex(sourceLines: List<String>): ByteArray {
+        val output = StringBuilder(RUNTIME_INDEX_HEADER)
+        var section = 'I'
+        for (line in sourceLines) {
+            when (line) {
+                "// ===BEGIN PRIVATE DOMAINS===" -> {
+                    section = 'P'
+                    continue
+                }
+                "// ===END PRIVATE DOMAINS===" -> {
+                    section = 'I'
+                    continue
+                }
+            }
+            if (line.isBlank() || line.trimStart().startsWith("//")) continue
+            val (kind, rule) = when {
+                line.startsWith('!') -> '!' to line.substring(1)
+                line.startsWith("*.") -> '*' to line.substring(2)
+                else -> '=' to line
+            }
+            output.append(section).append(kind).append(rule).append('\n')
+        }
+        return output.toString().toByteArray(Charsets.UTF_8)
+    }
+
+    private companion object {
+        const val RUNTIME_INDEX_HEADER = "# PSL-RUNTIME-INDEX/1\n" +
+            "# Mozilla Public Suffix List, MPL-2.0\n" +
+            "# Version: 2026-09-24_13-26-36_UTC\n" +
+            "# Upstream commit: a179a48c465e818cfd8d626691cb317985da87fb\n" +
+            "# Source SHA-256: 257b298daca42f6d8ec964e238c2a55518e14f09d3117917ec8acee6f188503e\n"
     }
 }

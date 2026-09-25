@@ -95,7 +95,7 @@ assumptions:
     statement: "RDAP bootstrap: https://data.iana.org/rdap/dns.json maps TLDs to RDAP base URLs; https://rdap.org/ acts as a redirector for domains/IPs/ASNs (302 to the authoritative server)."
     verify_with: "curl -sI https://rdap.org/domain/example.com | head"
   - id: A4
-    statement: "Vendor the versioned upstream list from https://publicsuffix.org/list/public_suffix_list.dat (334,786 bytes in the pinned snapshot), retain a hash-verified readable test copy, and bundle a GZIP runtime resource (~89 KB); first-use parsing target is <50 ms and remains open pending optimization."
+    statement: "Vendor the versioned upstream list from https://publicsuffix.org/list/public_suffix_list.dat (334,786 bytes in the pinned snapshot), retain a hash-verified readable test copy, and bundle a compact 165,002-byte runtime index; first-use parsing target is <50 ms and remains open pending stable validation."
 
 constraints:
   - "core-network remains Android-free; OkHttp and kotlinx-serialization are JVM libraries."
@@ -126,7 +126,7 @@ design:
     WhoisRepositoryImpl: MonotonicClock injected; RdapClient (OkHttp + kotlinx-serialization) with bootstrap cache (in-memory + DataStore-free; 24 h TTL in memory only) ; lookup(query, timeoutMs, protocol: WhoisProtocol = AUTO)
       AUTO: try RDAP (domain: bootstrap TLD -> base/domain/<name>; ip/asn: rdap.org redirector) -> map to WhoisResult (+ raw JSON as a hop with role RDAP) ; on failure (404/timeout/unsupported) fall back to WHOIS chain as today.
     WhoisServerRole += RDAP ; WhoisHop.rawResponse holds JSON for RDAP hops (UI shows 'RDAP' label).
-    PublicSuffix (core, runtime resource public_suffix_list.dat.gz; readable pinned snapshot in test resources): registrableDomain(host) replaces COMPOUND_TLDS.
+    PublicSuffix (core, runtime resource public_suffix_list.index; readable pinned snapshot in test resources): registrableDomain(host) replaces COMPOUND_TLDS.
     UI: protocol toggle (Auto/RDAP/WHOIS) in advanced options; hop chain visualiser supports an RDAP node.
 
   files_to_create:
@@ -134,7 +134,7 @@ design:
     - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/httprobe/engine/{HttpEngine,OkHttpEngine,HttpTimings}.kt
     - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/httprobe/{RedirectPolicy,CurlExporter,JsonPrettyPrinter,CookieAnalyzer}.kt + tests
     - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/whois/{RdapClient,RdapModels,RdapMapper,PublicSuffix}.kt + tests
-    - core-network/src/main/resources/psl/public_suffix_list.dat.gz (runtime-compressed) + core-network/src/test/resources/psl/public_suffix_list.dat (uncompressed, hash-verified upstream snapshot)
+    - core-network/src/main/resources/psl/public_suffix_list.index (compact section/kind index) + core-network/src/test/resources/psl/public_suffix_list.dat (uncompressed, hash-verified upstream snapshot)
     - core-network/src/test/resources/rdap/{domain-example.json,ip-8.8.8.8.json,asn-15169.json,bootstrap-dns.json}
     - core-network/src/test/resources/tls/*.pem (leaf/root fixtures; expired; wildcard; IPv4/IPv6 SANs; weak key; self-signed), generated with JDK keytool by tools/tls/make-fixtures.sh; private keys stay temporary
   files_to_modify:
@@ -246,7 +246,7 @@ tasks:
     progress:
       - "Closed the R3-009 registry-failure evidence gap: ordinary TLD registry connect failures now preserve the IANA hop and add/emit one failed REGISTRY hop with error text, zero query time, empty raw response, and operation ID. Cancellation and operation deadlines remain terminal. The broader RDAP, public-suffix, and UI protocol-toggle work remains open."
       - "WHOIS repository and transport elapsed timings now use the injected MonotonicClock; a shared fake-clock test asserts an 11 ms successful hop and 48 ms total through a failed registry connection, while preserving zero duration for failed hops."
-      - "Bundled the official Mozilla Public Suffix List (version 2026-09-24_13-26-36_UTC, upstream commit a179a48c465e818cfd8d626691cb317985da87fb; SHA-256 257b298daca42f6d8ec964e238c2a55518e14f09d3117917ec8acee6f188503e; MPL-2.0 header retained). The readable upstream snapshot is hash-verified in test resources; runtime loads its GZIP form. PublicSuffix handles ICANN/private, exact/wildcard/exception, Unicode/Punycode, root-dot, and unknown-suffix cases. General eTLD+1 uses both PSL sections; WHOIS query-domain selection uses ICANN rules only because PRIVATE rules describe tenant/site boundaries rather than registry-registered domains (for example, a.foo.github.io maps to github.io for WHOIS). Focused parser tests passed 7/7, and the serialized WHOIS/PublicSuffix suite passed 63/63. `:app:assembleDebug` passed and its APK contains `psl/public_suffix_list.dat.gz` (90,549 bytes). A fresh-JVM host harness measured 106–127 ms first-use after compression and parser scan reductions; the design's <50 ms target remains an open optimization/device-performance check. No emulator was used."
+      - "Bundled the official Mozilla Public Suffix List (version 2026-09-24_13-26-36_UTC, upstream commit a179a48c465e818cfd8d626691cb317985da87fb; SHA-256 257b298daca42f6d8ec964e238c2a55518e14f09d3117917ec8acee6f188503e; MPL-2.0 header retained). The readable upstream snapshot is hash-verified in test resources; runtime loads a compact 165,002-byte index with section and rule kinds pre-encoded. API-26-compatible bounded loading enforces exact size and EOF; malformed and empty records fail closed. PublicSuffix handles ICANN/private, exact/wildcard/exception, Unicode/Punycode, root-dot, and unknown-suffix cases. General eTLD+1 uses both PSL sections; WHOIS query-domain selection uses ICANN rules only because PRIVATE rules describe tenant/site boundaries rather than registry-registered domains (for example, a.foo.github.io maps to github.io for WHOIS). Focused parser tests passed 7/7, and the serialized WHOIS/PublicSuffix suite passed 63/63 after the loader compatibility fix. A five-process fresh-JVM harness measured PSL lazy read+parse at 41.3–53.0 ms (median 46.3 ms); one sample exceeded the design's <50 ms target, so stable performance and device measurement remain open. `:app:assembleDebug` passed and its APK contains `psl/public_suffix_list.index` (165,002 bytes). No emulator was used."
     tdd:
       red:
         tests:
