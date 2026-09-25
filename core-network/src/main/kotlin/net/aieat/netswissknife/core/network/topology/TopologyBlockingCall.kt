@@ -9,8 +9,11 @@ import java.util.concurrent.ThreadFactory
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeout
+import kotlin.coroutines.AbstractCoroutineContextElement
+import kotlin.coroutines.CoroutineContext
 import net.aieat.netswissknife.core.network.operation.OperationDeadline
 import net.aieat.netswissknife.core.network.operation.OperationDeadlineExceededException
 import kotlin.coroutines.resume
@@ -32,7 +35,7 @@ internal object TopologyBlockingCall {
         timeoutMessage: String = "Topology blocking call timed out",
         block: () -> T,
     ): T = runWithExecutor(
-        executor = workers,
+        executor = currentCoroutineContext()[TopologyBlockingExecutorOverride]?.executor ?: workers,
         deadline = deadline,
         requestTimeoutMillis = requestTimeoutMillis,
         timeoutMessage = timeoutMessage,
@@ -95,6 +98,13 @@ internal object TopologyBlockingCall {
                 .also { it.initCause(timeout) }
         }
     }
+}
+
+/** Internal coroutine-context seam for adapter tests; production defaults to the shared pool. */
+internal class TopologyBlockingExecutorOverride(
+    val executor: ThreadPoolExecutor,
+) : AbstractCoroutineContextElement(Key) {
+    companion object Key : CoroutineContext.Key<TopologyBlockingExecutorOverride>
 }
 
 /** Same bounded pool factory used by the production singleton and saturation regression. */

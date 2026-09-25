@@ -1,7 +1,6 @@
 package net.aieat.netswissknife.core.network.dns
 
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
@@ -46,27 +45,6 @@ class DnsServerTest {
     }
 
     @Nested
-    @DisplayName("display names")
-    inner class DisplayNames {
-
-        @Test
-        fun `System has human-readable display name`() {
-            assertTrue(DnsServer.System().displayName.isNotBlank())
-        }
-
-        @Test
-        fun `Custom carries address in description`() {
-            val custom = DnsServer.Custom("192.168.1.1")
-            assertEquals("192.168.1.1", custom.description)
-        }
-
-        @Test
-        fun `Custom display name is Custom`() {
-            assertEquals("Custom", DnsServer.Custom("10.0.0.1").displayName)
-        }
-    }
-
-    @Nested
     @DisplayName("presets list")
     inner class Presets {
 
@@ -100,12 +78,6 @@ class DnsServerTest {
             assertTrue(DnsServer.presets.any { it is DnsServer.Quad9 })
         }
 
-        @Test
-        fun `every preset has non-blank display name`() {
-            DnsServer.presets.forEach { server ->
-                assertTrue(server.displayName.isNotBlank(), "${server::class.simpleName} must have a display name")
-            }
-        }
     }
 
     @Nested

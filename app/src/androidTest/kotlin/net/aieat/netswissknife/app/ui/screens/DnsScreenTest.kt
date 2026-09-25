@@ -435,6 +435,24 @@ class DnsScreenTest {
             .assertIsDisplayed()
     }
 
+    @Test
+    fun dnsServerSelector_showsLocalizedPresetNameAndDescription() {
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                DnsScreen(viewModel = fakeDnsViewModel(DnsUiState.Idle))
+            }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        composeRule.onNodeWithText(context.getString(R.string.dns_server_system_name)).performClick()
+        composeRule
+            .onNodeWithText(context.getString(R.string.dns_server_google_name))
+            .assertIsDisplayed()
+        composeRule
+            .onNodeWithText(context.getString(R.string.dns_server_google_description))
+            .assertIsDisplayed()
+    }
+
     private fun scrollToStatePanel() {
         composeRule
             .onNodeWithTag(DnsScreenTestTags.CONTENT_LIST)

@@ -136,6 +136,7 @@ import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.ui.i18n.asString
 import net.aieat.netswissknife.app.ui.screens.ping.PingUiState
 import net.aieat.netswissknife.app.ui.screens.ping.PingViewModel
+import net.aieat.netswissknife.app.ui.screens.ping.pingChartSuccessSegments
 import net.aieat.netswissknife.app.ui.screens.ping.PingCsvSerializer
 import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.app.util.shareCsvFile
@@ -1153,40 +1154,41 @@ private fun RttChartCard(packets: List<PingPacketResult>) {
                     )
                 }
 
-                // Build path of RTT values
-                val points = mutableListOf<Offset>()
-                packets.forEachIndexed { index, packet ->
-                    val x = leftPad + (chartWidth - leftPad - edgePad) * index / (packets.size - 1).coerceAtLeast(1)
-                    val rtt = packet.rtTimeMs
-                    if (packet.status == PingStatus.SUCCESS && rtt != null) {
-                        val y = chartHeight - edgePad - (rtt.toFloat() / maxRtt) * (chartHeight - 2 * edgePad)
-                        points.add(Offset(x, y))
+                // Keep each contiguous success run separate so a line never bridges lost packets.
+                val chartSegments = pingChartSuccessSegments(packets)
+                chartSegments.forEach { segment ->
+                    val points = segment.map { sample ->
+                        val x = leftPad + (chartWidth - leftPad - edgePad) * sample.packetIndex /
+                            (packets.size - 1).coerceAtLeast(1)
+                        val y = chartHeight - edgePad - (sample.rttMs.toFloat() / maxRtt) *
+                            (chartHeight - 2 * edgePad)
+                        Offset(x, y)
                     }
-                }
 
-                if (points.size >= 2) {
-                    val fillPath = Path().apply {
-                        moveTo(points.first().x, chartHeight - edgePad)
-                        points.forEach { lineTo(it.x, it.y) }
-                        lineTo(points.last().x, chartHeight - edgePad)
-                        close()
-                    }
-                    drawPath(
-                        path = fillPath,
-                        brush = Brush.verticalGradient(
-                            colors = listOf(primaryColor.copy(alpha = 0.3f), Color.Transparent),
-                            startY = 0f, endY = chartHeight
+                    if (points.size >= 2) {
+                        val fillPath = Path().apply {
+                            moveTo(points.first().x, chartHeight - edgePad)
+                            points.forEach { lineTo(it.x, it.y) }
+                            lineTo(points.last().x, chartHeight - edgePad)
+                            close()
+                        }
+                        drawPath(
+                            path = fillPath,
+                            brush = Brush.verticalGradient(
+                                colors = listOf(primaryColor.copy(alpha = 0.3f), Color.Transparent),
+                                startY = 0f, endY = chartHeight
+                            )
                         )
-                    )
-                    val linePath = Path().apply {
-                        moveTo(points.first().x, points.first().y)
-                        points.drop(1).forEach { lineTo(it.x, it.y) }
+                        val linePath = Path().apply {
+                            moveTo(points.first().x, points.first().y)
+                            points.drop(1).forEach { lineTo(it.x, it.y) }
+                        }
+                        drawPath(
+                            path = linePath,
+                            color = primaryColor,
+                            style = Stroke(width = 2.5f, cap = StrokeCap.Round)
+                        )
                     }
-                    drawPath(
-                        path = linePath,
-                        color = primaryColor,
-                        style = Stroke(width = 2.5f, cap = StrokeCap.Round)
-                    )
                 }
 
                 // Dots per packet

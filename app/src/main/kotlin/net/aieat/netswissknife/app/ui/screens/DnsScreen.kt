@@ -126,6 +126,9 @@ import net.aieat.netswissknife.core.network.dns.DnsRecord
 import net.aieat.netswissknife.core.network.dns.DnsRecordType
 import net.aieat.netswissknife.core.network.dns.DnsResult
 import net.aieat.netswissknife.core.network.dns.DnsServer
+import net.aieat.netswissknife.app.ui.i18n.asString
+import net.aieat.netswissknife.app.ui.i18n.uiDescription
+import net.aieat.netswissknife.app.ui.i18n.uiLabel
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
@@ -597,7 +600,7 @@ private fun DnsServerSelector(
 
     // Text shown in the field: preset display name, or the typed custom address.
     val fieldValue = if (selectedServer is DnsServer.Custom) customServerAddress
-                     else selectedServer.displayName
+                     else selectedServer.uiLabel().asString()
 
     // Custom server addresses must be literal IPs (IPv4 or IPv6).
     val trimmedCustomAddress = customServerAddress.trim()
@@ -654,14 +657,14 @@ private fun DnsServerSelector(
                     text = {
                         Column {
                             Text(
-                                text = server.displayName,
+                                text = server.uiLabel().asString(),
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
                                 color = if (isSelected) MaterialTheme.colorScheme.primary
                                         else MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = server.description,
+                                text = server.uiDescription().asString(),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -906,6 +909,7 @@ private fun DnsResultSummaryCard(
 ) {
     val context = LocalContext.current
     val shareSubject = stringResource(R.string.share_subject_dns, result.recordType.name, result.domain)
+    val shareServerLine = stringResource(R.string.dns_share_server, result.server.uiLabel().asString())
     ElevatedCard(
         shape = AppShapes.large,
         modifier = Modifier.fillMaxWidth()
@@ -942,7 +946,7 @@ private fun DnsResultSummaryCard(
                     ) {
                         RecordTypeBadge(type = result.recordType)
                         Text(
-                            text = "via ${result.server.displayName}",
+                            text = stringResource(R.string.dns_result_server, result.server.uiLabel().asString()),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -981,7 +985,7 @@ private fun DnsResultSummaryCard(
                 Row {
                     IconButton(onClick = {
                         context.shareText(
-                            text = buildDnsShareText(result),
+                            text = buildDnsShareText(result, shareServerLine),
                             subject = shareSubject
                         )
                     }) {
@@ -1481,9 +1485,9 @@ private fun DnsRawToggleCard(
     }
 }
 
-private fun buildDnsShareText(result: DnsResult): String = buildString {
+private fun buildDnsShareText(result: DnsResult, serverLine: String): String = buildString {
     appendLine("DNS ${result.recordType.name} – ${result.domain}")
-    appendLine("Server: ${result.server.displayName}")
+    appendLine(serverLine)
     appendLine("Query time: ${result.queryTimeMs}ms")
     appendLine()
     if (result.records.isEmpty()) {

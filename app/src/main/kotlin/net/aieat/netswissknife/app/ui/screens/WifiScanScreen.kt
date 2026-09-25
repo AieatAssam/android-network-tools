@@ -158,6 +158,15 @@ internal fun wifiSpectrumPlotBounds(
     return minOf(first, last)..maxOf(first, last)
 }
 
+internal fun wifiSpectrumLabelLeft(
+    centerXPx: Float,
+    labelWidthPx: Float,
+    plotBounds: ClosedFloatingPointRange<Float>,
+): Float {
+    val maxLeft = (plotBounds.endInclusive - labelWidthPx).coerceAtLeast(plotBounds.start)
+    return (centerXPx - labelWidthPx / 2f).coerceIn(plotBounds.start, maxLeft)
+}
+
 // ── Network colour palette (12 visually distinct colours) ────────────────────
 
 private fun networkColor(colorIndex: Int): Color =
@@ -855,7 +864,8 @@ private fun bandChannelLabels(band: WifiBand): List<Pair<Int, Float>> = when (ba
                         ),
                     )
                     val labelY = (peakY - 4.dp.toPx() - label.size.height).coerceAtLeast(0f)
-                    drawText(label, topLeft = Offset(xCenter - label.size.width / 2f, labelY))
+                    val labelX = wifiSpectrumLabelLeft(xCenter, label.size.width.toFloat(), plotBounds)
+                    drawText(label, topLeft = Offset(labelX, labelY))
                 }
             }
         }
