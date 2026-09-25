@@ -24,6 +24,8 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
     private val resolver: WhoisHostResolver = InetAddressWhoisHostResolver,
     private val socketFactory: WhoisSocketFactory = WhoisSocketFactory { Socket() },
     private val clock: MonotonicClock = SystemMonotonicClock,
+    /** Null keeps legacy callers and tests on the WHOIS-only path. Production opts in explicitly. */
+    private val rdapClient: RdapClient? = null,
 ) : WhoisRepository {
 
     private val _hopProgress = MutableSharedFlow<WhoisHop>(extraBufferCapacity = 16)
@@ -54,6 +56,21 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
             OperationRunner.run(session) {
                 withContext(Dispatchers.IO) {
                     val start = clock.nowNanos()
+                    if (rdapClient != null) {
+                        val rdapResult = tryRdapLookup(
+                            client = rdapClient,
+                            query = if (normalizedQuery.type == WhoisQueryType.DOMAIN) {
+                                extractRegistrableDomain(normalizedQuery.value)
+                            } else normalizedQuery.value,
+                            resultQuery = normalizedQuery.value,
+                            queryType = normalizedQuery.type,
+                            start = start,
+                            budget = session.budget,
+                            operationId = session.budget.operationId,
+                            responseBudget = responseBudget,
+                        )
+                        if (rdapResult != null) return@withContext rdapResult
+                    }
                     when (normalizedQuery.type) {
                         WhoisQueryType.DOMAIN -> performDomainLookup(
                             normalizedQuery.value,
@@ -96,6 +113,74 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
         }
     }
 
+    /** Returns a mapped success, or null when ordinary RDAP failures should use WHOIS. */
+    private suspend fun tryRdapLookup(
+        client: RdapClient,
+        query: String,
+        resultQuery: String,
+        queryType: WhoisQueryType,
+        start: Long,
+        budget: OperationBudget,
+        operationId: OperationId,
+        responseBudget: WhoisResponseBudget,
+    ): NetworkResult<WhoisResult>? {
+        budget.throwIfExpired()
+        val lookup = try {
+            client.lookup(query, queryType) { bodyBytes -> responseBudget.consume(bodyBytes) }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (deadline: OperationDeadlineExceededException) {
+            throw deadline
+        } catch (budgetExceeded: WhoisResponseBudgetExceededException) {
+            throw budgetExceeded
+        } catch (tooLarge: RdapResponseTooLargeException) {
+            throw tooLarge
+        } catch (_: RdapHttpException) {
+            budget.throwIfExpired()
+            ensureCurrentOperationActive()
+            return null
+        } catch (_: Exception) {
+            // The operation runner cancels this suspended exchange when its shared deadline
+            // expires. Check explicitly as well before allowing fallback to consume that time.
+            budget.throwIfExpired()
+            ensureCurrentOperationActive()
+            return null
+        }
+
+        budget.throwIfExpired()
+        ensureCurrentOperationActive()
+        if (lookup is RdapLookupResult.Unsupported) {
+            budget.throwIfExpired()
+            ensureCurrentOperationActive()
+            return null
+        }
+
+        lookup as RdapLookupResult.Found
+        val elapsed = clock.elapsedMillisSince(start)
+        val mapped = try {
+            RdapMapper.map(
+                rawJson = lookup.rawJson,
+                query = resultQuery,
+                queryType = queryType,
+                serverHost = lookup.finalResponseHost,
+                queryTimeMs = elapsed,
+            )
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (deadline: OperationDeadlineExceededException) {
+            throw deadline
+        } catch (_: Exception) {
+            budget.throwIfExpired()
+            ensureCurrentOperationActive()
+            return null
+        }
+
+        val hop = mapped.hops.single().copy(operationId = operationId)
+        ensureCurrentOperationActive()
+        _hopProgress.emit(hop)
+        return NetworkResult.Success(mapped.copy(hops = listOf(hop)))
+    }
+
     private suspend fun performDomainLookup(
         domain: String,
         timeoutMs: Int,
@@ -114,6 +199,8 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
         } catch (e: CancellationException) {
             throw e
         } catch (e: OperationDeadlineExceededException) {
+            throw e
+        } catch (e: WhoisResponseBudgetExceededException) {
             throw e
         } catch (e: Exception) {
             return NetworkResult.Error("IANA lookup failed: ${e.message}", e)
@@ -140,6 +227,8 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
         } catch (e: CancellationException) {
             throw e
         } catch (e: OperationDeadlineExceededException) {
+            throw e
+        } catch (e: WhoisResponseBudgetExceededException) {
             throw e
         } catch (e: Exception) {
             val failedHop = WhoisHop(
@@ -174,6 +263,8 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: OperationDeadlineExceededException) {
+                throw e
+            } catch (e: WhoisResponseBudgetExceededException) {
                 throw e
             } catch (e: Exception) {
                 val failedHop = WhoisHop(
@@ -222,6 +313,8 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
             throw e
         } catch (e: OperationDeadlineExceededException) {
             throw e
+        } catch (e: WhoisResponseBudgetExceededException) {
+            throw e
         } catch (e: Exception) {
             return NetworkResult.Error("ARIN lookup failed: ${e.message}", e)
         }
@@ -244,6 +337,8 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: OperationDeadlineExceededException) {
+                throw e
+            } catch (e: WhoisResponseBudgetExceededException) {
                 throw e
             } catch (e: Exception) {
                 val failedHop = WhoisHop(

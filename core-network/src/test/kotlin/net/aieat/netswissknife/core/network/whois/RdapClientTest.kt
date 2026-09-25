@@ -5,6 +5,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.test.runTest
 import mockwebserver3.MockResponse
+import mockwebserver3.MockResponseBody
 import mockwebserver3.MockWebServer
 import okhttp3.Dns
 import okhttp3.OkHttpClient
@@ -18,6 +19,7 @@ import org.junit.jupiter.api.Assertions.assertInstanceOf
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
+import okio.BufferedSink
 import java.io.IOException
 import java.net.InetAddress
 import java.net.InetSocketAddress
@@ -124,7 +126,8 @@ class RdapClientTest {
         val missing = client.lookup("8.8.8.8", WhoisQueryType.IPV4)
         val asn = client.lookup("as15169", WhoisQueryType.ASN)
 
-        assertEquals(RdapLookupResult.Unsupported(), missing)
+        assertInstanceOf(RdapLookupResult.Unsupported::class.java, missing)
+        assertEquals(404, (missing as RdapLookupResult.Unsupported).statusCode)
         assertInstanceOf(RdapLookupResult.Found::class.java, asn)
         assertEquals("/ip/8.8.8.8", server.takeRequest().url.encodedPath)
         assertEquals("/autnum/15169", server.takeRequest().url.encodedPath)
@@ -231,6 +234,29 @@ class RdapClientTest {
         request.cancel()
         delay(50)
         assertTrue(request.isCancelled)
+    }
+
+    @Test
+    fun `partial response read failure reports bytes already received`() = runTest {
+        val server = server()
+        server.enqueue(MockResponse.Builder().body(object : MockResponseBody {
+            override val contentLength: Long = 100
+
+            override fun writeTo(sink: BufferedSink) {
+                sink.writeUtf8("partial")
+                sink.flush()
+                throw IOException("simulated truncated response")
+            }
+        }).build())
+        val client = rdapClient(ipRedirectorUrl = server.url("/"))
+        var observedBytes = 0
+
+        val failure = runCatching {
+            client.lookup("8.8.8.8", WhoisQueryType.IPV4) { observedBytes += it }
+        }.exceptionOrNull()
+
+        assertTrue(failure is IOException)
+        assertEquals("partial".toByteArray(Charsets.UTF_8).size, observedBytes)
     }
 
     @Test

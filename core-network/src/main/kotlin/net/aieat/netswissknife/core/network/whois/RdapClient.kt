@@ -35,6 +35,8 @@ data class RdapHttpResponse(
     val date: String? = null,
     val expires: String? = null,
     val age: String? = null,
+    /** Original response-body size when known; defaults to UTF-8 size for fake transports. */
+    val bodyBytes: Int = body.toByteArray(Charsets.UTF_8).size,
 )
 
 fun interface RdapTransport {
@@ -43,9 +45,25 @@ fun interface RdapTransport {
 
 /** Raw RDAP payload and the responding server identity for the mapper. */
 sealed interface RdapLookupResult {
-    data class Found(val rawJson: String, val finalResponseHost: String) : RdapLookupResult
-    data class Unsupported(val statusCode: Int = 404) : RdapLookupResult
+    data class Found(
+        val rawJson: String,
+        val finalResponseHost: String,
+        val bodyBytes: Int = rawJson.toByteArray(Charsets.UTF_8).size,
+    ) : RdapLookupResult
+    data class Unsupported(val statusCode: Int = 404, val bodyBytes: Int = 0) : RdapLookupResult
 }
+
+/** An HTTP error with its bounded body size retained for aggregate operation accounting. */
+class RdapHttpException(val statusCode: Int, val bodyBytes: Int) :
+    IOException("RDAP request failed with HTTP $statusCode")
+
+/** A bounded RDAP transport stopped after observing one byte beyond its response limit. */
+class RdapResponseTooLargeException(val observedBytes: Int, val limitBytes: Int) :
+    IOException("RDAP response exceeds size limit of $limitBytes bytes")
+
+/** A response body read failed after some bytes had already arrived. */
+class RdapResponseReadException(val observedBytes: Int, cause: IOException) :
+    IOException("RDAP response body could not be read", cause)
 
 /** RFC 9224 bootstrap-based RDAP lookup with a bounded in-memory DNS bootstrap cache. */
 class RdapClient(
@@ -92,24 +110,37 @@ class RdapClient(
         validateRequestUrl(asnRedirectorUrl)
     }
 
-    suspend fun lookup(query: String, queryType: WhoisQueryType): RdapLookupResult {
+    suspend fun lookup(
+        query: String,
+        queryType: WhoisQueryType,
+        onResponseBodyBytes: (Int) -> Unit = {},
+    ): RdapLookupResult {
         val url = when (queryType) {
-            WhoisQueryType.DOMAIN -> domainUrl(query)
+            WhoisQueryType.DOMAIN -> domainUrl(query, onResponseBodyBytes)
             WhoisQueryType.IPV4, WhoisQueryType.IPV6 -> redirectorUrl(ipRedirectorUrl, "ip", query)
             WhoisQueryType.ASN -> redirectorUrl(asnRedirectorUrl, "autnum", normalizeAsn(query))
         }
         validateRequestUrl(url)
-        val response = transport.get(url)
+        val response = try {
+            transport.get(url)
+        } catch (tooLarge: RdapResponseTooLargeException) {
+            onResponseBodyBytes(tooLarge.observedBytes)
+            throw tooLarge
+        } catch (readFailure: RdapResponseReadException) {
+            onResponseBodyBytes(readFailure.observedBytes)
+            throw readFailure.cause as IOException
+        }
+        onResponseBodyBytes(response.bodyBytes)
         val final = validateFinalUrl(response.finalUrl)
         if (url.isHttps && !final.isHttps) throw IOException("RDAP response attempted an HTTPS downgrade")
-        if (response.statusCode == 404) return RdapLookupResult.Unsupported()
-        if (response.statusCode !in 200..299) throw IOException("RDAP request failed with HTTP ${response.statusCode}")
-        return RdapLookupResult.Found(response.body, final.host)
+        if (response.statusCode == 404) return RdapLookupResult.Unsupported(bodyBytes = response.bodyBytes)
+        if (response.statusCode !in 200..299) throw RdapHttpException(response.statusCode, response.bodyBytes)
+        return RdapLookupResult.Found(response.body, final.host, response.bodyBytes)
     }
 
-    private suspend fun domainUrl(query: String): HttpUrl {
+    private suspend fun domainUrl(query: String, onResponseBodyBytes: (Int) -> Unit): HttpUrl {
         val domain = normalizeDomain(query)
-        val bootstrap = cachedOrFetchBootstrap()
+        val bootstrap = cachedOrFetchBootstrap(onResponseBodyBytes)
         val service = bootstrap.services
             .filter { service -> service.suffixes.any { domainMatches(domain, it) } }
             .maxByOrNull { service -> service.suffixes.filter { domainMatches(domain, it) }.maxOf(String::length) }
@@ -123,7 +154,7 @@ class RdapClient(
             .build()
     }
 
-    private suspend fun cachedOrFetchBootstrap(): DnsBootstrap {
+    private suspend fun cachedOrFetchBootstrap(onResponseBodyBytes: (Int) -> Unit): DnsBootstrap {
         val current = cachedBootstrap
         if (current != null && nowNanos() - current.expiresAtNanos < 0L) return current.value
         val observedGeneration = bootstrapGeneration
@@ -135,23 +166,45 @@ class RdapClient(
             // One caller fetches at a time, so a slower stale response cannot replace a newer
             // bootstrap document after a racing request. Waiters that were already in flight
             // also share a failed attempt, while later calls may retry immediately.
-            try {
-                val response = transport.get(bootstrapUrl)
-                val final = validateFinalUrl(response.finalUrl)
-                if (bootstrapUrl.isHttps && !final.isHttps) throw IOException("IANA bootstrap response attempted an HTTPS downgrade")
-                if (response.statusCode !in 200..299) throw IOException("IANA RDAP bootstrap failed with HTTP ${response.statusCode}")
-                val parsed = DnsBootstrap.parse(response.body)
-                val freshness = cacheFreshnessMillis(response.cacheControl, response.date, response.expires, response.age)
-                cachedBootstrap = CachedBootstrap(parsed, nowNanos() + freshness * 1_000_000L)
-                recentBootstrapFailure = null
-                parsed
+            val response = try {
+                transport.get(bootstrapUrl)
+            } catch (error: RdapResponseTooLargeException) {
+                onResponseBodyBytes(error.observedBytes)
+                cacheBootstrapFailure(error)
+                throw error
+            } catch (error: RdapResponseReadException) {
+                onResponseBodyBytes(error.observedBytes)
+                val readError = error.cause as IOException
+                cacheBootstrapFailure(readError)
+                throw readError
             } catch (error: IOException) {
-                val failure = BootstrapFailure(bootstrapGeneration + 1L, error)
-                recentBootstrapFailure = failure
-                bootstrapGeneration = failure.generation
+                cacheBootstrapFailure(error)
                 throw error
             }
+
+            // Do not place budget callback failures into the shared bootstrap failure slot:
+            // this response is valid globally even if one caller's operation budget is small.
+            onResponseBodyBytes(response.bodyBytes)
+            val parsed = try {
+                val final = validateFinalUrl(response.finalUrl)
+                if (bootstrapUrl.isHttps && !final.isHttps) throw IOException("IANA bootstrap response attempted an HTTPS downgrade")
+                if (response.statusCode !in 200..299) throw RdapHttpException(response.statusCode, response.bodyBytes)
+                DnsBootstrap.parse(response.body)
+            } catch (error: IOException) {
+                cacheBootstrapFailure(error)
+                throw error
+            }
+            val freshness = cacheFreshnessMillis(response.cacheControl, response.date, response.expires, response.age)
+            cachedBootstrap = CachedBootstrap(parsed, nowNanos() + freshness * 1_000_000L)
+            recentBootstrapFailure = null
+            parsed
         }
+    }
+
+    private fun cacheBootstrapFailure(error: IOException) {
+        val failure = BootstrapFailure(bootstrapGeneration + 1L, error)
+        recentBootstrapFailure = failure
+        bootstrapGeneration = failure.generation
     }
 
     private fun redirectorUrl(base: HttpUrl, objectType: String, value: String): HttpUrl =
@@ -310,15 +363,23 @@ private class OkHttpRdapTransport(
             override fun onResponse(call: Call, response: Response) {
                 try {
                     response.use {
+                        var bodyBytes = 0
                         val body = it.body.source().use { source ->
                             val buffer = Buffer()
                             var total = 0L
                             while (total <= MAX_RESPONSE_BYTES) {
-                                val count = source.read(buffer, minOf(8_192L, MAX_RESPONSE_BYTES + 1 - total))
+                                val count = try {
+                                    source.read(buffer, minOf(8_192L, MAX_RESPONSE_BYTES + 1 - total))
+                                } catch (error: IOException) {
+                                    throw RdapResponseReadException(total.toInt(), error)
+                                }
                                 if (count == -1L) break
                                 total += count
                             }
-                            if (total > MAX_RESPONSE_BYTES) throw IOException("RDAP response exceeds size limit")
+                            if (total > MAX_RESPONSE_BYTES) {
+                                throw RdapResponseTooLargeException(total.toInt(), MAX_RESPONSE_BYTES.toInt())
+                            }
+                            bodyBytes = total.toInt()
                             buffer.readUtf8()
                         }
                         val finalUrl = it.request.url
@@ -331,6 +392,7 @@ private class OkHttpRdapTransport(
                                 it.header("Date"),
                                 it.header("Expires"),
                                 it.header("Age"),
+                                bodyBytes,
                             ),
                         )
                     }

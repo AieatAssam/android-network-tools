@@ -188,7 +188,11 @@ internal class WhoisResponseBudget(private val maxBytes: Long) {
     fun consume(bytes: Int) {
         val total = consumed.addAndGet(bytes.toLong())
         if (total > maxBytes) {
-            throw java.io.IOException("WHOIS response exceeded $maxBytes bytes")
+            throw WhoisResponseBudgetExceededException(maxBytes)
         }
     }
 }
+
+/** Terminal for the current repository attempt: fallback must not spend more than the cap. */
+internal class WhoisResponseBudgetExceededException(maxBytes: Long) :
+    java.io.IOException("WHOIS response exceeded $maxBytes bytes")
