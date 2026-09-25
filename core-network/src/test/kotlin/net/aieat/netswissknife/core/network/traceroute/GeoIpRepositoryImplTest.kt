@@ -122,6 +122,53 @@ class GeoIpRepositoryImplTest {
         }
 
     @Test
+    @DisplayName("successful locations use a bounded least-recently-used cache")
+    fun `cache evicts least recently used location at its capacity`() =
+        runTest {
+            val connectionAttempts = AtomicInteger()
+            val fillerIps =
+                buildList {
+                    addAll((1..254).map { "8.8.8.$it" }.filterNot { it == "8.8.8.8" })
+                    addAll((1..254).map { "8.8.4.$it" })
+                    addAll(listOf("1.1.1.1", "1.0.0.1", "9.9.9.9", "149.112.112.112", "208.67.222.222"))
+                }
+            assertEquals(GeoIpRepositoryImpl.GEOIP_CACHE_MAX_ENTRIES, fillerIps.size)
+            assertEquals(fillerIps.size, fillerIps.toSet().size)
+
+            val repo =
+                GeoIpRepositoryImpl(
+                    providers = listOf(IpInfoGeoIpProvider("https://geo.test")),
+                    connectionFactory =
+                        GeoIpConnectionFactory { url ->
+                            connectionAttempts.incrementAndGet()
+                            ResponseGeoIpConnection(url)
+                        },
+                    clock = MonotonicClock { 0L },
+                )
+            val first = "8.8.8.8"
+
+            assertNotNull(repo.lookup(first))
+            fillerIps.take(GeoIpRepositoryImpl.GEOIP_CACHE_MAX_ENTRIES - 1).forEach { ip ->
+                assertNotNull(repo.lookup(ip), "Expected fixture response for $ip")
+            }
+            assertEquals(GeoIpRepositoryImpl.GEOIP_CACHE_MAX_ENTRIES, connectionAttempts.get())
+
+            // A hit refreshes recency so the oldest filler entry, rather than `first`, is evicted.
+            assertNotNull(repo.lookup(first))
+            assertEquals(GeoIpRepositoryImpl.GEOIP_CACHE_MAX_ENTRIES, connectionAttempts.get())
+            assertNotNull(repo.lookup(fillerIps.last()))
+            assertEquals(GeoIpRepositoryImpl.GEOIP_CACHE_MAX_ENTRIES + 1, connectionAttempts.get())
+            assertNotNull(repo.lookup(fillerIps.last()))
+            assertEquals(GeoIpRepositoryImpl.GEOIP_CACHE_MAX_ENTRIES + 1, connectionAttempts.get())
+            assertNotNull(repo.lookup(first))
+            assertEquals(GeoIpRepositoryImpl.GEOIP_CACHE_MAX_ENTRIES + 1, connectionAttempts.get())
+
+            // The least-recently-used filler item was removed and must be fetched again.
+            assertNotNull(repo.lookup(fillerIps.first()))
+            assertEquals(GeoIpRepositoryImpl.GEOIP_CACHE_MAX_ENTRIES + 2, connectionAttempts.get())
+        }
+
+    @Test
     @DisplayName("provider fixtures map the documented response fields")
     fun `provider parsers map deterministic fixtures`() {
         val ipInfo = (IpInfoGeoIpProvider().parse("8.8.8.8", ipInfoFixture) as GeoIpParseOutcome.Found).location

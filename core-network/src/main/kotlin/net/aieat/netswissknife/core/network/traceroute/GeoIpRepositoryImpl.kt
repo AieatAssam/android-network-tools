@@ -29,7 +29,7 @@ import java.net.HttpURLConnection
 import java.net.InetAddress
 import java.net.URI
 import java.net.URL
-import java.util.concurrent.ConcurrentHashMap
+import java.util.LinkedHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 
 fun interface GeoIpConnectionFactory {
@@ -357,17 +357,21 @@ class GeoIpRepositoryImpl internal constructor(
         require(providers.map { it.id }.distinct().size == providers.size) { "GeoIP provider IDs must be unique" }
     }
 
-    private val cache = ConcurrentHashMap<String, HopGeoLocation?>()
+    private val cache =
+        object : LinkedHashMap<String, HopGeoLocation>(GEOIP_CACHE_MAX_ENTRIES + 1, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, HopGeoLocation>?): Boolean =
+                size > GEOIP_CACHE_MAX_ENTRIES
+        }
     private val breakerLock = Any()
     private val providerBreakers = providers.associate { it.id to ProviderBreakerState() }
 
     override suspend fun lookup(ip: String): HopGeoLocation? {
         currentCoroutineContext().ensureActive()
         if (!ReservedRanges.isPublicGlobalLiteral(ip)) return null
-        cache[ip]?.let { return it }
+        cachedLocation(ip)?.let { return it }
         val session = newOperationSession(clock)
         val result = executeLookup(ip, session, mapDeadlineToNull = true)
-        if (result != null) cache[ip] = result
+        if (result != null) cacheLocation(ip, result)
         return result
     }
 
@@ -382,10 +386,19 @@ class GeoIpRepositoryImpl internal constructor(
         }
         operationSession.budget.throwIfExpired()
         if (!ReservedRanges.isPublicGlobalLiteral(ip)) return null
-        cache[ip]?.let { return it }
+        cachedLocation(ip)?.let { return it }
         val result = executeLookup(ip, operationSession, mapDeadlineToNull = false)
-        if (result != null) cache[ip] = result
+        if (result != null) cacheLocation(ip, result)
         return result
+    }
+
+    private fun cachedLocation(ip: String): HopGeoLocation? = synchronized(cache) { cache[ip] }
+
+    private fun cacheLocation(
+        ip: String,
+        location: HopGeoLocation,
+    ) {
+        synchronized(cache) { cache[ip] = location }
     }
 
     // ── Network ───────────────────────────────────────────────────────────────
@@ -616,6 +629,7 @@ class GeoIpRepositoryImpl internal constructor(
 
     companion object {
         private const val DEFAULT_BASE_URL = "https://ipinfo.io"
+        internal const val GEOIP_CACHE_MAX_ENTRIES = 512
         private const val REQUEST_TIMEOUT_MS = TracerouteOperation.MAX_GEO_IP_WAIT_MILLIS
         private const val MAX_RESPONSE_BYTES = 65_536L
         private const val BODY_BUFFER_BYTES = 4_096
