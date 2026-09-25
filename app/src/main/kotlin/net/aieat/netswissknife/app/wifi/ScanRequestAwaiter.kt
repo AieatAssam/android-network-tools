@@ -59,8 +59,6 @@ class ScanRequestAwaiter(
         var startScanReturned = false
         var broadcastArrived = false
         var resultsUpdated = false
-        var receiver: BroadcastReceiver? = null
-        var receiverRegistered = false
         var receiverLease: ReceiverLease? = null
 
         try {
@@ -78,14 +76,13 @@ class ScanRequestAwaiter(
                             if (continuation.isActive) continuation.resume(Unit)
                         }
                     }
-                    receiver = scanReceiver
                     registerReceiver(
                         scanReceiver,
                         createIntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION)
                     )
-                    receiverRegistered = true
                     val lease = ReceiverLease { unregisterQuietly(scanReceiver) }
-                    receiverLease = operationSession?.resources?.register(lease)
+                    receiverLease = lease
+                    operationSession?.resources?.register(lease)
                     continuation.invokeOnCancellation {
                         lease.close()
                     }
@@ -102,12 +99,11 @@ class ScanRequestAwaiter(
             }
         } finally {
             val lease = receiverLease
-            if (lease == null) {
-                if (receiverRegistered) receiver?.let(::unregisterQuietly)
-            } else if (operationSession?.resources?.release(lease) == true) {
+            if (lease != null &&
+                (operationSession == null || operationSession.resources.release(lease))
+            ) {
                 lease.close()
             }
-            receiverRegistered = false
         }
 
         return decideOutcome(startScanReturned, broadcastArrived, resultsUpdated)
