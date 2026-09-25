@@ -37,16 +37,29 @@ class TouchTargetAuditTest {
         assertEquals(3, findUndersizedIconButtons(source).size)
     }
 
+    @Test
+    fun `source guard reads dimension limits after nested modifier commas`() {
+        val source = """
+            IconButton(
+                onClick = {},
+                modifier = Modifier.sizeIn(maxWidth = 52.dp, maxHeight = 40.dp)
+            ) {}
+            OutlinedIconButton(
+                onClick = {},
+                modifier = Modifier.widthIn(min = 24.dp, max = 40.dp)
+            ) {}
+        """.trimIndent()
+
+        assertEquals(2, findUndersizedIconButtons(source).size)
+    }
+
     private fun findUndersizedIconButtons(source: String): List<Int> = buildList {
         val invocation = Regex("\\b(?:FilledTonal|Filled|Outlined)?IconButton\\s*\\(")
         invocation.findAll(source).forEach { match ->
             val openParen = source.indexOf('(', match.range.first)
             val closeParen = matchingParen(source, openParen) ?: return@forEach
             val arguments = source.substring(openParen + 1, closeParen)
-            val modifier = Regex("\\bmodifier\\s*=\\s*([\\s\\S]*?)(?=,\\s*\\w+\\s*=|$)")
-                .find(arguments)
-                ?.groupValues
-                ?.get(1)
+            val modifier = namedArgumentValue(arguments, "modifier")
                 ?: return@forEach
             val fixedDimensions = Regex("\\.(?:size|requiredSize|width|height)\\s*\\(([^)]*)\\)")
                 .findAll(modifier)
@@ -91,6 +104,52 @@ class TouchTargetAuditTest {
             }
         }
         return null
+    }
+
+    private fun namedArgumentValue(arguments: String, argumentName: String): String? {
+        var segmentStart = 0
+        var parentheses = 0
+        var braces = 0
+        var brackets = 0
+        var inString = false
+        var inChar = false
+        var escaped = false
+
+        fun valueInSegment(endExclusive: Int): String? {
+            val segment = arguments.substring(segmentStart, endExclusive).trim()
+            val equalsIndex = segment.indexOf('=')
+            if (equalsIndex < 0 || segment.substring(0, equalsIndex).trim() != argumentName) return null
+            return segment.substring(equalsIndex + 1).trim()
+        }
+
+        arguments.forEachIndexed { index, char ->
+            if (inString || inChar) {
+                when {
+                    escaped -> escaped = false
+                    char == '\\' -> escaped = true
+                    inString && char == '"' -> inString = false
+                    inChar && char == '\'' -> inChar = false
+                }
+                return@forEachIndexed
+            }
+
+            when (char) {
+                '"' -> inString = true
+                '\'' -> inChar = true
+                '(' -> parentheses++
+                ')' -> parentheses--
+                '{' -> braces++
+                '}' -> braces--
+                '[' -> brackets++
+                ']' -> brackets--
+                ',' -> if (parentheses == 0 && braces == 0 && brackets == 0) {
+                    valueInSegment(index)?.let { return it }
+                    segmentStart = index + 1
+                }
+            }
+        }
+
+        return valueInSegment(arguments.length)
     }
 
     private fun repositoryRoot(): File {
