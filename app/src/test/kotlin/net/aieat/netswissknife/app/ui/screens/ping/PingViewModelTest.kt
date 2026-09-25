@@ -32,6 +32,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
+import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.ui.i18n.UiText
 import net.aieat.netswissknife.app.platform.LinkInfoProvider
 import net.aieat.netswissknife.app.platform.NetworkStatus
 import net.aieat.netswissknife.app.platform.NetworkStatusProvider
@@ -46,6 +48,8 @@ import net.aieat.netswissknife.core.domain.ContinuousPingUseCase
 import net.aieat.netswissknife.core.domain.PingFlowResult
 import net.aieat.netswissknife.core.domain.PingSessionLogger
 import net.aieat.netswissknife.core.domain.PingUseCase
+import net.aieat.netswissknife.core.network.ErrorCode
+import net.aieat.netswissknife.core.network.ErrorInfo
 import net.aieat.netswissknife.core.network.operation.CancellationReason
 import net.aieat.netswissknife.core.network.operation.OperationSession
 import net.aieat.netswissknife.core.network.ping.PingPacketResult
@@ -383,12 +387,25 @@ class PingViewModelTest {
         @Test
         fun `transitions to Error on ValidationError`() =
             runTest {
-                coEvery { pingUseCase(any(), any()) } returns flowOf(PingFlowResult.ValidationError("invalid host"))
+                coEvery { pingUseCase(any(), any()) } returns flowOf(
+                    PingFlowResult.ValidationError(
+                        ErrorInfo(ErrorCode.HOST_INVALID, args = listOf("bad host"), developerMessage = "invalid host")
+                    )
+                )
                 viewModel.onHostChange("")
                 viewModel.startPing()
                 val state = viewModel.uiState.value
                 assertTrue(state is PingUiState.Error)
-                assertEquals("invalid host", (state as PingUiState.Error).message)
+                state as PingUiState.Error
+                assertEquals("invalid host", state.message)
+                assertEquals(
+                    UiText.Res(
+                        R.string.err_host_invalid,
+                        args = listOf("bad host"),
+                        developerFallback = "invalid host",
+                    ),
+                    state.text,
+                )
             }
 
         @Test
@@ -906,7 +923,9 @@ class PingViewModelTest {
                         PingFlowResult.ValidationError("invalid"),
                     )
                 viewModel.startPing()
-                assertEquals("invalid", awaitError().message)
+                val error = awaitError()
+                assertEquals("invalid", error.message)
+                assertEquals(UiText.Plain("invalid"), error.text)
                 assertFalse(logFile.exists())
             }
 

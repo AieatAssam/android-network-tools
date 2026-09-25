@@ -35,6 +35,8 @@ import net.aieat.netswissknife.app.ui.navigation.ToolDestination
 import net.aieat.netswissknife.app.ui.navigation.ToolHost
 import net.aieat.netswissknife.app.ui.navigation.ToolIntentCodec
 import net.aieat.netswissknife.app.ui.navigation.ToolSource
+import net.aieat.netswissknife.app.ui.i18n.ErrorTextMapper
+import net.aieat.netswissknife.app.ui.i18n.UiText
 import net.aieat.netswissknife.app.platform.NoOpNetworkStatusProvider
 import net.aieat.netswissknife.app.platform.AvailabilityReason
 import net.aieat.netswissknife.app.platform.OperationAvailability
@@ -53,6 +55,7 @@ import net.aieat.netswissknife.core.network.ping.PingStatsAccumulator
 import net.aieat.netswissknife.core.network.ping.PingStatus
 import net.aieat.netswissknife.core.network.ping.PingEngineKind
 import net.aieat.netswissknife.core.network.HostValidator
+import net.aieat.netswissknife.core.network.ErrorInfo
 import net.aieat.netswissknife.core.network.operation.CancellationReason
 import net.aieat.netswissknife.core.network.operation.OperationRequirement
 import net.aieat.netswissknife.core.network.operation.OperationSession
@@ -126,7 +129,10 @@ private class ContinuousPingSession(
     var stopRequested: Boolean = false
 }
 
-private class ContinuousPingValidationException(val validationMessage: String) :
+private class ContinuousPingValidationException(
+    val info: ErrorInfo,
+    val validationMessage: String,
+) :
     RuntimeException(validationMessage)
 
 /** All possible states for the Ping UI. */
@@ -146,7 +152,13 @@ sealed interface PingUiState {
         val showRaw: Boolean = false,
         val sessionLogFile: File? = null
     ) : PingUiState
-    data class Error(val message: String) : PingUiState
+    data class Error(
+        val text: UiText,
+        /** Developer-facing compatibility copy for logs and existing state consumers. */
+        val message: String,
+    ) : PingUiState {
+        constructor(message: String) : this(UiText.Plain(message), message)
+    }
 }
 
 @HiltViewModel
@@ -447,7 +459,7 @@ class PingViewModel @Inject constructor(
                     if (pingOperationSession !== operationSession) return@collect
                     when (result) {
                         is PingFlowResult.ValidationError -> {
-                            _uiState.value = PingUiState.Error(result.message)
+                            _uiState.value = typedError(result.info, result.message)
                             return@collect
                         }
                         is PingFlowResult.Packet -> {
@@ -549,7 +561,7 @@ class PingViewModel @Inject constructor(
                 continuousPingUseCase(params, operationSession).collect { result ->
                     when (result) {
                         is PingFlowResult.ValidationError -> {
-                            throw ContinuousPingValidationException(result.message)
+                            throw ContinuousPingValidationException(result.info, result.message)
                         }
                         is PingFlowResult.Packet -> {
                             seq++
@@ -585,7 +597,7 @@ class PingViewModel @Inject constructor(
                 if (continuousSession === session) {
                     continuousSession = null
                     session.file.delete()
-                    _uiState.value = PingUiState.Error(e.validationMessage)
+                    _uiState.value = typedError(e.info, e.validationMessage)
                 }
             } catch (e: Exception) {
                 session.logWriter.closeAndJoin()
@@ -617,6 +629,12 @@ class PingViewModel @Inject constructor(
             localNetworkPermissionAllowed = localPermission,
         )
     }
+
+    private fun typedError(info: ErrorInfo, developerMessage: String): PingUiState.Error =
+        PingUiState.Error(
+            text = ErrorTextMapper.map(info, developerMessage),
+            message = developerMessage,
+        )
 
     private fun finalizeContinuousSession(
         current: PingUiState.Running,

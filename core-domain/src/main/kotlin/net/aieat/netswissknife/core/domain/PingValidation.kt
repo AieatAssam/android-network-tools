@@ -12,7 +12,7 @@ internal fun validatePingCommon(
     ttl: Int = 64
 ): ErrorInfo? = when {
     host.isBlank() -> validationError(ErrorCode.HOST_BLANK, "Host must not be empty")
-    !HostValidator.isValidHostname(host) -> validationError(ErrorCode.HOST_INVALID, "Invalid host or IP address")
+    !HostValidator.isValidHostname(host) -> validationError(ErrorCode.HOST_INVALID, "Invalid host or IP address", host)
     timeoutMs !in 100..30_000 -> validationError(ErrorCode.TIMEOUT_OUT_OF_RANGE, "Timeout must be between 100 ms and 30 000 ms", 100, 30_000)
     payloadBytes !in 0..1472 -> validationError(ErrorCode.PAYLOAD_OUT_OF_RANGE, "Payload size must be between 0 and 1472 bytes", 0, 1472)
     ttl !in 1..255 -> validationError(ErrorCode.TTL_OUT_OF_RANGE, "TTL must be between 1 and 255", 1, 255)

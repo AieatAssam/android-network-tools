@@ -29,6 +29,7 @@ import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.platform.LocalNetworkPermissionPolicy
+import net.aieat.netswissknife.app.ui.i18n.ErrorTextMapper
 import net.aieat.netswissknife.app.ui.screens.ping.PingUiState
 import net.aieat.netswissknife.app.ui.screens.ping.PingViewModel
 import net.aieat.netswissknife.app.ui.navigation.ToolSource
@@ -36,6 +37,8 @@ import net.aieat.netswissknife.app.ui.theme.NetSwissKnifeTheme
 import net.aieat.netswissknife.core.network.ping.PingPacketResult
 import net.aieat.netswissknife.core.network.ping.PingStatus
 import net.aieat.netswissknife.core.network.HostValidator
+import net.aieat.netswissknife.core.network.ErrorCode
+import net.aieat.netswissknife.core.network.ErrorInfo
 import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Rule
@@ -149,6 +152,53 @@ class PingScreenTest {
             .onNodeWithTag(PingScreenTestTags.CONTENT_LIST)
             .performScrollToIndex(PingScreenTestTags.RESULTS_PANEL_INDEX)
         composeRule.onNodeWithText(context.getString(R.string.error_no_details)).assertIsDisplayed()
+    }
+
+    @Test
+    fun legacyContinuousValidationError_rendersDeveloperCopyForUnknownCode() {
+        val developerMessage = "Continuous ping requires validated connectivity"
+        val legacyError = PingUiState.Error(
+            text = ErrorTextMapper.map(
+                ErrorInfo(ErrorCode.UNKNOWN, developerMessage = developerMessage),
+                fallback = "fallback copy",
+            ),
+            message = developerMessage,
+        )
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                PingScreen(viewModel = fakePingViewModel(legacyError))
+            }
+        }
+
+        composeRule.mainClock.advanceTimeBy(2_000L)
+        composeRule
+            .onNodeWithTag(PingScreenTestTags.CONTENT_LIST)
+            .performScrollToIndex(PingScreenTestTags.RESULTS_PANEL_INDEX)
+        composeRule.onNodeWithText(developerMessage).assertIsDisplayed()
+    }
+
+    @Test
+    fun typedValidationError_rendersResolvedStringResource() {
+        val state = PingUiState.Error(
+            text = ErrorTextMapper.map(
+                ErrorInfo(ErrorCode.TIMEOUT_OUT_OF_RANGE, args = listOf(100, 30_000)),
+                fallback = "timeout fallback",
+            ),
+            message = "timeout diagnostic",
+        )
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                PingScreen(viewModel = fakePingViewModel(state))
+            }
+        }
+
+        composeRule.mainClock.advanceTimeBy(2_000L)
+        composeRule
+            .onNodeWithTag(PingScreenTestTags.CONTENT_LIST)
+            .performScrollToIndex(PingScreenTestTags.RESULTS_PANEL_INDEX)
+        composeRule
+            .onNodeWithText(context.getString(R.string.err_timeout_out_of_range, 100, 30_000))
+            .assertIsDisplayed()
     }
 
     @Test

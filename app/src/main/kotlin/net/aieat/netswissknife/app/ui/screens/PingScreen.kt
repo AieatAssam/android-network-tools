@@ -131,6 +131,7 @@ import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.RecentHostsRow
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
 import net.aieat.netswissknife.app.ui.theme.AppMotion
+import net.aieat.netswissknife.app.ui.i18n.asString
 import net.aieat.netswissknife.app.ui.screens.ping.PingUiState
 import net.aieat.netswissknife.app.ui.screens.ping.PingViewModel
 import net.aieat.netswissknife.app.ui.screens.ping.PingCsvSerializer
@@ -300,7 +301,7 @@ fun PingScreen(
                             onClear = viewModel::onClearResults
                         )
                         is PingUiState.Error -> PingErrorPanel(
-                            message = state.message,
+                            message = state.text.asString(),
                             onRetry = { requestLocalNetworkPermission(host) },
                             onClear = viewModel::onClearResults
                         )
