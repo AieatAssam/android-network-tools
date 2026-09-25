@@ -25,6 +25,7 @@ import net.aieat.netswissknife.app.platform.NetworkStatus
 import net.aieat.netswissknife.app.ui.screens.traceroute.TracerouteUiState
 import net.aieat.netswissknife.app.ui.screens.traceroute.TracerouteViewModel
 import net.aieat.netswissknife.app.ui.theme.NetSwissKnifeTheme
+import net.aieat.netswissknife.core.network.traceroute.HopGeoLocation
 import net.aieat.netswissknife.core.network.traceroute.HopResult
 import net.aieat.netswissknife.core.network.traceroute.HopStatus
 import net.aieat.netswissknife.core.network.traceroute.TracerouteProbeType
@@ -381,6 +382,65 @@ class TracerouteScreenTest {
         composeRule.mainClock.advanceTimeBy(2_000L)
         composeRule.mainClock.autoAdvance = true
         composeRule.onNodeWithText("10.0.0.2").performScrollTo().assertIsDisplayed()
+        composeRule.mainClock.autoAdvance = false
+    }
+
+    @Test
+    fun finishedState_showsCountryFlagsInHopLabelsAndCountryPath() {
+        val hops = listOf(
+            fakeHop(1, "192.0.2.1").copy(
+                geoLocation = HopGeoLocation(
+                    ip = "192.0.2.1",
+                    country = "US",
+                    countryCode = "US",
+                    city = "Ashburn",
+                    lat = 39.0,
+                    lon = -77.0,
+                ),
+            ),
+            fakeHop(2, "192.0.2.2").copy(
+                geoLocation = HopGeoLocation(
+                    ip = "192.0.2.2",
+                    country = "GB",
+                    countryCode = "GB",
+                    city = "London",
+                    lat = 51.5,
+                    lon = -0.1,
+                ),
+            ),
+        )
+        val result = TracerouteResult(
+            host = "example.com",
+            resolvedIp = "93.184.216.34",
+            hops = hops,
+            rawOutput = "traceroute output",
+            totalTimeMs = 500,
+        )
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                TracerouteScreen(viewModel = fakeViewModel(TracerouteUiState.Finished(result)))
+            }
+        }
+
+        composeRule.mainClock.advanceTimeBy(2_000L)
+        composeRule.mainClock.autoAdvance = true
+        composeRule
+            .onNodeWithText("Ashburn, 🇺🇸 United States")
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule
+            .onNodeWithText("London, 🇬🇧 United Kingdom")
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule
+            .onNodeWithText(
+                context.getString(
+                    R.string.traceroute_stats_country_path,
+                    "🇺🇸 United States → 🇬🇧 United Kingdom",
+                ),
+            )
+            .performScrollTo()
+            .assertIsDisplayed()
         composeRule.mainClock.autoAdvance = false
     }
 

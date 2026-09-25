@@ -131,6 +131,7 @@ import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.app.ui.screens.traceroute.TracerouteViewModel
 import net.aieat.netswissknife.app.ui.screens.traceroute.TracerouteViewMode
 import net.aieat.netswissknife.core.network.HostValidator
+import net.aieat.netswissknife.core.network.traceroute.CountryFlags
 import net.aieat.netswissknife.core.network.traceroute.HopGeoLocation
 import net.aieat.netswissknife.core.network.traceroute.HopResult
 import net.aieat.netswissknife.core.network.traceroute.HopStatus
@@ -855,7 +856,11 @@ private fun TraceJourneyStats(result: TracerouteResult) {
             )
         }
     }
-    val countries = remember(geoHops) { geoHops.map { it.geoLocation!!.country }.distinct() }
+    val countries = remember(geoHops) {
+        geoHops.mapNotNull { it.geoLocation }
+            .distinctBy { CountryFlags.countryName(it.countryCode) ?: it.country }
+            .map { CountryFlags.label(it.countryCode, it.country) }
+    }
     val isps      = remember(geoHops) { geoHops.mapNotNull { it.geoLocation!!.isp }.distinct() }
 
     // ── RTT stats ────────────────────────────────────────────────────────────
@@ -1365,7 +1370,7 @@ private fun HopCard(hop: HopResult, index: Int) {
                     hop.geoLocation?.let { geo ->
                         val location = buildString {
                             if (geo.city.isNotBlank()) append("${geo.city}, ")
-                            append(geo.country)
+                            append(CountryFlags.label(geo.countryCode, geo.country))
                         }
                         HopDetailRow(stringResource(R.string.traceroute_hop_detail_location), location)
                         geo.isp?.let { HopDetailRow(stringResource(R.string.traceroute_hop_detail_isp), it) }
@@ -1414,7 +1419,7 @@ private fun GeoLocationChip(geo: HopGeoLocation) {
         Spacer(Modifier.width(3.dp))
         val location = buildString {
             if (geo.city.isNotBlank()) append("${geo.city}, ")
-            append(geo.country)
+            append(CountryFlags.label(geo.countryCode, geo.country))
         }
         Text(
             text  = location,
