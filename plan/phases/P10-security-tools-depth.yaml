@@ -225,8 +225,13 @@ tasks:
 
   - id: P10-T4
     title: "HTTP: analyzer v2 (keys), cookie check, cURL export, JSON pretty-print; UI tabs"
-    status: todo
+    status: done
     depends_on: [P10-T3, P07-T1, P07-T3]
+    current_progress:
+      date: "2026-09-25"
+      implemented: "Added keyed HSTS/CSP and related security-header analysis, cookie flag checks, safe cURL export, JSON body formatting, timing visualization, and downgrade warning UI. cURL redirect flags use the same cap as the repository and are suppressed for unsafe methods/credentials/body cases."
+      validation: "HTTP analyzer, exporter, cookie, ViewModel, screen, and repository regression tests passed in the full module suite. The 512 KiB formatter budget test measures formatter-thread CPU time (with wall time retained in diagnostics) to avoid host scheduler noise; strict malformed-input behavior and two-space formatting are covered."
+      remaining: "Manual verification against live redirect/downgrade/JSON servers remains open; no emulator or public endpoint was used for this validation."
     tdd:
       red:
         tests:

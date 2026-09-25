@@ -167,7 +167,12 @@ tasks:
 
   - id: P09-T3
     title: "ktlint + detekt with baselines; CI steps (non-blocking first)"
-    status: todo
+    status: done
+    current_progress:
+      date: "2026-09-25"
+      implemented: "Added ktlint/detekt plugins, module configs, non-empty module baselines, CI report artifacts, and documented local commands. CI lint steps remain non-blocking during the initial baseline review period."
+      validation: "`ktlintCheck` and `detekt` both passed serially with a 768 MiB Gradle heap after the final source edits. Earlier baseline generation produced findings for the existing codebase; the current touched files pass without adding new findings."
+      remaining: "Keep the CI checks non-blocking through the initial baseline review period, then remove `continue-on-error` in a follow-up after reviewing CI reports."
     steps:
       - "Add plugins/versions; module config; generate baselines; commit."
       - "ci.yml: steps 'Run ktlint' and 'Run detekt' with continue-on-error: true and reports uploaded as artifacts."
@@ -209,7 +214,11 @@ tasks:
     steps: ["Bump per design; ./gradlew test :app:assembleDebug :app:assembleRelease :app:lintDebug; if Kotlin bump breaks KSP/Hilt, pin and note in libs.versions.toml comment."]
   - id: P09-T8
     title: "Dependabot"
-    status: todo
+    status: done
+    current_progress:
+      date: "2026-09-25"
+      implemented: "Added weekly Gradle and GitHub Actions updates. Minor/patch Gradle updates share a weekly group; major updates remain individually reviewable."
+      validation: "The committed-source configuration is present at `.github/dependabot.yml`; YAML parsing and source review are included in final verification."
     steps: ["Add .github/dependabot.yml (gradle weekly grouped; github-actions weekly)."]
   - id: P09-T9
     title: "(Optional) Baseline profile"
