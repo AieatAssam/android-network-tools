@@ -1,7 +1,7 @@
 expansion:
   id: E00
   title: "Agent execution contract and corrections to the existing roadmap"
-  status: todo
+  status: in_progress
   authored_on: "2026-09-22"
   baseline_commit: "5e183721e64ce8a8946f1a0b50f52b83544e8898"
   intent: "Planning only; executable increments for coding agents, preserving existing feature ownership and implementation history."

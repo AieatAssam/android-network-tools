@@ -19,7 +19,7 @@ phase:
   id: E01
   title: "UI and user flows: discoverability, trustworthy results, handoffs, and responsive tool workflows"
   priority: high
-  status: todo
+  status: in_progress
   type: expansion
   estimated_effort: "XL (8-12 coding-agent sessions; land as small PR-sized task groups)"
   audience: "AI coding agents; each task has a seam, a test contract, and a rollout gate"

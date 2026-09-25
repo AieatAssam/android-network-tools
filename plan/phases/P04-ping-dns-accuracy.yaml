@@ -10,16 +10,17 @@ expansion_tasks:
   rule: "Coordinate with these expansion tasks; do not duplicate existing scope or block independent regression fixes on optional enhancements. See comprehensive_expansion.regression_delivery for fresh follow-up ownership."
 
 second_pass_follow_up:
-  status: todo
+  status: done
   report: plan/reviews/2026-09-22-second-pass.yaml
   findings: [R2-006]
-  rule: "Apply report recommendations and regression acceptance before closing the listed follow-ups; historical phase completion does not close new findings."
+  rule: "R2-006 is closed by the Locale.ROOT Ping CSV serializer and locale regression suite; the remaining P04 manual device/live-DNS acceptance stays open below. Historical phase completion does not close new findings."
 
 phase:
   id: P04
   title: "Ping & DNS accuracy"
   priority: high
-  status: done
+  status: in_progress
+  status_note: "Source implementation is complete; retain P04 in progress until the listed device checks for ICMP payload/TTL, airplane mode, IDN, resolver records, and Private DNS are recorded."
   estimated_effort: "L (3-5 agent sessions)"
   depends_on: []
   enables: [P11, P14]

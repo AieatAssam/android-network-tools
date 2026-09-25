@@ -11,7 +11,7 @@ expansion:
   id: E02
   title: "Evidence-grade workflows for every shipped tool and a small set of new diagnostics"
   priority: high
-  status: todo
+  status: in_progress
   owner_file: "plan/expansion/E02-tool-depth-and-new-tools.yaml"
   audience: "coding agents working in small RED -> GREEN -> REFACTOR PRs"
   baseline: "README.md and current source at the working tree on 2026-09-22"

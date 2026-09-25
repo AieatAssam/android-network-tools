@@ -21,7 +21,7 @@ phase:
   current_progress:
     date: "2026-09-25"
     implemented: "Added P05-T7 source wiring for HTTP Probe and TLS Inspector: TCP sockets bind through an atomic NetworkBinder.bindIfLocal operation only when the selected local subnet contains the destination. AndroidNetworkBinder uses one captured network/subnet snapshot, and an initially local route that disappears before binding now fails closed. App DI supplies AndroidNetworkBinder; JVM construction retains NoOpNetworkBinder defaults."
-    validation: "Fake-binder regressions cover local/public routing, HTTP redirect re-evaluation from local to public, selected-network loss between classification and bind, and SecurityException preservation as LocalNetworkPermissionDeniedException. Targeted HTTP/TLS/GeoIP tests passed; the full core-network report executed 1,350 tests (1 skipped) with all P05/GeoIP cases passing and one unrelated existing Speed Test overlap test failing under shared-host load. The isolated Port Scan repository class passed. App and domain suites passed, app main and Android-test Kotlin compilation passed; no emulator/device was used."
+    validation: "Fake-binder regressions cover local/public routing, HTTP redirect re-evaluation from local to public, selected-network loss between classification and bind, and SecurityException preservation as LocalNetworkPermissionDeniedException. Targeted HTTP/TLS/GeoIP tests passed (78 cases across the four changed test classes); the full core-network report executed 1,350 tests (1 skipped) with all P05/GeoIP cases passing and one unrelated existing Speed Test overlap test failing under shared-host load. The isolated Port Scan repository class passed. App and domain suites passed, Android-test Kotlin compilation passed, and lintDebug succeeded with zero errors; no emulator/device was used."
     remaining: "The implementation slice is complete. Physical Wi-Fi/VPN route behavior remains in the phase-level device matrix. TLS uses the process resolver; if the selected network disappears during DNS before any address is classified as local, the current route decision follows the network state observed after resolution."
 
 review_follow_up:
@@ -321,7 +321,7 @@ tasks:
       - "If a destination is classified local but atomic binding finds the selected network gone, HTTP and TLS fail instead of falling back to the default route."
     validation:
       - "Focused HTTP/TLS binding and GeoIP cache regression tests passed. The full core-network report covered all new P05-T7 cases; its single failure was the unrelated existing `OkHttpTransferEngineTest` caller-concurrency/loaded-RTT timing case under shared-host load. Isolated `PortScanRepositoryImplTest` passed."
-      - "Full `:core-domain:test` passed (216 tests); full `:app:testDebugUnitTest` passed (594 tests); `:app:compileDebugAndroidTestKotlin` passed."
+      - "Full `:core-domain:test` passed (216 tests); full `:app:testDebugUnitTest` passed (594 tests); `:app:compileDebugAndroidTestKotlin` passed; `:app:lintDebug` succeeded with 0 errors, 38 warnings, and 9 hints."
       - "No emulator/device used for this source slice; physical Wi-Fi/VPN behavior remains in the phase-level device matrix."
 
 qa_validation:

@@ -237,7 +237,7 @@ findings:
   - id: R2-014
     severity: medium
     kind: correctness_gap
-    status: todo
+    status: done
     title: "Topology table failures become empty collections and misleading snapshot removals"
     related_phase: P02
     implementation_task: E02-T08
@@ -247,6 +247,8 @@ findings:
     impact: "Timeouts, authentication failures or unsupported MIBs can look like no interfaces/neighbours/VLANs. Proposed diffs may then report removals from incomplete evidence."
     recommended_action: "Carry per-table success/empty/unsupported/timeout/auth-failed/partial states through repository, node, report and diff. Only compare absence when both relevant observations are sufficiently complete; unknown data is not removal."
     validation: "Fake each walk failure and partial-return mode; snapshots retain successful sections, disclose missing evidence, and never report a removed interface/link solely from a failed candidate table."
+    resolution: "Commit 4fbb774 added completeness-aware table and snapshot diff behavior with tests that suppress removals when either compared graph lacks complete evidence. The finding is closed; the broader E02-T08 identity, persistence, UI, and export workflow remains in progress."
+    fixed_in: "4fbb774"
 
   - id: R2-015
     severity: medium

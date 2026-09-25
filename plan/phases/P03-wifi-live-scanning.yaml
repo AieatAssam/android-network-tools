@@ -12,7 +12,8 @@ phase:
   id: P03
   title: "Wi-Fi Scanner: live scanning with WifiManager.startScan + receiver, throttle/age reporting, configurable interval, LocationDisabled state, LinkProperties-based connection info, EAP/WPA3-Enterprise"
   priority: high
-  status: done
+  status: in_progress
+  status_note: "Source implementation and JVM/API 36 checks are complete, but P03-T7 remains open until the required API 33 permission experiment and Play pre-launch permission check are recorded."
   estimated_effort: "M (2-3 agent sessions)"
   depends_on: []            # soft: P01-T6 LinkInfoProvider (create a minimal one here if P01 not done)
   enables: [P08]
@@ -264,7 +265,7 @@ tasks:
 
   - id: P03-T7
     title: "Resolve F039: neverForLocation assertion vs ACCESS_FINE_LOCATION request"
-    status: done
+    status: in_progress
     depends_on: []
     steps:
       - "Run the A3 verification on an API 33+ device first; record the outcome in this file."
@@ -272,6 +273,11 @@ tasks:
       - "If location IS needed on 33+: remove usesPermissionFlags=neverForLocation; keep requesting both; fix PRIVACY_POLICY.md permission table (location needed on all versions for Wi-Fi scanning) and the onboarding permissions page copy."
       - "Either way: WifiScanScreenTest asserts the permission set requested per SDK (extract `requiredWifiPermissions(sdkInt)` as a pure function with a unit test)."
     acceptance_criteria: ["Manifest, runtime request, privacy policy and onboarding copy agree; Play pre-launch report shows no permission-declaration warning."]
+    current_progress:
+      date: "2026-09-25"
+      implemented: "The permission helper, manifest, privacy-policy table, and onboarding copy are source-aligned; API 32/33 permission mapping has JVM coverage, and WifiScanScreen instrumentation has been recorded on API 36."
+      validation: "The required controlled API 33 deny-location/grant-nearby-device experiment was not run, and no Play pre-launch report is attached. Existing JVM/API 36 evidence does not satisfy those acceptance checks."
+      remaining: "Keep P03-T7 and P03 in_progress until the API 33 runtime permission experiment and Play pre-launch permission check are recorded. No emulator/device was used for this audit."
 
   - id: P03-T6
     title: "README/help sync"

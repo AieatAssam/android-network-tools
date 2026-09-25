@@ -8,10 +8,10 @@ expansion_tasks:
   rule: "Coordinate with these expansion tasks; do not duplicate existing scope or block independent regression fixes on optional enhancements. See comprehensive_expansion.regression_delivery for fresh follow-up ownership."
 
 second_pass_follow_up:
-  status: todo
+  status: done
   report: plan/reviews/2026-09-22-second-pass.yaml
   findings: [R2-010, R2-014]
-  rule: "Apply report recommendations and regression acceptance before closing the listed follow-ups; historical phase completion does not close new findings."
+  rule: "R2-010 and R2-014 are closed with producer budgets and completeness-aware snapshot diff regressions; broader E02-T08 snapshot identity/persistence/UI/export remains open. Historical phase completion does not close new findings."
 
 phase:
   id: P02
@@ -26,11 +26,11 @@ phase:
 
 review_follow_up:
   reviewed_on: "2026-09-21"
-  status: todo
+  status: done
   findings: [RNET003]
   reports:
     - plan/reviews/2026-09-21-network.yaml
-  note: "New source-review follow-ups; preserve historical task completion. See report evidence, recommended_action, and validation before implementation."
+  note: "RNET003 parameter bounds are implemented and tested. Preserve historical phase completion; broader E02-T08 snapshot identity/persistence/UI/export remains open."
 
 context:
   problem: |

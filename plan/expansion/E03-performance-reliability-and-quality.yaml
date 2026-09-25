@@ -370,7 +370,7 @@ tasks:
     current_progress:
       date: "2026-09-25"
       implemented: "Added the bounded route/scope-keyed NetworkCache primitive and a pinned OkHttp 5.5.0 source fork that enforces HTTP/1 and HTTP/2 response metadata limits during parsing. HTTP/2 ordinary fields count cumulatively across informational/final/trailer blocks; pseudo-fields have separate per-block and per-stream caps so status-only interim blocks cannot bypass retained-memory bounds. Typed failures reach the HTTP probe, and bounded body close preserves trailer-limit errors."
-      fixed_in: "93522c7"
+      fixed_in: "42c06ff"
       validation: "Full :core-network:test passed 1,340 tests (one skipped, zero failures/errors); direct parser and HTTP/1+h2c transport regressions include exact/over UTF-8 and aggregate boundaries, 100/101 fields, informational/trailer aggregation, cumulative pseudo-field blocks, and typed trailer rejection after a capped body read. Independent QA/adversarial reviews found no remaining parser bypass. :app:testDebugUnitTest passed 586 tests, and :app:assembleDebug passed with both JVM and Android fork source sets. No emulator was used."
       remaining: "This cache and parser slice does not complete E03-T04. Shared TimeoutPolicy and overall deadlines, adapter integration for DNS/GeoIP/TLS/WHOIS/speed-test, shared response-body caps, and explicit stale/offline UI remain open."
       parser_limit_feasibility_audit:
