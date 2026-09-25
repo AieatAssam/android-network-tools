@@ -172,20 +172,24 @@ class NavigationAccessibilityTest {
 
     @Test
     fun onboardingSkip_dismissesWelcomeSheet() {
-        var dismissed = false
         composeRule.setContent {
+            var showWelcome by remember { mutableStateOf(true) }
             NetSwissKnifeTheme {
-                OnboardingSheet(onDismiss = { dismissed = true })
+                if (showWelcome) {
+                    OnboardingSheet(onDismiss = { showWelcome = false })
+                }
             }
         }
 
         composeRule.mainClock.advanceTimeBy(1_000L)
+        val welcomeTitle = context.getString(R.string.onboarding_page1_title)
+        composeRule.onNodeWithText(welcomeTitle).assertIsDisplayed()
         composeRule
             .onNodeWithText(context.getString(R.string.onboarding_dont_show_again))
             .assertHasClickAction()
             .performClick()
 
-        assertTrue(dismissed)
+        composeRule.onNodeWithText(welcomeTitle).assertDoesNotExist()
     }
 
     @Test
