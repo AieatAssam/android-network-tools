@@ -374,7 +374,8 @@ class WifiScanViewModel @Inject constructor(
     }
 
     fun startAutoRefresh(firstIntervalMs: Long? = null) {
-        val selectedIntervalMs = firstIntervalMs ?: refreshIntervalMs.value
+        val selectedIntervalMs = (firstIntervalMs ?: refreshIntervalMs.value)
+            ?.coerceAtLeast(MIN_REFRESH_INTERVAL_MS)
         if (!lifecycleResumed || !autoRefreshRequested || selectedIntervalMs == null) {
             _autoRefresh.value = false
             autoRefreshJob?.cancel()
@@ -426,19 +427,20 @@ class WifiScanViewModel @Inject constructor(
     }
 
     fun setRefreshInterval(intervalMs: Long?) {
+        val normalizedIntervalMs = intervalMs?.coerceAtLeast(MIN_REFRESH_INTERVAL_MS)
         viewModelScope.launch {
             dataStore.edit { preferences ->
                 preferences[AppPreferenceKeys.WIFI_REFRESH_INTERVAL_MS] =
-                    intervalMs ?: DISABLED_REFRESH_INTERVAL_MS
+                    normalizedIntervalMs ?: DISABLED_REFRESH_INTERVAL_MS
             }
         }
-        if (intervalMs == null) {
+        if (normalizedIntervalMs == null) {
             autoRefreshRequested = false
             stopAutoRefresh()
         } else {
             autoRefreshRequested = true
             if (lifecycleResumed && _uiState.value is WifiScanUiState.Success) {
-                startAutoRefresh(firstIntervalMs = intervalMs)
+                startAutoRefresh(firstIntervalMs = normalizedIntervalMs)
             }
         }
     }
@@ -478,8 +480,9 @@ class WifiScanViewModel @Inject constructor(
             WifiScanRefreshStatus.FAILED,
             WifiScanRefreshStatus.PERMISSION_DENIED
         )
+        const val MIN_REFRESH_INTERVAL_MS = 15_000L
         const val DEFAULT_REFRESH_INTERVAL_MS = 30_000L
         const val DISABLED_REFRESH_INTERVAL_MS = -1L
-        val REFRESH_INTERVAL_OPTIONS = setOf(15_000L, DEFAULT_REFRESH_INTERVAL_MS, 60_000L)
+        val REFRESH_INTERVAL_OPTIONS = setOf(MIN_REFRESH_INTERVAL_MS, DEFAULT_REFRESH_INTERVAL_MS, 60_000L)
     }
 }

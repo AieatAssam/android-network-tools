@@ -713,6 +713,49 @@ class WifiScanViewModelTest {
         }
 
         @Test
+        fun `startAutoRefresh normalizes a short first interval to the minimum`() = runWifiTest {
+            coEvery { wifiScanUseCase(trigger = true, operationSession = any()) } returns stubResult(stubAp())
+            viewModel.startScan()
+            runCurrent()
+            awaitSuccess()
+            viewModel.stopAutoRefresh()
+
+            viewModel.startAutoRefresh(firstIntervalMs = 1L)
+            advanceTimeBy(WifiScanViewModel.MIN_REFRESH_INTERVAL_MS - 1L)
+            runCurrent()
+            coVerify(exactly = 1) { wifiScanUseCase(trigger = true, operationSession = any()) }
+
+            advanceTimeBy(1L)
+            runCurrent()
+            coVerify(exactly = 2) { wifiScanUseCase(trigger = true, operationSession = any()) }
+        }
+
+        @Test
+        fun `setRefreshInterval normalizes a short interval and does not scan early`() = runWifiTest {
+            coEvery { wifiScanUseCase(trigger = true, operationSession = any()) } returns stubResult(stubAp())
+            viewModel.startScan()
+            runCurrent()
+            awaitSuccess()
+            viewModel.stopAutoRefresh()
+
+            viewModel.setRefreshInterval(1L)
+            runCurrent()
+            assertEquals(
+                WifiScanViewModel.MIN_REFRESH_INTERVAL_MS,
+                prefsFlow.value[AppPreferenceKeys.WIFI_REFRESH_INTERVAL_MS],
+            )
+            assertEquals(WifiScanViewModel.MIN_REFRESH_INTERVAL_MS, viewModel.refreshIntervalMs.value)
+
+            advanceTimeBy(WifiScanViewModel.MIN_REFRESH_INTERVAL_MS - 1L)
+            runCurrent()
+            coVerify(exactly = 1) { wifiScanUseCase(trigger = true, operationSession = any()) }
+
+            advanceTimeBy(1L)
+            runCurrent()
+            coVerify(exactly = 2) { wifiScanUseCase(trigger = true, operationSession = any()) }
+        }
+
+        @Test
         fun `scan completing after lifecycle pause does not restart refresh`() = runWifiTest {
             val original = stubResult(stubAp())
             coEvery { wifiScanUseCase(trigger = true, operationSession = any()) } returns original
@@ -862,6 +905,11 @@ class WifiScanViewModelTest {
         runCurrent()
         assertEquals(15_000L, prefsFlow.value[AppPreferenceKeys.WIFI_REFRESH_INTERVAL_MS])
         assertEquals(15_000L, viewModel.refreshIntervalMs.value)
+
+        viewModel.setRefreshInterval(60_000L)
+        runCurrent()
+        assertEquals(60_000L, prefsFlow.value[AppPreferenceKeys.WIFI_REFRESH_INTERVAL_MS])
+        assertEquals(60_000L, viewModel.refreshIntervalMs.value)
 
         viewModel.setRefreshInterval(null)
         runCurrent()
