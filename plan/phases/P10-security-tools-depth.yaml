@@ -245,6 +245,8 @@ tasks:
     status: in_progress
     progress:
       - "Closed the R3-009 registry-failure evidence gap: ordinary TLD registry connect failures now preserve the IANA hop and add/emit one failed REGISTRY hop with error text, zero query time, empty raw response, and operation ID. Cancellation and operation deadlines remain terminal. The broader RDAP, public-suffix, and UI protocol-toggle work remains open."
+      - "WHOIS repository and transport elapsed timings now use the injected MonotonicClock; a shared fake-clock test asserts an 11 ms successful hop and 48 ms total through a failed registry connection, while preserving zero duration for failed hops."
+      - "Bundled the official Mozilla Public Suffix List (version 2026-09-24_13-26-36_UTC, upstream commit a179a48c465e818cfd8d626691cb317985da87fb; SHA-256 257b298daca42f6d8ec964e238c2a55518e14f09d3117917ec8acee6f188503e; MPL-2.0 header retained). PublicSuffix handles ICANN/private, exact/wildcard/exception, Unicode/Punycode, root-dot, and unknown-suffix cases. General eTLD+1 uses both PSL sections; WHOIS query-domain selection uses ICANN rules only because PRIVATE rules describe tenant/site boundaries rather than registry-registered domains (for example, a.foo.github.io maps to github.io for WHOIS). Focused parser tests passed 7/7, and the serialized WHOIS/PublicSuffix suite passed 63/63. Cold first-use was measured at 418 ms in an isolated host test after section separation; the design's <50 ms target remains an open optimization/device-performance check."
     tdd:
       red:
         tests:

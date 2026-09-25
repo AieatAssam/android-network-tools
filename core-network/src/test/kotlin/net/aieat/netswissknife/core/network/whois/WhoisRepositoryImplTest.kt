@@ -318,9 +318,15 @@ class WhoisRegistrableDomainTest {
     }
 
     @Test
-    @DisplayName("compound TLD keeps three labels")
-    fun `compound TLD keeps three labels`() {
+    @DisplayName("compound public suffix keeps the registrable labels")
+    fun `compound public suffix keeps the registrable labels`() {
         assertEquals("example.co.uk", repo.extractRegistrableDomain("sub.example.co.uk"))
+    }
+
+    @Test
+    @DisplayName("private hosting suffix does not replace the WHOIS registry domain")
+    fun `private hosting suffix does not replace the WHOIS registry domain`() {
+        assertEquals("github.io", repo.extractRegistrableDomain("a.foo.github.io"))
     }
 
     @Test
@@ -333,5 +339,11 @@ class WhoisRegistrableDomainTest {
     @DisplayName("two-label compound TLD domain is returned unchanged")
     fun `two-label compound TLD domain is returned unchanged`() {
         assertEquals("example.co.uk", repo.extractRegistrableDomain("example.co.uk"))
+    }
+
+    @Test
+    @DisplayName("unknown suffix falls back to the last two labels")
+    fun `unknown suffix falls back to last two labels`() {
+        assertEquals("bar.unknown-tld", repo.extractRegistrableDomain("foo.bar.unknown-tld"))
     }
 }

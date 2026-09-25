@@ -387,21 +387,11 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
     }
 
     /**
-     * Strips subdomains to return the registrable domain (eTLD+1).
-     * e.g. "sub.example.co.uk" → "example.co.uk", "sub.example.com" → "example.com"
+     * Selects the domain boundary relevant to registry WHOIS queries.
+     * PRIVATE PSL rules are excluded because they describe hosted tenants,
+     * not domains registered with the TLD registry.
      */
-    internal fun extractRegistrableDomain(domain: String): String {
-        val parts = domain.lowercase(java.util.Locale.ROOT).split('.')
-        if (parts.size <= 2) return domain
-        val lastTwo = "${parts[parts.size - 2]}.${parts.last()}"
-        return if (COMPOUND_TLDS.contains(lastTwo)) {
-            // e.g. co.uk → take 3 labels: example.co.uk
-            if (parts.size >= 3) parts.takeLast(3).joinToString(".") else domain
-        } else {
-            // Standard TLD → take 2 labels: example.com
-            parts.takeLast(2).joinToString(".")
-        }
-    }
+    internal fun extractRegistrableDomain(domain: String): String = PublicSuffix.domainForWhois(domain)
 
     private fun getTldFallback(domain: String): String? {
         val parts = domain.lowercase(java.util.Locale.ROOT).split('.')
@@ -420,17 +410,6 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
         private const val MAX_HOPS = 3
         private const val IANA_SERVER = "whois.iana.org"
         private const val ARIN_SERVER = "whois.arin.net"
-
-        private val COMPOUND_TLDS = setOf(
-            "co.uk", "org.uk", "me.uk", "net.uk", "ltd.uk", "plc.uk",
-            "co.nz", "net.nz", "org.nz", "gov.nz",
-            "com.au", "net.au", "org.au", "gov.au",
-            "co.jp", "or.jp", "ne.jp",
-            "co.in", "net.in", "org.in",
-            "com.br", "net.br", "org.br",
-            "com.cn", "net.cn", "org.cn",
-            "com.mx", "com.ar", "com.sg", "com.hk"
-        )
 
         private val TLD_FALLBACK = mapOf(
             "com"   to "whois.verisign-grs.com",
