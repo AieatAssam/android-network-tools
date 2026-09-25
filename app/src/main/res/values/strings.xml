@@ -636,7 +636,7 @@
     <string name="whois_relay_chain">Query Chain</string>
     <string name="whois_hop_latency_ms">%1$d ms</string>
     <string name="whois_querying_server">Querying %1$s…</string>
-    <string name="whois_raw_responses">Raw WHOIS Responses</string>
+    <string name="whois_raw_responses">Raw RDAP/WHOIS Responses</string>
     <string name="whois_show_raw">Show raw response</string>
     <string name="whois_lifecycle">Lifecycle</string>
     <string name="whois_registered">Registered</string>
@@ -1107,11 +1107,13 @@
     <string-array name="help_tls_params_bullets">
         <item>Host - the domain name or IP to connect to.</item>
         <item>Port - the TLS port (default 443 for HTTPS; 8443, 993, 465 are common alternatives).</item>
+        <item>Optional checks - probe older TLS versions or compare the leaf certificate with an expected SHA-256 pin.</item>
     </string-array>
     <string-array name="help_tls_results_bullets">
-        <item>The connection card shows the TLS version, cipher suite, and handshake time.</item>
-        <item>Each certificate in the chain (leaf, intermediate, root) expands to show subject, issuer, validity dates, SANs, and the SHA-256 fingerprint.</item>
-        <item>A red badge means expired - the site\'s ID card is out of date and your connection can\'t be fully verified, similar to a browser warning page.</item>
+        <item>The connection card shows trust, hostname match, TLS version, ALPN, cipher suite, connect time, and handshake time.</item>
+        <item>Each certificate presented by the server expands to show subject, issuer, validity dates, SANs, and the SHA-256 fingerprint.</item>
+        <item>Findings include expired or not-yet-valid certificates, hostname mismatch, incomplete chains, weak keys or signatures, and self-signed certificates.</item>
+        <item>Share PEM exports the certificates in the presented chain.</item>
     </string-array>
 
     <!-- WHOIS help -->
@@ -1119,7 +1121,7 @@
     <string name="help_whois_concept_heading">What is WHOIS?</string>
     <string name="help_whois_concept_body">WHOIS is a public registry of who owns a domain name or block of IP addresses and since when - like checking a property deed. Every domain and IP range has an owner on record somewhere, and WHOIS servers let anyone look that record up.</string>
     <string name="help_whois_what_heading">What it does</string>
-    <string name="help_whois_what_body">Queries WHOIS servers to retrieve registration information for a domain name, IP address, or Autonomous System Number (ASN).</string>
+    <string name="help_whois_what_body">Looks up registration information for domains, IP addresses, and ASNs using RDAP or the classic WHOIS protocol. Auto tries RDAP first and falls back to WHOIS.</string>
     <string name="help_whois_params_heading">What to enter</string>
     <string name="help_whois_results_heading">Reading the results</string>
     <string-array name="help_whois_params_bullets">
@@ -1130,9 +1132,9 @@
         <item>Use the quick-fill chips to insert an example of each type.</item>
     </string-array>
     <string-array name="help_whois_results_bullets">
-        <item>For domains: registrant, registration/expiry dates, name servers, and status codes - handy for checking if a domain is about to expire or investigating who\'s behind a site.</item>
-        <item>For IPs: the network range, owning organisation, and country - useful for finding the ISP or hosting provider behind an address.</item>
-        <item>The Raw section shows the unprocessed WHOIS server response.</item>
+        <item>For domains: registrar and registrant, registration/expiry dates, name servers, DNSSEC, and status codes.</item>
+        <item>For IPs and ASNs: network range, organization, and country where the registry provides them.</item>
+        <item>The Raw section shows the unprocessed RDAP JSON or WHOIS server response.</item>
     </string-array>
 
     <!-- HTTP Probe help -->
@@ -1148,8 +1150,9 @@
         <item>URL - the full address including https://</item>
         <item>Method - GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS.</item>
         <item>Custom headers - add Authorization, Accept, Content-Type, etc.</item>
-        <item>Request body - JSON or other payload for POST/PUT.</item>
-        <item>Follow redirects - automatically follow 3xx responses.</item>
+        <item>Request body - text or JSON for POST, PUT, and PATCH.</item>
+        <item>Follow redirects - automatically follow 3xx responses and show each hop.</item>
+        <item>HTTPS-to-HTTP redirects are blocked. Before a cross-origin redirect resends a request body, the app asks you to approve that destination.</item>
     </string-array>
     <string-array name="help_httprobe_results_bullets">
         <item>Overview - status code, response time, and final URL after redirects.</item>

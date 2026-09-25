@@ -1,12 +1,12 @@
 # Privacy Policy - Net Swiss Knife
 
-**Effective date:** 2026-09-20
+**Effective date:** 2026-09-25
 
 ---
 
 ## Overview
 
-Net Swiss Knife is a collection of local network diagnostic tools (Ping, Traceroute, Port Scanner, LAN Scanner, DNS Lookup, and Wi-Fi Scanner). This policy explains what data the app uses, why, and how it is handled.
+Net Swiss Knife is a collection of network diagnostic tools, including Ping, Traceroute, LAN Scanner, DNS Lookup, TLS Inspector, HTTP Probe, and WHOIS Lookup. This policy explains what data the app uses, why, and how it is handled.
 
 ---
 
@@ -14,13 +14,14 @@ Net Swiss Knife is a collection of local network diagnostic tools (Ping, Tracero
 
 ### Data You Provide
 
-When you use a diagnostic tool you enter targets such as hostnames, IP addresses, domain names, or subnet ranges. These values are used solely to run the requested network operation and are never stored after you close or reset the screen.
+When you use a diagnostic tool you enter targets such as hostnames, IP addresses, domain names, or subnet ranges. The app uses them to run the requested operation. Most target and result data stays in memory, but tools with recent selections keep up to five recent targets in private on-device preferences so you can select them again. You can remove recent entries in a tool or clear recent targets in Settings; uninstalling the app or clearing its storage also removes them. HTTP Probe stores only a credential-free origin for its recent list, not the URL path, query, or fragment.
 
 ### Data the App Generates
 
 | Data | Where it lives | How long |
 |------|----------------|----------|
 | Diagnostic results (ping statistics, open ports, DNS records, Wi-Fi channel info, etc.) | Device RAM only | Until the screen is reset or the app is closed |
+| Recent target entries (up to five for each tool with recent selections) | App-private on-device preferences | Until removed in the tool, cleared in Settings, or app storage is removed |
 
 The LAN Scanner may send ICMP/TCP probes and local NetBIOS (UDP/137) or mDNS (multicast UDP/5353) queries to devices on the subnet you choose. These discovery packets stay on the local network; their results are displayed in the app and are not uploaded by Net Swiss Knife.
 
@@ -29,6 +30,18 @@ The LAN Scanner may send ICMP/TCP probes and local NetBIOS (UDP/137) or mDNS (mu
 ## External Services
 
 The app makes network requests to run the tool you choose. Requests to a target you enter, such as a DNS resolver, web server, SNMP device, or traceroute destination, are part of that tool's operation. The app does not send diagnostic results to Net Swiss Knife servers.
+
+### TLS Inspector and HTTP Probe
+
+TLS Inspector opens a TLS connection to the host and port you enter to retrieve its certificate chain and connection details. It does not send an HTTP request. The target host receives the connection and TLS handshake, including normal connection metadata such as your IP address and timestamp.
+
+HTTP Probe sends the URL, selected method, custom headers, and any request body you enter to that URL. Redirects are followed only when the option is enabled; an HTTPS-to-HTTP redirect is blocked before the HTTP destination is contacted. Before a cross-origin redirect resends a request body, the app asks you to approve that specific destination. Only enter credentials or other sensitive data when you intend to send them to the target.
+
+### WHOIS and RDAP
+
+Auto mode tries RDAP first. For domain lookups, the app may fetch the [IANA RDAP DNS bootstrap document](https://data.iana.org/rdap/dns.json), then sends the registrable domain to the selected registry RDAP service. For IP address and ASN lookups, it sends the query to the [rdap.org](https://rdap.org/) redirector, which directs the client to a registry service. The app prefers HTTPS RDAP endpoints when they are advertised. If RDAP cannot provide a result in Auto mode, the app can query WHOIS servers; domain lookups may follow IANA, registry, and registrar referrals, while IP/ASN lookups may query ARIN and a referred regional registry. The classic WHOIS protocol uses TCP port 43 and does not encrypt the query.
+
+These services receive the domain, IP address, or ASN needed to answer the lookup and ordinary network metadata such as your IP address and request time. RDAP and WHOIS requests may reach IANA, `rdap.org`, registry services, and, for WHOIS referrals, registrar WHOIS servers; these services are operated by their respective organizations, not by Net Swiss Knife. Their own logging and data-handling practices apply. The protocol selector can restrict a lookup to RDAP or WHOIS instead of Auto mode.
 
 ### Cloudflare Speed Test
 
@@ -73,11 +86,12 @@ Google Play may collect anonymized crash and ANR (Application Not Responding) re
 
 ## Data Sharing
 
-We do not sell, rent, or share your data with any third party, with the following narrow exceptions:
+We do not sell your data. When you use a tool, the target and request details are sent to the destination or supporting public service needed to perform that operation, as described above. These services can receive ordinary network metadata such as your IP address and request time. In particular:
 
-- Synthetic measurement traffic and ordinary HTTPS request metadata sent to Cloudflare only when you run Speed Test, as described above.
-- IP addresses of traceroute hops sent to the geolocation service as described above.
-- Crash and stability data collected by the Google Play platform as described above.
+- Synthetic measurement traffic and ordinary HTTPS request metadata are sent to Cloudflare only when you run Speed Test.
+- Public IP addresses found on a traceroute path are sent to the geolocation service when you run Traceroute.
+- The target and request details described above are sent to the service selected by TLS Inspector, HTTP Probe, or WHOIS Lookup.
+- Crash and stability reports may be collected by the Google Play platform as described above.
 
 ---
 

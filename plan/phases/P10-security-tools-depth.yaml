@@ -271,9 +271,12 @@ tasks:
 
   - id: P10-T6
     title: "Docs + README sync for all three tools"
-    status: todo
+    status: in_progress
     depends_on: [P10-T2, P10-T4, P10-T5]
-    steps: ["README Features: TLS/HTTP/WHOIS sections rewritten to actual behaviour; PRIVACY_POLICY: RDAP servers (rdap.org redirector, IANA bootstrap, registry RDAP endpoints) added; help sheets updated."]
+    steps: ["README Features: TLS/HTTP/WHOIS sections rewritten to actual behaviour; PRIVACY_POLICY: TLS/HTTP data flows and RDAP/WHOIS routes and recipients documented; help sheets updated."]
+    progress:
+      - "Synced README TLS/HTTP/WHOIS descriptions, privacy disclosures, and English help strings to current behavior. WHOIS privacy wording includes the registrar WHOIS referral hop; docs review found no remaining mismatch. `strings.xml` XML parsing, `git diff --check`, and `:app:assembleDebug` passed. Live registry acceptance remains open with P10-T5."
+    acceptance_criteria: ["README, privacy policy, and help text accurately describe current TLS, HTTP, and WHOIS behavior, including data sent and possible RDAP/WHOIS recipients."]
 
 qa_validation:
   automated: ["./gradlew test --no-daemon", "koverVerify x3", "lintDebug (0 errors; TrustAll suppressed via lint.xml with justification)", "release-smoke (P09) passes with new deps"]

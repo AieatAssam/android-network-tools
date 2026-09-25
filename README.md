@@ -69,13 +69,12 @@ Wi-Fi environment analysis with SSID grouping and spectrum visualisation.
 - Each refresh requests a platform scan; auto-refresh is configurable (Off / 15 / 30 / 60 seconds, default 30 seconds). Android throttles foreground scans to four per two minutes, so the screen shows result age and when a request was throttled; Location Services must be enabled.
 
 ### TLS Inspector
-SSL/TLS certificate chain analysis for any TCP host.
+SSL/TLS certificate analysis for any TCP host, without sending an HTTP request.
 - Configurable host, port (default 443), and timeout (500–30 000 ms)
-- Full certificate chain: leaf, intermediates, and root
-- Per-certificate: subject/issuer CN & org, validity dates, SANs, serial number, signature algorithm, public key algorithm & bit length, SHA-256 fingerprint
-- Connection summary: TLS version, cipher suite, handshake time, chain trust status
-- Highlights expired certificates and self-signed certs
-- Works with any TCP host, not just HTTPS — does not send an HTTP request
+- Presented peer chain: subject/issuer, validity dates, SANs, serial number, signature and public-key details, and SHA-256 fingerprint per certificate
+- Checks device trust, hostname match, expiry/not-yet-valid dates, incomplete chains, self-signed certificates, weak signatures, and weak keys
+- Connection summary includes negotiated TLS version, ALPN, cipher suite, connect time, and handshake time
+- Optional older-TLS-version probes, expected SHA-256 leaf-certificate pin comparison, and PEM chain sharing
 
 ### Network Topology Discovery
 SNMP-based network topology discovery via BFS traversal.
@@ -91,24 +90,24 @@ SNMP-based network topology discovery via BFS traversal.
 - LLDP neighbour addresses are decoded from the LLDP management-address index; CDP accepts dotted and hex-octet cache addresses
 
 ### WHOIS Lookup
-Domain and IP registration lookup via three-hop WHOIS referral chain.
+Domain, IP, and ASN registration lookup using RDAP with WHOIS fallback.
 - Supports domain names, IPv4, IPv6, and ASN queries
-- Three-hop chain for domains: IANA referral → TLD registry → registrar
-- Two-hop chain for IPs/ASNs: ARIN → referred RIR if needed
-- Static TLD fallback map for common TLDs (.com, .net, .org, .io, .co.uk, .de, .fr, .app, .dev)
-- Parsed fields: registrar, registration/expiry/update dates, name servers, WHOIS status codes, DNSSEC, registrant org & country
+- Protocol selector: Auto tries RDAP first and falls back to WHOIS; RDAP and WHOIS modes use only the selected protocol
+- Domain RDAP uses the [IANA DNS bootstrap](https://data.iana.org/rdap/dns.json) to choose a registry endpoint; IP and ASN requests use the [rdap.org](https://rdap.org/) redirector
+- WHOIS fallback uses the IANA-to-registry-to-registrar referral chain for domains and ARIN/referring RIRs for IPs and ASNs
+- Parsed fields include registrar, registration/expiry/update dates, name servers, status codes, DNSSEC, registrant organization/country, and network ranges
 - Human-readable status code labels (e.g. "clientTransferProhibited" → "Transfer Locked")
-- Live relay-chain visualiser: animates each server node PENDING → QUERYING → DONE as the chain progresses
-- Optional raw response per hop for power users
+- Live relay-chain visualiser shows the RDAP or WHOIS servers used; raw responses are available for inspection
 
 ### HTTP Probe
 Full HTTP/HTTPS request tester with security header analysis.
 - Supports GET, POST, PUT, PATCH, DELETE, HEAD, and OPTIONS methods
 - Custom request headers: add/remove key-value pairs dynamically
-- Request body editor (enabled for POST, PUT, PATCH) with monospace text input
-- Follow-redirects toggle with full redirect chain display
+- Request body editor for POST, PUT, and PATCH
+- Follow-redirects toggle with each hop's status and URL; HTTPS-to-HTTP redirects are blocked before contacting the destination
+- Cross-origin redirects that would resend a request body require approval for that redirect
 - Response display across four tabs:
-  - **Overview**: status code (color-coded 2xx/3xx/4xx/5xx), response time, final URL, redirect hops, body size, Content-Type
+  - **Overview**: status code (color-coded 2xx/3xx/4xx/5xx), response time, negotiated HTTP protocol, final URL, redirect hops, body size, Content-Type
   - **Headers**: collapsible request and response header sections
   - **Body**: scrollable monospace response body with copy-to-clipboard; truncated at 512 KB with notice
   - **Security**: per-header pass/warn/fail ratings for HSTS, CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy, Cross-Origin-Opener-Policy, Cross-Origin-Embedder-Policy, and Server header information disclosure
