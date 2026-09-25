@@ -162,6 +162,7 @@ tasks:
       - "All addresses return refusal, timeout or unreachable and no positive evidence: zero confirmed host events and zero confirmed count; scan progress still reaches total attempted."
       - "Exactly one endpoint completes TCP while all others fail: exactly one confirmed endpoint; no expensive enrichment for the others."
       - "ICMP success alone is confirmed and does not fabricate TCP_REFUSED metadata for a probe that was never run."
+      - "A correlated target-specific local protocol reply confirms its endpoint despite ICMP failure and non-positive TCP; enrichment runs only for that confirmed endpoint."
       - "Multiple refused ports alone remain unconfirmed; optional diagnostic entries are clearly labeled and cannot populate the confirmed topology/export."
       - "A routed-LAN fixture returning path-generated errors for unused addresses does not inflate device count. Source attribution remains unknown when unavailable."
     validation:
@@ -212,6 +213,11 @@ tasks:
         - "LanShareTextTest now directly asserts shared output includes only confirmed summary.hosts and excludes uncertain diagnostic addresses/reasons."
         - "ConnectException is unknown rather than definite refusal; cause detail is retained in bounded opt-in diagnostics."
         - "git diff --check passes."
+      latest_regression_slice:
+        date: "2026-09-25"
+        fixed_in: "c207a5c"
+        scope: "LanScanDiscoveryPipelineTest now drives ICMP failure, ambiguous TCP refusal on one address and no positive TCP elsewhere, plus a correlated NETBIOS reply for the target. It asserts the single confirmed host/name/method, zero uncertainty, and that name, MAC, and 16 quick-port enrichment probes are limited to the confirmed target."
+        validation: "The serialized core-network suite passed 1,327 tests (one skipped, zero failures/errors). No emulator, device, or live NBSTAT fixture was used."
       remaining_acceptance:
         - "Device-only Wi-Fi/VPN LAN capture remains unavailable in this environment."
         - "Validate with an anonymized real NBSTAT response when one is available."

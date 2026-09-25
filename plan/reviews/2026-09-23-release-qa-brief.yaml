@@ -23,6 +23,21 @@ review:
     android_test_sources: "./gradlew :app:compileDebugAndroidTestKotlin passed"
     quality_gates: "`:app:compileDebugAndroidTestKotlin`, `:app:lintDebug` (0 errors, 30 warnings), and `:app:assembleDebug` passed. Other Kover/release/ktlint/Detekt checks from prior commits were not rerun on 74e2c50."
     device_validation: "No emulator, live SNMP/mDNS endpoint, physical Wi-Fi device, live protocol server, or link-accuracy probe was used; API 33, TalkBack, connected instrumentation, cancellation, and no-ANR checks remain open."
+  followup_recheck:
+    date: "2026-09-25"
+    checked_source_commit: "037181c"
+    release_baseline: "Freshly fetched origin/main remains 5e183721e64ce8a8946f1a0b50f52b83544e8898."
+    scope: "Rechecked the supplied QA brief without reopening its fixed-list items. This pass confirms the prior source findings still apply; it does not claim API 33, TalkBack, live SNMP, mDNS-on-device, or no-ANR validation."
+    item_recheck:
+      fixed_list: "ISS-01/02/03/04/08/09/15 and SNMP-threading remain source-supported as in the item evidence above; this follow-up made no device claim or requested retest for them."
+      ISS-05: "Not a current source defect: merged clickable card semantics and label activation/navigation assertions are present. TalkBack traversal and activation on API 33 remain unverified."
+      ISS-06: "The Skip callback and Compose callback test are present; integrated Welcome-sheet dismissal on the release target remains unverified."
+      ISS-17: "Retry/Clear, offline state, progress, Canceling/Canceled, retained partial hops, and a connectivity banner are source-covered. Dead-route behavior and initial-viewport layout remain API 33/device checks."
+      ISS-20: "Confirmed as a release-baseline defect and fixed on this branch: outer whitespace is normalized before start eligibility, while embedded whitespace remains invalid. This differs from the brief's trailing-space error/disabled-Start repro; the repro and trim() fix request conflict, so the plan records accepted trimming as the chosen behavior."
+      ISS-21: "The brief's claimed missing controls were already present on the release baseline; the current branch keeps Cancel available after config collapse, reports progress/counts, labels nodes and shows details, and bounds SNMP requests. The live 10.0.2.2/community-public v2c cancellation and sparse-canvas usability check was unavailable."
+      ISS-22: "Graceful error plus Dismiss and injected ENODEV cleanup are source-covered; API 33 ENODEV and discovery over physical wlan0 remain unverified."
+    validation: "Current source suites passed :core-network:test (1,327 tests, one skipped) and :app:testDebugUnitTest (586 tests, zero failures/errors). A first app-suite run had a Wi-Fi teardown assertion with a cascading Wake-on-LAN Main-dispatcher error; focused Wi-Fi/WOL tests and a full app rerun passed. No emulator, device, host snmpd, or physical Wi-Fi was used for this follow-up."
+    remaining_release_gates: [API-33, TalkBack, integrated-Skip-dismissal, dead-route-Traceroute-layout, live-SNMP-cancel-and-canvas, API-33-mDNS-ENODEV, physical-wlan0, measured-no-ANR]
   branch: "plan/comprehensive-review-2026-09-22"
   release_metadata:
     app: "Net Swiss Knife"
