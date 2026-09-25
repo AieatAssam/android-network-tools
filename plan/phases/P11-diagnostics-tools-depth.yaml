@@ -126,7 +126,13 @@ design:
 tasks:
   - id: P11-T1
     title: "Speed test engine + config + loaded latency + server info"
-    status: todo
+    status: in_progress
+    current_progress:
+      date: "2026-09-25"
+      implemented: "A pooled OkHttp TransferEngine now measures corrected keep-alive HTTP RTT, TCP connect RTT, parallel download/upload streams, phase-loaded latency, and bounded Cloudflare server metadata. Stream counts persist and are configurable, and the screen/share summary exposes server and loaded-latency results. Server-Timing parsing preserves repeated headers and handles quoted commas; metadata and upload-response reads are capped. Cancellation joins the sampler before final statistics."
+      fixed_in: "93522c7"
+      validation: "The serialized core-network/core-domain/app JVM suites passed 1,270 (one skipped)/216/549 tests with zero failures or errors. Android-test Kotlin compilation, lintDebug, assembleDebug, assembleRelease, and all three Kover verification gates passed. The unsigned-release smoke check verified retained SNMP/icmpenguin classes, native library, OUI data, and the public-suffix list. No emulator or live Cloudflare link test was used."
+      remaining: "P11-T1 remains in_progress until Wi-Fi/cellular link accuracy, cancellation and offline/error behavior are accepted on a physical device; the >300 Mbps throughput and idle-latency comparisons are not claimed."
     tdd:
       red:
         tests:
@@ -169,10 +175,10 @@ tasks:
     status: in_progress
     current_progress:
       date: "2026-09-25"
-      implemented: "The scanner now reads up to 1,024 bytes across partial reads, recomputes the socket timeout before each read to stay within the remaining per-port budget, preserves partial banners on EOF/timeout/read failure, and propagates byte/display-cap truncation to results. Truncated banners display an ellipsis with an accessible disclosure, including in exported reports."
-      fixed_in: "1f703260485172ff5b7ffa2a5e2625333c68d111"
-      validation: "Focused core-network BannerReaderTest (4) and BannerSanitizerTest (12) passed; PortScanRepositoryImplTest passed with regressions for cap propagation and per-read remaining-budget enforcement. app compileDebugAndroidTestKotlin passed for the PortsScreen ellipsis/accessibility test; instrumentation was not run because no emulator was started."
-      remaining: "Protocol-aware HTTP/SMTP/FTP/SSH/POP/IMAP probes, TLS subject inspection, and live-server acceptance remain open."
+      implemented: "The scanner reads up to 1,024 bytes across partial reads, recomputes each read timeout from the remaining per-port budget, retains partial banners on EOF/timeout/read failure, and discloses byte/display truncation accessibly in the UI and report. Optional aggressive probing is limited to open ports: HTTP sends HEAD, SMTP completes the greeting and EHLO exchange within the byte/time budget, and known TLS ports inspect the certificate subject using the selected network, original host identity, and operation-session cleanup. TLS subjects are sanitized before persistence and again at display/report boundaries. Passive mode performs no protocol writes or TLS peek."
+      fixed_in: "93522c7"
+      validation: "The serialized core-network/core-domain/app JVM suites passed 1,270 (one skipped)/216/549 tests with zero failures or errors, including BannerReader, HTTP/SMTP/TLS probe, TLS-subject sanitizer and repository cases. Android-test Kotlin compilation, lintDebug, both APK assemblies, all Kover gates, and the unsigned-release smoke check passed. No emulator, host snmpd, or live HTTP/SMTP/TLS server was used."
+      remaining: "P11-T3 remains in_progress for live HTTP/SMTP/TLS server acceptance and device UI checks. FTP/SSH/POP/IMAP active greeting probes from the broader phase goal are not implemented by this slice; those ports remain passive."
     tdd:
       red:
         tests:

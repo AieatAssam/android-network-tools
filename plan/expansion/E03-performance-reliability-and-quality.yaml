@@ -234,7 +234,13 @@ tasks:
   - id: E03-T02
     title: "Make availability target-aware and make lifecycle/background behavior explicit"
     priority: high
-    status: todo
+    status: in_progress
+    current_progress:
+      date: "2026-09-25"
+      implemented: "Added a no-DNS literal destination classifier and a pure OperationAvailability model. Normalized padded IPv4 literals are classified consistently; scoped IPv6 is local only for local ranges, while malformed, reserved, and ambiguous targets remain unknown. Requirement selection models the resolver separately from the queried name. The availability decision distinguishes definitive policy/route/local-permission denial from unvalidated connectivity, which remains an advisory permitting a bounded attempt."
+      fixed_in: "93522c7"
+      validation: "The complete app JVM suite passed 549/549 with zero failures or errors, including literal destination and availability cases. Android-test Kotlin compilation and lintDebug passed; the complete module test suites and builds also passed. No emulator or live network was used."
+      remaining: "This is the classifier and decision-model foundation only. Ping/Traceroute and other ViewModel gates are not yet wired to it; target-specific route/permission adapters, lifecycle cancellation and Wi-Fi refresh pausing, any explicit foreground-session behavior, and captive-portal/VPN/device acceptance remain open."
     source_evidence:
       - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/platform/LinkInfoProvider.kt", lines: "22-23,65-74", why: "The only reusable status predicate requires NET_CAPABILITY_VALIDATED, which describes Internet validation rather than LAN reachability." }
       - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/ping/PingViewModel.kt", lines: "183-191,249-258", why: "Both ping modes reject a local target when the active network has no validated Internet." }
@@ -334,7 +340,13 @@ tasks:
       rule: "Treat each linked finding as a required independently verified acceptance case; urgent regression slices do not wait for optional task breadth."
     title: "Unify timeout, cache, and response-size policies"
     priority: high
-    status: todo
+    status: in_progress
+    current_progress:
+      date: "2026-09-25"
+      implemented: "Added a generic process-local NetworkCache with Fresh-by-default access and explicit UseCached opt-in, route/scope-isolated keys, monotonic positive/negative TTLs, a 256-entry LRU bound, concurrent single-flight loads, clear-generation protection, and no retention of failed or cancelled loads."
+      fixed_in: "93522c7"
+      validation: "NetworkCacheTest is included in the passing full core-network suite (1,270 tests, one skipped, zero failures/errors); core-domain passed 216/216 and app passed 549/549. All three Kover gates, lintDebug, Android-test Kotlin compilation, debug/release assembly, and release smoke passed."
+      remaining: "This cache primitive does not complete E03-T04. Shared TimeoutPolicy and overall deadlines, adapter integration for DNS/GeoIP/HTTP/TLS/WHOIS/speed-test, shared response-body caps, explicit stale/offline UI, and parser-time HTTP metadata field/byte limits with transport-level rejection remain open."
     source_evidence:
       - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/traceroute/GeoIpRepositoryImpl.kt", lines: "23-55", why: "Successful GeoIP values live in an unbounded process cache and each request reads an unconstrained response body." }
       - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/dns/DnsRepositoryImpl.kt", lines: "70-121", why: "Resolver timeout is per attempt; no overall budget, cache policy, or stale/offline semantics are shared." }
