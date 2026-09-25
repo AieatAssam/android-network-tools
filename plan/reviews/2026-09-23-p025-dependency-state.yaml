@@ -1,10 +1,10 @@
 review:
   id: P02.5-dependency-state
-  checked_at: "2026-09-25T01:04:27Z"
+  checked_at: "2026-09-25T01:13:51Z"
   branch: "plan/comprehensive-review-2026-09-22"
-  commit: "8b902c7de20182581849eed13aa16cb2b9e218e4"
+  commit: "b9f3d232739b1bb636b030393a7a974892b75fb3"
   status: "open"
-  worktree_delta: "At pushed HEAD 8b902c7, exact-head Automatic Dependency Submission confirms patched versions for all alerted coordinates, including the new OkHttp 5.5.0 dependencies. Only the pre-existing untracked comprehensive-review YAML remains outside the commit."
+  worktree_delta: "At pushed HEAD b9f3d23, exact-head Automatic Dependency Submission confirms patched versions for all alerted coordinates, including the new OkHttp 5.5.0 dependencies. Compared with the prior exact-head artifact at 8b902c7, no dependency coordinates or versions changed. Only the pre-existing untracked comprehensive-review YAML remains outside the commit."
   initial_snapshot: { checked_at: "2026-09-23T22:37:21Z", commit: "7106a5bafa21bf0b30b91afb98470d8d10b184c8", worktree_delta: "Uncommitted app/build.gradle.kts constraints for :app:androidLintTool; this source change had not yet been submitted to GitHub." }
   sources:
     alerts_command: "gh api --paginate repos/AieatAssam/android-network-tools/dependabot/alerts"
@@ -163,6 +163,40 @@ current_recheck_2026_09_25T0103Z:
   pull_request_state:
     result: "No pull request exists for this topic branch."
     disposition: "P02.5-T3 is confirmed for 8b902c7. P02.5-T4 and the phase remain open until reviewed changes reach protected main, a fresh main ADS/SBOM/alert scan completes, and each actionable alert is closed or has an approved time-bounded disposition."
+
+current_recheck_2026_09_25T0112Z:
+  checked_at: "2026-09-25T01:12:29Z"
+  topic_branch_head: "b9f3d232739b1bb636b030393a7a974892b75fb3"
+  exact_head_ads:
+    run_id: 36080957304
+    url: "https://github.com/AieatAssam/android-network-tools/actions/runs/36080957304"
+    completed_at: "2026-09-25T01:12:29Z"
+    artifact_id: 10842300363
+    artifact_created_at: "2026-09-25T01:12:26Z"
+    artifact_bytes: 13252
+    component_count: 417
+    result: "Successful exact-HEAD submission; artifact SHA/ref match b9f3d23. Includes okhttp and mockwebserver3 5.5.0; all currently alerted coordinates remain patched. Comparison with artifact 10841039981 for 8b902c7 found identical 417-component maps with zero additions, removals, or version changes. Confirms P02.5-T3 for the current dependency graph; it does not close local T4 or protected-main gates."
+    patched_alert_coordinates: { "org.freemarker:freemarker": "2.3.35", "org.bouncycastle:bcprov-jdk18on": "1.85", "org.bouncycastle:bcpkix-jdk18on": "1.85", "org.apache.commons:commons-lang3": "3.18.0", "org.apache.httpcomponents:httpclient": "4.5.14", "org.bitbucket.b_c:jose4j": "0.9.6", "org.jdom:jdom2": "2.0.6.1", "org.jetbrains.kotlin:kotlin-gradle-plugin": "2.4.20" }
+  default_branch_state:
+    head: "5e183721e64ce8a8946f1a0b50f52b83544e8898"
+    latest_successful_ads_run: 35601558226
+    ads_component_count: 415
+    note: "No newer main ADS run exists; its default-branch dependency graph and open alerts are unchanged."
+  repository_sbom:
+    last_fetched_at: "2026-09-25T01:03:45Z"
+    format: "SPDX-2.3"
+    package_count: 425
+    sha256: "6ac004f29b222256a21d841b44c83a26f3206709234348035cc4e7e5f2b70dda"
+    interpretation: "The latest repository SBOM still reflects the main/default-branch graph, not topic-only OkHttp 5.5.0. No newer SBOM was generated in this recheck."
+  dependabot_alerts:
+    checked_at: "2026-09-25T01:12:29Z"
+    total: 10
+    open: [1, 2, 5, 6, 8, 9, 10]
+    fixed: [3, 4, 7]
+    changed_since_prior_recheck: false
+  pull_request_state:
+    result: "No pull request exists for this topic branch."
+    disposition: "P02.5-T3 remains confirmed for b9f3d23. P02.5-T4 and the phase remain open until reviewed changes reach protected main, a fresh main ADS/SBOM/alert scan completes, and actionable alerts are closed or have approved time-bounded dispositions."
 
 prior_recheck_2026_09_23:
   checked_at: "2026-09-23T22:34:40Z"
