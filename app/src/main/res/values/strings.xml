@@ -732,6 +732,40 @@
     <string name="httprobe_body_truncated">Showing first %1$s of the response body</string>
     <string name="httprobe_response_size_at_least">≥ %1$s</string>
     <string name="httprobe_empty_body">Empty body (HEAD or no content)</string>
+    <string name="httprobe_copy_curl">Copy as cURL</string>
+    <string name="httprobe_curl_redirect_safety">Redirect following was disabled to avoid forwarding custom headers or a body, or changing the app’s redirect method behavior. The command sends only the initial request.</string>
+    <string name="httprobe_pretty_json">Pretty JSON</string>
+    <string name="httprobe_json_valid">Valid JSON</string>
+    <string name="httprobe_json_invalid">Not valid JSON</string>
+    <string name="httprobe_json_incomplete">JSON validity unavailable because the response was truncated.</string>
+    <string name="httprobe_timing_breakdown">Timing breakdown</string>
+    <string name="httprobe_timing_dns">DNS</string>
+    <string name="httprobe_timing_connect">Connect</string>
+    <string name="httprobe_timing_tls">TLS</string>
+    <string name="httprobe_timing_ttfb">Time to first byte</string>
+    <string name="httprobe_timing_server_wait">Server and headers</string>
+    <string name="httprobe_timing_transfer">Transfer</string>
+    <string name="httprobe_timing_unavailable">Timing details are unavailable.</string>
+    <string name="httprobe_timing_value_ms">%1$d ms</string>
+    <string name="httprobe_sec_hsts_pass_strong">HSTS max-age is at least one year.</string>
+    <string name="httprobe_sec_hsts_short">HSTS max-age is shorter than one year.</string>
+    <string name="httprobe_sec_hsts_invalid">HSTS does not contain a valid max-age directive.</string>
+    <string name="httprobe_sec_hsts_ignored_http">Browsers ignore HSTS received over HTTP.</string>
+    <string name="httprobe_sec_csp_unsafe_inline">CSP permits unsafe inline or evaluated script content.</string>
+    <string name="httprobe_sec_csp_ambiguous">Conflicting or malformed CSP values were received.</string>
+    <string name="httprobe_sec_csp_report_only">Only a report-only CSP is set; it does not enforce restrictions.</string>
+    <string name="httprobe_sec_xfo_via_csp">CSP frame-ancestors provides clickjacking protection.</string>
+    <string name="httprobe_sec_xss_protection_absent">X-XSS-Protection is not set; modern browsers rely on Content Security Policy.</string>
+    <string name="httprobe_sec_xss_protection_deprecated">X-XSS-Protection is deprecated; use Content Security Policy instead.</string>
+    <string name="httprobe_sec_cookie_flags_complete">Cookie has Secure, HttpOnly, and a valid SameSite attribute.</string>
+    <string name="httprobe_sec_cookie_missing_secure">Cookie is missing the Secure flag on an HTTPS response.</string>
+    <string name="httprobe_sec_cookie_missing_httponly">Cookie is missing the HttpOnly flag.</string>
+    <string name="httprobe_sec_cookie_missing_secure_httponly">Cookie is missing Secure and HttpOnly flags.</string>
+    <string name="httprobe_sec_cookie_missing_samesite">Cookie is missing a valid SameSite attribute.</string>
+    <string name="httprobe_sec_cookie_samesite_none_requires_secure">SameSite=None cookies require Secure; browsers reject them without it.</string>
+    <string name="httprobe_sec_cookie_secure_from_http">Browsers reject Secure cookies received over an insecure HTTP response.</string>
+    <string name="httprobe_sec_cookie_secure_not_applicable">Cookie omits Secure on a non-HTTPS response.</string>
+    <string name="httprobe_sec_cookie_malformed">Cookie does not contain a valid name and value pair.</string>
 
     <!-- DNS Record labels -->
     <string name="dns_ipv4_prefix">IPv4</string>
@@ -1156,7 +1190,7 @@
     <string name="help_httprobe_concept_heading">What happens when you "visit" a URL?</string>
     <string name="help_httprobe_concept_body">When you request a URL, your device opens a connection to a server and sends a small text message describing what you want - the method, headers, maybe a body. The server replies with a status code, its own headers, and the content. This tool lets you send that request directly and inspect the entire exchange, including security-related response headers browsers check automatically but rarely show you.</string>
     <string name="help_httprobe_what_heading">What it does</string>
-    <string name="help_httprobe_what_body">Sends an HTTP or HTTPS request to a URL and displays the full response including status, headers, body, redirect chain, and a security header analysis.</string>
+    <string name="help_httprobe_what_body">Sends an HTTP or HTTPS request to a URL and displays status, headers, body, redirect chain, timing breakdown, and security checks. Copy the request as cURL or pretty-print a JSON response.</string>
     <string name="help_httprobe_params_heading">Key parameters</string>
     <string name="help_httprobe_results_heading">Reading the results</string>
     <string name="help_httprobe_security_heading">Security header checks</string>
@@ -1169,10 +1203,11 @@
         <item>HTTPS-to-HTTP redirects are blocked. Before a cross-origin redirect resends a request body, the app asks you to approve that destination.</item>
     </string-array>
     <string-array name="help_httprobe_results_bullets">
-        <item>Overview - status code, response time, and final URL after redirects.</item>
+        <item>Overview - status code, DNS/connect/TLS/server-wait/transfer phases, total time to first byte, HTTP protocol, and final URL after redirects.</item>
         <item>Headers - every request and response header.</item>
-        <item>Body - the response body, with size and truncation shown if applicable.</item>
-        <item>Security - see below.</item>
+        <item>Body - inspect, copy, and optionally pretty-print valid JSON; size and truncation are shown when applicable.</item>
+        <item>Copy as cURL exports the configured method, headers, body, URL, and redirect behavior as a shell-safe command.</item>
+        <item>Security - header, cookie-flag, and HTTPS downgrade checks; see below.</item>
     </string-array>
     <string-array name="help_httprobe_security_bullets">
         <item>HSTS - forces browsers to always use the encrypted (https) version of this site.</item>
@@ -1184,6 +1219,8 @@
         <item>Cross-Origin-Opener-Policy - isolates this tab from being manipulated by a malicious page it opened or was opened by.</item>
         <item>Cross-Origin-Embedder-Policy - requires cross-origin resources to explicitly opt in before this page can use them, closing another cross-tab attack path.</item>
         <item>Server - whether the response reveals software/version info attackers could use to look up known vulnerabilities.</item>
+        <item>Set-Cookie - each response cookie is checked for Secure, HttpOnly, and SameSite attributes.</item>
+        <item>X-XSS-Protection - reports the legacy header as informational because modern browsers rely on CSP.</item>
     </string-array>
 
     <!-- Subnet Calculator help -->

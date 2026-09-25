@@ -7,6 +7,9 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.SavedStateHandle
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
+import net.aieat.netswissknife.app.platform.LinkInfoProvider
+import net.aieat.netswissknife.app.platform.LiteralDestinationClassifier
+import net.aieat.netswissknife.app.platform.OperationAvailability
 import net.aieat.netswissknife.app.ui.navigation.HostTool
 import net.aieat.netswissknife.app.ui.navigation.ToolDestination
 import net.aieat.netswissknife.app.ui.navigation.ToolIntentCodec
@@ -25,6 +28,7 @@ import net.aieat.netswissknife.core.network.portscan.PortScanResult
 import net.aieat.netswissknife.core.network.portscan.PortScanSummary
 import net.aieat.netswissknife.core.network.operation.CancellationReason
 import net.aieat.netswissknife.core.network.operation.OperationDeadlineExceededException
+import net.aieat.netswissknife.core.network.operation.OperationRequirement
 import net.aieat.netswissknife.core.network.operation.OperationSession
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -68,6 +72,7 @@ class PortScanViewModel @Inject constructor(
     private val recentHostsRepository: RecentHostsRepository,
     private val savedStateHandle: SavedStateHandle = SavedStateHandle(),
     private val monotonicClock: MonotonicClock = SystemMonotonicClock,
+    private val linkInfoProvider: LinkInfoProvider = LinkInfoProvider({ true }, { true }),
 ) : ViewModel() {
 
     companion object {
@@ -304,6 +309,16 @@ class PortScanViewModel @Inject constructor(
         val normalizedHost = HostValidator.normalize(_host.value)
         val hostForScan = normalizedHost ?: _host.value.trim()
         if (normalizedHost != null) _host.value = normalizedHost
+        val requirement = OperationAvailability.requirementFor(
+            LiteralDestinationClassifier.target(hostForScan),
+        )
+        if (requirement == OperationRequirement.LOCAL_NETWORK &&
+            !linkInfoProvider.localNetworkPermissionAllowed()
+        ) {
+            scanStartedAtNanos = null
+            _uiState.value = PortScanUiState.Error("Local network permission denied")
+            return
+        }
         val liveResults = mutableListOf<PortScanResult>()
 
         val params = PortScanParams(

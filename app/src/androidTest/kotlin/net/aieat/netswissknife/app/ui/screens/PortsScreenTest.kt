@@ -1,6 +1,5 @@
 package net.aieat.netswissknife.app.ui.screens
 
-import android.Manifest
 import android.net.Uri
 import android.os.Build
 import androidx.compose.ui.test.assertCountEquals
@@ -31,6 +30,7 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.MutableStateFlow
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.platform.LocalNetworkPermissionPolicy
 import net.aieat.netswissknife.app.ui.screens.portscan.PortScanUiState
 import net.aieat.netswissknife.app.ui.screens.portscan.PortScanViewModel
 import net.aieat.netswissknife.app.ui.navigation.ToolSource
@@ -56,18 +56,16 @@ import org.junit.runner.RunWith
  * Covers the concurrency safety warning added to [PortsScreen] — it must
  * appear above 100 concurrent connections and stay hidden at or below it.
  *
- * [PortsScreen] requests `NEARBY_WIFI_DEVICES` on entry on API 36+ (Local
- * Network Protections, see `LocalNetworkPermission.kt`) — pre-granting it
- * avoids a system permission dialog interrupting the test.
+ * Pre-grant the OS-version-specific local-network permission so local-target
+ * scan tests do not show a system permission dialog.
  */
 @RunWith(AndroidJUnit4::class)
 class PortsScreenTest {
     @get:Rule
-    val permissionRule: GrantPermissionRule = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
-        GrantPermissionRule.grant(Manifest.permission.NEARBY_WIFI_DEVICES)
-    } else {
-        GrantPermissionRule.grant()
-    }
+    val permissionRule: GrantPermissionRule = LocalNetworkPermissionPolicy
+        .permissionToRequest(Build.VERSION.SDK_INT)
+        ?.let { permission -> GrantPermissionRule.grant(permission) }
+        ?: GrantPermissionRule.grant()
 
     @get:Rule
     val composeRule = createComposeRule()

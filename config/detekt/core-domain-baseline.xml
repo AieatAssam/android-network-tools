@@ -1,0 +1,114 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>CyclomaticComplexMethod:PortScanUseCase.kt:PortScanUseCase$private fun execute: Flow&lt;PortScanFlowResult&gt;</ID>
+    <ID>CyclomaticComplexMethod:TracerouteUseCase.kt:TracerouteUseCase$private fun invokeInternal: Flow&lt;TracerouteFlowResult&gt;</ID>
+    <ID>LongMethod:PortScanUseCase.kt:PortScanUseCase$private fun execute: Flow&lt;PortScanFlowResult&gt;</ID>
+    <ID>LongMethod:TracerouteUseCase.kt:TracerouteUseCase$private fun invokeInternal: Flow&lt;TracerouteFlowResult&gt;</ID>
+    <ID>MagicNumber:DnsLookupUseCase.kt:DnsLookupUseCase$253</ID>
+    <ID>MagicNumber:HttpProbeUseCase.kt:65_535</ID>
+    <ID>MagicNumber:HttpProbeUseCase.kt:HttpProbeUseCase$500</ID>
+    <ID>MagicNumber:HttpProbeUseCase.kt:HttpProbeUseCase$60_000</ID>
+    <ID>MagicNumber:LanScanUseCase.kt:LanScanUseCase$100</ID>
+    <ID>MagicNumber:LanScanUseCase.kt:LanScanUseCase$10_000</ID>
+    <ID>MagicNumber:LanScanUseCase.kt:LanScanUseCase$500</ID>
+    <ID>MagicNumber:PingValidation.kt:100</ID>
+    <ID>MagicNumber:PingValidation.kt:10_000</ID>
+    <ID>MagicNumber:PingValidation.kt:1472</ID>
+    <ID>MagicNumber:PingValidation.kt:255</ID>
+    <ID>MagicNumber:PingValidation.kt:30_000</ID>
+    <ID>MagicNumber:PortScanDeadlineBudget.kt:PortScanDeadlineBudget$65_535</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.COMMON$110</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.COMMON$143</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.COMMON$21</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.COMMON$22</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.COMMON$23</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.COMMON$25</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.COMMON$27017</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.COMMON$3306</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.COMMON$3389</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.COMMON$443</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.COMMON$465</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.COMMON$53</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.COMMON$5432</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.COMMON$587</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.COMMON$5900</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.COMMON$6379</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.COMMON$80</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.COMMON$8080</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.COMMON$8443</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.COMMON$8888</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.COMMON$9200</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.COMMON$993</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.COMMON$995</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.DATABASE$11211</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.DATABASE$1433</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.DATABASE$1521</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.DATABASE$27017</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.DATABASE$27018</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.DATABASE$28015</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.DATABASE$3306</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.DATABASE$5432</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.DATABASE$5433</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.DATABASE$6379</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.DATABASE$9200</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.DATABASE$9300</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.MAIL$110</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.MAIL$143</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.MAIL$25</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.MAIL$465</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.MAIL$587</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.MAIL$993</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.MAIL$995</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.REMOTE$1194</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.REMOTE$1723</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.REMOTE$22</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.REMOTE$23</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.REMOTE$3389</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.REMOTE$5900</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.REMOTE$5901</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.WEB$3000</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.WEB$4000</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.WEB$443</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.WEB$5000</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.WEB$80</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.WEB$8000</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.WEB$8080</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.WEB$8081</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.WEB$8443</ID>
+    <ID>MagicNumber:PortScanParams.kt:PortScanPreset.WEB$8888</ID>
+    <ID>MagicNumber:PortScanUseCase.kt:PortScanUseCase$100</ID>
+    <ID>MagicNumber:PortScanUseCase.kt:PortScanUseCase$30_000</ID>
+    <ID>MagicNumber:PortScanUseCase.kt:PortScanUseCase$500</ID>
+    <ID>MagicNumber:TlsInspectorUseCase.kt:TlsInspectorUseCase$30_000</ID>
+    <ID>MagicNumber:TlsInspectorUseCase.kt:TlsInspectorUseCase$500</ID>
+    <ID>MagicNumber:TlsInspectorUseCase.kt:TlsInspectorUseCase$65_535</ID>
+    <ID>MagicNumber:WhoisLookupUseCase.kt:WhoisLookupUseCase$30_000</ID>
+    <ID>MagicNumber:WhoisLookupUseCase.kt:WhoisLookupUseCase$500</ID>
+    <ID>MaxLineLength:DnsLookupUseCaseTest.kt:DnsLookupUseCaseTest.HappyPath$coVerify(exactly = 1) { repository.lookup("example.com", DnsRecordType.A, DnsServer.Custom("2001:db8::53")) }</ID>
+    <ID>MaxLineLength:PortScanUseCase.kt:PortScanUseCase$"This scan may exceed the 15-minute operation limit; increase concurrency or reduce the port range or timeout."</ID>
+    <ID>MaxLineLength:PortScanUseCaseTest.kt:PortScanUseCaseTest.PresetScanning$assertTrue(events.indexOfFirst { it is PortScanFlowResult.Started } &lt; events.indexOfFirst { it is PortScanFlowResult.PortScanned })</ID>
+    <ID>MaxLineLength:SpeedTestUseCaseTest.kt:SpeedTestUseCaseTest.&lt;no name provided&gt;$override</ID>
+    <ID>MaxLineLength:TlsInspectorUseCaseTest.kt:TlsInspectorUseCaseTest$sha256Fingerprint = "AB:CD:EF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC"</ID>
+    <ID>MaxLineLength:TracerouteUseCaseTest.kt:TracerouteUseCaseTest.HappyPath$assertEquals(listOf(1, 2), results.filterIsInstance&lt;TracerouteFlowResult.HopEnriched&gt;().map { it.hopNumber })</ID>
+    <ID>MaxLineLength:TracerouteUseCaseTest.kt:TracerouteUseCaseTest.HappyPath$assertTrue(results.indexOf(TracerouteFlowResult.Hop(hop1)) &lt; results.indexOf(enrichmentEvents.single { it.hopNumber == 1 }))</ID>
+    <ID>MaxLineLength:TracerouteUseCaseTest.kt:TracerouteUseCaseTest.HappyPath$assertTrue(results.indexOf(TracerouteFlowResult.Hop(hop2)) &lt; results.indexOf(enrichmentEvents.single { it.hopNumber == 2 }))</ID>
+    <ID>MaxLineLength:TracerouteUseCaseTest.kt:TracerouteUseCaseTest.HappyPath$every { tracerouteRepo.trace(any(), any(), any(), any(), any(), any(), any()) } returns flowOf(*hops.toTypedArray())</ID>
+    <ID>MaxLineLength:TracerouteUseCaseTest.kt:TracerouteUseCaseTest.HappyPath$val results = TracerouteUseCase(tracerouteRepo, geoRepo, reverseDns)(TracerouteParams("google.com")).toList()</ID>
+    <ID>ReturnCount:DnsLookupUseCase.kt:DnsLookupUseCase$private suspend fun invokeValidated: NetworkResult&lt;DnsResult&gt;</ID>
+    <ID>ReturnCount:HttpProbeUseCase.kt:HttpProbeUseCase$private suspend fun invokeValidated: NetworkResult&lt;HttpProbeResult&gt;</ID>
+    <ID>ReturnCount:HttpProbeUseCase.kt:fun validateHttpProbeUrl: String?</ID>
+    <ID>ReturnCount:LanScanUseCase.kt:LanScanUseCase$private fun execute: Flow&lt;LanScanFlowResult&gt;</ID>
+    <ID>ReturnCount:TlsInspectorUseCase.kt:TlsInspectorUseCase$private suspend fun invokeValidated: NetworkResult&lt;TlsInspectorResult&gt;</ID>
+    <ID>ReturnCount:TopologyDiscoveryUseCase.kt:TopologyDiscoveryUseCase$operator fun invoke: Flow&lt;TopologyDiscoveryEvent&gt;</ID>
+    <ID>ReturnCount:WakeOnLanUseCase.kt:WakeOnLanUseCase$private suspend fun invokeValidated: NetworkResult&lt;WolSendReport&gt;</ID>
+    <ID>ReturnCount:WhoisLookupUseCase.kt:WhoisLookupUseCase$private suspend fun execute: NetworkResult&lt;WhoisResult&gt;</ID>
+    <ID>ThrowsCount:TracerouteUseCase.kt:TracerouteUseCase$private suspend fun &lt;T&gt; optionalEnrichment: T?</ID>
+    <ID>TooGenericExceptionCaught:HttpProbeUseCase.kt:e: Exception</ID>
+    <ID>WildcardImport:TopologyDiscoveryUseCase.kt:import net.aieat.netswissknife.core.network.topology.*</ID>
+    <ID>WildcardImport:TopologyDiscoveryUseCaseTest.kt:import io.mockk.*</ID>
+    <ID>WildcardImport:TopologyDiscoveryUseCaseTest.kt:import net.aieat.netswissknife.core.network.topology.*</ID>
+    <ID>WildcardImport:TopologyDiscoveryUseCaseTest.kt:import org.junit.jupiter.api.Assertions.*</ID>
+  </CurrentIssues>
+</SmellBaseline>

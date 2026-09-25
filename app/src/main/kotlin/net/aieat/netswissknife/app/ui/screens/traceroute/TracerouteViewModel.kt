@@ -7,11 +7,16 @@ import net.aieat.netswissknife.app.data.RecentHostsRepository
 import net.aieat.netswissknife.app.platform.NetworkStatus
 import net.aieat.netswissknife.app.platform.NetworkStatusProvider
 import net.aieat.netswissknife.app.platform.NoOpNetworkStatusProvider
+import net.aieat.netswissknife.app.platform.LinkInfoProvider
+import net.aieat.netswissknife.app.platform.LiteralDestinationClassifier
+import net.aieat.netswissknife.app.platform.OperationAvailability
+import net.aieat.netswissknife.app.platform.denialMessage
 import net.aieat.netswissknife.core.domain.TracerouteFlowResult
 import net.aieat.netswissknife.core.domain.TracerouteParams
 import net.aieat.netswissknife.core.domain.TracerouteUseCase
 import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationRequirement
 import net.aieat.netswissknife.core.network.operation.OperationSession
 import net.aieat.netswissknife.core.network.traceroute.HopResult
 import net.aieat.netswissknife.core.network.traceroute.HopStatus
@@ -64,10 +69,10 @@ class TracerouteViewModel @Inject constructor(
     private val tracerouteUseCase: TracerouteUseCase,
     private val recentHostsRepository: RecentHostsRepository,
     private val networkStatusProvider: NetworkStatusProvider = NoOpNetworkStatusProvider,
+    private val linkInfoProvider: LinkInfoProvider = LinkInfoProvider({ true }, { true }),
 ) : ViewModel() {
 
     companion object {
-        private const val NO_NETWORK_CONNECTION = "No network connection"
         // Resource cleanup may block while cancellation closes native or socket handles.
         // Keep it off the UI and independent of the ViewModel's clearing scope.
         private val cancellationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -150,6 +155,15 @@ class TracerouteViewModel @Inject constructor(
     }
 
     fun onStop() {
+        cancelRunningTrace(CancellationReason.USER_STOP)
+    }
+
+    /** Cancel an in-flight trace when its screen leaves the foreground. */
+    fun onLifecycleStop() {
+        cancelRunningTrace(CancellationReason.LIFECYCLE_PAUSE)
+    }
+
+    private fun cancelRunningTrace(reason: CancellationReason) {
         if (_uiState.value is TracerouteUiState.Canceling) return
         val current = _uiState.value as? TracerouteUiState.Running ?: return
         val operationId = traceGeneration
@@ -161,7 +175,7 @@ class TracerouteViewModel @Inject constructor(
             operationId = operationId,
             elapsedMs = elapsedMs,
         )
-        cancelActiveTrace(CancellationReason.USER_STOP)
+        cancelActiveTrace(reason)
     }
 
     fun onClear() {
@@ -194,9 +208,24 @@ class TracerouteViewModel @Inject constructor(
         ) return
         val generation = ++traceGeneration
 
-        val status = networkStatus.value
-        if (!status.hasInternet && !status.hasLocalNetwork && !status.vpnActive) {
-            _uiState.value = TracerouteUiState.Error(NO_NETWORK_CONNECTION)
+        val validatedHost = HostValidator.normalize(_host.value)
+        val normalizedHost = validatedHost ?: _host.value.trim()
+        val target = LiteralDestinationClassifier.target(normalizedHost)
+        val requirement = OperationAvailability.requirementFor(target)
+        val localPermission = if (
+            requirement == OperationRequirement.LOCAL_NETWORK
+        ) {
+            linkInfoProvider.localNetworkPermissionAllowed()
+        } else {
+            null
+        }
+        val availability = OperationAvailability.classifyObserved(
+            target = target,
+            status = networkStatus.value,
+            localNetworkPermissionAllowed = localPermission,
+        )
+        if (!availability.allowed) {
+            _uiState.value = TracerouteUiState.Error(availability.denialMessage())
             return
         }
 
@@ -212,8 +241,6 @@ class TracerouteViewModel @Inject constructor(
             return
         }
 
-        val validatedHost = HostValidator.normalize(_host.value)
-        val normalizedHost = validatedHost ?: _host.value.trim()
         val params = TracerouteParams(
             host          = normalizedHost,
             maxHops       = _maxHops.value,
@@ -308,7 +335,8 @@ class TracerouteViewModel @Inject constructor(
                         )
                     }
                     current is TracerouteUiState.Canceling && current.operationId == generation &&
-                        (cancellationReason == null || cancellationReason == CancellationReason.USER_STOP) -> {
+                        (cancellationReason == null || cancellationReason == CancellationReason.USER_STOP ||
+                            cancellationReason == CancellationReason.LIFECYCLE_PAUSE) -> {
                         _uiState.value = TracerouteUiState.Canceled(
                             result = buildResult(current.host, current.hops, current.elapsedMs),
                         )

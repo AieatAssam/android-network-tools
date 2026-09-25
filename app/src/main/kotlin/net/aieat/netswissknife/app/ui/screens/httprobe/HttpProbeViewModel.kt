@@ -37,6 +37,7 @@ import net.aieat.netswissknife.core.network.httprobe.HttpProbeOperation
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeResult
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeBlockedRedirectException
 import net.aieat.netswissknife.core.network.httprobe.CrossOriginEntityReplay
+import net.aieat.netswissknife.core.network.httprobe.CurlExporter
 import net.aieat.netswissknife.core.network.operation.CancellationReason
 import net.aieat.netswissknife.core.network.operation.OperationSession
 import java.util.UUID
@@ -73,7 +74,8 @@ data class HttpProbeUiState(
     val blockedRedirectWarning: BlockedHttpRedirectWarning? = null,
     val pendingEntityReplayApproval: PendingEntityReplayApproval? = null,
     val selectedTab: Int = 0,
-    val headersExpanded: Boolean = false
+    val headersExpanded: Boolean = false,
+    val prettyJson: Boolean = false,
 )
 
 @HiltViewModel
@@ -191,6 +193,11 @@ class HttpProbeViewModel @Inject constructor(
     }
 
     fun onTabSelected(tab: Int) = _uiState.update { it.copy(selectedTab = tab) }
+
+    fun onPrettyJsonToggle() = _uiState.update { it.copy(prettyJson = !it.prettyJson) }
+
+    /** Returns a shell-safe command for the current successful request, if one is available. */
+    fun copyAsCurl(): String? = _uiState.value.result?.let { CurlExporter.build(it.request) }
 
     fun respondToEntityReplayApproval(runId: String, approvalId: String, approved: Boolean) {
         val active = activeReplayDecision ?: return

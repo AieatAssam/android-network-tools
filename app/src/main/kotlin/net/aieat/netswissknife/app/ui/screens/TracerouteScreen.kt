@@ -73,6 +73,7 @@ import androidx.compose.material3.Switch
 
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -121,6 +122,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
@@ -147,8 +151,8 @@ import kotlin.math.sqrt
 
 @Composable
 fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
-    val requestLocalNetworkPermission = rememberLocalNetworkPermissionRequester()
-    LaunchedEffect(Unit) { requestLocalNetworkPermission() }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val requestLocalNetworkPermission = rememberLocalNetworkPermissionRequester(viewModel::startTrace)
 
     val uiState      by viewModel.uiState.collectAsStateWithLifecycle()
     val networkStatus by viewModel.networkStatus.collectAsStateWithLifecycle()
@@ -159,6 +163,14 @@ fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
     val probeType    by viewModel.probeType.collectAsStateWithLifecycle()
     val packetSize   by viewModel.packetSize.collectAsStateWithLifecycle()
     val recentHosts  by viewModel.recentHosts.collectAsStateWithLifecycle()
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) viewModel.onLifecycleStop()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     // animateFloatAsState instead of AnimatedVisibility: both AnimatedVisibility and the
     // inner AnimatedContent use SubcomposeLayout.  Two simultaneously-animating nested
@@ -203,7 +215,7 @@ fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
                     onProbeTypeChange   = viewModel::onProbeTypeChange,
                     onPacketSizeChange  = viewModel::onPacketSizeChange,
                     onToggleMtuDiscovery = viewModel::onToggleMtuDiscovery,
-                    onStart             = viewModel::startTrace,
+                    onStart             = { requestLocalNetworkPermission(host) },
                     onStop              = viewModel::onStop,
                     onRemoveRecentHost  = viewModel::removeRecentHost,
                     onClearRecentHosts  = viewModel::clearRecentHosts
@@ -246,7 +258,7 @@ fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
                         }
                         is TracerouteUiState.Error    -> TracerouteErrorPanel(
                             state   = state,
-                            onRetry = viewModel::onRetry,
+                            onRetry = { requestLocalNetworkPermission(host) },
                             onClear = viewModel::onClear
                         )
                     }

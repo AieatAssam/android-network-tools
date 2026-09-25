@@ -41,4 +41,17 @@ object LiteralDestinationClassifier {
             else -> OperationTargetClass.UNKNOWN
         }
     }
+
+    /** Classifies a destination without resolving hostnames; they use the system resolver. */
+    fun target(input: String): OperationTarget {
+        val targetClass = classify(input)
+        return OperationTarget(
+            targetClass = targetClass,
+            resolverClass = if (targetClass == OperationTargetClass.UNKNOWN) {
+                ResolverClass.SYSTEM_DEFAULT
+            } else {
+                ResolverClass.NONE
+            },
+        )
+    }
 }

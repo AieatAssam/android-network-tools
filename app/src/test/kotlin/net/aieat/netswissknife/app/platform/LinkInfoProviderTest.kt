@@ -4,8 +4,8 @@ import android.net.NetworkCapabilities
 import io.mockk.every
 import io.mockk.mockk
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -40,6 +40,12 @@ class LinkInfoProviderTest {
     @Test
     fun `network availability override is fail safe`() {
         assertFalse(LinkInfoProvider { error("connectivity unavailable") }.hasValidatedNetwork())
+    }
+
+    @Test
+    fun `local network permission can be injected for admission checks`() {
+        assertTrue(LinkInfoProvider({ true }, { true }).localNetworkPermissionAllowed())
+        assertFalse(LinkInfoProvider({ true }, { false }).localNetworkPermissionAllowed())
     }
 
     @Test

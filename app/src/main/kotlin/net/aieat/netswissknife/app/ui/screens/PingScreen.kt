@@ -154,8 +154,7 @@ object PingScreenTestTags {
 fun PingScreen(
     viewModel: PingViewModel = hiltViewModel()
 ) {
-    val requestLocalNetworkPermission = rememberLocalNetworkPermissionRequester()
-    LaunchedEffect(Unit) { requestLocalNetworkPermission() }
+    val requestLocalNetworkPermission = rememberLocalNetworkPermissionRequester(viewModel::startPing)
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val networkStatus by viewModel.networkStatus.collectAsStateWithLifecycle()
@@ -271,7 +270,7 @@ fun PingScreen(
                     onTtlChange = viewModel::onTtlChange,
                     onIntervalChange = viewModel::onIntervalChange,
                     onToggleContinuous = viewModel::onToggleContinuous,
-                    onStart = viewModel::startPing,
+                    onStart = { requestLocalNetworkPermission(host) },
                     onStop = viewModel::onStop,
                     onRemoveRecentHost = viewModel::removeRecentHost,
                     onClearRecentHosts = viewModel::clearRecentHosts
@@ -299,7 +298,7 @@ fun PingScreen(
                         )
                         is PingUiState.Error -> PingErrorPanel(
                             message = state.message,
-                            onRetry = viewModel::onRetry,
+                            onRetry = { requestLocalNetworkPermission(host) },
                             onClear = viewModel::onClearResults
                         )
                     }

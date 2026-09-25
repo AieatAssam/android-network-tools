@@ -496,9 +496,10 @@ class HttpProbeScreenTest {
             redirectChain = emptyList(),
             securityChecks = emptyList()
         )
+        val viewModel = fakeViewModel(HttpProbeUiState(result = result, selectedTab = 0))
         composeRule.setContent {
             NetSwissKnifeTheme {
-                HttpProbeScreen(viewModel = fakeViewModel(HttpProbeUiState(result = result, selectedTab = 0)))
+                HttpProbeScreen(viewModel = viewModel)
             }
         }
 
@@ -515,6 +516,99 @@ class HttpProbeScreenTest {
             .onFirst()
             .performScrollTo()
             .assertIsDisplayed()
+        composeRule.onNodeWithTag(HttpProbeScreenTestTags.TIMING_BAR)
+            .performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag(HttpProbeScreenTestTags.COPY_CURL_ACTION)
+            .performScrollTo().assertIsDisplayed().performClick()
+        verify { viewModel.copyAsCurl() }
+    }
+
+    @Test
+    fun bodyTab_showsJsonValidityAndPrettyToggle() {
+        val result = HttpProbeResult(
+            request = HttpProbeRequest(url = "https://example.com"),
+            statusCode = 200,
+            statusMessage = "OK",
+            responseTimeMs = 42,
+            responseHeaders = mapOf("Content-Type" to listOf("application/json")),
+            responseBody = "{\"ok\":true}",
+            responseBodyBytes = 11,
+            finalUrl = "https://example.com",
+            redirectChain = emptyList(),
+            securityChecks = emptyList(),
+        )
+        val viewModel = fakeViewModel(HttpProbeUiState(result = result, selectedTab = 2))
+        composeRule.setContent {
+            NetSwissKnifeTheme { HttpProbeScreen(viewModel = viewModel) }
+        }
+        composeRule.mainClock.advanceTimeBy(2_000L)
+        composeRule.onNodeWithTag(HttpProbeScreenTestTags.CONTENT_LIST)
+            .performScrollToIndex(HttpProbeScreenTestTags.RESULT_PANEL_INDEX)
+        composeRule.onNodeWithTag(HttpProbeScreenTestTags.PRETTY_JSON_SWITCH)
+            .performScrollTo().assertIsDisplayed().performClick()
+        composeRule.onNodeWithText(context.getString(R.string.httprobe_json_valid))
+            .performScrollTo().assertIsDisplayed()
+        verify { viewModel.onPrettyJsonToggle() }
+    }
+
+    @Test
+    fun bodyTab_doesNotCallTruncatedJsonInvalid() {
+        val result = HttpProbeResult(
+            request = HttpProbeRequest(url = "https://example.com"),
+            statusCode = 200,
+            statusMessage = "OK",
+            responseTimeMs = 42,
+            responseHeaders = mapOf("Content-Type" to listOf("application/json")),
+            responseBody = "{\"ok\":",
+            responseBodyBytes = 7,
+            responseBodyTruncated = true,
+            finalUrl = "https://example.com",
+            redirectChain = emptyList(),
+            securityChecks = emptyList(),
+        )
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                HttpProbeScreen(viewModel = fakeViewModel(HttpProbeUiState(result = result, selectedTab = 2)))
+            }
+        }
+        composeRule.mainClock.advanceTimeBy(2_000L)
+        composeRule.onNodeWithTag(HttpProbeScreenTestTags.CONTENT_LIST)
+            .performScrollToIndex(HttpProbeScreenTestTags.RESULT_PANEL_INDEX)
+        composeRule.onNodeWithText(context.getString(R.string.httprobe_json_incomplete))
+            .performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.httprobe_json_invalid))
+            .assertDoesNotExist()
+    }
+
+    @Test
+    fun copyCurl_disclosesWhenHeaderForwardingSuppressesRedirects() {
+        val request = HttpProbeRequest(
+            url = "https://example.com/start",
+            headers = listOf("Authorization" to "Bearer test"),
+            followRedirects = true,
+        )
+        val result = HttpProbeResult(
+            request = request,
+            statusCode = 302,
+            statusMessage = "Found",
+            responseTimeMs = 42,
+            responseHeaders = emptyMap(),
+            responseBody = "",
+            responseBodyBytes = 0,
+            finalUrl = request.url,
+            redirectChain = emptyList(),
+            securityChecks = emptyList(),
+        )
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                HttpProbeScreen(viewModel = fakeViewModel(HttpProbeUiState(result = result)))
+            }
+        }
+        composeRule.mainClock.advanceTimeBy(2_000L)
+        composeRule.onNodeWithTag(HttpProbeScreenTestTags.CONTENT_LIST)
+            .performScrollToIndex(HttpProbeScreenTestTags.RESULT_PANEL_INDEX)
+        composeRule.onNodeWithTag(HttpProbeScreenTestTags.CURL_REDIRECT_NOTICE)
+            .performScrollTo().assertIsDisplayed()
     }
 
     private fun fakeViewModel(

@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -125,8 +126,12 @@ import net.aieat.netswissknife.app.util.formatBytes
 import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.core.network.httprobe.HttpMethod
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeResult
+import net.aieat.netswissknife.core.network.httprobe.CurlExporter
+import net.aieat.netswissknife.core.network.httprobe.JsonPrettyPrinter
 import net.aieat.netswissknife.core.network.httprobe.SecurityHeaderCheck
 import net.aieat.netswissknife.core.network.httprobe.SecurityRating
+import net.aieat.netswissknife.core.network.httprobe.engine.HttpTimings
+import net.aieat.netswissknife.core.network.httprobe.engine.HttpTimingBreakdown
 import net.aieat.netswissknife.core.domain.validateHttpProbeUrl
 import net.aieat.netswissknife.app.ui.navigation.ToolSource
 
@@ -138,6 +143,10 @@ object HttpProbeScreenTestTags {
     const val CLEAR_PREFILL_ACTION = "httprobe_clear_prefill_action"
     const val INVALID_HANDOFF = "httprobe_invalid_handoff"
     const val BLOCKED_REDIRECT_WARNING = "httprobe_blocked_redirect_warning"
+    const val TIMING_BAR = "httprobe_timing_bar"
+    const val COPY_CURL_ACTION = "httprobe_copy_curl_action"
+    const val PRETTY_JSON_SWITCH = "httprobe_pretty_json_switch"
+    const val CURL_REDIRECT_NOTICE = "httprobe_curl_redirect_notice"
 
     /** Index of the idle/loading/error/success result panel within [CONTENT_LIST]. */
     const val RESULT_PANEL_INDEX = 2
@@ -151,6 +160,8 @@ fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
     val hasInvalidHandoff by viewModel.hasInvalidHandoff.collectAsStateWithLifecycle()
     val sourceContext by viewModel.sourceContextState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val clipboard = LocalClipboard.current
+    val clipboardScope = rememberCoroutineScope()
 
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
@@ -293,7 +304,16 @@ fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
                             HttpProbeSuccessContent(
                                 result = state.result,
                                 selectedTab = uiState.selectedTab,
+                                prettyJson = uiState.prettyJson,
                                 onTabSelected = viewModel::onTabSelected,
+                                onPrettyJsonToggle = viewModel::onPrettyJsonToggle,
+                                onCopyCurl = {
+                                    viewModel.copyAsCurl()?.let { command ->
+                                        clipboardScope.launch {
+                                            clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("cURL", command)))
+                                        }
+                                    }
+                                },
                                 onShare = {
                                     context.shareText(
                                         text = buildHttpShareText(state.result, shareSizeText),
@@ -793,7 +813,10 @@ private fun HttpProbeErrorContent(message: String, onRetry: () -> Unit) {
 private fun HttpProbeSuccessContent(
     result: HttpProbeResult,
     selectedTab: Int,
+    prettyJson: Boolean,
     onTabSelected: (Int) -> Unit,
+    onPrettyJsonToggle: () -> Unit,
+    onCopyCurl: () -> Unit,
     onShare: () -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -807,6 +830,20 @@ private fun HttpProbeSuccessContent(
                     contentDescription = stringResource(R.string.action_share)
                 )
             }
+            TextButton(
+                onClick = onCopyCurl,
+                modifier = Modifier.testTag(HttpProbeScreenTestTags.COPY_CURL_ACTION),
+            ) {
+                Text(stringResource(R.string.httprobe_copy_curl))
+            }
+        }
+        if (CurlExporter.redirectFollowingSuppressed(result.request)) {
+            Text(
+                text = stringResource(R.string.httprobe_curl_redirect_safety),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.testTag(HttpProbeScreenTestTags.CURL_REDIRECT_NOTICE),
+            )
         }
         // Status banner
         StatusBannerCard(result)
@@ -847,7 +884,7 @@ private fun HttpProbeSuccessContent(
                 when (tab) {
                     0 -> OverviewTabContent(result)
                     1 -> HeadersTabContent(result)
-                    2 -> BodyTabContent(result)
+                    2 -> BodyTabContent(result, prettyJson, onPrettyJsonToggle)
                     3 -> SecurityTabContent(result.securityChecks)
                     else -> OverviewTabContent(result)
                 }
@@ -944,6 +981,7 @@ private fun OverviewTabContent(result: HttpProbeResult) {
     ) {
         LabeledValue(stringResource(R.string.httprobe_method_used), result.request.method.name)
         LabeledValue(stringResource(R.string.httprobe_protocol_label), result.protocol)
+        TimingBreakdown(result.timings)
         LabeledValue(stringResource(R.string.httprobe_final_url), safeRedirectDisplayValue(result.finalUrl))
         LabeledValue(
             stringResource(R.string.httprobe_response_size),
@@ -991,6 +1029,54 @@ private fun OverviewTabContent(result: HttpProbeResult) {
                         overflow = TextOverflow.Ellipsis
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TimingBreakdown(timings: HttpTimings) {
+    val breakdown = HttpTimingBreakdown.from(timings)
+    val segments = listOf(
+        Triple(R.string.httprobe_timing_dns, breakdown.dnsMs, MaterialTheme.colorScheme.primary),
+        Triple(R.string.httprobe_timing_connect, breakdown.connectMs, MaterialTheme.colorScheme.secondary),
+        Triple(R.string.httprobe_timing_tls, breakdown.tlsMs, MaterialTheme.colorScheme.tertiary),
+        Triple(R.string.httprobe_timing_server_wait, breakdown.serverWaitMs, StatusBlueDeep),
+        Triple(R.string.httprobe_timing_transfer, breakdown.transferMs, StatusGoodDeep),
+    ).filter { (_, value, _) -> value != null }
+    val total = segments.sumOf { (_, value, _) -> value!!.coerceAtLeast(0L) }
+    val visibleSegments = if (total == 0L) emptyList() else segments.filter { (_, value, _) -> value!! > 0L }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            text = stringResource(R.string.httprobe_timing_breakdown),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(12.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .testTag(HttpProbeScreenTestTags.TIMING_BAR),
+        ) {
+            visibleSegments.forEach { (_, value, color) ->
+                Box(
+                    Modifier
+                        .weight(value!!.toFloat())
+                        .fillMaxHeight()
+                        .background(color)
+                )
+            }
+        }
+        if (segments.isEmpty()) {
+            Text(stringResource(R.string.httprobe_timing_unavailable), style = MaterialTheme.typography.bodySmall)
+        } else {
+            segments.forEach { (label, value, _) ->
+                LabeledValue(stringResource(label), stringResource(R.string.httprobe_timing_value_ms, value ?: 0L))
+            }
+            breakdown.ttfbTotalMs?.let { totalTtfb ->
+                LabeledValue(stringResource(R.string.httprobe_timing_ttfb), stringResource(R.string.httprobe_timing_value_ms, totalTtfb))
             }
         }
     }
@@ -1112,11 +1198,14 @@ private fun HeaderRow(key: String, value: String) {
 // ── Body tab ──────────────────────────────────────────────────────────────────
 
 @Composable
-private fun BodyTabContent(result: HttpProbeResult) {
+private fun BodyTabContent(result: HttpProbeResult, prettyJson: Boolean, onPrettyJsonToggle: () -> Unit) {
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
 
     val responseBody = result.responseBody
+    val formattedJson = remember(responseBody, result.responseBodyTruncated) {
+        if (result.responseBodyTruncated) null else responseBody?.let(JsonPrettyPrinter::prettyPrint)
+    }
 
     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
@@ -1159,6 +1248,34 @@ private fun BodyTabContent(result: HttpProbeResult) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         } else {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(stringResource(R.string.httprobe_pretty_json), style = MaterialTheme.typography.labelMedium)
+                Text(
+                    stringResource(
+                        when {
+                            result.responseBodyTruncated -> R.string.httprobe_json_incomplete
+                            formattedJson != null -> R.string.httprobe_json_valid
+                            else -> R.string.httprobe_json_invalid
+                        }
+                    ),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = when {
+                        result.responseBodyTruncated -> MaterialTheme.colorScheme.onSurfaceVariant
+                        formattedJson != null -> StatusGoodDeep
+                        else -> StatusWarnDeep
+                    },
+                )
+                Switch(
+                    checked = prettyJson,
+                    onCheckedChange = { onPrettyJsonToggle() },
+                    enabled = formattedJson != null && !result.responseBodyTruncated,
+                    modifier = Modifier.testTag(HttpProbeScreenTestTags.PRETTY_JSON_SWITCH),
+                )
+            }
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1167,7 +1284,7 @@ private fun BodyTabContent(result: HttpProbeResult) {
                     .padding(12.dp)
             ) {
                 Text(
-                    text = responseBody,
+                    text = if (prettyJson) formattedJson ?: responseBody else responseBody,
                     style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -1264,7 +1381,7 @@ private fun SecurityCheckRow(check: SecurityHeaderCheck) {
                         HorizontalDivider()
                     }
                     Text(
-                        text = check.description,
+                        text = securityDescription(check),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface
                     )
@@ -1272,6 +1389,30 @@ private fun SecurityCheckRow(check: SecurityHeaderCheck) {
             }
         }
     }
+}
+
+@Composable
+private fun securityDescription(check: SecurityHeaderCheck): String = when (check.descriptionKey) {
+    "httprobe_sec_hsts_pass_strong" -> stringResource(R.string.httprobe_sec_hsts_pass_strong)
+    "httprobe_sec_hsts_short" -> stringResource(R.string.httprobe_sec_hsts_short)
+    "httprobe_sec_hsts_invalid" -> stringResource(R.string.httprobe_sec_hsts_invalid)
+    "httprobe_sec_hsts_ignored_http" -> stringResource(R.string.httprobe_sec_hsts_ignored_http)
+    "httprobe_sec_csp_unsafe_inline" -> stringResource(R.string.httprobe_sec_csp_unsafe_inline)
+    "httprobe_sec_csp_ambiguous" -> stringResource(R.string.httprobe_sec_csp_ambiguous)
+    "httprobe_sec_csp_report_only" -> stringResource(R.string.httprobe_sec_csp_report_only)
+    "httprobe_sec_xfo_via_csp" -> stringResource(R.string.httprobe_sec_xfo_via_csp)
+    "httprobe_sec_xss_protection_absent" -> stringResource(R.string.httprobe_sec_xss_protection_absent)
+    "httprobe_sec_xss_protection_deprecated" -> stringResource(R.string.httprobe_sec_xss_protection_deprecated)
+    "httprobe_sec_cookie_flags_complete" -> stringResource(R.string.httprobe_sec_cookie_flags_complete)
+    "httprobe_sec_cookie_missing_secure" -> stringResource(R.string.httprobe_sec_cookie_missing_secure)
+    "httprobe_sec_cookie_missing_httponly" -> stringResource(R.string.httprobe_sec_cookie_missing_httponly)
+    "httprobe_sec_cookie_missing_secure_httponly" -> stringResource(R.string.httprobe_sec_cookie_missing_secure_httponly)
+    "httprobe_sec_cookie_missing_samesite" -> stringResource(R.string.httprobe_sec_cookie_missing_samesite)
+    "httprobe_sec_cookie_samesite_none_requires_secure" -> stringResource(R.string.httprobe_sec_cookie_samesite_none_requires_secure)
+    "httprobe_sec_cookie_secure_from_http" -> stringResource(R.string.httprobe_sec_cookie_secure_from_http)
+    "httprobe_sec_cookie_secure_not_applicable" -> stringResource(R.string.httprobe_sec_cookie_secure_not_applicable)
+    "httprobe_sec_cookie_malformed" -> stringResource(R.string.httprobe_sec_cookie_malformed)
+    else -> check.description
 }
 
 @Composable

@@ -107,10 +107,11 @@ Full HTTP/HTTPS request tester with security header analysis.
 - Follow-redirects toggle with each hop's status and URL; HTTPS-to-HTTP redirects are blocked before contacting the destination
 - Cross-origin redirects that would resend a request body require approval for that redirect
 - Response display across four tabs:
-  - **Overview**: status code (color-coded 2xx/3xx/4xx/5xx), response time, negotiated HTTP protocol, final URL, redirect hops, body size, Content-Type
+  - **Overview**: status code (color-coded 2xx/3xx/4xx/5xx), DNS/connect/TLS/server-wait/transfer phases plus total time to first byte, negotiated HTTP/1.1 or HTTP/2 protocol, final URL, redirect hops, body size, Content-Type
   - **Headers**: collapsible request and response header sections
-  - **Body**: scrollable monospace response body with copy-to-clipboard; truncated at 512 KB with notice
-  - **Security**: per-header pass/warn/fail ratings for HSTS, CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy, Cross-Origin-Opener-Policy, Cross-Origin-Embedder-Policy, and Server header information disclosure
+  - **Body**: scrollable monospace response body with copy-to-clipboard, JSON validity, and optional pretty-print; response data is capped at 512 KB with a truncation notice
+  - **Security**: grades HSTS strength, CSP enforcement and script directives, clickjacking protection, deprecated X-XSS-Protection, MIME sniffing, referrer and permissions policies, cross-origin opener/embedder policies, Server version disclosure, and each Set-Cookie flag set. HTTPS-to-HTTP downgrade evidence appears separately in a blocked-redirect warning.
+- Copy the configured request as a shell-quoted cURL command, including method, custom headers, body, and redirect behavior. Redirect following is omitted when custom headers, a body, or a non-GET/HEAD method could diverge from the app's redirect handling; otherwise HTTPS requests only follow HTTPS redirects and HTTP requests allow HTTP or HTTPS redirects. The UI explains when following is suppressed.
 
 ### mDNS Service Browser
 LAN service discovery via multicast DNS (RFC 6762 / DNS-SD RFC 6763).

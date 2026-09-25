@@ -1,7 +1,6 @@
 package net.aieat.netswissknife.core.network.portscan
 
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.async
@@ -555,51 +554,54 @@ class PortScanRepositoryImplTest {
     }
 
     @Test
-    fun `resolution phase cap expires within session budget and reports host resolution timeout`() = runTest {
-        val executor = PortScanBlockingResolver.createWorkerExecutor()
-        val resolverEntered = CompletableDeferred<Unit>()
-        val releaseResolver = CountDownLatch(1)
-        val session = OperationSession(OperationBudget.start(timeoutMillis = 60_000))
-        val operation = async {
-            runCatching {
-                PortScanBlockingResolver.resolve(
-                    session = session,
-                    executor = executor,
-                    resolutionTimeoutMillis = 25,
-                ) {
-                    resolverEntered.complete(Unit)
-                    var released = false
-                    while (!released) {
-                        try {
-                            releaseResolver.await()
-                            released = true
-                        } catch (_: InterruptedException) {
-                            // The test keeps the worker occupied until cleanup releases it.
+    fun `resolution phase cap expires within session budget and reports host resolution timeout`() =
+        runTest {
+            val executor = PortScanBlockingResolver.createWorkerExecutor()
+            val resolverEntered = CountDownLatch(1)
+            val releaseResolver = CountDownLatch(1)
+            val session = OperationSession(OperationBudget.start(timeoutMillis = 60_000))
+            val operation =
+                async(Dispatchers.IO) {
+                    runCatching {
+                        PortScanBlockingResolver.resolve(
+                            session = session,
+                            executor = executor,
+                            resolutionTimeoutMillis = 100,
+                        ) {
+                            resolverEntered.countDown()
+                            var released = false
+                            while (!released) {
+                                try {
+                                    releaseResolver.await()
+                                    released = true
+                                } catch (_: InterruptedException) {
+                                    // The test keeps the worker occupied until cleanup releases it.
+                                }
+                            }
+                            InetAddress.getLoopbackAddress()
                         }
-                    }
-                    InetAddress.getLoopbackAddress()
+                    }.exceptionOrNull()
                 }
-            }.exceptionOrNull()
-        }
 
-        try {
-            runCurrent()
-            resolverEntered.await()
-            // Advance beyond the exact timeout tick so the scheduler runs the
-            // phase-timeout continuation deterministically.
-            advanceTimeBy(26)
-            runCurrent()
-
-            val failure = operation.await()
-            assertTrue(failure is PortScanHostResolutionTimeoutException)
-            assertEquals(null, session.cancellationReason, "a phase timeout must not become a session cancellation")
-            assertTrue(session.budget.remainingTimeoutMillis() > 0L)
-        } finally {
-            releaseResolver.countDown()
-            executor.shutdownNow()
-            withContext(Dispatchers.IO) { executor.awaitTermination(2, TimeUnit.SECONDS) }
+            try {
+                assertTrue(
+                    withContext(Dispatchers.IO) {
+                        resolverEntered.await(2, TimeUnit.SECONDS)
+                    },
+                )
+                val failure =
+                    withContext(Dispatchers.IO) {
+                        withTimeout(2_000) { operation.await() }
+                    }
+                assertTrue(failure is PortScanHostResolutionTimeoutException)
+                assertEquals(null, session.cancellationReason, "a phase timeout must not become a session cancellation")
+                assertTrue(session.budget.remainingTimeoutMillis() > 0L)
+            } finally {
+                releaseResolver.countDown()
+                executor.shutdownNow()
+                withContext(Dispatchers.IO) { executor.awaitTermination(2, TimeUnit.SECONDS) }
+            }
         }
-    }
 
     @Test
     fun `resolver worker and queue saturation fails fast and remains bounded`() = runTest {

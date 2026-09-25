@@ -1,0 +1,952 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>ComplexCondition:CrashReportBuilder.kt:CrashReportBuilder$current != null &amp;&amp; depth &lt; MAX_CAUSE_DEPTH &amp;&amp; seen.add(current) &amp;&amp; frames &lt; MAX_FRAMES</ID>
+    <ID>ComplexCondition:HttpProbeViewModel.kt:HttpProbeViewModel$active.runId != runId || active.approvalId != approvalId || pending == null || pending.runId != runId || pending.approvalId != approvalId</ID>
+    <ID>ComplexCondition:LiteralDestinationClassifier.kt:LiteralDestinationClassifier$zoneParts.size != 2 || zoneParts[1].isEmpty() || !zoneParts[1].matches(Regex("[A-Za-z0-9_.-]+")) || !HostValidator.isValidIpv6(candidate)</ID>
+    <ID>ComplexCondition:PingCsvSerializer.kt:PingCsvSerializer$value.any { it == ',' || it == '"' || it == '\n' || it == '\r' }</ID>
+    <ID>ComplexCondition:PortsScreen.kt:startNum != null &amp;&amp; endNum != null &amp;&amp; !startInvalid &amp;&amp; !endInvalid</ID>
+    <ID>ComplexCondition:ToolIntent.kt:ToolHost.Companion$'/' in value || '\\' in value || '?' in value || '#' in value</ID>
+    <ID>ComplexCondition:TopologyDiscoveryViewModel.kt:TopologyDiscoveryViewModel$current is TopologyUiState.Canceling &amp;&amp; current.operationId == currentOperationId &amp;&amp; (cancellationReason == null || cancellationReason == CancellationReason.USER_STOP)</ID>
+    <ID>ComplexCondition:TopologyDiscoveryViewModel.kt:TopologyDiscoveryViewModel$operationSession !== session || terminalEventReceived || cancellationReason == CancellationReason.USER_STOP || cancellationReason == CancellationReason.LIFECYCLE_PAUSE || (cancellationReason != null &amp;&amp; event !is TopologyDiscoveryEvent.Error &amp;&amp; event !is TopologyDiscoveryEvent.TimeLimit)</ID>
+    <ID>ComplexCondition:TracerouteViewModel.kt:TracerouteViewModel$traceSession != null || traceJob?.isActive == true || _uiState.value is TracerouteUiState.Running || _uiState.value is TracerouteUiState.Canceling</ID>
+    <ID>CyclomaticComplexMethod:DnsScreen.kt:@Composable private fun DnsInputCard</ID>
+    <ID>CyclomaticComplexMethod:DnsViewModel.kt:DnsViewModel$fun performLookup</ID>
+    <ID>CyclomaticComplexMethod:HttpProbeScreen.kt:@Composable fun HttpProbeScreen</ID>
+    <ID>CyclomaticComplexMethod:HttpProbeScreen.kt:@Composable private fun securityDescription: String</ID>
+    <ID>CyclomaticComplexMethod:HttpProbeViewModel.kt:HttpProbeViewModel$fun send</ID>
+    <ID>CyclomaticComplexMethod:IcmpenguinPingEngine.kt:private fun ProbeResult.toMirror: IcmpProbe</ID>
+    <ID>CyclomaticComplexMethod:LanScanScreen.kt:@Composable private fun LanFinishedContent</ID>
+    <ID>CyclomaticComplexMethod:LanScanScreen.kt:@OptIn(ExperimentalMaterial3Api::class) @Composable fun LanScreen</ID>
+    <ID>CyclomaticComplexMethod:LanScanScreen.kt:private fun portServiceName: String</ID>
+    <ID>CyclomaticComplexMethod:LanScanViewModel.kt:LanScanViewModel$fun startScan</ID>
+    <ID>CyclomaticComplexMethod:LiteralDestinationClassifier.kt:LiteralDestinationClassifier$fun classify: OperationTargetClass</ID>
+    <ID>CyclomaticComplexMethod:MdnsDiscoveryScreen.kt:@OptIn(ExperimentalMaterial3Api::class) @Composable fun MdnsDiscoveryScreen</ID>
+    <ID>CyclomaticComplexMethod:MdnsDiscoveryViewModel.kt:MdnsDiscoveryViewModel$fun startScan</ID>
+    <ID>CyclomaticComplexMethod:MdnsRepositoryImpl.kt:MdnsRepositoryImpl$private suspend fun OperationContext.runDiscovery: MdnsDiscoveryOutcome</ID>
+    <ID>CyclomaticComplexMethod:NetworkStatusBanner.kt:@Composable fun NetworkStatusBanner</ID>
+    <ID>CyclomaticComplexMethod:PingCsvSerializerTest.kt:PingCsvSerializerTest$private fun parseCsv: List&lt;List&lt;String&gt;&gt;</ID>
+    <ID>CyclomaticComplexMethod:PingScreen.kt:@Composable fun PingScreen</ID>
+    <ID>CyclomaticComplexMethod:PingScreen.kt:@Composable private fun PacketRow</ID>
+    <ID>CyclomaticComplexMethod:PingViewModel.kt:PingViewModel$private fun startContinuousPing</ID>
+    <ID>CyclomaticComplexMethod:PingViewModel.kt:PingViewModel$private fun startNormalPing</ID>
+    <ID>CyclomaticComplexMethod:PortScanViewModel.kt:PortScanViewModel$fun startScan</ID>
+    <ID>CyclomaticComplexMethod:PortsScreen.kt:@Composable private fun PortResultRow</ID>
+    <ID>CyclomaticComplexMethod:PortsScreen.kt:@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class) @Composable fun PortsScreen</ID>
+    <ID>CyclomaticComplexMethod:PortsScreen.kt:@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class) @Composable private fun PortScanInputCard</ID>
+    <ID>CyclomaticComplexMethod:SpeedTestViewModel.kt:SpeedTestViewModel$fun startTest</ID>
+    <ID>CyclomaticComplexMethod:TlsInspectorScreen.kt:@Composable fun TlsInspectorScreen</ID>
+    <ID>CyclomaticComplexMethod:TlsInspectorViewModel.kt:TlsInspectorViewModel$fun inspect</ID>
+    <ID>CyclomaticComplexMethod:ToolIntentCodec.kt:ToolIntentCodec$private fun decodePayload: ToolIntent?</ID>
+    <ID>CyclomaticComplexMethod:TopologyDiscoveryScreen.kt:@Composable private fun TopologyCanvas</ID>
+    <ID>CyclomaticComplexMethod:TopologyDiscoveryScreen.kt:@OptIn(ExperimentalMaterial3Api::class) @Composable private fun NodeDetailSheet</ID>
+    <ID>CyclomaticComplexMethod:TopologyDiscoveryScreen.kt:@OptIn(ExperimentalMaterial3Api::class) @Composable private fun TopologyScreenContent</ID>
+    <ID>CyclomaticComplexMethod:TopologyDiscoveryViewModel.kt:TopologyDiscoveryViewModel$fun startDiscovery</ID>
+    <ID>CyclomaticComplexMethod:TracerouteScreen.kt:@Composable private fun HopCard</ID>
+    <ID>CyclomaticComplexMethod:TracerouteScreen.kt:@Composable private fun TraceJourneyStats</ID>
+    <ID>CyclomaticComplexMethod:TracerouteViewModel.kt:TracerouteViewModel$fun startTrace</ID>
+    <ID>CyclomaticComplexMethod:WhoisScreen.kt:@OptIn(ExperimentalLayoutApi::class) @Composable fun DomainResultCard</ID>
+    <ID>CyclomaticComplexMethod:WhoisScreen.kt:@OptIn(ExperimentalMaterial3Api::class) @Composable fun WhoisScreen</ID>
+    <ID>CyclomaticComplexMethod:WifiScanScreen.kt:@Composable private fun WifiSpectrumCard</ID>
+    <ID>CyclomaticComplexMethod:WifiScanScreen.kt:@OptIn(ExperimentalMaterial3Api::class) @Composable fun WifiScanScreen</ID>
+    <ID>CyclomaticComplexMethod:WifiScanViewModel.kt:WifiScanViewModel$fun startScan</ID>
+    <ID>DestructuringDeclarationWithTooManyEntries:SubnetCalculatorScreen.kt:val (scopeIcon, scopeLabel, scopeColor, scopeContainerColor) = if (info.isPrivate) { Quad( Icons.Default.Lock, stringResource(R.string.subnet_scope_private), MaterialTheme.colorScheme.onSecondaryContainer, MaterialTheme.colorScheme.secondaryContainer ) } else { Quad( Icons.Default.Public, stringResource(R.string.subnet_scope_public), MaterialTheme.colorScheme.onTertiaryContainer, MaterialTheme.colorScheme.tertiaryContainer ) }</ID>
+    <ID>FunctionNaming:AdaptiveContentBounds.kt:@Composable fun AdaptiveContentBounds</ID>
+    <ID>FunctionNaming:AppNavigation.kt:@Composable fun AppNavHost</ID>
+    <ID>FunctionNaming:AppNavigation.kt:@Composable internal fun AppNavHostWithContentOverrides</ID>
+    <ID>FunctionNaming:AppNavigation.kt:@Composable private fun AppNavHostGraph</ID>
+    <ID>FunctionNaming:CrashActivity.kt:@Composable private fun CrashDetailRow</ID>
+    <ID>FunctionNaming:CrashActivity.kt:@Composable private fun CrashScreen</ID>
+    <ID>FunctionNaming:DebugLogScreen.kt:@Composable fun DebugLogScreen</ID>
+    <ID>FunctionNaming:DnsScreen.kt:@Composable private fun DnsCanceledPanel</ID>
+    <ID>FunctionNaming:DnsScreen.kt:@Composable private fun DnsCancelingPanel</ID>
+    <ID>FunctionNaming:DnsScreen.kt:@Composable private fun DnsErrorPanel</ID>
+    <ID>FunctionNaming:DnsScreen.kt:@Composable private fun DnsHeroHeader</ID>
+    <ID>FunctionNaming:DnsScreen.kt:@Composable private fun DnsIdleHint</ID>
+    <ID>FunctionNaming:DnsScreen.kt:@Composable private fun DnsInputCard</ID>
+    <ID>FunctionNaming:DnsScreen.kt:@Composable private fun DnsLoadingPanel</ID>
+    <ID>FunctionNaming:DnsScreen.kt:@Composable private fun DnsNoRecordsCard</ID>
+    <ID>FunctionNaming:DnsScreen.kt:@Composable private fun DnsRawToggleCard</ID>
+    <ID>FunctionNaming:DnsScreen.kt:@Composable private fun DnsRecordCard</ID>
+    <ID>FunctionNaming:DnsScreen.kt:@Composable private fun DnsResultPanel</ID>
+    <ID>FunctionNaming:DnsScreen.kt:@Composable private fun DnsResultSummaryCard</ID>
+    <ID>FunctionNaming:DnsScreen.kt:@Composable private fun DnsSectionCard</ID>
+    <ID>FunctionNaming:DnsScreen.kt:@Composable private fun LabeledValue</ID>
+    <ID>FunctionNaming:DnsScreen.kt:@Composable private fun PlainValueDisplay</ID>
+    <ID>FunctionNaming:DnsScreen.kt:@Composable private fun RecordTypeBadge</ID>
+    <ID>FunctionNaming:DnsScreen.kt:@Composable private fun RecordTypeDescription</ID>
+    <ID>FunctionNaming:DnsScreen.kt:@Composable private fun RecordTypeIcon</ID>
+    <ID>FunctionNaming:DnsScreen.kt:@Composable private fun RecordValueDisplay</ID>
+    <ID>FunctionNaming:DnsScreen.kt:@Composable private fun SummaryMetric</ID>
+    <ID>FunctionNaming:DnsScreen.kt:@Composable private fun TtlBadge</ID>
+    <ID>FunctionNaming:DnsScreen.kt:@OptIn(ExperimentalMaterial3Api::class) @Composable fun DnsScreen</ID>
+    <ID>FunctionNaming:DnsScreen.kt:@OptIn(ExperimentalMaterial3Api::class) @Composable private fun DnsServerSelector</ID>
+    <ID>FunctionNaming:DnsScreen.kt:@OptIn(ExperimentalMaterial3Api::class) @Composable private fun RecordTypeChips</ID>
+    <ID>FunctionNaming:HomeScreen.kt:@Composable fun HomeScreen</ID>
+    <ID>FunctionNaming:HomeScreen.kt:@Composable private fun AnimatedToolCard</ID>
+    <ID>FunctionNaming:HomeScreen.kt:@Composable private fun HeroHeader</ID>
+    <ID>FunctionNaming:HomeScreen.kt:@Composable private fun ToolGrid</ID>
+    <ID>FunctionNaming:HttpProbeScreen.kt:@Composable fun HttpProbeScreen</ID>
+    <ID>FunctionNaming:HttpProbeScreen.kt:@Composable private fun BodyTabContent</ID>
+    <ID>FunctionNaming:HttpProbeScreen.kt:@Composable private fun CrossOriginEntityReplayApprovalCard</ID>
+    <ID>FunctionNaming:HttpProbeScreen.kt:@Composable private fun HeaderRow</ID>
+    <ID>FunctionNaming:HttpProbeScreen.kt:@Composable private fun HeaderSection</ID>
+    <ID>FunctionNaming:HttpProbeScreen.kt:@Composable private fun HeadersTabContent</ID>
+    <ID>FunctionNaming:HttpProbeScreen.kt:@Composable private fun HttpProbeBlockedRedirectContent</ID>
+    <ID>FunctionNaming:HttpProbeScreen.kt:@Composable private fun HttpProbeCanceledContent</ID>
+    <ID>FunctionNaming:HttpProbeScreen.kt:@Composable private fun HttpProbeErrorContent</ID>
+    <ID>FunctionNaming:HttpProbeScreen.kt:@Composable private fun HttpProbeHeaderCard</ID>
+    <ID>FunctionNaming:HttpProbeScreen.kt:@Composable private fun HttpProbeIdlePlaceholder</ID>
+    <ID>FunctionNaming:HttpProbeScreen.kt:@Composable private fun HttpProbeLoadingContent</ID>
+    <ID>FunctionNaming:HttpProbeScreen.kt:@Composable private fun HttpProbeSuccessContent</ID>
+    <ID>FunctionNaming:HttpProbeScreen.kt:@Composable private fun LabeledValue</ID>
+    <ID>FunctionNaming:HttpProbeScreen.kt:@Composable private fun OverviewTabContent</ID>
+    <ID>FunctionNaming:HttpProbeScreen.kt:@Composable private fun RedirectEvidenceLine</ID>
+    <ID>FunctionNaming:HttpProbeScreen.kt:@Composable private fun SecurityCheckRow</ID>
+    <ID>FunctionNaming:HttpProbeScreen.kt:@Composable private fun SecurityRatingBadge</ID>
+    <ID>FunctionNaming:HttpProbeScreen.kt:@Composable private fun SecurityRatingIcon</ID>
+    <ID>FunctionNaming:HttpProbeScreen.kt:@Composable private fun SecuritySummaryChip</ID>
+    <ID>FunctionNaming:HttpProbeScreen.kt:@Composable private fun SecurityTabContent</ID>
+    <ID>FunctionNaming:HttpProbeScreen.kt:@Composable private fun StatusBannerCard</ID>
+    <ID>FunctionNaming:HttpProbeScreen.kt:@Composable private fun TimingBreakdown</ID>
+    <ID>FunctionNaming:HttpProbeScreen.kt:@OptIn(ExperimentalLayoutApi::class) @Composable private fun HttpProbeInputCard</ID>
+    <ID>FunctionNaming:LanScanScreen.kt:@Composable @OptIn(ExperimentalLayoutApi::class) private fun HostDetailPanel</ID>
+    <ID>FunctionNaming:LanScanScreen.kt:@Composable private fun DetailRow</ID>
+    <ID>FunctionNaming:LanScanScreen.kt:@Composable private fun HostFilterChips</ID>
+    <ID>FunctionNaming:LanScanScreen.kt:@Composable private fun LabeledSlider</ID>
+    <ID>FunctionNaming:LanScanScreen.kt:@Composable private fun LanCancelingContent</ID>
+    <ID>FunctionNaming:LanScanScreen.kt:@Composable private fun LanErrorContent</ID>
+    <ID>FunctionNaming:LanScanScreen.kt:@Composable private fun LanFinishedContent</ID>
+    <ID>FunctionNaming:LanScanScreen.kt:@Composable private fun LanHeaderCard</ID>
+    <ID>FunctionNaming:LanScanScreen.kt:@Composable private fun LanIdleContent</ID>
+    <ID>FunctionNaming:LanScanScreen.kt:@Composable private fun LanInputCard</ID>
+    <ID>FunctionNaming:LanScanScreen.kt:@Composable private fun LanScanningContent</ID>
+    <ID>FunctionNaming:LanScanScreen.kt:@Composable private fun MoreDevicesNode</ID>
+    <ID>FunctionNaming:LanScanScreen.kt:@Composable private fun PortChip</ID>
+    <ID>FunctionNaming:LanScanScreen.kt:@Composable private fun PulsingIndicator</ID>
+    <ID>FunctionNaming:LanScanScreen.kt:@Composable private fun StatChip</ID>
+    <ID>FunctionNaming:LanScanScreen.kt:@Composable private fun TopologyNode</ID>
+    <ID>FunctionNaming:LanScanScreen.kt:@OptIn(ExperimentalLayoutApi::class) @Composable private fun DiscoveryMethodChips</ID>
+    <ID>FunctionNaming:LanScanScreen.kt:@OptIn(ExperimentalLayoutApi::class) @Composable private fun HostCard</ID>
+    <ID>FunctionNaming:LanScanScreen.kt:@OptIn(ExperimentalLayoutApi::class) @Composable private fun NetworkTopologyCard</ID>
+    <ID>FunctionNaming:LanScanScreen.kt:@OptIn(ExperimentalMaterial3Api::class) @Composable fun LanScreen</ID>
+    <ID>FunctionNaming:LanScreen.kt:@Composable fun LanScreen</ID>
+    <ID>FunctionNaming:MainActivity.kt:@Composable fun NetSwissKnifeApp</ID>
+    <ID>FunctionNaming:MdnsDiscoveryScreen.kt:@Composable private fun CanceledEmptyHint</ID>
+    <ID>FunctionNaming:MdnsDiscoveryScreen.kt:@Composable private fun CancelingPlaceholder</ID>
+    <ID>FunctionNaming:MdnsDiscoveryScreen.kt:@Composable private fun ControlRow</ID>
+    <ID>FunctionNaming:MdnsDiscoveryScreen.kt:@Composable private fun EmptyResultHint</ID>
+    <ID>FunctionNaming:MdnsDiscoveryScreen.kt:@Composable private fun ErrorCard</ID>
+    <ID>FunctionNaming:MdnsDiscoveryScreen.kt:@Composable private fun HeroCard</ID>
+    <ID>FunctionNaming:MdnsDiscoveryScreen.kt:@Composable private fun IdleHint</ID>
+    <ID>FunctionNaming:MdnsDiscoveryScreen.kt:@Composable private fun ScanningPlaceholder</ID>
+    <ID>FunctionNaming:MdnsDiscoveryScreen.kt:@Composable private fun ServiceList</ID>
+    <ID>FunctionNaming:MdnsDiscoveryScreen.kt:@Composable private fun ServiceTypeHeader</ID>
+    <ID>FunctionNaming:MdnsDiscoveryScreen.kt:@Composable private fun StatBadge</ID>
+    <ID>FunctionNaming:MdnsDiscoveryScreen.kt:@OptIn(ExperimentalLayoutApi::class) @Composable private fun ServiceItem</ID>
+    <ID>FunctionNaming:MdnsDiscoveryScreen.kt:@OptIn(ExperimentalMaterial3Api::class) @Composable fun MdnsDiscoveryScreen</ID>
+    <ID>FunctionNaming:MoreToolsSheet.kt:@Composable private fun ToolSheetRow</ID>
+    <ID>FunctionNaming:MoreToolsSheet.kt:@OptIn(ExperimentalMaterial3Api::class) @Composable fun MoreToolsSheet</ID>
+    <ID>FunctionNaming:NetworkStatusBanner.kt:@Composable fun NetworkStatusBanner</ID>
+    <ID>FunctionNaming:OnboardingSheet.kt:@Composable private fun NavigationRow</ID>
+    <ID>FunctionNaming:OnboardingSheet.kt:@Composable private fun OrganizationPage</ID>
+    <ID>FunctionNaming:OnboardingSheet.kt:@Composable private fun PageIndicator</ID>
+    <ID>FunctionNaming:OnboardingSheet.kt:@Composable private fun PermissionsPage</ID>
+    <ID>FunctionNaming:OnboardingSheet.kt:@Composable private fun UseCaseRow</ID>
+    <ID>FunctionNaming:OnboardingSheet.kt:@Composable private fun UseCasesPage</ID>
+    <ID>FunctionNaming:OnboardingSheet.kt:@Composable private fun WelcomePage</ID>
+    <ID>FunctionNaming:OnboardingSheet.kt:@OptIn(ExperimentalMaterial3Api::class) @Composable fun OnboardingSheet</ID>
+    <ID>FunctionNaming:PingScreen.kt:@Composable fun PingScreen</ID>
+    <ID>FunctionNaming:PingScreen.kt:@Composable private fun LiveStatLabel</ID>
+    <ID>FunctionNaming:PingScreen.kt:@Composable private fun PacketRow</ID>
+    <ID>FunctionNaming:PingScreen.kt:@Composable private fun PingAdvancedOptions</ID>
+    <ID>FunctionNaming:PingScreen.kt:@Composable private fun PingErrorPanel</ID>
+    <ID>FunctionNaming:PingScreen.kt:@Composable private fun PingFinishedPanel</ID>
+    <ID>FunctionNaming:PingScreen.kt:@Composable private fun PingHeroHeader</ID>
+    <ID>FunctionNaming:PingScreen.kt:@Composable private fun PingIdlePanel</ID>
+    <ID>FunctionNaming:PingScreen.kt:@Composable private fun PingInputCard</ID>
+    <ID>FunctionNaming:PingScreen.kt:@Composable private fun PingRunningPanel</ID>
+    <ID>FunctionNaming:PingScreen.kt:@Composable private fun PingSliderRow</ID>
+    <ID>FunctionNaming:PingScreen.kt:@Composable private fun PingTimeoutRow</ID>
+    <ID>FunctionNaming:PingScreen.kt:@Composable private fun RawOutputCard</ID>
+    <ID>FunctionNaming:PingScreen.kt:@Composable private fun RttChartCard</ID>
+    <ID>FunctionNaming:PingScreen.kt:@Composable private fun StatItem</ID>
+    <ID>FunctionNaming:PingScreen.kt:@Composable private fun StatsCard</ID>
+    <ID>FunctionNaming:PortsScreen.kt:@Composable private fun PortResultRow</ID>
+    <ID>FunctionNaming:PortsScreen.kt:@Composable private fun PortScanErrorCard</ID>
+    <ID>FunctionNaming:PortsScreen.kt:@Composable private fun PortScanIdleState</ID>
+    <ID>FunctionNaming:PortsScreen.kt:@Composable private fun PortScanProgressCard</ID>
+    <ID>FunctionNaming:PortsScreen.kt:@Composable private fun StatChip</ID>
+    <ID>FunctionNaming:PortsScreen.kt:@OptIn(ExperimentalLayoutApi::class) @Composable private fun PortScanSummaryCard</ID>
+    <ID>FunctionNaming:PortsScreen.kt:@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class) @Composable fun PortsScreen</ID>
+    <ID>FunctionNaming:PortsScreen.kt:@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class) @Composable private fun PortScanInputCard</ID>
+    <ID>FunctionNaming:RecentHostsRow.kt:@Composable fun RecentHostsRow</ID>
+    <ID>FunctionNaming:SettingsScreen.kt:@Composable fun SettingsScreen</ID>
+    <ID>FunctionNaming:SettingsScreen.kt:@Composable private fun AboutSection</ID>
+    <ID>FunctionNaming:SettingsScreen.kt:@Composable private fun AttributionsSection</ID>
+    <ID>FunctionNaming:SettingsScreen.kt:@Composable private fun DataSection</ID>
+    <ID>FunctionNaming:SettingsScreen.kt:@Composable private fun DefaultsSection</ID>
+    <ID>FunctionNaming:SettingsScreen.kt:@Composable private fun LibraryRow</ID>
+    <ID>FunctionNaming:SettingsScreen.kt:@Composable private fun LicensesSection</ID>
+    <ID>FunctionNaming:SettingsScreen.kt:@Composable private fun OnboardingResetSection</ID>
+    <ID>FunctionNaming:SettingsScreen.kt:@Composable private fun SectionHeader</ID>
+    <ID>FunctionNaming:SettingsScreen.kt:@Composable private fun SettingsHeader</ID>
+    <ID>FunctionNaming:SettingsScreen.kt:@Composable private fun SliderSetting</ID>
+    <ID>FunctionNaming:SettingsScreen.kt:@OptIn(ExperimentalMaterial3Api::class) @Composable private fun ThemeSection</ID>
+    <ID>FunctionNaming:SpeedTestScreen.kt:@Composable fun SpeedTestScreen</ID>
+    <ID>FunctionNaming:SpeedTestScreen.kt:@Composable private fun CloudflareAttributionCard</ID>
+    <ID>FunctionNaming:SpeedTestScreen.kt:@Composable private fun LatencyLiveStats</ID>
+    <ID>FunctionNaming:SpeedTestScreen.kt:@Composable private fun LatencyResultCard</ID>
+    <ID>FunctionNaming:SpeedTestScreen.kt:@Composable private fun MiniResultCard</ID>
+    <ID>FunctionNaming:SpeedTestScreen.kt:@Composable private fun PhaseStepper</ID>
+    <ID>FunctionNaming:SpeedTestScreen.kt:@Composable private fun ResultStrip</ID>
+    <ID>FunctionNaming:SpeedTestScreen.kt:@Composable private fun ServerInfoChip</ID>
+    <ID>FunctionNaming:SpeedTestScreen.kt:@Composable private fun SpeedGauge</ID>
+    <ID>FunctionNaming:SpeedTestScreen.kt:@Composable private fun SpeedTestErrorContent</ID>
+    <ID>FunctionNaming:SpeedTestScreen.kt:@Composable private fun SpeedTestHeaderCard</ID>
+    <ID>FunctionNaming:SpeedTestScreen.kt:@Composable private fun SpeedTestIdleContent</ID>
+    <ID>FunctionNaming:SpeedTestScreen.kt:@Composable private fun SpeedTestResultContent</ID>
+    <ID>FunctionNaming:SpeedTestScreen.kt:@Composable private fun SpeedTestRunningContent</ID>
+    <ID>FunctionNaming:SpeedTestScreen.kt:@Composable private fun StatGrid</ID>
+    <ID>FunctionNaming:SpeedTestScreen.kt:@Composable private fun StreamSetting</ID>
+    <ID>FunctionNaming:SpeedTestScreen.kt:@Composable private fun ThroughputChart</ID>
+    <ID>FunctionNaming:SpeedTestScreen.kt:@Composable private fun ThroughputLiveView</ID>
+    <ID>FunctionNaming:SpeedTestScreen.kt:@Composable private fun ThroughputResultCard</ID>
+    <ID>FunctionNaming:SubnetCalculatorScreen.kt:@Composable fun SubnetCalculatorScreen</ID>
+    <ID>FunctionNaming:SubnetCalculatorScreen.kt:@Composable private fun BinaryBitsRow</ID>
+    <ID>FunctionNaming:SubnetCalculatorScreen.kt:@Composable private fun LegendItem</ID>
+    <ID>FunctionNaming:SubnetCalculatorScreen.kt:@Composable private fun SubnetAlignmentWarning</ID>
+    <ID>FunctionNaming:SubnetCalculatorScreen.kt:@Composable private fun SubnetBinaryVisualizerCard</ID>
+    <ID>FunctionNaming:SubnetCalculatorScreen.kt:@Composable private fun SubnetCidrInputs</ID>
+    <ID>FunctionNaming:SubnetCalculatorScreen.kt:@Composable private fun SubnetErrorCard</ID>
+    <ID>FunctionNaming:SubnetCalculatorScreen.kt:@Composable private fun SubnetIdleCard</ID>
+    <ID>FunctionNaming:SubnetCalculatorScreen.kt:@Composable private fun SubnetInfoRow</ID>
+    <ID>FunctionNaming:SubnetCalculatorScreen.kt:@Composable private fun SubnetNotationsCard</ID>
+    <ID>FunctionNaming:SubnetCalculatorScreen.kt:@Composable private fun SubnetOverviewCard</ID>
+    <ID>FunctionNaming:SubnetCalculatorScreen.kt:@Composable private fun SubnetPropertiesCard</ID>
+    <ID>FunctionNaming:SubnetCalculatorScreen.kt:@Composable private fun SubnetRangeInputs</ID>
+    <ID>FunctionNaming:SubnetCalculatorScreen.kt:@Composable private fun SubnetResultContent</ID>
+    <ID>FunctionNaming:SubnetCalculatorScreen.kt:@OptIn(ExperimentalLayoutApi::class) @Composable private fun SubnetExampleChips</ID>
+    <ID>FunctionNaming:SubnetCalculatorScreen.kt:@OptIn(ExperimentalMaterial3Api::class) @Composable private fun SubnetInfoRow</ID>
+    <ID>FunctionNaming:SubnetCalculatorScreen.kt:@OptIn(ExperimentalMaterial3Api::class) @Composable private fun SubnetModeToggle</ID>
+    <ID>FunctionNaming:Theme.kt:@Composable fun NetSwissKnifeTheme</ID>
+    <ID>FunctionNaming:TlsInspectorScreen.kt:@Composable fun TlsInspectorScreen</ID>
+    <ID>FunctionNaming:TlsInspectorScreen.kt:@Composable private fun CertificateCard</ID>
+    <ID>FunctionNaming:TlsInspectorScreen.kt:@Composable private fun CertificateDetails</ID>
+    <ID>FunctionNaming:TlsInspectorScreen.kt:@Composable private fun ConnectionCard</ID>
+    <ID>FunctionNaming:TlsInspectorScreen.kt:@Composable private fun ExpiryBadge</ID>
+    <ID>FunctionNaming:TlsInspectorScreen.kt:@Composable private fun LabeledValue</ID>
+    <ID>FunctionNaming:TlsInspectorScreen.kt:@Composable private fun TlsCanceledContent</ID>
+    <ID>FunctionNaming:TlsInspectorScreen.kt:@Composable private fun TlsErrorContent</ID>
+    <ID>FunctionNaming:TlsInspectorScreen.kt:@Composable private fun TlsHeaderCard</ID>
+    <ID>FunctionNaming:TlsInspectorScreen.kt:@Composable private fun TlsIdlePlaceholder</ID>
+    <ID>FunctionNaming:TlsInspectorScreen.kt:@Composable private fun TlsInputSection</ID>
+    <ID>FunctionNaming:TlsInspectorScreen.kt:@Composable private fun TlsLoadingContent</ID>
+    <ID>FunctionNaming:TlsInspectorScreen.kt:@Composable private fun TlsSuccessContent</ID>
+    <ID>FunctionNaming:ToolErrorCard.kt:@Composable fun ToolErrorCard</ID>
+    <ID>FunctionNaming:ToolHelpSheet.kt:@Composable private fun BulletLine</ID>
+    <ID>FunctionNaming:ToolHelpSheet.kt:@Composable private fun ConceptCallout</ID>
+    <ID>FunctionNaming:ToolHelpSheet.kt:@OptIn(ExperimentalMaterial3Api::class) @Composable fun ToolHelpSheet</ID>
+    <ID>FunctionNaming:ToolHeroHeader.kt:@Composable fun HeroTitleText</ID>
+    <ID>FunctionNaming:ToolHeroHeader.kt:@Composable fun ToolHeroHeader</ID>
+    <ID>FunctionNaming:ToolStopButton.kt:@Composable fun ToolStopButton</ID>
+    <ID>FunctionNaming:TopologyDiscoveryScreen.kt:@Composable fun TopologyDiscoveryScreen</ID>
+    <ID>FunctionNaming:TopologyDiscoveryScreen.kt:@Composable private fun DetailRow</ID>
+    <ID>FunctionNaming:TopologyDiscoveryScreen.kt:@Composable private fun ErrorContent</ID>
+    <ID>FunctionNaming:TopologyDiscoveryScreen.kt:@Composable private fun IdleContent</ID>
+    <ID>FunctionNaming:TopologyDiscoveryScreen.kt:@Composable private fun InterfaceRow</ID>
+    <ID>FunctionNaming:TopologyDiscoveryScreen.kt:@Composable private fun NeighbourRow</ID>
+    <ID>FunctionNaming:TopologyDiscoveryScreen.kt:@Composable private fun ScanningBadge</ID>
+    <ID>FunctionNaming:TopologyDiscoveryScreen.kt:@Composable private fun SectionCard</ID>
+    <ID>FunctionNaming:TopologyDiscoveryScreen.kt:@Composable private fun TopologyCanvas</ID>
+    <ID>FunctionNaming:TopologyDiscoveryScreen.kt:@Composable private fun TopologyProgressContent</ID>
+    <ID>FunctionNaming:TopologyDiscoveryScreen.kt:@OptIn(ExperimentalMaterial3Api::class) @Composable private fun &lt;T&gt; V3ProtocolDropdown</ID>
+    <ID>FunctionNaming:TopologyDiscoveryScreen.kt:@OptIn(ExperimentalMaterial3Api::class) @Composable private fun NodeDetailSheet</ID>
+    <ID>FunctionNaming:TopologyDiscoveryScreen.kt:@OptIn(ExperimentalMaterial3Api::class) @Composable private fun TopologyScreenContent</ID>
+    <ID>FunctionNaming:TracerouteScreen.kt:@Composable fun TracerouteScreen</ID>
+    <ID>FunctionNaming:TracerouteScreen.kt:@Composable private fun GeoLocationChip</ID>
+    <ID>FunctionNaming:TracerouteScreen.kt:@Composable private fun HopCard</ID>
+    <ID>FunctionNaming:TracerouteScreen.kt:@Composable private fun HopDetailList</ID>
+    <ID>FunctionNaming:TracerouteScreen.kt:@Composable private fun HopDetailRow</ID>
+    <ID>FunctionNaming:TracerouteScreen.kt:@Composable private fun JourneyStatBox</ID>
+    <ID>FunctionNaming:TracerouteScreen.kt:@Composable private fun RawOutputCard</ID>
+    <ID>FunctionNaming:TracerouteScreen.kt:@Composable private fun SliderRow</ID>
+    <ID>FunctionNaming:TracerouteScreen.kt:@Composable private fun StatChip</ID>
+    <ID>FunctionNaming:TracerouteScreen.kt:@Composable private fun TraceJourneyStats</ID>
+    <ID>FunctionNaming:TracerouteScreen.kt:@Composable private fun TraceStatsSummary</ID>
+    <ID>FunctionNaming:TracerouteScreen.kt:@Composable private fun TracerouteErrorPanel</ID>
+    <ID>FunctionNaming:TracerouteScreen.kt:@Composable private fun TracerouteFinishedPanel</ID>
+    <ID>FunctionNaming:TracerouteScreen.kt:@Composable private fun TracerouteHeroHeader</ID>
+    <ID>FunctionNaming:TracerouteScreen.kt:@Composable private fun TracerouteIdlePrompt</ID>
+    <ID>FunctionNaming:TracerouteScreen.kt:@Composable private fun TracerouteInputCard</ID>
+    <ID>FunctionNaming:TracerouteScreen.kt:@Composable private fun TracerouteRunningPanel</ID>
+    <ID>FunctionNaming:WakeOnLanScreen.kt:@Composable fun WakeOnLanScreen</ID>
+    <ID>FunctionNaming:WakeOnLanScreen.kt:@Composable private fun WolErrorCard</ID>
+    <ID>FunctionNaming:WakeOnLanScreen.kt:@Composable private fun WolInputCard</ID>
+    <ID>FunctionNaming:WakeOnLanScreen.kt:@Composable private fun WolSendingCard</ID>
+    <ID>FunctionNaming:WakeOnLanScreen.kt:@Composable private fun WolSuccessCard</ID>
+    <ID>FunctionNaming:WhoisScreen.kt:@Composable fun DateColumn</ID>
+    <ID>FunctionNaming:WhoisScreen.kt:@Composable fun ErrorCard</ID>
+    <ID>FunctionNaming:WhoisScreen.kt:@Composable fun IdleCard</ID>
+    <ID>FunctionNaming:WhoisScreen.kt:@Composable fun IpAsnResultCard</ID>
+    <ID>FunctionNaming:WhoisScreen.kt:@Composable fun LabeledRow</ID>
+    <ID>FunctionNaming:WhoisScreen.kt:@Composable fun RawResponseAccordion</ID>
+    <ID>FunctionNaming:WhoisScreen.kt:@Composable fun RelayChainVisualiser</ID>
+    <ID>FunctionNaming:WhoisScreen.kt:@Composable fun WhoisResultsSection</ID>
+    <ID>FunctionNaming:WhoisScreen.kt:@Composable private fun CanceledLookupCard</ID>
+    <ID>FunctionNaming:WhoisScreen.kt:@Composable private fun HopNodeCircle</ID>
+    <ID>FunctionNaming:WhoisScreen.kt:@Composable private fun HopNodeLabels</ID>
+    <ID>FunctionNaming:WhoisScreen.kt:@Composable private fun WhoisHeroHeader</ID>
+    <ID>FunctionNaming:WhoisScreen.kt:@OptIn(ExperimentalLayoutApi::class) @Composable fun DomainResultCard</ID>
+    <ID>FunctionNaming:WhoisScreen.kt:@OptIn(ExperimentalMaterial3Api::class) @Composable fun WhoisScreen</ID>
+    <ID>FunctionNaming:WifiScanScreen.kt:@Composable internal fun WifiSecurityIndicator</ID>
+    <ID>FunctionNaming:WifiScanScreen.kt:@Composable private fun ApBadge</ID>
+    <ID>FunctionNaming:WifiScanScreen.kt:@Composable private fun DetailRow</ID>
+    <ID>FunctionNaming:WifiScanScreen.kt:@Composable private fun DetailSectionHeader</ID>
+    <ID>FunctionNaming:WifiScanScreen.kt:@Composable private fun ShimmerBox</ID>
+    <ID>FunctionNaming:WifiScanScreen.kt:@Composable private fun SignalArcGauge</ID>
+    <ID>FunctionNaming:WifiScanScreen.kt:@Composable private fun SignalBarsIcon</ID>
+    <ID>FunctionNaming:WifiScanScreen.kt:@Composable private fun WifiBandTabRow</ID>
+    <ID>FunctionNaming:WifiScanScreen.kt:@Composable private fun WifiBestChannelCallout</ID>
+    <ID>FunctionNaming:WifiScanScreen.kt:@Composable private fun WifiCancelledScreen</ID>
+    <ID>FunctionNaming:WifiScanScreen.kt:@Composable private fun WifiDisabledScreen</ID>
+    <ID>FunctionNaming:WifiScanScreen.kt:@Composable private fun WifiErrorScreen</ID>
+    <ID>FunctionNaming:WifiScanScreen.kt:@Composable private fun WifiHeader</ID>
+    <ID>FunctionNaming:WifiScanScreen.kt:@Composable private fun WifiIdleScreen</ID>
+    <ID>FunctionNaming:WifiScanScreen.kt:@Composable private fun WifiNetworkCard</ID>
+    <ID>FunctionNaming:WifiScanScreen.kt:@Composable private fun WifiNoPermissionScreen</ID>
+    <ID>FunctionNaming:WifiScanScreen.kt:@Composable private fun WifiNotSupportedScreen</ID>
+    <ID>FunctionNaming:WifiScanScreen.kt:@Composable private fun WifiPausedScreen</ID>
+    <ID>FunctionNaming:WifiScanScreen.kt:@Composable private fun WifiScanningScreen</ID>
+    <ID>FunctionNaming:WifiScanScreen.kt:@Composable private fun WifiSortRow</ID>
+    <ID>FunctionNaming:WifiScanScreen.kt:@Composable private fun WifiSpectrumCard</ID>
+    <ID>FunctionNaming:WifiScanScreen.kt:@Composable private fun WifiStatusCard</ID>
+    <ID>FunctionNaming:WifiScanScreen.kt:@Composable private fun WifiSuccessScreen</ID>
+    <ID>FunctionNaming:WifiScanScreen.kt:@OptIn(ExperimentalMaterial3Api::class) @Composable fun WifiScanScreen</ID>
+    <ID>FunctionNaming:WifiScanScreen.kt:@OptIn(ExperimentalMaterial3Api::class) @Composable private fun WifiApDetailSheet</ID>
+    <ID>FunctionNaming:WifiScanStatusComponents.kt:@Composable fun WifiConnectedNetworkCard</ID>
+    <ID>FunctionNaming:WifiScanStatusComponents.kt:@Composable fun WifiLocationDisabledScreen</ID>
+    <ID>FunctionNaming:WifiScanStatusComponents.kt:@Composable fun WifiRefreshIntervalPicker</ID>
+    <ID>FunctionNaming:WifiScanStatusComponents.kt:@Composable fun WifiScanFreshnessStatus</ID>
+    <ID>FunctionNaming:WifiScanStatusComponents.kt:@Composable private fun ConnectionDetailRow</ID>
+    <ID>LargeClass:PortScanViewModelTest.kt:PortScanViewModelTest</ID>
+    <ID>LongMethod:AppNavigation.kt:@Composable private fun AppNavHostGraph</ID>
+    <ID>LongMethod:CrashActivity.kt:@Composable private fun CrashScreen</ID>
+    <ID>LongMethod:DebugLogScreen.kt:@Composable fun DebugLogScreen</ID>
+    <ID>LongMethod:DnsScreen.kt:@Composable private fun DnsInputCard</ID>
+    <ID>LongMethod:DnsScreen.kt:@Composable private fun DnsRawToggleCard</ID>
+    <ID>LongMethod:DnsScreen.kt:@Composable private fun DnsRecordCard</ID>
+    <ID>LongMethod:DnsScreen.kt:@Composable private fun DnsResultSummaryCard</ID>
+    <ID>LongMethod:DnsScreen.kt:@Composable private fun RecordValueDisplay</ID>
+    <ID>LongMethod:DnsScreen.kt:@OptIn(ExperimentalMaterial3Api::class) @Composable fun DnsScreen</ID>
+    <ID>LongMethod:DnsScreen.kt:@OptIn(ExperimentalMaterial3Api::class) @Composable private fun DnsServerSelector</ID>
+    <ID>LongMethod:DnsViewModel.kt:DnsViewModel$fun performLookup</ID>
+    <ID>LongMethod:HomeScreen.kt:@Composable private fun ToolGrid</ID>
+    <ID>LongMethod:HttpProbeScreen.kt:@Composable fun HttpProbeScreen</ID>
+    <ID>LongMethod:HttpProbeScreen.kt:@Composable private fun BodyTabContent</ID>
+    <ID>LongMethod:HttpProbeScreen.kt:@Composable private fun HttpProbeSuccessContent</ID>
+    <ID>LongMethod:HttpProbeScreen.kt:@Composable private fun StatusBannerCard</ID>
+    <ID>LongMethod:HttpProbeScreen.kt:@OptIn(ExperimentalLayoutApi::class) @Composable private fun HttpProbeInputCard</ID>
+    <ID>LongMethod:HttpProbeViewModel.kt:HttpProbeViewModel$fun send</ID>
+    <ID>LongMethod:LanScanScreen.kt:@Composable @OptIn(ExperimentalLayoutApi::class) private fun HostDetailPanel</ID>
+    <ID>LongMethod:LanScanScreen.kt:@Composable private fun LanFinishedContent</ID>
+    <ID>LongMethod:LanScanScreen.kt:@Composable private fun LanInputCard</ID>
+    <ID>LongMethod:LanScanScreen.kt:@Composable private fun LanScanningContent</ID>
+    <ID>LongMethod:LanScanScreen.kt:@OptIn(ExperimentalLayoutApi::class) @Composable private fun HostCard</ID>
+    <ID>LongMethod:LanScanScreen.kt:@OptIn(ExperimentalMaterial3Api::class) @Composable fun LanScreen</ID>
+    <ID>LongMethod:LanScanViewModel.kt:LanScanViewModel$fun startScan</ID>
+    <ID>LongMethod:MdnsDiscoveryScreen.kt:@Composable private fun HeroCard</ID>
+    <ID>LongMethod:MdnsDiscoveryScreen.kt:@OptIn(ExperimentalLayoutApi::class) @Composable private fun ServiceItem</ID>
+    <ID>LongMethod:MdnsDiscoveryScreen.kt:@OptIn(ExperimentalMaterial3Api::class) @Composable fun MdnsDiscoveryScreen</ID>
+    <ID>LongMethod:MdnsDiscoveryViewModel.kt:MdnsDiscoveryViewModel$fun startScan</ID>
+    <ID>LongMethod:MdnsRepositoryImpl.kt:MdnsRepositoryImpl$private suspend fun OperationContext.runDiscovery: MdnsDiscoveryOutcome</ID>
+    <ID>LongMethod:MoreToolsSheet.kt:@Composable private fun ToolSheetRow</ID>
+    <ID>LongMethod:MoreToolsSheet.kt:@OptIn(ExperimentalMaterial3Api::class) @Composable fun MoreToolsSheet</ID>
+    <ID>LongMethod:NetworkStatusBanner.kt:@Composable fun NetworkStatusBanner</ID>
+    <ID>LongMethod:OperationAvailabilityTest.kt:OperationAvailabilityTest$@Test fun `unvalidated connectivity permits bounded attempt with advisory`</ID>
+    <ID>LongMethod:PingScreen.kt:@Composable fun PingScreen</ID>
+    <ID>LongMethod:PingScreen.kt:@Composable private fun PacketRow</ID>
+    <ID>LongMethod:PingScreen.kt:@Composable private fun PingFinishedPanel</ID>
+    <ID>LongMethod:PingScreen.kt:@Composable private fun PingInputCard</ID>
+    <ID>LongMethod:PingScreen.kt:@Composable private fun PingRunningPanel</ID>
+    <ID>LongMethod:PingScreen.kt:@Composable private fun RttChartCard</ID>
+    <ID>LongMethod:PingScreen.kt:@Composable private fun StatsCard</ID>
+    <ID>LongMethod:PingViewModel.kt:PingViewModel$private fun startContinuousPing</ID>
+    <ID>LongMethod:PingViewModel.kt:PingViewModel$private fun startNormalPing</ID>
+    <ID>LongMethod:PortScanViewModel.kt:PortScanViewModel$fun startScan</ID>
+    <ID>LongMethod:PortScanViewModelTest.kt:PortScanViewModelTest.StartScanStateTransitions$@Test fun `repository deadline after a completed probe finishes with the collected partial summary`</ID>
+    <ID>LongMethod:PortsScreen.kt:@Composable private fun PortResultRow</ID>
+    <ID>LongMethod:PortsScreen.kt:@Composable private fun PortScanProgressCard</ID>
+    <ID>LongMethod:PortsScreen.kt:@OptIn(ExperimentalLayoutApi::class) @Composable private fun PortScanSummaryCard</ID>
+    <ID>LongMethod:PortsScreen.kt:@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class) @Composable fun PortsScreen</ID>
+    <ID>LongMethod:PortsScreen.kt:@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class) @Composable private fun PortScanInputCard</ID>
+    <ID>LongMethod:RecentHostsRow.kt:@Composable fun RecentHostsRow</ID>
+    <ID>LongMethod:SettingsScreen.kt:@Composable fun SettingsScreen</ID>
+    <ID>LongMethod:SpeedTestScreen.kt:@Composable fun SpeedTestScreen</ID>
+    <ID>LongMethod:SpeedTestScreen.kt:@Composable private fun SpeedTestHeaderCard</ID>
+    <ID>LongMethod:SpeedTestScreen.kt:@Composable private fun SpeedTestIdleContent</ID>
+    <ID>LongMethod:SpeedTestViewModel.kt:SpeedTestViewModel$fun startTest</ID>
+    <ID>LongMethod:SubnetCalculatorScreen.kt:@Composable fun SubnetCalculatorScreen</ID>
+    <ID>LongMethod:SubnetCalculatorScreen.kt:@Composable private fun SubnetOverviewCard</ID>
+    <ID>LongMethod:SubnetCalculatorScreen.kt:@Composable private fun SubnetPropertiesCard</ID>
+    <ID>LongMethod:TlsInspectorScreen.kt:@Composable fun TlsInspectorScreen</ID>
+    <ID>LongMethod:TlsInspectorScreen.kt:@Composable private fun CertificateCard</ID>
+    <ID>LongMethod:TlsInspectorScreen.kt:@Composable private fun CertificateDetails</ID>
+    <ID>LongMethod:TlsInspectorScreen.kt:@Composable private fun ConnectionCard</ID>
+    <ID>LongMethod:TlsInspectorScreen.kt:@Composable private fun TlsInputSection</ID>
+    <ID>LongMethod:TlsInspectorViewModel.kt:TlsInspectorViewModel$fun inspect</ID>
+    <ID>LongMethod:TlsInspectorViewModelTest.kt:TlsInspectorViewModelTest$@Test fun `invalid typed handoff stays editable and valid host port replacement restores`</ID>
+    <ID>LongMethod:ToolHeroHeader.kt:@Composable fun ToolHeroHeader</ID>
+    <ID>LongMethod:TopologyDiscoveryScreen.kt:@Composable private fun TopologyCanvas</ID>
+    <ID>LongMethod:TopologyDiscoveryScreen.kt:@OptIn(ExperimentalMaterial3Api::class) @Composable private fun NodeDetailSheet</ID>
+    <ID>LongMethod:TopologyDiscoveryScreen.kt:@OptIn(ExperimentalMaterial3Api::class) @Composable private fun TopologyScreenContent</ID>
+    <ID>LongMethod:TopologyDiscoveryViewModel.kt:TopologyDiscoveryViewModel$fun startDiscovery</ID>
+    <ID>LongMethod:TracerouteAggregateConcurrencyTest.kt:TracerouteAggregateConcurrencyTest$@OptIn(ExperimentalCoroutinesApi::class) @Test fun `native probes and enrichment share the caller concurrency budget through cancellation`</ID>
+    <ID>LongMethod:TracerouteScreen.kt:@Composable fun TracerouteScreen</ID>
+    <ID>LongMethod:TracerouteScreen.kt:@Composable private fun HopCard</ID>
+    <ID>LongMethod:TracerouteScreen.kt:@Composable private fun TraceJourneyStats</ID>
+    <ID>LongMethod:TracerouteScreen.kt:@Composable private fun TracerouteFinishedPanel</ID>
+    <ID>LongMethod:TracerouteScreen.kt:@Composable private fun TracerouteInputCard</ID>
+    <ID>LongMethod:TracerouteViewModel.kt:TracerouteViewModel$fun startTrace</ID>
+    <ID>LongMethod:WakeOnLanScreen.kt:@Composable fun WakeOnLanScreen</ID>
+    <ID>LongMethod:WakeOnLanScreen.kt:@Composable private fun WolInputCard</ID>
+    <ID>LongMethod:WakeOnLanScreen.kt:@Composable private fun WolSuccessCard</ID>
+    <ID>LongMethod:WhoisScreen.kt:@OptIn(ExperimentalLayoutApi::class) @Composable fun DomainResultCard</ID>
+    <ID>LongMethod:WhoisScreen.kt:@OptIn(ExperimentalMaterial3Api::class) @Composable fun WhoisScreen</ID>
+    <ID>LongMethod:WhoisViewModel.kt:WhoisViewModel$private fun startLookup</ID>
+    <ID>LongMethod:WifiScanScreen.kt:@Composable private fun WifiHeader</ID>
+    <ID>LongMethod:WifiScanScreen.kt:@Composable private fun WifiNetworkCard</ID>
+    <ID>LongMethod:WifiScanScreen.kt:@Composable private fun WifiSpectrumCard</ID>
+    <ID>LongMethod:WifiScanScreen.kt:@Composable private fun WifiSuccessScreen</ID>
+    <ID>LongMethod:WifiScanScreen.kt:@OptIn(ExperimentalMaterial3Api::class) @Composable fun WifiScanScreen</ID>
+    <ID>LongMethod:WifiScanScreen.kt:@OptIn(ExperimentalMaterial3Api::class) @Composable private fun WifiApDetailSheet</ID>
+    <ID>LongMethod:WifiScanViewModel.kt:WifiScanViewModel$fun startScan</ID>
+    <ID>LoopWithTooManyJumpStatements:MdnsRepositoryImpl.kt:MdnsRepositoryImpl$for</ID>
+    <ID>LoopWithTooManyJumpStatements:MdnsRepositoryImpl.kt:MdnsRepositoryImpl$while</ID>
+    <ID>LoopWithTooManyJumpStatements:TopologyDiscoveryScreen.kt:for</ID>
+    <ID>MagicNumber:AppNavigation.kt:4</ID>
+    <ID>MagicNumber:AppNavigation.kt:6</ID>
+    <ID>MagicNumber:AppNavigation.kt:8</ID>
+    <ID>MagicNumber:CrashActivity.kt:0.35f</ID>
+    <ID>MagicNumber:CrashActivity.kt:0.65f</ID>
+    <ID>MagicNumber:CrashReportBuilder.kt:CrashReportBuilder$1024</ID>
+    <ID>MagicNumber:DebugLogScreen.kt:400</ID>
+    <ID>MagicNumber:DebugLogScreen.kt:6</ID>
+    <ID>MagicNumber:DnsScreen.kt:200</ID>
+    <ID>MagicNumber:DnsScreen.kt:3</ID>
+    <ID>MagicNumber:DnsScreen.kt:300</ID>
+    <ID>MagicNumber:DnsScreen.kt:4</ID>
+    <ID>MagicNumber:DnsScreen.kt:8</ID>
+    <ID>MagicNumber:DnsViewModel.kt:DnsViewModel$253</ID>
+    <ID>MagicNumber:FormatUtils.kt:1024</ID>
+    <ID>MagicNumber:FormatUtils.kt:1024.0</ID>
+    <ID>MagicNumber:HomeScreen.kt:200</ID>
+    <ID>MagicNumber:HomeScreen.kt:40</ID>
+    <ID>MagicNumber:HomeScreen.kt:500</ID>
+    <ID>MagicNumber:HomeScreen.kt:60L</ID>
+    <ID>MagicNumber:HttpProbeScreen.kt:0.4f</ID>
+    <ID>MagicNumber:HttpProbeScreen.kt:0.6f</ID>
+    <ID>MagicNumber:HttpProbeScreen.kt:150</ID>
+    <ID>MagicNumber:HttpProbeScreen.kt:200</ID>
+    <ID>MagicNumber:HttpProbeScreen.kt:299</ID>
+    <ID>MagicNumber:HttpProbeScreen.kt:3</ID>
+    <ID>MagicNumber:HttpProbeScreen.kt:300</ID>
+    <ID>MagicNumber:HttpProbeScreen.kt:399</ID>
+    <ID>MagicNumber:HttpProbeScreen.kt:4</ID>
+    <ID>MagicNumber:HttpProbeScreen.kt:400</ID>
+    <ID>MagicNumber:HttpProbeScreen.kt:499</ID>
+    <ID>MagicNumber:HttpProbeScreen.kt:500</ID>
+    <ID>MagicNumber:HttpProbeScreen.kt:599</ID>
+    <ID>MagicNumber:HttpProbeScreen.kt:800</ID>
+    <ID>MagicNumber:IcmpenguinIcmpProbe.kt:1_000L</ID>
+    <ID>MagicNumber:IcmpenguinPingEngine.kt:11</ID>
+    <ID>MagicNumber:LanScanScreen.kt:0.4f</ID>
+    <ID>MagicNumber:LanScanScreen.kt:0.6f</ID>
+    <ID>MagicNumber:LanScanScreen.kt:10</ID>
+    <ID>MagicNumber:LanScanScreen.kt:110</ID>
+    <ID>MagicNumber:LanScanScreen.kt:139</ID>
+    <ID>MagicNumber:LanScanScreen.kt:143</ID>
+    <ID>MagicNumber:LanScanScreen.kt:20</ID>
+    <ID>MagicNumber:LanScanScreen.kt:200</ID>
+    <ID>MagicNumber:LanScanScreen.kt:21</ID>
+    <ID>MagicNumber:LanScanScreen.kt:22</ID>
+    <ID>MagicNumber:LanScanScreen.kt:23</ID>
+    <ID>MagicNumber:LanScanScreen.kt:25</ID>
+    <ID>MagicNumber:LanScanScreen.kt:250</ID>
+    <ID>MagicNumber:LanScanScreen.kt:256L</ID>
+    <ID>MagicNumber:LanScanScreen.kt:300</ID>
+    <ID>MagicNumber:LanScanScreen.kt:3306</ID>
+    <ID>MagicNumber:LanScanScreen.kt:3389</ID>
+    <ID>MagicNumber:LanScanScreen.kt:400</ID>
+    <ID>MagicNumber:LanScanScreen.kt:443</ID>
+    <ID>MagicNumber:LanScanScreen.kt:445</ID>
+    <ID>MagicNumber:LanScanScreen.kt:50</ID>
+    <ID>MagicNumber:LanScanScreen.kt:53</ID>
+    <ID>MagicNumber:LanScanScreen.kt:5900</ID>
+    <ID>MagicNumber:LanScanScreen.kt:6</ID>
+    <ID>MagicNumber:LanScanScreen.kt:8</ID>
+    <ID>MagicNumber:LanScanScreen.kt:80</ID>
+    <ID>MagicNumber:LanScanScreen.kt:8080</ID>
+    <ID>MagicNumber:LanScanScreen.kt:8443</ID>
+    <ID>MagicNumber:LanScanViewModel.kt:80</ID>
+    <ID>MagicNumber:LanScanViewModel.kt:8000</ID>
+    <ID>MagicNumber:LanScanViewModel.kt:8080</ID>
+    <ID>MagicNumber:LanScanViewModel.kt:8888</ID>
+    <ID>MagicNumber:LanScanViewModel.kt:LanScanViewModel$100</ID>
+    <ID>MagicNumber:LanScanViewModel.kt:LanScanViewModel$10_000</ID>
+    <ID>MagicNumber:LanScanViewModel.kt:LanScanViewModel$1_000</ID>
+    <ID>MagicNumber:LanScanViewModel.kt:LanScanViewModel$50</ID>
+    <ID>MagicNumber:LanScanViewModel.kt:LanScanViewModel$500</ID>
+    <ID>MagicNumber:LinkInfoProvider.kt:LinkInfoMapper$0xFF</ID>
+    <ID>MagicNumber:LinkInfoProvider.kt:LinkInfoMapper$16</ID>
+    <ID>MagicNumber:LinkInfoProvider.kt:LinkInfoMapper$24</ID>
+    <ID>MagicNumber:LinkInfoProvider.kt:LinkInfoMapper$255</ID>
+    <ID>MagicNumber:LinkInfoProvider.kt:LinkInfoMapper$32</ID>
+    <ID>MagicNumber:LinkInfoProvider.kt:LinkInfoMapper$4</ID>
+    <ID>MagicNumber:LinkInfoProvider.kt:LinkInfoMapper$8</ID>
+    <ID>MagicNumber:MdnsDiscoveryScreen.kt:10</ID>
+    <ID>MagicNumber:MdnsDiscoveryScreen.kt:200</ID>
+    <ID>MagicNumber:MdnsDiscoveryScreen.kt:300</ID>
+    <ID>MagicNumber:MdnsDiscoveryScreen.kt:40</ID>
+    <ID>MagicNumber:MdnsDiscoveryScreen.kt:400</ID>
+    <ID>MagicNumber:MdnsDiscoveryViewModel.kt:MdnsDiscoveryViewModel$100</ID>
+    <ID>MagicNumber:OnboardingSheet.kt:300</ID>
+    <ID>MagicNumber:OnboardingSheet.kt:4</ID>
+    <ID>MagicNumber:PingCsvSerializer.kt:PingCsvSerializer$3</ID>
+    <ID>MagicNumber:PingScreen.kt:0.04f</ID>
+    <ID>MagicNumber:PingScreen.kt:200</ID>
+    <ID>MagicNumber:PingScreen.kt:300</ID>
+    <ID>MagicNumber:PingScreen.kt:8</ID>
+    <ID>MagicNumber:PingViewModel.kt:PingViewModel$10</ID>
+    <ID>MagicNumber:PingViewModel.kt:PingViewModel$100</ID>
+    <ID>MagicNumber:PingViewModel.kt:PingViewModel$10_000</ID>
+    <ID>MagicNumber:PingViewModel.kt:PingViewModel$1_472</ID>
+    <ID>MagicNumber:PingViewModel.kt:PingViewModel$255</ID>
+    <ID>MagicNumber:PingViewModel.kt:PingViewModel$2_000</ID>
+    <ID>MagicNumber:PingViewModel.kt:PingViewModel$30_000</ID>
+    <ID>MagicNumber:PortScanViewModel.kt:PortScanViewModel$100</ID>
+    <ID>MagicNumber:PortScanViewModel.kt:PortScanViewModel$2_000</ID>
+    <ID>MagicNumber:PortScanViewModel.kt:PortScanViewModel$30_000</ID>
+    <ID>MagicNumber:PortScanViewModel.kt:PortScanViewModel$500</ID>
+    <ID>MagicNumber:PortsScreen.kt:200</ID>
+    <ID>MagicNumber:PortsScreen.kt:300</ID>
+    <ID>MagicNumber:PortsScreen.kt:5</ID>
+    <ID>MagicNumber:PortsScreen.kt:6</ID>
+    <ID>MagicNumber:PortsScreen.kt:65535</ID>
+    <ID>MagicNumber:SettingsScreen.kt:250</ID>
+    <ID>MagicNumber:SettingsScreen.kt:3</ID>
+    <ID>MagicNumber:SettingsScreen.kt:300</ID>
+    <ID>MagicNumber:SettingsScreen.kt:500</ID>
+    <ID>MagicNumber:SettingsScreen.kt:60L</ID>
+    <ID>MagicNumber:SettingsScreen.kt:8</ID>
+    <ID>MagicNumber:SettingsViewModel.kt:SettingsViewModel$100</ID>
+    <ID>MagicNumber:SettingsViewModel.kt:SettingsViewModel$30_000</ID>
+    <ID>MagicNumber:SettingsViewModel.kt:SettingsViewModel$500</ID>
+    <ID>MagicNumber:SpeedTestScreen.kt:120L</ID>
+    <ID>MagicNumber:SpeedTestScreen.kt:200</ID>
+    <ID>MagicNumber:SpeedTestScreen.kt:300</ID>
+    <ID>MagicNumber:SpeedTestScreen.kt:4</ID>
+    <ID>MagicNumber:SpeedTestScreen.kt:400</ID>
+    <ID>MagicNumber:SpeedTestScreen.kt:50</ID>
+    <ID>MagicNumber:SpeedTestScreen.kt:80L</ID>
+    <ID>MagicNumber:SubnetCalculatorScreen.kt:0.5f</ID>
+    <ID>MagicNumber:SubnetCalculatorScreen.kt:150</ID>
+    <ID>MagicNumber:SubnetCalculatorScreen.kt:1_000.0</ID>
+    <ID>MagicNumber:SubnetCalculatorScreen.kt:1_000L</ID>
+    <ID>MagicNumber:SubnetCalculatorScreen.kt:1_000_000.0</ID>
+    <ID>MagicNumber:SubnetCalculatorScreen.kt:1_000_000L</ID>
+    <ID>MagicNumber:SubnetCalculatorScreen.kt:200</ID>
+    <ID>MagicNumber:SubnetCalculatorScreen.kt:3</ID>
+    <ID>MagicNumber:SubnetCalculatorScreen.kt:300</ID>
+    <ID>MagicNumber:SubnetCalculatorScreen.kt:4</ID>
+    <ID>MagicNumber:SubnetCalculatorScreen.kt:8</ID>
+    <ID>MagicNumber:TlsInspectorScreen.kt:0.4f</ID>
+    <ID>MagicNumber:TlsInspectorScreen.kt:0.6f</ID>
+    <ID>MagicNumber:TlsInspectorScreen.kt:150</ID>
+    <ID>MagicNumber:TlsInspectorScreen.kt:200</ID>
+    <ID>MagicNumber:TlsInspectorScreen.kt:30</ID>
+    <ID>MagicNumber:TlsInspectorScreen.kt:300</ID>
+    <ID>MagicNumber:TlsInspectorScreen.kt:4</ID>
+    <ID>MagicNumber:TlsInspectorScreen.kt:400</ID>
+    <ID>MagicNumber:ToolIntent.kt:ToolPort.Companion$65535</ID>
+    <ID>MagicNumber:ToolIntent.kt:ToolSubnet.Companion$128</ID>
+    <ID>MagicNumber:ToolIntent.kt:ToolSubnet.Companion$32</ID>
+    <ID>MagicNumber:ToolIntentCodec.kt:ToolIntentCodec$3</ID>
+    <ID>MagicNumber:ToolIntentCodec.kt:ToolIntentCodec$4</ID>
+    <ID>MagicNumber:ToolIntentCodec.kt:ToolIntentCodec$5</ID>
+    <ID>MagicNumber:TopologyDiscoveryScreen.kt:0.3f</ID>
+    <ID>MagicNumber:TopologyDiscoveryScreen.kt:0.4f</ID>
+    <ID>MagicNumber:TopologyDiscoveryScreen.kt:0.6f</ID>
+    <ID>MagicNumber:TopologyDiscoveryScreen.kt:18f</ID>
+    <ID>MagicNumber:TopologyDiscoveryScreen.kt:1_000L</ID>
+    <ID>MagicNumber:TopologyDiscoveryScreen.kt:1_000_000L</ID>
+    <ID>MagicNumber:TopologyDiscoveryScreen.kt:1_000_000_000L</ID>
+    <ID>MagicNumber:TopologyDiscoveryScreen.kt:22f</ID>
+    <ID>MagicNumber:TopologyDiscoveryScreen.kt:28f</ID>
+    <ID>MagicNumber:TopologyDiscoveryScreen.kt:300</ID>
+    <ID>MagicNumber:TopologyDiscoveryScreen.kt:3f</ID>
+    <ID>MagicNumber:TopologyDiscoveryScreen.kt:400</ID>
+    <ID>MagicNumber:TopologyDiscoveryScreen.kt:8</ID>
+    <ID>MagicNumber:TracerouteScreen.kt:10_000</ID>
+    <ID>MagicNumber:TracerouteScreen.kt:1472f</ID>
+    <ID>MagicNumber:TracerouteScreen.kt:150</ID>
+    <ID>MagicNumber:TracerouteScreen.kt:1_000</ID>
+    <ID>MagicNumber:TracerouteScreen.kt:200</ID>
+    <ID>MagicNumber:TracerouteScreen.kt:28f</ID>
+    <ID>MagicNumber:TracerouteScreen.kt:300</ID>
+    <ID>MagicNumber:TracerouteScreen.kt:50</ID>
+    <ID>MagicNumber:TracerouteScreen.kt:6</ID>
+    <ID>MagicNumber:TracerouteViewModel.kt:TracerouteViewModel$1472</ID>
+    <ID>MagicNumber:TracerouteViewModel.kt:TracerouteViewModel$1_000_000L</ID>
+    <ID>MagicNumber:TracerouteViewModel.kt:TracerouteViewModel$30_000</ID>
+    <ID>MagicNumber:TracerouteViewModel.kt:TracerouteViewModel$5</ID>
+    <ID>MagicNumber:TracerouteViewModel.kt:TracerouteViewModel$500</ID>
+    <ID>MagicNumber:TracerouteViewModel.kt:TracerouteViewModel$56</ID>
+    <ID>MagicNumber:TracerouteViewModel.kt:TracerouteViewModel$64</ID>
+    <ID>MagicNumber:WakeOnLanScreen.kt:150</ID>
+    <ID>MagicNumber:WakeOnLanScreen.kt:250</ID>
+    <ID>MagicNumber:WakeOnLanScreen.kt:4</ID>
+    <ID>MagicNumber:WakeOnLanScreen.kt:400</ID>
+    <ID>MagicNumber:WakeOnLanScreen.kt:6</ID>
+    <ID>MagicNumber:WakeOnLanViewModel.kt:WakeOnLanViewModel$5</ID>
+    <ID>MagicNumber:WhoisScreen.kt:0.4f</ID>
+    <ID>MagicNumber:WhoisScreen.kt:0.6f</ID>
+    <ID>MagicNumber:WhoisScreen.kt:200</ID>
+    <ID>MagicNumber:WhoisScreen.kt:30</ID>
+    <ID>MagicNumber:WhoisScreen.kt:300</ID>
+    <ID>MagicNumber:WhoisScreen.kt:4</ID>
+    <ID>MagicNumber:WhoisScreen.kt:8</ID>
+    <ID>MagicNumber:WhoisScreen.kt:90</ID>
+    <ID>MagicNumber:WifiScanScreen.kt:0.45f</ID>
+    <ID>MagicNumber:WifiScanScreen.kt:0.55f</ID>
+    <ID>MagicNumber:WifiScanScreen.kt:1.6f</ID>
+    <ID>MagicNumber:WifiScanScreen.kt:10</ID>
+    <ID>MagicNumber:WifiScanScreen.kt:100</ID>
+    <ID>MagicNumber:WifiScanScreen.kt:100f</ID>
+    <ID>MagicNumber:WifiScanScreen.kt:11</ID>
+    <ID>MagicNumber:WifiScanScreen.kt:117</ID>
+    <ID>MagicNumber:WifiScanScreen.kt:14</ID>
+    <ID>MagicNumber:WifiScanScreen.kt:149</ID>
+    <ID>MagicNumber:WifiScanScreen.kt:165</ID>
+    <ID>MagicNumber:WifiScanScreen.kt:180f</ID>
+    <ID>MagicNumber:WifiScanScreen.kt:181</ID>
+    <ID>MagicNumber:WifiScanScreen.kt:2.5f</ID>
+    <ID>MagicNumber:WifiScanScreen.kt:2395f</ID>
+    <ID>MagicNumber:WifiScanScreen.kt:2412f</ID>
+    <ID>MagicNumber:WifiScanScreen.kt:2437f</ID>
+    <ID>MagicNumber:WifiScanScreen.kt:2462f</ID>
+    <ID>MagicNumber:WifiScanScreen.kt:2484f</ID>
+    <ID>MagicNumber:WifiScanScreen.kt:2495f</ID>
+    <ID>MagicNumber:WifiScanScreen.kt:30f</ID>
+    <ID>MagicNumber:WifiScanScreen.kt:36</ID>
+    <ID>MagicNumber:WifiScanScreen.kt:37</ID>
+    <ID>MagicNumber:WifiScanScreen.kt:3f</ID>
+    <ID>MagicNumber:WifiScanScreen.kt:4</ID>
+    <ID>MagicNumber:WifiScanScreen.kt:50f</ID>
+    <ID>MagicNumber:WifiScanScreen.kt:5150f</ID>
+    <ID>MagicNumber:WifiScanScreen.kt:5180f</ID>
+    <ID>MagicNumber:WifiScanScreen.kt:5320f</ID>
+    <ID>MagicNumber:WifiScanScreen.kt:5500f</ID>
+    <ID>MagicNumber:WifiScanScreen.kt:5745f</ID>
+    <ID>MagicNumber:WifiScanScreen.kt:5825f</ID>
+    <ID>MagicNumber:WifiScanScreen.kt:5895f</ID>
+    <ID>MagicNumber:WifiScanScreen.kt:5925f</ID>
+    <ID>MagicNumber:WifiScanScreen.kt:5955f</ID>
+    <ID>MagicNumber:WifiScanScreen.kt:6</ID>
+    <ID>MagicNumber:WifiScanScreen.kt:600f</ID>
+    <ID>MagicNumber:WifiScanScreen.kt:6135f</ID>
+    <ID>MagicNumber:WifiScanScreen.kt:6315f</ID>
+    <ID>MagicNumber:WifiScanScreen.kt:64</ID>
+    <ID>MagicNumber:WifiScanScreen.kt:6545f</ID>
+    <ID>MagicNumber:WifiScanScreen.kt:6885f</ID>
+    <ID>MagicNumber:WifiScanScreen.kt:70f</ID>
+    <ID>MagicNumber:WifiScanScreen.kt:7125f</ID>
+    <ID>MagicNumber:WifiScanScreen.kt:73</ID>
+    <ID>MagicNumber:WifiScanScreen.kt:90f</ID>
+    <ID>MatchingDeclarationName:DnsScreen.kt:DnsScreenTestTags</ID>
+    <ID>MatchingDeclarationName:HomeScreen.kt:HomeScreenTestTags</ID>
+    <ID>MatchingDeclarationName:HttpProbeScreen.kt:HttpProbeScreenTestTags</ID>
+    <ID>MatchingDeclarationName:Motion.kt:AppMotion</ID>
+    <ID>MatchingDeclarationName:NetworkStatusBanner.kt:NetworkStatusScope</ID>
+    <ID>MatchingDeclarationName:PingScreen.kt:PingScreenTestTags</ID>
+    <ID>MatchingDeclarationName:PortsScreen.kt:PortsScreenTestTags</ID>
+    <ID>MatchingDeclarationName:SettingsScreen.kt:SettingsScreenTestTags</ID>
+    <ID>MatchingDeclarationName:TlsInspectorScreen.kt:TlsInspectorScreenTestTags</ID>
+    <ID>MatchingDeclarationName:ToolHelpSheet.kt:HelpSection</ID>
+    <ID>MatchingDeclarationName:WakeOnLanScreen.kt:WakeOnLanScreenTestTags</ID>
+    <ID>MaxLineLength:AppPreferenceKeysTest.kt:AppPreferenceKeysTest$@Test fun `DEFAULT_CONCURRENCY key name`</ID>
+    <ID>MaxLineLength:AppPreferenceKeysTest.kt:AppPreferenceKeysTest$@Test fun `DEFAULT_PING_COUNT key name`</ID>
+    <ID>MaxLineLength:AppPreferenceKeysTest.kt:AppPreferenceKeysTest$@Test fun `DEFAULT_TIMEOUT_MS key name`</ID>
+    <ID>MaxLineLength:AppPreferenceKeysTest.kt:AppPreferenceKeysTest$@Test fun `ONBOARDING_COMPLETED key name`</ID>
+    <ID>MaxLineLength:AppPreferenceKeysTest.kt:AppPreferenceKeysTest$@Test fun `PINNED_ROUTES key name`</ID>
+    <ID>MaxLineLength:AppPreferenceKeysTest.kt:AppPreferenceKeysTest$@Test fun `RECENT_DNS_HOSTS key name`</ID>
+    <ID>MaxLineLength:AppPreferenceKeysTest.kt:AppPreferenceKeysTest$@Test fun `RECENT_HTTP_HOSTS key name`</ID>
+    <ID>MaxLineLength:AppPreferenceKeysTest.kt:AppPreferenceKeysTest$@Test fun `RECENT_LAN_SUBNETS key name`</ID>
+    <ID>MaxLineLength:AppPreferenceKeysTest.kt:AppPreferenceKeysTest$@Test fun `RECENT_PING_HOSTS key name`</ID>
+    <ID>MaxLineLength:AppPreferenceKeysTest.kt:AppPreferenceKeysTest$@Test fun `RECENT_PORTS_HOSTS key name`</ID>
+    <ID>MaxLineLength:AppPreferenceKeysTest.kt:AppPreferenceKeysTest$@Test fun `RECENT_TLS_HOSTS key name`</ID>
+    <ID>MaxLineLength:AppPreferenceKeysTest.kt:AppPreferenceKeysTest$@Test fun `RECENT_TOPOLOGY_SEEDS key name`</ID>
+    <ID>MaxLineLength:AppPreferenceKeysTest.kt:AppPreferenceKeysTest$@Test fun `RECENT_TRACEROUTE_HOSTS key name`</ID>
+    <ID>MaxLineLength:AppPreferenceKeysTest.kt:AppPreferenceKeysTest$@Test fun `RECENT_WHOIS_HOSTS key name`</ID>
+    <ID>MaxLineLength:AppPreferenceKeysTest.kt:AppPreferenceKeysTest$@Test fun `THEME_OVERRIDE key name`</ID>
+    <ID>MaxLineLength:AppPreferenceKeysTest.kt:AppPreferenceKeysTest$@Test fun `WIFI_REFRESH_INTERVAL_MS key name`</ID>
+    <ID>MaxLineLength:CrashActivity.kt:CrashActivity$onCopy = { copyToClipboard(buildFullReport(exceptionClass, exceptionMessage, threadName, timestamp, stackTrace)) }</ID>
+    <ID>MaxLineLength:CrashActivity.kt:CrashActivity$onShare = { shareReport(buildFullReport(exceptionClass, exceptionMessage, threadName, timestamp, stackTrace)) }</ID>
+    <ID>MaxLineLength:CrashActivity.kt:CrashDetailRow(label = stringResource(R.string.crash_label_exception), value = exceptionClass.substringAfterLast('.'))</ID>
+    <ID>MaxLineLength:CrashActivity.kt:CrashDetailRow(label = stringResource(R.string.crash_label_message), value = exceptionMessage)</ID>
+    <ID>MaxLineLength:CrashReportBuilder.kt:CrashReportBuilder$"(?i)(?&lt;![A-Za-z0-9_])[\\\"']?(authorization|proxy-authorization|cookie|set-cookie|password|passwd|pwd|token|access[_-]?token|refresh[_-]?token|api[_-]?key|secret)[\\\"']?\\s*[:=]\\s*(?:\\\"(?:\\\\.|[^\\\"\\\\])*\\\"|'(?:\\\\.|[^'\\\\])*'|[^\\s,;}]+)"</ID>
+    <ID>MaxLineLength:CrashReportBuilder.kt:CrashReportBuilder$"(?im)\\b(authorization|proxy-authorization|cookie|set-cookie)[ \\t]*[:=](?:[ \\t]*[^ \\t\\r\\n][^\\r\\n]*(?:\\r?\\n[ \\t]+[^\\r\\n]*)*|[ \\t]*\\r?\\n[^\\r\\n]*(?:\\r?\\n[ \\t]+[^\\r\\n]*)*)?"</ID>
+    <ID>MaxLineLength:DebugLogScreen.kt:onClick = { scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("", logContent))) } }</ID>
+    <ID>MaxLineLength:DnsScreen.kt:DnsRecordType.A -&gt; MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer</ID>
+    <ID>MaxLineLength:DnsScreen.kt:DnsRecordType.AAAA -&gt; MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer</ID>
+    <ID>MaxLineLength:DnsScreen.kt:DnsRecordType.CNAME -&gt; MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer</ID>
+    <ID>MaxLineLength:DnsScreen.kt:DnsRecordType.MX -&gt; MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer</ID>
+    <ID>MaxLineLength:DnsScreen.kt:DnsRecordType.NS -&gt; MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer</ID>
+    <ID>MaxLineLength:DnsScreen.kt:DnsRecordType.PTR -&gt; MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer</ID>
+    <ID>MaxLineLength:DnsScreen.kt:DnsRecordType.SRV -&gt; MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer</ID>
+    <ID>MaxLineLength:DnsScreen.kt:HelpSection(stringResource(R.string.help_dns_what_heading), stringResource(R.string.help_dns_what_body))</ID>
+    <ID>MaxLineLength:DnsScreen.kt:onClick = { scope2.launch { clipboard2.setClipEntry(ClipEntry(ClipData.newPlainText("", rawResponse))) } }</ID>
+    <ID>MaxLineLength:HttpProbeScreen.kt:"httprobe_sec_cookie_missing_secure_httponly" -&gt; stringResource(R.string.httprobe_sec_cookie_missing_secure_httponly)</ID>
+    <ID>MaxLineLength:HttpProbeScreen.kt:"httprobe_sec_cookie_samesite_none_requires_secure" -&gt; stringResource(R.string.httprobe_sec_cookie_samesite_none_requires_secure)</ID>
+    <ID>MaxLineLength:HttpProbeScreen.kt:HelpSection(stringResource(R.string.help_httprobe_what_heading), stringResource(R.string.help_httprobe_what_body))</ID>
+    <ID>MaxLineLength:HttpProbeScreen.kt:Icon(Icons.Default.Add, contentDescription = stringResource(R.string.httprobe_add_header), modifier = Modifier.size(20.dp))</ID>
+    <ID>MaxLineLength:HttpProbeScreen.kt:LabeledValue(stringResource(R.string.httprobe_timing_ttfb), stringResource(R.string.httprobe_timing_value_ms, totalTtfb))</ID>
+    <ID>MaxLineLength:HttpProbeScreen.kt:SecurityRating.FAIL -&gt; Icon(Icons.Default.Clear, null, modifier = modifier, tint = MaterialTheme.colorScheme.error)</ID>
+    <ID>MaxLineLength:HttpProbeScreen.kt:SecurityRating.FAIL -&gt; Triple(MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.error, stringResource(R.string.security_rating_fail))</ID>
+    <ID>MaxLineLength:HttpProbeScreen.kt:SecurityRating.INFO -&gt; Icon(Icons.Default.Info, null, modifier = modifier, tint = MaterialTheme.colorScheme.onSurfaceVariant)</ID>
+    <ID>MaxLineLength:HttpProbeScreen.kt:SecurityRating.INFO -&gt; Triple(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.colorScheme.onSurfaceVariant, stringResource(R.string.security_rating_info))</ID>
+    <ID>MaxLineLength:HttpProbeScreen.kt:SecurityRating.PASS -&gt; Triple(StatusGoodDeep.copy(alpha = 0.12f), StatusGoodDeep, stringResource(R.string.security_rating_pass))</ID>
+    <ID>MaxLineLength:HttpProbeScreen.kt:SecurityRating.WARN -&gt; Triple(StatusWarnDeep.copy(alpha = 0.12f), StatusWarnDeep, stringResource(R.string.security_rating_warn))</ID>
+    <ID>MaxLineLength:HttpProbeScreen.kt:SecuritySummaryChip(count = failCount, label = stringResource(R.string.security_rating_fail), color = MaterialTheme.colorScheme.error)</ID>
+    <ID>MaxLineLength:HttpProbeScreen.kt:SecuritySummaryChip(count = passCount, label = stringResource(R.string.security_rating_pass), color = StatusGoodDeep)</ID>
+    <ID>MaxLineLength:HttpProbeScreen.kt:SecuritySummaryChip(count = warnCount, label = stringResource(R.string.security_rating_warn), color = StatusWarnDeep)</ID>
+    <ID>MaxLineLength:HttpProbeScreen.kt:contentDescription = stringResource(if (expanded) R.string.action_collapse else R.string.action_expand)</ID>
+    <ID>MaxLineLength:HttpProbeScreen.kt:contentDescription = stringResource(if (uiState.headersExpanded) R.string.action_collapse else R.string.action_expand)</ID>
+    <ID>MaxLineLength:HttpProbeScreen.kt:imageVector = if (uiState.headersExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore</ID>
+    <ID>MaxLineLength:HttpProbeScreen.kt:label = { Text(stringResource(R.string.httprobe_header_key), style = MaterialTheme.typography.labelSmall) }</ID>
+    <ID>MaxLineLength:HttpProbeScreen.kt:label = { Text(stringResource(R.string.httprobe_header_value), style = MaterialTheme.typography.labelSmall) }</ID>
+    <ID>MaxLineLength:HttpProbeScreen.kt:onClick = { scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("", responseBody))) } }</ID>
+    <ID>MaxLineLength:HttpProbeScreen.kt:text = pluralStringResource(R.plurals.httprobe_redirects_label, result.redirectChain.size, result.redirectChain.size)</ID>
+    <ID>MaxLineLength:HttpProbeViewModelTest.kt:HttpProbeViewModelTest$val invalidVm = HttpProbeViewModel(useCase, recentHostsRepository, savedStateHandle = SavedStateHandle(args))</ID>
+    <ID>MaxLineLength:IcmpEnginTracerouteRepositoryImplTest.kt:IcmpEnginTracerouteRepositoryImplTest$assertInstanceOf(net.aieat.netswissknife.core.network.operation.OperationDeadlineExceededException::class.java, failure)</ID>
+    <ID>MaxLineLength:LanScanScreen.kt:HelpSection(stringResource(R.string.help_lan_what_heading), stringResource(R.string.help_lan_what_body))</ID>
+    <ID>MaxLineLength:LanScanScreen.kt:label = host.vendor ?: host.hostname?.split(".")?.firstOrNull() ?: host.ip.substringAfterLast(".")</ID>
+    <ID>MaxLineLength:LanScanScreen.kt:permissionDenied = (uiState as? LanScanUiState.Error)?.networkErrorKind == NetworkErrorKind.LOCAL_NETWORK_PERMISSION_DENIED</ID>
+    <ID>MaxLineLength:LanScanScreen.kt:val canRefresh = uiState is LanScanUiState.Finished || uiState is LanScanUiState.Canceled || uiState is LanScanUiState.Error</ID>
+    <ID>MaxLineLength:LanScanViewModel.kt:LanScanViewModel$AppLogger.d(TAG, "startScan: host found – ip=${result.host.ip} ping=${result.host.pingTimeMs}ms ports=${result.host.openPorts}")</ID>
+    <ID>MaxLineLength:LanScanViewModel.kt:LanScanViewModel$AppLogger.i(TAG, "startScan: scan complete – scanned=${result.summary.totalScanned} alive=${result.summary.aliveHosts} duration=${result.summary.scanDurationMs}ms")</ID>
+    <ID>MaxLineLength:LanScanViewModel.kt:LanScanViewModel$AppLogger.i(TAG, "startScan: subnet=${params.subnet} timeoutMs=${params.timeoutMs} concurrency=${params.concurrency}")</ID>
+    <ID>MaxLineLength:LanScanViewModel.kt:LanScanViewModel$if</ID>
+    <ID>MaxLineLength:LanScanViewModelTest.kt:LanScanViewModelTest.StartScanStateTransitions$withTimeout(2_000) { viewModel.uiState.first { it is LanScanUiState.Scanning &amp;&amp; it.hosts.isNotEmpty() } }</ID>
+    <ID>MaxLineLength:LanScanViewModelTest.kt:LanScanViewModelTest.StopAndClear$withTimeout(2_000) { viewModel.uiState.first { it is LanScanUiState.Scanning &amp;&amp; it.hosts.isNotEmpty() } }</ID>
+    <ID>MaxLineLength:MdnsDiscoveryScreen.kt:HelpSection(stringResource(R.string.help_mdns_what_heading), stringResource(R.string.help_mdns_what_body))</ID>
+    <ID>MaxLineLength:MdnsDiscoveryScreen.kt:stringResource(if (isCanceling) R.string.mdns_canceling_hint else R.string.mdns_scanning_inline_label)</ID>
+    <ID>MaxLineLength:MdnsDiscoveryViewModel.kt:MdnsDiscoveryViewModel$if (activeScanGeneration == generation &amp;&amp; state.isScanning) state.copy(elapsedMs = elapsedMs) else state</ID>
+    <ID>MaxLineLength:MdnsDiscoveryViewModel.kt:MdnsDiscoveryViewModel$val existing = state.services.indexOfFirst { it.instanceName == update.service.instanceName }</ID>
+    <ID>MaxLineLength:MdnsDiscoveryViewModelTest.kt:MdnsDiscoveryViewModelTest.StartScan$every { useCase(any(), any()) } returns flow { throw LocalNetworkPermissionDeniedException(SecurityException("denied")) }</ID>
+    <ID>MaxLineLength:MdnsRepositoryImpl.kt:MdnsRepositoryImpl$if</ID>
+    <ID>MaxLineLength:MdnsRepositoryImpl.kt:MdnsRepositoryImpl$operationSession.cancellationReason != net.aieat.netswissknife.core.network.operation.CancellationReason.DEADLINE_EXCEEDED</ID>
+    <ID>MaxLineLength:MdnsRepositoryImplCancellationTest.kt:MdnsRepositoryImplCancellationTest$"Close failure missing from chain: ${failure.describeFailureChain()}; closeCount=${socket.closeCount.get()}"</ID>
+    <ID>MaxLineLength:MdnsRepositoryImplCancellationTest.kt:MdnsRepositoryImplCancellationTest$"Expected typed deadline, got ${failure?.javaClass?.name}: ${failure?.message}; reason=${session.cancellationReason}"</ID>
+    <ID>MaxLineLength:MdnsRepositoryImplCancellationTest.kt:MdnsRepositoryImplCancellationTest$assertTrue(lock.releasedSignal.await(1, TimeUnit.SECONDS), "stopScan did not release multicast lock")</ID>
+    <ID>MaxLineLength:NavRoutes.kt:NavRoutes.Companion$ToolInfo("httprobe", "HTTP Probe", "HTTP", Icons.Default.Http, "HTTP/HTTPS request tester with security header analysis")</ID>
+    <ID>MaxLineLength:NavRoutes.kt:NavRoutes.Companion$ToolInfo("mdns", "mDNS Browser", "mDNS", Icons.Default.CellTower, "Discover LAN services via multicast DNS")</ID>
+    <ID>MaxLineLength:NavRoutes.kt:NavRoutes.Companion$ToolInfo("ping", "Ping", "Ping", Icons.Default.NetworkCheck, "Reachability and round-trip latency")</ID>
+    <ID>MaxLineLength:NavRoutes.kt:NavRoutes.Companion$ToolInfo("speedtest", "Speed Test", "Speed", Icons.Default.Speed, "Download, upload speed and latency via Cloudflare")</ID>
+    <ID>MaxLineLength:NavRoutes.kt:NavRoutes.Companion$ToolInfo("subnet", "Subnet Calc", "Subnet", Icons.Default.Calculate, "IPv4 subnet calculator with binary breakdown and notation conversion")</ID>
+    <ID>MaxLineLength:NavRoutes.kt:NavRoutes.Companion$ToolInfo("tls", "TLS Inspector", "TLS", Icons.Default.Lock, "SSL/TLS certificate chain inspector")</ID>
+    <ID>MaxLineLength:NavRoutes.kt:NavRoutes.Companion$ToolInfo("topology", "Network Topology", "Topology", Icons.Default.AccountTree, "SNMP switch &amp; neighbour discovery")</ID>
+    <ID>MaxLineLength:NavRoutes.kt:NavRoutes.Companion$ToolInfo("whois", "WHOIS Lookup", "WHOIS", Icons.AutoMirrored.Filled.ManageSearch, "Domain and IP registration lookup")</ID>
+    <ID>MaxLineLength:NavRoutes.kt:NavRoutes.Companion$ToolInfo("wifi_scan", "Wi-Fi Scanner", "Wi-Fi", Icons.Default.WifiFind, "Scan channels &amp; access points")</ID>
+    <ID>MaxLineLength:NavRoutes.kt:NavRoutes.Companion$ToolInfo("wol", "Wake-on-LAN", "WOL", Icons.Default.PowerSettingsNew, "Wake sleeping devices with a magic packet")</ID>
+    <ID>MaxLineLength:NavRoutes.kt:NavRoutes.HttpProbe$return "$baseRoute?intent=${Uri.encode(ToolIntentCodec.encode(intent))}&amp;host=${Uri.encode(target.host.value)}"</ID>
+    <ID>MaxLineLength:NavRoutes.kt:NavRoutes.Ping$return "$baseRoute?host=${Uri.encode(target.host.value)}&amp;intent=${Uri.encode(ToolIntentCodec.encode(intent))}"</ID>
+    <ID>MaxLineLength:NavRoutes.kt:NavRoutes.Ports$return "$baseRoute?host=${Uri.encode(target.host.value)}&amp;intent=${Uri.encode(ToolIntentCodec.encode(intent))}"</ID>
+    <ID>MaxLineLength:NavRoutes.kt:NavRoutes.TlsInspector$object</ID>
+    <ID>MaxLineLength:NetSwissKnifeApp.kt:NetSwissKnifeApp$AppLogger.i("App", "NetSwissKnife started (versionName=${packageManager.getPackageInfo(packageName, 0).versionName})")</ID>
+    <ID>MaxLineLength:NetworkStatusProviderTest.kt:NetworkStatusProviderTest$assertEquals(NetworkErrorKind.LOCAL_NETWORK_PERMISSION_DENIED, IllegalStateException("wrapper", typed).toNetworkErrorKind())</ID>
+    <ID>MaxLineLength:OnboardingSheet.kt:UseCase(Icons.Default.Language, stringResource(R.string.onboarding_usecase_dns_q), stringResource(R.string.onboarding_usecase_dns_a))</ID>
+    <ID>MaxLineLength:OnboardingSheet.kt:UseCase(Icons.Default.Lock, stringResource(R.string.onboarding_usecase_security_q), stringResource(R.string.onboarding_usecase_security_a))</ID>
+    <ID>MaxLineLength:OnboardingSheet.kt:UseCase(Icons.Default.NetworkCheck, stringResource(R.string.onboarding_usecase_diagnostics_q), stringResource(R.string.onboarding_usecase_diagnostics_a))</ID>
+    <ID>MaxLineLength:OnboardingSheet.kt:UseCase(Icons.Default.Speed, stringResource(R.string.onboarding_usecase_speed_q), stringResource(R.string.onboarding_usecase_speed_a))</ID>
+    <ID>MaxLineLength:OnboardingSheet.kt:UseCase(Icons.Default.Wifi, stringResource(R.string.onboarding_usecase_wifi_q), stringResource(R.string.onboarding_usecase_wifi_a))</ID>
+    <ID>MaxLineLength:PingScreen.kt:HelpSection(stringResource(R.string.help_ping_what_heading), stringResource(R.string.help_ping_what_body))</ID>
+    <ID>MaxLineLength:PingScreen.kt:contentDescription = stringResource(if (showRaw) R.string.action_collapse else R.string.action_expand)</ID>
+    <ID>MaxLineLength:PingScreen.kt:coroutineScope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("", PingCsvSerializer.serialize(result)))) }</ID>
+    <ID>MaxLineLength:PingViewModel.kt:PingViewModel$appendLine("Destination unreachable for probe_seq ${p.sequence}: ${p.errorMessage ?: "unknown reason"}")</ID>
+    <ID>MaxLineLength:PingViewModelTest.kt:PingViewModelTest.RecentHosts$val packet = PingPacketResult(sequence = 1, host = "example.com", status = PingStatus.SUCCESS, rtTimeMs = 10L)</ID>
+    <ID>MaxLineLength:PortScanViewModel.kt:PortScanViewModel$closedPorts = current.liveResults.count { it.status == net.aieat.netswissknife.core.network.portscan.PortStatus.CLOSED }</ID>
+    <ID>MaxLineLength:PortScanViewModel.kt:PortScanViewModel$closedPorts = liveResults.count { it.status == net.aieat.netswissknife.core.network.portscan.PortStatus.CLOSED }</ID>
+    <ID>MaxLineLength:PortScanViewModel.kt:PortScanViewModel$filteredPorts = current.liveResults.count { it.status == net.aieat.netswissknife.core.network.portscan.PortStatus.FILTERED }</ID>
+    <ID>MaxLineLength:PortScanViewModel.kt:PortScanViewModel$filteredPorts = liveResults.count { it.status == net.aieat.netswissknife.core.network.portscan.PortStatus.FILTERED }</ID>
+    <ID>MaxLineLength:PortScanViewModel.kt:PortScanViewModel$message = "This scan may exceed the 15-minute operation limit; increase concurrency or reduce the port range or timeout."</ID>
+    <ID>MaxLineLength:PortScanViewModel.kt:PortScanViewModel$openPorts = current.liveResults.count { it.status == net.aieat.netswissknife.core.network.portscan.PortStatus.OPEN }</ID>
+    <ID>MaxLineLength:PortScanViewModel.kt:PortScanViewModel$openPorts = liveResults.count { it.status == net.aieat.netswissknife.core.network.portscan.PortStatus.OPEN }</ID>
+    <ID>MaxLineLength:PortsScreen.kt:HelpSection(stringResource(R.string.help_portscan_what_heading), stringResource(R.string.help_portscan_what_body))</ID>
+    <ID>MaxLineLength:PortsScreen.kt:clipScope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("", buildScanReport(summary)))) }</ID>
+    <ID>MaxLineLength:PortsScreen.kt:text = pluralStringResource(R.plurals.ports_range_count, endNum - startNum + 1, endNum - startNum + 1)</ID>
+    <ID>MaxLineLength:PrivacyAndUiCopyTest.kt:PrivacyAndUiCopyTest$root.resolve("core-network/src/main/kotlin/net/aieat/netswissknife/core/network/dns/DnsRecordType.kt")</ID>
+    <ID>MaxLineLength:PrivacyAndUiCopyTest.kt:PrivacyAndUiCopyTest$root.resolve("core-network/src/main/kotlin/net/aieat/netswissknife/core/network/httprobe/HttpSecurityAnalyzer.kt")</ID>
+    <ID>MaxLineLength:PrivacyAndUiCopyTest.kt:PrivacyAndUiCopyTest$root.resolve("core-network/src/main/kotlin/net/aieat/netswissknife/core/network/wifi/WifiStandard.kt")</ID>
+    <ID>MaxLineLength:RecentHostsRepositoryTest.kt:RecentHostsRepositoryTest.SanitizeRecents$assertEquals("https://example.com|http://other.example", dataStore.data.first()[AppPreferenceKeys.RECENT_HTTP_HOSTS])</ID>
+    <ID>MaxLineLength:SettingsScreen.kt:AnimatedVisibility</ID>
+    <ID>MaxLineLength:SettingsScreen.kt:Icon(imageVector = Icons.Default.Speed, contentDescription = null, tint = MaterialTheme.colorScheme.primary)</ID>
+    <ID>MaxLineLength:SpeedTestScreen.kt:AnimatedVisibility</ID>
+    <ID>MaxLineLength:SpeedTestScreen.kt:HelpSection(stringResource(R.string.help_speedtest_what_heading), stringResource(R.string.help_speedtest_what_body))</ID>
+    <ID>MaxLineLength:SpeedTestScreen.kt:Text("$connectMs ${stringResource(R.string.speedtest_ms_suffix)}", style = MaterialTheme.typography.labelMedium)</ID>
+    <ID>MaxLineLength:SpeedTestScreen.kt:Text(stringResource(R.string.speedtest_connect_latency), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)</ID>
+    <ID>MaxLineLength:SpeedTestScreen.kt:Text(text = label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)</ID>
+    <ID>MaxLineLength:SpeedTestScreen.kt:Text(text = label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)</ID>
+    <ID>MaxLineLength:SpeedTestScreen.kt:appendLine("Download: avg %.1f Mbps / peak %.1f Mbps / %s".format(result.download.avgMbps, result.download.peakMbps, formatBytes(result.download.bytesTransferred)))</ID>
+    <ID>MaxLineLength:SpeedTestScreen.kt:appendLine("Latency under download load: %.1f ms avg / %d samples".format(result.loadedLatencyDown.avgMs, result.loadedLatencyDown.samples.size))</ID>
+    <ID>MaxLineLength:SpeedTestScreen.kt:appendLine("Latency under upload load: %.1f ms avg / %d samples".format(result.loadedLatencyUp.avgMs, result.loadedLatencyUp.samples.size))</ID>
+    <ID>MaxLineLength:SpeedTestScreen.kt:appendLine("Upload: avg %.1f Mbps / peak %.1f Mbps / %s".format(result.upload.avgMbps, result.upload.peakMbps, formatBytes(result.upload.bytesTransferred)))</ID>
+    <ID>MaxLineLength:SpeedTestScreen.kt:leadingIcon = if (value == selected) ({ Icon(Icons.Default.Speed, contentDescription = null) }) else null</ID>
+    <ID>MaxLineLength:SpeedTestScreen.kt:result.serverInfo?.let { appendLine("Server: ${it.colo ?: "Cloudflare"} · ${it.asn ?: "ASN unavailable"}${it.country?.let { country -&gt; " · $country" } ?: ""}") }</ID>
+    <ID>MaxLineLength:SpeedTestScreen.kt:stringResource(R.string.speedtest_avg_speed) to "%.1f %s".format(result.avgMbps, stringResource(R.string.speedtest_mbps_suffix))</ID>
+    <ID>MaxLineLength:SpeedTestScreen.kt:stringResource(R.string.speedtest_peak_speed) to "%.1f %s".format(result.peakMbps, stringResource(R.string.speedtest_mbps_suffix))</ID>
+    <ID>MaxLineLength:SpeedTestScreen.kt:text = stringResource(R.string.speedtest_server_info, info.colo ?: stringResource(R.string.speedtest_server_global_edge), asn)</ID>
+    <ID>MaxLineLength:SpeedTestScreen.kt:text = stringResource(if (state.phase == SpeedTestPhase.DOWNLOAD) R.string.speedtest_loaded_latency_download else R.string.speedtest_loaded_latency_upload)</ID>
+    <ID>MaxLineLength:SpeedTestViewModel.kt:SpeedTestViewModel$downloadStreams = (preferences[AppPreferenceKeys.SPEEDTEST_DOWN_STREAMS] ?: _config.value.downloadStreams).coerceIn(1, 8)</ID>
+    <ID>MaxLineLength:SpeedTestViewModel.kt:SpeedTestViewModel$downloadStreams = preferences[AppPreferenceKeys.SPEEDTEST_DOWN_STREAMS] ?: SpeedTestConfig().downloadStreams</ID>
+    <ID>MaxLineLength:SpeedTestViewModel.kt:SpeedTestViewModel$uploadStreams = (preferences[AppPreferenceKeys.SPEEDTEST_UP_STREAMS] ?: _config.value.uploadStreams).coerceIn(1, 4)</ID>
+    <ID>MaxLineLength:SpeedTestViewModelTest.kt:SpeedTestViewModelTest.StartTest$SpeedTestEvent.LoadedLatencyFinished(SpeedTestPhase.DOWNLOAD, LatencyStats.compute(listOf(LatencySample(1, 24))))</ID>
+    <ID>MaxLineLength:SpeedTestViewModelTest.kt:SpeedTestViewModelTest.StartTest$SpeedTestEvent.LoadedLatencyFinished(SpeedTestPhase.UPLOAD, LatencyStats.compute(listOf(LatencySample(1, 30))))</ID>
+    <ID>MaxLineLength:SpeedTestViewModelTest.kt:SpeedTestViewModelTest.StartTest$dataStore.data.first { it[AppPreferenceKeys.SPEEDTEST_DOWN_STREAMS] == 6 &amp;&amp; it[AppPreferenceKeys.SPEEDTEST_UP_STREAMS] == 3 }</ID>
+    <ID>MaxLineLength:SubnetCalculatorScreen.kt:HelpSection(stringResource(R.string.help_subnet_what_heading), stringResource(R.string.help_subnet_what_body))</ID>
+    <ID>MaxLineLength:SubnetCalculatorScreen.kt:width = if (absoluteBit == prefixLength - 1 || absoluteBit == prefixLength) 1.dp else 0.dp</ID>
+    <ID>MaxLineLength:SystemDnsAddressProvider.kt:SystemDnsAddressProvider$privateDnsHost = if (Build.VERSION.SDK_INT &gt;= Build.VERSION_CODES.P) props.privateDnsServerName else null</ID>
+    <ID>MaxLineLength:TlsInspectorScreen.kt:HelpSection(stringResource(R.string.help_tls_what_heading), stringResource(R.string.help_tls_what_body))</ID>
+    <ID>MaxLineLength:TlsInspectorScreen.kt:Icon(Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))</ID>
+    <ID>MaxLineLength:TlsInspectorScreen.kt:Text(stringResource(R.string.tls_probe_protocols_label), style = MaterialTheme.typography.bodyMedium)</ID>
+    <ID>MaxLineLength:TlsInspectorScreen.kt:is DisplayState.Error -&gt; TlsErrorContent(state.message, state.descriptionKey) { viewModel.inspect() }</ID>
+    <ID>MaxLineLength:TopologyDiscoveryScreen.kt:Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.clear))</ID>
+    <ID>MaxLineLength:TopologyDiscoveryScreen.kt:Icon(Icons.Default.Info, contentDescription = null, modifier = Modifier.size(18.dp))</ID>
+    <ID>MaxLineLength:TopologyDiscoveryScreen.kt:contentDescription = stringResource(if (showAuthPassword) R.string.action_hide_password else R.string.action_show_password)</ID>
+    <ID>MaxLineLength:TopologyDiscoveryScreen.kt:contentDescription = stringResource(if (showCommunityPassword) R.string.action_hide_password else R.string.action_show_password)</ID>
+    <ID>MaxLineLength:TopologyDiscoveryScreen.kt:contentDescription = stringResource(if (showPrivPassword) R.string.action_hide_password else R.string.action_show_password)</ID>
+    <ID>MaxLineLength:TopologyDiscoveryScreen.kt:if (showAuthPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility</ID>
+    <ID>MaxLineLength:TopologyDiscoveryScreen.kt:if (showCommunityPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility</ID>
+    <ID>MaxLineLength:TopologyDiscoveryScreen.kt:if (showPrivPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility</ID>
+    <ID>MaxLineLength:TopologyDiscoveryScreen.kt:label = { Text(stringResource(R.string.topology_vlan_label, vlan.id, vlan.name), style = MaterialTheme.typography.labelSmall) }</ID>
+    <ID>MaxLineLength:TopologyDiscoveryScreen.kt:net.aieat.netswissknife.app.ui.components.HelpSection(stringResource(R.string.help_topology_what_heading), stringResource(R.string.help_topology_what_body))</ID>
+    <ID>MaxLineLength:TopologyDiscoveryScreen.kt:permissionDenied = (uiState as? TopologyUiState.Failure)?.networkErrorKind == NetworkErrorKind.LOCAL_NETWORK_PERMISSION_DENIED</ID>
+    <ID>MaxLineLength:TopologyDiscoveryScreen.kt:shape = SegmentedButtonDefaults.itemShape(index = index, count = SnmpVersion.entries.size)</ID>
+    <ID>MaxLineLength:TopologyDiscoveryScreen.kt:visible = v3PrivProto != V3PrivProtocol.NONE &amp;&amp; v3AuthProto == V3AuthProtocol.NONE</ID>
+    <ID>MaxLineLength:TopologyDiscoveryViewModelTest.kt:TopologyDiscoveryViewModelTest.StartDiscovery$assertEquals("Target IP or hostname must be valid", (viewModel.uiState.value as TopologyUiState.Failure).message)</ID>
+    <ID>MaxLineLength:TracerouteScreen.kt:CircularProgressIndicator(modifier = Modifier.size(24.dp).semantics { contentDescription = loadingCd }, strokeWidth = 2.dp)</ID>
+    <ID>MaxLineLength:TracerouteScreen.kt:HelpSection(stringResource(R.string.help_traceroute_what_heading), stringResource(R.string.help_traceroute_what_body))</ID>
+    <ID>MaxLineLength:WakeOnLanScreen.kt:leadingIcon = { Icon(Icons.Default.Memory, contentDescription = null, tint = MaterialTheme.colorScheme.primary) }</ID>
+    <ID>MaxLineLength:WakeOnLanScreen.kt:permissionDenied = (uiState as? WolUiState.Error)?.networkErrorKind == NetworkErrorKind.LOCAL_NETWORK_PERMISSION_DENIED</ID>
+    <ID>MaxLineLength:WakeOnLanScreen.kt:transitionSpec = { (fadeIn(AppMotion.enter(250)) + slideInVertically(AppMotion.enter(250)) { it / 6 }) togetherWith fadeOut(AppMotion.exit(150)) }</ID>
+    <ID>MaxLineLength:WakeOnLanViewModelTest.kt:WakeOnLanViewModelTest$mapOf("intent" to ToolIntentCodec.encode(ToolIntent(ToolDestination.WakeOnLan(mac), ToolSource.LAN)), "mac" to "02:23:45:67:89:AC")</ID>
+    <ID>MaxLineLength:WhoisScreen.kt:HelpSection(stringResource(R.string.help_whois_what_heading), stringResource(R.string.help_whois_what_body))</ID>
+    <ID>MaxLineLength:WhoisScreen.kt:label = { Text(humanReadableStatus(status), style = MaterialTheme.typography.labelSmall) }</ID>
+    <ID>MaxLineLength:WifiScanRepositoryImpl.kt:WifiScanRepositoryImpl$ScanResult.WIFI_STANDARD_11AX -&gt; if (band == WifiBand.BAND_6GHZ) WifiStandard.WIFI_6E else WifiStandard.WIFI_6</ID>
+    <ID>MaxLineLength:WifiScanScreen.kt:DetailRow(stringResource(R.string.wifi_detail_standard), "${ap.standard.generationLabel} (${ap.standard.protocolName})")</ID>
+    <ID>MaxLineLength:WifiScanScreen.kt:HelpSection(stringResource(R.string.help_wifi_what_heading), stringResource(R.string.help_wifi_what_body))</ID>
+    <ID>MaxLineLength:WifiScanScreen.kt:icon = { Icon(Icons.Default.LocationOff, null, Modifier.size(48.dp), tint = MaterialTheme.colorScheme.error) }</ID>
+    <ID>MaxLineLength:WifiScanScreen.kt:icon = { Icon(Icons.Default.SignalWifiOff, null, Modifier.size(48.dp), tint = MaterialTheme.colorScheme.tertiary) }</ID>
+    <ID>MaxLineLength:WifiScanScreen.kt:icon = { Icon(Icons.Default.WifiOff, null, Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant) }</ID>
+    <ID>MaxLineLength:WifiScanStatusComponents.kt:WifiScanRefreshStatus.PERMISSION_DENIED -&gt; stringResource(R.string.wifi_scan_permission_denied_cached)</ID>
+    <ID>MaxLineLength:WifiScanStatusComponents.kt:val ageSeconds = result.scanAgeMs?.let { (it / 1_000L).coerceAtLeast(0L).coerceAtMost(Int.MAX_VALUE.toLong()).toInt() }</ID>
+    <ID>MaxLineLength:WifiScanViewModelTest.kt:WifiScanViewModelTest.FiltersAndSort$coEvery { wifiScanUseCase(trigger = true, operationSession = any()) } returns stubResult(stubAp(band = WifiBand.BAND_2_4GHZ))</ID>
+    <ID>MaxLineLength:WifiScanViewModelTest.kt:WifiScanViewModelTest.OrderFreeze$coEvery { wifiScanUseCase(trigger = true, operationSession = any()) } returns stubResult()</ID>
+    <ID>MaxLineLength:WifiScanViewModelTest.kt:WifiScanViewModelTest.OrderFreeze$coEvery { wifiScanUseCase(trigger = true, operationSession = any()) } returns stubResult(weakNowStrong, strongNowWeak)</ID>
+    <ID>MaxLineLength:WifiScanViewModelTest.kt:WifiScanViewModelTest.StartScan$coEvery { wifiScanUseCase(trigger = true, operationSession = any()) } returns stubResult(locationEnabled = false)</ID>
+    <ID>MaxLineLength:WifiScanViewModelTest.kt:WifiScanViewModelTest.StartScan$coEvery { wifiScanUseCase(trigger = true, operationSession = any()) } returns stubResult(wifiEnabled = false)</ID>
+    <ID>RethrowCaughtException:WakeOnLanViewModel.kt:WakeOnLanViewModel$throw cancelled</ID>
+    <ID>ReturnCount:AndroidNetworkBinder.kt:AndroidNetworkBinder$override fun localSubnet: String?</ID>
+    <ID>ReturnCount:AppLogger.kt:AppLogger$fun getLogContent: String</ID>
+    <ID>ReturnCount:HttpProbeViewModel.kt:HttpProbeViewModel$private fun updateRequestInput: Boolean</ID>
+    <ID>ReturnCount:HttpRecentOrigin.kt:internal fun safeHttpRecentOrigin: String?</ID>
+    <ID>ReturnCount:LinkInfoProvider.kt:LinkInfoMapper$fun cidrOf: String?</ID>
+    <ID>ReturnCount:LiteralDestinationClassifier.kt:LiteralDestinationClassifier$fun classify: OperationTargetClass</ID>
+    <ID>ReturnCount:MdnsDiscoveryScreen.kt:internal fun mdnsHttpIntent: ToolIntent?</ID>
+    <ID>ReturnCount:OperationAvailability.kt:OperationAvailability.Companion$fun classify: OperationAvailability</ID>
+    <ID>ReturnCount:SystemDnsAddressProvider.kt:SystemDnsAddressProvider$fun getInfo: SystemDnsInfo</ID>
+    <ID>ReturnCount:TlsInspectorViewModel.kt:TlsInspectorViewModel$fun inspect</ID>
+    <ID>ReturnCount:ToolIntent.kt:ToolHost.Companion$private fun isValid: Boolean</ID>
+    <ID>ReturnCount:ToolIntent.kt:ToolMacAddress.Companion$fun parse: ToolMacAddress?</ID>
+    <ID>ReturnCount:ToolIntent.kt:ToolSubnet.Companion$fun parse: ToolSubnet?</ID>
+    <ID>ReturnCount:ToolIntent.kt:ToolSubnet.Companion$private fun isValidSubnet: Boolean</ID>
+    <ID>ReturnCount:ToolIntentCodec.kt:ToolIntentCodec$fun decode: ToolIntent?</ID>
+    <ID>ReturnCount:ToolIntentCodec.kt:ToolIntentCodec$fun decodeLegacyPortsRoute: ToolIntent?</ID>
+    <ID>ReturnCount:ToolIntentCodec.kt:ToolIntentCodec$private fun decodePayload: ToolIntent?</ID>
+    <ID>ReturnCount:ToolIntentCodec.kt:ToolIntentCodec$private fun percentDecode: String?</ID>
+    <ID>ReturnCount:TracerouteHostResolver.kt:BoundedTracerouteHostResolver$@OptIn(InternalCoroutinesApi::class) override suspend fun resolve: String</ID>
+    <ID>ReturnCount:TracerouteViewModel.kt:TracerouteViewModel$fun startTrace</ID>
+    <ID>ReturnCount:WhoisViewModel.kt:WhoisViewModel$fun lookup</ID>
+    <ID>ReturnCount:WifiScanRepositoryImpl.kt:WifiScanRepositoryImpl$@SuppressLint("MissingPermission") private fun buildConnectionInfo: WifiConnectionInfo?</ID>
+    <ID>ReturnCount:WifiScanRepositoryImpl.kt:WifiScanRepositoryImpl$@SuppressLint("MissingPermission") private fun getActiveWifiConnection: ActiveWifiConnection?</ID>
+    <ID>SwallowedException:LanScanViewModelTest.kt:LanScanViewModelTest.StartScanStateTransitions.&lt;no name provided&gt;$cancelled: kotlinx.coroutines.CancellationException</ID>
+    <ID>SwallowedException:PortScanViewModelTest.kt:PortScanViewModelTest.&lt;no name provided&gt;$cancelled: kotlinx.coroutines.CancellationException</ID>
+    <ID>SwallowedException:WifiScanViewModel.kt:WifiScanViewModel$e: SecurityException</ID>
+    <ID>SwallowedException:WifiScanViewModel.kt:WifiScanViewModel$e: WifiNotSupportedException</ID>
+    <ID>ThrowingExceptionFromFinally:MdnsDiscoveryViewModelTest.kt:MdnsDiscoveryViewModelTest.StopAndReset$throw IllegalStateException("late old failure")</ID>
+    <ID>TooGenericExceptionCaught:AppLogger.kt:AppLogger$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:DebugLogScreen.kt:e: Exception</ID>
+    <ID>TooGenericExceptionCaught:DnsViewModel.kt:DnsViewModel$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:HttpProbeViewModel.kt:HttpProbeViewModel$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:LanScanViewModel.kt:LanScanViewModel$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:MdnsDiscoveryViewModel.kt:MdnsDiscoveryViewModel$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:MdnsRepositoryImpl.kt:MdnsRepositoryImpl$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:PingViewModel.kt:PingViewModel$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:PortScanViewModel.kt:PortScanViewModel$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:SpeedTestViewModel.kt:SpeedTestViewModel$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:TlsInspectorViewModel.kt:TlsInspectorViewModel$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:TopologyDiscoveryViewModel.kt:TopologyDiscoveryViewModel$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:TracerouteHostResolver.kt:BoundedTracerouteHostResolver$failure: Exception</ID>
+    <ID>TooGenericExceptionCaught:TracerouteHostResolver.kt:BoundedTracerouteHostResolver.HostResolutionFutureTask$failure: Exception</ID>
+    <ID>TooGenericExceptionCaught:TracerouteReverseDnsLookup.kt:BoundedTracerouteReverseDnsLookup$failure: Exception</ID>
+    <ID>TooGenericExceptionCaught:TracerouteReverseDnsLookup.kt:BoundedTracerouteReverseDnsLookup.ReverseDnsFutureTask$failure: Exception</ID>
+    <ID>TooGenericExceptionCaught:TracerouteViewModel.kt:TracerouteViewModel$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:WifiScanViewModel.kt:WifiScanViewModel$e: Exception</ID>
+    <ID>TooGenericExceptionThrown:MdnsDiscoveryViewModelTest.kt:MdnsDiscoveryViewModelTest.StartScan$throw RuntimeException("mdns failed")</ID>
+    <ID>TooManyFunctions:AppNavigation.kt:net.aieat.netswissknife.app.ui.navigation.AppNavigation.kt</ID>
+    <ID>TooManyFunctions:DnsScreen.kt:net.aieat.netswissknife.app.ui.screens.DnsScreen.kt</ID>
+    <ID>TooManyFunctions:DnsViewModel.kt:DnsViewModel : ViewModel</ID>
+    <ID>TooManyFunctions:HttpProbeScreen.kt:net.aieat.netswissknife.app.ui.screens.httprobe.HttpProbeScreen.kt</ID>
+    <ID>TooManyFunctions:HttpProbeViewModel.kt:HttpProbeViewModel : ViewModel</ID>
+    <ID>TooManyFunctions:LanScanScreen.kt:net.aieat.netswissknife.app.ui.screens.lan.LanScanScreen.kt</ID>
+    <ID>TooManyFunctions:LanScanViewModel.kt:LanScanViewModel : ViewModel</ID>
+    <ID>TooManyFunctions:MdnsDiscoveryScreen.kt:net.aieat.netswissknife.app.ui.screens.mdns.MdnsDiscoveryScreen.kt</ID>
+    <ID>TooManyFunctions:PingScreen.kt:net.aieat.netswissknife.app.ui.screens.PingScreen.kt</ID>
+    <ID>TooManyFunctions:PingViewModel.kt:PingViewModel : ViewModel</ID>
+    <ID>TooManyFunctions:PortScanViewModel.kt:PortScanViewModel : ViewModel</ID>
+    <ID>TooManyFunctions:SettingsScreen.kt:net.aieat.netswissknife.app.ui.screens.settings.SettingsScreen.kt</ID>
+    <ID>TooManyFunctions:SpeedTestScreen.kt:net.aieat.netswissknife.app.ui.screens.speedtest.SpeedTestScreen.kt</ID>
+    <ID>TooManyFunctions:SubnetCalculatorScreen.kt:net.aieat.netswissknife.app.ui.screens.subnet.SubnetCalculatorScreen.kt</ID>
+    <ID>TooManyFunctions:TlsInspectorScreen.kt:net.aieat.netswissknife.app.ui.screens.tls.TlsInspectorScreen.kt</ID>
+    <ID>TooManyFunctions:TlsInspectorViewModel.kt:TlsInspectorViewModel : ViewModel</ID>
+    <ID>TooManyFunctions:TopologyDiscoveryScreen.kt:net.aieat.netswissknife.app.ui.screens.topology.TopologyDiscoveryScreen.kt</ID>
+    <ID>TooManyFunctions:TracerouteScreen.kt:net.aieat.netswissknife.app.ui.screens.TracerouteScreen.kt</ID>
+    <ID>TooManyFunctions:TracerouteViewModel.kt:TracerouteViewModel : ViewModel</ID>
+    <ID>TooManyFunctions:WhoisScreen.kt:net.aieat.netswissknife.app.ui.screens.whois.WhoisScreen.kt</ID>
+    <ID>TooManyFunctions:WhoisViewModel.kt:WhoisViewModel : ViewModel</ID>
+    <ID>TooManyFunctions:WifiScanScreen.kt:net.aieat.netswissknife.app.ui.screens.WifiScanScreen.kt</ID>
+    <ID>TooManyFunctions:WifiScanViewModel.kt:WifiScanViewModel : ViewModel</ID>
+    <ID>UnusedParameter:PingViewModel.kt:PingViewModel$totalCount: Int</ID>
+    <ID>UnusedParameter:TlsInspectorScreen.kt:index: Int</ID>
+    <ID>VariableNaming:TracerouteScreen.kt:val R = 6371.0</ID>
+    <ID>WildcardImport:TopologyDiscoveryScreen.kt:import androidx.compose.animation.*</ID>
+    <ID>WildcardImport:TopologyDiscoveryScreen.kt:import androidx.compose.animation.core.*</ID>
+    <ID>WildcardImport:TopologyDiscoveryScreen.kt:import androidx.compose.foundation.*</ID>
+    <ID>WildcardImport:TopologyDiscoveryScreen.kt:import androidx.compose.foundation.gestures.*</ID>
+    <ID>WildcardImport:TopologyDiscoveryScreen.kt:import androidx.compose.foundation.layout.*</ID>
+    <ID>WildcardImport:TopologyDiscoveryScreen.kt:import androidx.compose.material.icons.filled.*</ID>
+    <ID>WildcardImport:TopologyDiscoveryScreen.kt:import androidx.compose.material3.*</ID>
+    <ID>WildcardImport:TopologyDiscoveryScreen.kt:import androidx.compose.runtime.*</ID>
+    <ID>WildcardImport:TopologyDiscoveryScreen.kt:import androidx.compose.ui.*</ID>
+    <ID>WildcardImport:TopologyDiscoveryScreen.kt:import androidx.compose.ui.draw.*</ID>
+    <ID>WildcardImport:TopologyDiscoveryScreen.kt:import androidx.compose.ui.geometry.*</ID>
+    <ID>WildcardImport:TopologyDiscoveryScreen.kt:import androidx.compose.ui.graphics.*</ID>
+    <ID>WildcardImport:TopologyDiscoveryScreen.kt:import androidx.compose.ui.graphics.drawscope.*</ID>
+    <ID>WildcardImport:TopologyDiscoveryScreen.kt:import androidx.compose.ui.input.pointer.*</ID>
+    <ID>WildcardImport:TopologyDiscoveryScreen.kt:import androidx.compose.ui.unit.*</ID>
+    <ID>WildcardImport:TopologyDiscoveryScreen.kt:import kotlin.math.*</ID>
+    <ID>WildcardImport:TopologyDiscoveryScreen.kt:import net.aieat.netswissknife.core.network.topology.*</ID>
+    <ID>WildcardImport:TopologyDiscoveryViewModel.kt:import net.aieat.netswissknife.core.network.topology.*</ID>
+  </CurrentIssues>
+</SmellBaseline>

@@ -1,28 +1,25 @@
 package net.aieat.netswissknife.app.ui.components
 
-import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
+import net.aieat.netswissknife.core.network.HostValidator
+import net.aieat.netswissknife.app.platform.LiteralDestinationClassifier
+import net.aieat.netswissknife.app.platform.LocalNetworkPermissionPolicy
+import net.aieat.netswissknife.app.platform.OperationAvailability
+import net.aieat.netswissknife.core.network.operation.OperationRequirement
 
 /**
- * Android 16 (API 36) gates LAN sockets, mDNS/NSD, and broadcast traffic behind
- * `NEARBY_WIFI_DEVICES` under Local Network Protections (currently opt-in via
- * `adb shell am compat enable RESTRICT_LOCAL_NETWORK`, enforcement lands in a
- * future release; confirmed against the android-36 SDK, no separate permission
- * constant exists). Tools that talk to local-network addresses call this once
- * on entry so the permission is already granted before enforcement ships;
- * denial isn't fatal today; the underlying socket call will surface as the
- * tool's existing error state.
- *
- * Gated on API 36+, not 33+ (`NEARBY_WIFI_DEVICES` also exists since 33 for
- * Wi-Fi scanning, but LNP itself only applies on 36+) so 13-15 devices don't
- * see an irrelevant permission prompt.
+ * Requests the permission required by the OS release: Android 16 uses the
+ * temporary `NEARBY_WIFI_DEVICES` path, Android 17+ uses `ACCESS_LOCAL_NETWORK`,
+ * and earlier releases keep their implicit access without showing a prompt.
  */
 @Composable
 fun rememberLocalNetworkPermissionRequester(): () -> Unit {
@@ -33,13 +30,55 @@ fun rememberLocalNetworkPermissionRequester(): () -> Unit {
 
     return remember(context) {
         {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA &&
-                ContextCompat.checkSelfPermission(
-                    context,
-                    Manifest.permission.NEARBY_WIFI_DEVICES
-                ) != PackageManager.PERMISSION_GRANTED
-            ) {
-                launcher.launch(Manifest.permission.NEARBY_WIFI_DEVICES)
+            val permission = LocalNetworkPermissionPolicy.permissionToRequest(Build.VERSION.SDK_INT)
+            val granted = permission?.let {
+                ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
+            } ?: false
+            if (LocalNetworkPermissionPolicy.shouldRequestPermission(Build.VERSION.SDK_INT, true, granted)) {
+                checkNotNull(permission)
+                launcher.launch(permission)
+            }
+        }
+    }
+}
+
+/**
+ * Starts public/system-resolver destinations immediately and gates local targets on the
+ * OS-appropriate runtime permission. The start callback runs after either grant or denial;
+ * on API 37+ the ViewModel then reports the explicit denial from its own permission seam.
+ */
+@Composable
+fun rememberLocalNetworkPermissionRequester(onStart: () -> Unit): (String) -> Unit {
+    val context = LocalContext.current
+    val pendingStart = remember { mutableStateOf<(() -> Unit)?>(null) }
+    val latestOnStart = rememberUpdatedState(onStart)
+    val launcher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+    ) {
+        val start = pendingStart.value
+        pendingStart.value = null
+        start?.invoke()
+    }
+
+    return remember(context, launcher) {
+        { destination ->
+            val normalizedHost = HostValidator.normalize(destination) ?: destination.trim()
+            val target = LiteralDestinationClassifier.target(normalizedHost)
+            val requirement = OperationAvailability.requirementFor(target)
+            val permission = LocalNetworkPermissionPolicy.permissionToRequest(Build.VERSION.SDK_INT)
+            val granted = permission?.let {
+                ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
+            } ?: false
+            val shouldRequest = LocalNetworkPermissionPolicy.shouldRequestPermission(
+                apiLevel = Build.VERSION.SDK_INT,
+                isLocalTarget = requirement == OperationRequirement.LOCAL_NETWORK,
+                permissionGranted = granted,
+            )
+            if (!shouldRequest) {
+                latestOnStart.value()
+            } else {
+                pendingStart.value = { latestOnStart.value() }
+                launcher.launch(checkNotNull(permission))
             }
         }
     }

@@ -174,6 +174,12 @@ REFACTOR: Clean up → ./gradlew test (all pass)
 # Build release AAB (for Play Store)
 ./gradlew :app:bundleRelease
 
+# Check Kotlin formatting and static analysis
+./gradlew ktlintCheck detekt --no-daemon --no-parallel
+
+# Regenerate per-module lint baselines after reviewing the current findings
+./gradlew ktlintGenerateBaseline detektBaseline --no-daemon --no-parallel
+
 # Clean
 ./gradlew clean
 

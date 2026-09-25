@@ -38,6 +38,39 @@ data class HttpTimings(
     val totalMs: Long = 0,
 )
 
+/** Display-ready phases; TTFB is a total from call start, so only its residual is stacked. */
+data class HttpTimingBreakdown(
+    val dnsMs: Long?,
+    val connectMs: Long?,
+    val tlsMs: Long?,
+    val serverWaitMs: Long?,
+    val ttfbTotalMs: Long?,
+    val transferMs: Long?,
+) {
+    companion object {
+        fun from(timings: HttpTimings): HttpTimingBreakdown {
+            val setupMs =
+                listOfNotNull(timings.dnsMs, timings.connectMs, timings.tlsMs)
+                    .fold(0L) { sum, phase ->
+                        val value = phase.coerceAtLeast(0L)
+                        if (Long.MAX_VALUE - sum < value) Long.MAX_VALUE else sum + value
+                    }
+            val serverWaitMs =
+                timings.ttfbMs?.let { ttfb ->
+                    (ttfb.coerceAtLeast(0L) - setupMs).coerceAtLeast(0L)
+                }
+            return HttpTimingBreakdown(
+                dnsMs = timings.dnsMs,
+                connectMs = timings.connectMs,
+                tlsMs = timings.tlsMs,
+                serverWaitMs = serverWaitMs,
+                ttfbTotalMs = timings.ttfbMs,
+                transferMs = timings.transferMs,
+            )
+        }
+    }
+}
+
 /** One redirect response, retaining exactly the evidence supplied by that response. */
 data class RedirectHop(
     val url: String,

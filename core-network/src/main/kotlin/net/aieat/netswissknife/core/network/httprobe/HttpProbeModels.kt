@@ -3,14 +3,16 @@ package net.aieat.netswissknife.core.network.httprobe
 import net.aieat.netswissknife.core.network.httprobe.engine.HttpTimings
 import net.aieat.netswissknife.core.network.httprobe.engine.RedirectHop
 
-enum class HttpMethod(val supportsBody: Boolean) {
+enum class HttpMethod(
+    val supportsBody: Boolean,
+) {
     GET(false),
     POST(true),
     PUT(true),
     PATCH(true),
     DELETE(false),
     HEAD(false),
-    OPTIONS(false)
+    OPTIONS(false),
 }
 
 enum class SecurityRating { PASS, WARN, FAIL, INFO }
@@ -24,21 +26,23 @@ data class HttpProbeRequest(
     val timeoutMs: Int = 15_000,
     val maxResponseBodyBytes: Long = 512_000L,
     /** Per-run approval callback. It is invoked before an entity is replayed to another origin. */
-    val approveCrossOriginEntityReplay: (suspend (CrossOriginEntityReplay) -> Boolean)? = null
+    val approveCrossOriginEntityReplay: (suspend (CrossOriginEntityReplay) -> Boolean)? = null,
 )
 
 data class CrossOriginEntityReplay(
     /** Exact resolved URL displayed to the user for this single redirect hop. */
     val destinationUrl: String,
     val method: HttpMethod,
-    val statusCode: Int
+    val statusCode: Int,
 )
 
 data class SecurityHeaderCheck(
     val headerName: String,
     val value: String?,
     val rating: SecurityRating,
-    val description: String
+    val description: String,
+    /** Optional app resource key for a localized, stable explanation. */
+    val descriptionKey: String? = null,
 )
 
 data class HttpProbeResult(

@@ -1,0 +1,714 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>ComplexCondition:BannerReader.kt:BannerReader$(stopAfterLine || stopWhenLine != null) &amp;&amp; total &gt; 0 &amp;&amp; bytes[total - 1] == '\n'.code.toByte()</ID>
+    <ID>ComplexCondition:MdnsReverseNameProbe.kt:MdnsReverseNameProbe.Companion$!message.header.getFlag(Flags.QR.toInt()) || message.header.id != 0 || message.header.getOpcode() != Opcode.QUERY || message.header.getRcode() != Rcode.NOERROR</ID>
+    <ID>ComplexCondition:NetBiosNameProbe.kt:NetBiosNameProbe.Companion$requireResponse &amp;&amp; (flags and 0x8000 == 0 || flags and 0x7800 != 0 || flags and 0x0200 != 0 || flags and 0x000F != 0)</ID>
+    <ID>ComplexCondition:PublicSuffix.kt:PublicSuffix.Rules$(candidate in ruleSet.exact || (unicodeCandidate != null &amp;&amp; unicodeCandidate in ruleSet.exactUnicode)) &amp;&amp; length &gt; publicSuffixLength</ID>
+    <ID>ComplexCondition:PublicSuffix.kt:PublicSuffix.Rules$(candidate in ruleSet.exceptions || (unicodeCandidate != null &amp;&amp; unicodeCandidate in ruleSet.exceptionsUnicode)) &amp;&amp; (exceptionLength == null || length &gt; exceptionLength)</ID>
+    <ID>ComplexCondition:PublicSuffix.kt:PublicSuffix.Rules$start &gt; 0 &amp;&amp; (candidate in ruleSet.wildcard || (unicodeCandidate != null &amp;&amp; unicodeCandidate in ruleSet.wildcardUnicode)) &amp;&amp; length + 1 &gt; publicSuffixLength</ID>
+    <ID>ComplexCondition:RdapClient.kt:DnsBootstrap.Companion$url.host.isBlank() || url.username.isNotEmpty() || url.password.isNotEmpty() || url.query != null || url.fragment != null</ID>
+    <ID>ComplexCondition:RdapClient.kt:PublicInternetDns$address.isAnyLocalAddress || address.isLoopbackAddress || address.isLinkLocalAddress || address.isSiteLocalAddress || address.isMulticastAddress</ID>
+    <ID>ComplexCondition:RdapClient.kt:PublicInternetDns$bytes[0] == 0x20 &amp;&amp; bytes[1] == 0x01 &amp;&amp; bytes[2] == 0x0d &amp;&amp; bytes[3] == 0xb8</ID>
+    <ID>ComplexCondition:ReservedRanges.kt:ReservedRanges$a == 192 &amp;&amp; b == 0 &amp;&amp; c == 0 &amp;&amp; d in 9..10</ID>
+    <ID>ComplexCondition:ReservedRanges.kt:ReservedRanges$first == 0x0100 &amp;&amp; groups[1] == 0 &amp;&amp; groups[2] == 0 &amp;&amp; groups[3] == 0</ID>
+    <ID>ComplexCondition:ReservedRanges.kt:ReservedRanges$first == 0x0100 &amp;&amp; groups[1] == 0 &amp;&amp; groups[2] == 0 &amp;&amp; groups[3] == 1</ID>
+    <ID>ComplexCondition:ReservedRanges.kt:ReservedRanges$part.isEmpty() || part.length &gt; 3 || (part.length &gt; 1 &amp;&amp; part[0] == '0')</ID>
+    <ID>ComplexCondition:ReservedRanges.kt:ReservedRanges$value.any { it !in '0'..'9' &amp;&amp; it !in 'a'..'f' &amp;&amp; it !in 'A'..'F' &amp;&amp; it != ':' &amp;&amp; it != '.' }</ID>
+    <ID>ComplexCondition:TopologyDiscoveryRepositoryImpl.kt:TopologyDiscoveryRepositoryImpl$lower.contains("access point") || lower.contains("wireless") || lower.contains("wifi") || lower.contains("wi-fi")</ID>
+    <ID>ComplexCondition:TopologyParamsValidator.kt:TopologyParamsValidator$params.maxHops in MIN_MAX_HOPS..MAX_MAX_HOPS &amp;&amp; params.timeoutMs in MIN_TIMEOUT_MS..MAX_TIMEOUT_MS &amp;&amp; params.retries in MIN_RETRIES..MAX_RETRIES &amp;&amp; TopologyOperationBudget.timeoutMillisOrNull(params) == null</ID>
+    <ID>ComplexCondition:TopologySnapshotDiff.kt:parts.size != 4 || parts.any { part -&gt; part.isEmpty() || part.length &gt; 3 || part.any { it !in '0'..'9' } }</ID>
+    <ID>ComplexCondition:TopologySnapshotDiff.kt:tokens.any { token -&gt; token.isEmpty() || token.length &gt; 4 || token.any { it !in '0'..'9' &amp;&amp; it !in 'a'..'f' } }</ID>
+    <ID>ComplexCondition:TracerouteOperation.kt:TracerouteOperation$maxHops !in 1..64 || timeoutMs !in 500..30_000 || probesPerHop !in 1..5 || maxConcurrentProbes &lt;= 0</ID>
+    <ID>ComplexCondition:WhoisQueryTypeDetector.kt:WhoisQueryTypeDetector$labels.any { label -&gt; label.isEmpty() || label.length &gt; 63 || label.startsWith('-') || label.endsWith('-') }</ID>
+    <ID>CyclomaticComplexMethod:BannerReader.kt:BannerReader$fun read: BannerReadResult</ID>
+    <ID>CyclomaticComplexMethod:CookieAnalyzer.kt:CookieAnalyzer$private fun analyzeCookie: SecurityHeaderCheck</ID>
+    <ID>CyclomaticComplexMethod:DiscoveryProbes.kt:SocketTcpPresenceProbe$override suspend fun probe: TcpPresence</ID>
+    <ID>CyclomaticComplexMethod:DnsRepositoryImpl.kt:DnsRepositoryImpl$override suspend fun lookup: NetworkResult&lt;DnsResult&gt;</ID>
+    <ID>CyclomaticComplexMethod:GeoIpRepositoryImpl.kt:GeoIpRepositoryImpl$private suspend fun net.aieat.netswissknife.core.network.operation.OperationContext.fetchGeoIp: HopGeoLocation?</ID>
+    <ID>CyclomaticComplexMethod:GeoIpRepositoryImpl.kt:IpApiGeoIpProvider$override fun parse: GeoIpParseOutcome</ID>
+    <ID>CyclomaticComplexMethod:HostnameMatcher.kt:HostnameMatcher$fun matches: Boolean</ID>
+    <ID>CyclomaticComplexMethod:HttpProbeRepositoryImpl.kt:HttpProbeRepositoryImpl$private suspend fun executeRequest: NetworkResult&lt;HttpProbeResult&gt;</ID>
+    <ID>CyclomaticComplexMethod:HttpProbeRepositoryImpl.kt:HttpProbeRepositoryImpl$private suspend fun probeInternal: NetworkResult&lt;HttpProbeResult&gt;</ID>
+    <ID>CyclomaticComplexMethod:HttpSecurityAnalyzer.kt:HttpSecurityAnalyzer$private fun checkHsts: SecurityHeaderCheck</ID>
+    <ID>CyclomaticComplexMethod:LanScanRepositoryImpl.kt:LanScanRepositoryImpl$override fun scan: Flow&lt;LanScanUpdate&gt;</ID>
+    <ID>CyclomaticComplexMethod:LanScanRepositoryImpl.kt:LanScanRepositoryImpl$private suspend fun discoverPresence: PresenceResult</ID>
+    <ID>CyclomaticComplexMethod:LanScanRepositoryImpl.kt:LanScanRepositoryImpl$private suspend fun enrich: LanHost</ID>
+    <ID>CyclomaticComplexMethod:MdnsDiscoverySession.kt:MdnsDiscoverySession$fun process: MdnsSessionResult</ID>
+    <ID>CyclomaticComplexMethod:NetBiosNameProbe.kt:NetBiosNameProbe.Companion$private fun parseNbstat: String?</ID>
+    <ID>CyclomaticComplexMethod:OperationRunner.kt:OperationRunner$@OptIn(InternalCoroutinesApi::class) suspend fun &lt;T&gt; run: T</ID>
+    <ID>CyclomaticComplexMethod:PingRepositoryImpl.kt:PingRepositoryImpl$private fun runBoundedSession: Flow&lt;PingPacketResult&gt;</ID>
+    <ID>CyclomaticComplexMethod:PingRepositoryImpl.kt:PingRepositoryImpl$private fun runContinuousSession: Flow&lt;PingPacketResult&gt;</ID>
+    <ID>CyclomaticComplexMethod:PortScanRepositoryImpl.kt:PortScanRepositoryImpl$private fun scanInternal: Flow&lt;PortScanUpdate&gt;</ID>
+    <ID>CyclomaticComplexMethod:PortScanRepositoryImpl.kt:PortScanRepositoryImpl.Companion$private fun scopedDefaultChecker: PortConnectChecker</ID>
+    <ID>CyclomaticComplexMethod:PublicSuffix.kt:PublicSuffix.Rules$fun registrableDomain: String</ID>
+    <ID>CyclomaticComplexMethod:RdapClient.kt:PublicInternetDns$private fun isLocalOrPrivateAddress: Boolean</ID>
+    <ID>CyclomaticComplexMethod:RdapMapper.kt:RdapMapper$fun map: WhoisResult</ID>
+    <ID>CyclomaticComplexMethod:ReachabilityPingEngine.kt:ReachabilityPingEngine$private fun pingInternal: Flow&lt;PingPacketResult&gt;</ID>
+    <ID>CyclomaticComplexMethod:ReservedRanges.kt:ReservedRanges$private fun isPublicIpv4: Boolean</ID>
+    <ID>CyclomaticComplexMethod:ReservedRanges.kt:ReservedRanges$private fun isPublicIpv6: Boolean</ID>
+    <ID>CyclomaticComplexMethod:ReservedRanges.kt:ReservedRanges$private fun parseIpv6: IntArray?</ID>
+    <ID>CyclomaticComplexMethod:ResourceScope.kt:ResourceScope$override fun close</ID>
+    <ID>CyclomaticComplexMethod:SpeedTestRepositoryImpl.kt:SpeedTestRepositoryImpl$private fun runLegacy: Flow&lt;SpeedTestEvent&gt;</ID>
+    <ID>CyclomaticComplexMethod:SubnetUtils.kt:SubnetUtils$private fun platformInterfaceAddressCandidates: Sequence&lt;InterfaceAddressCandidate&gt;</ID>
+    <ID>CyclomaticComplexMethod:TlsInspectorRepositoryImpl.kt:TlsInspectorRepositoryImpl$override suspend fun inspect: NetworkResult&lt;TlsInspectorResult&gt;</ID>
+    <ID>CyclomaticComplexMethod:TopologyDiscoveryRepositoryImpl.kt:TopologyDiscoveryRepositoryImpl$override fun discover: Flow&lt;TopologyDiscoveryEvent&gt;</ID>
+    <ID>CyclomaticComplexMethod:TopologyParamsValidator.kt:TopologyParamsValidator$fun validate: ValidationResult</ID>
+    <ID>CyclomaticComplexMethod:TopologySnapshotDiff.kt:TopologySnapshotDiffer$private fun tableChanges: TopologyTableChanges</ID>
+    <ID>CyclomaticComplexMethod:TopologySnapshotDiff.kt:private fun canonicalIpv6: String?</ID>
+    <ID>CyclomaticComplexMethod:WhoisQueryTypeDetector.kt:WhoisQueryTypeDetector$fun normalize: NormalizedWhoisQuery?</ID>
+    <ID>CyclomaticComplexMethod:WhoisQueryTypeDetector.kt:WhoisQueryTypeDetector$private fun parseIpv6Literal: ByteArray?</ID>
+    <ID>CyclomaticComplexMethod:WhoisRepositoryImpl.kt:WhoisRepositoryImpl$override suspend fun lookup: NetworkResult&lt;WhoisResult&gt;</ID>
+    <ID>CyclomaticComplexMethod:WhoisRepositoryImpl.kt:WhoisRepositoryImpl$private suspend fun performDomainLookup: NetworkResult&lt;WhoisResult&gt;</ID>
+    <ID>CyclomaticComplexMethod:WhoisRepositoryImpl.kt:WhoisRepositoryImpl$private suspend fun tryRdapLookup: NetworkResult&lt;WhoisResult&gt;?</ID>
+    <ID>CyclomaticComplexMethod:WifiSecurity.kt:WifiSecurity.Companion$fun fromCapabilities: WifiSecurity</ID>
+    <ID>DestructuringDeclarationWithTooManyEntries:DnsRepositoryImpl.kt:DnsRepositoryImpl.Companion$val (a, b, c, d) = ipv4Match.destructured</ID>
+    <ID>DestructuringDeclarationWithTooManyEntries:TopologyDiscoveryRepositoryImpl.kt:TopologyDiscoveryRepositoryImpl$val (descrWalk, speedWalk, highSpeedWalk, statusWalk, macWalk) = coroutineScope { val table = TopologyDataTable.INTERFACES val descr = async { safeWalk(client, target, "1.3.6.1.2.1.2.2.1.2", budget, truncationReasons, snmpErrors, sessionRequestLimiter, table, tableObservations) } val speed = async { safeWalk(client, target, "1.3.6.1.2.1.2.2.1.5", budget, truncationReasons, snmpErrors, sessionRequestLimiter, table, tableObservations) } val highSpeed = async { safeWalk(client, target, "1.3.6.1.2.1.31.1.1.1.15", budget, truncationReasons, snmpErrors, sessionRequestLimiter, table, tableObservations) } val status = async { safeWalk(client, target, "1.3.6.1.2.1.2.2.1.8", budget, truncationReasons, snmpErrors, sessionRequestLimiter, table, tableObservations) } val mac = async { safeWalk(client, target, "1.3.6.1.2.1.2.2.1.6", budget, truncationReasons, snmpErrors, sessionRequestLimiter, table, tableObservations) } Quintuple(descr.await(), speed.await(), highSpeed.await(), status.await(), mac.await()) }</ID>
+    <ID>DestructuringDeclarationWithTooManyEntries:TopologyDiscoveryRepositoryImpl.kt:TopologyDiscoveryRepositoryImpl$val (interfaces, vlans, lldpResult, cdpResult) = coroutineScope { val interfaces = async { queryInterfaces(snmpClient, target, walkBudget, truncationReasons, snmpErrors, sessionRequestLimiter, tableObservations) } val vlans = async { queryVlans(snmpClient, target, walkBudget, truncationReasons, snmpErrors, sessionRequestLimiter, tableObservations) } val lldp = async { queryLldpNeighbours( snmpClient, target, currentIp, currentHop, params.maxHops, walkBudget, truncationReasons, snmpErrors, linkBudget, sessionRequestLimiter, tableObservations ) } val cdp = async { queryCdpNeighbours( snmpClient, target, currentIp, currentHop, params.maxHops, walkBudget, truncationReasons, snmpErrors, linkBudget, sessionRequestLimiter, tableObservations ) } Quadruple(interfaces.await(), vlans.await(), lldp.await(), cdp.await()) }</ID>
+    <ID>ForEachOnRange:TopologySnapshotDiff.kt:TopologySnapshotDiffer$0 until sharedCount</ID>
+    <ID>ForEachOnRange:TopologySnapshotDiff.kt:TopologySnapshotDiffer$sharedCount until newOccurrences.size</ID>
+    <ID>ForEachOnRange:TopologySnapshotDiff.kt:TopologySnapshotDiffer$sharedCount until oldOccurrences.size</ID>
+    <ID>LargeClass:GeoIpRepositoryImplTest.kt:GeoIpRepositoryImplTest</ID>
+    <ID>LargeClass:PortScanRepositoryImplTest.kt:PortScanRepositoryImplTest</ID>
+    <ID>LargeClass:TopologyDiscoveryRepositoryTest.kt:TopologyDiscoveryRepositoryTest</ID>
+    <ID>LongMethod:DnsRepositoryImpl.kt:DnsRepositoryImpl$override suspend fun lookup: NetworkResult&lt;DnsResult&gt;</ID>
+    <ID>LongMethod:DnsRepositoryOperationSessionTest.kt:DnsRepositoryOperationSessionTest$@Test fun `dnsjava retries truncated udp response over the session scoped tcp socket`</ID>
+    <ID>LongMethod:HttpProbeRepositoryImpl.kt:HttpProbeRepositoryImpl$private suspend fun executeRequest: NetworkResult&lt;HttpProbeResult&gt;</ID>
+    <ID>LongMethod:LanScanRepositoryImpl.kt:LanScanRepositoryImpl$override fun scan: Flow&lt;LanScanUpdate&gt;</ID>
+    <ID>LongMethod:LanScanRepositoryImplTest.kt:LanScanRepositoryImplTest$@Test @OptIn(ExperimentalCoroutinesApi::class) fun `scan worker count never exceeds the caller session budget`</ID>
+    <ID>LongMethod:MdnsDiscoverySession.kt:MdnsDiscoverySession$fun process: MdnsSessionResult</ID>
+    <ID>LongMethod:OperationRunner.kt:OperationRunner$@OptIn(InternalCoroutinesApi::class) suspend fun &lt;T&gt; run: T</ID>
+    <ID>LongMethod:OperationRunnerTest.kt:OperationRunnerTest$@Test fun `deadline closes resources cancels and joins workers without success emission`</ID>
+    <ID>LongMethod:PingRepositoryImpl.kt:PingRepositoryImpl$private fun runBoundedSession: Flow&lt;PingPacketResult&gt;</ID>
+    <ID>LongMethod:PingRepositoryImpl.kt:PingRepositoryImpl$private fun runContinuousSession: Flow&lt;PingPacketResult&gt;</ID>
+    <ID>LongMethod:PortScanRepositoryImpl.kt:PortScanRepositoryImpl$private fun scanInternal: Flow&lt;PortScanUpdate&gt;</ID>
+    <ID>LongMethod:PortScanRepositoryImpl.kt:PortScanRepositoryImpl.Companion$private fun scopedDefaultChecker: PortConnectChecker</ID>
+    <ID>LongMethod:SpeedTestRepositoryImpl.kt:SpeedTestRepositoryImpl$private fun runLegacy: Flow&lt;SpeedTestEvent&gt;</ID>
+    <ID>LongMethod:SpeedTestRepositoryImpl.kt:SpeedTestRepositoryImpl$private fun runWithTransferEngine: Flow&lt;SpeedTestEvent&gt;</ID>
+    <ID>LongMethod:TlsInspectorRepositoryImpl.kt:TlsInspectorRepositoryImpl$override suspend fun inspect: NetworkResult&lt;TlsInspectorResult&gt;</ID>
+    <ID>LongMethod:TopologyDiscoveryRepositoryImpl.kt:TopologyDiscoveryRepositoryImpl$override fun discover: Flow&lt;TopologyDiscoveryEvent&gt;</ID>
+    <ID>LongMethod:TopologyDiscoveryRepositoryTest.kt:TopologyDiscoveryRepositoryTest$@Test fun `late listener recreating a socket is closed after one-shot init timeout`</ID>
+    <ID>LongMethod:TopologyDiscoveryRepositoryTest.kt:TopologyDiscoveryRepositoryTest$@Test fun `repository caps scalar GET requests across sessions and resumes queued request after cancellation`</ID>
+    <ID>LongMethod:TopologyDiscoveryRepositoryTest.kt:TopologyDiscoveryRepositoryTest$@Test fun `repository walk cap is shared across sessions and releases queued work after cancellation`</ID>
+    <ID>LongMethod:TopologySnapshotDiff.kt:TopologySnapshotDiffer$private fun classifyProtocolChanges: Map&lt;TopologyDataTable, TopologyTableChanges&gt;</ID>
+    <ID>LongMethod:TopologySnapshotDiff.kt:TopologySnapshotDiffer$private fun tableChanges: TopologyTableChanges</ID>
+    <ID>LongMethod:TopologySnapshotDiff.kt:private fun canonicalIpv6: String?</ID>
+    <ID>LongMethod:TopologySnapshotDiffTest.kt:TopologySnapshotDiffTest$@Test fun `full graph diff is stable when node link interface and VLAN lists are permuted`</ID>
+    <ID>LongMethod:WhoisBlockingTransport.kt:WhoisBlockingTransport$suspend fun query: Pair&lt;Long, String&gt;</ID>
+    <ID>LongMethod:WhoisBlockingTransportTest.kt:WhoisBlockingTransportTest$@Test fun `production executor runs two resolver calls queues sixteen and rejects overflow before socket creation`</ID>
+    <ID>LongMethod:WhoisRepositoryImpl.kt:WhoisRepositoryImpl$override suspend fun lookup: NetworkResult&lt;WhoisResult&gt;</ID>
+    <ID>LongMethod:WhoisRepositoryImpl.kt:WhoisRepositoryImpl$private suspend fun performDomainLookup: NetworkResult&lt;WhoisResult&gt;</ID>
+    <ID>LoopWithTooManyJumpStatements:BannerReader.kt:BannerReader$while</ID>
+    <ID>LoopWithTooManyJumpStatements:GeoIpRepositoryImpl.kt:GeoIpRepositoryImpl$for</ID>
+    <ID>LoopWithTooManyJumpStatements:HostnameMatcher.kt:HostnameMatcher$for</ID>
+    <ID>LoopWithTooManyJumpStatements:HttpProbeRepositoryImpl.kt:HttpProbeRepositoryImpl$while</ID>
+    <ID>LoopWithTooManyJumpStatements:OperationRunner.kt:OperationRunner$while</ID>
+    <ID>LoopWithTooManyJumpStatements:PingRepositoryImpl.kt:PingRepositoryImpl$while</ID>
+    <ID>LoopWithTooManyJumpStatements:PublicSuffix.kt:PublicSuffix$while</ID>
+    <ID>LoopWithTooManyJumpStatements:PublicSuffixTest.kt:PublicSuffixTest$for</ID>
+    <ID>LoopWithTooManyJumpStatements:Snmp4jClientImpl.kt:BoundedSnmpWalkCollector$for</ID>
+    <ID>LoopWithTooManyJumpStatements:SubnetUtils.kt:SubnetUtils$while</ID>
+    <ID>LoopWithTooManyJumpStatements:TlsCertificateParser.kt:TlsCertificateParser$while</ID>
+    <ID>LoopWithTooManyJumpStatements:TopologyDiscoveryRepositoryImpl.kt:TopologyDiscoveryRepositoryImpl$while</ID>
+    <ID>LoopWithTooManyJumpStatements:WifiSecurity.kt:WifiSecurity.Companion$for</ID>
+    <ID>MagicNumber:ArpFileMacResolver.kt:ArpFileMacResolver.Companion$4</ID>
+    <ID>MagicNumber:DiscoveryProbes.kt:ReachabilityIcmpProbe$1_000_000L</ID>
+    <ID>MagicNumber:DiscoveryProbes.kt:SocketTcpPresenceProbe.Companion$160</ID>
+    <ID>MagicNumber:DiscoveryProbes.kt:SocketTcpPresenceProbe.Companion$3</ID>
+    <ID>MagicNumber:DnsRepositoryImpl.kt:DnsRepositoryImpl.Companion$253</ID>
+    <ID>MagicNumber:DnsRepositoryImpl.kt:DnsRepositoryImpl.Companion$255</ID>
+    <ID>MagicNumber:GeoIpRepositoryImpl.kt:180.0</ID>
+    <ID>MagicNumber:GeoIpRepositoryImpl.kt:90.0</ID>
+    <ID>MagicNumber:HostValidator.kt:HostValidator$255</ID>
+    <ID>MagicNumber:HostValidator.kt:HostValidator$3</ID>
+    <ID>MagicNumber:HostValidator.kt:HostValidator$4</ID>
+    <ID>MagicNumber:HostnameMatcher.kt:HostnameMatcher$8</ID>
+    <ID>MagicNumber:HttpProbeRepositoryImpl.kt:HttpProbeRepositoryImpl$500</ID>
+    <ID>MagicNumber:HttpProbeRepositoryImpl.kt:HttpProbeRepositoryImpl$60_000</ID>
+    <ID>MagicNumber:LanScanOperationBudget.kt:LanScanOperationBudget$100</ID>
+    <ID>MagicNumber:LanScanOperationBudget.kt:LanScanOperationBudget$10_000</ID>
+    <ID>MagicNumber:LanScanOperationBudget.kt:LanScanOperationBudget$500</ID>
+    <ID>MagicNumber:LanScanRepositoryImpl.kt:LanScanRepositoryImpl.Companion$500</ID>
+    <ID>MagicNumber:LegacyHttpEngine.kt:LegacyHttpCall$400</ID>
+    <ID>MagicNumber:LocalDestinationPolicy.kt:LocalDestinationPolicy.Companion$0x80</ID>
+    <ID>MagicNumber:LocalDestinationPolicy.kt:LocalDestinationPolicy.Companion$0xc0</ID>
+    <ID>MagicNumber:LocalDestinationPolicy.kt:LocalDestinationPolicy.Companion$0xfc</ID>
+    <ID>MagicNumber:LocalDestinationPolicy.kt:LocalDestinationPolicy.Companion$0xfe</ID>
+    <ID>MagicNumber:LocalDestinationPolicy.kt:LocalDestinationPolicy.Companion$0xff</ID>
+    <ID>MagicNumber:LocalDestinationPolicy.kt:LocalDestinationPolicy.Companion$10</ID>
+    <ID>MagicNumber:LocalDestinationPolicy.kt:LocalDestinationPolicy.Companion$11</ID>
+    <ID>MagicNumber:LocalDestinationPolicy.kt:LocalDestinationPolicy.Companion$16</ID>
+    <ID>MagicNumber:LocalDestinationPolicy.kt:LocalDestinationPolicy.Companion$168</ID>
+    <ID>MagicNumber:LocalDestinationPolicy.kt:LocalDestinationPolicy.Companion$169</ID>
+    <ID>MagicNumber:LocalDestinationPolicy.kt:LocalDestinationPolicy.Companion$172</ID>
+    <ID>MagicNumber:LocalDestinationPolicy.kt:LocalDestinationPolicy.Companion$192</ID>
+    <ID>MagicNumber:LocalDestinationPolicy.kt:LocalDestinationPolicy.Companion$254</ID>
+    <ID>MagicNumber:LocalDestinationPolicy.kt:LocalDestinationPolicy.Companion$31</ID>
+    <ID>MagicNumber:MdnsReverseNameProbe.kt:MdnsReverseNameProbe$5353</ID>
+    <ID>MagicNumber:MdnsReverseNameProbe.kt:MdnsReverseNameProbe.Companion$0x7FFF</ID>
+    <ID>MagicNumber:MdnsReverseNameProbe.kt:MdnsReverseNameProbe.Companion$12</ID>
+    <ID>MagicNumber:MdnsReverseNameProbe.kt:MdnsReverseNameProbe.Companion$255</ID>
+    <ID>MagicNumber:MdnsReverseNameProbe.kt:MdnsReverseNameProbe.Companion$4</ID>
+    <ID>MagicNumber:NetBiosNameProbe.kt:NetBiosNameProbe$137</ID>
+    <ID>MagicNumber:NetBiosNameProbe.kt:NetBiosNameProbe$300</ID>
+    <ID>MagicNumber:NetBiosNameProbe.kt:NetBiosNameProbe.Companion$0x0021</ID>
+    <ID>MagicNumber:NetBiosNameProbe.kt:NetBiosNameProbe.Companion$0x0200</ID>
+    <ID>MagicNumber:NetBiosNameProbe.kt:NetBiosNameProbe.Companion$0x7800</ID>
+    <ID>MagicNumber:NetBiosNameProbe.kt:NetBiosNameProbe.Companion$0x8000</ID>
+    <ID>MagicNumber:NetBiosNameProbe.kt:NetBiosNameProbe.Companion$0xC0</ID>
+    <ID>MagicNumber:NetBiosNameProbe.kt:NetBiosNameProbe.Companion$0xFF</ID>
+    <ID>MagicNumber:NetBiosNameProbe.kt:NetBiosNameProbe.Companion$10</ID>
+    <ID>MagicNumber:NetBiosNameProbe.kt:NetBiosNameProbe.Companion$12</ID>
+    <ID>MagicNumber:NetBiosNameProbe.kt:NetBiosNameProbe.Companion$128</ID>
+    <ID>MagicNumber:NetBiosNameProbe.kt:NetBiosNameProbe.Companion$18</ID>
+    <ID>MagicNumber:NetBiosNameProbe.kt:NetBiosNameProbe.Companion$32</ID>
+    <ID>MagicNumber:NetBiosNameProbe.kt:NetBiosNameProbe.Companion$4</ID>
+    <ID>MagicNumber:NetBiosNameProbe.kt:NetBiosNameProbe.Companion$63</ID>
+    <ID>MagicNumber:NetBiosNameProbe.kt:NetBiosNameProbe.Companion$8</ID>
+    <ID>MagicNumber:OkHttpEngine.kt:TimingRecorder$1_000_000L</ID>
+    <ID>MagicNumber:OkHttpTransferEngine.kt:OkHttpTransferEngine$1_000_000L</ID>
+    <ID>MagicNumber:OkHttpTransferEngine.kt:OkHttpTransferEngine$5</ID>
+    <ID>MagicNumber:OkHttpTransferEngine.kt:OkHttpTransferEngine$5_000</ID>
+    <ID>MagicNumber:PortScanRepository.kt:PortScanRepository$500</ID>
+    <ID>MagicNumber:PortScanRepositoryImpl.kt:PortScanRepositoryImpl$500</ID>
+    <ID>MagicNumber:PublicSuffix.kt:PublicSuffix$63</ID>
+    <ID>MagicNumber:PublicSuffix.kt:PublicSuffix.RuleTable$16</ID>
+    <ID>MagicNumber:PublicSuffix.kt:PublicSuffix.Rules.Companion$127</ID>
+    <ID>MagicNumber:PublicSuffix.kt:PublicSuffix.Rules.Companion$3</ID>
+    <ID>MagicNumber:PublicSuffix.kt:PublicSuffix.Rules.Companion$31</ID>
+    <ID>MagicNumber:RdapClient.kt:253</ID>
+    <ID>MagicNumber:RdapClient.kt:63</ID>
+    <ID>MagicNumber:RdapClient.kt:PublicInternetDns$0x20</ID>
+    <ID>MagicNumber:RdapClient.kt:PublicInternetDns$0xb8</ID>
+    <ID>MagicNumber:RdapClient.kt:PublicInternetDns$0xfc</ID>
+    <ID>MagicNumber:RdapClient.kt:PublicInternetDns$0xfe</ID>
+    <ID>MagicNumber:RdapClient.kt:PublicInternetDns$100</ID>
+    <ID>MagicNumber:RdapClient.kt:PublicInternetDns$113</ID>
+    <ID>MagicNumber:RdapClient.kt:PublicInternetDns$127</ID>
+    <ID>MagicNumber:RdapClient.kt:PublicInternetDns$18</ID>
+    <ID>MagicNumber:RdapClient.kt:PublicInternetDns$19</ID>
+    <ID>MagicNumber:RdapClient.kt:PublicInternetDns$192</ID>
+    <ID>MagicNumber:RdapClient.kt:PublicInternetDns$198</ID>
+    <ID>MagicNumber:RdapClient.kt:PublicInternetDns$203</ID>
+    <ID>MagicNumber:RdapClient.kt:PublicInternetDns$240</ID>
+    <ID>MagicNumber:RdapClient.kt:PublicInternetDns$3</ID>
+    <ID>MagicNumber:RdapClient.kt:PublicInternetDns$51</ID>
+    <ID>MagicNumber:RdapClient.kt:PublicInternetDns$64</ID>
+    <ID>MagicNumber:RdapClient.kt:PublicInternetDns$88</ID>
+    <ID>MagicNumber:RdapClient.kt:PublicInternetDns$99</ID>
+    <ID>MagicNumber:RdapClient.kt:RdapClient$1_000_000L</ID>
+    <ID>MagicNumber:RdapClient.kt:RdapClient$200</ID>
+    <ID>MagicNumber:RdapClient.kt:RdapClient$299</ID>
+    <ID>MagicNumber:RdapClient.kt:RdapClient$404</ID>
+    <ID>MagicNumber:RdapClient.kt:RdapClient.Companion$1_000L</ID>
+    <ID>MagicNumber:RdapMapper.kt:RdapMapper$3</ID>
+    <ID>MagicNumber:RedirectPolicy.kt:RedirectPolicy$301</ID>
+    <ID>MagicNumber:RedirectPolicy.kt:RedirectPolicy$302</ID>
+    <ID>MagicNumber:RedirectPolicy.kt:RedirectPolicy$303</ID>
+    <ID>MagicNumber:RedirectPolicy.kt:RedirectPolicy$443</ID>
+    <ID>MagicNumber:RedirectPolicy.kt:RedirectPolicy$80</ID>
+    <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$0x0003</ID>
+    <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$0x0004</ID>
+    <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$0x0020</ID>
+    <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$0x0030</ID>
+    <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$0x003f</ID>
+    <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$0x0064</ID>
+    <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$0x0100</ID>
+    <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$0x0112</ID>
+    <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$0x01ff</ID>
+    <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$0x0db8</ID>
+    <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$0x2000</ID>
+    <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$0x2001</ID>
+    <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$0x2002</ID>
+    <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$0x3fff</ID>
+    <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$0xf000</ID>
+    <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$0xfc00</ID>
+    <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$0xfe00</ID>
+    <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$0xfe80</ID>
+    <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$0xfec0</ID>
+    <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$0xff</ID>
+    <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$0xff00</ID>
+    <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$0xff9b</ID>
+    <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$0xffc0</ID>
+    <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$0xffff</ID>
+    <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$10</ID>
+    <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$100</ID>
+    <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$113</ID>
+    <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$127</ID>
+    <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$16</ID>
+    <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$168</ID>
+    <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$169</ID>
+    <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$172</ID>
+    <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$18</ID>
+    <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$19</ID>
+    <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$192</ID>
+    <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$198</ID>
+    <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$203</ID>
+    <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$224</ID>
+    <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$239</ID>
+    <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$240</ID>
+    <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$254</ID>
+    <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$255</ID>
+    <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$3</ID>
+    <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$31</ID>
+    <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$4</ID>
+    <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$5</ID>
+    <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$51</ID>
+    <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$6</ID>
+    <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$64</ID>
+    <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$7</ID>
+    <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$8</ID>
+    <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$88</ID>
+    <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$9</ID>
+    <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$99</ID>
+    <ID>MagicNumber:ServiceProbes.kt:ServiceProbes$110</ID>
+    <ID>MagicNumber:ServiceProbes.kt:ServiceProbes$143</ID>
+    <ID>MagicNumber:ServiceProbes.kt:ServiceProbes$21</ID>
+    <ID>MagicNumber:ServiceProbes.kt:ServiceProbes$22</ID>
+    <ID>MagicNumber:ServiceProbes.kt:ServiceProbes$80</ID>
+    <ID>MagicNumber:SessionIoClientFactory.kt:SessionIoClientFactory$16</ID>
+    <ID>MagicNumber:SpeedTestModels.kt:SpeedTestConfig$1_000</ID>
+    <ID>MagicNumber:SpeedTestModels.kt:SpeedTestConfig$2_000</ID>
+    <ID>MagicNumber:SpeedTestModels.kt:SpeedTestConfig$30</ID>
+    <ID>MagicNumber:SpeedTestModels.kt:SpeedTestConfig$4</ID>
+    <ID>MagicNumber:SpeedTestModels.kt:SpeedTestConfig$50</ID>
+    <ID>MagicNumber:SpeedTestModels.kt:SpeedTestConfig$5_000</ID>
+    <ID>MagicNumber:SpeedTestModels.kt:SpeedTestConfig$60_000</ID>
+    <ID>MagicNumber:SpeedTestModels.kt:SpeedTestConfig$8</ID>
+    <ID>MagicNumber:SpeedTestRepositoryImpl.kt:SpeedTestRepositoryImpl$1_000_000L</ID>
+    <ID>MagicNumber:SubnetCalculatorRepositoryImpl.kt:SubnetCalculatorRepositoryImpl$0x3L</ID>
+    <ID>MagicNumber:SubnetCalculatorRepositoryImpl.kt:SubnetCalculatorRepositoryImpl$0x8000_0000L</ID>
+    <ID>MagicNumber:SubnetCalculatorRepositoryImpl.kt:SubnetCalculatorRepositoryImpl$0xEL</ID>
+    <ID>MagicNumber:SubnetCalculatorRepositoryImpl.kt:SubnetCalculatorRepositoryImpl$0xFF</ID>
+    <ID>MagicNumber:SubnetCalculatorRepositoryImpl.kt:SubnetCalculatorRepositoryImpl$0xFFFFFFFFL</ID>
+    <ID>MagicNumber:SubnetCalculatorRepositoryImpl.kt:SubnetCalculatorRepositoryImpl$10L</ID>
+    <ID>MagicNumber:SubnetCalculatorRepositoryImpl.kt:SubnetCalculatorRepositoryImpl$127L</ID>
+    <ID>MagicNumber:SubnetCalculatorRepositoryImpl.kt:SubnetCalculatorRepositoryImpl$16</ID>
+    <ID>MagicNumber:SubnetCalculatorRepositoryImpl.kt:SubnetCalculatorRepositoryImpl$168</ID>
+    <ID>MagicNumber:SubnetCalculatorRepositoryImpl.kt:SubnetCalculatorRepositoryImpl$169L</ID>
+    <ID>MagicNumber:SubnetCalculatorRepositoryImpl.kt:SubnetCalculatorRepositoryImpl$172L</ID>
+    <ID>MagicNumber:SubnetCalculatorRepositoryImpl.kt:SubnetCalculatorRepositoryImpl$192L</ID>
+    <ID>MagicNumber:SubnetCalculatorRepositoryImpl.kt:SubnetCalculatorRepositoryImpl$20</ID>
+    <ID>MagicNumber:SubnetCalculatorRepositoryImpl.kt:SubnetCalculatorRepositoryImpl$24</ID>
+    <ID>MagicNumber:SubnetCalculatorRepositoryImpl.kt:SubnetCalculatorRepositoryImpl$254</ID>
+    <ID>MagicNumber:SubnetCalculatorRepositoryImpl.kt:SubnetCalculatorRepositoryImpl$255</ID>
+    <ID>MagicNumber:SubnetCalculatorRepositoryImpl.kt:SubnetCalculatorRepositoryImpl$256L</ID>
+    <ID>MagicNumber:SubnetCalculatorRepositoryImpl.kt:SubnetCalculatorRepositoryImpl$28</ID>
+    <ID>MagicNumber:SubnetCalculatorRepositoryImpl.kt:SubnetCalculatorRepositoryImpl$3</ID>
+    <ID>MagicNumber:SubnetCalculatorRepositoryImpl.kt:SubnetCalculatorRepositoryImpl$30</ID>
+    <ID>MagicNumber:SubnetCalculatorRepositoryImpl.kt:SubnetCalculatorRepositoryImpl$31</ID>
+    <ID>MagicNumber:SubnetCalculatorRepositoryImpl.kt:SubnetCalculatorRepositoryImpl$32</ID>
+    <ID>MagicNumber:SubnetCalculatorRepositoryImpl.kt:SubnetCalculatorRepositoryImpl$4</ID>
+    <ID>MagicNumber:SubnetCalculatorRepositoryImpl.kt:SubnetCalculatorRepositoryImpl$8</ID>
+    <ID>MagicNumber:SubnetUtils.kt:SubnetUtils$0xFF</ID>
+    <ID>MagicNumber:SubnetUtils.kt:SubnetUtils$0xFFFFFFFFL</ID>
+    <ID>MagicNumber:SubnetUtils.kt:SubnetUtils$16</ID>
+    <ID>MagicNumber:SubnetUtils.kt:SubnetUtils$24</ID>
+    <ID>MagicNumber:SubnetUtils.kt:SubnetUtils$255</ID>
+    <ID>MagicNumber:SubnetUtils.kt:SubnetUtils$30</ID>
+    <ID>MagicNumber:SubnetUtils.kt:SubnetUtils$32</ID>
+    <ID>MagicNumber:SubnetUtils.kt:SubnetUtils$4</ID>
+    <ID>MagicNumber:SubnetUtils.kt:SubnetUtils$65534</ID>
+    <ID>MagicNumber:SubnetUtils.kt:SubnetUtils$8</ID>
+    <ID>MagicNumber:TlsCertificateParser.kt:TlsCertificateParser$16</ID>
+    <ID>MagicNumber:TlsCertificateParser.kt:TlsCertificateParser$3</ID>
+    <ID>MagicNumber:TlsCertificateParser.kt:TlsCertificateParser$4</ID>
+    <ID>MagicNumber:TlsInspectorRepositoryImpl.kt:TlsInspectorRepositoryImpl$65_535</ID>
+    <ID>MagicNumber:TopologyDiscoveryRepositoryImpl.kt:TopologyDiscoveryRepositoryImpl.GraphByteBudget.Companion$128L</ID>
+    <ID>MagicNumber:TopologyDiscoveryRepositoryImpl.kt:TopologyDiscoveryRepositoryImpl.GraphByteBudget.Companion$24L</ID>
+    <ID>MagicNumber:TopologyDiscoveryRepositoryImpl.kt:TopologyDiscoveryRepositoryImpl.GraphByteBudget.Companion$3L</ID>
+    <ID>MagicNumber:TopologyDiscoveryRepositoryImpl.kt:TopologyDiscoveryRepositoryImpl.GraphByteBudget.Companion$48L</ID>
+    <ID>MagicNumber:TopologyDiscoveryRepositoryImpl.kt:TopologyDiscoveryRepositoryImpl.GraphByteBudget.Companion$64L</ID>
+    <ID>MagicNumber:TopologyDiscoveryRepositoryImpl.kt:TopologyDiscoveryRepositoryImpl.GraphByteBudget.Companion$8L</ID>
+    <ID>MagicNumber:TopologyDiscoveryRepositoryImpl.kt:TopologyDiscoveryRepositoryImpl.GraphByteBudget.Companion$96L</ID>
+    <ID>MagicNumber:TopologyMibParser.kt:TopologyMibParser$16</ID>
+    <ID>MagicNumber:TopologyMibParser.kt:TopologyMibParser$255</ID>
+    <ID>MagicNumber:TopologyMibParser.kt:TopologyMibParser$3</ID>
+    <ID>MagicNumber:TopologyMibParser.kt:TopologyMibParser$4</ID>
+    <ID>MagicNumber:TopologyMibParser.kt:TopologyMibParser$6</ID>
+    <ID>MagicNumber:TopologyModels.kt:TopologyResourceLimits$1024</ID>
+    <ID>MagicNumber:TopologyModels.kt:TopologyResourceLimits$16</ID>
+    <ID>MagicNumber:TopologyModels.kt:TopologyResourceLimits$16_384</ID>
+    <ID>MagicNumber:TopologyModels.kt:TopologyResourceLimits$25</ID>
+    <ID>MagicNumber:TopologyModels.kt:TopologyResourceLimits$256</ID>
+    <ID>MagicNumber:TopologyModels.kt:TopologyResourceLimits$2_048</ID>
+    <ID>MagicNumber:TopologyModels.kt:TopologyResourceLimits$4_096</ID>
+    <ID>MagicNumber:TopologyModels.kt:TopologyResourceLimits$512</ID>
+    <ID>MagicNumber:TopologyModels.kt:TopologyResourceLimits$64</ID>
+    <ID>MagicNumber:TopologyModels.kt:TopologyResourceLimits$8</ID>
+    <ID>MagicNumber:TopologyNodeParser.kt:TopologyNodeParser$0x04L</ID>
+    <ID>MagicNumber:TopologyNodeParser.kt:TopologyNodeParser$0x08L</ID>
+    <ID>MagicNumber:TopologyNodeParser.kt:TopologyNodeParser$0x10L</ID>
+    <ID>MagicNumber:TopologyNodeParser.kt:TopologyNodeParser$0x20L</ID>
+    <ID>MagicNumber:TopologyNodeParser.kt:TopologyNodeParser$0x40L</ID>
+    <ID>MagicNumber:TopologyNodeParser.kt:TopologyNodeParser$0x80L</ID>
+    <ID>MagicNumber:TopologyNodeParser.kt:TopologyNodeParser$1_000_000L</ID>
+    <ID>MagicNumber:TopologyOperationBudget.kt:TopologyOperationBudget$100L</ID>
+    <ID>MagicNumber:TopologyOperationBudget.kt:TopologyOperationBudget$99L</ID>
+    <ID>MagicNumber:TopologySnapshotDiff.kt:16</ID>
+    <ID>MagicNumber:TopologySnapshotDiff.kt:3</ID>
+    <ID>MagicNumber:TopologySnapshotDiff.kt:4</ID>
+    <ID>MagicNumber:TopologySnapshotDiff.kt:8</ID>
+    <ID>MagicNumber:TopologySnapshotDiff.kt:TopologySnapshotDiffer$12</ID>
+    <ID>MagicNumber:TopologySnapshotDiff.kt:TopologySnapshotDiffer$16</ID>
+    <ID>MagicNumber:TracerouteOperation.kt:TracerouteOperation$30_000</ID>
+    <ID>MagicNumber:TracerouteOperation.kt:TracerouteOperation$5</ID>
+    <ID>MagicNumber:TracerouteOperation.kt:TracerouteOperation$500</ID>
+    <ID>MagicNumber:TracerouteOperation.kt:TracerouteOperation$64</ID>
+    <ID>MagicNumber:UdpExchange.kt:NetworkBoundUdpExchange$100L</ID>
+    <ID>MagicNumber:UdpExchange.kt:NetworkBoundUdpExchange$1_000_000L</ID>
+    <ID>MagicNumber:UdpExchange.kt:NetworkBoundUdpExchange$999_999L</ID>
+    <ID>MagicNumber:WakeOnLanRepositoryImpl.kt:WakeOnLanRepositoryImpl$255</ID>
+    <ID>MagicNumber:WakeOnLanRepositoryImpl.kt:WakeOnLanRepositoryImpl$4</ID>
+    <ID>MagicNumber:WellKnownPorts.kt:WellKnownPorts$1023</ID>
+    <ID>MagicNumber:WellKnownPorts.kt:WellKnownPorts$1024</ID>
+    <ID>MagicNumber:WellKnownPorts.kt:WellKnownPorts$49151</ID>
+    <ID>MagicNumber:WhoisOperation.kt:WhoisOperation$30_000</ID>
+    <ID>MagicNumber:WhoisOperation.kt:WhoisOperation$500</ID>
+    <ID>MagicNumber:WhoisQueryTypeDetector.kt:WhoisQueryTypeDetector$16</ID>
+    <ID>MagicNumber:WhoisQueryTypeDetector.kt:WhoisQueryTypeDetector$253</ID>
+    <ID>MagicNumber:WhoisQueryTypeDetector.kt:WhoisQueryTypeDetector$255</ID>
+    <ID>MagicNumber:WhoisQueryTypeDetector.kt:WhoisQueryTypeDetector$4_294_967_295L</ID>
+    <ID>MagicNumber:WhoisQueryTypeDetector.kt:WhoisQueryTypeDetector$63</ID>
+    <ID>MagicNumber:WhoisQueryTypeDetector.kt:WhoisQueryTypeDetector$8</ID>
+    <ID>MagicNumber:WhoisRepositoryImpl.kt:WhoisRepositoryImpl$30_000</ID>
+    <ID>MagicNumber:WhoisRepositoryImpl.kt:WhoisRepositoryImpl$500</ID>
+    <ID>MagicNumber:WifiAccessPoint.kt:WifiChannelHelper$12</ID>
+    <ID>MagicNumber:WifiAccessPoint.kt:WifiChannelHelper$13</ID>
+    <ID>MagicNumber:WifiAccessPoint.kt:WifiChannelHelper$14</ID>
+    <ID>MagicNumber:WifiAccessPoint.kt:WifiChannelHelper$160</ID>
+    <ID>MagicNumber:WifiAccessPoint.kt:WifiChannelHelper$177</ID>
+    <ID>MagicNumber:WifiAccessPoint.kt:WifiChannelHelper$180</ID>
+    <ID>MagicNumber:WifiAccessPoint.kt:WifiChannelHelper$199</ID>
+    <ID>MagicNumber:WifiAccessPoint.kt:WifiChannelHelper$20</ID>
+    <ID>MagicNumber:WifiAccessPoint.kt:WifiChannelHelper$2160</ID>
+    <ID>MagicNumber:WifiAccessPoint.kt:WifiChannelHelper$233</ID>
+    <ID>MagicNumber:WifiAccessPoint.kt:WifiChannelHelper$2407</ID>
+    <ID>MagicNumber:WifiAccessPoint.kt:WifiChannelHelper$2484</ID>
+    <ID>MagicNumber:WifiAccessPoint.kt:WifiChannelHelper$3</ID>
+    <ID>MagicNumber:WifiAccessPoint.kt:WifiChannelHelper$320</ID>
+    <ID>MagicNumber:WifiAccessPoint.kt:WifiChannelHelper$4</ID>
+    <ID>MagicNumber:WifiAccessPoint.kt:WifiChannelHelper$40</ID>
+    <ID>MagicNumber:WifiAccessPoint.kt:WifiChannelHelper$4000</ID>
+    <ID>MagicNumber:WifiAccessPoint.kt:WifiChannelHelper$4900</ID>
+    <ID>MagicNumber:WifiAccessPoint.kt:WifiChannelHelper$5</ID>
+    <ID>MagicNumber:WifiAccessPoint.kt:WifiChannelHelper$5000</ID>
+    <ID>MagicNumber:WifiAccessPoint.kt:WifiChannelHelper$56160</ID>
+    <ID>MagicNumber:WifiAccessPoint.kt:WifiChannelHelper$5950</ID>
+    <ID>MagicNumber:WifiAccessPoint.kt:WifiChannelHelper$6</ID>
+    <ID>MagicNumber:WifiAccessPoint.kt:WifiChannelHelper$80</ID>
+    <ID>MagicNumber:WifiBand.kt:WifiBand.BAND_2_4GHZ$2400</ID>
+    <ID>MagicNumber:WifiBand.kt:WifiBand.BAND_2_4GHZ$2500</ID>
+    <ID>MagicNumber:WifiBand.kt:WifiBand.BAND_5GHZ$4900</ID>
+    <ID>MagicNumber:WifiBand.kt:WifiBand.BAND_5GHZ$5925</ID>
+    <ID>MagicNumber:WifiBand.kt:WifiBand.BAND_60GHZ$57000</ID>
+    <ID>MagicNumber:WifiBand.kt:WifiBand.BAND_60GHZ$71000</ID>
+    <ID>MagicNumber:WifiBand.kt:WifiBand.BAND_6GHZ$5925</ID>
+    <ID>MagicNumber:WifiBand.kt:WifiBand.BAND_6GHZ$7125</ID>
+    <ID>MagicNumber:WifiBand.kt:WifiBand.Companion$2400</ID>
+    <ID>MagicNumber:WifiBand.kt:WifiBand.Companion$2500</ID>
+    <ID>MagicNumber:WifiBand.kt:WifiBand.Companion$4900</ID>
+    <ID>MagicNumber:WifiBand.kt:WifiBand.Companion$57000</ID>
+    <ID>MagicNumber:WifiBand.kt:WifiBand.Companion$5925</ID>
+    <ID>MagicNumber:WifiBand.kt:WifiBand.Companion$71000</ID>
+    <ID>MagicNumber:WifiBand.kt:WifiBand.Companion$7125</ID>
+    <ID>MagicNumber:WolMagicPacket.kt:WolMagicPacket$16</ID>
+    <ID>MagicNumber:WolMagicPacket.kt:WolMagicPacket$6</ID>
+    <ID>MatchingDeclarationName:SubnetModels.kt:SubnetInfo</ID>
+    <ID>MatchingDeclarationName:TopologyDiscoveryEvents.kt:TopologyDiscoveryEvent</ID>
+    <ID>MaxLineLength:CookieAnalyzer.kt:CookieAnalyzer$"httprobe_sec_cookie_samesite_none_requires_secure" -&gt; "SameSite=None cookies require Secure and are rejected by browsers without it."</ID>
+    <ID>MaxLineLength:CookieAnalyzer.kt:CookieAnalyzer$"httprobe_sec_cookie_secure_from_http" -&gt; "Browsers reject Secure cookies received over an insecure HTTP response."</ID>
+    <ID>MaxLineLength:DiscoveryProbes.kt:SocketTcpPresenceProbe$TcpConnectOutcome.POLICY_DENIED -&gt; if (firstFailure == null) firstFailure = TcpPresence.PolicyDenied(port, detail)</ID>
+    <ID>MaxLineLength:DiscoveryProbes.kt:SocketTcpPresenceProbe$TcpConnectOutcome.TIMED_OUT -&gt; if (firstFailure == null) firstFailure = TcpPresence.TimedOut(port, detail)</ID>
+    <ID>MaxLineLength:DiscoveryProbes.kt:SocketTcpPresenceProbe$TcpConnectOutcome.UNKNOWN_FAILURE -&gt; if (firstFailure == null) firstFailure = TcpPresence.UnknownFailure(port, detail)</ID>
+    <ID>MaxLineLength:DiscoveryProbes.kt:SocketTcpPresenceProbe$TcpConnectOutcome.UNREACHABLE -&gt; if (firstFailure == null) firstFailure = TcpPresence.Unreachable(port, detail)</ID>
+    <ID>MaxLineLength:DnsRepositoryOperationSessionTest.kt:DnsRepositoryOperationSessionTest$assertTrue(interruptedSend.await(2, TimeUnit.SECONDS), "scope cleanup should interrupt blocking resolver wait")</ID>
+    <ID>MaxLineLength:GeoIpRepositoryImpl.kt:GeoIpRepositoryImpl$private</ID>
+    <ID>MaxLineLength:GeoIpRepositoryImpl.kt:GeoIpRepositoryImpl$providers = if (baseUrl.trimEnd('/') == DEFAULT_BASE_URL) defaultProviders() else listOf(IpInfoGeoIpProvider(baseUrl))</ID>
+    <ID>MaxLineLength:GeoIpRepositoryImplTest.kt:GeoIpRepositoryImplTest$(failure is OperationCancellationException &amp;&amp; failure.reason == CancellationReason.DEADLINE_EXCEEDED)</ID>
+    <ID>MaxLineLength:GeoIpRepositoryImplTest.kt:GeoIpRepositoryImplTest$200 to """{"ip":"8.8.8.8","city":"Mountain View","country":"US","loc":"37.38,-122.08","org":"AS15169 Google LLC","bogon":false}"""</ID>
+    <ID>MaxLineLength:GeoIpRepositoryImplTest.kt:GeoIpRepositoryImplTest$200 to """{"ip":"8.8.8.8","city":"Mountain View","country":"US","loc":"37.38,-122.08","org":"AS15169 Google LLC"}"""</ID>
+    <ID>MaxLineLength:GeoIpRepositoryImplTest.kt:GeoIpRepositoryImplTest$200 to """{"ip":"8.8.8.8","city":"Mountain View","note":"text says \"bogon\":true","country":"US","loc":"37.38,-122.08"}"""</ID>
+    <ID>MaxLineLength:GeoIpRepositoryImplTest.kt:GeoIpRepositoryImplTest$IpApiGeoIpProvider().parse("8.8.8.8", ipApiFixture.replace("\"ip\":\"8.8.8.8\"", "\"ip\":\"8.8.8.8\",\"error\":\"false\""))</ID>
+    <ID>MaxLineLength:GeoIpRepositoryImplTest.kt:GeoIpRepositoryImplTest$IpApiGeoIpProvider().parse("8.8.8.8", ipApiFixture.replace("\"ip\":\"8.8.8.8\"", "\"ip\":\"8.8.8.8\",\"error\":true"))</ID>
+    <ID>MaxLineLength:GeoIpRepositoryImplTest.kt:GeoIpRepositoryImplTest$ScriptedGeoIpConnection(url, 200, """{"ip":"${ipFromPath(url)}","success":false,"message":"quota exceeded"}""")</ID>
+    <ID>MaxLineLength:GeoIpRepositoryImplTest.kt:GeoIpRepositoryImplTest$val canonicalIpv6 = """{"ip":"2001:4860:4860:0:0:0:0:8888","city":"Mountain View","country":"US","loc":"37.38,-122.08"}"""</ID>
+    <ID>MaxLineLength:HttpProbeEnhancementsTest.kt:HttpProbeEnhancementsTest$"curl -X 'POST' -H 'X-Name: O'\\''Reilly' --data-raw '{\"message\":\"it'\\''s ok\"}' 'https://example.test/submit'"</ID>
+    <ID>MaxLineLength:HttpProbeEnhancementsTest.kt:HttpProbeEnhancementsTest$mapOf("Content-Security-Policy" to listOf("default-src 'self'; script-src 'self' 'unsafe-inline'; frame-ancestors 'none'"))</ID>
+    <ID>MaxLineLength:HttpProbeEnhancementsTest.kt:HttpProbeEnhancementsTest$mapOf("Content-Security-Policy" to listOf("script-src-elem 'unsafe-inline' 'sha256-${"A".repeat(43)}='; script-src-attr 'self'"))</ID>
+    <ID>MaxLineLength:HttpProbeRepositoryImpl.kt:HttpProbeRepositoryImpl$?:</ID>
+    <ID>MaxLineLength:HttpProbeRepositoryImpl.kt:HttpProbeRepositoryImpl$CrossOriginEntityReplay(redirect.destination.toString(), redirect.method, response.statusCode)</ID>
+    <ID>MaxLineLength:HttpProbeRepositoryImpl.kt:HttpProbeRepositoryImpl$RedirectPolicy.Decision.TooManyRedirects -&gt; return NetworkResult.Error("Too many redirects (max ${RedirectPolicy.MAX_REDIRECTS})")</ID>
+    <ID>MaxLineLength:HttpProbeRepositoryImpl.kt:HttpProbeRepositoryImpl$RedirectPolicy.Decision.UnsupportedProtocol -&gt; return NetworkResult.Error("Redirected to unsupported protocol")</ID>
+    <ID>MaxLineLength:HttpProbeRepositoryImpl.kt:HttpProbeRepositoryImpl$if (!approved) return NetworkResult.Error("Cross-origin redirect entity replay was not approved")</ID>
+    <ID>MaxLineLength:HttpProbeRepositoryImpl.kt:HttpProbeRepositoryImpl$return NetworkResult.Error("Maximum response body size must be between 0 and $MAX_RESPONSE_BODY_BYTES bytes")</ID>
+    <ID>MaxLineLength:HttpProbeRepositoryTest.kt:HttpProbeRepositoryRedirectTest$assertEquals("http://bob:destination-secret@destination.test/danger?redirect-token=private#destination-fragment", evidence.destinationUrl)</ID>
+    <ID>MaxLineLength:HttpProbeRepositoryTest.kt:HttpProbeRepositoryRedirectTest$assertTrue(sourceConnection.disconnected, "source connection must close before waiting for consent")</ID>
+    <ID>MaxLineLength:HttpProbeRepositoryTest.kt:HttpProbeRepositoryRedirectTest$val location = "http://bob:destination-secret@destination.test/danger?redirect-token=private#destination-fragment"</ID>
+    <ID>MaxLineLength:HttpSecurityAnalyzer.kt:HttpSecurityAnalyzer$"(?:https?://)?[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*(?::[0-9]{1,5})?(?:/[^\\s]*)?"</ID>
+    <ID>MaxLineLength:HttpSecurityAnalyzer.kt:HttpSecurityAnalyzer$description = "No Cross-Origin-Embedder-Policy - only required for cross-origin isolation features (e.g. SharedArrayBuffer)."</ID>
+    <ID>MaxLineLength:HttpSecurityAnalyzer.kt:HttpSecurityAnalyzer$descriptionKey = if (value == null) "httprobe_sec_xss_protection_absent" else "httprobe_sec_xss_protection_deprecated"</ID>
+    <ID>MaxLineLength:HttpSecurityAnalyzer.kt:HttpSecurityAnalyzer$headerValues.size == 1 &amp;&amp; headerValues.single().lowercase() in setOf("same-origin", "same-origin-allow-popups")</ID>
+    <ID>MaxLineLength:HttpSecurityAnalyzer.kt:HttpSecurityAnalyzer$return</ID>
+    <ID>MaxLineLength:HttpSecurityAnalyzer.kt:HttpSecurityAnalyzer$xfoValues.size == 1 &amp;&amp; xfoValues.single().let { it.equals("DENY", true) || it.equals("SAMEORIGIN", true) }</ID>
+    <ID>MaxLineLength:LanScanRepositoryImpl.kt:LanScanRepositoryImpl$is TcpPresence.PolicyDenied -&gt; LanScanDiagnostic(ip, LanScanDiagnosticReason.TCP_POLICY_DENIED, tcp.port, tcp.detail)</ID>
+    <ID>MaxLineLength:LanScanRepositoryImpl.kt:LanScanRepositoryImpl$is TcpPresence.TimedOut -&gt; LanScanDiagnostic(ip, LanScanDiagnosticReason.TCP_TIMED_OUT, tcp.port, tcp.detail)</ID>
+    <ID>MaxLineLength:LanScanRepositoryImpl.kt:LanScanRepositoryImpl$is TcpPresence.UnknownFailure -&gt; LanScanDiagnostic(ip, LanScanDiagnosticReason.TCP_UNKNOWN_FAILURE, tcp.port, tcp.detail)</ID>
+    <ID>MaxLineLength:LanScanRepositoryImpl.kt:LanScanRepositoryImpl$is TcpPresence.Unreachable -&gt; LanScanDiagnostic(ip, LanScanDiagnosticReason.TCP_UNREACHABLE, tcp.port, tcp.detail)</ID>
+    <ID>MaxLineLength:NetworkCacheTest.kt:NetworkCacheTest$assertEquals("answer", (cache.getOrLoad(key, NetworkCacheMode.UseCached) { "wrong" } as NetworkCacheResult.Found).value)</ID>
+    <ID>MaxLineLength:NetworkCacheTest.kt:NetworkCacheTest$assertEquals("one", (cache.getOrLoad(base, NetworkCacheMode.UseCached) { "one" } as NetworkCacheResult.Found).value)</ID>
+    <ID>MaxLineLength:NetworkCacheTest.kt:NetworkCacheTest$assertEquals("recovered", (cache.getOrLoad(key, NetworkCacheMode.UseCached) { "recovered" } as NetworkCacheResult.Found).value)</ID>
+    <ID>MaxLineLength:NetworkCacheTest.kt:NetworkCacheTest$assertEquals("retry", (cache.getOrLoad(key, NetworkCacheMode.UseCached) { "retry" } as NetworkCacheResult.Found).value)</ID>
+    <ID>MaxLineLength:NetworkCacheTest.kt:NetworkCacheTest$assertEquals("three", (cache.getOrLoad(alternateScope, NetworkCacheMode.UseCached) { "three" } as NetworkCacheResult.Found).value)</ID>
+    <ID>MaxLineLength:NetworkCacheTest.kt:NetworkCacheTest$assertEquals("two", (cache.getOrLoad(alternateRoute, NetworkCacheMode.UseCached) { "two" } as NetworkCacheResult.Found).value)</ID>
+    <ID>MaxLineLength:OkHttpEngine.kt:OkHttpEngine$?:</ID>
+    <ID>MaxLineLength:OkHttpEngine.kt:TimingRecorder$override fun connectEnd</ID>
+    <ID>MaxLineLength:OkHttpEngine.kt:TimingRecorder$override fun connectStart</ID>
+    <ID>MaxLineLength:OkHttpEngine.kt:TimingRecorder$override fun dnsEnd</ID>
+    <ID>MaxLineLength:OkHttpEngineTest.kt:OkHttpEngineTest$HttpEngineResponse(200, "OK", emptyMap(), ByteArrayInputStream(byteArrayOf(1)), "h2", HttpTimings(5, 6, 7, 8, 9, 20))</ID>
+    <ID>MaxLineLength:OkHttpEngineTest.kt:OkHttpEngineTest$HttpEngineResponse(302, "Found", mapOf("Location" to listOf("/next")), null, "http/1.1", HttpTimings(1, 2, null, 3, 4, 10))</ID>
+    <ID>MaxLineLength:OkHttpEngineTest.kt:OkHttpEngineTest$MockResponse.Builder().code(200).body("x".repeat(100)).throttleBody(1, 1, java.util.concurrent.TimeUnit.SECONDS).build()</ID>
+    <ID>MaxLineLength:OkHttpEngineTest.kt:OkHttpEngineTest$assertFalse((result as net.aieat.netswissknife.core.network.NetworkResult.Error).message.contains("private-token"))</ID>
+    <ID>MaxLineLength:OkHttpEngineTest.kt:OkHttpEngineTest$runCatching { repository.probe(HttpProbeRequest(url = server.url("/").toString()), session) }.exceptionOrNull()</ID>
+    <ID>MaxLineLength:OkHttpEngineTest.kt:OkHttpEngineTest$server.enqueue(MockResponse.Builder().code(200).addHeader("Content-Type", "text/plain; charset=UTF-8").body("abcdefgh").build())</ID>
+    <ID>MaxLineLength:OkHttpEngineTest.kt:OkHttpEngineTest$source.enqueue(MockResponse.Builder().code(302).addHeader("Location", destination.url("/private?token=secret").toString()).build())</ID>
+    <ID>MaxLineLength:OkHttpEngineTest.kt:OkHttpEngineTest$source.enqueue(MockResponse.Builder().code(307).addHeader("Location", credentialedDestination.toString()).build())</ID>
+    <ID>MaxLineLength:OkHttpEngineTest.kt:OkHttpEngineTest$val</ID>
+    <ID>MaxLineLength:OkHttpEngineTest.kt:OkHttpEngineTest$val result = HttpProbeRepositoryImpl().probe(HttpProbeRequest(url = server.url("/").toString(), maxResponseBodyBytes = 4))</ID>
+    <ID>MaxLineLength:OkHttpTransferEngine.kt:OkHttpTransferEngine$val</ID>
+    <ID>MaxLineLength:OkHttpTransferEngine.kt:OkHttpTransferEngine.Companion$if (!parts.firstOrNull().equals("cfRequestDuration", ignoreCase = true)) return@firstNotNullOfOrNull null</ID>
+    <ID>MaxLineLength:OkHttpTransferEngineTest.kt:OkHttpTransferEngineTest$assertEquals(12.5, OkHttpTransferEngine.parseServerTimingMs("cfRequestDuration;desc=\"cache, \\\"warm\\\" origin\";dur=12.5"))</ID>
+    <ID>MaxLineLength:OkHttpTransferEngineTest.kt:OkHttpTransferEngineTest$assertEquals(12.5, OkHttpTransferEngine.parseServerTimingMs("cfRequestDuration;desc=\"cache, origin\";dur=12.5"))</ID>
+    <ID>MaxLineLength:PublicSuffix.kt:PublicSuffix.Rules.Companion$check(contents.startsWith(INDEX_HEADER)) { "Bundled Public Suffix List index has an unsupported header" }</ID>
+    <ID>MaxLineLength:PublicSuffixColdStartBenchmarkTest.kt:PublicSuffixColdStartBenchmarkTest$*</ID>
+    <ID>MaxLineLength:RdapClient.kt:DnsBootstrap.Companion$if (url.host.isBlank() || url.username.isNotEmpty() || url.password.isNotEmpty() || url.query != null || url.fragment != null) return null</ID>
+    <ID>MaxLineLength:RdapClient.kt:DnsBootstrap.Companion$val</ID>
+    <ID>MaxLineLength:RdapClient.kt:OkHttpRdapTransport$val call = client.newCall(Request.Builder().url(url).header("Accept", "application/rdap+json, application/json").get().build())</ID>
+    <ID>MaxLineLength:RdapClient.kt:RdapClient$if (bootstrapUrl.isHttps &amp;&amp; !final.isHttps) throw IOException("IANA bootstrap response attempted an HTTPS downgrade")</ID>
+    <ID>MaxLineLength:RdapClient.kt:RdapClient$require((url.isHttps || url.scheme == "http") &amp;&amp; url.host.isNotBlank()) { "RDAP URL must use HTTP or HTTPS and have a host" }</ID>
+    <ID>MaxLineLength:RdapClient.kt:RdapClient.Companion$if (names.any { it.equals("no-store", ignoreCase = true) || it.equals("no-cache", ignoreCase = true) }) return 0L</ID>
+    <ID>MaxLineLength:RdapClient.kt:RdapClient.Companion$val maxAgeDirective = directives.firstOrNull { it.substringBefore('=').trim().equals("max-age", ignoreCase = true) }</ID>
+    <ID>MaxLineLength:RdapClient.kt:private fun domainMatches: Boolean</ID>
+    <ID>MaxLineLength:RdapClientTest.kt:RdapClientTest$secure.enqueue(MockResponse.Builder().code(302).addHeader("Location", insecure.url("/should-not-hit").toString()).build())</ID>
+    <ID>MaxLineLength:RdapClientTest.kt:RdapClientTest$server.enqueue(MockResponse.Builder().body(bootstrap).addHeader("Expires", "Wed, 21 Oct 2015 07:28:00 GMT").build())</ID>
+    <ID>MaxLineLength:RdapClientTest.kt:RdapClientTest$val bootstrap = """{"services":[[["com"],["http://insecure.example.test/rdap", "https://secure.example.test/rdap/"]]]}"""</ID>
+    <ID>MaxLineLength:RdapMapperTest.kt:RdapMapperTest$"""{"objectClassName":"domain","events":"bad","nameservers":[null,{},7,{"ldhName":42,"unicodeName":false},{"ldhName":["bad.example"]}],"status":[7,false,["bad"],"ok"],"entities":[null],"secureDNS":"bad","country":["US"]}"""</ID>
+    <ID>MaxLineLength:RedirectPolicy.kt:RedirectPolicy$private</ID>
+    <ID>MaxLineLength:RedirectPolicyTest.kt:RedirectPolicyTest$assertFalse(RedirectPolicy.evaluate(source, HttpMethod.GET, null, 200, "/ignored", 0, 10) is RedirectPolicy.Decision.Follow)</ID>
+    <ID>MaxLineLength:SpeedTestEngineRepositoryTest.kt:SpeedTestEngineRepositoryTest$assertEquals(ServerInfo(colo = "LHR", asn = "AS13335", country = "GB"), (events.first() as SpeedTestEvent.ServerInfoReceived).info)</ID>
+    <ID>MaxLineLength:SpeedTestEngineRepositoryTest.kt:SpeedTestEngineRepositoryTest$val down = events.filterIsInstance&lt;SpeedTestEvent.LoadedLatencySample&gt;().filter { it.phase == SpeedTestPhase.DOWNLOAD }</ID>
+    <ID>MaxLineLength:SpeedTestEngineRepositoryTest.kt:SpeedTestEngineRepositoryTest$val up = events.filterIsInstance&lt;SpeedTestEvent.LoadedLatencySample&gt;().filter { it.phase == SpeedTestPhase.UPLOAD }</ID>
+    <ID>MaxLineLength:SpeedTestRepositoryImpl.kt:SpeedTestRepositoryImpl$engine.connectRtt(endpoint.host, if (endpoint.port &gt; 0) endpoint.port else if (endpoint.scheme == "https") 443 else 80)</ID>
+    <ID>MaxLineLength:SpeedTestRepositoryImpl.kt:SpeedTestRepositoryImpl$if</ID>
+    <ID>MaxLineLength:SpeedTestRepositoryImpl.kt:SpeedTestRepositoryImpl$transfer = engine.download("$baseUrl/__down?bytes=$DOWNLOAD_PAYLOAD_BYTES", config.downloadStreams, config.phaseDurationMs)</ID>
+    <ID>MaxLineLength:SpeedTestRepositoryImpl.kt:internal</ID>
+    <ID>MaxLineLength:TopologyDiscoveryRepositoryImpl.kt:TopologyDiscoveryRepositoryImpl$if (lower.contains("access point") || lower.contains("wireless") || lower.contains("wifi") || lower.contains("wi-fi")) caps.add(DeviceCapability.AP)</ID>
+    <ID>MaxLineLength:TopologyDiscoveryRepositoryImpl.kt:TopologyDiscoveryRepositoryImpl$if (lower.contains("switch") || lower.contains("catalyst") || lower.contains("nexus")) caps.add(DeviceCapability.SWITCH)</ID>
+    <ID>MaxLineLength:TopologyDiscoveryRepositoryImpl.kt:TopologyDiscoveryRepositoryImpl$queryInterfaces(snmpClient, target, walkBudget, truncationReasons, snmpErrors, sessionRequestLimiter, tableObservations)</ID>
+    <ID>MaxLineLength:TopologyDiscoveryRepositoryImpl.kt:TopologyDiscoveryRepositoryImpl$queryVlans(snmpClient, target, walkBudget, truncationReasons, snmpErrors, sessionRequestLimiter, tableObservations)</ID>
+    <ID>MaxLineLength:TopologyDiscoveryRepositoryImpl.kt:TopologyDiscoveryRepositoryImpl$safeWalk(client, target, "1.3.6.1.2.1.17.7.1.4.3.1.1", budget, truncationReasons, snmpErrors, sessionRequestLimiter, TopologyDataTable.VLANS, tableObservations)</ID>
+    <ID>MaxLineLength:TopologyDiscoveryRepositoryImpl.kt:TopologyDiscoveryRepositoryImpl$send(TopologyDiscoveryEvent.Error(SnmpErrorFormatter.describe(systemFailure), systemFailure))</ID>
+    <ID>MaxLineLength:TopologyDiscoveryRepositoryImpl.kt:TopologyDiscoveryRepositoryImpl$val cdpWalk = safeWalk(client, target, "1.3.6.1.4.1.9.9.23.1.2.1", budget, truncationReasons, snmpErrors, sessionRequestLimiter, TopologyDataTable.CDP_NEIGHBORS, tableObservations)</ID>
+    <ID>MaxLineLength:TopologyDiscoveryRepositoryImpl.kt:TopologyDiscoveryRepositoryImpl$val descr = async { safeWalk(client, target, "1.3.6.1.2.1.2.2.1.2", budget, truncationReasons, snmpErrors, sessionRequestLimiter, table, tableObservations) }</ID>
+    <ID>MaxLineLength:TopologyDiscoveryRepositoryImpl.kt:TopologyDiscoveryRepositoryImpl$val highSpeed = async { safeWalk(client, target, "1.3.6.1.2.1.31.1.1.1.15", budget, truncationReasons, snmpErrors, sessionRequestLimiter, table, tableObservations) }</ID>
+    <ID>MaxLineLength:TopologyDiscoveryRepositoryImpl.kt:TopologyDiscoveryRepositoryImpl$val lldpWalk = safeWalk(client, target, "1.0.8802.1.1.2.1.4", budget, truncationReasons, snmpErrors, sessionRequestLimiter, TopologyDataTable.LLDP_NEIGHBORS, tableObservations)</ID>
+    <ID>MaxLineLength:TopologyDiscoveryRepositoryImpl.kt:TopologyDiscoveryRepositoryImpl$val mac = async { safeWalk(client, target, "1.3.6.1.2.1.2.2.1.6", budget, truncationReasons, snmpErrors, sessionRequestLimiter, table, tableObservations) }</ID>
+    <ID>MaxLineLength:TopologyDiscoveryRepositoryImpl.kt:TopologyDiscoveryRepositoryImpl$val names = async { safeWalk(client, target, "1.3.6.1.4.1.9.9.46.1.3.1.1.4", budget, truncationReasons, snmpErrors, sessionRequestLimiter, table, tableObservations) }</ID>
+    <ID>MaxLineLength:TopologyDiscoveryRepositoryImpl.kt:TopologyDiscoveryRepositoryImpl$val speed = async { safeWalk(client, target, "1.3.6.1.2.1.2.2.1.5", budget, truncationReasons, snmpErrors, sessionRequestLimiter, table, tableObservations) }</ID>
+    <ID>MaxLineLength:TopologyDiscoveryRepositoryImpl.kt:TopologyDiscoveryRepositoryImpl$val states = async { safeWalk(client, target, "1.3.6.1.4.1.9.9.46.1.3.1.1.2", budget, truncationReasons, snmpErrors, sessionRequestLimiter, table, tableObservations) }</ID>
+    <ID>MaxLineLength:TopologyDiscoveryRepositoryImpl.kt:TopologyDiscoveryRepositoryImpl$val status = async { safeWalk(client, target, "1.3.6.1.2.1.2.2.1.8", budget, truncationReasons, snmpErrors, sessionRequestLimiter, table, tableObservations) }</ID>
+    <ID>MaxLineLength:TopologyDiscoveryRepositoryImpl.kt:TopologyDiscoveryRepositoryImpl$val sysDescr = retainScalar("1.3.6.1.2.1.1.1.0", sysDescrAttempt.value, walkBudget, truncationReasons)</ID>
+    <ID>MaxLineLength:TopologyDiscoveryRepositoryImpl.kt:TopologyDiscoveryRepositoryImpl$walkBudget</ID>
+    <ID>MaxLineLength:TopologyDiscoveryRepositoryImpl.kt:TopologyDiscoveryRepositoryImpl.TableObservationCollector$"auth" in message || "credential" in message || "community" in message -&gt; TopologyTableFailure.AUTHENTICATION</ID>
+    <ID>MaxLineLength:TopologyDiscoveryRepositoryImpl.kt:TopologyDiscoveryRepositoryImpl.TableObservationCollector$Counts</ID>
+    <ID>MaxLineLength:TopologyDiscoveryRepositoryImpl.kt:TopologyDiscoveryRepositoryImpl.TableObservationCollector$this is java.net.SocketTimeoutException || "timeout" in message || "timed out" in message -&gt; TopologyTableFailure.TIMEOUT</ID>
+    <ID>MaxLineLength:TopologyDiscoveryRepositoryTest.kt:TopologyDiscoveryRepositoryTest$assertTrue(TopologyTableFailure.TRUNCATED in node.tableObservations.getValue(TopologyDataTable.INTERFACES).failures)</ID>
+    <ID>MaxLineLength:TopologyDiscoveryRepositoryTest.kt:TopologyDiscoveryRepositoryTest$assertTrue(error.message.contains("permission", ignoreCase = true) || error.message.contains("SNMP", ignoreCase = true))</ID>
+    <ID>MaxLineLength:TopologyDiscoveryRepositoryTest.kt:TopologyDiscoveryRepositoryTest$assertTrue(events.any { it is TopologyDiscoveryEvent.Error &amp;&amp; it.message.contains("initialization timed out") })</ID>
+    <ID>MaxLineLength:TopologyDiscoveryRepositoryTest.kt:TopologyDiscoveryRepositoryTest$coEvery { snmpClient.get(any(), "1.3.6.1.2.1.1.1.0") } throws IllegalStateException("SNMP request failed", denial)</ID>
+    <ID>MaxLineLength:TopologyDiscoveryRepositoryTest.kt:TopologyDiscoveryRepositoryTest$fun</ID>
+    <ID>MaxLineLength:TopologyDiscoveryRepositoryTest.kt:TopologyDiscoveryRepositoryTest$val first = withContext(Dispatchers.IO) { runCatching { client.get(target, "1.3.6.1.2.1.1.1.0") }.exceptionOrNull() }</ID>
+    <ID>MaxLineLength:TopologyDiscoveryRepositoryTest.kt:TopologyDiscoveryRepositoryTest$val second = withContext(Dispatchers.IO) { runCatching { client.walk(target, "1.3.6.1.2.1.1", SnmpWalkBudget(TopologyResourceLimits())) }.exceptionOrNull() }</ID>
+    <ID>MaxLineLength:TopologyNodeParserTest.kt:TopologyNodeParserTest$val vendor = TopologyNodeParser.parseVendor("Juniper Networks, Inc. ex2300 Ethernet Switch, kernel JUNOS 20.4R1")</ID>
+    <ID>MaxLineLength:TopologyOperationBudgetTest.kt:TopologyOperationBudgetTest$assertTrue(TopologyOperationBudget.estimatedTimeoutMillis(oversized) &gt; TopologyOperationBudget.HARD_CEILING_MILLIS)</ID>
+    <ID>MaxLineLength:WhoisBlockingTransportTest.kt:WhoisBlockingTransportTest$fun</ID>
+    <ID>MaxLineLength:WhoisRdapIntegrationTest.kt:WhoisRdapIntegrationTest$Triple("8.8.8.8", WhoisQueryType.IPV4, """{"objectClassName":"ip network","ipVersion":"v4","name":"PUBLIC"}""")</ID>
+    <ID>MaxLineLength:WhoisRdapIntegrationTest.kt:WhoisRdapIntegrationTest$Triple("AS15169", WhoisQueryType.ASN, """{"objectClassName":"autnum","name":"GOOGLE","startAutnum":15169,"endAutnum":15169}""")</ID>
+    <ID>MaxLineLength:WhoisRdapIntegrationTest.kt:WhoisRdapIntegrationTest$client { url -&gt; if (url == bootstrapUrl) bootstrapResponse() else RdapHttpResponse(200, "{}", url.toString()) }</ID>
+    <ID>MaxLineLength:WhoisRepository.kt:WhoisRepository$suspend</ID>
+    <ID>NestedBlockDepth:MdnsDiscoverySession.kt:MdnsDiscoverySession$fun process: MdnsSessionResult</ID>
+    <ID>NestedBlockDepth:PortScanRepositoryImpl.kt:PortScanRepositoryImpl.Companion$private fun scopedDefaultChecker: PortConnectChecker</ID>
+    <ID>NestedBlockDepth:ResourceScope.kt:ResourceScope$override fun close</ID>
+    <ID>NestedBlockDepth:SpeedTestRepositoryImpl.kt:SpeedTestRepositoryImpl$private suspend fun runManagedDownload</ID>
+    <ID>ReturnCount:CountryFlags.kt:CountryFlags$private fun normalize: String?</ID>
+    <ID>ReturnCount:DnsRepositoryImpl.kt:DnsRepositoryImpl.Companion$internal fun normalizeDomain: String</ID>
+    <ID>ReturnCount:GeoIpRepositoryImpl.kt:GeoIpRepositoryImpl$override suspend fun lookup: HopGeoLocation?</ID>
+    <ID>ReturnCount:GeoIpRepositoryImpl.kt:IpApiGeoIpProvider$override fun parse: GeoIpParseOutcome</ID>
+    <ID>ReturnCount:GeoIpRepositoryImpl.kt:IpInfoGeoIpProvider$override fun parse: GeoIpParseOutcome</ID>
+    <ID>ReturnCount:GeoIpRepositoryImpl.kt:IpWhoGeoIpProvider$override fun parse: GeoIpParseOutcome</ID>
+    <ID>ReturnCount:GeoIpRepositoryImpl.kt:private fun normalizeAsn: String?</ID>
+    <ID>ReturnCount:GeoIpRepositoryImpl.kt:private fun parseCoordinates: Pair&lt;Double, Double&gt;?</ID>
+    <ID>ReturnCount:GeoIpRepositoryImpl.kt:private fun validCoordinates: Pair&lt;Double, Double&gt;?</ID>
+    <ID>ReturnCount:HostValidator.kt:HostValidator$fun isValidHostname: Boolean</ID>
+    <ID>ReturnCount:HostValidator.kt:HostValidator$fun isValidIpv6: Boolean</ID>
+    <ID>ReturnCount:HostValidator.kt:HostValidator$fun normalize: String?</ID>
+    <ID>ReturnCount:HostValidator.kt:HostValidator$private fun countGroups: Int?</ID>
+    <ID>ReturnCount:HostValidator.kt:HostValidator$private fun parseIpv4Octets: List&lt;Int&gt;?</ID>
+    <ID>ReturnCount:HostnameMatcher.kt:HostnameMatcher$fun matches: Boolean</ID>
+    <ID>ReturnCount:HostnameMatcher.kt:HostnameMatcher$internal fun matchesDnsName: Boolean</ID>
+    <ID>ReturnCount:HostnameMatcher.kt:HostnameMatcher$private fun normalizeDnsName: String?</ID>
+    <ID>ReturnCount:HostnameMatcher.kt:HostnameMatcher$private fun normalizeDnsPattern: String?</ID>
+    <ID>ReturnCount:HostnameMatcher.kt:HostnameMatcher$private fun parseIpLiteral: ByteArray?</ID>
+    <ID>ReturnCount:HttpProbeRepositoryImpl.kt:HttpProbeRepositoryImpl$private fun responseCharset: Charset</ID>
+    <ID>ReturnCount:HttpProbeRepositoryImpl.kt:HttpProbeRepositoryImpl$private suspend fun executeRequest: NetworkResult&lt;HttpProbeResult&gt;</ID>
+    <ID>ReturnCount:HttpProbeRepositoryImpl.kt:HttpProbeRepositoryImpl$private suspend fun probeInternal: NetworkResult&lt;HttpProbeResult&gt;</ID>
+    <ID>ReturnCount:LanScanRepositoryImpl.kt:LanScanRepositoryImpl$private suspend fun discoverPresence: PresenceResult</ID>
+    <ID>ReturnCount:LocalDestinationPolicy.kt:LocalDestinationPolicy$fun isLocal: Boolean</ID>
+    <ID>ReturnCount:LocalDestinationPolicy.kt:LocalDestinationPolicy.Companion$fun parseAddress: ParsedAddress?</ID>
+    <ID>ReturnCount:LocalDestinationPolicy.kt:LocalDestinationPolicy.Companion$fun parseCidr: ParsedSubnet?</ID>
+    <ID>ReturnCount:LocalDestinationPolicy.kt:LocalDestinationPolicy.ParsedSubnet$fun contains: Boolean</ID>
+    <ID>ReturnCount:MdnsReverseNameProbe.kt:MdnsReverseNameProbe$override suspend fun probePresence: LocalProtocolReply?</ID>
+    <ID>ReturnCount:NetBiosNameProbe.kt:NetBiosNameProbe$override suspend fun probePresence: LocalProtocolReply?</ID>
+    <ID>ReturnCount:NetBiosNameProbe.kt:NetBiosNameProbe.Companion$private fun parseNbstat: String?</ID>
+    <ID>ReturnCount:NetBiosNameProbe.kt:NetBiosNameProbe.Companion$private fun skipDnsName: Int?</ID>
+    <ID>ReturnCount:NetworkCache.kt:NetworkCache$suspend fun getOrLoad: NetworkCacheResult&lt;V&gt;</ID>
+    <ID>ReturnCount:OuiDatabase.kt:OuiDatabase$fun lookup: String?</ID>
+    <ID>ReturnCount:PublicSuffix.kt:PublicSuffix$private fun isValidAsciiLabel: Boolean</ID>
+    <ID>ReturnCount:PublicSuffix.kt:PublicSuffix$private fun resolve: String</ID>
+    <ID>ReturnCount:RdapClient.kt:DnsBootstrap.Companion$private fun validatedBaseUrl: HttpUrl?</ID>
+    <ID>ReturnCount:RdapClient.kt:PublicInternetDns$private fun isLocalOrPrivateAddress: Boolean</ID>
+    <ID>ReturnCount:RdapClient.kt:RdapClient.Companion$private fun cacheFreshnessMillis: Long</ID>
+    <ID>ReturnCount:RedirectPolicy.kt:RedirectPolicy$fun evaluate: Decision</ID>
+    <ID>ReturnCount:ReservedRanges.kt:ReservedRanges$fun isLocalNetworkLiteral: Boolean</ID>
+    <ID>ReturnCount:ReservedRanges.kt:ReservedRanges$fun isPublicGlobalLiteral: Boolean</ID>
+    <ID>ReturnCount:ReservedRanges.kt:ReservedRanges$private fun isPublicIpv6: Boolean</ID>
+    <ID>ReturnCount:ReservedRanges.kt:ReservedRanges$private fun parseHextets: List&lt;Int&gt;?</ID>
+    <ID>ReturnCount:ReservedRanges.kt:ReservedRanges$private fun parseIpv4: IntArray?</ID>
+    <ID>ReturnCount:ReservedRanges.kt:ReservedRanges$private fun parseIpv6: IntArray?</ID>
+    <ID>ReturnCount:SessionIoClientFactory.kt:SessionIoClientFactory$private fun &lt;T&gt; submit: CompletableFuture&lt;T&gt;</ID>
+    <ID>ReturnCount:SessionIoClientFactory.kt:SessionIoClientFactory$private fun isPeer: Boolean</ID>
+    <ID>ReturnCount:Snmp4jClientImpl.kt:BoundedSnmpWalkCollector$private fun collect: Boolean</ID>
+    <ID>ReturnCount:Snmp4jClientImpl.kt:Snmp4jClientImpl$private suspend fun ensureAuthoritativeEngineId</ID>
+    <ID>ReturnCount:Snmp4jClientImpl.kt:Snmp4jClientImpl$private suspend fun targetFor: Pair&lt;Target&lt;*&gt;, UdpAddress&gt;</ID>
+    <ID>ReturnCount:SnmpWalkBudget.kt:SnmpWalkBudget$@Synchronized internal fun tryReserve: Reservation</ID>
+    <ID>ReturnCount:SubnetCalculatorRepositoryImpl.kt:SubnetCalculatorRepositoryImpl$private fun isPrivate: Boolean</ID>
+    <ID>ReturnCount:SubnetUtils.kt:SubnetUtils$fun contains: Boolean</ID>
+    <ID>ReturnCount:SubnetUtils.kt:SubnetUtils$fun isValidCidr: Boolean</ID>
+    <ID>ReturnCount:TlsInspectorRepositoryImpl.kt:TlsInspectorRepositoryImpl$override suspend fun inspect: NetworkResult&lt;TlsInspectorResult&gt;</ID>
+    <ID>ReturnCount:TopologyMibParser.kt:TopologyMibParser$fun hexOctetsToIpv4: String?</ID>
+    <ID>ReturnCount:TopologyNodeParser.kt:TopologyNodeParser$fun parseCapabilities: Set&lt;DeviceCapability&gt;</ID>
+    <ID>ReturnCount:TopologyNodeParser.kt:TopologyNodeParser$fun parseFirmwareVersion: String?</ID>
+    <ID>ReturnCount:TopologyNodeParser.kt:TopologyNodeParser$fun parseModel: String?</ID>
+    <ID>ReturnCount:TopologyNodeParser.kt:TopologyNodeParser$fun parseVendor: String?</ID>
+    <ID>ReturnCount:TopologyOperationBudget.kt:TopologyOperationBudget$fun estimate: Estimate?</ID>
+    <ID>ReturnCount:TopologyParamsValidator.kt:TopologyParamsValidator$private fun isValidTarget: Boolean</ID>
+    <ID>ReturnCount:TopologySnapshotDiff.kt:fun groups: List&lt;Int&gt;?</ID>
+    <ID>ReturnCount:TopologySnapshotDiff.kt:private fun String.snapshotIdentity: String</ID>
+    <ID>ReturnCount:TopologySnapshotDiff.kt:private fun canonicalIpv4: String?</ID>
+    <ID>ReturnCount:TopologySnapshotDiff.kt:private fun canonicalIpv6: String?</ID>
+    <ID>ReturnCount:UdpExchange.kt:NetworkBoundUdpExchange$override suspend fun exchangeCorrelated: CorrelatedUdpReply?</ID>
+    <ID>ReturnCount:WhoisQueryTypeDetector.kt:WhoisQueryTypeDetector$fun normalize: NormalizedWhoisQuery?</ID>
+    <ID>ReturnCount:WhoisQueryTypeDetector.kt:WhoisQueryTypeDetector$private fun parseIpv4: List&lt;Int&gt;?</ID>
+    <ID>ReturnCount:WhoisQueryTypeDetector.kt:WhoisQueryTypeDetector$private fun parseIpv6Groups: List&lt;Int&gt;?</ID>
+    <ID>ReturnCount:WhoisQueryTypeDetector.kt:WhoisQueryTypeDetector$private fun parseIpv6Literal: ByteArray?</ID>
+    <ID>ReturnCount:WhoisRepositoryImpl.kt:WhoisRepositoryImpl$override suspend fun lookup: NetworkResult&lt;WhoisResult&gt;</ID>
+    <ID>ReturnCount:WhoisRepositoryImpl.kt:WhoisRepositoryImpl$private fun getTldFallback: String?</ID>
+    <ID>ReturnCount:WhoisRepositoryImpl.kt:WhoisRepositoryImpl$private suspend fun performDomainLookup: NetworkResult&lt;WhoisResult&gt;</ID>
+    <ID>ReturnCount:WhoisRepositoryImpl.kt:WhoisRepositoryImpl$private suspend fun performIpAsnLookup: NetworkResult&lt;WhoisResult&gt;</ID>
+    <ID>ReturnCount:WhoisRepositoryImpl.kt:WhoisRepositoryImpl$private suspend fun tryRdapLookup: NetworkResult&lt;WhoisResult&gt;?</ID>
+    <ID>ReturnCount:WhoisResponseParser.kt:WhoisResponseParser$fun parseDate: Long?</ID>
+    <ID>ReturnCount:WifiSecurity.kt:WifiSecurity.Companion$private fun parseQualifiedAuthMarkers: List&lt;String&gt;</ID>
+    <ID>SwallowedException:PortScanRepositoryImpl.kt:PortScanRepositoryImpl.Companion$e: ConnectException</ID>
+    <ID>SwallowedException:PortScanRepositoryImpl.kt:PortScanRepositoryImpl.Companion$e: SocketTimeoutException</ID>
+    <ID>SwallowedException:RdapClient.kt:RdapClient$readFailure: RdapResponseReadException</ID>
+    <ID>ThrowingExceptionFromFinally:OperationRunner.kt:OperationRunner$throw observedCloseFailure</ID>
+    <ID>ThrowingExceptionFromFinally:TlsInspectorRepositoryImpl.kt:TlsInspectorRepositoryImpl$throw closeFailure</ID>
+    <ID>ThrowsCount:BoundSockets.kt:private fun &lt;T : Closeable&gt; NetworkBinder.createBoundSocket: T</ID>
+    <ID>ThrowsCount:GeoIpRepositoryImpl.kt:GeoIpRepositoryImpl$private suspend fun net.aieat.netswissknife.core.network.operation.OperationContext.fetchGeoIp: HopGeoLocation?</ID>
+    <ID>ThrowsCount:HttpProbeRepositoryImpl.kt:HttpProbeRepositoryImpl$private suspend fun probeInternal: NetworkResult&lt;HttpProbeResult&gt;</ID>
+    <ID>ThrowsCount:LanScanRepositoryImpl.kt:LanScanRepositoryImpl$private suspend fun enrich: LanHost</ID>
+    <ID>ThrowsCount:OperationRunner.kt:OperationRunner$@OptIn(InternalCoroutinesApi::class) suspend fun &lt;T&gt; run: T</ID>
+    <ID>ThrowsCount:PortScanBlockingResolver.kt:PortScanBlockingResolver$suspend fun resolve: java.net.InetAddress</ID>
+    <ID>ThrowsCount:PortScanRepositoryImpl.kt:P10TlsSubjectProbe$override fun inspect: String?</ID>
+    <ID>ThrowsCount:RdapClient.kt:DnsBootstrap.Companion$fun parse: DnsBootstrap</ID>
+    <ID>ThrowsCount:RdapClient.kt:RdapClient$private suspend fun cachedOrFetchBootstrap: DnsBootstrap</ID>
+    <ID>ThrowsCount:RdapClient.kt:RdapClient$suspend fun lookup: RdapLookupResult</ID>
+    <ID>ThrowsCount:ResourceScope.kt:ResourceScope$override fun close</ID>
+    <ID>ThrowsCount:Snmp4jClientImpl.kt:Snmp4jClientImpl$@OptIn(InternalCoroutinesApi::class) override suspend fun get: String?</ID>
+    <ID>ThrowsCount:Snmp4jClientImpl.kt:Snmp4jClientImpl$@OptIn(InternalCoroutinesApi::class) override suspend fun walk: SnmpWalkResult</ID>
+    <ID>ThrowsCount:Snmp4jClientImpl.kt:Snmp4jClientImpl$private fun initializeBlocking</ID>
+    <ID>ThrowsCount:Snmp4jClientImpl.kt:Snmp4jClientImpl$private suspend fun ensureInitialized</ID>
+    <ID>ThrowsCount:Snmp4jClientImpl.kt:Snmp4jClientImpl$private suspend fun targetFor: Pair&lt;Target&lt;*&gt;, UdpAddress&gt;</ID>
+    <ID>ThrowsCount:TlsInspectorRepositoryImpl.kt:TlsInspectorRepositoryImpl$private suspend fun performHandshake: TimedHandshake</ID>
+    <ID>ThrowsCount:UdpExchange.kt:NetworkBoundUdpExchange$private fun openSocket: DatagramSocket</ID>
+    <ID>ThrowsCount:UsmUserSpecFactory.kt:UsmUserSpecFactory$fun from: UsmUserSpec</ID>
+    <ID>ThrowsCount:WhoisRepositoryImpl.kt:WhoisRepositoryImpl$override suspend fun lookup: NetworkResult&lt;WhoisResult&gt;</ID>
+    <ID>ThrowsCount:WhoisRepositoryImpl.kt:WhoisRepositoryImpl$private suspend fun performDomainLookup: NetworkResult&lt;WhoisResult&gt;</ID>
+    <ID>ThrowsCount:WhoisRepositoryImpl.kt:WhoisRepositoryImpl$private suspend fun performIpAsnLookup: NetworkResult&lt;WhoisResult&gt;</ID>
+    <ID>ThrowsCount:WhoisRepositoryImpl.kt:WhoisRepositoryImpl$private suspend fun tryRdapLookup: NetworkResult&lt;WhoisResult&gt;?</ID>
+    <ID>TooGenericExceptionCaught:BoundSockets.kt:error: Exception</ID>
+    <ID>TooGenericExceptionCaught:DnsRepositoryImpl.kt:DnsRepositoryImpl$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:DnsRepositoryImpl.kt:DnsRepositoryImpl$failure: Throwable</ID>
+    <ID>TooGenericExceptionCaught:HttpProbeRepositoryImpl.kt:HttpProbeRepositoryImpl$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:HttpProbeRepositoryImpl.kt:HttpProbeRepositoryImpl$failure: Exception</ID>
+    <ID>TooGenericExceptionCaught:NetworkCache.kt:NetworkCache$failure: Throwable</ID>
+    <ID>TooGenericExceptionCaught:OperationRunner.kt:OperationRunner$closeFailure: Throwable</ID>
+    <ID>TooGenericExceptionCaught:OperationRunner.kt:OperationRunner$failure: Throwable</ID>
+    <ID>TooGenericExceptionCaught:PingBlockingCallExecutor.kt:PingBlockingCallExecutor$failure: Exception</ID>
+    <ID>TooGenericExceptionCaught:PingBlockingCallExecutor.kt:PingBlockingCallExecutor.ScopedFutureTask$failure: Exception</ID>
+    <ID>TooGenericExceptionCaught:PingRepositoryImpl.kt:PingRepositoryImpl$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:PortScanBlockingResolver.kt:PortScanBlockingResolver$failure: Exception</ID>
+    <ID>TooGenericExceptionCaught:PortScanBlockingResolver.kt:PortScanBlockingResolver.ResolverFutureTask$failure: Exception</ID>
+    <ID>TooGenericExceptionCaught:PortScanRepositoryImpl.kt:PortScanRepositoryImpl$error: Exception</ID>
+    <ID>TooGenericExceptionCaught:PortScanRepositoryImpl.kt:PortScanRepositoryImpl$failure: Exception</ID>
+    <ID>TooGenericExceptionCaught:RdapClient.kt:OkHttpRdapTransport.&lt;no name provided&gt;$error: Exception</ID>
+    <ID>TooGenericExceptionCaught:ReachabilityPingEngine.kt:ReachabilityPingEngine$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:ReachabilityPingEngine.kt:ReachabilityPingEngine.Companion$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:ResourceScope.kt:ResourceScope$failure: Throwable</ID>
+    <ID>TooGenericExceptionCaught:ReverseDnsNameProbe.kt:ReverseDnsNameProbe$failure: Throwable</ID>
+    <ID>TooGenericExceptionCaught:SessionIoClientFactory.kt:SessionIoClientFactory$failure: Throwable</ID>
+    <ID>TooGenericExceptionCaught:Snmp4jClientImpl.kt:BoundUdpTransportMapping$error: Exception</ID>
+    <ID>TooGenericExceptionCaught:Snmp4jClientImpl.kt:Snmp4jClientImpl$error: Exception</ID>
+    <ID>TooGenericExceptionCaught:Snmp4jClientImpl.kt:Snmp4jClientImpl$failure: Exception</ID>
+    <ID>TooGenericExceptionCaught:Snmp4jClientImpl.kt:Snmp4jClientImpl$failure: Throwable</ID>
+    <ID>TooGenericExceptionCaught:Snmp4jClientImpl.kt:Snmp4jClientImpl.&lt;no name provided&gt;$error: Exception</ID>
+    <ID>TooGenericExceptionCaught:SpeedTestRepositoryImpl.kt:SpeedTestRepositoryImpl$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:SpeedTestRepositoryImpl.kt:SpeedTestRepositoryImpl$failure: Exception</ID>
+    <ID>TooGenericExceptionCaught:SpeedTestRepositoryImpl.kt:SpeedTestRepositoryImpl.ConnectionLease$closeFailure: Throwable</ID>
+    <ID>TooGenericExceptionCaught:SubnetCalculatorRepositoryImpl.kt:SubnetCalculatorRepositoryImpl$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:TlsHandshakeEngine.kt:SocketTlsHandshakeEngine$closeFailure: Throwable</ID>
+    <ID>TooGenericExceptionCaught:TlsHandshakeEngine.kt:SocketTlsHandshakeEngine$failure: Throwable</ID>
+    <ID>TooGenericExceptionCaught:TlsInspectorRepositoryImpl.kt:TlsInspectorRepositoryImpl$closeFailure: Throwable</ID>
+    <ID>TooGenericExceptionCaught:TlsInspectorRepositoryImpl.kt:TlsInspectorRepositoryImpl$connectFailure: Exception</ID>
+    <ID>TooGenericExceptionCaught:TlsInspectorRepositoryImpl.kt:TlsInspectorRepositoryImpl$failure: Exception</ID>
+    <ID>TooGenericExceptionCaught:TlsInspectorRepositoryImpl.kt:TlsInspectorRepositoryImpl$handshakeFailure: Exception</ID>
+    <ID>TooGenericExceptionCaught:TlsInspectorRepositoryImpl.kt:TlsInspectorRepositoryImpl$thrown: Throwable</ID>
+    <ID>TooGenericExceptionCaught:TopologyBlockingCall.kt:TopologyBlockingCall.&lt;no name provided&gt;$failure: Throwable</ID>
+    <ID>TooGenericExceptionCaught:TopologyDiscoveryRepositoryImpl.kt:TopologyDiscoveryRepositoryImpl$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:UdpExchange.kt:NetworkBoundUdpExchange$error: Exception</ID>
+    <ID>TooGenericExceptionCaught:UdpExchange.kt:NetworkBoundUdpExchange$failure: Throwable</ID>
+    <ID>TooGenericExceptionCaught:WakeOnLanRepositoryImpl.kt:WakeOnLanRepositoryImpl$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:WhoisBlockingTransport.kt:WhoisBlockingTransport$failure: Throwable</ID>
+    <ID>TooGenericExceptionCaught:WhoisRepositoryImpl.kt:WhoisRepositoryImpl$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:WhoisRepositoryImpl.kt:WhoisRepositoryImpl$failure: Exception</ID>
+    <ID>TooManyFunctions:GeoIpRepositoryImpl.kt:GeoIpRepositoryImpl : GeoIpRepository</ID>
+    <ID>TooManyFunctions:GeoIpRepositoryImpl.kt:net.aieat.netswissknife.core.network.traceroute.GeoIpRepositoryImpl.kt</ID>
+    <ID>TooManyFunctions:HttpSecurityAnalyzer.kt:HttpSecurityAnalyzer</ID>
+    <ID>TooManyFunctions:OkHttpEngine.kt:TimingRecorder : EventListener</ID>
+    <ID>TooManyFunctions:PingRepositoryImpl.kt:PingRepositoryImpl : PingRepository</ID>
+    <ID>TooManyFunctions:RdapMapper.kt:RdapMapper</ID>
+    <ID>TooManyFunctions:Snmp4jClientImpl.kt:Snmp4jClientImpl : SnmpClient</ID>
+    <ID>TooManyFunctions:SpeedTestRepositoryImpl.kt:SpeedTestRepositoryImpl : SpeedTestRepository</ID>
+    <ID>TooManyFunctions:TopologyDiscoveryRepositoryImpl.kt:TopologyDiscoveryRepositoryImpl : TopologyDiscoveryRepository</ID>
+    <ID>TooManyFunctions:TopologySnapshotDiff.kt:TopologySnapshotDiffer</ID>
+    <ID>TooManyFunctions:WhoisRepositoryImpl.kt:WhoisRepositoryImpl : WhoisRepository</ID>
+    <ID>TooManyFunctions:WhoisResponseParser.kt:WhoisResponseParser</ID>
+    <ID>UnusedParameter:TopologyDiscoveryRepositoryImpl.kt:TopologyDiscoveryRepositoryImpl$vendor: String?</ID>
+    <ID>WildcardImport:TopologyDiscoveryRepositoryTest.kt:import io.mockk.*</ID>
+    <ID>WildcardImport:TopologyDiscoveryRepositoryTest.kt:import org.junit.jupiter.api.Assertions.*</ID>
+    <ID>WildcardImport:TopologyNodeParserTest.kt:import org.junit.jupiter.api.Assertions.*</ID>
+    <ID>WildcardImport:TopologyParamsValidationTest.kt:import org.junit.jupiter.api.Assertions.*</ID>
+    <ID>WildcardImport:WhoisResponseParserTest.kt:import org.junit.jupiter.api.Assertions.*</ID>
+  </CurrentIssues>
+</SmellBaseline>

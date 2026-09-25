@@ -12,6 +12,8 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ClosedSendChannelException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,6 +26,7 @@ import kotlinx.coroutines.launch
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
 import net.aieat.netswissknife.app.platform.LinkInfoProvider
+import net.aieat.netswissknife.app.platform.LiteralDestinationClassifier
 import net.aieat.netswissknife.app.platform.NetworkStatus
 import net.aieat.netswissknife.app.platform.NetworkStatusProvider
 import net.aieat.netswissknife.app.ui.navigation.HostTool
@@ -32,6 +35,9 @@ import net.aieat.netswissknife.app.ui.navigation.ToolHost
 import net.aieat.netswissknife.app.ui.navigation.ToolIntentCodec
 import net.aieat.netswissknife.app.ui.navigation.ToolSource
 import net.aieat.netswissknife.app.platform.NoOpNetworkStatusProvider
+import net.aieat.netswissknife.app.platform.AvailabilityReason
+import net.aieat.netswissknife.app.platform.OperationAvailability
+import net.aieat.netswissknife.app.platform.denialMessage
 import net.aieat.netswissknife.core.domain.ContinuousPingParams
 import net.aieat.netswissknife.core.domain.ContinuousPingUseCase
 import net.aieat.netswissknife.core.domain.PingFlowResult
@@ -47,6 +53,7 @@ import net.aieat.netswissknife.core.network.ping.PingStatus
 import net.aieat.netswissknife.core.network.ping.PingEngineKind
 import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationRequirement
 import net.aieat.netswissknife.core.network.operation.OperationSession
 import net.aieat.netswissknife.core.network.ping.PingOperation
 import java.io.File
@@ -153,8 +160,10 @@ class PingViewModel @Inject constructor(
 ) : ViewModel() {
 
     companion object {
+        // The operation's finally block closes native/socket resources. Keep this
+        // join alive if the screen's ViewModel is cleared while cleanup is blocked.
+        private val lifecycleCleanupScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         private const val ROLLING_WINDOW = 100
-        private const val NO_NETWORK_CONNECTION = "No network connection"
         private const val HANDOFF_CONSUMED_KEY = "pingHandoffConsumed"
         private const val HANDOFF_SOURCE_KEY = "pingHandoffSource"
         private const val EDITED_HOST_KEY = "editedHost"
@@ -221,6 +230,7 @@ class PingViewModel @Inject constructor(
 
     private var pingJob: Job? = null
     private var pingOperationSession: OperationSession? = null
+    private var lifecyclePingCleanupState: PingUiState.Running? = null
     private var continuousSession: ContinuousPingSession? = null
     private val retiringSessions = mutableSetOf<ContinuousPingSession>()
 
@@ -336,6 +346,36 @@ class PingViewModel @Inject constructor(
         val current = _uiState.value
         if (current is PingUiState.Running && current.isContinuous) {
             stopContinuousPing(CancellationReason.LIFECYCLE_PAUSE)
+        } else if (current is PingUiState.Running) {
+            if (lifecyclePingCleanupState === current) return
+            val session = pingOperationSession
+            val job = pingJob
+            // Detach the canceled run immediately so late packets are ignored and a
+            // deliberate new run may start while this run closes its resources.
+            pingOperationSession = null
+            pingJob = null
+            lifecyclePingCleanupState = current
+            lifecycleCleanupScope.launch {
+                try {
+                    session?.cancel(CancellationReason.LIFECYCLE_PAUSE)
+                    job?.cancelAndJoin()
+                } finally {
+                    if (lifecyclePingCleanupState === current) {
+                        lifecyclePingCleanupState = null
+                    }
+                    // Do not let an old cleanup replace a newer run or an explicit
+                    // user action that changed the state while cleanup was pending.
+                    if (_uiState.value === current) {
+                        _uiState.value = if (current.packets.isNotEmpty()) {
+                            PingUiState.Finished(
+                                buildResult(current.host, current.packets, current.totalCount),
+                            )
+                        } else {
+                            PingUiState.Idle
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -366,12 +406,12 @@ class PingViewModel @Inject constructor(
         pingJob = null
         discardContinuousSession()
 
-        if (!linkInfoProvider.hasValidatedNetwork()) {
-            _uiState.value = PingUiState.Error(NO_NETWORK_CONNECTION)
+        val trimmedHost = HostValidator.normalize(_host.value) ?: _host.value.trim()
+        val availability = availabilityFor(trimmedHost)
+        if (!availability.allowed) {
+            _uiState.value = PingUiState.Error(availability.denialMessage())
             return
         }
-
-        val trimmedHost = HostValidator.normalize(_host.value) ?: _host.value.trim()
         val params = PingParams(
             host = trimmedHost,
             count = _count.value,
@@ -401,6 +441,7 @@ class PingViewModel @Inject constructor(
 
             try {
                 pingUseCase(params, operationSession).collect { result ->
+                    if (pingOperationSession !== operationSession) return@collect
                     when (result) {
                         is PingFlowResult.ValidationError -> {
                             _uiState.value = PingUiState.Error(result.message)
@@ -422,7 +463,7 @@ class PingViewModel @Inject constructor(
                 }
 
                 val current = _uiState.value
-                if (current is PingUiState.Running) {
+                if (pingOperationSession === operationSession && current is PingUiState.Running) {
                     _uiState.value = if (current.packets.isEmpty()) {
                         PingUiState.Error("No response received from $trimmedHost")
                     } else {
@@ -432,7 +473,9 @@ class PingViewModel @Inject constructor(
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _uiState.value = PingUiState.Error(e.message ?: "Ping failed")
+                if (pingOperationSession === operationSession) {
+                    _uiState.value = PingUiState.Error(e.message ?: "Ping failed")
+                }
             } finally {
                 if (pingOperationSession === operationSession) pingOperationSession = null
             }
@@ -448,12 +491,15 @@ class PingViewModel @Inject constructor(
         pingJob = null
         discardContinuousSession()
 
-        if (!linkInfoProvider.hasValidatedNetwork()) {
-            _uiState.value = PingUiState.Error(NO_NETWORK_CONNECTION)
+        val trimmedHost = HostValidator.normalize(_host.value) ?: _host.value.trim()
+        val availability = availabilityFor(trimmedHost)
+        if (!availability.allowed || availability.reason == AvailabilityReason.CONNECTIVITY_UNVALIDATED) {
+            _uiState.value = PingUiState.Error(
+                if (availability.allowed) "Continuous ping requires validated connectivity"
+                else availability.denialMessage(),
+            )
             return
         }
-
-        val trimmedHost = HostValidator.normalize(_host.value) ?: _host.value.trim()
         val params = ContinuousPingParams(
             host = trimmedHost,
             timeoutMs = _timeoutMs.value,
@@ -550,6 +596,23 @@ class PingViewModel @Inject constructor(
         session.producerJob = producer
         pingJob = producer
         producer.start()
+    }
+
+    private fun availabilityFor(host: String): OperationAvailability {
+        val target = LiteralDestinationClassifier.target(host)
+        val requirement = OperationAvailability.requirementFor(target)
+        val localPermission = if (
+            requirement == OperationRequirement.LOCAL_NETWORK
+        ) {
+            linkInfoProvider.localNetworkPermissionAllowed()
+        } else {
+            null
+        }
+        return OperationAvailability.classifyObserved(
+            target = target,
+            status = networkStatusProvider.status.value,
+            localNetworkPermissionAllowed = localPermission,
+        )
     }
 
     private fun finalizeContinuousSession(

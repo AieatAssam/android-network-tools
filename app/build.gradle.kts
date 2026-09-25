@@ -3,9 +3,26 @@ plugins {
     alias(libs.plugins.compose.compiler)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
+    alias(libs.plugins.ktlint)
+    alias(libs.plugins.detekt)
 }
 
 apply(plugin = "org.jetbrains.kotlinx.kover")
+
+configure<org.jlleitschuh.gradle.ktlint.KtlintExtension> {
+    version.set(libs.versions.ktlint.get())
+    android.set(true)
+    baseline.set(rootProject.file("config/ktlint/app-baseline.xml"))
+}
+
+detekt {
+    toolVersion = libs.versions.detekt.get()
+    config.setFrom(rootProject.file("config/detekt/detekt.yml"))
+    buildUponDefaultConfig = true
+    baseline = rootProject.file("config/detekt/app-baseline.xml")
+    parallel = false
+    basePath.set(projectDir)
+}
 
 // ── CI-supplied properties ────────────────────────────────────────────────────
 // Pass via: ./gradlew :app:assembleRelease -PversionName=1.2.3 -PversionCode=100

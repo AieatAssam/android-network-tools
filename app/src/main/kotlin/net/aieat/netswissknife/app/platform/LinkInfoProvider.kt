@@ -1,8 +1,11 @@
 package net.aieat.netswissknife.app.platform
 
 import android.content.Context
+import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.os.Build
+import androidx.core.content.ContextCompat
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.net.Inet4Address
 import javax.inject.Inject
@@ -53,16 +56,23 @@ object LinkInfoMapper {
 class LinkInfoProvider private constructor(
     private val context: Context?,
     private val validatedNetworkOverride: (() -> Boolean)?,
+    private val localNetworkPermissionOverride: (() -> Boolean)?,
 ) {
     @Inject
-    constructor(@ApplicationContext context: Context) : this(context, null)
+    constructor(@ApplicationContext context: Context) : this(context, null, null)
 
     /**
      * Test-only construction hook. The production constructor always uses the
      * process ConnectivityManager; tests can provide a deterministic answer
      * without needing an Android network stack.
      */
-    constructor(hasValidatedNetwork: () -> Boolean) : this(null, hasValidatedNetwork)
+    constructor(hasValidatedNetwork: () -> Boolean) : this(null, hasValidatedNetwork, null)
+
+    /** Test seam for API 36 local-network permission admission. */
+    constructor(
+        hasValidatedNetwork: () -> Boolean,
+        localNetworkPermissionAllowed: () -> Boolean,
+    ) : this(null, hasValidatedNetwork, localNetworkPermissionAllowed)
 
     /** True only when the active network has validated Internet connectivity. */
     fun hasValidatedNetwork(): Boolean = runCatching {
@@ -73,6 +83,22 @@ class LinkInfoProvider private constructor(
             ?: return@runCatching false
         val network = connectivity.activeNetwork ?: return@runCatching false
         LinkInfoMapper.isValidatedNetwork(connectivity.getNetworkCapabilities(network))
+    }.getOrDefault(false)
+
+    /**
+     * Reports mandatory permission state on Android 17+. Android 16 uses an opt-in compat
+     * restriction whose state is not visible to apps, so missing `NEARBY_WIFI_DEVICES` cannot
+     * be treated as a definitive denial there; let the attempted operation report socket errors.
+     */
+    fun localNetworkPermissionAllowed(): Boolean = runCatching {
+        localNetworkPermissionOverride?.let { return@runCatching it() }
+        val permission = LocalNetworkPermissionPolicy.permissionToCheck(Build.VERSION.SDK_INT)
+            ?: return@runCatching true
+        val appContext = context ?: return@runCatching false
+        ContextCompat.checkSelfPermission(
+            appContext,
+            permission,
+        ) == PackageManager.PERMISSION_GRANTED
     }.getOrDefault(false)
 
     fun getLinkInfo(): LinkInfo? = runCatching {
@@ -102,4 +128,25 @@ class LinkInfoProvider private constructor(
             isVpnActive = capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true,
         )
     }.getOrNull()
+}
+
+/** OS-version mapping for local-network protections used by both admission and UI prompts. */
+internal object LocalNetworkPermissionPolicy {
+    const val ANDROID_16_API = 36
+    const val ANDROID_17_API = 37
+    const val NEARBY_WIFI_DEVICES = "android.permission.NEARBY_WIFI_DEVICES"
+    const val ACCESS_LOCAL_NETWORK = "android.permission.ACCESS_LOCAL_NETWORK"
+
+    fun permissionToRequest(apiLevel: Int): String? = when {
+        apiLevel >= ANDROID_17_API -> ACCESS_LOCAL_NETWORK
+        apiLevel >= ANDROID_16_API -> NEARBY_WIFI_DEVICES
+        else -> null
+    }
+
+    /** API 36 enforcement is opt-in, and the app cannot observe that compat state. */
+    fun permissionToCheck(apiLevel: Int): String? =
+        if (apiLevel >= ANDROID_17_API) ACCESS_LOCAL_NETWORK else null
+
+    fun shouldRequestPermission(apiLevel: Int, isLocalTarget: Boolean, permissionGranted: Boolean): Boolean =
+        isLocalTarget && permissionToRequest(apiLevel) != null && !permissionGranted
 }

@@ -1,6 +1,5 @@
 package net.aieat.netswissknife.app.ui.screens
 
-import android.Manifest
 import android.os.Build
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -29,6 +28,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.platform.LocalNetworkPermissionPolicy
 import net.aieat.netswissknife.app.ui.screens.ping.PingUiState
 import net.aieat.netswissknife.app.ui.screens.ping.PingViewModel
 import net.aieat.netswissknife.app.ui.navigation.ToolSource
@@ -45,18 +45,16 @@ import org.junit.runner.RunWith
 /**
  * Covers Ping's Running -> Error state transition rendering.
  *
- * [PingScreen] requests `NEARBY_WIFI_DEVICES` on entry on API 36+ (Local
- * Network Protections, see `LocalNetworkPermission.kt`) — pre-granting it
- * avoids a system permission dialog interrupting the test.
+ * Pre-grant the OS-version-specific local-network permission so any test that
+ * starts a local target avoids a system permission dialog.
  */
 @RunWith(AndroidJUnit4::class)
 class PingScreenTest {
     @get:Rule
-    val permissionRule: GrantPermissionRule = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
-        GrantPermissionRule.grant(Manifest.permission.NEARBY_WIFI_DEVICES)
-    } else {
-        GrantPermissionRule.grant()
-    }
+    val permissionRule: GrantPermissionRule = LocalNetworkPermissionPolicy
+        .permissionToRequest(Build.VERSION.SDK_INT)
+        ?.let { permission -> GrantPermissionRule.grant(permission) }
+        ?: GrantPermissionRule.grant()
 
     @get:Rule
     val composeRule = createComposeRule()

@@ -10,24 +10,25 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
-import kotlinx.coroutines.awaitCancellation
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.InternalCoroutinesApi
 import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
+import net.aieat.netswissknife.app.platform.LinkInfoProvider
 import net.aieat.netswissknife.app.ui.navigation.HostTool
 import net.aieat.netswissknife.app.ui.navigation.ToolDestination
 import net.aieat.netswissknife.app.ui.navigation.ToolHost
@@ -39,16 +40,16 @@ import net.aieat.netswissknife.core.domain.PortScanParams
 import net.aieat.netswissknife.core.domain.PortScanPreset
 import net.aieat.netswissknife.core.domain.PortScanUseCase
 import net.aieat.netswissknife.core.network.MonotonicClock
-import net.aieat.netswissknife.core.network.portscan.PortScanResult
-import net.aieat.netswissknife.core.network.portscan.PortConnectResult
-import net.aieat.netswissknife.core.network.portscan.PortScanRepositoryImpl
-import net.aieat.netswissknife.core.network.portscan.PortScanSummary
-import net.aieat.netswissknife.core.network.portscan.PortStatus
+import net.aieat.netswissknife.core.network.operation.CancellationReason
 import net.aieat.netswissknife.core.network.operation.OperationBudget
+import net.aieat.netswissknife.core.network.operation.OperationDeadlineExceededException
 import net.aieat.netswissknife.core.network.operation.OperationRunner
 import net.aieat.netswissknife.core.network.operation.OperationSession
-import net.aieat.netswissknife.core.network.operation.CancellationReason
-import net.aieat.netswissknife.core.network.operation.OperationDeadlineExceededException
+import net.aieat.netswissknife.core.network.portscan.PortConnectResult
+import net.aieat.netswissknife.core.network.portscan.PortScanRepositoryImpl
+import net.aieat.netswissknife.core.network.portscan.PortScanResult
+import net.aieat.netswissknife.core.network.portscan.PortScanSummary
+import net.aieat.netswissknife.core.network.portscan.PortStatus
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -63,7 +64,6 @@ import java.util.concurrent.TimeUnit
 @OptIn(ExperimentalCoroutinesApi::class, InternalCoroutinesApi::class)
 @DisplayName("PortScanViewModel")
 class PortScanViewModelTest {
-
     private val testDispatcher = UnconfinedTestDispatcher()
 
     private lateinit var portScanUseCase: PortScanUseCase
@@ -71,26 +71,29 @@ class PortScanViewModelTest {
     private lateinit var recentHostsRepository: RecentHostsRepository
     private lateinit var viewModel: PortScanViewModel
     private val testClock = FakeMonotonicClock()
+    private var localNetworkPermissionAllowed = true
     private lateinit var lastOperationSession: OperationSession
 
-    private val stubResult = PortScanResult(
-        port = 80,
-        status = PortStatus.OPEN,
-        serviceName = "HTTP",
-        serviceDescription = null,
-        banner = null,
-        responseTimeMs = 10L
-    )
-    private val stubSummary = PortScanSummary(
-        host = "example.com",
-        resolvedIp = "93.184.216.34",
-        scannedPorts = listOf(80),
-        openPorts = 1,
-        closedPorts = 0,
-        filteredPorts = 0,
-        scanDurationMs = 50L,
-        results = listOf(stubResult)
-    )
+    private val stubResult =
+        PortScanResult(
+            port = 80,
+            status = PortStatus.OPEN,
+            serviceName = "HTTP",
+            serviceDescription = null,
+            banner = null,
+            responseTimeMs = 10L,
+        )
+    private val stubSummary =
+        PortScanSummary(
+            host = "example.com",
+            resolvedIp = "93.184.216.34",
+            scannedPorts = listOf(80),
+            openPorts = 1,
+            closedPorts = 0,
+            filteredPorts = 0,
+            scanDurationMs = 50L,
+            results = listOf(stubResult),
+        )
 
     @BeforeEach
     fun setUp() {
@@ -99,18 +102,22 @@ class PortScanViewModelTest {
         every { portScanUseCase.newSession(any()) } answers {
             OperationSession(OperationBudget.start()).also { lastOperationSession = it }
         }
-        dataStore = mockk {
-            every { data } returns flowOf(emptyPreferences())
-        }
-        recentHostsRepository = mockk(relaxed = true) {
-            every { getRecents(any()) } returns flowOf(emptyList())
-        }
-        viewModel = PortScanViewModel(
-            portScanUseCase,
-            dataStore,
-            recentHostsRepository,
-            monotonicClock = testClock
-        )
+        dataStore =
+            mockk {
+                every { data } returns flowOf(emptyPreferences())
+            }
+        recentHostsRepository =
+            mockk(relaxed = true) {
+                every { getRecents(any()) } returns flowOf(emptyList())
+            }
+        viewModel =
+            PortScanViewModel(
+                portScanUseCase,
+                dataStore,
+                recentHostsRepository,
+                monotonicClock = testClock,
+                linkInfoProvider = LinkInfoProvider({ true }, { localNetworkPermissionAllowed }),
+            )
     }
 
     @AfterEach
@@ -124,32 +131,35 @@ class PortScanViewModelTest {
     }
 
     @Test
-    fun `initial concurrency matches the shared default and stored fallback`() = runTest {
-        assertEquals(PortScanDefaults.CONCURRENCY, viewModel.concurrency.value)
-        every { portScanUseCase(any(), any()) } returns flowOf()
-        viewModel.onHostChange("example.com")
+    fun `initial concurrency matches the shared default and stored fallback`() =
+        runTest {
+            assertEquals(PortScanDefaults.CONCURRENCY, viewModel.concurrency.value)
+            every { portScanUseCase(any(), any()) } returns flowOf()
+            viewModel.onHostChange("example.com")
 
-        viewModel.startScan()
+            viewModel.startScan()
 
-        verify { portScanUseCase(match { it.concurrency == PortScanDefaults.CONCURRENCY }, any()) }
-    }
+            verify { portScanUseCase(match { it.concurrency == PortScanDefaults.CONCURRENCY }, any()) }
+        }
 
     @Test
     fun `LAN typed handoff prefills host without scanning and preserves edits in saved state`() {
-        val encoded = ToolIntentCodec.encode(
-            ToolIntent(
-                ToolDestination.HostTarget(HostTool.PORTS, requireNotNull(ToolHost.parse("192.0.2.8"))),
-                ToolSource.LAN,
-            ),
-        )
+        val encoded =
+            ToolIntentCodec.encode(
+                ToolIntent(
+                    ToolDestination.HostTarget(HostTool.PORTS, requireNotNull(ToolHost.parse("192.0.2.8"))),
+                    ToolSource.LAN,
+                ),
+            )
         val routeState = SavedStateHandle(mapOf("intent" to encoded, "host" to "192.0.2.8"))
-        val handoffViewModel = PortScanViewModel(
-            portScanUseCase,
-            dataStore,
-            recentHostsRepository,
-            savedStateHandle = routeState,
-            monotonicClock = testClock,
-        )
+        val handoffViewModel =
+            PortScanViewModel(
+                portScanUseCase,
+                dataStore,
+                recentHostsRepository,
+                savedStateHandle = routeState,
+                monotonicClock = testClock,
+            )
 
         assertEquals("192.0.2.8", handoffViewModel.host.value)
         assertEquals(ToolSource.LAN, handoffViewModel.sourceContext)
@@ -165,15 +175,17 @@ class PortScanViewModelTest {
         handoffViewModel.onHostChange("edited.example")
         assertEquals("edited.example", routeState.get<String>("editedHost"))
         assertEquals("192.0.2.8", routeState.get<String>("host"))
-        val recreated = PortScanViewModel(
-            portScanUseCase,
-            dataStore,
-            recentHostsRepository,
-            savedStateHandle = SavedStateHandle(
-                mapOf("intent" to encoded, "host" to "192.0.2.8", "editedHost" to "edited.example"),
-            ),
-            monotonicClock = testClock,
-        )
+        val recreated =
+            PortScanViewModel(
+                portScanUseCase,
+                dataStore,
+                recentHostsRepository,
+                savedStateHandle =
+                    SavedStateHandle(
+                        mapOf("intent" to encoded, "host" to "192.0.2.8", "editedHost" to "edited.example"),
+                    ),
+                monotonicClock = testClock,
+            )
         assertEquals("edited.example", recreated.host.value)
         assertEquals(ToolSource.LAN, recreated.sourceContext)
         assertTrue(!recreated.hasInvalidHandoff.value)
@@ -185,39 +197,43 @@ class PortScanViewModelTest {
 
     @Test
     fun `consumed typed route snapshots initial host and never replays route after recreation`() {
-        val encoded = ToolIntentCodec.encode(
-            ToolIntent(
-                ToolDestination.HostTarget(HostTool.PORTS, requireNotNull(ToolHost.parse("192.0.2.8"))),
-                ToolSource.LAN,
-            ),
-        )
+        val encoded =
+            ToolIntentCodec.encode(
+                ToolIntent(
+                    ToolDestination.HostTarget(HostTool.PORTS, requireNotNull(ToolHost.parse("192.0.2.8"))),
+                    ToolSource.LAN,
+                ),
+            )
         val routeState = SavedStateHandle(mapOf("intent" to encoded, "host" to "192.0.2.8"))
-        val first = PortScanViewModel(
-            portScanUseCase,
-            dataStore,
-            recentHostsRepository,
-            savedStateHandle = routeState,
-            monotonicClock = testClock,
-        )
+        val first =
+            PortScanViewModel(
+                portScanUseCase,
+                dataStore,
+                recentHostsRepository,
+                savedStateHandle = routeState,
+                monotonicClock = testClock,
+            )
         assertEquals("192.0.2.8", first.host.value)
         assertEquals(true, routeState.get<Boolean>("portsHandoffConsumed"))
         assertEquals("192.0.2.8", routeState.get<String>("editedHost"))
 
-        val recreated = PortScanViewModel(
-            portScanUseCase,
-            dataStore,
-            recentHostsRepository,
-            savedStateHandle = SavedStateHandle(
-                mapOf(
-                    "intent" to encoded,
-                    "host" to "192.0.2.8",
-                    "portsHandoffConsumed" to true,
-                    "portsHandoffSource" to "lan",
-                    "editedHost" to "192.0.2.8",
-                ),
-            ),
-            monotonicClock = testClock,
-        )
+        val recreated =
+            PortScanViewModel(
+                portScanUseCase,
+                dataStore,
+                recentHostsRepository,
+                savedStateHandle =
+                    SavedStateHandle(
+                        mapOf(
+                            "intent" to encoded,
+                            "host" to "192.0.2.8",
+                            "portsHandoffConsumed" to true,
+                            "portsHandoffSource" to "lan",
+                            "editedHost" to "192.0.2.8",
+                        ),
+                    ),
+                monotonicClock = testClock,
+            )
         assertEquals("192.0.2.8", recreated.host.value)
         assertEquals(ToolSource.LAN, recreated.sourceContext)
         assertTrue(recreated.uiState.value is PortScanUiState.Idle)
@@ -228,30 +244,33 @@ class PortScanViewModelTest {
 
     @Test
     fun `present empty edit does not fall back to route host while absent edit consumes prefill`() {
-        val encoded = ToolIntentCodec.encode(
-            ToolIntent(
-                ToolDestination.HostTarget(HostTool.PORTS, requireNotNull(ToolHost.parse("192.0.2.8"))),
-                ToolSource.LAN,
-            ),
-        )
+        val encoded =
+            ToolIntentCodec.encode(
+                ToolIntent(
+                    ToolDestination.HostTarget(HostTool.PORTS, requireNotNull(ToolHost.parse("192.0.2.8"))),
+                    ToolSource.LAN,
+                ),
+            )
         val route = mapOf("intent" to encoded, "host" to "192.0.2.8")
 
-        val untouched = PortScanViewModel(
-            portScanUseCase,
-            dataStore,
-            recentHostsRepository,
-            savedStateHandle = SavedStateHandle(route),
-            monotonicClock = testClock,
-        )
+        val untouched =
+            PortScanViewModel(
+                portScanUseCase,
+                dataStore,
+                recentHostsRepository,
+                savedStateHandle = SavedStateHandle(route),
+                monotonicClock = testClock,
+            )
         assertEquals("192.0.2.8", untouched.host.value)
 
-        val explicitlyBlank = PortScanViewModel(
-            portScanUseCase,
-            dataStore,
-            recentHostsRepository,
-            savedStateHandle = SavedStateHandle(route + mapOf("editedHost" to "")),
-            monotonicClock = testClock,
-        )
+        val explicitlyBlank =
+            PortScanViewModel(
+                portScanUseCase,
+                dataStore,
+                recentHostsRepository,
+                savedStateHandle = SavedStateHandle(route + mapOf("editedHost" to "")),
+                monotonicClock = testClock,
+            )
         assertEquals("", explicitlyBlank.host.value)
         assertFalse(explicitlyBlank.hasInvalidHandoff.value)
         assertTrue(explicitlyBlank.uiState.value is PortScanUiState.Idle)
@@ -261,22 +280,25 @@ class PortScanViewModelTest {
     }
 
     @Test
-    fun `cleared prefill and source remain cleared after recreation with original route arguments`() {
-        val encoded = ToolIntentCodec.encode(
-            ToolIntent(
-                ToolDestination.HostTarget(HostTool.PORTS, requireNotNull(ToolHost.parse("192.0.2.8"))),
-                ToolSource.LAN,
-            ),
-        )
+    @Suppress("LongMethod")
+    fun `cleared prefill and source remain cleared after recreation`() {
+        val encoded =
+            ToolIntentCodec.encode(
+                ToolIntent(
+                    ToolDestination.HostTarget(HostTool.PORTS, requireNotNull(ToolHost.parse("192.0.2.8"))),
+                    ToolSource.LAN,
+                ),
+            )
         val originalRouteArgs = mapOf("intent" to encoded, "host" to "192.0.2.8")
         val routeState = SavedStateHandle(originalRouteArgs)
-        val handoff = PortScanViewModel(
-            portScanUseCase,
-            dataStore,
-            recentHostsRepository,
-            savedStateHandle = routeState,
-            monotonicClock = testClock,
-        )
+        val handoff =
+            PortScanViewModel(
+                portScanUseCase,
+                dataStore,
+                recentHostsRepository,
+                savedStateHandle = routeState,
+                monotonicClock = testClock,
+            )
         assertEquals("192.0.2.8", handoff.host.value)
         assertEquals(ToolSource.LAN, handoff.sourceContext)
 
@@ -288,18 +310,21 @@ class PortScanViewModelTest {
         assertEquals(null, routeState.get<String>("portsHandoffSource"))
         assertEquals(true, routeState.get<Boolean>("portsHandoffConsumed"))
 
-        val recreated = PortScanViewModel(
-            portScanUseCase,
-            dataStore,
-            recentHostsRepository,
-            savedStateHandle = SavedStateHandle(
-                originalRouteArgs + mapOf(
-                    "editedHost" to "",
-                    "portsHandoffConsumed" to true,
-                ),
-            ),
-            monotonicClock = testClock,
-        )
+        val recreated =
+            PortScanViewModel(
+                portScanUseCase,
+                dataStore,
+                recentHostsRepository,
+                savedStateHandle =
+                    SavedStateHandle(
+                        originalRouteArgs +
+                            mapOf(
+                                "editedHost" to "",
+                                "portsHandoffConsumed" to true,
+                            ),
+                    ),
+                monotonicClock = testClock,
+            )
         assertEquals("", recreated.host.value)
         assertEquals(null, recreated.sourceContext)
         assertTrue(recreated.uiState.value is PortScanUiState.Idle)
@@ -309,15 +334,17 @@ class PortScanViewModelTest {
 
         // A consumed route with no editedHost snapshot is also authoritative; it
         // must not fall back to the still-present navigation argument.
-        val absentEdit = PortScanViewModel(
-            portScanUseCase,
-            dataStore,
-            recentHostsRepository,
-            savedStateHandle = SavedStateHandle(
-                originalRouteArgs + mapOf("portsHandoffConsumed" to true),
-            ),
-            monotonicClock = testClock,
-        )
+        val absentEdit =
+            PortScanViewModel(
+                portScanUseCase,
+                dataStore,
+                recentHostsRepository,
+                savedStateHandle =
+                    SavedStateHandle(
+                        originalRouteArgs + mapOf("portsHandoffConsumed" to true),
+                    ),
+                monotonicClock = testClock,
+            )
         assertEquals("", absentEdit.host.value)
         assertEquals(null, absentEdit.sourceContext)
         verify(exactly = 0) { portScanUseCase.newSession(any()) }
@@ -326,32 +353,35 @@ class PortScanViewModelTest {
     @Test
     fun `legacy host route remains supported and its host survives recreation`() {
         val routeState = SavedStateHandle(mapOf("host" to "legacy.example"))
-        val legacy = PortScanViewModel(
-            portScanUseCase,
-            dataStore,
-            recentHostsRepository,
-            savedStateHandle = routeState,
-            monotonicClock = testClock,
-        )
+        val legacy =
+            PortScanViewModel(
+                portScanUseCase,
+                dataStore,
+                recentHostsRepository,
+                savedStateHandle = routeState,
+                monotonicClock = testClock,
+            )
 
         assertEquals("legacy.example", legacy.host.value)
         assertEquals(null, legacy.sourceContext)
         assertEquals(true, routeState.get<Boolean>("portsHandoffConsumed"))
         assertEquals("legacy.example", routeState.get<String>("editedHost"))
 
-        val recreated = PortScanViewModel(
-            portScanUseCase,
-            dataStore,
-            recentHostsRepository,
-            savedStateHandle = SavedStateHandle(
-                mapOf(
-                    "host" to "legacy.example",
-                    "editedHost" to "legacy.example",
-                    "portsHandoffConsumed" to true,
-                ),
-            ),
-            monotonicClock = testClock,
-        )
+        val recreated =
+            PortScanViewModel(
+                portScanUseCase,
+                dataStore,
+                recentHostsRepository,
+                savedStateHandle =
+                    SavedStateHandle(
+                        mapOf(
+                            "host" to "legacy.example",
+                            "editedHost" to "legacy.example",
+                            "portsHandoffConsumed" to true,
+                        ),
+                    ),
+                monotonicClock = testClock,
+            )
         assertEquals("legacy.example", recreated.host.value)
         assertEquals(null, recreated.sourceContext)
         assertTrue(recreated.uiState.value is PortScanUiState.Idle)
@@ -361,54 +391,60 @@ class PortScanViewModelTest {
     }
 
     @Test
-    fun `clear prefill is ignored while a scan is active`() = runTest {
-        val encoded = ToolIntentCodec.encode(
-            ToolIntent(
-                ToolDestination.HostTarget(HostTool.PORTS, requireNotNull(ToolHost.parse("192.0.2.8"))),
-                ToolSource.LAN,
-            ),
-        )
-        val handoff = PortScanViewModel(
-            portScanUseCase,
-            dataStore,
-            recentHostsRepository,
-            savedStateHandle = SavedStateHandle(mapOf("intent" to encoded, "host" to "192.0.2.8")),
-            monotonicClock = testClock,
-        )
-        every { portScanUseCase(any(), any()) } returns kotlinx.coroutines.flow.flow {
-            emit(PortScanFlowResult.Started("192.0.2.8", 1))
-            awaitCancellation()
+    fun `clear prefill is ignored while a scan is active`() =
+        runTest {
+            val encoded =
+                ToolIntentCodec.encode(
+                    ToolIntent(
+                        ToolDestination.HostTarget(HostTool.PORTS, requireNotNull(ToolHost.parse("192.0.2.8"))),
+                        ToolSource.LAN,
+                    ),
+                )
+            val handoff =
+                PortScanViewModel(
+                    portScanUseCase,
+                    dataStore,
+                    recentHostsRepository,
+                    savedStateHandle = SavedStateHandle(mapOf("intent" to encoded, "host" to "192.0.2.8")),
+                    monotonicClock = testClock,
+                )
+            every { portScanUseCase(any(), any()) } returns
+                kotlinx.coroutines.flow.flow {
+                    emit(PortScanFlowResult.Started("192.0.2.8", 1))
+                    awaitCancellation()
+                }
+
+            handoff.startScan()
+            assertTrue(handoff.uiState.value is PortScanUiState.Scanning)
+
+            // The screen's clear icon calls onHostChange("") directly.
+            handoff.onHostChange("")
+            handoff.clearPrefill()
+
+            assertEquals("192.0.2.8", handoff.host.value)
+            assertEquals(ToolSource.LAN, handoff.sourceContext)
+            assertTrue(handoff.uiState.value is PortScanUiState.Scanning)
+            verify(exactly = 1) { portScanUseCase.newSession(any()) }
+            handoff.onClear()
         }
-
-        handoff.startScan()
-        assertTrue(handoff.uiState.value is PortScanUiState.Scanning)
-
-        // The screen's clear icon calls onHostChange("") directly.
-        handoff.onHostChange("")
-        handoff.clearPrefill()
-
-        assertEquals("192.0.2.8", handoff.host.value)
-        assertEquals(ToolSource.LAN, handoff.sourceContext)
-        assertTrue(handoff.uiState.value is PortScanUiState.Scanning)
-        verify(exactly = 1) { portScanUseCase.newSession(any()) }
-        handoff.onClear()
-    }
 
     @Test
     fun `mismatched typed host and route host leave blank form and expose inline error`() {
-        val encoded = ToolIntentCodec.encode(
-            ToolIntent(
-                ToolDestination.HostTarget(HostTool.PORTS, requireNotNull(ToolHost.parse("router-a.local"))),
-                ToolSource.LAN,
-            ),
-        )
-        val mismatched = PortScanViewModel(
-            portScanUseCase,
-            dataStore,
-            recentHostsRepository,
-            savedStateHandle = SavedStateHandle(mapOf("intent" to encoded, "host" to "router-b.local")),
-            monotonicClock = testClock,
-        )
+        val encoded =
+            ToolIntentCodec.encode(
+                ToolIntent(
+                    ToolDestination.HostTarget(HostTool.PORTS, requireNotNull(ToolHost.parse("router-a.local"))),
+                    ToolSource.LAN,
+                ),
+            )
+        val mismatched =
+            PortScanViewModel(
+                portScanUseCase,
+                dataStore,
+                recentHostsRepository,
+                savedStateHandle = SavedStateHandle(mapOf("intent" to encoded, "host" to "router-b.local")),
+                monotonicClock = testClock,
+            )
 
         assertEquals("", mismatched.host.value)
         assertEquals(null, mismatched.sourceContext)
@@ -419,94 +455,104 @@ class PortScanViewModelTest {
 
     @Test
     fun `malformed typed handoff does not silently use legacy host`() {
-        val savedState = SavedStateHandle(
-            mapOf(
-                "intent" to "tool-intent-v1.invalid",
-                "host" to "router.local",
-                "portsHandoffSource" to "lan",
-            ),
-        )
-        val invalid = PortScanViewModel(
-            portScanUseCase,
-            dataStore,
-            recentHostsRepository,
-            savedStateHandle = savedState,
-            monotonicClock = testClock,
-        )
+        val savedState =
+            SavedStateHandle(
+                mapOf(
+                    "intent" to "tool-intent-v1.invalid",
+                    "host" to "router.local",
+                    "portsHandoffSource" to "lan",
+                ),
+            )
+        val invalid =
+            PortScanViewModel(
+                portScanUseCase,
+                dataStore,
+                recentHostsRepository,
+                savedStateHandle = savedState,
+                monotonicClock = testClock,
+            )
 
         assertEquals("", invalid.host.value)
         assertEquals(null, invalid.sourceContext)
         assertTrue(invalid.hasInvalidHandoff.value)
         assertEquals(null, savedState.get<String>("portsHandoffSource"))
 
-        val staleConsumedSource = PortScanViewModel(
-            portScanUseCase,
-            dataStore,
-            recentHostsRepository,
-            savedStateHandle = SavedStateHandle(
-                mapOf(
-                    "intent" to "tool-intent-v1.invalid",
-                    "host" to "router.local",
-                    "portsHandoffConsumed" to true,
-                    "portsHandoffSource" to "lan",
-                    "editedHost" to "",
-                ),
-            ),
-            monotonicClock = testClock,
-        )
+        val staleConsumedSource =
+            PortScanViewModel(
+                portScanUseCase,
+                dataStore,
+                recentHostsRepository,
+                savedStateHandle =
+                    SavedStateHandle(
+                        mapOf(
+                            "intent" to "tool-intent-v1.invalid",
+                            "host" to "router.local",
+                            "portsHandoffConsumed" to true,
+                            "portsHandoffSource" to "lan",
+                            "editedHost" to "",
+                        ),
+                    ),
+                monotonicClock = testClock,
+            )
         assertEquals(null, staleConsumedSource.sourceContext)
         assertTrue(staleConsumedSource.hasInvalidHandoff.value)
     }
 
     @Test
     fun `valid recovery edit and dismissed warning survive route recreation`() {
-        val encoded = ToolIntentCodec.encode(
-            ToolIntent(
-                ToolDestination.HostTarget(HostTool.PORTS, requireNotNull(ToolHost.parse("router-a.local"))),
-                ToolSource.LAN,
-            ),
-        )
+        val encoded =
+            ToolIntentCodec.encode(
+                ToolIntent(
+                    ToolDestination.HostTarget(HostTool.PORTS, requireNotNull(ToolHost.parse("router-a.local"))),
+                    ToolSource.LAN,
+                ),
+            )
         val routeState = SavedStateHandle(mapOf("intent" to encoded, "host" to "router-b.local"))
-        val recovery = PortScanViewModel(
-            portScanUseCase,
-            dataStore,
-            recentHostsRepository,
-            savedStateHandle = routeState,
-            monotonicClock = testClock,
-        )
+        val recovery =
+            PortScanViewModel(
+                portScanUseCase,
+                dataStore,
+                recentHostsRepository,
+                savedStateHandle = routeState,
+                monotonicClock = testClock,
+            )
         assertTrue(recovery.hasInvalidHandoff.value)
 
         recovery.onHostChange("bad host")
         assertEquals("bad host", routeState.get<String>("editedHost"))
-        val invalidEditRestored = PortScanViewModel(
-            portScanUseCase,
-            dataStore,
-            recentHostsRepository,
-            savedStateHandle = SavedStateHandle(
-                mapOf("intent" to encoded, "host" to "router-b.local", "editedHost" to "bad host"),
-            ),
-            monotonicClock = testClock,
-        )
+        val invalidEditRestored =
+            PortScanViewModel(
+                portScanUseCase,
+                dataStore,
+                recentHostsRepository,
+                savedStateHandle =
+                    SavedStateHandle(
+                        mapOf("intent" to encoded, "host" to "router-b.local", "editedHost" to "bad host"),
+                    ),
+                monotonicClock = testClock,
+            )
         assertEquals("bad host", invalidEditRestored.host.value)
         assertTrue(invalidEditRestored.hasInvalidHandoff.value)
 
         recovery.onHostChange("replacement.example")
         assertFalse(recovery.hasInvalidHandoff.value)
         assertEquals(true, routeState.get<Boolean>("handoffRecovered"))
-        val recreated = PortScanViewModel(
-            portScanUseCase,
-            dataStore,
-            recentHostsRepository,
-            savedStateHandle = SavedStateHandle(
-                mapOf(
-                    "intent" to encoded,
-                    "host" to "router-b.local",
-                    "editedHost" to "replacement.example",
-                    "handoffRecovered" to true,
-                ),
-            ),
-            monotonicClock = testClock,
-        )
+        val recreated =
+            PortScanViewModel(
+                portScanUseCase,
+                dataStore,
+                recentHostsRepository,
+                savedStateHandle =
+                    SavedStateHandle(
+                        mapOf(
+                            "intent" to encoded,
+                            "host" to "router-b.local",
+                            "editedHost" to "replacement.example",
+                            "handoffRecovered" to true,
+                        ),
+                    ),
+                monotonicClock = testClock,
+            )
         assertEquals("replacement.example", recreated.host.value)
         assertFalse(recreated.hasInvalidHandoff.value)
         assertTrue(recreated.uiState.value is PortScanUiState.Idle)
@@ -516,51 +562,53 @@ class PortScanViewModelTest {
     }
 
     @Test
-    fun `late completion and failure from replaced scan cannot overwrite current result`() = runTest {
-        val oldStarted = CompletableDeferred<Unit>()
-        val releaseOld = CompletableDeferred<Unit>()
-        val oldFinished = CompletableDeferred<Unit>()
-        val oldSummary = stubSummary.copy(host = "old.example")
-        val newSummary = stubSummary.copy(host = "new.example")
-        every { portScanUseCase(match { it.host == "old.example" }, any()) } returns
-            object : Flow<PortScanFlowResult> {
-                override suspend fun collect(collector: FlowCollector<PortScanFlowResult>) {
-                    collector.emit(PortScanFlowResult.Started("192.0.2.1", 1))
-                    oldStarted.complete(Unit)
-                    try {
-                        awaitCancellation()
-                    } catch (cancelled: kotlinx.coroutines.CancellationException) {
-                        withContext(NonCancellable) {
-                            try {
-                                releaseOld.await()
-                                collector.emit(PortScanFlowResult.ScanComplete(oldSummary))
-                                throw IllegalStateException("late old scan failure")
-                            } finally {
-                                oldFinished.complete(Unit)
+    fun `late completion and failure from replaced scan cannot overwrite current result`() =
+        runTest {
+            val oldStarted = CompletableDeferred<Unit>()
+            val releaseOld = CompletableDeferred<Unit>()
+            val oldFinished = CompletableDeferred<Unit>()
+            val oldSummary = stubSummary.copy(host = "old.example")
+            val newSummary = stubSummary.copy(host = "new.example")
+            every { portScanUseCase(match { it.host == "old.example" }, any()) } returns
+                object : Flow<PortScanFlowResult> {
+                    override suspend fun collect(collector: FlowCollector<PortScanFlowResult>) {
+                        collector.emit(PortScanFlowResult.Started("192.0.2.1", 1))
+                        oldStarted.complete(Unit)
+                        try {
+                            awaitCancellation()
+                        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                            withContext(NonCancellable) {
+                                try {
+                                    releaseOld.await()
+                                    collector.emit(PortScanFlowResult.ScanComplete(oldSummary))
+                                    throw IllegalStateException("late old scan failure")
+                                } finally {
+                                    oldFinished.complete(Unit)
+                                }
                             }
                         }
                     }
                 }
+            every { portScanUseCase(match { it.host == "new.example" }, any()) } returns
+                flowOf(
+                    PortScanFlowResult.Started("192.0.2.2", 1),
+                    PortScanFlowResult.ScanComplete(newSummary),
+                )
+
+            viewModel.onHostChange("old.example")
+            viewModel.startScan()
+            withContext(Dispatchers.Default) { kotlinx.coroutines.withTimeout(2_000) { oldStarted.await() } }
+
+            viewModel.onHostChange("new.example")
+            viewModel.startScan()
+            withContext(Dispatchers.Default) {
+                kotlinx.coroutines.withTimeout(2_000) { viewModel.uiState.first { it is PortScanUiState.Finished } }
             }
-        every { portScanUseCase(match { it.host == "new.example" }, any()) } returns flowOf(
-            PortScanFlowResult.Started("192.0.2.2", 1),
-            PortScanFlowResult.ScanComplete(newSummary),
-        )
+            releaseOld.complete(Unit)
+            withContext(Dispatchers.Default) { kotlinx.coroutines.withTimeout(2_000) { oldFinished.await() } }
 
-        viewModel.onHostChange("old.example")
-        viewModel.startScan()
-        withContext(Dispatchers.Default) { kotlinx.coroutines.withTimeout(2_000) { oldStarted.await() } }
-
-        viewModel.onHostChange("new.example")
-        viewModel.startScan()
-        withContext(Dispatchers.Default) {
-            kotlinx.coroutines.withTimeout(2_000) { viewModel.uiState.first { it is PortScanUiState.Finished } }
+            assertEquals(newSummary, (viewModel.uiState.value as PortScanUiState.Finished).summary)
         }
-        releaseOld.complete(Unit)
-        withContext(Dispatchers.Default) { kotlinx.coroutines.withTimeout(2_000) { oldFinished.await() } }
-
-        assertEquals(newSummary, (viewModel.uiState.value as PortScanUiState.Finished).summary)
-    }
 
     @Test
     fun `preset defaults to COMMON`() {
@@ -570,471 +618,558 @@ class PortScanViewModelTest {
     @Nested
     @DisplayName("startScan state transitions")
     inner class StartScanStateTransitions {
+        @Test
+        fun `transitions to Finished on ScanComplete`() =
+            runTest {
+                every { portScanUseCase(any(), any()) } returns
+                    flowOf(
+                        PortScanFlowResult.ScanComplete(stubSummary),
+                    )
+                viewModel.onHostChange("example.com")
+                viewModel.startScan()
+                assertTrue(viewModel.uiState.value is PortScanUiState.Finished)
+            }
 
         @Test
-        fun `transitions to Finished on ScanComplete`() = runTest {
-            every { portScanUseCase(any(), any()) } returns flowOf(
-                PortScanFlowResult.ScanComplete(stubSummary)
-            )
-            viewModel.onHostChange("example.com")
-            viewModel.startScan()
-            assertTrue(viewModel.uiState.value is PortScanUiState.Finished)
-        }
+        fun `Stop after operation completion leaves queued Complete delivery intact`() =
+            runTest {
+                val operationFinished = CompletableDeferred<Unit>()
+                val releaseTerminal = CompletableDeferred<Unit>()
+                every { portScanUseCase(any(), any()) } answers {
+                    val session = secondArg<OperationSession>()
+                    kotlinx.coroutines.flow.flow {
+                        emit(PortScanFlowResult.Started("93.184.216.34", 1))
+                        OperationRunner.run(session) { }
+                        operationFinished.complete(Unit)
+                        releaseTerminal.await()
+                        emit(PortScanFlowResult.ScanComplete(stubSummary))
+                    }
+                }
+                viewModel.onHostChange("example.com")
+                viewModel.startScan()
+                operationFinished.await()
+
+                viewModel.onStopScan()
+
+                assertEquals(null, lastOperationSession.cancellationReason)
+                assertTrue(viewModel.uiState.value is PortScanUiState.Scanning)
+                releaseTerminal.complete(Unit)
+                val finished = viewModel.uiState.first { it is PortScanUiState.Finished } as PortScanUiState.Finished
+
+                assertEquals(PortScanUiState.Completion.COMPLETE, finished.completion)
+                assertEquals(stubSummary, finished.summary)
+            }
 
         @Test
-        fun `Stop after operation completion leaves queued Complete delivery intact`() = runTest {
-            val operationFinished = CompletableDeferred<Unit>()
-            val releaseTerminal = CompletableDeferred<Unit>()
-            every { portScanUseCase(any(), any()) } answers {
-                val session = secondArg<OperationSession>()
-                kotlinx.coroutines.flow.flow {
-                    emit(PortScanFlowResult.Started("93.184.216.34", 1))
-                    OperationRunner.run(session) { }
-                    operationFinished.complete(Unit)
-                    releaseTerminal.await()
-                    emit(PortScanFlowResult.ScanComplete(stubSummary))
+        fun `transitions to Error on ValidationError`() =
+            runTest {
+                every { portScanUseCase(any(), any()) } returns
+                    flowOf(
+                        PortScanFlowResult.ValidationError("invalid host"),
+                    )
+                viewModel.onHostChange("bad##host")
+                viewModel.startScan()
+                val state = viewModel.uiState.value
+                assertTrue(state is PortScanUiState.Error)
+            }
+
+        @Test
+        fun `API 37 local permission denial prevents scan admission`() =
+            runTest {
+                localNetworkPermissionAllowed = false
+                viewModel.onHostChange("192.168.1.20")
+
+                viewModel.startScan()
+
+                assertEquals(
+                    PortScanUiState.Error("Local network permission denied"),
+                    viewModel.uiState.value,
+                )
+                verify(exactly = 0) { portScanUseCase.newSession(any()) }
+                verify(exactly = 0) { portScanUseCase(any(), any()) }
+            }
+
+        @Test
+        fun `public literal remains attemptable without local permission`() =
+            runTest {
+                localNetworkPermissionAllowed = false
+                every { portScanUseCase(any(), any()) } returns
+                    flowOf(
+                        PortScanFlowResult.ScanComplete(stubSummary),
+                    )
+                viewModel.onHostChange("1.1.1.1")
+
+                viewModel.startScan()
+
+                assertTrue(viewModel.uiState.value is PortScanUiState.Finished)
+                verify(exactly = 1) { portScanUseCase.newSession(any()) }
+            }
+
+        @Test
+        fun `an exception during the scan flow surfaces as Error instead of crashing`() =
+            runTest {
+                every { portScanUseCase(any(), any()) } returns
+                    kotlinx.coroutines.flow.flow {
+                        throw java.net.SocketException("network unreachable")
+                    }
+                viewModel.onHostChange("example.com")
+                viewModel.startScan()
+                val state = viewModel.uiState.value
+                assertTrue(state is PortScanUiState.Error)
+            }
+
+        @Test
+        fun `deadline keeps completed results in a partial Finished state`() =
+            runTest {
+                every { portScanUseCase(any(), any()) } returns
+                    kotlinx.coroutines.flow.flow {
+                        emit(PortScanFlowResult.Started("93.184.216.34", 2))
+                        emit(PortScanFlowResult.PortScanned(stubResult, scannedCount = 1, totalCount = 2))
+                        throw OperationDeadlineExceededException()
+                    }
+                viewModel.onHostChange("example.com")
+
+                viewModel.startScan()
+
+                val state = viewModel.uiState.value as PortScanUiState.Finished
+                assertEquals(PortScanUiState.Completion.DEADLINE, state.completion)
+                assertEquals(listOf(80), state.summary.scannedPorts)
+                assertEquals(listOf(stubResult), state.summary.results)
+                assertEquals(1, state.summary.openPorts)
+            }
+
+        @Test
+        fun `Stop preserves a deadline that already won and lets its terminal catch finish`() =
+            runTest {
+                val resumeDeadline = CompletableDeferred<Unit>()
+                every { portScanUseCase(any(), any()) } returns
+                    kotlinx.coroutines.flow.flow {
+                        emit(PortScanFlowResult.Started("93.184.216.34", 2))
+                        emit(PortScanFlowResult.PortScanned(stubResult, scannedCount = 1, totalCount = 2))
+                        resumeDeadline.await()
+                        throw OperationDeadlineExceededException()
+                    }
+                viewModel.onHostChange("example.com")
+                viewModel.startScan()
+                lastOperationSession.cancel(CancellationReason.DEADLINE_EXCEEDED)
+
+                viewModel.onStopScan()
+
+                assertEquals(CancellationReason.DEADLINE_EXCEEDED, lastOperationSession.cancellationReason)
+                assertTrue(viewModel.uiState.value is PortScanUiState.Scanning)
+                resumeDeadline.complete(Unit)
+                val finished = viewModel.uiState.first { it is PortScanUiState.Finished } as PortScanUiState.Finished
+
+                assertEquals(PortScanUiState.Completion.DEADLINE, finished.completion)
+                assertEquals(listOf(80), finished.summary.scannedPorts)
+                assertEquals(1, finished.summary.openPorts)
+            }
+
+        @Test
+        fun `Stop records an expired budget as deadline before the watcher runs`() =
+            runTest {
+                val resumeDeadline = CompletableDeferred<Unit>()
+                val expiredSession =
+                    OperationSession(
+                        OperationBudget.start(timeoutMillis = 100, maxConcurrentProbes = 1, clock = testClock),
+                    )
+                every { portScanUseCase.newSession(any()) } returns expiredSession
+                every { portScanUseCase(any(), any()) } returns
+                    kotlinx.coroutines.flow.flow {
+                        emit(PortScanFlowResult.Started("93.184.216.34", 2))
+                        emit(PortScanFlowResult.PortScanned(stubResult, scannedCount = 1, totalCount = 2))
+                        resumeDeadline.await()
+                        throw OperationDeadlineExceededException()
+                    }
+                viewModel.onHostChange("example.com")
+                viewModel.startScan()
+                testClock.nowNanos += 100_000_000L
+                assertEquals(null, expiredSession.cancellationReason, "the deadline watcher has not recorded a reason")
+
+                viewModel.onStopScan()
+
+                assertEquals(CancellationReason.DEADLINE_EXCEEDED, expiredSession.cancellationReason)
+                assertTrue(viewModel.uiState.value is PortScanUiState.Scanning)
+                resumeDeadline.complete(Unit)
+                val finished = viewModel.uiState.first { it is PortScanUiState.Finished } as PortScanUiState.Finished
+
+                assertEquals(PortScanUiState.Completion.DEADLINE, finished.completion)
+                assertEquals(listOf(80), finished.summary.scannedPorts)
+            }
+
+        @Test
+        fun `repository deadline after a completed probe finishes with the collected partial summary`() =
+            runTest {
+                val laterProbeEntered = CountDownLatch(1)
+                val releaseLaterProbe = CountDownLatch(1)
+                val repository =
+                    PortScanRepositoryImpl(
+                        checker = { _, port ->
+                            if (port == 80) {
+                                PortConnectResult(PortStatus.OPEN, 10L, null)
+                            } else {
+                                laterProbeEntered.countDown()
+                                var released = false
+                                while (!released) {
+                                    try {
+                                        releaseLaterProbe.await()
+                                        released = true
+                                    } catch (_: InterruptedException) {
+                                        // Keep the later probe blocked until the test releases it.
+                                    }
+                                }
+                                PortConnectResult(PortStatus.CLOSED, 20L, null)
+                            }
+                        },
+                        hostResolver = { java.net.InetAddress.getLoopbackAddress() },
+                    )
+                val actualUseCase = PortScanUseCase(repository)
+                every { portScanUseCase.newSession(any()) } answers {
+                    OperationSession(
+                        OperationBudget.start(timeoutMillis = 60_000, maxConcurrentProbes = 1),
+                    ).also { lastOperationSession = it }
+                }
+                every { portScanUseCase(any(), any()) } answers {
+                    actualUseCase(firstArg<PortScanParams>(), secondArg<OperationSession>())
+                }
+                viewModel.onHostChange("192.0.2.1")
+                viewModel.onPresetChange(PortScanPreset.CUSTOM)
+                viewModel.onStartPortChange("80")
+                viewModel.onEndPortChange("81")
+                viewModel.onConcurrencyChange(1)
+
+                try {
+                    viewModel.startScan()
+                    assertTrue(
+                        withContext(Dispatchers.IO) { laterProbeEntered.await(2, TimeUnit.SECONDS) },
+                        "the later port probe should block after the first result is emitted",
+                    )
+                    val partialLive =
+                        withContext(Dispatchers.IO) {
+                            withTimeout(2_000) {
+                                viewModel.uiState.first { state ->
+                                    state is PortScanUiState.Scanning && state.liveResults.any { it.port == 80 }
+                                }
+                            }
+                        } as PortScanUiState.Scanning
+                    assertEquals(listOf(80), partialLive.liveResults.map { it.port })
+
+                    lastOperationSession.cancel(CancellationReason.DEADLINE_EXCEEDED)
+                    releaseLaterProbe.countDown()
+                    val terminal =
+                        withContext(Dispatchers.IO) {
+                            withTimeout(2_000) {
+                                viewModel.uiState.first {
+                                    it is PortScanUiState.Finished &&
+                                        it.completion == PortScanUiState.Completion.DEADLINE
+                                }
+                            }
+                        } as PortScanUiState.Finished
+
+                    assertEquals(listOf(80), terminal.summary.scannedPorts)
+                    assertEquals(listOf(80), terminal.summary.results.map { it.port })
+                    assertEquals(
+                        PortStatus.OPEN,
+                        terminal.summary.results
+                            .single()
+                            .status,
+                    )
+                    assertEquals(1, terminal.summary.openPorts)
+                } finally {
+                    releaseLaterProbe.countDown()
                 }
             }
+
+        @Test
+        fun `over-ceiling custom scan is rejected before a session or probes start`() =
+            runTest {
+                viewModel.onHostChange("example.com")
+                viewModel.onPresetChange(PortScanPreset.CUSTOM)
+                viewModel.onStartPortChange("1")
+                viewModel.onEndPortChange("10000")
+                viewModel.onTimeoutChange(30_000)
+                viewModel.onConcurrencyChange(1)
+
+                viewModel.startScan()
+
+                val state = viewModel.uiState.value as PortScanUiState.Error
+                assertTrue(state.isBudgetLimit)
+                verify(exactly = 0) { portScanUseCase.newSession(any()) }
+                verify(exactly = 0) { portScanUseCase(any(), any()) }
+            }
+
+        @Test
+        fun `accumulates port results during scan`() =
+            runTest {
+                every { portScanUseCase(any(), any()) } returns
+                    flowOf(
+                        PortScanFlowResult.PortScanned(stubResult, scannedCount = 1, totalCount = 1),
+                        PortScanFlowResult.ScanComplete(stubSummary),
+                    )
+                viewModel.onHostChange("example.com")
+                viewModel.startScan()
+                val state = viewModel.uiState.value as PortScanUiState.Finished
+                assertEquals(1, state.summary.openPorts)
+            }
+    }
+
+    @Test
+    fun `onClear resets to Idle`() =
+        runTest {
+            every { portScanUseCase(any(), any()) } returns flowOf(PortScanFlowResult.ScanComplete(stubSummary))
             viewModel.onHostChange("example.com")
             viewModel.startScan()
-            operationFinished.await()
+            viewModel.onClear()
+            assertTrue(viewModel.uiState.value is PortScanUiState.Idle)
+        }
+
+    @Test
+    fun `manual stop records USER_STOP on caller session`() =
+        runTest {
+            every { portScanUseCase(any(), any()) } returns
+                kotlinx.coroutines.flow.flow {
+                    emit(PortScanFlowResult.Started("127.0.0.1", 1))
+                    awaitCancellation()
+                }
+            viewModel.onHostChange("example.com")
+            viewModel.startScan()
 
             viewModel.onStopScan()
 
-            assertEquals(null, lastOperationSession.cancellationReason)
-            assertTrue(viewModel.uiState.value is PortScanUiState.Scanning)
-            releaseTerminal.complete(Unit)
-            val finished = viewModel.uiState.first { it is PortScanUiState.Finished } as PortScanUiState.Finished
-
-            assertEquals(PortScanUiState.Completion.COMPLETE, finished.completion)
-            assertEquals(stubSummary, finished.summary)
+            assertEquals(CancellationReason.USER_STOP, lastOperationSession.cancellationReason)
+            assertTrue(viewModel.uiState.value is PortScanUiState.Finished)
+            viewModel.onClear()
         }
 
-        @Test
-        fun `transitions to Error on ValidationError`() = runTest {
-            every { portScanUseCase(any(), any()) } returns flowOf(
-                PortScanFlowResult.ValidationError("invalid host")
-            )
-            viewModel.onHostChange("bad##host")
-            viewModel.startScan()
-            val state = viewModel.uiState.value
-            assertTrue(state is PortScanUiState.Error)
-        }
-
-        @Test
-        fun `an exception during the scan flow surfaces as Error instead of crashing`() = runTest {
-            every { portScanUseCase(any(), any()) } returns kotlinx.coroutines.flow.flow {
-                throw java.net.SocketException("network unreachable")
-            }
+    @Test
+    fun `lifecycle pause records LIFECYCLE_PAUSE on caller session`() =
+        runTest {
+            every { portScanUseCase(any(), any()) } returns
+                kotlinx.coroutines.flow.flow {
+                    emit(PortScanFlowResult.Started("127.0.0.1", 1))
+                    awaitCancellation()
+                }
             viewModel.onHostChange("example.com")
             viewModel.startScan()
-            val state = viewModel.uiState.value
-            assertTrue(state is PortScanUiState.Error)
+
+            viewModel.onLifecyclePause()
+
+            assertEquals(CancellationReason.LIFECYCLE_PAUSE, lastOperationSession.cancellationReason)
+            assertTrue(viewModel.uiState.value is PortScanUiState.Finished)
+            viewModel.onClear()
         }
 
-        @Test
-        fun `deadline keeps completed results in a partial Finished state`() = runTest {
-            every { portScanUseCase(any(), any()) } returns kotlinx.coroutines.flow.flow {
-                emit(PortScanFlowResult.Started("93.184.216.34", 2))
-                emit(PortScanFlowResult.PortScanned(stubResult, scannedCount = 1, totalCount = 2))
-                throw OperationDeadlineExceededException()
+    @Test
+    fun `addRecent is called on first port result`() =
+        runTest {
+            every { portScanUseCase(any(), any()) } returns
+                flowOf(
+                    PortScanFlowResult.Started("93.184.216.34", 2),
+                    PortScanFlowResult.PortScanned(stubResult, 1, 2),
+                    PortScanFlowResult.PortScanned(stubResult.copy(port = 443), 2, 2),
+                )
+            viewModel.onHostChange("example.com")
+            viewModel.startScan()
+            coVerify(exactly = 1) {
+                recentHostsRepository.addRecent(
+                    AppPreferenceKeys.RECENT_PORTS_HOSTS,
+                    "example.com",
+                )
             }
+        }
+
+    @Test
+    fun `startScan normalizes host before probing and does not save validation failures`() =
+        runTest {
+            every { portScanUseCase(any(), any()) } returns flowOf(PortScanFlowResult.ValidationError("test"))
+            viewModel.onHostChange("  Example.COM.  ")
+
+            viewModel.startScan()
+
+            assertEquals("example.com", viewModel.host.value)
+            verify { portScanUseCase(match { it.host == "example.com" }, any()) }
+            coVerify(exactly = 0) { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_PORTS_HOSTS, any()) }
+        }
+
+    @Test
+    fun `scan completing without a port result does not save a recent host`() =
+        runTest {
+            every { portScanUseCase(any(), any()) } returns flowOf(PortScanFlowResult.ScanComplete(stubSummary))
             viewModel.onHostChange("example.com")
 
             viewModel.startScan()
+
+            coVerify(exactly = 0) { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_PORTS_HOSTS, any()) }
+        }
+
+    @Test
+    fun `startScan passes concurrency maximum of 500 to scan params`() =
+        runTest {
+            every { portScanUseCase(any(), any()) } returns flowOf(PortScanFlowResult.ScanComplete(stubSummary))
+            viewModel.onHostChange("example.com")
+            viewModel.onConcurrencyChange(500)
+
+            viewModel.startScan()
+
+            verify { portScanUseCase(match { it.concurrency == 500 }, any()) }
+        }
+
+    @Test
+    fun `stored concurrency above the supported range is clamped before scan`() =
+        runTest {
+            every { portScanUseCase(any(), any()) } returns flowOf(PortScanFlowResult.ScanComplete(stubSummary))
+            val seededPreferences = mutablePreferencesOf(AppPreferenceKeys.DEFAULT_CONCURRENCY to 501)
+            val seededDataStore =
+                mockk<DataStore<Preferences>> {
+                    every { data } returns flowOf(seededPreferences)
+                }
+            val seededViewModel =
+                PortScanViewModel(
+                    portScanUseCase,
+                    seededDataStore,
+                    recentHostsRepository,
+                    monotonicClock = testClock,
+                )
+            seededViewModel.onHostChange("example.com")
+
+            seededViewModel.startScan()
+
+            assertEquals(500, seededViewModel.concurrency.value)
+            verify { portScanUseCase(match { it.concurrency == 500 }, any()) }
+        }
+
+    @Test
+    fun `concurrency changes are clamped to the supported range`() =
+        runTest {
+            every { portScanUseCase(any(), any()) } returns flowOf(PortScanFlowResult.ScanComplete(stubSummary))
+            viewModel.onHostChange("example.com")
+            viewModel.onConcurrencyChange(-1)
+
+            viewModel.startScan()
+
+            assertEquals(1, viewModel.concurrency.value)
+            verify { portScanUseCase(match { it.concurrency == 1 }, any()) }
+        }
+
+    @Test
+    fun `invalid internal whitespace is not saved to recents`() =
+        runTest {
+            every { portScanUseCase(any(), any()) } returns flowOf(PortScanFlowResult.ValidationError("invalid host"))
+            viewModel.onHostChange("bad host")
+
+            viewModel.startScan()
+
+            verify { portScanUseCase(match { it.host == "bad host" }, any()) }
+            coVerify(exactly = 0) { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_PORTS_HOSTS, any()) }
+        }
+
+    @Test
+    fun `stopping a scan preserves resolved IP and measures duration through stop`() =
+        runTest {
+            testClock.nowNanos = 4_000_000_000L
+            every { portScanUseCase(any(), any()) } returns
+                kotlinx.coroutines.flow.flow {
+                    emit(PortScanFlowResult.Started(resolvedIp = "93.184.216.34", totalCount = 3))
+                    emit(
+                        PortScanFlowResult.PortScanned(
+                            result = stubResult,
+                            scannedCount = 1,
+                            totalCount = 3,
+                        ),
+                    )
+                    awaitCancellation()
+                }
+            viewModel.onHostChange("example.com")
+
+            viewModel.startScan()
+            testClock.nowNanos += 725_000_000L // Time passes after the last result while probes remain in flight.
+            viewModel.onStopScan()
 
             val state = viewModel.uiState.value as PortScanUiState.Finished
-            assertEquals(PortScanUiState.Completion.DEADLINE, state.completion)
+            assertEquals("example.com", state.summary.host)
+            assertEquals("93.184.216.34", state.summary.resolvedIp)
+            assertEquals(725L, state.summary.scanDurationMs)
             assertEquals(listOf(80), state.summary.scannedPorts)
             assertEquals(listOf(stubResult), state.summary.results)
-            assertEquals(1, state.summary.openPorts)
+            viewModel.onClear()
         }
 
-        @Test
-        fun `Stop preserves a deadline that already won and lets its terminal catch finish`() = runTest {
-            val resumeDeadline = CompletableDeferred<Unit>()
-            every { portScanUseCase(any(), any()) } returns kotlinx.coroutines.flow.flow {
-                emit(PortScanFlowResult.Started("93.184.216.34", 2))
-                emit(PortScanFlowResult.PortScanned(stubResult, scannedCount = 1, totalCount = 2))
-                resumeDeadline.await()
-                throw OperationDeadlineExceededException()
-            }
+    @Test
+    fun `first port remains visible and in partial results while recent write is suspended`() =
+        runTest {
+            val recentWrite = CompletableDeferred<Unit>()
+            coEvery {
+                recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_PORTS_HOSTS, "example.com")
+            } coAnswers { recentWrite.await() }
+            every { portScanUseCase(any(), any()) } returns
+                kotlinx.coroutines.flow.flow {
+                    emit(PortScanFlowResult.Started(resolvedIp = "93.184.216.34", totalCount = 2))
+                    emit(PortScanFlowResult.PortScanned(stubResult, scannedCount = 1, totalCount = 2))
+                    awaitCancellation()
+                }
             viewModel.onHostChange("example.com")
+
             viewModel.startScan()
-            lastOperationSession.cancel(CancellationReason.DEADLINE_EXCEEDED)
 
+            assertEquals(
+                listOf(stubResult),
+                (viewModel.uiState.value as PortScanUiState.Scanning).liveResults,
+            )
             viewModel.onStopScan()
-
-            assertEquals(CancellationReason.DEADLINE_EXCEEDED, lastOperationSession.cancellationReason)
-            assertTrue(viewModel.uiState.value is PortScanUiState.Scanning)
-            resumeDeadline.complete(Unit)
-            val finished = viewModel.uiState.first { it is PortScanUiState.Finished } as PortScanUiState.Finished
-
-            assertEquals(PortScanUiState.Completion.DEADLINE, finished.completion)
-            assertEquals(listOf(80), finished.summary.scannedPorts)
-            assertEquals(1, finished.summary.openPorts)
+            val finished = viewModel.uiState.value as PortScanUiState.Finished
+            assertEquals(listOf(stubResult), finished.summary.results)
+            recentWrite.complete(Unit)
         }
 
-        @Test
-        fun `Stop records an expired budget as deadline before the watcher runs`() = runTest {
-            val resumeDeadline = CompletableDeferred<Unit>()
-            val expiredSession = OperationSession(
-                OperationBudget.start(timeoutMillis = 100, maxConcurrentProbes = 1, clock = testClock),
-            )
-            every { portScanUseCase.newSession(any()) } returns expiredSession
-            every { portScanUseCase(any(), any()) } returns kotlinx.coroutines.flow.flow {
-                emit(PortScanFlowResult.Started("93.184.216.34", 2))
-                emit(PortScanFlowResult.PortScanned(stubResult, scannedCount = 1, totalCount = 2))
-                resumeDeadline.await()
-                throw OperationDeadlineExceededException()
-            }
+    @Test
+    fun `scan enters Scanning immediately with custom total before first result`() =
+        runTest {
+            every { portScanUseCase(any(), any()) } returns
+                kotlinx.coroutines.flow.flow {
+                    awaitCancellation()
+                }
             viewModel.onHostChange("example.com")
-            viewModel.startScan()
-            testClock.nowNanos += 100_000_000L
-            assertEquals(null, expiredSession.cancellationReason, "the deadline watcher has not recorded a reason")
-
-            viewModel.onStopScan()
-
-            assertEquals(CancellationReason.DEADLINE_EXCEEDED, expiredSession.cancellationReason)
-            assertTrue(viewModel.uiState.value is PortScanUiState.Scanning)
-            resumeDeadline.complete(Unit)
-            val finished = viewModel.uiState.first { it is PortScanUiState.Finished } as PortScanUiState.Finished
-
-            assertEquals(PortScanUiState.Completion.DEADLINE, finished.completion)
-            assertEquals(listOf(80), finished.summary.scannedPorts)
-        }
-
-        @Test
-        fun `repository deadline after a completed probe finishes with the collected partial summary`() = runTest {
-            val laterProbeEntered = CountDownLatch(1)
-            val releaseLaterProbe = CountDownLatch(1)
-            val repository = PortScanRepositoryImpl(
-                checker = { _, port ->
-                    if (port == 80) {
-                        PortConnectResult(PortStatus.OPEN, 10L, null)
-                    } else {
-                        laterProbeEntered.countDown()
-                        var released = false
-                        while (!released) {
-                            try {
-                                releaseLaterProbe.await()
-                                released = true
-                            } catch (_: InterruptedException) {
-                                // Keep the later probe blocked until the test releases it.
-                            }
-                        }
-                        PortConnectResult(PortStatus.CLOSED, 20L, null)
-                    }
-                },
-                hostResolver = { java.net.InetAddress.getLoopbackAddress() },
-            )
-            val actualUseCase = PortScanUseCase(repository)
-            every { portScanUseCase.newSession(any()) } answers {
-                OperationSession(
-                    OperationBudget.start(timeoutMillis = 60_000, maxConcurrentProbes = 1),
-                ).also { lastOperationSession = it }
-            }
-            every { portScanUseCase(any(), any()) } answers {
-                actualUseCase(firstArg<PortScanParams>(), secondArg<OperationSession>())
-            }
-            viewModel.onHostChange("192.0.2.1")
             viewModel.onPresetChange(PortScanPreset.CUSTOM)
             viewModel.onStartPortChange("80")
-            viewModel.onEndPortChange("81")
-            viewModel.onConcurrencyChange(1)
-
-            try {
-                viewModel.startScan()
-                assertTrue(
-                    withContext(Dispatchers.IO) { laterProbeEntered.await(2, TimeUnit.SECONDS) },
-                    "the later port probe should block after the first result is emitted",
-                )
-                val partialLive = withContext(Dispatchers.IO) {
-                    withTimeout(2_000) {
-                        viewModel.uiState.first { state ->
-                            state is PortScanUiState.Scanning && state.liveResults.any { it.port == 80 }
-                        }
-                    }
-                } as PortScanUiState.Scanning
-                assertEquals(listOf(80), partialLive.liveResults.map { it.port })
-
-                lastOperationSession.cancel(CancellationReason.DEADLINE_EXCEEDED)
-                releaseLaterProbe.countDown()
-                val terminal = withContext(Dispatchers.IO) {
-                    withTimeout(2_000) {
-                        viewModel.uiState.first {
-                            it is PortScanUiState.Finished &&
-                                it.completion == PortScanUiState.Completion.DEADLINE
-                        }
-                    }
-                } as PortScanUiState.Finished
-
-                assertEquals(listOf(80), terminal.summary.scannedPorts)
-                assertEquals(listOf(80), terminal.summary.results.map { it.port })
-                assertEquals(PortStatus.OPEN, terminal.summary.results.single().status)
-                assertEquals(1, terminal.summary.openPorts)
-            } finally {
-                releaseLaterProbe.countDown()
-            }
-        }
-
-        @Test
-        fun `over-ceiling custom scan is rejected before a session or probes start`() = runTest {
-            viewModel.onHostChange("example.com")
-            viewModel.onPresetChange(PortScanPreset.CUSTOM)
-            viewModel.onStartPortChange("1")
-            viewModel.onEndPortChange("10000")
-            viewModel.onTimeoutChange(30_000)
-            viewModel.onConcurrencyChange(1)
+            viewModel.onEndPortChange("82")
 
             viewModel.startScan()
 
-            val state = viewModel.uiState.value as PortScanUiState.Error
-            assertTrue(state.isBudgetLimit)
-            verify(exactly = 0) { portScanUseCase.newSession(any()) }
-            verify(exactly = 0) { portScanUseCase(any(), any()) }
+            val state = viewModel.uiState.value as PortScanUiState.Scanning
+            assertEquals(emptyList<PortScanResult>(), state.liveResults)
+            assertEquals(0, state.scannedCount)
+            assertEquals(3, state.totalCount)
         }
 
-        @Test
-        fun `accumulates port results during scan`() = runTest {
-            every { portScanUseCase(any(), any()) } returns flowOf(
-                PortScanFlowResult.PortScanned(stubResult, scannedCount = 1, totalCount = 1),
-                PortScanFlowResult.ScanComplete(stubSummary)
-            )
+    @Test
+    fun `stopping after target resolution but before first result keeps resolved IP`() =
+        runTest {
+            testClock.nowNanos = 8_000_000_000L
+            every { portScanUseCase(any(), any()) } returns
+                kotlinx.coroutines.flow.flow {
+                    emit(PortScanFlowResult.Started(resolvedIp = "93.184.216.34", totalCount = 20))
+                    awaitCancellation()
+                }
             viewModel.onHostChange("example.com")
+
             viewModel.startScan()
-            val state = viewModel.uiState.value as PortScanUiState.Finished
-            assertEquals(1, state.summary.openPorts)
+            val scanning = viewModel.uiState.value as PortScanUiState.Scanning
+            assertEquals("93.184.216.34", scanning.resolvedIp)
+            assertEquals(emptyList<PortScanResult>(), scanning.liveResults)
+            testClock.nowNanos += 1_250_000_000L
+            viewModel.onStopScan()
+
+            val summary = (viewModel.uiState.value as PortScanUiState.Finished).summary
+            assertEquals("example.com", summary.host)
+            assertEquals("93.184.216.34", summary.resolvedIp)
+            assertEquals(1_250L, summary.scanDurationMs)
+            assertTrue(summary.results.isEmpty())
+            viewModel.onClear()
         }
-    }
 
-    @Test
-    fun `onClear resets to Idle`() = runTest {
-        every { portScanUseCase(any(), any()) } returns flowOf(PortScanFlowResult.ScanComplete(stubSummary))
-        viewModel.onHostChange("example.com")
-        viewModel.startScan()
-        viewModel.onClear()
-        assertTrue(viewModel.uiState.value is PortScanUiState.Idle)
-    }
-
-    @Test
-    fun `manual stop records USER_STOP on caller session`() = runTest {
-        every { portScanUseCase(any(), any()) } returns kotlinx.coroutines.flow.flow {
-            emit(PortScanFlowResult.Started("127.0.0.1", 1))
-            awaitCancellation()
-        }
-        viewModel.onHostChange("example.com")
-        viewModel.startScan()
-
-        viewModel.onStopScan()
-
-        assertEquals(CancellationReason.USER_STOP, lastOperationSession.cancellationReason)
-        assertTrue(viewModel.uiState.value is PortScanUiState.Finished)
-        viewModel.onClear()
-    }
-
-    @Test
-    fun `lifecycle pause records LIFECYCLE_PAUSE on caller session`() = runTest {
-        every { portScanUseCase(any(), any()) } returns kotlinx.coroutines.flow.flow {
-            emit(PortScanFlowResult.Started("127.0.0.1", 1))
-            awaitCancellation()
-        }
-        viewModel.onHostChange("example.com")
-        viewModel.startScan()
-
-        viewModel.onLifecyclePause()
-
-        assertEquals(CancellationReason.LIFECYCLE_PAUSE, lastOperationSession.cancellationReason)
-        assertTrue(viewModel.uiState.value is PortScanUiState.Finished)
-        viewModel.onClear()
-    }
-
-    @Test
-    fun `addRecent is called on first port result`() = runTest {
-        every { portScanUseCase(any(), any()) } returns flowOf(
-            PortScanFlowResult.Started("93.184.216.34", 2),
-            PortScanFlowResult.PortScanned(stubResult, 1, 2),
-            PortScanFlowResult.PortScanned(stubResult.copy(port = 443), 2, 2),
-        )
-        viewModel.onHostChange("example.com")
-        viewModel.startScan()
-        coVerify(exactly = 1) { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_PORTS_HOSTS, "example.com") }
-    }
-
-    @Test
-    fun `startScan normalizes host before probing and does not save validation failures`() = runTest {
-        every { portScanUseCase(any(), any()) } returns flowOf(PortScanFlowResult.ValidationError("test"))
-        viewModel.onHostChange("  Example.COM.  ")
-
-        viewModel.startScan()
-
-        assertEquals("example.com", viewModel.host.value)
-        verify { portScanUseCase(match { it.host == "example.com" }, any()) }
-        coVerify(exactly = 0) { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_PORTS_HOSTS, any()) }
-    }
-
-    @Test
-    fun `scan completing without a port result does not save a recent host`() = runTest {
-        every { portScanUseCase(any(), any()) } returns flowOf(PortScanFlowResult.ScanComplete(stubSummary))
-        viewModel.onHostChange("example.com")
-
-        viewModel.startScan()
-
-        coVerify(exactly = 0) { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_PORTS_HOSTS, any()) }
-    }
-
-    @Test
-    fun `startScan passes concurrency maximum of 500 to scan params`() = runTest {
-        every { portScanUseCase(any(), any()) } returns flowOf(PortScanFlowResult.ScanComplete(stubSummary))
-        viewModel.onHostChange("example.com")
-        viewModel.onConcurrencyChange(500)
-
-        viewModel.startScan()
-
-        verify { portScanUseCase(match { it.concurrency == 500 }, any()) }
-    }
-
-    @Test
-    fun `stored concurrency above the supported range is clamped before scan`() = runTest {
-        every { portScanUseCase(any(), any()) } returns flowOf(PortScanFlowResult.ScanComplete(stubSummary))
-        val seededPreferences = mutablePreferencesOf(AppPreferenceKeys.DEFAULT_CONCURRENCY to 501)
-        val seededDataStore = mockk<DataStore<Preferences>> {
-            every { data } returns flowOf(seededPreferences)
-        }
-        val seededViewModel = PortScanViewModel(
-            portScanUseCase,
-            seededDataStore,
-            recentHostsRepository,
-            monotonicClock = testClock
-        )
-        seededViewModel.onHostChange("example.com")
-
-        seededViewModel.startScan()
-
-        assertEquals(500, seededViewModel.concurrency.value)
-        verify { portScanUseCase(match { it.concurrency == 500 }, any()) }
-    }
-
-    @Test
-    fun `concurrency changes are clamped to the supported range`() = runTest {
-        every { portScanUseCase(any(), any()) } returns flowOf(PortScanFlowResult.ScanComplete(stubSummary))
-        viewModel.onHostChange("example.com")
-        viewModel.onConcurrencyChange(-1)
-
-        viewModel.startScan()
-
-        assertEquals(1, viewModel.concurrency.value)
-        verify { portScanUseCase(match { it.concurrency == 1 }, any()) }
-    }
-
-    @Test
-    fun `invalid internal whitespace is not saved to recents`() = runTest {
-        every { portScanUseCase(any(), any()) } returns flowOf(PortScanFlowResult.ValidationError("invalid host"))
-        viewModel.onHostChange("bad host")
-
-        viewModel.startScan()
-
-        verify { portScanUseCase(match { it.host == "bad host" }, any()) }
-        coVerify(exactly = 0) { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_PORTS_HOSTS, any()) }
-    }
-
-    @Test
-    fun `stopping a scan preserves resolved IP and measures duration through stop`() = runTest {
-        testClock.nowNanos = 4_000_000_000L
-        every { portScanUseCase(any(), any()) } returns kotlinx.coroutines.flow.flow {
-            emit(PortScanFlowResult.Started(resolvedIp = "93.184.216.34", totalCount = 3))
-            emit(
-                PortScanFlowResult.PortScanned(
-                    result = stubResult,
-                    scannedCount = 1,
-                    totalCount = 3
-                )
-            )
-            awaitCancellation()
-        }
-        viewModel.onHostChange("example.com")
-
-        viewModel.startScan()
-        testClock.nowNanos += 725_000_000L // Time passes after the last result while probes remain in flight.
-        viewModel.onStopScan()
-
-        val state = viewModel.uiState.value as PortScanUiState.Finished
-        assertEquals("example.com", state.summary.host)
-        assertEquals("93.184.216.34", state.summary.resolvedIp)
-        assertEquals(725L, state.summary.scanDurationMs)
-        assertEquals(listOf(80), state.summary.scannedPorts)
-        assertEquals(listOf(stubResult), state.summary.results)
-        viewModel.onClear()
-    }
-
-    @Test
-    fun `first port remains visible and in partial results while recent write is suspended`() = runTest {
-        val recentWrite = CompletableDeferred<Unit>()
-        coEvery {
-            recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_PORTS_HOSTS, "example.com")
-        } coAnswers { recentWrite.await() }
-        every { portScanUseCase(any(), any()) } returns kotlinx.coroutines.flow.flow {
-            emit(PortScanFlowResult.Started(resolvedIp = "93.184.216.34", totalCount = 2))
-            emit(PortScanFlowResult.PortScanned(stubResult, scannedCount = 1, totalCount = 2))
-            awaitCancellation()
-        }
-        viewModel.onHostChange("example.com")
-
-        viewModel.startScan()
-
-        assertEquals(
-            listOf(stubResult),
-            (viewModel.uiState.value as PortScanUiState.Scanning).liveResults,
-        )
-        viewModel.onStopScan()
-        val finished = viewModel.uiState.value as PortScanUiState.Finished
-        assertEquals(listOf(stubResult), finished.summary.results)
-        recentWrite.complete(Unit)
-    }
-
-    @Test
-    fun `scan enters Scanning immediately with custom total before first result`() = runTest {
-        every { portScanUseCase(any(), any()) } returns kotlinx.coroutines.flow.flow {
-            awaitCancellation()
-        }
-        viewModel.onHostChange("example.com")
-        viewModel.onPresetChange(PortScanPreset.CUSTOM)
-        viewModel.onStartPortChange("80")
-        viewModel.onEndPortChange("82")
-
-        viewModel.startScan()
-
-        val state = viewModel.uiState.value as PortScanUiState.Scanning
-        assertEquals(emptyList<PortScanResult>(), state.liveResults)
-        assertEquals(0, state.scannedCount)
-        assertEquals(3, state.totalCount)
-    }
-
-    @Test
-    fun `stopping after target resolution but before first result keeps resolved IP`() = runTest {
-        testClock.nowNanos = 8_000_000_000L
-        every { portScanUseCase(any(), any()) } returns kotlinx.coroutines.flow.flow {
-            emit(PortScanFlowResult.Started(resolvedIp = "93.184.216.34", totalCount = 20))
-            awaitCancellation()
-        }
-        viewModel.onHostChange("example.com")
-
-        viewModel.startScan()
-        val scanning = viewModel.uiState.value as PortScanUiState.Scanning
-        assertEquals("93.184.216.34", scanning.resolvedIp)
-        assertEquals(emptyList<PortScanResult>(), scanning.liveResults)
-        testClock.nowNanos += 1_250_000_000L
-        viewModel.onStopScan()
-
-        val summary = (viewModel.uiState.value as PortScanUiState.Finished).summary
-        assertEquals("example.com", summary.host)
-        assertEquals("93.184.216.34", summary.resolvedIp)
-        assertEquals(1_250L, summary.scanDurationMs)
-        assertTrue(summary.results.isEmpty())
-        viewModel.onClear()
-    }
-
-    private class FakeMonotonicClock(var nowNanos: Long = 1_000_000_000L) : MonotonicClock {
+    private class FakeMonotonicClock(
+        var nowNanos: Long = 1_000_000_000L,
+    ) : MonotonicClock {
         override fun nowNanos(): Long = nowNanos
     }
 }

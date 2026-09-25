@@ -25,6 +25,7 @@ data class OperationTarget(
 
 enum class AvailabilityReason {
     NO_ROUTE,
+    TARGET_ROUTE_UNKNOWN,
     LOCAL_NETWORK_PERMISSION_DENIED,
     POLICY_DENIED,
     CONNECTIVITY_UNVALIDATED,
@@ -57,14 +58,17 @@ data class OperationAvailability(
         }
 
         /**
-         * `routePresent` is target-specific: callers must determine whether a route can
-         * reach this destination. `hasInternet` means the network advertises Internet
-         * capability; only `hasValidatedInternet` represents Android's validation signal.
+         * `routePresent` is tri-state. `false` is definitive evidence that there is no
+         * network route at all; `true` means a target-specific route was observed; `null`
+         * means the current platform seam only reports connectivity, not whether this
+         * destination is reachable. Unknown routes permit one bounded attempt and remain
+         * advisory. `hasInternet` is advertised capability; `hasValidatedInternet` is
+         * Android's validation signal.
          */
         fun classify(
             target: OperationTarget,
             status: NetworkStatus,
-            routePresent: Boolean,
+            routePresent: Boolean?,
             localNetworkPermissionAllowed: Boolean? = null,
             policyAllowed: Boolean = true,
         ): OperationAvailability {
@@ -79,7 +83,7 @@ data class OperationAvailability(
             if (requirement == OperationRequirement.LOCAL_NETWORK && localNetworkPermissionAllowed == false) {
                 return denied(AvailabilityReason.LOCAL_NETWORK_PERMISSION_DENIED)
             }
-            if (!routePresent) return denied(AvailabilityReason.NO_ROUTE)
+            if (routePresent == false) return denied(AvailabilityReason.NO_ROUTE)
 
             val validated = when (requirement) {
                 OperationRequirement.LOCAL_NETWORK -> status.hasLocalNetwork
@@ -89,16 +93,57 @@ data class OperationAvailability(
                 // bounded attempt with an advisory until Internet is validated.
                 OperationRequirement.ANY_NETWORK -> status.hasValidatedInternet
             }
-            return if (validated) {
+            return if (validated && routePresent == true) {
                 OperationAvailability(requirement = requirement, allowed = true)
             } else {
                 OperationAvailability(
                     requirement = requirement,
                     allowed = true,
                     advisory = true,
-                    reason = AvailabilityReason.CONNECTIVITY_UNVALIDATED,
+                    reason = if (!validated) {
+                        AvailabilityReason.CONNECTIVITY_UNVALIDATED
+                    } else {
+                        AvailabilityReason.TARGET_ROUTE_UNKNOWN
+                    },
                 )
             }
         }
+
+        /**
+         * Uses only the aggregate connectivity signals currently exposed by
+         * [NetworkStatus]. A live network proves a route exists in general, not that it
+         * reaches this target, so target-route presence remains unknown. A fully empty
+         * status is the only definitive no-route signal this seam can provide.
+         */
+        fun classifyObserved(
+            target: OperationTarget,
+            status: NetworkStatus,
+            localNetworkPermissionAllowed: Boolean? = null,
+            policyAllowed: Boolean = true,
+        ): OperationAvailability {
+            val requirement = requirementFor(target)
+            val hasRouteClassEvidence = when (requirement) {
+                OperationRequirement.LOCAL_NETWORK -> status.hasLocalNetwork || status.vpnActive
+                OperationRequirement.INTERNET -> status.hasInternet || status.vpnActive
+                OperationRequirement.ANY_NETWORK -> status.hasInternet || status.hasLocalNetwork ||
+                    status.vpnActive || status.transport != null
+            }
+            return classify(
+                target = target,
+                status = status,
+                routePresent = if (hasRouteClassEvidence) null else false,
+                localNetworkPermissionAllowed = localNetworkPermissionAllowed,
+                policyAllowed = policyAllowed,
+            )
+        }
     }
+}
+
+fun OperationAvailability.denialMessage(): String = when (reason) {
+    AvailabilityReason.NO_ROUTE -> "No network connection"
+    AvailabilityReason.LOCAL_NETWORK_PERMISSION_DENIED -> "Local network permission denied"
+    AvailabilityReason.POLICY_DENIED -> "Network operation is unavailable"
+    AvailabilityReason.CONNECTIVITY_UNVALIDATED,
+    AvailabilityReason.TARGET_ROUTE_UNKNOWN,
+    null -> "Network operation is unavailable"
 }

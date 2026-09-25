@@ -1,20 +1,21 @@
 package net.aieat.netswissknife.core.network.httprobe
 
-import com.sun.net.httpserver.HttpServer
 import com.sun.net.httpserver.HttpExchange
+import com.sun.net.httpserver.HttpServer
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import net.aieat.netswissknife.core.network.NetworkResult
+import net.aieat.netswissknife.core.network.httprobe.engine.HttpEngine
+import net.aieat.netswissknife.core.network.httprobe.engine.HttpEngineCall
+import net.aieat.netswissknife.core.network.httprobe.engine.HttpEngineRequest
+import net.aieat.netswissknife.core.network.httprobe.engine.HttpEngineResponse
+import net.aieat.netswissknife.core.network.httprobe.engine.HttpTimings
 import net.aieat.netswissknife.core.network.operation.CancellationReason
 import net.aieat.netswissknife.core.network.operation.OperationCancellationException
-import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
-import java.io.InputStream
-import java.io.OutputStream
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -24,60 +25,63 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
-import java.net.InetSocketAddress
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+import java.io.InputStream
+import java.io.OutputStream
 import java.net.HttpURLConnection
+import java.net.InetSocketAddress
 import java.net.URL
 import java.nio.charset.Charset
-import java.util.concurrent.atomic.AtomicReference
-import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicBoolean
-import net.aieat.netswissknife.core.network.httprobe.engine.HttpEngine
-import net.aieat.netswissknife.core.network.httprobe.engine.HttpEngineCall
-import net.aieat.netswissknife.core.network.httprobe.engine.HttpEngineRequest
-import net.aieat.netswissknife.core.network.httprobe.engine.HttpEngineResponse
-import net.aieat.netswissknife.core.network.httprobe.engine.HttpTimings
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
 
 @DisplayName("HttpProbeRepositoryImpl – input validation")
 class HttpProbeRepositoryValidationTest {
-
     private val repo = HttpProbeRepositoryImpl()
 
     @Test
     @DisplayName("probe returns Error for blank URL")
-    fun `probe returns Error for blank URL`() = runTest {
-        val result = repo.probe(HttpProbeRequest(url = "   "))
-        assertTrue(result is NetworkResult.Error)
-        assertTrue((result as NetworkResult.Error).message.contains("blank", ignoreCase = true))
-    }
+    fun `probe returns Error for blank URL`() =
+        runTest {
+            val result = repo.probe(HttpProbeRequest(url = "   "))
+            assertTrue(result is NetworkResult.Error)
+            assertTrue((result as NetworkResult.Error).message.contains("blank", ignoreCase = true))
+        }
 
     @Test
     @DisplayName("probe returns Error for non-HTTP URL")
-    fun `probe returns Error for non-HTTP URL`() = runTest {
-        val result = repo.probe(HttpProbeRequest(url = "ftp://example.com"))
-        assertTrue(result is NetworkResult.Error)
-    }
+    fun `probe returns Error for non-HTTP URL`() =
+        runTest {
+            val result = repo.probe(HttpProbeRequest(url = "ftp://example.com"))
+            assertTrue(result is NetworkResult.Error)
+        }
 
     @Test
     @DisplayName("probe returns Error for malformed URL")
-    fun `probe returns Error for malformed URL`() = runTest {
-        val result = repo.probe(HttpProbeRequest(url = "not a url at all"))
-        assertTrue(result is NetworkResult.Error)
-    }
+    fun `probe returns Error for malformed URL`() =
+        runTest {
+            val result = repo.probe(HttpProbeRequest(url = "not a url at all"))
+            assertTrue(result is NetworkResult.Error)
+        }
 
     @Test
     @DisplayName("probe returns Error for timeout below 500ms")
-    fun `probe returns Error for timeout below 500ms`() = runTest {
-        val result = repo.probe(HttpProbeRequest(url = "https://example.com", timeoutMs = 499))
-        assertTrue(result is NetworkResult.Error)
-    }
+    fun `probe returns Error for timeout below 500ms`() =
+        runTest {
+            val result = repo.probe(HttpProbeRequest(url = "https://example.com", timeoutMs = 499))
+            assertTrue(result is NetworkResult.Error)
+        }
 
     @Test
     @DisplayName("probe returns Error for timeout above 60000ms")
-    fun `probe returns Error for timeout above 60000ms`() = runTest {
-        val result = repo.probe(HttpProbeRequest(url = "https://example.com", timeoutMs = 60_001))
-        assertTrue(result is NetworkResult.Error)
-    }
+    fun `probe returns Error for timeout above 60000ms`() =
+        runTest {
+            val result = repo.probe(HttpProbeRequest(url = "https://example.com", timeoutMs = 60_001))
+            assertTrue(result is NetworkResult.Error)
+        }
 }
 
 private fun interface HttpProbeConnectionFactory {
@@ -94,31 +98,34 @@ private class ConnectionFakeEngine(
             private val closed = AtomicBoolean(false)
             private var stream: InputStream? = null
 
-            override suspend fun execute(): HttpEngineResponse = withContext(Dispatchers.IO) {
-                connection.instanceFollowRedirects = false
-                connection.requestMethod = request.method
-                connection.connectTimeout = request.timeoutMs
-                connection.readTimeout = request.timeoutMs
-                request.headers.forEach { (name, value) -> connection.setRequestProperty(name, value) }
-                request.body?.let { bytes ->
-                    connection.doOutput = true
-                    connection.outputStream.use { it.write(bytes) }
+            override suspend fun execute(): HttpEngineResponse =
+                withContext(Dispatchers.IO) {
+                    connection.instanceFollowRedirects = false
+                    connection.requestMethod = request.method
+                    connection.connectTimeout = request.timeoutMs
+                    connection.readTimeout = request.timeoutMs
+                    request.headers.forEach { (name, value) -> connection.setRequestProperty(name, value) }
+                    request.body?.let { bytes ->
+                        connection.doOutput = true
+                        connection.outputStream.use { it.write(bytes) }
+                    }
+                    connection.connect()
+                    val code = connection.responseCode
+                    val headers =
+                        buildMap<String, List<String>> {
+                            connection.headerFields.forEach { (name, values) -> if (name != null) put(name, values) }
+                        }
+                    stream =
+                        if (code >= 400) connection.errorStream else runCatching { connection.inputStream }.getOrNull()
+                    HttpEngineResponse(
+                        statusCode = code,
+                        statusMessage = connection.responseMessage ?: "",
+                        headers = headers,
+                        body = stream,
+                        protocol = "http/1.1",
+                        timings = HttpTimings(),
+                    )
                 }
-                connection.connect()
-                val code = connection.responseCode
-                val headers = buildMap<String, List<String>> {
-                    connection.headerFields.forEach { (name, values) -> if (name != null) put(name, values) }
-                }
-                stream = if (code >= 400) connection.errorStream else runCatching { connection.inputStream }.getOrNull()
-                HttpEngineResponse(
-                    statusCode = code,
-                    statusMessage = connection.responseMessage ?: "",
-                    headers = headers,
-                    body = stream,
-                    protocol = "http/1.1",
-                    timings = HttpTimings(),
-                )
-            }
 
             override fun close() {
                 if (!closed.compareAndSet(false, true)) return
@@ -131,7 +138,6 @@ private class ConnectionFakeEngine(
 
 @DisplayName("HttpSecurityAnalyzer – header ratings")
 class HttpSecurityAnalyzerTest {
-
     @Test
     @DisplayName("HSTS present on HTTPS gets PASS")
     fun `HSTS present on HTTPS gets PASS`() {
@@ -245,22 +251,23 @@ class HttpSecurityAnalyzerTest {
     // ── Previously uncovered branches ────────────────────────────────────────
 
     @Test
-    @DisplayName("analyze reports the same nine checks in a stable order")
-    fun `analyze reports the nine checks in order`() {
+    @DisplayName("analyze reports the same ten header checks in a stable order")
+    fun `analyze reports the ten header checks in order`() {
         val checks = HttpSecurityAnalyzer.analyze(emptyMap(), isHttps = true)
         assertEquals(
             listOf(
                 "Strict-Transport-Security",
                 "Content-Security-Policy",
                 "X-Frame-Options",
+                "X-XSS-Protection",
                 "X-Content-Type-Options",
                 "Referrer-Policy",
                 "Permissions-Policy",
                 "Cross-Origin-Opener-Policy",
                 "Cross-Origin-Embedder-Policy",
-                "Server"
+                "Server",
             ),
-            checks.map { it.headerName }
+            checks.map { it.headerName },
         )
     }
 
@@ -268,8 +275,10 @@ class HttpSecurityAnalyzerTest {
     @DisplayName("COOP same-origin gets PASS")
     fun `COOP same-origin gets PASS`() {
         val headers = mapOf("Cross-Origin-Opener-Policy" to listOf("same-origin"))
-        val check = HttpSecurityAnalyzer.analyze(headers, isHttps = true)
-            .first { it.headerName == "Cross-Origin-Opener-Policy" }
+        val check =
+            HttpSecurityAnalyzer
+                .analyze(headers, isHttps = true)
+                .first { it.headerName == "Cross-Origin-Opener-Policy" }
         assertEquals(SecurityRating.PASS, check.rating)
     }
 
@@ -277,16 +286,20 @@ class HttpSecurityAnalyzerTest {
     @DisplayName("COOP unsafe-none gets WARN")
     fun `COOP unsafe-none gets WARN`() {
         val headers = mapOf("Cross-Origin-Opener-Policy" to listOf("unsafe-none"))
-        val check = HttpSecurityAnalyzer.analyze(headers, isHttps = true)
-            .first { it.headerName == "Cross-Origin-Opener-Policy" }
+        val check =
+            HttpSecurityAnalyzer
+                .analyze(headers, isHttps = true)
+                .first { it.headerName == "Cross-Origin-Opener-Policy" }
         assertEquals(SecurityRating.WARN, check.rating)
     }
 
     @Test
     @DisplayName("COOP absent gets WARN")
     fun `COOP absent gets WARN`() {
-        val check = HttpSecurityAnalyzer.analyze(emptyMap(), isHttps = true)
-            .first { it.headerName == "Cross-Origin-Opener-Policy" }
+        val check =
+            HttpSecurityAnalyzer
+                .analyze(emptyMap(), isHttps = true)
+                .first { it.headerName == "Cross-Origin-Opener-Policy" }
         assertEquals(SecurityRating.WARN, check.rating)
         assertNull(check.value)
     }
@@ -295,8 +308,10 @@ class HttpSecurityAnalyzerTest {
     @DisplayName("COEP require-corp gets PASS")
     fun `COEP require-corp gets PASS`() {
         val headers = mapOf("Cross-Origin-Embedder-Policy" to listOf("require-corp"))
-        val check = HttpSecurityAnalyzer.analyze(headers, isHttps = true)
-            .first { it.headerName == "Cross-Origin-Embedder-Policy" }
+        val check =
+            HttpSecurityAnalyzer
+                .analyze(headers, isHttps = true)
+                .first { it.headerName == "Cross-Origin-Embedder-Policy" }
         assertEquals(SecurityRating.PASS, check.rating)
     }
 
@@ -304,16 +319,20 @@ class HttpSecurityAnalyzerTest {
     @DisplayName("COEP credentialless gets PASS")
     fun `COEP credentialless gets PASS`() {
         val headers = mapOf("Cross-Origin-Embedder-Policy" to listOf("credentialless"))
-        val check = HttpSecurityAnalyzer.analyze(headers, isHttps = true)
-            .first { it.headerName == "Cross-Origin-Embedder-Policy" }
+        val check =
+            HttpSecurityAnalyzer
+                .analyze(headers, isHttps = true)
+                .first { it.headerName == "Cross-Origin-Embedder-Policy" }
         assertEquals(SecurityRating.PASS, check.rating)
     }
 
     @Test
     @DisplayName("COEP absent gets INFO")
     fun `COEP absent gets INFO`() {
-        val check = HttpSecurityAnalyzer.analyze(emptyMap(), isHttps = true)
-            .first { it.headerName == "Cross-Origin-Embedder-Policy" }
+        val check =
+            HttpSecurityAnalyzer
+                .analyze(emptyMap(), isHttps = true)
+                .first { it.headerName == "Cross-Origin-Embedder-Policy" }
         assertEquals(SecurityRating.INFO, check.rating)
     }
 
@@ -321,8 +340,10 @@ class HttpSecurityAnalyzerTest {
     @DisplayName("analyze matches header names case-insensitively")
     fun `analyze matches header names case-insensitively`() {
         val headers = mapOf("CONTENT-security-Policy" to listOf("default-src 'self'"))
-        val check = HttpSecurityAnalyzer.analyze(headers, isHttps = true)
-            .first { it.headerName == "Content-Security-Policy" }
+        val check =
+            HttpSecurityAnalyzer
+                .analyze(headers, isHttps = true)
+                .first { it.headerName == "Content-Security-Policy" }
         assertEquals(SecurityRating.PASS, check.rating)
     }
 
@@ -330,8 +351,10 @@ class HttpSecurityAnalyzerTest {
     @DisplayName("analyze treats a blank header value as absent")
     fun `analyze treats a blank header value as absent`() {
         val headers = mapOf("Content-Security-Policy" to listOf("   "))
-        val check = HttpSecurityAnalyzer.analyze(headers, isHttps = true)
-            .first { it.headerName == "Content-Security-Policy" }
+        val check =
+            HttpSecurityAnalyzer
+                .analyze(headers, isHttps = true)
+                .first { it.headerName == "Content-Security-Policy" }
         assertNull(check.value)
         assertEquals(SecurityRating.WARN, check.rating)
     }
@@ -340,34 +363,43 @@ class HttpSecurityAnalyzerTest {
     @DisplayName("analyze treats an empty value list as absent")
     fun `analyze treats an empty value list as absent`() {
         val headers = mapOf("Content-Security-Policy" to emptyList<String>())
-        val check = HttpSecurityAnalyzer.analyze(headers, isHttps = true)
-            .first { it.headerName == "Content-Security-Policy" }
+        val check =
+            HttpSecurityAnalyzer
+                .analyze(headers, isHttps = true)
+                .first { it.headerName == "Content-Security-Policy" }
         assertNull(check.value)
     }
 
     @Test
-    @DisplayName("analyze uses the first value when a header repeats")
-    fun `analyze uses the first value when a header repeats`() {
-        val headers = mapOf("Server" to listOf("nginx", "apache"))
-        val check = HttpSecurityAnalyzer.analyze(headers, isHttps = true)
-            .first { it.headerName == "Server" }
-        assertEquals("nginx", check.value)
+    @DisplayName("analyze inspects every value when a header repeats")
+    fun `analyze inspects every value when a header repeats`() {
+        val headers = mapOf("Server" to listOf("nginx", "Apache/2.4.57"))
+        val check =
+            HttpSecurityAnalyzer
+                .analyze(headers, isHttps = true)
+                .first { it.headerName == "Server" }
+        assertEquals("nginx\nApache/2.4.57", check.value)
+        assertEquals(SecurityRating.WARN, check.rating)
     }
 
     @Test
-    @DisplayName("HSTS present on plain HTTP still gets PASS")
-    fun `HSTS present on plain HTTP still gets PASS`() {
+    @DisplayName("HSTS sent over plain HTTP is informational and ignored")
+    fun `HSTS sent over plain HTTP is informational and ignored`() {
         val headers = mapOf("Strict-Transport-Security" to listOf("max-age=1"))
-        val check = HttpSecurityAnalyzer.analyze(headers, isHttps = false)
-            .first { it.headerName == "Strict-Transport-Security" }
-        assertEquals(SecurityRating.PASS, check.rating)
+        val check =
+            HttpSecurityAnalyzer
+                .analyze(headers, isHttps = false)
+                .first { it.headerName == "Strict-Transport-Security" }
+        assertEquals(SecurityRating.INFO, check.rating)
     }
 
     @Test
     @DisplayName("HSTS absent on plain HTTP gets INFO, not FAIL")
     fun `HSTS absent on plain HTTP gets INFO`() {
-        val check = HttpSecurityAnalyzer.analyze(emptyMap(), isHttps = false)
-            .first { it.headerName == "Strict-Transport-Security" }
+        val check =
+            HttpSecurityAnalyzer
+                .analyze(emptyMap(), isHttps = false)
+                .first { it.headerName == "Strict-Transport-Security" }
         assertEquals(SecurityRating.INFO, check.rating)
     }
 
@@ -379,14 +411,16 @@ class HttpSecurityAnalyzerTest {
             "strict-origin",
             "strict-origin-when-cross-origin",
             "same-origin",
-            "STRICT-ORIGIN"
-        ]
+            "STRICT-ORIGIN",
+        ],
     )
     @DisplayName("privacy-preserving Referrer-Policy gets PASS")
     fun `privacy preserving referrer policy gets PASS`(value: String) {
         val headers = mapOf("Referrer-Policy" to listOf(value))
-        val check = HttpSecurityAnalyzer.analyze(headers, isHttps = true)
-            .first { it.headerName == "Referrer-Policy" }
+        val check =
+            HttpSecurityAnalyzer
+                .analyze(headers, isHttps = true)
+                .first { it.headerName == "Referrer-Policy" }
         assertEquals(SecurityRating.PASS, check.rating)
     }
 
@@ -394,8 +428,10 @@ class HttpSecurityAnalyzerTest {
     @DisplayName("leaky Referrer-Policy gets WARN and names the value")
     fun `leaky referrer policy gets WARN`() {
         val headers = mapOf("Referrer-Policy" to listOf("unsafe-url"))
-        val check = HttpSecurityAnalyzer.analyze(headers, isHttps = true)
-            .first { it.headerName == "Referrer-Policy" }
+        val check =
+            HttpSecurityAnalyzer
+                .analyze(headers, isHttps = true)
+                .first { it.headerName == "Referrer-Policy" }
         assertEquals(SecurityRating.WARN, check.rating)
         assertTrue(check.description.contains("unsafe-url"))
     }
@@ -403,8 +439,10 @@ class HttpSecurityAnalyzerTest {
     @Test
     @DisplayName("absent Referrer-Policy gets WARN")
     fun `absent referrer policy gets WARN`() {
-        val check = HttpSecurityAnalyzer.analyze(emptyMap(), isHttps = true)
-            .first { it.headerName == "Referrer-Policy" }
+        val check =
+            HttpSecurityAnalyzer
+                .analyze(emptyMap(), isHttps = true)
+                .first { it.headerName == "Referrer-Policy" }
         assertEquals(SecurityRating.WARN, check.rating)
     }
 
@@ -412,16 +450,20 @@ class HttpSecurityAnalyzerTest {
     @DisplayName("Permissions-Policy present gets PASS")
     fun `permissions policy present gets PASS`() {
         val headers = mapOf("Permissions-Policy" to listOf("camera=()"))
-        val check = HttpSecurityAnalyzer.analyze(headers, isHttps = true)
-            .first { it.headerName == "Permissions-Policy" }
+        val check =
+            HttpSecurityAnalyzer
+                .analyze(headers, isHttps = true)
+                .first { it.headerName == "Permissions-Policy" }
         assertEquals(SecurityRating.PASS, check.rating)
     }
 
     @Test
     @DisplayName("absent Permissions-Policy gets WARN")
     fun `absent permissions policy gets WARN`() {
-        val check = HttpSecurityAnalyzer.analyze(emptyMap(), isHttps = true)
-            .first { it.headerName == "Permissions-Policy" }
+        val check =
+            HttpSecurityAnalyzer
+                .analyze(emptyMap(), isHttps = true)
+                .first { it.headerName == "Permissions-Policy" }
         assertEquals(SecurityRating.WARN, check.rating)
     }
 
@@ -429,8 +471,10 @@ class HttpSecurityAnalyzerTest {
     @DisplayName("X-Frame-Options with a non-protective value gets WARN and names it")
     fun `non protective x frame options gets WARN`() {
         val headers = mapOf("X-Frame-Options" to listOf("ALLOW-FROM https://example.com"))
-        val check = HttpSecurityAnalyzer.analyze(headers, isHttps = true)
-            .first { it.headerName == "X-Frame-Options" }
+        val check =
+            HttpSecurityAnalyzer
+                .analyze(headers, isHttps = true)
+                .first { it.headerName == "X-Frame-Options" }
         assertEquals(SecurityRating.WARN, check.rating)
         assertTrue(check.description.contains("ALLOW-FROM https://example.com"))
     }
@@ -442,12 +486,10 @@ class HttpSecurityAnalyzerTest {
             assertTrue(it.description.isNotBlank(), "${it.headerName} has a blank description")
         }
     }
-
 }
 
 @DisplayName("HttpMethod – body support")
 class HttpMethodBodySupportTest {
-
     @Test
     @DisplayName("POST supports body")
     fun `POST supports body`() {
@@ -487,7 +529,6 @@ class HttpMethodBodySupportTest {
 
 @DisplayName("HttpProbeRepositoryImpl – redirect handling")
 class HttpProbeRepositoryRedirectTest {
-
     private val servers = mutableListOf<HttpServer>()
     private val repo = HttpProbeRepositoryImpl()
 
@@ -511,18 +552,18 @@ class HttpProbeRepositoryRedirectTest {
         return "http://127.0.0.1:${httpServer.address.port}"
     }
 
-    private fun startRecordingServer(
-        handler: (HttpExchange) -> Triple<Int, String, String?>
-    ): String {
+    private fun startRecordingServer(handler: (HttpExchange) -> Triple<Int, String, String?>): String {
         val httpServer = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
         httpServer.createContext("/") { exchange ->
             val (status, body, contentType) = handler(exchange)
             contentType?.let { exchange.responseHeaders.add("Content-Type", it) }
-            val charset = contentType?.substringAfter("charset=", "")
-                ?.substringBefore(';')
-                ?.trim()
-                ?.let { runCatching { Charset.forName(it) }.getOrNull() }
-                ?: Charsets.UTF_8
+            val charset =
+                contentType
+                    ?.substringAfter("charset=", "")
+                    ?.substringBefore(';')
+                    ?.trim()
+                    ?.let { runCatching { Charset.forName(it) }.getOrNull() }
+                    ?: Charsets.UTF_8
             val bytes = body.toByteArray(charset)
             exchange.sendResponseHeaders(status, bytes.size.toLong())
             exchange.responseBody.use { it.write(bytes) }
@@ -534,389 +575,459 @@ class HttpProbeRepositoryRedirectTest {
 
     @Test
     @DisplayName("probe rejects a redirect to a non-http(s) scheme")
-    fun `probe rejects redirect to file scheme`() = runTest {
-        val baseUrl = startServer { Triple(302, "", "file:///etc/passwd") }
+    fun `probe rejects redirect to file scheme`() =
+        runTest {
+            val baseUrl = startServer { Triple(302, "", "file:///etc/passwd") }
 
-        val result = repo.probe(HttpProbeRequest(url = baseUrl))
+            val result = repo.probe(HttpProbeRequest(url = baseUrl))
 
-        assertTrue(result is NetworkResult.Error)
-        assertTrue((result as NetworkResult.Error).message.contains("protocol", ignoreCase = true))
-    }
+            assertTrue(result is NetworkResult.Error)
+            assertTrue((result as NetworkResult.Error).message.contains("protocol", ignoreCase = true))
+        }
 
     @Test
     @DisplayName("blocked HTTPS downgrade preserves source evidence without opening HTTP destination")
-    fun `blocked https downgrade returns structured evidence and never opens destination`() = runTest {
-        val sourceUrl = URL("https://alice:source-secret@source.test/start?source-token=private#source-fragment")
-        val location = "http://bob:destination-secret@destination.test/danger?redirect-token=private#destination-fragment"
-        val openedUrls = mutableListOf<String>()
-        val repository = HttpProbeRepositoryImpl(ConnectionFakeEngine(HttpProbeConnectionFactory { url ->
-            openedUrls += url.toString()
-            check(url.toString() == sourceUrl.toString()) { "HTTP destination must never be opened: $url" }
-            RecordingHttpConnection(url, 302, location)
-        }))
+    fun `blocked https downgrade returns structured evidence and never opens destination`() =
+        runTest {
+            val sourceUrl = URL("https://alice:source-secret@source.test/start?source-token=private#source-fragment")
+            val location = "http://bob:destination-secret@destination.test/danger?redirect-token=private#destination-fragment"
+            val openedUrls = mutableListOf<String>()
+            val repository =
+                HttpProbeRepositoryImpl(
+                    ConnectionFakeEngine(
+                        HttpProbeConnectionFactory { url ->
+                            openedUrls += url.toString()
+                            check(url.toString() == sourceUrl.toString()) {
+                                "HTTP destination must never be opened: $url"
+                            }
+                            RecordingHttpConnection(url, 302, location)
+                        },
+                    ),
+                )
 
-        val result = repository.probe(HttpProbeRequest(url = sourceUrl.toString()))
+            val result = repository.probe(HttpProbeRequest(url = sourceUrl.toString()))
 
-        assertTrue(result is NetworkResult.Error)
-        val error = result as NetworkResult.Error
-        val evidence = error.cause as HttpProbeBlockedRedirectException
-        assertEquals(sourceUrl.toString(), evidence.sourceUrl)
-        assertEquals("http://bob:destination-secret@destination.test/danger?redirect-token=private#destination-fragment", evidence.destinationUrl)
-        assertEquals(302, evidence.statusCode)
-        assertEquals(location, evidence.location)
-        assertEquals("INSECURE_REDIRECT", error.code)
-        assertEquals(listOf(sourceUrl.toString()), openedUrls)
-        listOf("source-secret", "source-token", "redirect-token", "destination-secret").forEach { secret ->
-            assertFalse(error.message.contains(secret))
-            assertFalse(evidence.message.orEmpty().contains(secret))
+            assertTrue(result is NetworkResult.Error)
+            val error = result as NetworkResult.Error
+            val evidence = error.cause as HttpProbeBlockedRedirectException
+            assertEquals(sourceUrl.toString(), evidence.sourceUrl)
+            assertEquals("http://bob:destination-secret@destination.test/danger?redirect-token=private#destination-fragment", evidence.destinationUrl)
+            assertEquals(302, evidence.statusCode)
+            assertEquals(location, evidence.location)
+            assertEquals("INSECURE_REDIRECT", error.code)
+            assertEquals(listOf(sourceUrl.toString()), openedUrls)
+            listOf("source-secret", "source-token", "redirect-token", "destination-secret").forEach { secret ->
+                assertFalse(error.message.contains(secret))
+                assertFalse(evidence.message.orEmpty().contains(secret))
+            }
         }
-    }
 
     @Test
     @DisplayName("malformed Location errors do not echo attacker-controlled URI text")
-    fun `malformed redirect location is not included in error text`() = runTest {
-        val sourceUrl = URL("https://source.test/start")
-        val location = "http://[broken?redirect-token=private"
-        val openedUrls = mutableListOf<String>()
-        val repository = HttpProbeRepositoryImpl(ConnectionFakeEngine(HttpProbeConnectionFactory { url ->
-            openedUrls += url.toString()
-            RecordingHttpConnection(url, 302, location)
-        }))
+    fun `malformed redirect location is not included in error text`() =
+        runTest {
+            val sourceUrl = URL("https://source.test/start")
+            val location = "http://[broken?redirect-token=private"
+            val openedUrls = mutableListOf<String>()
+            val repository =
+                HttpProbeRepositoryImpl(
+                    ConnectionFakeEngine(
+                        HttpProbeConnectionFactory { url ->
+                            openedUrls += url.toString()
+                            RecordingHttpConnection(url, 302, location)
+                        },
+                    ),
+                )
 
-        val result = repository.probe(HttpProbeRequest(url = sourceUrl.toString()))
+            val result = repository.probe(HttpProbeRequest(url = sourceUrl.toString()))
 
-        assertTrue(result is NetworkResult.Error)
-        val error = result as NetworkResult.Error
-        assertEquals("Malformed redirect URL", error.message)
-        assertNull(error.cause)
-        assertFalse(error.message.contains("redirect-token"))
-        assertEquals(listOf(sourceUrl.toString()), openedUrls)
-    }
+            assertTrue(result is NetworkResult.Error)
+            val error = result as NetworkResult.Error
+            assertEquals("Malformed redirect URL", error.message)
+            assertNull(error.cause)
+            assertFalse(error.message.contains("redirect-token"))
+            assertEquals(listOf(sourceUrl.toString()), openedUrls)
+        }
 
     @Test
     @DisplayName("probe follows a normal http redirect to completion")
-    fun `probe follows http redirect`() = runTest {
-        lateinit var baseUrl: String
-        baseUrl = startServer { path ->
-            if (path == "/target") Triple(200, "ok", null)
-            else Triple(302, "", "$baseUrl/target")
+    fun `probe follows http redirect`() =
+        runTest {
+            lateinit var baseUrl: String
+            baseUrl =
+                startServer { path ->
+                    if (path == "/target") {
+                        Triple(200, "ok", null)
+                    } else {
+                        Triple(302, "", "$baseUrl/target")
+                    }
+                }
+
+            val result = repo.probe(HttpProbeRequest(url = baseUrl))
+
+            assertTrue(result is NetworkResult.Success)
+            assertEquals(200, (result as NetworkResult.Success).data.statusCode)
+            assertTrue(result.data.redirectChain.isNotEmpty())
         }
-
-        val result = repo.probe(HttpProbeRequest(url = baseUrl))
-
-        assertTrue(result is NetworkResult.Success)
-        assertEquals(200, (result as NetworkResult.Success).data.statusCode)
-        assertTrue(result.data.redirectChain.isNotEmpty())
-    }
 
     @Test
     @DisplayName("probe does not forward credentials to another origin")
-    fun `probe strips sensitive headers across origins`() = runTest {
-        val receivedAuthorization = AtomicReference<String?>()
-        val receivedCookie = AtomicReference<String?>()
-        val targetUrl = startRecordingServer { exchange ->
-            receivedAuthorization.set(exchange.requestHeaders.getFirst("Authorization"))
-            receivedCookie.set(exchange.requestHeaders.getFirst("Cookie"))
-            Triple(200, "ok", null)
-        }
-        val sourceUrl = startRecordingServer { exchange ->
-            exchange.responseHeaders.add("Location", targetUrl)
-            Triple(302, "", null)
-        }
-
-        val result = repo.probe(
-            HttpProbeRequest(
-                url = sourceUrl,
-                headers = listOf("Authorization" to "Bearer secret", "Cookie" to "session=secret")
-            )
-        )
-
-        assertTrue(result is NetworkResult.Success)
-        assertNull(receivedAuthorization.get())
-        assertNull(receivedCookie.get())
-    }
-
-    @Test
-    @DisplayName("cross-origin entity redirects wait for per-hop explicit approval")
-    fun `cross-origin entity redirects are gated by approval`() = runTest {
-        val cases = listOf(
-            HttpMethod.POST to 307,
-            HttpMethod.POST to 308,
-            HttpMethod.PUT to 301,
-            HttpMethod.PUT to 302
-        )
-        for ((method, status) in cases) {
-            val destinationRequests = AtomicInteger()
-            val receivedMethod = AtomicReference<String>()
-            val receivedBody = AtomicReference<String>()
+    fun `probe strips sensitive headers across origins`() =
+        runTest {
             val receivedAuthorization = AtomicReference<String?>()
-            val targetUrl = startRecordingServer { exchange ->
-                destinationRequests.incrementAndGet()
-                receivedMethod.set(exchange.requestMethod)
-                receivedBody.set(exchange.requestBody.bufferedReader().use { it.readText() })
-                receivedAuthorization.set(exchange.requestHeaders.getFirst("Authorization"))
-                Triple(200, "ok", null)
-            }
-            val sourceUrl = startRecordingServer { exchange ->
-                exchange.responseHeaders.add("Location", targetUrl)
-                Triple(status, "", null)
-            }
-            val replayRequest = CompletableDeferred<CrossOriginEntityReplay>()
-            val userDecision = CompletableDeferred<Boolean>()
+            val receivedCookie = AtomicReference<String?>()
+            val targetUrl =
+                startRecordingServer { exchange ->
+                    receivedAuthorization.set(exchange.requestHeaders.getFirst("Authorization"))
+                    receivedCookie.set(exchange.requestHeaders.getFirst("Cookie"))
+                    Triple(200, "ok", null)
+                }
+            val sourceUrl =
+                startRecordingServer { exchange ->
+                    exchange.responseHeaders.add("Location", targetUrl)
+                    Triple(302, "", null)
+                }
 
-            val probe = async(Dispatchers.IO) {
+            val result =
                 repo.probe(
                     HttpProbeRequest(
                         url = sourceUrl,
-                        method = method,
-                        body = "sensitive-$method-$status",
-                        headers = listOf("Authorization" to "Bearer secret"),
-                        approveCrossOriginEntityReplay = { replay ->
-                            replayRequest.complete(replay)
-                            userDecision.await()
-                        }
-                    )
+                        headers = listOf("Authorization" to "Bearer secret", "Cookie" to "session=secret"),
+                    ),
                 )
-            }
 
-            val requestedApproval = withContext(Dispatchers.Default) {
-                withTimeout(5_000) { replayRequest.await() }
-            }
-            assertEquals(targetUrl, requestedApproval.destinationUrl)
-            assertEquals(method, requestedApproval.method)
-            assertEquals(0, destinationRequests.get(), "destination must remain untouched pending approval")
-
-            userDecision.complete(true)
-            val result = withContext(Dispatchers.Default) {
-                withTimeout(5_000) { probe.await() }
-            }
-            assertTrue(result is NetworkResult.Success, "$method/$status should proceed after approval")
-            assertEquals(1, destinationRequests.get())
-            assertEquals(method.name, receivedMethod.get())
-            assertEquals("sensitive-$method-$status", receivedBody.get())
-            assertNull(receivedAuthorization.get(), "custom headers must remain stripped after approval")
+            assertTrue(result is NetworkResult.Success)
+            assertNull(receivedAuthorization.get())
+            assertNull(receivedCookie.get())
         }
-    }
+
+    @Test
+    @DisplayName("cross-origin entity redirects wait for per-hop explicit approval")
+    @Suppress("LongMethod")
+    fun `cross-origin redirects await consent`() =
+        runTest {
+            val cases =
+                listOf(
+                    HttpMethod.POST to 307,
+                    HttpMethod.POST to 308,
+                    HttpMethod.PUT to 301,
+                    HttpMethod.PUT to 302,
+                )
+            for ((method, status) in cases) {
+                val destinationRequests = AtomicInteger()
+                val receivedMethod = AtomicReference<String>()
+                val receivedBody = AtomicReference<String>()
+                val receivedAuthorization = AtomicReference<String?>()
+                val targetUrl =
+                    startRecordingServer { exchange ->
+                        destinationRequests.incrementAndGet()
+                        receivedMethod.set(exchange.requestMethod)
+                        receivedBody.set(exchange.requestBody.bufferedReader().use { it.readText() })
+                        receivedAuthorization.set(exchange.requestHeaders.getFirst("Authorization"))
+                        Triple(200, "ok", null)
+                    }
+                val sourceUrl =
+                    startRecordingServer { exchange ->
+                        exchange.responseHeaders.add("Location", targetUrl)
+                        Triple(status, "", null)
+                    }
+                val replayRequest = CompletableDeferred<CrossOriginEntityReplay>()
+                val userDecision = CompletableDeferred<Boolean>()
+
+                val probe =
+                    async(Dispatchers.IO) {
+                        repo.probe(
+                            HttpProbeRequest(
+                                url = sourceUrl,
+                                method = method,
+                                body = "sensitive-$method-$status",
+                                headers = listOf("Authorization" to "Bearer secret"),
+                                approveCrossOriginEntityReplay = { replay ->
+                                    replayRequest.complete(replay)
+                                    userDecision.await()
+                                },
+                            ),
+                        )
+                    }
+
+                val requestedApproval =
+                    withContext(Dispatchers.Default) {
+                        withTimeout(5_000) { replayRequest.await() }
+                    }
+                assertEquals(targetUrl, requestedApproval.destinationUrl)
+                assertEquals(method, requestedApproval.method)
+                assertEquals(0, destinationRequests.get(), "destination must remain untouched pending approval")
+
+                userDecision.complete(true)
+                val result =
+                    withContext(Dispatchers.Default) {
+                        withTimeout(5_000) { probe.await() }
+                    }
+                assertTrue(result is NetworkResult.Success, "$method/$status should proceed after approval")
+                assertEquals(1, destinationRequests.get())
+                assertEquals(method.name, receivedMethod.get())
+                assertEquals("sensitive-$method-$status", receivedBody.get())
+                assertNull(receivedAuthorization.get(), "custom headers must remain stripped after approval")
+            }
+        }
 
     @Test
     @DisplayName("PATCH 301 and 302 redirects do not open the cross-origin destination before approval")
-    fun `patch entity redirects are gated before destination connection`() = runTest {
-        for (status in listOf(301, 302)) {
-            val sourceUrl = URL("http://source.test/start")
-            val targetUrl = URL("http://destination.test/next")
-            val openedUrls = mutableListOf<String>()
-            lateinit var sourceConnection: RecordingHttpConnection
-            lateinit var targetConnection: RecordingHttpConnection
-            val connectionFactory = HttpProbeConnectionFactory { url ->
-                openedUrls += url.toString()
-                when (url.toString()) {
-                    sourceUrl.toString() -> RecordingHttpConnection(url, status, targetUrl.toString()).also {
-                        sourceConnection = it
-                    }
-                    targetUrl.toString() -> RecordingHttpConnection(url, 200, null).also {
-                        targetConnection = it
-                    }
-                    else -> error("Unexpected URL: $url")
-                }
-            }
-            val replayRequest = CompletableDeferred<CrossOriginEntityReplay>()
-            val userDecision = CompletableDeferred<Boolean>()
-            val fakeRepo = HttpProbeRepositoryImpl(ConnectionFakeEngine(connectionFactory))
-            val probe = async(Dispatchers.IO) {
-                fakeRepo.probe(
-                    HttpProbeRequest(
-                        url = sourceUrl.toString(),
-                        method = HttpMethod.PATCH,
-                        body = "patch-$status",
-                        headers = listOf("X-Secret" to "private"),
-                        approveCrossOriginEntityReplay = { replay ->
-                            assertTrue(sourceConnection.disconnected, "source connection must close before waiting for consent")
-                            replayRequest.complete(replay)
-                            userDecision.await()
+    @Suppress("LongMethod")
+    fun `patch redirects need approval`() =
+        runTest {
+            for (status in listOf(301, 302)) {
+                val sourceUrl = URL("http://source.test/start")
+                val targetUrl = URL("http://destination.test/next")
+                val openedUrls = mutableListOf<String>()
+                lateinit var sourceConnection: RecordingHttpConnection
+                lateinit var targetConnection: RecordingHttpConnection
+                val connectionFactory =
+                    HttpProbeConnectionFactory { url ->
+                        openedUrls += url.toString()
+                        when (url.toString()) {
+                            sourceUrl.toString() -> {
+                                RecordingHttpConnection(url, status, targetUrl.toString()).also {
+                                    sourceConnection = it
+                                }
+                            }
+
+                            targetUrl.toString() -> {
+                                RecordingHttpConnection(url, 200, null).also {
+                                    targetConnection = it
+                                }
+                            }
+
+                            else -> {
+                                error("Unexpected URL: $url")
+                            }
                         }
-                    )
-                )
-            }
+                    }
+                val replayRequest = CompletableDeferred<CrossOriginEntityReplay>()
+                val userDecision = CompletableDeferred<Boolean>()
+                val fakeRepo = HttpProbeRepositoryImpl(ConnectionFakeEngine(connectionFactory))
+                val probe =
+                    async(Dispatchers.IO) {
+                        fakeRepo.probe(
+                            HttpProbeRequest(
+                                url = sourceUrl.toString(),
+                                method = HttpMethod.PATCH,
+                                body = "patch-$status",
+                                headers = listOf("X-Secret" to "private"),
+                                approveCrossOriginEntityReplay = { replay ->
+                                    assertTrue(sourceConnection.disconnected, "source connection must close before waiting for consent")
+                                    replayRequest.complete(replay)
+                                    userDecision.await()
+                                },
+                            ),
+                        )
+                    }
 
-            val approval = withContext(Dispatchers.Default) {
-                withTimeout(5_000) { replayRequest.await() }
-            }
-            assertEquals(targetUrl.toString(), approval.destinationUrl)
-            assertEquals(HttpMethod.PATCH, approval.method)
-            assertEquals(status, approval.statusCode)
-            assertEquals(listOf(sourceUrl.toString()), openedUrls)
+                val approval =
+                    withContext(Dispatchers.Default) {
+                        withTimeout(5_000) { replayRequest.await() }
+                    }
+                assertEquals(targetUrl.toString(), approval.destinationUrl)
+                assertEquals(HttpMethod.PATCH, approval.method)
+                assertEquals(status, approval.statusCode)
+                assertEquals(listOf(sourceUrl.toString()), openedUrls)
 
-            userDecision.complete(true)
-            val result = withContext(Dispatchers.Default) {
-                withTimeout(5_000) { probe.await() }
+                userDecision.complete(true)
+                val result =
+                    withContext(Dispatchers.Default) {
+                        withTimeout(5_000) { probe.await() }
+                    }
+                assertTrue(result is NetworkResult.Success)
+                assertEquals(listOf(sourceUrl.toString(), targetUrl.toString()), openedUrls)
+                assertEquals(1, sourceConnection.disconnectCount, "early consent cleanup must not disconnect twice")
+                assertEquals(1, targetConnection.disconnectCount)
+                assertEquals("PATCH", targetConnection.requestedMethod)
+                assertEquals("patch-$status", targetConnection.requestBody())
+                assertFalse(targetConnection.requestProperties.containsKey("X-Secret"))
             }
-            assertTrue(result is NetworkResult.Success)
-            assertEquals(listOf(sourceUrl.toString(), targetUrl.toString()), openedUrls)
-            assertEquals(1, sourceConnection.disconnectCount, "early consent cleanup must not disconnect twice")
-            assertEquals(1, targetConnection.disconnectCount)
-            assertEquals("PATCH", targetConnection.requestedMethod)
-            assertEquals("patch-$status", targetConnection.requestBody())
-            assertFalse(targetConnection.requestProperties.containsKey("X-Secret"))
         }
-    }
 
     @Test
     @DisplayName("cross-origin entity redirects default to deny when no approval flow is supplied")
-    fun `cross-origin entity redirect without approval never contacts destination`() = runTest {
-        val sourceUrl = URL("http://source.test/start")
-        val targetUrl = "http://alice:destination-secret@target.test/reset-token/path?redirect-token=private#frag"
-        val openedUrls = mutableListOf<String>()
-        val repository = HttpProbeRepositoryImpl(ConnectionFakeEngine(HttpProbeConnectionFactory { url ->
-            openedUrls += url.toString()
-            check(url.toString() == sourceUrl.toString()) { "Unapproved destination must never be opened" }
-            RecordingHttpConnection(url, 307, targetUrl)
-        }))
+    fun `cross-origin entity redirect without approval never contacts destination`() =
+        runTest {
+            val sourceUrl = URL("http://source.test/start")
+            val targetUrl = "http://alice:destination-secret@target.test/reset-token/path?redirect-token=private#frag"
+            val openedUrls = mutableListOf<String>()
+            val repository =
+                HttpProbeRepositoryImpl(
+                    ConnectionFakeEngine(
+                        HttpProbeConnectionFactory { url ->
+                            openedUrls += url.toString()
+                            check(url.toString() == sourceUrl.toString()) {
+                                "Unapproved destination must never be opened"
+                            }
+                            RecordingHttpConnection(url, 307, targetUrl)
+                        },
+                    ),
+                )
 
-        val result = repository.probe(
-            HttpProbeRequest(url = sourceUrl.toString(), method = HttpMethod.POST, body = "secret"),
-        )
+            val result =
+                repository.probe(
+                    HttpProbeRequest(url = sourceUrl.toString(), method = HttpMethod.POST, body = "secret"),
+                )
 
-        assertTrue(result is NetworkResult.Error)
-        val error = result as NetworkResult.Error
-        assertTrue(error.message.contains("requires approval"))
-        listOf("target.test", "destination-secret", "reset-token", "redirect-token", "frag").forEach { secret ->
-            assertFalse(error.message.contains(secret))
+            assertTrue(result is NetworkResult.Error)
+            val error = result as NetworkResult.Error
+            assertTrue(error.message.contains("requires approval"))
+            listOf("target.test", "destination-secret", "reset-token", "redirect-token", "frag").forEach { secret ->
+                assertFalse(error.message.contains(secret))
+            }
+            assertEquals(listOf(sourceUrl.toString()), openedUrls)
         }
-        assertEquals(listOf(sourceUrl.toString()), openedUrls)
-    }
 
     @Test
     @DisplayName("explicitly denied entity replay does not disclose destination and never opens it")
-    fun `denied cross-origin entity replay keeps destination private`() = runTest {
-        val sourceUrl = URL("http://source.test/start")
-        val targetUrl = URL("http://target.test/private?token=private")
-        val openedUrls = mutableListOf<String>()
-        val repository = HttpProbeRepositoryImpl(ConnectionFakeEngine(HttpProbeConnectionFactory { url ->
-            openedUrls += url.toString()
-            check(url.toString() == sourceUrl.toString()) { "Denied destination must never be opened" }
-            RecordingHttpConnection(url, 307, targetUrl.toString())
-        }))
+    fun `denied cross-origin entity replay keeps destination private`() =
+        runTest {
+            val sourceUrl = URL("http://source.test/start")
+            val targetUrl = URL("http://target.test/private?token=private")
+            val openedUrls = mutableListOf<String>()
+            val repository =
+                HttpProbeRepositoryImpl(
+                    ConnectionFakeEngine(
+                        HttpProbeConnectionFactory { url ->
+                            openedUrls += url.toString()
+                            check(url.toString() == sourceUrl.toString()) { "Denied destination must never be opened" }
+                            RecordingHttpConnection(url, 307, targetUrl.toString())
+                        },
+                    ),
+                )
 
-        val result = repository.probe(
-            HttpProbeRequest(
-                url = sourceUrl.toString(),
-                method = HttpMethod.POST,
-                body = "private body",
-                approveCrossOriginEntityReplay = { false },
-            ),
-        )
+            val result =
+                repository.probe(
+                    HttpProbeRequest(
+                        url = sourceUrl.toString(),
+                        method = HttpMethod.POST,
+                        body = "private body",
+                        approveCrossOriginEntityReplay = { false },
+                    ),
+                )
 
-        assertTrue(result is NetworkResult.Error)
-        val error = result as NetworkResult.Error
-        assertTrue(error.message.contains("was not approved"))
-        assertFalse(error.message.contains("target.test"))
-        assertFalse(error.message.contains("token"))
-        assertEquals(listOf(sourceUrl.toString()), openedUrls)
-    }
+            assertTrue(result is NetworkResult.Error)
+            val error = result as NetworkResult.Error
+            assertTrue(error.message.contains("was not approved"))
+            assertFalse(error.message.contains("target.test"))
+            assertFalse(error.message.contains("token"))
+            assertEquals(listOf(sourceUrl.toString()), openedUrls)
+        }
 
     @Test
     @DisplayName("POST 302 follows browser-compatible method semantics")
-    fun `post 302 becomes get without body`() = runTest {
-        val receivedMethod = AtomicReference<String>()
-        val receivedBody = AtomicReference<String>()
-        lateinit var baseUrl: String
-        baseUrl = startRecordingServer { exchange ->
-            if (exchange.requestURI.path == "/target") {
-                receivedMethod.set(exchange.requestMethod)
-                receivedBody.set(exchange.requestBody.bufferedReader().use { it.readText() })
-                Triple(200, "ok", null)
-            } else {
-                exchange.responseHeaders.add("Location", "$baseUrl/target")
-                Triple(302, "", null)
-            }
+    fun `post 302 becomes get without body`() =
+        runTest {
+            val receivedMethod = AtomicReference<String>()
+            val receivedBody = AtomicReference<String>()
+            lateinit var baseUrl: String
+            baseUrl =
+                startRecordingServer { exchange ->
+                    if (exchange.requestURI.path == "/target") {
+                        receivedMethod.set(exchange.requestMethod)
+                        receivedBody.set(exchange.requestBody.bufferedReader().use { it.readText() })
+                        Triple(200, "ok", null)
+                    } else {
+                        exchange.responseHeaders.add("Location", "$baseUrl/target")
+                        Triple(302, "", null)
+                    }
+                }
+
+            val result =
+                repo.probe(
+                    HttpProbeRequest(
+                        url = baseUrl,
+                        method = HttpMethod.POST,
+                        body = "payload",
+                        headers = listOf("Content-Type" to "text/plain"),
+                    ),
+                )
+
+            assertTrue(result is NetworkResult.Success)
+            assertEquals("GET", receivedMethod.get())
+            assertEquals("", receivedBody.get())
         }
-
-        val result = repo.probe(
-            HttpProbeRequest(
-                url = baseUrl,
-                method = HttpMethod.POST,
-                body = "payload",
-                headers = listOf("Content-Type" to "text/plain")
-            )
-        )
-
-        assertTrue(result is NetworkResult.Success)
-        assertEquals("GET", receivedMethod.get())
-        assertEquals("", receivedBody.get())
-    }
 
     @Test
     @DisplayName("307 preserves method and request body")
-    fun `307 preserves post body`() = runTest {
-        val receivedMethod = AtomicReference<String>()
-        val receivedBody = AtomicReference<String>()
-        lateinit var baseUrl: String
-        baseUrl = startRecordingServer { exchange ->
-            if (exchange.requestURI.path == "/target") {
-                receivedMethod.set(exchange.requestMethod)
-                receivedBody.set(exchange.requestBody.bufferedReader().use { it.readText() })
-                Triple(200, "ok", null)
-            } else {
-                // A 307 redirect must preserve the entity and method.
-                exchange.responseHeaders.add("Location", "$baseUrl/target")
-                Triple(307, "", null)
-            }
+    fun `307 preserves post body`() =
+        runTest {
+            val receivedMethod = AtomicReference<String>()
+            val receivedBody = AtomicReference<String>()
+            lateinit var baseUrl: String
+            baseUrl =
+                startRecordingServer { exchange ->
+                    if (exchange.requestURI.path == "/target") {
+                        receivedMethod.set(exchange.requestMethod)
+                        receivedBody.set(exchange.requestBody.bufferedReader().use { it.readText() })
+                        Triple(200, "ok", null)
+                    } else {
+                        // A 307 redirect must preserve the entity and method.
+                        exchange.responseHeaders.add("Location", "$baseUrl/target")
+                        Triple(307, "", null)
+                    }
+                }
+
+            val result = repo.probe(HttpProbeRequest(url = baseUrl, method = HttpMethod.POST, body = "payload"))
+
+            assertTrue(result is NetworkResult.Success)
+            assertEquals("POST", receivedMethod.get())
+            assertEquals("payload", receivedBody.get())
         }
-
-        val result = repo.probe(HttpProbeRequest(url = baseUrl, method = HttpMethod.POST, body = "payload"))
-
-        assertTrue(result is NetworkResult.Success)
-        assertEquals("POST", receivedMethod.get())
-        assertEquals("payload", receivedBody.get())
-    }
 
     @Test
     @DisplayName("response body uses declared charset and bounded memory")
-    fun `body is charset aware and bounded`() = runTest {
-        val fullBody = "café-éclair"
-        val url = startRecordingServer { Triple(200, fullBody, "text/plain; charset=ISO-8859-1") }
+    fun `body is charset aware and bounded`() =
+        runTest {
+            val fullBody = "café-éclair"
+            val url = startRecordingServer { Triple(200, fullBody, "text/plain; charset=ISO-8859-1") }
 
-        val result = repo.probe(HttpProbeRequest(url = url, maxResponseBodyBytes = 4L))
+            val result = repo.probe(HttpProbeRequest(url = url, maxResponseBodyBytes = 4L))
 
-        assertTrue(result is NetworkResult.Success)
-        assertEquals("café", (result as NetworkResult.Success).data.responseBody)
-        // responseBodyBytes reports what was buffered, never a probe byte past
-        // the cap; the full size comes from Content-Length instead.
-        assertEquals(4L, result.data.responseBodyBytes)
-        assertTrue(result.data.responseBodyTruncated)
-        assertEquals(fullBody.toByteArray(Charsets.ISO_8859_1).size.toLong(), result.data.declaredBodyBytes)
-    }
+            assertTrue(result is NetworkResult.Success)
+            assertEquals("café", (result as NetworkResult.Success).data.responseBody)
+            // responseBodyBytes reports what was buffered, never a probe byte past
+            // the cap; the full size comes from Content-Length instead.
+            assertEquals(4L, result.data.responseBodyBytes)
+            assertTrue(result.data.responseBodyTruncated)
+            assertEquals(fullBody.toByteArray(Charsets.ISO_8859_1).size.toLong(), result.data.declaredBodyBytes)
+        }
 
     @Test
     @DisplayName("an untruncated body reports its exact size and no declared/actual mismatch")
-    fun `untruncated body reports exact size`() = runTest {
-        val url = startRecordingServer { Triple(200, "hello", "text/plain") }
+    fun `untruncated body reports exact size`() =
+        runTest {
+            val url = startRecordingServer { Triple(200, "hello", "text/plain") }
 
-        val result = repo.probe(HttpProbeRequest(url = url))
+            val result = repo.probe(HttpProbeRequest(url = url))
 
-        assertTrue(result is NetworkResult.Success)
-        assertEquals(5L, (result as NetworkResult.Success).data.responseBodyBytes)
-        assertEquals(5L, result.data.declaredBodyBytes)
-        assertFalse(result.data.responseBodyTruncated)
-    }
+            assertTrue(result is NetworkResult.Success)
+            assertEquals(5L, (result as NetworkResult.Success).data.responseBodyBytes)
+            assertEquals(5L, result.data.declaredBodyBytes)
+            assertFalse(result.data.responseBodyTruncated)
+        }
 
     @Test
     @DisplayName("a zero-byte cap buffers nothing but still detects a non-empty body")
-    fun `zero cap buffers nothing and flags truncation`() = runTest {
-        val url = startRecordingServer { Triple(200, "hello", "text/plain") }
+    fun `zero cap buffers nothing and flags truncation`() =
+        runTest {
+            val url = startRecordingServer { Triple(200, "hello", "text/plain") }
 
-        val result = repo.probe(HttpProbeRequest(url = url, maxResponseBodyBytes = 0L))
+            val result = repo.probe(HttpProbeRequest(url = url, maxResponseBodyBytes = 0L))
 
-        assertTrue(result is NetworkResult.Success)
-        assertEquals(0L, (result as NetworkResult.Success).data.responseBodyBytes)
-        assertTrue(result.data.responseBodyTruncated)
-        assertEquals(5L, result.data.declaredBodyBytes)
-    }
+            assertTrue(result is NetworkResult.Success)
+            assertEquals(0L, (result as NetworkResult.Success).data.responseBodyBytes)
+            assertTrue(result.data.responseBodyTruncated)
+            assertEquals(5L, result.data.declaredBodyBytes)
+        }
 
     private class RecordingHttpConnection(
         url: URL,
         private val statusCode: Int,
-        private val location: String?
+        private val location: String?,
     ) : HttpURLConnection(url) {
         private val bodyOutput = ByteArrayOutputStream()
         val requestProperties = linkedMapOf<String, String>()
@@ -928,25 +1039,43 @@ class HttpProbeRepositoryRedirectTest {
             private set
 
         override fun connect() = Unit
+
         override fun disconnect() {
             disconnectCount++
             disconnected = true
         }
+
         override fun usingProxy(): Boolean = false
+
         override fun setRequestMethod(method: String) {
             requestedMethod = method
         }
+
         override fun getRequestMethod(): String? = requestedMethod
-        override fun setRequestProperty(key: String, value: String) {
+
+        override fun setRequestProperty(
+            key: String,
+            value: String,
+        ) {
             requestProperties[key] = value
         }
-        override fun getHeaderField(name: String): String? =
-            if (name.equals("Location", ignoreCase = true)) location else null
-        override fun getHeaderFields(): Map<String?, List<String>> =
-            location?.let { mapOf("Location" to listOf(it)) } ?: emptyMap()
+
+        override fun getHeaderField(name: String): String? {
+            val isLocation = name.equals("Location", ignoreCase = true)
+            return if (isLocation) location else null
+        }
+
+        override fun getHeaderFields(): Map<String?, List<String>> {
+            val locationValue = location ?: return emptyMap()
+            return mapOf("Location" to listOf(locationValue))
+        }
+
         override fun getResponseCode(): Int = statusCode
+
         override fun getResponseMessage(): String = if (statusCode >= 300) "Redirect" else "OK"
+
         override fun getInputStream(): InputStream = ByteArrayInputStream("ok".toByteArray())
+
         override fun getOutputStream(): OutputStream = bodyOutput
 
         fun requestBody(): String = bodyOutput.toString(Charsets.UTF_8)
@@ -955,83 +1084,101 @@ class HttpProbeRepositoryRedirectTest {
 
 @DisplayName("HttpProbeRepositoryImpl – operation resource ownership")
 class HttpProbeOperationTest {
-
     @Test
     @DisplayName("user stop disconnects a blocked body read and remains cancellation")
-    fun `user stop closes blocked response connection`() = runTest {
-        val readEntered = CompletableDeferred<Unit>()
-        val releaseRead = CountDownLatch(1)
-        val disconnectCount = AtomicInteger()
-        val url = URL("http://example.test/")
-        val connection = object : HttpURLConnection(url) {
-            override fun connect() = Unit
-            override fun disconnect() {
-                disconnectCount.incrementAndGet()
-                releaseRead.countDown()
-            }
-            override fun usingProxy() = false
-            override fun getResponseCode() = 200
-            override fun getResponseMessage() = "OK"
-            override fun getInputStream(): InputStream = object : InputStream() {
-                override fun read(): Int {
-                    readEntered.complete(Unit)
-                    releaseRead.await()
-                    return -1
+    fun `user stop closes blocked response connection`() =
+        runTest {
+            val readEntered = CompletableDeferred<Unit>()
+            val releaseRead = CountDownLatch(1)
+            val disconnectCount = AtomicInteger()
+            val url = URL("http://example.test/")
+            val connection =
+                object : HttpURLConnection(url) {
+                    override fun connect() = Unit
+
+                    override fun disconnect() {
+                        disconnectCount.incrementAndGet()
+                        releaseRead.countDown()
+                    }
+
+                    override fun usingProxy() = false
+
+                    override fun getResponseCode() = 200
+
+                    override fun getResponseMessage() = "OK"
+
+                    override fun getInputStream(): InputStream =
+                        object : InputStream() {
+                            override fun read(): Int {
+                                readEntered.complete(Unit)
+                                releaseRead.await()
+                                return -1
+                            }
+                        }
                 }
-            }
-        }
-        val repository = HttpProbeRepositoryImpl(ConnectionFakeEngine(HttpProbeConnectionFactory { connection }))
-        val session = HttpProbeOperation.newSession(timeoutMillis = 5_000)
-        val probe = async(Dispatchers.IO) {
-            repository.probe(HttpProbeRequest(url = url.toString()), session)
-        }
+            val repository = HttpProbeRepositoryImpl(ConnectionFakeEngine(HttpProbeConnectionFactory { connection }))
+            val session = HttpProbeOperation.newSession(timeoutMillis = 5_000)
+            val probe =
+                async(Dispatchers.IO) {
+                    repository.probe(HttpProbeRequest(url = url.toString()), session)
+                }
 
-        withContext(Dispatchers.Default) { withTimeout(5_000) { readEntered.await() } }
-        session.cancel(CancellationReason.USER_STOP)
-        val failure = withContext(Dispatchers.IO) {
-            withTimeout(5_000) { runCatching { probe.await() }.exceptionOrNull() }
-        }
+            withContext(Dispatchers.Default) { withTimeout(5_000) { readEntered.await() } }
+            session.cancel(CancellationReason.USER_STOP)
+            val failure =
+                withContext(Dispatchers.IO) {
+                    withTimeout(5_000) { runCatching { probe.await() }.exceptionOrNull() }
+                }
 
-        assertTrue(failure is OperationCancellationException)
-        assertEquals(CancellationReason.USER_STOP, (failure as OperationCancellationException).reason)
-        assertEquals(1, disconnectCount.get(), "the registered connection must close once")
-    }
+            assertTrue(failure is OperationCancellationException)
+            assertEquals(CancellationReason.USER_STOP, (failure as OperationCancellationException).reason)
+            assertEquals(1, disconnectCount.get(), "the registered connection must close once")
+        }
 
     @Test
     @DisplayName("deadline closes a blocked body read and cannot return late success")
-    fun `deadline maps to timeout after closing blocked response connection`() = runTest {
-        val readEntered = CompletableDeferred<Unit>()
-        val releaseRead = CountDownLatch(1)
-        val disconnectCount = AtomicInteger()
-        val url = URL("http://example.test/")
-        val connection = object : HttpURLConnection(url) {
-            override fun connect() = Unit
-            override fun disconnect() {
-                disconnectCount.incrementAndGet()
-                releaseRead.countDown()
-            }
-            override fun usingProxy() = false
-            override fun getResponseCode() = 200
-            override fun getResponseMessage() = "OK"
-            override fun getInputStream(): InputStream = object : InputStream() {
-                override fun read(): Int {
-                    readEntered.complete(Unit)
-                    releaseRead.await()
-                    return -1
+    fun `deadline maps to timeout after closing blocked response connection`() =
+        runTest {
+            val readEntered = CompletableDeferred<Unit>()
+            val releaseRead = CountDownLatch(1)
+            val disconnectCount = AtomicInteger()
+            val url = URL("http://example.test/")
+            val connection =
+                object : HttpURLConnection(url) {
+                    override fun connect() = Unit
+
+                    override fun disconnect() {
+                        disconnectCount.incrementAndGet()
+                        releaseRead.countDown()
+                    }
+
+                    override fun usingProxy() = false
+
+                    override fun getResponseCode() = 200
+
+                    override fun getResponseMessage() = "OK"
+
+                    override fun getInputStream(): InputStream =
+                        object : InputStream() {
+                            override fun read(): Int {
+                                readEntered.complete(Unit)
+                                releaseRead.await()
+                                return -1
+                            }
+                        }
                 }
-            }
-        }
-        val repository = HttpProbeRepositoryImpl(ConnectionFakeEngine(HttpProbeConnectionFactory { connection }))
-        val session = HttpProbeOperation.newSession(timeoutMillis = 500)
-        val probe = async(Dispatchers.IO) {
-            repository.probe(HttpProbeRequest(url = url.toString()), session)
-        }
+            val repository = HttpProbeRepositoryImpl(ConnectionFakeEngine(HttpProbeConnectionFactory { connection }))
+            val session = HttpProbeOperation.newSession(timeoutMillis = 500)
+            val probe =
+                async(Dispatchers.IO) {
+                    repository.probe(HttpProbeRequest(url = url.toString()), session)
+                }
 
-        withContext(Dispatchers.Default) { withTimeout(5_000) { readEntered.await() } }
-        val result = withContext(Dispatchers.IO) { withTimeout(5_000) { probe.await() } }
+            withContext(Dispatchers.Default) { withTimeout(5_000) { readEntered.await() } }
+            val result = withContext(Dispatchers.IO) { withTimeout(5_000) { probe.await() } }
 
-        assertTrue(result is NetworkResult.Error)
-        assertEquals("HTTP request timed out", (result as NetworkResult.Error).message)
-        assertEquals(1, disconnectCount.get(), "the registered connection must close once")
-    }
+            assertTrue(result is NetworkResult.Error)
+            assertEquals("HTTP request timed out", (result as NetworkResult.Error).message)
+            assertEquals(1, disconnectCount.get(), "the registered connection must close once")
+        }
 }

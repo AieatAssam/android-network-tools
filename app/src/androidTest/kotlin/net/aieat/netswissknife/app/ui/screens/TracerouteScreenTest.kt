@@ -1,6 +1,5 @@
 package net.aieat.netswissknife.app.ui.screens
 
-import android.Manifest
 import android.os.Build
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsDisplayed
@@ -21,6 +20,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.platform.LocalNetworkPermissionPolicy
 import net.aieat.netswissknife.app.platform.NetworkStatus
 import net.aieat.netswissknife.app.ui.screens.traceroute.TracerouteUiState
 import net.aieat.netswissknife.app.ui.screens.traceroute.TracerouteViewModel
@@ -39,18 +39,16 @@ import org.junit.runner.RunWith
  * Covers Traceroute's help sheet, host validation, incremental hop accumulation
  * during a run, probe-type/MTU interactions, and the Finished-state result view.
  *
- * [TracerouteScreen] requests `NEARBY_WIFI_DEVICES` on entry on API 36+ (Local
- * Network Protections, see `LocalNetworkPermission.kt`) — pre-granting it avoids
- * a system permission dialog interrupting the test.
+ * Pre-grant the OS-version-specific local-network permission so any test that
+ * starts a local target avoids a system permission dialog.
  */
 @RunWith(AndroidJUnit4::class)
 class TracerouteScreenTest {
     @get:Rule
-    val permissionRule: GrantPermissionRule = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
-        GrantPermissionRule.grant(Manifest.permission.NEARBY_WIFI_DEVICES)
-    } else {
-        GrantPermissionRule.grant()
-    }
+    val permissionRule: GrantPermissionRule = LocalNetworkPermissionPolicy
+        .permissionToRequest(Build.VERSION.SDK_INT)
+        ?.let { permission -> GrantPermissionRule.grant(permission) }
+        ?: GrantPermissionRule.grant()
 
     @get:Rule
     val composeRule = createComposeRule()

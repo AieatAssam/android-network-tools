@@ -41,6 +41,34 @@ jobs:
           python3 -B -m unittest discover -s tools/quality -p 'test_*.py' -v
           python3 -B tools/quality/check_resource_sites.py
 
+      # These checks are initially non-blocking. Review their reports, generate
+      # and review baselines, then remove continue-on-error after the two-week window.
+      - name: Run ktlint
+        continue-on-error: true
+        run: ./gradlew ktlintCheck --continue --no-daemon --no-parallel
+
+      - name: Upload ktlint reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ktlint-reports
+          path: '**/build/reports/ktlint/**'
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Run detekt
+        continue-on-error: true
+        run: ./gradlew detekt --continue --no-daemon --no-parallel
+
+      - name: Upload detekt reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: detekt-reports
+          path: '**/build/reports/detekt/**'
+          if-no-files-found: warn
+          retention-days: 7
+
       - name: Run Android Lint
         run: ./gradlew :app:lintDebug --no-daemon --no-parallel
 

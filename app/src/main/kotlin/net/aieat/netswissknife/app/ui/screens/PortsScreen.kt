@@ -155,8 +155,7 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
             viewModel.onLifecyclePause()
         }
     }
-    val requestLocalNetworkPermission = rememberLocalNetworkPermissionRequester()
-    LaunchedEffect(Unit) { requestLocalNetworkPermission() }
+    val requestLocalNetworkPermission = rememberLocalNetworkPermissionRequester(viewModel::startScan)
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val host by viewModel.host.collectAsStateWithLifecycle()
@@ -243,7 +242,7 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
                     onAggressiveProbesChange = viewModel::onAggressiveProbesChange,
                     onStartScan = {
                         keyboardController?.hide()
-                        viewModel.startScan()
+                        requestLocalNetworkPermission(host)
                     },
                     onStopScan = viewModel::onStopScan,
                     onRemoveRecentHost = viewModel::removeRecentHost,
@@ -268,7 +267,7 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
                             message = if (state.isBudgetLimit) {
                                 stringResource(R.string.ports_scan_budget_exceeded)
                             } else state.message,
-                            onRetry = viewModel::startScan,
+                            onRetry = { requestLocalNetworkPermission(host) },
                             onClear = viewModel::onClear
                         )
                         is PortScanUiState.Finished -> { /* results shown below */ }

@@ -1,8 +1,25 @@
 plugins {
     alias(libs.plugins.kotlin.jvm)
+    alias(libs.plugins.ktlint)
+    alias(libs.plugins.detekt)
 }
 
 apply(plugin = "org.jetbrains.kotlinx.kover")
+
+configure<org.jlleitschuh.gradle.ktlint.KtlintExtension> {
+    version.set(libs.versions.ktlint.get())
+    android.set(true)
+    baseline.set(rootProject.file("config/ktlint/core-network-baseline.xml"))
+}
+
+detekt {
+    toolVersion = libs.versions.detekt.get()
+    config.setFrom(rootProject.file("config/detekt/detekt.yml"))
+    buildUponDefaultConfig = true
+    baseline = rootProject.file("config/detekt/core-network-baseline.xml")
+    parallel = false
+    basePath.set(projectDir)
+}
 
 java {
     sourceCompatibility = JavaVersion.VERSION_21
