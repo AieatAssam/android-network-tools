@@ -147,7 +147,7 @@ tasks:
     current_progress:
       date: "2026-09-25"
       implemented: "The E03-T01 traceroute slice emits raw hops immediately, performs reverse-DNS and GeoIP enrichment asynchronously under the caller session with bounded concurrency and lookup timeouts, and merges enrichment by hop number without changing row order. Per-probe RTTs retain nullable ordered slots, show localized success/no-reply markers with accessible numbered descriptions, and display success-only min/average/max. A deadline during enrichment preserves the raw partial hop. GeoIP now uses strict numeric IPv4/IPv6 parsing and filters non-global ranges before transport, including mapped IPv4 and NAT64 embedded destinations; public IPv4 and IPv6 literals pass through. Stopped partial results retain measured elapsed time through cleanup."
-      fixed_in: "pending commit hash"
+      fixed_in: "715ab6566b63c1bb5ca16c8906ef220af763b8e4"
       validation: "Serialized focused gates passed: core GeoIpRepositoryImplTest and ReservedRangesTest 23/23; app TracerouteViewModelTest 23/23, all zero failures/errors. Independent QA and adversarial reviews cleared address parsing/classification, mapped/NAT64 behavior, no-DNS fail-closed handling, and canceled-result timing. The supplied release QA brief was re-audited against this diff; no listed source regression surfaced. No emulator, live network trace, host snmpd, or physical Wi-Fi device was used."
       remaining: "P11-T2 remains in_progress: provider fallback and breaker, bounded/evicting cache policy, country flags, and the manual 1.1.1.1 three-probe validation remain open. Public IPv6 lookup eligibility and reserved-range classification are implemented; provider-backed live IPv6 enrichment remains unverified."
     tdd:
