@@ -5,6 +5,7 @@ import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import net.aieat.netswissknife.core.network.NetworkResult
+import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.tls.TlsInspectorRepository
 import net.aieat.netswissknife.core.network.tls.TlsInspectorResult
 import net.aieat.netswissknife.core.network.tls.TlsInspectorOperation
@@ -65,6 +66,7 @@ class TlsInspectorUseCaseTest {
         fun `blank host returns Error without calling repository`() = runTest {
             val result = useCase(TlsInspectorParams(host = "  "))
             assertTrue(result is NetworkResult.Error)
+            assertEquals(ErrorCode.HOST_BLANK, (result as NetworkResult.Error).info?.code)
             coVerify(exactly = 0) { repository.inspect(any(), any(), any()) }
         }
 
@@ -115,6 +117,7 @@ class TlsInspectorUseCaseTest {
             val error = result as NetworkResult.Error
             assertEquals("TLS_PIN_INVALID", error.code)
             assertEquals("tls_pin_invalid", error.descriptionKey)
+            assertEquals(ErrorCode.TLS_PIN_INVALID, error.info?.code)
             coVerify(exactly = 0) { repository.inspect(any(), any(), any(), any<TlsInspectorOptions>()) }
         }
 

@@ -1,5 +1,6 @@
 package net.aieat.netswissknife.core.network.subnet
 
+import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.NetworkResult
 
 class SubnetCalculatorRepositoryImpl : SubnetCalculatorRepository {
@@ -46,9 +47,9 @@ class SubnetCalculatorRepositoryImpl : SubnetCalculatorRepository {
             )
         )
     } catch (e: IllegalArgumentException) {
-        NetworkResult.Error(e.message ?: "Invalid input")
+        NetworkResult.error(ErrorCode.SUBNET_INVALID, developerMessage = e.message ?: "Invalid input", cause = e)
     } catch (e: Exception) {
-        NetworkResult.Error("Invalid input: ${e.message}")
+        NetworkResult.error(ErrorCode.SUBNET_INVALID, developerMessage = "Invalid input: ${e.message}")
     }
 
     override fun calculateRange(minIp: String, maxIp: String): NetworkResult<SubnetInfo> = try {
@@ -64,9 +65,9 @@ class SubnetCalculatorRepositoryImpl : SubnetCalculatorRepository {
         val networkIp = longToIp(minLong and prefixToMask(prefix))
         calculate("$networkIp/$prefix")
     } catch (e: IllegalArgumentException) {
-        NetworkResult.Error(e.message ?: "Invalid IP range")
+        NetworkResult.error(ErrorCode.SUBNET_INVALID, developerMessage = e.message ?: "Invalid IP range", cause = e)
     } catch (e: Exception) {
-        NetworkResult.Error("Invalid IP range: ${e.message}")
+        NetworkResult.error(ErrorCode.SUBNET_INVALID, developerMessage = "Invalid IP range: ${e.message}")
     }
 
     // ── Parsing ────────────────────────────────────────────────────────────────

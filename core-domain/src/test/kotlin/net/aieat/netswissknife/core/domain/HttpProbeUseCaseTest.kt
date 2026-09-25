@@ -5,6 +5,7 @@ import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import net.aieat.netswissknife.core.network.NetworkResult
+import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.httprobe.HttpMethod
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeRepository
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeRequest
@@ -46,7 +47,9 @@ class HttpProbeUseCaseTest {
     fun `invoke returns Error for blank URL`() = runTest {
         val result = useCase(HttpProbeParams(url = "  "))
         assertTrue(result is NetworkResult.Error)
-        assertTrue((result as NetworkResult.Error).message.contains("blank", ignoreCase = true))
+        val error = result as NetworkResult.Error
+        assertTrue(error.message.contains("blank", ignoreCase = true))
+        assertEquals(ErrorCode.URL_BLANK, error.info?.code)
     }
 
     @Test

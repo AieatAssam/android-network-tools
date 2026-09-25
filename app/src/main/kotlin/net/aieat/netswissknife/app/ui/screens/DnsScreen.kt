@@ -783,9 +783,9 @@ private fun DnsCanceledPanel(onClear: () -> Unit, modifier: Modifier = Modifier)
 private fun DnsErrorPanel(
     message: String,
     onRetry: () -> Unit,
+    modifier: Modifier = Modifier,
     canFallbackToCloudflare: Boolean = false,
     onUseCloudflare: () -> Unit = {},
-    modifier: Modifier = Modifier
 ) {
     ToolErrorCard(
         modifier = modifier,

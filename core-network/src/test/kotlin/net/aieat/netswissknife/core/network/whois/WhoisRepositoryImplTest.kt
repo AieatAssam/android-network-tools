@@ -8,6 +8,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.withContext
+import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.operation.OperationBudget
 import net.aieat.netswissknife.core.network.operation.OperationDeadlineExceededException
@@ -46,6 +47,10 @@ class WhoisRepositoryImplTest {
     fun `lookup returns Error for timeout below 500 ms`() = runTest {
         val result = repo.lookup("example.com", 499)
         assertTrue(result is NetworkResult.Error)
+        val error = result as NetworkResult.Error
+        assertEquals(ErrorCode.TIMEOUT_OUT_OF_RANGE, error.info?.code)
+        assertEquals(listOf(500, 30_000), error.info?.args)
+        assertTrue(error.message.contains("500") && error.message.contains("30 000"))
     }
 
     @Test

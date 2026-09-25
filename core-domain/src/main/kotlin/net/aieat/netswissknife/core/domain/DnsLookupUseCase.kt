@@ -2,6 +2,7 @@ package net.aieat.netswissknife.core.domain
 
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.HostValidator
+import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.dns.DnsRepository
 import net.aieat.netswissknife.core.network.dns.DnsResult
 import net.aieat.netswissknife.core.network.dns.DnsServer
@@ -37,17 +38,17 @@ class DnsLookupUseCase(
         val trimmedDomain = params.domain.trim()
 
         if (trimmedDomain.isBlank()) {
-            return NetworkResult.Error("Domain name must not be empty")
+            return NetworkResult.error(ErrorCode.QUERY_BLANK, "Domain name must not be empty")
         }
         if (trimmedDomain.length > 253) {
-            return NetworkResult.Error("Domain name is too long (max 253 characters)")
+            return NetworkResult.error(ErrorCode.DOMAIN_TOO_LONG, "Domain name is too long (max 253 characters)", args = listOf(253))
         }
 
         val server = when (val requestedServer = params.server) {
             is DnsServer.Custom -> {
                 val address = requestedServer.address.trim()
                 if (!HostValidator.isValidIpv4(address) && !HostValidator.isValidIpv6(address)) {
-                    return NetworkResult.Error("Custom DNS server must be an IPv4 or IPv6 address")
+                    return NetworkResult.error(ErrorCode.CUSTOM_DNS_INVALID, "Custom DNS server must be an IPv4 or IPv6 address")
                 }
                 DnsServer.Custom(address)
             }

@@ -5,6 +5,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.withContext
 import net.aieat.netswissknife.core.network.MonotonicClock
+import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.SystemMonotonicClock
 import net.aieat.netswissknife.core.network.elapsedMillisSince
@@ -56,27 +57,35 @@ class HttpProbeRepositoryImpl internal constructor(
         callerSession: OperationSession?,
     ): NetworkResult<HttpProbeResult> {
         val trimmedUrl = request.url.trim()
-        if (trimmedUrl.isBlank()) return NetworkResult.Error("URL must not be blank")
+        if (trimmedUrl.isBlank()) return NetworkResult.error(ErrorCode.URL_BLANK, developerMessage = "URL must not be blank")
         if (request.timeoutMs !in 500..60_000) {
-            return NetworkResult.Error("Timeout must be between 500 ms and 60 000 ms")
+            return NetworkResult.error(
+                ErrorCode.TIMEOUT_OUT_OF_RANGE,
+                developerMessage = "Timeout must be between 500 ms and 60 000 ms",
+                args = listOf(500, 60_000),
+            )
         }
         if (request.maxResponseBodyBytes !in 0..MAX_RESPONSE_BODY_BYTES) {
-            return NetworkResult.Error("Maximum response body size must be between 0 and $MAX_RESPONSE_BODY_BYTES bytes")
+            return NetworkResult.error(
+                ErrorCode.RESPONSE_SIZE_OUT_OF_RANGE,
+                developerMessage = "Maximum response body size must be between 0 and $MAX_RESPONSE_BODY_BYTES bytes",
+                args = listOf(0, MAX_RESPONSE_BODY_BYTES),
+            )
         }
 
         val parsedUrl =
             try {
                 URI(trimmedUrl).toURL().also { url ->
                     if (url.protocol !in listOf("http", "https")) {
-                        return NetworkResult.Error("Only HTTP and HTTPS URLs are supported")
+                        return NetworkResult.error(ErrorCode.URL_SCHEME_UNSUPPORTED, developerMessage = "Only HTTP and HTTPS URLs are supported")
                     }
                 }
             } catch (_: MalformedURLException) {
-                return NetworkResult.Error("Malformed URL")
+                return NetworkResult.error(ErrorCode.URL_INVALID, developerMessage = "Malformed URL")
             } catch (_: URISyntaxException) {
-                return NetworkResult.Error("Malformed URL")
+                return NetworkResult.error(ErrorCode.URL_INVALID, developerMessage = "Malformed URL")
             } catch (_: IllegalArgumentException) {
-                return NetworkResult.Error("Malformed URL")
+                return NetworkResult.error(ErrorCode.URL_INVALID, developerMessage = "Malformed URL")
             }
 
         return withContext(Dispatchers.IO) {
@@ -85,27 +94,43 @@ class HttpProbeRepositoryImpl internal constructor(
                 OperationRunner.run(session) { executeRequest(parsedUrl, request) }
             } catch (e: CancellationException) {
                 if (e is OperationCancellationException && e.reason == CancellationReason.DEADLINE_EXCEEDED) {
-                    return@withContext NetworkResult.Error("HTTP request timed out", e)
+                    return@withContext NetworkResult.error(
+                        ErrorCode.NETWORK_TIMEOUT,
+                        developerMessage = "HTTP request timed out",
+                        cause = e,
+                    )
                 }
                 throw e
             } catch (e: OperationDeadlineExceededException) {
-                return@withContext NetworkResult.Error("HTTP request timed out", e)
+                return@withContext NetworkResult.error(
+                    ErrorCode.NETWORK_TIMEOUT,
+                    developerMessage = "HTTP request timed out",
+                    cause = e,
+                )
             } catch (e: IOException) {
                 session.cancellationReason?.let { reason ->
                     if (reason == CancellationReason.DEADLINE_EXCEEDED) {
-                        return@withContext NetworkResult.Error("HTTP request timed out", e)
+                        return@withContext NetworkResult.error(
+                            ErrorCode.NETWORK_TIMEOUT,
+                            developerMessage = "HTTP request timed out",
+                            cause = e,
+                        )
                     }
                     throw OperationCancellationException(reason, e)
                 }
-                NetworkResult.Error("Network request failed", e)
+                NetworkResult.error(ErrorCode.NETWORK_REQUEST_FAILED, developerMessage = "Network request failed", cause = e)
             } catch (e: Exception) {
                 session.cancellationReason?.let { reason ->
                     if (reason == CancellationReason.DEADLINE_EXCEEDED) {
-                        return@withContext NetworkResult.Error("HTTP request timed out", e)
+                        return@withContext NetworkResult.error(
+                            ErrorCode.NETWORK_TIMEOUT,
+                            developerMessage = "HTTP request timed out",
+                            cause = e,
+                        )
                     }
                     throw OperationCancellationException(reason, e)
                 }
-                NetworkResult.Error("HTTP request failed", e)
+                NetworkResult.error(ErrorCode.NETWORK_REQUEST_FAILED, developerMessage = "HTTP request failed", cause = e)
             }
         }
     }
@@ -172,19 +197,18 @@ class HttpProbeRepositoryImpl internal constructor(
                     }
                 when (redirect) {
                     RedirectPolicy.Decision.NotRedirect -> {
-                        Unit
                     }
 
                     RedirectPolicy.Decision.MalformedLocation -> {
-                        return NetworkResult.Error("Malformed redirect URL")
+                        return NetworkResult.error(ErrorCode.HTTP_REDIRECT_INVALID, developerMessage = "Malformed redirect URL")
                     }
 
                     RedirectPolicy.Decision.UnsupportedProtocol -> {
-                        return NetworkResult.Error("Redirected to unsupported protocol")
+                        return NetworkResult.error(ErrorCode.URL_SCHEME_UNSUPPORTED, developerMessage = "Redirected to unsupported protocol")
                     }
 
                     RedirectPolicy.Decision.TooManyRedirects -> {
-                        return NetworkResult.Error("Too many redirects (max ${RedirectPolicy.MAX_REDIRECTS})")
+                        return NetworkResult.error(ErrorCode.HTTP_REDIRECT_LIMIT, developerMessage = "Too many redirects (max ${RedirectPolicy.MAX_REDIRECTS})")
                     }
 
                     is RedirectPolicy.Decision.BlockedDowngrade -> {
@@ -196,10 +220,11 @@ class HttpProbeRepositoryImpl internal constructor(
                                 statusCode = response.statusCode,
                                 location = location.orEmpty(),
                             )
-                        return NetworkResult.Error(
-                            "Refusing insecure HTTPS-to-HTTP redirect",
-                            blockedRedirect,
-                            code = HttpProbeBlockedRedirectException.CODE,
+                        return NetworkResult.error(
+                            ErrorCode.HTTPS_DOWNGRADE_BLOCKED,
+                            developerMessage = "Refusing insecure HTTPS-to-HTTP redirect",
+                            cause = blockedRedirect,
+                            legacyCode = HttpProbeBlockedRedirectException.CODE,
                         )
                     }
 
@@ -209,12 +234,12 @@ class HttpProbeRepositoryImpl internal constructor(
                             lease.close()
                             val approval =
                                 request.approveCrossOriginEntityReplay
-                                    ?: return NetworkResult.Error("Cross-origin redirect requires approval before entity replay")
+                                    ?: return NetworkResult.error(ErrorCode.HTTP_REDIRECT_APPROVAL_REQUIRED, developerMessage = "Cross-origin redirect requires approval before entity replay")
                             val approved =
                                 approval(
                                     CrossOriginEntityReplay(redirect.destination.toString(), redirect.method, response.statusCode),
                                 )
-                            if (!approved) return NetworkResult.Error("Cross-origin redirect entity replay was not approved")
+                            if (!approved) return NetworkResult.error(ErrorCode.HTTP_REDIRECT_APPROVAL_REQUIRED, developerMessage = "Cross-origin redirect entity replay was not approved")
                         }
                         currentMethod = redirect.method
                         currentBody = redirect.body
@@ -269,7 +294,7 @@ class HttpProbeRepositoryImpl internal constructor(
                 if (resources == null || resources.release(lease)) lease.close()
             }
         }
-        return NetworkResult.Error("Too many redirects (max ${RedirectPolicy.MAX_REDIRECTS})")
+        return NetworkResult.error(ErrorCode.HTTP_REDIRECT_LIMIT, developerMessage = "Too many redirects (max ${RedirectPolicy.MAX_REDIRECTS})")
     }
 
     private fun readResponseBody(

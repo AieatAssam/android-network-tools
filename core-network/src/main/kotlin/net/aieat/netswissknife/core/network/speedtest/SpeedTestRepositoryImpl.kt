@@ -19,6 +19,8 @@ import java.security.SecureRandom
 import java.io.Closeable
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
+import net.aieat.netswissknife.core.network.ErrorCode
+import net.aieat.netswissknife.core.network.ErrorInfo
 import net.aieat.netswissknife.core.network.MonotonicClock
 import net.aieat.netswissknife.core.network.SystemMonotonicClock
 import net.aieat.netswissknife.core.network.operation.OperationBudget
@@ -259,7 +261,7 @@ class SpeedTestRepositoryImpl(
                         throw e
                     } catch (e: Exception) {
                         ensureCurrentOperationActive()
-                        send(SpeedTestEvent.Failed(SpeedTestPhase.LATENCY, e.message ?: "Latency probe failed"))
+                        send(SpeedTestEvent.Failed(SpeedTestPhase.LATENCY, ErrorInfo(ErrorCode.NETWORK_REQUEST_FAILED, developerMessage = e.message ?: "Latency probe failed")))
                         return@run
                     }
                     ensureCurrentOperationActive()
@@ -281,7 +283,7 @@ class SpeedTestRepositoryImpl(
                     throw e
                 } catch (e: Exception) {
                     ensureCurrentOperationActive()
-                    send(SpeedTestEvent.Failed(SpeedTestPhase.DOWNLOAD, e.message ?: "Download test failed"))
+                    send(SpeedTestEvent.Failed(SpeedTestPhase.DOWNLOAD, ErrorInfo(ErrorCode.NETWORK_REQUEST_FAILED, developerMessage = e.message ?: "Download test failed")))
                     return@run
                 }
                 ensureCurrentOperationActive()
@@ -297,7 +299,7 @@ class SpeedTestRepositoryImpl(
                     throw e
                 } catch (e: Exception) {
                     ensureCurrentOperationActive()
-                    send(SpeedTestEvent.Failed(SpeedTestPhase.UPLOAD, e.message ?: "Upload test failed"))
+                    send(SpeedTestEvent.Failed(SpeedTestPhase.UPLOAD, ErrorInfo(ErrorCode.NETWORK_REQUEST_FAILED, developerMessage = e.message ?: "Upload test failed")))
                     return@run
                 }
                 ensureCurrentOperationActive()
@@ -305,13 +307,13 @@ class SpeedTestRepositoryImpl(
             }
         } catch (cancelled: CancellationException) {
             if (operationSession.cancellationReason == CancellationReason.DEADLINE_EXCEEDED) {
-                send(SpeedTestEvent.Failed(currentPhase, "Speed test timed out"))
+                send(SpeedTestEvent.Failed(currentPhase, ErrorInfo(ErrorCode.NETWORK_TIMEOUT, developerMessage = "Speed test timed out")))
             } else {
                 throw cancelled
             }
         } catch (deadline: OperationDeadlineExceededException) {
             if (operationSession.cancellationReason == CancellationReason.DEADLINE_EXCEEDED) {
-                send(SpeedTestEvent.Failed(currentPhase, "Speed test timed out"))
+                send(SpeedTestEvent.Failed(currentPhase, ErrorInfo(ErrorCode.NETWORK_TIMEOUT, developerMessage = "Speed test timed out")))
             } else {
                 throw deadline
             }
@@ -381,14 +383,14 @@ class SpeedTestRepositoryImpl(
             }
         } catch (cancelled: CancellationException) {
             if (operationSession.cancellationReason == CancellationReason.DEADLINE_EXCEEDED) {
-                send(SpeedTestEvent.Failed(currentPhase, "Speed test timed out"))
+                send(SpeedTestEvent.Failed(currentPhase, ErrorInfo(ErrorCode.NETWORK_TIMEOUT, developerMessage = "Speed test timed out")))
             } else throw cancelled
         } catch (failure: Exception) {
             if (operationSession.cancellationReason == CancellationReason.DEADLINE_EXCEEDED) {
-                send(SpeedTestEvent.Failed(currentPhase, "Speed test timed out"))
+                send(SpeedTestEvent.Failed(currentPhase, ErrorInfo(ErrorCode.NETWORK_TIMEOUT, developerMessage = "Speed test timed out")))
             } else {
                 ensureCurrentOperationActive()
-                send(SpeedTestEvent.Failed(currentPhase, failure.message ?: "Speed test failed"))
+                send(SpeedTestEvent.Failed(currentPhase, ErrorInfo(ErrorCode.NETWORK_REQUEST_FAILED, developerMessage = failure.message ?: "Speed test failed")))
             }
         }
     }

@@ -1,6 +1,7 @@
 package net.aieat.netswissknife.core.domain
 
 import net.aieat.netswissknife.core.network.HostValidator
+import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.ping.PingRepository
 import net.aieat.netswissknife.core.network.ping.PingRequest
 import net.aieat.netswissknife.core.network.ping.PingEngineKind
@@ -23,17 +24,22 @@ class PingUseCase(
     private fun execute(params: PingParams, session: OperationSession?): Flow<PingFlowResult> {
         val trimmedHost = HostValidator.normalize(params.host) ?: params.host.trim()
 
-        val errorMessage: String? = validatePingCommon(
+        val errorInfo = validatePingCommon(
             trimmedHost,
             params.timeoutMs,
             params.intervalMs,
             params.payloadBytes,
             params.ttl
         )
-            ?: if (params.count !in 1..100) "Count must be between 1 and 100" else null
+            ?: if (params.count !in 1..100) validationError(
+                ErrorCode.COUNT_OUT_OF_RANGE,
+                "Count must be between 1 and 100",
+                1,
+                100,
+            ) else null
 
-        if (errorMessage != null) {
-            return flow { emit(PingFlowResult.ValidationError(errorMessage)) }
+        if (errorInfo != null) {
+            return flow { emit(PingFlowResult.ValidationError(errorInfo)) }
         }
 
         val defaultOptions = params.intervalMs == 1_000 && params.payloadBytes == 56 && params.ttl == 64

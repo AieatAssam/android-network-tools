@@ -1,5 +1,6 @@
 package net.aieat.netswissknife.app.ui.screens.httprobe
 
+import android.annotation.SuppressLint
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
@@ -83,6 +84,8 @@ class HttpProbeViewModel @Inject constructor(
     private val useCase: HttpProbeUseCase,
     private val recentHostsRepository: RecentHostsRepository,
     private val networkStatusProvider: NetworkStatusProvider = NoOpNetworkStatusProvider,
+    // Hilt supplies the owner-backed handle at runtime; this empty default supports direct unit tests.
+    @param:SuppressLint("VisibleForTests")
     private val savedStateHandle: SavedStateHandle = SavedStateHandle(),
 ) : ViewModel() {
 

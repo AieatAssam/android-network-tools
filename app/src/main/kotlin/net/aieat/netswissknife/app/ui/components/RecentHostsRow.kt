@@ -33,9 +33,9 @@ fun RecentHostsRow(
     onHostSelected: (String) -> Unit,
     onRemoveHost: (String) -> Unit,
     onClearAll: () -> Unit,
+    modifier: Modifier = Modifier,
     selectionEnabled: Boolean = true,
     actionsEnabled: Boolean = true,
-    modifier: Modifier = Modifier
 ) {
     AnimatedVisibility(
         visible = recentHosts.isNotEmpty(),

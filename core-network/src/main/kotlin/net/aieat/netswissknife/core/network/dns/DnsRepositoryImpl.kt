@@ -4,6 +4,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import net.aieat.netswissknife.core.network.HostValidator
+import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.elapsedMillisSince
 import net.aieat.netswissknife.core.network.MonotonicClock
@@ -180,8 +181,9 @@ class DnsRepositoryImpl(
             is DnsServer.Custom -> {
                 val address = server.address.trim()
                 if (!HostValidator.isValidIpv4(address) && !HostValidator.isValidIpv6(address)) {
-                    return@withContext NetworkResult.Error(
-                        "Invalid custom DNS server: expected an IPv4 or IPv6 address"
+                    return@withContext NetworkResult.error(
+                        ErrorCode.DNS_INVALID_NAME,
+                        developerMessage = "Invalid custom DNS server: expected an IPv4 or IPv6 address",
                     )
                 }
                 DnsServer.Custom(address)
@@ -190,15 +192,20 @@ class DnsRepositoryImpl(
         }
 
         if (normalizedServer is DnsServer.System && normalizedServer.serverAddresses.isEmpty()) {
-            return@withContext NetworkResult.Error(
-                "No system DNS server reported by Android (Private DNS or no network). Choose a resolver."
+            return@withContext NetworkResult.error(
+                ErrorCode.DNS_NO_SYSTEM_RESOLVER,
+                developerMessage = "No system DNS server reported by Android (Private DNS or no network). Choose a resolver.",
             )
         }
 
         val normalizedDomain = try {
             normalizeDomain(domain, recordType)
         } catch (e: IllegalArgumentException) {
-            return@withContext NetworkResult.Error("Invalid DNS domain name: ${e.message}", e)
+            return@withContext NetworkResult.error(
+                ErrorCode.DNS_INVALID_NAME,
+                developerMessage = "Invalid DNS domain name: ${e.message}",
+                cause = e,
+            )
         }
 
         try {
@@ -246,14 +253,19 @@ class DnsRepositoryImpl(
             }
         } catch (e: CancellationException) {
             if (e is OperationCancellationException && e.reason == CancellationReason.DEADLINE_EXCEEDED) {
-                return@withContext NetworkResult.Error("DNS lookup failed: Operation deadline exceeded", e)
+                return@withContext NetworkResult.error(
+                    ErrorCode.NETWORK_TIMEOUT,
+                    developerMessage = "DNS lookup failed: Operation deadline exceeded",
+                    cause = e,
+                )
             }
             throw e
         } catch (e: Exception) {
             when (operationSession.cancellationReason) {
-                CancellationReason.DEADLINE_EXCEEDED -> return@withContext NetworkResult.Error(
-                    "DNS lookup failed: Operation deadline exceeded",
-                    e,
+                CancellationReason.DEADLINE_EXCEEDED -> return@withContext NetworkResult.error(
+                    ErrorCode.NETWORK_TIMEOUT,
+                    developerMessage = "DNS lookup failed: Operation deadline exceeded",
+                    cause = e,
                 )
                 null -> Unit
                 else -> throw OperationCancellationException(
@@ -261,9 +273,10 @@ class DnsRepositoryImpl(
                     e,
                 )
             }
-            NetworkResult.Error(
-                message = "DNS lookup failed: ${e.message ?: e.javaClass.simpleName}",
-                cause = e
+            NetworkResult.error(
+                ErrorCode.DNS_LOOKUP_FAILED,
+                developerMessage = "DNS lookup failed: ${e.message ?: e.javaClass.simpleName}",
+                cause = e,
             )
         }
     }

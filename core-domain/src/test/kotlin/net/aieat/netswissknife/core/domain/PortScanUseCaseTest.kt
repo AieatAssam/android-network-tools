@@ -5,6 +5,7 @@ import net.aieat.netswissknife.core.network.portscan.PortConnectResult
 import net.aieat.netswissknife.core.network.portscan.PortScanRepository
 import net.aieat.netswissknife.core.network.portscan.PortScanRepositoryImpl
 import net.aieat.netswissknife.core.network.portscan.PortStatus
+import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.operation.OperationBudget
 import net.aieat.netswissknife.core.network.operation.OperationSession
 import io.mockk.every
@@ -232,6 +233,9 @@ class PortScanUseCaseTest {
                 PortScanParams(host = "8.8.8.8", preset = PortScanPreset.CUSTOM, startPort = 1, endPort = 10001)
             ).toList()
             assertTrue(results.first() is PortScanFlowResult.ValidationError)
+            val info = (results.first() as PortScanFlowResult.ValidationError).info
+            assertEquals(ErrorCode.PORT_RANGE_TOO_LARGE, info.code)
+            assertEquals(listOf(10_000, 10_001), info.args)
         }
 
         @Test

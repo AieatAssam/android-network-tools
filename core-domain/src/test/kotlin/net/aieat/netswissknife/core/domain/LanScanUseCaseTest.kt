@@ -3,6 +3,7 @@ package net.aieat.netswissknife.core.domain
 import net.aieat.netswissknife.core.network.lan.HostChecker
 import net.aieat.netswissknife.core.network.lan.LanScanRepositoryImpl
 import net.aieat.netswissknife.core.network.lan.PortChecker
+import net.aieat.netswissknife.core.network.ErrorCode
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -57,6 +58,7 @@ class LanScanUseCaseTest {
         fun `invalid CIDR emits ValidationError`() = runTest {
             val results = makeUseCase().invoke(LanScanParams(subnet = "not-a-cidr/24")).toList()
             assertTrue(results.first() is LanScanFlowResult.ValidationError)
+            assertEquals(ErrorCode.SUBNET_INVALID, (results.first() as LanScanFlowResult.ValidationError).info.code)
         }
 
         @Test

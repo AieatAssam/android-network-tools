@@ -5,6 +5,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.operation.CancellationReason
 import net.aieat.netswissknife.core.network.operation.OperationBudget
@@ -75,6 +76,7 @@ class WakeOnLanRepositoryImplTest {
     fun `returns Error for invalid MAC`() = runBlocking {
         val result = repository.sendMagicPacket("not-a-mac", "127.0.0.1", 9)
         assertTrue(result is NetworkResult.Error)
+        assertEquals(ErrorCode.MAC_INVALID, (result as NetworkResult.Error).info?.code)
     }
 
     @Test

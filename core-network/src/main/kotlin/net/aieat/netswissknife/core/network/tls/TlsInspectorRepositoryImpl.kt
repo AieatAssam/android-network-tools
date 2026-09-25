@@ -5,6 +5,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.MonotonicClock
+import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.SystemMonotonicClock
 import net.aieat.netswissknife.core.network.elapsedMillisSince
@@ -16,7 +17,7 @@ import net.aieat.netswissknife.core.network.operation.ensureCurrentOperationActi
 import java.security.KeyStore
 import java.security.cert.CertificateException
 import java.security.cert.X509Certificate
-import javax.net.ssl.SSLHandshakeException
+import javax.net.ssl.SSLException
 import javax.net.ssl.SSLContext
 import javax.net.ssl.SSLSocket
 import javax.net.ssl.TrustManagerFactory
@@ -66,15 +67,24 @@ class TlsInspectorRepositoryImpl : TlsInspectorRepository {
         operationSession: OperationSession,
         options: TlsInspectorOptions,
     ): NetworkResult<TlsInspectorResult> {
-        if (host.isBlank()) return NetworkResult.Error("Host must not be blank")
-        if (port !in 1..65_535) return NetworkResult.Error("Port must be between 1 and 65535")
+        if (host.isBlank()) return NetworkResult.error(ErrorCode.HOST_BLANK, developerMessage = "Host must not be blank")
+        if (port !in 1..65_535) return NetworkResult.error(
+            ErrorCode.PORT_OUT_OF_RANGE,
+            developerMessage = "Port must be between 1 and 65535",
+            args = listOf(1, 65_535),
+        )
         if (timeoutMs !in TlsInspectorOperation.MIN_TIMEOUT_MILLIS..TlsInspectorOperation.MAX_TIMEOUT_MILLIS) {
-            return NetworkResult.Error("Timeout must be between 500 ms and 30 000 ms")
+            return NetworkResult.error(
+                ErrorCode.TIMEOUT_OUT_OF_RANGE,
+                developerMessage = "Timeout must be between 500 ms and 30 000 ms",
+                args = listOf(500, 30_000),
+            )
         }
         if (options.expectedPinSha256 != null && !options.expectedPinSha256.matches(PIN_PATTERN)) {
-            return NetworkResult.Error(
-                "Invalid SHA-256 pin",
-                code = "TLS_PIN_INVALID",
+            return NetworkResult.error(
+                ErrorCode.TLS_PIN_INVALID,
+                developerMessage = "Invalid SHA-256 pin",
+                legacyCode = "TLS_PIN_INVALID",
                 descriptionKey = "tls_pin_invalid",
             )
         }
@@ -123,17 +133,25 @@ class TlsInspectorRepositoryImpl : TlsInspectorRepository {
                 if (cancelled is OperationCancellationException &&
                     cancelled.reason == CancellationReason.DEADLINE_EXCEEDED
                 ) {
-                    return@withContext NetworkResult.Error("TLS inspection timed out", cancelled)
+                    return@withContext NetworkResult.error(ErrorCode.TLS_INSPECTION_FAILED, developerMessage = "TLS inspection timed out", cancelled)
                 }
                 throw cancelled
             } catch (failure: Exception) {
                 when (operationSession.cancellationReason) {
                     null -> Unit
                     CancellationReason.DEADLINE_EXCEEDED ->
-                        return@withContext NetworkResult.Error("TLS inspection timed out", failure)
+                        return@withContext NetworkResult.error(
+                            ErrorCode.TLS_INSPECTION_FAILED,
+                            developerMessage = "TLS inspection timed out",
+                            cause = failure,
+                        )
                     else -> throw OperationCancellationException(operationSession.cancellationReason!!, failure)
                 }
-                NetworkResult.Error(failure.message ?: "TLS inspection failed", failure)
+                NetworkResult.error(
+                    ErrorCode.TLS_INSPECTION_FAILED,
+                    developerMessage = failure.message ?: "TLS inspection failed",
+                    cause = failure,
+                )
             }
         }
     }
@@ -146,7 +164,15 @@ class TlsInspectorRepositoryImpl : TlsInspectorRepository {
         operationSession: OperationSession,
         protocol: String?,
     ): TimedHandshake {
-        val connection = engine.openConnection(host, port, timeoutMs, protocol)
+        val connection = try {
+            engine.openConnection(host, port, timeoutMs, protocol)
+        } catch (failure: IllegalArgumentException) {
+            // A protocol-specific IllegalArgumentException here occurs while configuring the
+            // local socket, before any endpoint interaction. It means this provider cannot test
+            // that candidate; errors after the connection opens remain ambiguous.
+            if (protocol != null) throw ProtocolNotTestableException(protocol, failure)
+            throw failure
+        }
         operationSession.resources.register(connection)
         var failure: Throwable? = null
         try {
@@ -199,7 +225,7 @@ class TlsInspectorRepositoryImpl : TlsInspectorRepository {
         val localEnabled = engine.enabledProtocols()
         val results = linkedMapOf<String, Boolean>()
         val unknown = linkedSetOf<String>()
-        val notTestable = CANDIDATE_PROTOCOLS.filterNot(localEnabled::contains).toSet()
+        val notTestable = CANDIDATE_PROTOCOLS.filterNot(localEnabled::contains).toMutableSet()
         CANDIDATE_PROTOCOLS.filter(localEnabled::contains).forEach { protocol ->
             try {
                 val handshake = performHandshake(engine, host, port, timeoutMs, operationSession, protocol)
@@ -207,7 +233,9 @@ class TlsInspectorRepositoryImpl : TlsInspectorRepository {
                 else unknown += protocol
             } catch (cancelled: CancellationException) {
                 throw cancelled
-            } catch (failure: SSLHandshakeException) {
+            } catch (failure: ProtocolNotTestableException) {
+                notTestable += failure.protocol
+            } catch (failure: SSLException) {
                 if (isProtocolVersionRejection(failure)) results[protocol] = false
                 else unknown += protocol
             } catch (_: Exception) {
@@ -218,7 +246,7 @@ class TlsInspectorRepositoryImpl : TlsInspectorRepository {
         return ProtocolProbeResults(results, unknown, notTestable)
     }
 
-    private fun isProtocolVersionRejection(failure: SSLHandshakeException): Boolean {
+    private fun isProtocolVersionRejection(failure: SSLException): Boolean {
         var current: Throwable? = failure
         while (current != null) {
             val message = current.message.orEmpty()
@@ -252,6 +280,11 @@ class TlsInspectorRepositoryImpl : TlsInspectorRepository {
         val connectTimeMs: Long,
         val handshakeTimeMs: Long,
     )
+
+    private class ProtocolNotTestableException(
+        val protocol: String,
+        cause: IllegalArgumentException,
+    ) : Exception("Local TLS provider cannot configure $protocol", cause)
 
     private data class ProtocolProbeResults(
         val support: Map<String, Boolean>,

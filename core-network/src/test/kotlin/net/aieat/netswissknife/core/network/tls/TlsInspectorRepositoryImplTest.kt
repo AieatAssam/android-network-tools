@@ -11,6 +11,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.test.runTest
+import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.MonotonicClock
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.operation.CancellationReason
@@ -49,6 +50,7 @@ class TlsInspectorRepositoryImplTest {
         val result = repository.inspect("", 443, 5_000)
         assertTrue(result is NetworkResult.Error,
             "Expected Error for blank host but got $result")
+        assertEquals(ErrorCode.HOST_BLANK, (result as NetworkResult.Error).info?.code)
     }
 
     @Test
@@ -82,6 +84,8 @@ class TlsInspectorRepositoryImplTest {
         val result = repository.inspect("example.com", 443, 499)
         assertTrue(result is NetworkResult.Error,
             "Timeout < 500 ms should return Error")
+        assertEquals(ErrorCode.TIMEOUT_OUT_OF_RANGE, (result as NetworkResult.Error).info?.code)
+        assertEquals(listOf(500, 30_000), result.info?.args)
     }
 
     @Test
@@ -94,7 +98,9 @@ class TlsInspectorRepositoryImplTest {
     fun `inspect returns Error above maximum timeout`() = runTest {
         val result = repository.inspect("example.com", 443, 30_001)
         assertTrue(result is NetworkResult.Error)
-        assertEquals("Timeout must be between 500 ms and 30 000 ms", (result as NetworkResult.Error).message)
+        val error = result as NetworkResult.Error
+        assertEquals("Timeout must be between 500 ms and 30 000 ms", error.message)
+        assertEquals(listOf(500, 30_000), error.info?.args)
     }
 
     @Test

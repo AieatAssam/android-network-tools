@@ -4,6 +4,7 @@ import io.mockk.*
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
+import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.topology.*
 import net.aieat.netswissknife.core.network.operation.OperationBudget
 import net.aieat.netswissknife.core.network.operation.OperationRequirement
@@ -69,13 +70,18 @@ class TopologyDiscoveryUseCaseTest {
 
     @Test
     fun `invalid params emits Error without calling repository`() = runTest {
-        val invalidParams = validParams.copy(targetIp = "")
+        val invalidParams = validParams.copy(targetIp = "", communityString = "")
 
         val events = useCase.invoke(invalidParams).toList()
 
         verify(exactly = 0) { repository.discover(any()) }
         assertEquals(1, events.size)
-        assertTrue(events[0] is TopologyDiscoveryEvent.Error)
+        val error = events[0] as TopologyDiscoveryEvent.Error
+        assertEquals(listOf(ErrorCode.HOST_BLANK, ErrorCode.SNMP_COMMUNITY_BLANK), error.errors.map { it.code })
+        assertEquals(
+            "Target IP or hostname must not be blank; Community string must not be blank for SNMP v1/v2c",
+            error.message,
+        )
     }
 
     @Test

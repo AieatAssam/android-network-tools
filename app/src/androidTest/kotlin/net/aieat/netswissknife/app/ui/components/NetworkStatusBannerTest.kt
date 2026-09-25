@@ -9,6 +9,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.platform.NetworkStatus
+import net.aieat.netswissknife.app.platform.Transport
 import net.aieat.netswissknife.app.ui.theme.NetSwissKnifeTheme
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -33,12 +34,36 @@ class NetworkStatusBannerTest {
             }
         }
 
-        composeRule.onNodeWithText(context.getString(R.string.network_banner_no_internet)).assertIsDisplayed()
+        composeRule
+            .onNodeWithText(context.getString(R.string.network_banner_no_internet))
+            .assertIsDisplayed()
+        composeRule
+            .onNodeWithText(context.getString(R.string.network_banner_internet_unvalidated))
+            .assertDoesNotExist()
         composeRule.onNodeWithTag(PERMISSION_CARD_TEST_TAG).assertDoesNotExist()
     }
 
     @Test
-    fun localScope_showsNoLocalWarningBeforeVpnInformation() {
+    fun internetScope_showsAdvisoryForUnvalidatedInternet() {
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                NetworkStatusBanner(
+                    status = NetworkStatus(hasInternet = true, hasValidatedInternet = false),
+                    scope = NetworkStatusScope.INTERNET,
+                )
+            }
+        }
+
+        composeRule
+            .onNodeWithText(context.getString(R.string.network_banner_internet_unvalidated))
+            .assertIsDisplayed()
+        composeRule
+            .onNodeWithText(context.getString(R.string.network_banner_no_internet))
+            .assertDoesNotExist()
+    }
+
+    @Test
+    fun localScope_withVpnAndNoLocalNetworkShowsRouteCaveat() {
         composeRule.setContent {
             NetSwissKnifeTheme {
                 NetworkStatusBanner(
@@ -48,8 +73,25 @@ class NetworkStatusBannerTest {
             }
         }
 
-        composeRule.onNodeWithText(context.getString(R.string.network_banner_no_local)).assertIsDisplayed()
+        composeRule
+            .onNodeWithText(context.getString(R.string.network_banner_local_vpn_route_unknown))
+            .assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.network_banner_no_local)).assertDoesNotExist()
         composeRule.onNodeWithText(context.getString(R.string.network_banner_vpn_info)).assertDoesNotExist()
+    }
+
+    @Test
+    fun localScope_withoutLocalNetworkOrVpnShowsNoLocalWarning() {
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                NetworkStatusBanner(
+                    status = NetworkStatus(hasInternet = true),
+                    scope = NetworkStatusScope.LOCAL_NETWORK,
+                )
+            }
+        }
+
+        composeRule.onNodeWithText(context.getString(R.string.network_banner_no_local)).assertIsDisplayed()
     }
 
     @Test
@@ -67,11 +109,29 @@ class NetworkStatusBannerTest {
     }
 
     @Test
+    fun healthyLocalScopeWithoutVpn_hasNoBanner() {
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                NetworkStatusBanner(
+                    status = NetworkStatus(hasInternet = true, hasValidatedInternet = true, hasLocalNetwork = true),
+                    scope = NetworkStatusScope.LOCAL_NETWORK,
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag(STATUS_BANNER_TEST_TAG).assertDoesNotExist()
+    }
+
+    @Test
     fun healthyInternetScope_hasNoBanner() {
         composeRule.setContent {
             NetSwissKnifeTheme {
                 NetworkStatusBanner(
-                    status = NetworkStatus(hasInternet = true, hasLocalNetwork = true),
+                    status = NetworkStatus(
+                        hasInternet = true,
+                        hasValidatedInternet = true,
+                        hasLocalNetwork = true,
+                    ),
                     scope = NetworkStatusScope.INTERNET,
                 )
             }
@@ -93,6 +153,44 @@ class NetworkStatusBannerTest {
 
         composeRule.onNodeWithTag(STATUS_BANNER_TEST_TAG).assertDoesNotExist()
         composeRule.onNodeWithText(context.getString(R.string.network_banner_no_network)).assertDoesNotExist()
+    }
+
+    @Test
+    fun anyNetworkScope_unknownTransportShowsAdvisoryInsteadOfNoNetworkError() {
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                NetworkStatusBanner(
+                    status = NetworkStatus(transport = Transport.OTHER),
+                    scope = NetworkStatusScope.ANY_NETWORK,
+                )
+            }
+        }
+
+        composeRule
+            .onNodeWithText(context.getString(R.string.network_banner_route_unknown))
+            .assertIsDisplayed()
+        composeRule
+            .onNodeWithText(context.getString(R.string.network_banner_no_network))
+            .assertDoesNotExist()
+    }
+
+    @Test
+    fun anyNetworkScope_fullyEmptyStatusShowsDefinitiveOfflineMessage() {
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                NetworkStatusBanner(
+                    status = NetworkStatus(),
+                    scope = NetworkStatusScope.ANY_NETWORK,
+                )
+            }
+        }
+
+        composeRule
+            .onNodeWithText(context.getString(R.string.network_banner_no_network))
+            .assertIsDisplayed()
+        composeRule
+            .onNodeWithText(context.getString(R.string.network_banner_route_unknown))
+            .assertDoesNotExist()
     }
 
     @Test

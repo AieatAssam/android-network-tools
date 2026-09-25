@@ -50,8 +50,8 @@ fun ToolHeroHeader(
     title: String,
     subtitle: String,
     icon: ImageVector,
-    onHelpClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
+    onHelpClick: (() -> Unit)? = null,
     iconContent: @Composable (() -> Unit)? = null,
 ) {
     ElevatedCard(

@@ -516,6 +516,5 @@ class LanScanViewModel @Inject constructor(
     override fun onCleared() {
         pendingCancellation = null
         cancelScan(CancellationReason.LIFECYCLE_PAUSE)
-        super.onCleared()
     }
 }

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lint>
+    <!-- TLS inspection deliberately captures an untrusted peer chain for diagnostics. The
+         repository separately checks chain trust and hostname matching before reporting results;
+         it sends no application request data or credentials over this diagnostic handshake. -->
+    <issue id="TrustAllX509TrustManager">
+        <ignore path="**/core-network/**" />
+    </issue>
+</lint>

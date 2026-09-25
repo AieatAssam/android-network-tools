@@ -1,6 +1,7 @@
 package net.aieat.netswissknife.core.domain
 
 import net.aieat.netswissknife.core.network.NetworkResult
+import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.wol.WakeOnLanRepository
 import net.aieat.netswissknife.core.network.wol.WolMagicPacket
 import net.aieat.netswissknife.core.network.wol.WolSendReport
@@ -33,13 +34,15 @@ class WakeOnLanUseCase(private val repository: WakeOnLanRepository) {
         operationSession: OperationSession?,
     ): NetworkResult<WolSendReport> {
         val mac = params.macAddress.trim()
-        if (mac.isBlank()) return NetworkResult.Error("MAC address must not be blank")
-        if (!WolMagicPacket.isValidMac(mac)) return NetworkResult.Error("Invalid MAC address format")
+        if (mac.isBlank()) return NetworkResult.error(ErrorCode.MAC_BLANK, "MAC address must not be blank")
+        if (!WolMagicPacket.isValidMac(mac)) return NetworkResult.error(ErrorCode.MAC_INVALID, "Invalid MAC address format")
         val broadcast = params.broadcastAddress.trim()
-        if (broadcast.isBlank()) return NetworkResult.Error("Broadcast address must not be blank")
+        if (broadcast.isBlank()) return NetworkResult.error(ErrorCode.BROADCAST_BLANK, "Broadcast address must not be blank")
         if (params.port !in WakeOnLanParams.MIN_PORT..WakeOnLanParams.MAX_PORT) {
-            return NetworkResult.Error(
-                "Port must be between ${WakeOnLanParams.MIN_PORT} and ${WakeOnLanParams.MAX_PORT}"
+            return NetworkResult.error(
+                ErrorCode.PORT_OUT_OF_RANGE,
+                "Port must be between ${WakeOnLanParams.MIN_PORT} and ${WakeOnLanParams.MAX_PORT}",
+                args = listOf(params.port, WakeOnLanParams.MIN_PORT, WakeOnLanParams.MAX_PORT),
             )
         }
         return if (operationSession == null) {

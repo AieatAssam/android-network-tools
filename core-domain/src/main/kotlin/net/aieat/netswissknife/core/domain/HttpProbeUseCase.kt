@@ -2,6 +2,7 @@ package net.aieat.netswissknife.core.domain
 
 import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.NetworkResult
+import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.httprobe.HttpMethod
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeRepository
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeRequest
@@ -39,10 +40,10 @@ class HttpProbeUseCase(private val repository: HttpProbeRepository) {
     ): NetworkResult<HttpProbeResult> {
         val url = params.url.trim()
 
-        validateHttpProbeUrl(url)?.let { return NetworkResult.Error(it) }
+        validateHttpProbeUrlInfo(url)?.let { return NetworkResult.error(it.code, it.developerCopy(), args = it.args) }
 
         if (params.timeoutMs !in 500..60_000)
-            return NetworkResult.Error("Timeout must be between 500 ms and 60 000 ms")
+            return NetworkResult.error(ErrorCode.TIMEOUT_OUT_OF_RANGE, "Timeout must be between 500 ms and 60 000 ms", args = listOf(500, 60_000))
 
         val effectiveBody = if (params.method.supportsBody) params.body else null
 
@@ -65,32 +66,37 @@ class HttpProbeUseCase(private val repository: HttpProbeRepository) {
  * It deliberately does not resolve DNS or open a socket.
  */
 fun validateHttpProbeUrl(rawUrl: String): String? {
+    return validateHttpProbeUrlInfo(rawUrl)?.developerCopy()
+}
+
+/** Typed URL validation used by the use case and localization layer. */
+fun validateHttpProbeUrlInfo(rawUrl: String): net.aieat.netswissknife.core.network.ErrorInfo? {
     val url = rawUrl.trim()
-    if (url.isBlank()) return "URL must not be blank"
+    if (url.isBlank()) return validationError(ErrorCode.URL_BLANK, "URL must not be blank")
 
     val uri = try {
         URI(url)
     } catch (e: URISyntaxException) {
-        return "Malformed URL: ${e.message}"
+        return validationError(ErrorCode.URL_MALFORMED, "Malformed URL: ${e.message}")
     } catch (e: IllegalArgumentException) {
-        return "Malformed URL: ${e.message}"
+        return validationError(ErrorCode.URL_MALFORMED, "Malformed URL: ${e.message}")
     }
 
     val parsedUrl = try {
         uri.toURL()
     } catch (e: Exception) {
-        return "Malformed URL: ${e.message ?: "invalid syntax"}"
+        return validationError(ErrorCode.URL_MALFORMED, "Malformed URL: ${e.message ?: "invalid syntax"}")
     }
 
     if (parsedUrl.protocol.lowercase(Locale.ROOT) !in setOf("http", "https")) {
-        return "Only HTTP and HTTPS URLs are supported"
+        return validationError(ErrorCode.URL_SCHEME_UNSUPPORTED, "Only HTTP and HTTPS URLs are supported")
     }
 
     val host = uri.host ?: parsedUrl.host.takeIf { it.isNotBlank() }
-        ?: return "URL must include a valid host"
-    if (host.endsWith('.')) return "URL host is incomplete"
-    if (!HostValidator.isValidHostname(host)) return "URL must include a valid host"
-    if (uri.port != -1 && uri.port !in 1..65_535) return "URL port must be between 1 and 65535"
+        ?: return validationError(ErrorCode.URL_INVALID, "URL must include a valid host")
+    if (host.endsWith('.')) return validationError(ErrorCode.URL_INVALID, "URL host is incomplete")
+    if (!HostValidator.isValidHostname(host)) return validationError(ErrorCode.URL_INVALID, "URL must include a valid host")
+    if (uri.port != -1 && uri.port !in 1..65_535) return validationError(ErrorCode.PORT_OUT_OF_RANGE, "URL port must be between 1 and 65535", uri.port, 1, 65_535)
 
     return null
 }

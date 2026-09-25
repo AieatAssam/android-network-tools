@@ -160,7 +160,8 @@ object WifiScreenTestTags {
 fun requiredWifiPermissions(sdkInt: Int): List<String> = buildList {
     add(Manifest.permission.ACCESS_FINE_LOCATION)
     if (sdkInt >= Build.VERSION_CODES.TIRAMISU) {
-        add(Manifest.permission.NEARBY_WIFI_DEVICES)
+        // Kept as a string so API 26-32 never resolve an API 33 permission field.
+        add("android.permission.NEARBY_WIFI_DEVICES")
     }
 }
 

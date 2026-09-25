@@ -1,5 +1,6 @@
 package net.aieat.netswissknife.app.ui.screens.wol
 
+import android.annotation.SuppressLint
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -41,6 +42,8 @@ sealed interface WolUiState {
 class WakeOnLanViewModel @Inject constructor(
     private val wakeOnLan: WakeOnLanUseCase,
     networkStatusProvider: NetworkStatusProvider = NoOpNetworkStatusProvider,
+    // Hilt supplies the owner-backed handle at runtime; this empty default supports direct unit tests.
+    @param:SuppressLint("VisibleForTests")
     private val savedStateHandle: SavedStateHandle = SavedStateHandle(),
 ) : ViewModel() {
 

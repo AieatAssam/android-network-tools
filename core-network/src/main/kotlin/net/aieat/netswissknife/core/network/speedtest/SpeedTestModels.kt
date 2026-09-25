@@ -1,5 +1,8 @@
 package net.aieat.netswissknife.core.network.speedtest
 
+import net.aieat.netswissknife.core.network.ErrorCode
+import net.aieat.netswissknife.core.network.ErrorInfo
+
 /** Phases of a full speed test run, in execution order. */
 enum class SpeedTestPhase {
     LATENCY, DOWNLOAD, UPLOAD
@@ -126,5 +129,13 @@ sealed interface SpeedTestEvent {
     data class DownloadFinished(val result: ThroughputResult) : SpeedTestEvent
     data class UploadProgress(val sample: ThroughputSample) : SpeedTestEvent
     data class UploadFinished(val result: ThroughputResult) : SpeedTestEvent
-    data class Failed(val phase: SpeedTestPhase, val message: String) : SpeedTestEvent
+    data class Failed(val phase: SpeedTestPhase, val info: ErrorInfo) : SpeedTestEvent {
+        constructor(phase: SpeedTestPhase, message: String) : this(
+            phase,
+            ErrorInfo(ErrorCode.UNKNOWN, developerMessage = message),
+        )
+
+        /** Source-compatible convenience for callers that construct or read the former string form. */
+        val message: String get() = info.developerMessage ?: info.code.name.lowercase().replace('_', ' ')
+    }
 }

@@ -133,6 +133,7 @@ import net.aieat.netswissknife.core.network.portscan.PortStatus
 import net.aieat.netswissknife.core.network.portscan.TlsSubjectSanitizer
 
 object PortsScreenTestTags {
+    const val HOST_FIELD = "ports_host_field"
     const val PRESET_FIELD = "ports_preset_field"
     const val SCAN_BUTTON = "ports_scan_button"
     const val CONCURRENCY_SLIDER = "ports_concurrency_slider"
@@ -479,7 +480,9 @@ private fun PortScanInputCard(
                 supportingText = if (isHostInvalid) {
                     { Text(stringResource(R.string.error_invalid_host)) }
                 } else null,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(PortsScreenTestTags.HOST_FIELD)
             )
 
             RecentHostsRow(

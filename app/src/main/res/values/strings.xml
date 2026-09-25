@@ -48,7 +48,6 @@
     <string name="dns_server_custom">Custom server…</string>
     <string name="dns_custom_server_placeholder">e.g. 192.168.1.1</string>
     <string name="dns_lookup_button">Look up</string>
-    <string name="dns_looking_up">Looking up…</string>
     <string name="clear">Clear</string>
     <string name="error_no_details">No additional details were provided.</string>
     <string name="action_back">Back</string>
@@ -950,7 +949,6 @@
     <string name="mdns_ping_address">Ping %1$s</string>
 
     <!-- Onboarding -->
-    <string name="onboarding_subtitle">Your all-in-one Android networking toolkit</string>
     <string name="onboarding_get_started">Get Started</string>
     <string name="onboarding_dont_show_again">Skip</string>
     <string name="onboarding_next">Next</string>
@@ -1316,7 +1314,6 @@
     <string name="speedtest_mbps_suffix">Mbps</string>
     <string name="speedtest_ms_suffix">ms</string>
 
-    <string name="speedtest_latency_header">Latency</string>
     <string name="speedtest_latency_min">Min</string>
     <string name="speedtest_latency_avg">Avg</string>
     <string name="speedtest_latency_max">Max</string>
@@ -1380,9 +1377,12 @@
 
     <!-- Network state and local-network permission -->
     <string name="network_banner_no_internet">No internet connection. This tool may not reach public hosts.</string>
+    <string name="network_banner_internet_unvalidated">Internet access is unverified. This tool may not reach public hosts.</string>
     <string name="network_banner_no_network">No network connection. Connect to Wi-Fi, Ethernet, or the internet to run this tool.</string>
+    <string name="network_banner_route_unknown">Network type is unknown. This tool may still be able to connect.</string>
     <string name="network_banner_no_local">No Wi-Fi or Ethernet network. LAN tools need a local network.</string>
-    <string name="network_banner_vpn_info">VPN active. LAN traffic is sent directly over Wi-Fi or Ethernet.</string>
+    <string name="network_banner_local_vpn_route_unknown">No Wi-Fi or Ethernet network is detected. VPN reachability varies by destination.</string>
+    <string name="network_banner_vpn_info">VPN active. Routing can differ by destination.</string>
     <string name="network_error_local_permission">Local network permission was denied. Grant access, then retry.</string>
     <string name="network_action_grant_permission">Grant</string>
 

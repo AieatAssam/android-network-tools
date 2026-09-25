@@ -3,13 +3,19 @@ package net.aieat.netswissknife.app.ui
 import android.Manifest
 import android.os.Build
 import android.view.KeyEvent
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -26,8 +32,13 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.receiveAsFlow
+import net.aieat.netswissknife.app.data.RecentHostsRepository
 import net.aieat.netswissknife.app.platform.NetworkStatus
+import net.aieat.netswissknife.app.ui.screens.PortsScreen
+import net.aieat.netswissknife.app.ui.screens.PortsScreenTestTags
+import net.aieat.netswissknife.app.ui.screens.portscan.PortScanViewModel
 import net.aieat.netswissknife.app.ui.navigation.AppNavHostContentOverrides
 import net.aieat.netswissknife.app.ui.navigation.AppNavHostWithContentOverrides
 import net.aieat.netswissknife.app.ui.navigation.HostTool
@@ -47,6 +58,7 @@ import net.aieat.netswissknife.app.ui.screens.lan.LanScanViewModel
 import net.aieat.netswissknife.app.ui.screens.lan.LanScreen as RealLanScreen
 import net.aieat.netswissknife.core.network.lan.LanHost
 import net.aieat.netswissknife.core.network.lan.LanScanSummary
+import net.aieat.netswissknife.core.domain.PortScanUseCase
 import org.junit.Rule
 import org.junit.Assert.assertThrows
 import org.junit.Test
@@ -125,7 +137,7 @@ class ToolHandoffNavigationTest {
     }
 
     @Test
-    fun productionNavHost_realLanPortsActionRoutesTypedIntentAndBackKeepsPreloadedResultWithoutAutoStart() {
+    fun productionNavHost_realLanPortsActionPrefillsRealPortsViewModelAndBackKeepsResultWithoutAutoScan() {
         val lanEvents = Channel<LanNavEvent>(Channel.BUFFERED)
         val lanViewModel = mockk<LanScanViewModel>(relaxed = true)
         val summary = LanScanSummary(
@@ -145,6 +157,10 @@ class ToolHandoffNavigationTest {
             ),
         )
         val uiState = MutableStateFlow<LanScanUiState>(LanScanUiState.Finished(summary))
+        val portsDataStore = mockk<DataStore<Preferences>> {
+            every { data } returns flowOf(emptyPreferences())
+        }
+        val portsUseCase = mockk<PortScanUseCase>(relaxed = true)
         every { lanViewModel.navigationEvents } returns lanEvents.receiveAsFlow()
         every { lanViewModel.uiState } returns uiState
         every { lanViewModel.networkStatus } returns MutableStateFlow(NetworkStatus(hasLocalNetwork = true))
@@ -176,15 +192,15 @@ class ToolHandoffNavigationTest {
                             )
                         },
                         ports = { entry ->
-                            val routeHost = entry.arguments?.getString("host")
-                            val decoded = entry.arguments?.getString("intent")?.let(ToolIntentCodec::decode)
-                            val target = decoded?.destination as? ToolDestination.HostTarget
-                            Column {
-                                Text("Ports route host: $routeHost")
-                                Text("Ports intent host: ${target?.host?.value}")
-                                Text("Ports intent tool: ${target?.tool?.name}")
-                                Text("Ports intent source: ${decoded?.source}")
+                            val portsViewModel = remember(entry) {
+                                PortScanViewModel(
+                                    portScanUseCase = portsUseCase,
+                                    dataStore = portsDataStore,
+                                    recentHostsRepository = RecentHostsRepository(portsDataStore),
+                                    savedStateHandle = entry.savedStateHandle,
+                                )
                             }
+                            PortsScreen(viewModel = portsViewModel)
                         },
                     ),
                 )
@@ -198,10 +214,9 @@ class ToolHandoffNavigationTest {
         composeRule.onNodeWithText("192.0.2.8", substring = false).performScrollTo().performClick()
         composeRule.onNodeWithText("Scan ports").performScrollTo().performClick()
         composeRule.mainClock.advanceTimeBy(2_000L)
-        composeRule.onNodeWithText("Ports route host: 192.0.2.8").assertIsDisplayed()
-        composeRule.onNodeWithText("Ports intent host: 192.0.2.8").assertIsDisplayed()
-        composeRule.onNodeWithText("Ports intent tool: PORTS").assertIsDisplayed()
-        composeRule.onNodeWithText("Ports intent source: LAN").assertIsDisplayed()
+        composeRule.onNodeWithTag(PortsScreenTestTags.HOST_FIELD).assertTextContains("192.0.2.8")
+        composeRule.onNodeWithTag(PortsScreenTestTags.SOURCE_CONTEXT).assertIsDisplayed()
+        verify(exactly = 0) { portsUseCase.newSession(any()) }
 
         InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
         composeRule.mainClock.advanceTimeBy(2_000L)

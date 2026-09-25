@@ -9,6 +9,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import net.aieat.netswissknife.core.network.NetworkResult
+import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.httprobe.engine.HttpEngine
 import net.aieat.netswissknife.core.network.httprobe.engine.HttpEngineCall
 import net.aieat.netswissknife.core.network.httprobe.engine.HttpEngineRequest
@@ -57,6 +58,7 @@ class HttpProbeRepositoryValidationTest {
         runTest {
             val result = repo.probe(HttpProbeRequest(url = "ftp://example.com"))
             assertTrue(result is NetworkResult.Error)
+            assertEquals(ErrorCode.URL_SCHEME_UNSUPPORTED, (result as NetworkResult.Error).info?.code)
         }
 
     @Test
@@ -73,6 +75,7 @@ class HttpProbeRepositoryValidationTest {
         runTest {
             val result = repo.probe(HttpProbeRequest(url = "https://example.com", timeoutMs = 499))
             assertTrue(result is NetworkResult.Error)
+            assertEquals(listOf(500, 60_000), (result as NetworkResult.Error).info?.args)
         }
 
     @Test
@@ -81,6 +84,7 @@ class HttpProbeRepositoryValidationTest {
         runTest {
             val result = repo.probe(HttpProbeRequest(url = "https://example.com", timeoutMs = 60_001))
             assertTrue(result is NetworkResult.Error)
+            assertEquals(listOf(500, 60_000), (result as NetworkResult.Error).info?.args)
         }
 }
 

@@ -1076,8 +1076,8 @@ private fun JourneyStatBox(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     label: String,
     value: String,
+    modifier: Modifier = Modifier,
     subValue: String? = null,
-    modifier: Modifier = Modifier
 ) {
     OutlinedCard(modifier = modifier) {
         Column(

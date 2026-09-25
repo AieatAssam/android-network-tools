@@ -1,0 +1,88 @@
+package net.aieat.netswissknife.core.network
+
+/** Stable, locale-independent identifiers for failures produced by :core-network. */
+enum class ErrorCode {
+    UNKNOWN,
+    HOST_BLANK,
+    HOST_INVALID,
+    COUNT_OUT_OF_RANGE,
+    CONCURRENCY_OUT_OF_RANGE,
+    QUERY_BLANK,
+    DOMAIN_TOO_LONG,
+    CUSTOM_DNS_BLANK,
+    CUSTOM_DNS_INVALID,
+    URL_BLANK,
+    URL_INVALID,
+    URL_MALFORMED,
+    URL_SCHEME_UNSUPPORTED,
+    HTTPS_DOWNGRADE_BLOCKED,
+    TIMEOUT_OUT_OF_RANGE,
+    RESPONSE_SIZE_OUT_OF_RANGE,
+    PORT_OUT_OF_RANGE,
+    PORT_RANGE_INVERTED,
+    PORT_RANGE_TOO_LARGE,
+    PORT_SELECTION_EMPTY,
+    MAX_HOPS_OUT_OF_RANGE,
+    PROBES_OUT_OF_RANGE,
+    PACKET_SIZE_OUT_OF_RANGE,
+    PAYLOAD_OUT_OF_RANGE,
+    TTL_OUT_OF_RANGE,
+    INTERVAL_OUT_OF_RANGE,
+    RETRIES_OUT_OF_RANGE,
+    OPERATION_DEADLINE_EXCEEDED,
+    SNMP_COMMUNITY_BLANK,
+    SNMP_V3_USER_BLANK,
+    SNMP_V3_PRIV_WITHOUT_AUTH,
+    SNMP_V3_AUTH_PASSWORD_BLANK,
+    SNMP_V3_PRIV_PASSWORD_BLANK,
+    MAC_BLANK,
+    BROADCAST_BLANK,
+    DNS_NO_SYSTEM_RESOLVER,
+    DNS_INVALID_NAME,
+    DNS_LOOKUP_FAILED,
+    DNS_NO_RESULT,
+    NETWORK_TIMEOUT,
+    NETWORK_REQUEST_FAILED,
+    WHOIS_INVALID_QUERY,
+    WHOIS_IANA_FAILED,
+    WHOIS_RESPONSE_TOO_LARGE,
+    WHOIS_REFERRAL_REFUSED,
+    WHOIS_UNAVAILABLE,
+    WHOIS_NO_RESULT,
+    WHOIS_LOOKUP_FAILED,
+    HTTP_REDIRECT_INVALID,
+    HTTP_REDIRECT_MALFORMED,
+    HTTP_REDIRECT_UNSUPPORTED,
+    HTTP_REDIRECT_UNSUPPORTED_SCHEME,
+    HTTP_INSECURE_DOWNGRADE,
+    HTTP_REDIRECT_LIMIT,
+    HTTP_REDIRECT_APPROVAL_REQUIRED,
+    HTTP_REDIRECT_REPLAY_REJECTED,
+    HTTP_TOO_MANY_REDIRECTS,
+    HTTP_NETWORK_ERROR,
+    TLS_INSPECTION_FAILED,
+    TLS_HANDSHAKE_FAILED,
+    TLS_PIN_INVALID,
+    MAC_INVALID,
+    LOCAL_NETWORK_PERMISSION_DENIED,
+    WOL_SEND_FAILED,
+    SUBNET_BLANK,
+    SUBNET_INVALID,
+    SUBNET_RANGE_INVALID,
+    NO_RESPONSE,
+    NETWORK_IO,
+}
+
+/** Typed failure information safe to map to localized resources in higher layers. */
+data class ErrorInfo(
+    val code: ErrorCode,
+    val args: List<Any?> = emptyList(),
+    /** Existing diagnostic text, when a repository already has useful developer copy. */
+    val developerMessage: String? = null,
+) {
+    internal fun defaultDeveloperMessage(): String = developerMessage ?: when (code) {
+        ErrorCode.TIMEOUT_OUT_OF_RANGE ->
+            "Timeout must be between ${args.getOrNull(0) ?: "?"} ms and ${args.getOrNull(1) ?: "?"} ms"
+        else -> code.name.lowercase().replace('_', ' ')
+    }
+}

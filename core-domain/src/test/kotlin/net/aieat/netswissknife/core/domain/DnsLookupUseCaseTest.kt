@@ -1,6 +1,7 @@
 package net.aieat.netswissknife.core.domain
 
 import net.aieat.netswissknife.core.network.NetworkResult
+import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.dns.DnsRecord
 import net.aieat.netswissknife.core.network.dns.DnsRecordType
 import net.aieat.netswissknife.core.network.dns.DnsRepository
@@ -62,6 +63,7 @@ class DnsLookupUseCaseTest {
         fun `blank domain error message is descriptive`() = runTest {
             val result = useCase(DnsLookupParams(domain = "")) as NetworkResult.Error
             assertTrue(result.message.isNotBlank())
+            assertEquals(ErrorCode.QUERY_BLANK, result.info?.code)
         }
 
         @Test

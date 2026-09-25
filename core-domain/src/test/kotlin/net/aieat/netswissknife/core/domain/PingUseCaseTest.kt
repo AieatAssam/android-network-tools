@@ -5,6 +5,7 @@ import net.aieat.netswissknife.core.network.ping.PingRepository
 import net.aieat.netswissknife.core.network.ping.PingStatus
 import net.aieat.netswissknife.core.network.ping.PingRequest
 import net.aieat.netswissknife.core.network.ping.PingOperation
+import net.aieat.netswissknife.core.network.ErrorCode
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -47,6 +48,7 @@ class PingUseCaseTest {
         fun `blank host emits error and does not call repository`() = runTest {
             val results = useCase(PingParams(host = "  ")).toList()
             assertTrue(results.first().isError)
+            assertEquals(ErrorCode.HOST_BLANK, (results.first() as PingFlowResult.ValidationError).info.code)
             verify(exactly = 0) { repository.ping(any(), any(), any()) }
         }
 
@@ -66,6 +68,9 @@ class PingUseCaseTest {
         fun `count zero emits error`() = runTest {
             val results = useCase(PingParams(host = "8.8.8.8", count = 0)).toList()
             assertTrue(results.first().isError)
+            val info = (results.first() as PingFlowResult.ValidationError).info
+            assertEquals(ErrorCode.COUNT_OUT_OF_RANGE, info.code)
+            assertEquals(listOf(1, 100), info.args)
         }
 
         @Test

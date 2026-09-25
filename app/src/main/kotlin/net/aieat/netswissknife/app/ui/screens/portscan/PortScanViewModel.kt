@@ -1,5 +1,6 @@
 package net.aieat.netswissknife.app.ui.screens.portscan
 
+import android.annotation.SuppressLint
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.lifecycle.ViewModel
@@ -70,6 +71,8 @@ class PortScanViewModel @Inject constructor(
     private val portScanUseCase: PortScanUseCase,
     private val dataStore: DataStore<Preferences>,
     private val recentHostsRepository: RecentHostsRepository,
+    // Hilt supplies the owner-backed handle at runtime; this empty default supports direct unit tests.
+    @param:SuppressLint("VisibleForTests")
     private val savedStateHandle: SavedStateHandle = SavedStateHandle(),
     private val monotonicClock: MonotonicClock = SystemMonotonicClock,
     private val linkInfoProvider: LinkInfoProvider = LinkInfoProvider({ true }, { true }),
@@ -450,6 +453,5 @@ class PortScanViewModel @Inject constructor(
 
     override fun onCleared() {
         cancelScan(CancellationReason.LIFECYCLE_PAUSE)
-        super.onCleared()
     }
 }

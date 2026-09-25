@@ -17,6 +17,7 @@ import net.aieat.netswissknife.core.network.operation.OperationBudget
 import net.aieat.netswissknife.core.network.operation.OperationRunner
 import net.aieat.netswissknife.core.network.operation.OperationSession
 import net.aieat.netswissknife.core.network.operation.ensureCurrentOperationActive
+import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.NetworkResult
 import java.io.IOException
 import java.net.Socket
@@ -40,8 +41,12 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
         timeoutMs: Int,
         protocol: WhoisProtocol,
     ): NetworkResult<WhoisResult> {
-        if (query.isBlank()) return NetworkResult.Error("Query must not be blank")
-        if (timeoutMs !in 500..30_000) return NetworkResult.Error("Timeout must be between 500 ms and 30 000 ms")
+        if (query.isBlank()) return NetworkResult.error(ErrorCode.QUERY_BLANK, developerMessage = "Query must not be blank")
+        if (timeoutMs !in 500..30_000) return NetworkResult.error(
+            ErrorCode.TIMEOUT_OUT_OF_RANGE,
+            developerMessage = "Timeout must be between 500 ms and 30 000 ms",
+            args = listOf(500, 30_000),
+        )
         return lookup(query, timeoutMs, WhoisOperation.newSession(timeoutMs, clock), protocol)
     }
 
@@ -57,12 +62,23 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
         operationSession: OperationSession,
         protocol: WhoisProtocol,
     ): NetworkResult<WhoisResult> {
-        if (timeoutMs < 500) return NetworkResult.Error("Timeout must be between 500 ms and 30 000 ms")
-        if (timeoutMs > 30_000) return NetworkResult.Error("Timeout must be between 500 ms and 30 000 ms")
+        if (timeoutMs < 500) return NetworkResult.error(
+            ErrorCode.TIMEOUT_OUT_OF_RANGE,
+            developerMessage = "Timeout must be between 500 ms and 30 000 ms",
+            args = listOf(500, 30_000),
+        )
+        if (timeoutMs > 30_000) return NetworkResult.error(
+            ErrorCode.TIMEOUT_OUT_OF_RANGE,
+            developerMessage = "Timeout must be between 500 ms and 30 000 ms",
+            args = listOf(500, 30_000),
+        )
         val normalizedQuery = WhoisQueryTypeDetector.normalize(query)
-            ?: return NetworkResult.Error("Enter a valid domain, IP address, or ASN without spaces")
+            ?: return NetworkResult.error(
+                ErrorCode.WHOIS_INVALID_QUERY,
+                developerMessage = "Enter a valid domain, IP address, or ASN without spaces",
+            )
         if (protocol == WhoisProtocol.RDAP && rdapClient == null) {
-            return NetworkResult.Error("RDAP is unavailable")
+            return NetworkResult.error(ErrorCode.WHOIS_UNAVAILABLE, developerMessage = "RDAP is unavailable")
         }
 
         val session = operationSession
@@ -91,7 +107,10 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
                         if (rdapResult != null) return@withContext rdapResult
                     }
                     if (protocol == WhoisProtocol.RDAP) {
-                        return@withContext NetworkResult.Error("RDAP lookup returned no result")
+                        return@withContext NetworkResult.error(
+                            ErrorCode.WHOIS_NO_RESULT,
+                            developerMessage = "RDAP lookup returned no result",
+                        )
                     }
                     when (normalizedQuery.type) {
                         WhoisQueryType.DOMAIN -> performDomainLookup(
@@ -116,10 +135,18 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
                 }
             }
         } catch (e: OperationDeadlineExceededException) {
-            NetworkResult.Error("WHOIS lookup exceeded its total deadline", e)
+            NetworkResult.error(
+                ErrorCode.WHOIS_LOOKUP_FAILED,
+                developerMessage = "WHOIS lookup exceeded its total deadline",
+                cause = e,
+            )
         } catch (e: OperationCancellationException) {
             if (e.reason == CancellationReason.DEADLINE_EXCEEDED) {
-                NetworkResult.Error("WHOIS lookup exceeded its total deadline", e)
+                NetworkResult.error(
+                    ErrorCode.WHOIS_LOOKUP_FAILED,
+                    developerMessage = "WHOIS lookup exceeded its total deadline",
+                    cause = e,
+                )
             } else if (e.reason == CancellationReason.PARENT_CANCELLED && e.cause is CancellationException) {
                 // OperationRunner records cancellation from a blocking adapter as a
                 // parent reason; retain the adapter's original cancellation contract.
@@ -131,7 +158,11 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            NetworkResult.Error(e.message ?: "WHOIS lookup failed", e)
+            NetworkResult.error(
+                ErrorCode.WHOIS_LOOKUP_FAILED,
+                developerMessage = e.message ?: "WHOIS lookup failed",
+                cause = e,
+            )
         }
     }
 
@@ -230,7 +261,11 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
         } catch (e: WhoisResponseBudgetExceededException) {
             throw e
         } catch (e: Exception) {
-            return NetworkResult.Error("IANA lookup failed: ${e.message}", e)
+            return NetworkResult.error(
+                ErrorCode.WHOIS_LOOKUP_FAILED,
+                developerMessage = "IANA lookup failed: ${e.message}",
+                cause = e,
+            )
         }
         val ianaReferral = WhoisResponseParser.parseReferral(ianaHop.second)
         val hop1 = WhoisHop(
@@ -343,7 +378,11 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
         } catch (e: WhoisResponseBudgetExceededException) {
             throw e
         } catch (e: Exception) {
-            return NetworkResult.Error("ARIN lookup failed: ${e.message}", e)
+            return NetworkResult.error(
+                ErrorCode.WHOIS_LOOKUP_FAILED,
+                developerMessage = "ARIN lookup failed: ${e.message}",
+                cause = e,
+            )
         }
         val referral = WhoisResponseParser.parseRirReferral(arinHop.second)
         val hop1 = WhoisHop(

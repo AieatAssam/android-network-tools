@@ -7,6 +7,7 @@ import io.mockk.mockk
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.test.runTest
 import net.aieat.netswissknife.core.network.NetworkResult
+import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.whois.WhoisQueryType
 import net.aieat.netswissknife.core.network.whois.WhoisProtocol
 import net.aieat.netswissknife.core.network.whois.WhoisHop
@@ -61,6 +62,7 @@ class WhoisLookupUseCaseTest {
     fun `blank query returns Error without calling repository`() = runTest {
         val result = useCase(WhoisParams(query = "  "))
         assertTrue(result is NetworkResult.Error)
+        assertEquals(ErrorCode.WHOIS_INVALID_QUERY, (result as NetworkResult.Error).info?.code)
         coVerify(exactly = 0) { repository.lookup(any(), any()) }
     }
 

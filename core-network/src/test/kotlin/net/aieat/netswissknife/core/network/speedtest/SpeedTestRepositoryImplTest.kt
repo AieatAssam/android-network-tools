@@ -10,6 +10,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.test.runTest
+import net.aieat.netswissknife.core.network.ErrorCode
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
@@ -226,10 +227,10 @@ class SpeedTestRepositoryImplTest {
             withContext(Dispatchers.IO) { assertTrue(released.await(3, TimeUnit.SECONDS)) }
             val events = collector.await()
             assertEquals(1, disconnects.get())
-            assertEquals(
-                SpeedTestEvent.Failed(SpeedTestPhase.DOWNLOAD, "Speed test timed out"),
-                events.last(),
-            )
+            val failure = events.last() as SpeedTestEvent.Failed
+            assertEquals(SpeedTestPhase.DOWNLOAD, failure.phase)
+            assertEquals("Speed test timed out", failure.message)
+            assertEquals(ErrorCode.NETWORK_TIMEOUT, failure.info.code)
             assertTrue(events.none { it is SpeedTestEvent.DownloadFinished || it is SpeedTestEvent.UploadFinished })
         }
 

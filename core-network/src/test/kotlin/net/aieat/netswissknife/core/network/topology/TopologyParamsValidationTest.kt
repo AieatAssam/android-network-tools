@@ -20,7 +20,7 @@ class TopologyParamsValidationTest {
     fun `blank targetIp returns validation error`() {
         val result = TopologyParamsValidator.validate(validV2cParams().copy(targetIp = ""))
         assertFalse(result.isValid)
-        assertTrue(result.errors.any { it.contains("IP", ignoreCase = true) })
+        assertTrue(result.messages.any { it.contains("IP", ignoreCase = true) })
     }
 
     @Test
@@ -33,7 +33,7 @@ class TopologyParamsValidationTest {
     fun `blank community on V2C returns validation error`() {
         val result = TopologyParamsValidator.validate(validV2cParams().copy(communityString = ""))
         assertFalse(result.isValid)
-        assertTrue(result.errors.any { it.contains("community", ignoreCase = true) })
+        assertTrue(result.messages.any { it.contains("community", ignoreCase = true) })
     }
 
     @Test
@@ -58,7 +58,7 @@ class TopologyParamsValidationTest {
             )
         )
         assertFalse(result.isValid)
-        assertTrue(result.errors.any { it.contains("username", ignoreCase = true) })
+        assertTrue(result.messages.any { it.contains("username", ignoreCase = true) })
     }
 
     @Test
@@ -104,7 +104,7 @@ class TopologyParamsValidationTest {
         assertTrue(TopologyParamsValidator.validate(minimums).isValid)
         val maximumResult = TopologyParamsValidator.validate(maximums)
         assertFalse(maximumResult.isValid)
-        assertTrue(maximumResult.errors.any { it.contains("10 minute limit") })
+        assertTrue(maximumResult.messages.any { it.contains("10 minute limit") })
     }
 
     @ParameterizedTest
@@ -113,7 +113,7 @@ class TopologyParamsValidationTest {
         val result = TopologyParamsValidator.validate(validV2cParams().copy(maxHops = maxHops))
 
         assertFalse(result.isValid)
-        assertTrue(result.errors.any { it.contains("Max hops") })
+        assertTrue(result.messages.any { it.contains("Max hops") })
     }
 
     @ParameterizedTest
@@ -122,7 +122,7 @@ class TopologyParamsValidationTest {
         val result = TopologyParamsValidator.validate(validV2cParams().copy(timeoutMs = timeoutMs))
 
         assertFalse(result.isValid)
-        assertTrue(result.errors.any { it.contains("Timeout") })
+        assertTrue(result.messages.any { it.contains("Timeout") })
     }
 
     @ParameterizedTest
@@ -131,7 +131,7 @@ class TopologyParamsValidationTest {
         val result = TopologyParamsValidator.validate(validV2cParams().copy(retries = retries))
 
         assertFalse(result.isValid)
-        assertTrue(result.errors.any { it.contains("Retries") })
+        assertTrue(result.messages.any { it.contains("Retries") })
     }
 
     @Test
@@ -146,8 +146,8 @@ class TopologyParamsValidationTest {
         )
 
         assertFalse(result.isValid)
-        assertTrue(result.errors.any { it.contains("privacy requires", ignoreCase = true) })
-        assertTrue(result.errors.any { it.contains("Privacy password", ignoreCase = true) })
+        assertTrue(result.messages.any { it.contains("privacy requires", ignoreCase = true) })
+        assertTrue(result.messages.any { it.contains("Privacy password", ignoreCase = true) })
     }
 
     @Test
@@ -162,6 +162,6 @@ class TopologyParamsValidationTest {
         )
 
         assertFalse(result.isValid)
-        assertTrue(result.errors.any { it.contains("Authentication password", ignoreCase = true) })
+        assertTrue(result.messages.any { it.contains("Authentication password", ignoreCase = true) })
     }
 }

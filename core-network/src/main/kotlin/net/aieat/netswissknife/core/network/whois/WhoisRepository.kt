@@ -1,6 +1,7 @@
 package net.aieat.netswissknife.core.network.whois
 
 import kotlinx.coroutines.flow.SharedFlow
+import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.operation.OperationSession
 
@@ -12,7 +13,7 @@ interface WhoisRepository {
 
     /** Source-selecting overload; legacy repositories retain their existing behavior by default. */
     suspend fun lookup(query: String, timeoutMs: Int, protocol: WhoisProtocol): NetworkResult<WhoisResult> = when (protocol) {
-        WhoisProtocol.RDAP -> NetworkResult.Error("RDAP is not supported by this repository")
+        WhoisProtocol.RDAP -> NetworkResult.error(ErrorCode.WHOIS_UNAVAILABLE, developerMessage = "RDAP is not supported by this repository")
         WhoisProtocol.AUTO, WhoisProtocol.WHOIS -> lookup(query, timeoutMs)
     }
 
@@ -31,7 +32,7 @@ interface WhoisRepository {
         operationSession: OperationSession,
         protocol: WhoisProtocol,
     ): NetworkResult<WhoisResult> = when (protocol) {
-        WhoisProtocol.RDAP -> NetworkResult.Error("RDAP is not supported by this repository")
+        WhoisProtocol.RDAP -> NetworkResult.error(ErrorCode.WHOIS_UNAVAILABLE, developerMessage = "RDAP is not supported by this repository")
         WhoisProtocol.AUTO, WhoisProtocol.WHOIS -> lookup(query, timeoutMs, operationSession)
     }
 }

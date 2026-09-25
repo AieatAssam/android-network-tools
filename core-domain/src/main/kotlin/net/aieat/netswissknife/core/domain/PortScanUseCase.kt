@@ -1,6 +1,7 @@
 package net.aieat.netswissknife.core.domain
 
 import net.aieat.netswissknife.core.network.HostValidator
+import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.portscan.PortScanRepository
 import net.aieat.netswissknife.core.network.portscan.PortScanOperationBudget
 import net.aieat.netswissknife.core.network.portscan.PortScanUpdate
@@ -45,43 +46,43 @@ class PortScanUseCase(private val repository: PortScanRepository) {
 
         // Validate host
         if (host.isBlank()) {
-            emit(PortScanFlowResult.ValidationError("Host must not be blank"))
+            emit(PortScanFlowResult.ValidationError(validationError(ErrorCode.HOST_BLANK, "Host must not be blank")))
             return@flow
         }
         if (!HostValidator.isValidHostname(host)) {
-            emit(PortScanFlowResult.ValidationError("Invalid hostname or IP address: \"$host\""))
+            emit(PortScanFlowResult.ValidationError(validationError(ErrorCode.HOST_INVALID, "Invalid hostname or IP address: \"$host\"", host)))
             return@flow
         }
 
         // Validate timeout
         if (params.timeoutMs < 100 || params.timeoutMs > 30_000) {
-            emit(PortScanFlowResult.ValidationError("Timeout must be between 100 ms and 30 000 ms"))
+            emit(PortScanFlowResult.ValidationError(validationError(ErrorCode.TIMEOUT_OUT_OF_RANGE, "Timeout must be between 100 ms and 30 000 ms", 100, 30_000)))
             return@flow
         }
 
         // Validate concurrency
         if (params.concurrency < 1 || params.concurrency > 500) {
-            emit(PortScanFlowResult.ValidationError("Concurrency must be between 1 and 500"))
+            emit(PortScanFlowResult.ValidationError(validationError(ErrorCode.CONCURRENCY_OUT_OF_RANGE, "Concurrency must be between 1 and 500", 1, 500)))
             return@flow
         }
 
         // Resolve ports to scan
         val portsToScan: List<Int> = if (params.preset == PortScanPreset.CUSTOM) {
             if (params.startPort < 1 || params.startPort > 65_535) {
-                emit(PortScanFlowResult.ValidationError("Start port must be between 1 and 65 535"))
+                emit(PortScanFlowResult.ValidationError(validationError(ErrorCode.PORT_OUT_OF_RANGE, "Start port must be between 1 and 65 535", params.startPort, 1, 65_535)))
                 return@flow
             }
             if (params.endPort < 1 || params.endPort > 65_535) {
-                emit(PortScanFlowResult.ValidationError("End port must be between 1 and 65 535"))
+                emit(PortScanFlowResult.ValidationError(validationError(ErrorCode.PORT_OUT_OF_RANGE, "End port must be between 1 and 65 535", params.endPort, 1, 65_535)))
                 return@flow
             }
             if (params.startPort > params.endPort) {
-                emit(PortScanFlowResult.ValidationError("Start port must be ≤ end port"))
+                emit(PortScanFlowResult.ValidationError(validationError(ErrorCode.PORT_RANGE_INVERTED, "Start port must be ≤ end port", params.startPort, params.endPort)))
                 return@flow
             }
             val rangeSize = params.endPort - params.startPort + 1
             if (rangeSize > 10_000) {
-                emit(PortScanFlowResult.ValidationError("Custom range must not exceed 10 000 ports (got $rangeSize)"))
+                emit(PortScanFlowResult.ValidationError(validationError(ErrorCode.PORT_RANGE_TOO_LARGE, "Custom range must not exceed 10 000 ports (got $rangeSize)", 10_000, rangeSize)))
                 return@flow
             }
             (params.startPort..params.endPort).toList()
@@ -90,7 +91,10 @@ class PortScanUseCase(private val repository: PortScanRepository) {
         }
 
         if (portsToScan.isEmpty()) {
-            emit(PortScanFlowResult.ValidationError("No ports to scan in the selected preset"))
+            emit(PortScanFlowResult.ValidationError(validationError(
+                ErrorCode.PORT_SELECTION_EMPTY,
+                "No ports to scan in the selected preset",
+            )))
             return@flow
         }
 
@@ -102,9 +106,10 @@ class PortScanUseCase(private val repository: PortScanRepository) {
         )
         if (estimate.exceedsHardCeiling) {
             emit(
-                PortScanFlowResult.ValidationError(
+                PortScanFlowResult.ValidationError(validationError(
+                    ErrorCode.OPERATION_DEADLINE_EXCEEDED,
                     "This scan may exceed the 15-minute operation limit; increase concurrency or reduce the port range or timeout.",
-                ),
+                )),
             )
             return@flow
         }

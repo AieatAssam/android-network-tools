@@ -5,6 +5,7 @@ import net.aieat.netswissknife.core.network.traceroute.HopGeoLocation
 import net.aieat.netswissknife.core.network.traceroute.HopResult
 import net.aieat.netswissknife.core.network.traceroute.HopStatus
 import net.aieat.netswissknife.core.network.traceroute.TracerouteRepository
+import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.traceroute.TracerouteOperation
 import net.aieat.netswissknife.core.network.traceroute.TracerouteReverseDnsRepository
 import net.aieat.netswissknife.core.network.operation.OperationSession
@@ -84,12 +85,9 @@ class TracerouteUseCaseTest {
                 TracerouteParams(host = "google.com", maxHops = 64, timeoutMs = 20_000),
             ).toList()
 
-            assertEquals(
-                TracerouteFlowResult.ValidationError(
-                    "Requested trace exceeds the 20-minute time limit; reduce max hops, probes per hop, or timeout",
-                ),
-                results.single(),
-            )
+            val error = results.single() as TracerouteFlowResult.ValidationError
+            assertEquals(ErrorCode.OPERATION_DEADLINE_EXCEEDED, error.info.code)
+            assertEquals("Requested trace exceeds the 20-minute time limit; reduce max hops, probes per hop, or timeout", error.message)
             io.mockk.verify(exactly = 0) {
                 tracerouteRepo.trace(any(), any(), any(), any(), any(), any(), any())
             }

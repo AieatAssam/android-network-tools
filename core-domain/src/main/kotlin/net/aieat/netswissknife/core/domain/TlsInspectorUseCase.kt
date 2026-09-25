@@ -2,6 +2,7 @@ package net.aieat.netswissknife.core.domain
 
 import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.NetworkResult
+import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.tls.TlsInspectorRepository
 import net.aieat.netswissknife.core.network.tls.TlsInspectorResult
 import net.aieat.netswissknife.core.network.tls.TlsInspectorOptions
@@ -37,18 +38,19 @@ class TlsInspectorUseCase(private val repository: TlsInspectorRepository) {
         operationSession: OperationSession?,
     ): NetworkResult<TlsInspectorResult> {
         val host = HostValidator.normalize(params.host) ?: params.host.trim()
-        if (host.isBlank()) return NetworkResult.Error("Host must not be blank")
-        if (!HostValidator.isValidHostname(host)) return NetworkResult.Error("Invalid host or IP address")
-        if (params.port !in 1..65_535) return NetworkResult.Error("Port must be between 1 and 65535")
-        if (params.timeoutMs !in 500..30_000) return NetworkResult.Error("Timeout must be between 500 ms and 30 000 ms")
+        if (host.isBlank()) return NetworkResult.error(ErrorCode.HOST_BLANK, "Host must not be blank")
+        if (!HostValidator.isValidHostname(host)) return NetworkResult.error(ErrorCode.HOST_INVALID, "Invalid host or IP address")
+        if (params.port !in 1..65_535) return NetworkResult.error(ErrorCode.PORT_OUT_OF_RANGE, "Port must be between 1 and 65535", args = listOf(params.port, 1, 65_535))
+        if (params.timeoutMs !in 500..30_000) return NetworkResult.error(ErrorCode.TIMEOUT_OUT_OF_RANGE, "Timeout must be between 500 ms and 30 000 ms", args = listOf(500, 30_000))
 
         val normalizedPin = params.expectedPinSha256?.let { supplied ->
             supplied.trim().replace(":", "").uppercase()
         }
         if (normalizedPin != null && !normalizedPin.matches(SHA256_HEX_PATTERN)) {
-            return NetworkResult.Error(
-                message = "SHA-256 pin must contain exactly 64 hexadecimal characters",
-                code = TlsInspectorErrorKeys.PIN_INVALID_CODE,
+            return NetworkResult.error(
+                code = ErrorCode.TLS_PIN_INVALID,
+                developerMessage = "SHA-256 pin must contain exactly 64 hexadecimal characters",
+                legacyCode = TlsInspectorErrorKeys.PIN_INVALID_CODE,
                 descriptionKey = TlsInspectorErrorKeys.PIN_INVALID_DESCRIPTION,
             )
         }

@@ -11,6 +11,7 @@ import java.io.IOException
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import javax.net.ssl.SSLHandshakeException
+import javax.net.ssl.SSLProtocolException
 
 class TlsInspectorRepositoryFakeEngineTest {
     private val certificate = TlsTestCertificates.read("valid-leaf")
@@ -130,10 +131,52 @@ class TlsInspectorRepositoryFakeEngineTest {
         assertEquals(setOf("TLSv1", "TLSv1.1"), result.data.protocolProbeNotTestable)
     }
 
+    @Test
+    fun `local protocol configuration failure is not testable rather than unknown`() = runTest {
+        val engine = FakeEngine(
+            enabled = setOf("TLSv1.2", "TLSv1.3"),
+            configurationFailure = setOf("TLSv1.2"),
+        )
+        val repository = TlsInspectorRepositoryImpl().apply {
+            handshakeEngine = engine
+            wallClockMillis = { certificate.notBefore.time + 1_000 }
+        }
+
+        val result = repository.inspect(
+            "www.example.com", 443, 5_000, TlsInspectorOptions(probeProtocols = true),
+        ) as NetworkResult.Success
+
+        assertEquals(mapOf("TLSv1.3" to true), result.data.protocolSupport)
+        assertEquals(setOf("TLSv1", "TLSv1.1", "TLSv1.2"), result.data.protocolProbeNotTestable)
+        assertTrue(result.data.protocolProbeUnknown.isEmpty())
+        assertEquals(engine.openCount.get() - 1, engine.closedCount.get())
+    }
+
+    @Test
+    fun `explicit protocol version alert on SSLProtocolException is unsupported`() = runTest {
+        val engine = FakeEngine(
+            enabled = setOf("TLSv1.2", "TLSv1.3"),
+            protocolVersionProtocolFailures = setOf("TLSv1.2"),
+        )
+        val repository = TlsInspectorRepositoryImpl().apply {
+            handshakeEngine = engine
+            wallClockMillis = { certificate.notBefore.time + 1_000 }
+        }
+
+        val result = repository.inspect(
+            "www.example.com", 443, 5_000, TlsInspectorOptions(probeProtocols = true),
+        ) as NetworkResult.Success
+
+        assertEquals(mapOf("TLSv1.2" to false, "TLSv1.3" to true), result.data.protocolSupport)
+        assertTrue(result.data.protocolProbeUnknown.isEmpty())
+    }
+
     private inner class FakeEngine(
         private val enabled: Set<String> = emptySet(),
         private val rejected: Set<String> = emptySet(),
         private val ambiguous: Set<String> = emptySet(),
+        private val configurationFailure: Set<String> = emptySet(),
+        private val protocolVersionProtocolFailures: Set<String> = emptySet(),
         private val onConnect: () -> Unit = {},
         private val onHandshake: () -> Unit = {},
     ) : TlsHandshakeEngine {
@@ -151,6 +194,7 @@ class TlsInspectorRepositoryFakeEngineTest {
         ): TlsHandshakeConnection {
             openCount.incrementAndGet()
             requestedProtocols += protocol
+            if (protocol in configurationFailure) throw IllegalArgumentException("unsupported locally")
             return object : TlsHandshakeConnection {
                 override fun connect() {
                     if (host.isBlank() || port != 443 || timeoutMs <= 0) throw IOException("bad request")
@@ -160,6 +204,9 @@ class TlsInspectorRepositoryFakeEngineTest {
                 override fun handshake() {
                     onHandshake()
                     if (protocol in rejected) throw SSLHandshakeException("Received fatal alert: protocol_version")
+                    if (protocol in protocolVersionProtocolFailures) {
+                        throw SSLProtocolException("Received fatal alert: protocol_version")
+                    }
                     if (protocol in ambiguous) throw SSLHandshakeException("Received fatal alert: handshake_failure")
                 }
 

@@ -1,5 +1,9 @@
 package net.aieat.netswissknife.app.ui
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
@@ -8,6 +12,7 @@ import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -60,10 +65,11 @@ class NavigationAccessibilityTest {
                 .assertIsDisplayed()
                 .assertHasClickAction()
                 .assert(hasButtonRole())
+                // Matching and activating the visible title proves it is part of the
+                // merged card action, rather than a separate non-clickable Text node.
+                .performClick()
+            assertEquals("Activating ${tool.label} should navigate to its tool", tool.route, destination)
         }
-
-        composeRule.onNodeWithText(NavRoutes.allTools.last().label).performClick()
-        assertEquals(NavRoutes.allTools.last().route, destination)
     }
 
     @Test
@@ -106,9 +112,62 @@ class NavigationAccessibilityTest {
                 .assertIsDisplayed()
                 .assertHasClickAction()
                 .assert(hasButtonRole())
+                // The label itself must activate the row. The nested pin button stays
+                // independently available through its own content description.
+                .performClick()
+            assertEquals("Activating ${tool.label} should navigate to its tool", tool.route, navigated.last())
         }
 
         toolList.assertIsDisplayed()
+    }
+
+    @Test
+    fun moreSheet_pinAndUnpinButtonsAreIndependentFromToolNavigation() {
+        val toggledRoutes = mutableListOf<String>()
+        val navigatedRoutes = mutableListOf<String>()
+        val ping = NavRoutes.allTools.first { it.route == NavRoutes.Ping.baseRoute }
+
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                var pinnedRoutes by remember { mutableStateOf(emptyList<String>()) }
+                MoreToolsSheet(
+                    pinnedRoutes = pinnedRoutes,
+                    onNavigate = navigatedRoutes::add,
+                    onTogglePin = { route ->
+                        toggledRoutes += route
+                        pinnedRoutes = if (route in pinnedRoutes) {
+                            pinnedRoutes - route
+                        } else {
+                            pinnedRoutes + route
+                        }
+                    },
+                    maxPinned = 3,
+                    onDismiss = {},
+                )
+            }
+        }
+
+        val pinDescription = context.getString(R.string.more_pin_description, ping.label)
+        composeRule
+            .onNodeWithContentDescription(pinDescription)
+            .assertIsDisplayed()
+            .assertHasClickAction()
+            .assert(hasButtonRole())
+            .performClick()
+
+        assertEquals(listOf(ping.route), toggledRoutes)
+        assertTrue("Pin action must not navigate", navigatedRoutes.isEmpty())
+
+        val unpinDescription = context.getString(R.string.more_unpin_description, ping.label)
+        composeRule
+            .onNodeWithContentDescription(unpinDescription)
+            .assertIsDisplayed()
+            .assertHasClickAction()
+            .assert(hasButtonRole())
+            .performClick()
+
+        assertEquals(listOf(ping.route, ping.route), toggledRoutes)
+        assertTrue("Unpin action must not navigate", navigatedRoutes.isEmpty())
     }
 
     @Test

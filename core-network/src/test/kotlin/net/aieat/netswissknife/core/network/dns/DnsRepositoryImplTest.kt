@@ -1,6 +1,7 @@
 package net.aieat.netswissknife.core.network.dns
 
 import kotlinx.coroutines.test.runTest
+import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.NetworkResult
 import org.xbill.DNS.EDNSOption
 import org.xbill.DNS.Message
@@ -22,6 +23,18 @@ import org.junit.jupiter.params.provider.CsvSource
 
 @DisplayName("DnsRepositoryImpl.normalizeDomain")
 class DnsRepositoryImplTest {
+
+    @Test
+    fun `empty system DNS list returns typed resolver error`() = runTest {
+        val result = DnsRepositoryImpl().lookup(
+            domain = "example.com",
+            recordType = DnsRecordType.A,
+            server = DnsServer.System(emptyList()),
+        ) as NetworkResult.Error
+
+        assertEquals(ErrorCode.DNS_NO_SYSTEM_RESOLVER, result.info?.code)
+        assertTrue(result.message.contains("No system DNS server"))
+    }
 
     @Test
     fun `invalid custom DNS hostname and host port are rejected before resolver construction or IO`() = runTest {

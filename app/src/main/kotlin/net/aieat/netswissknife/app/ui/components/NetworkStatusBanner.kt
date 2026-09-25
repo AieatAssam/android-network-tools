@@ -42,16 +42,25 @@ fun NetworkStatusBanner(
     permissionDenied: Boolean = false,
     onGrantPermission: (() -> Unit)? = null,
 ) {
+    val noNetworkCapabilities = !status.hasInternet && !status.hasLocalNetwork && !status.vpnActive
     val statusMessage = when {
         scope == NetworkStatusScope.INTERNET && !status.hasInternet -> R.string.network_banner_no_internet
+        scope == NetworkStatusScope.INTERNET && !status.hasValidatedInternet ->
+            R.string.network_banner_internet_unvalidated
+        scope == NetworkStatusScope.LOCAL_NETWORK && !status.hasLocalNetwork && status.vpnActive ->
+            R.string.network_banner_local_vpn_route_unknown
         scope == NetworkStatusScope.LOCAL_NETWORK && !status.hasLocalNetwork -> R.string.network_banner_no_local
-        scope == NetworkStatusScope.ANY_NETWORK &&
-            !status.hasInternet && !status.hasLocalNetwork && !status.vpnActive ->
+        scope == NetworkStatusScope.ANY_NETWORK && noNetworkCapabilities && status.transport == null ->
             R.string.network_banner_no_network
+        scope == NetworkStatusScope.ANY_NETWORK && noNetworkCapabilities && status.transport != null ->
+            R.string.network_banner_route_unknown
         scope == NetworkStatusScope.LOCAL_NETWORK && status.vpnActive -> R.string.network_banner_vpn_info
         else -> null
     }
-    val isVpnMessage = statusMessage == R.string.network_banner_vpn_info
+    val isAdvisoryMessage = statusMessage == R.string.network_banner_vpn_info ||
+        statusMessage == R.string.network_banner_internet_unvalidated ||
+        statusMessage == R.string.network_banner_local_vpn_route_unknown ||
+        statusMessage == R.string.network_banner_route_unknown
 
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -68,7 +77,7 @@ fun NetworkStatusBanner(
                     .testTag(STATUS_BANNER_TEST_TAG)
                     .semantics { liveRegion = LiveRegionMode.Polite },
                 colors = CardDefaults.elevatedCardColors(
-                    containerColor = if (isVpnMessage) {
+                    containerColor = if (isAdvisoryMessage) {
                         MaterialTheme.colorScheme.secondaryContainer
                     } else {
                         MaterialTheme.colorScheme.errorContainer
@@ -81,9 +90,9 @@ fun NetworkStatusBanner(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(
-                        imageVector = if (isVpnMessage) Icons.Default.Info else Icons.Default.Error,
+                        imageVector = if (isAdvisoryMessage) Icons.Default.Info else Icons.Default.Error,
                         contentDescription = null,
-                        tint = if (isVpnMessage) {
+                        tint = if (isAdvisoryMessage) {
                             MaterialTheme.colorScheme.onSecondaryContainer
                         } else {
                             MaterialTheme.colorScheme.onErrorContainer
@@ -92,7 +101,7 @@ fun NetworkStatusBanner(
                     Text(
                         text = statusMessage?.let { stringResource(it) }.orEmpty(),
                         style = MaterialTheme.typography.bodyMedium,
-                        color = if (isVpnMessage) {
+                        color = if (isAdvisoryMessage) {
                             MaterialTheme.colorScheme.onSecondaryContainer
                         } else {
                             MaterialTheme.colorScheme.onErrorContainer

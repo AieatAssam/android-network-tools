@@ -2,6 +2,7 @@ package net.aieat.netswissknife.core.network.wol
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.operation.CancellationReason
 import net.aieat.netswissknife.core.network.operation.OperationCancellationException
@@ -73,23 +74,32 @@ class WakeOnLanRepositoryImpl(
         }.let { NetworkResult.Success(it) }
     } catch (e: OperationCancellationException) {
         if (e.reason == CancellationReason.DEADLINE_EXCEEDED) {
-            NetworkResult.Error("Wake-on-LAN send timed out", e)
+            NetworkResult.error(ErrorCode.NETWORK_TIMEOUT, developerMessage = "Wake-on-LAN send timed out", cause = e)
         } else {
             throw e
         }
     } catch (e: OperationDeadlineExceededException) {
-        NetworkResult.Error("Wake-on-LAN send timed out", e)
+        NetworkResult.error(ErrorCode.NETWORK_TIMEOUT, developerMessage = "Wake-on-LAN send timed out", cause = e)
     } catch (e: IllegalArgumentException) {
-        NetworkResult.Error(e.message ?: "Invalid MAC address", e)
+        NetworkResult.error(ErrorCode.MAC_INVALID, developerMessage = e.message ?: "Invalid MAC address", cause = e)
     } catch (e: LocalNetworkPermissionDeniedException) {
-        NetworkResult.Error("Local network permission denied", e)
+        NetworkResult.error(
+            ErrorCode.LOCAL_NETWORK_PERMISSION_DENIED,
+            developerMessage = "Local network permission denied",
+            cause = e,
+        )
     } catch (e: SecurityException) {
-        NetworkResult.Error(
-            "Local network permission denied",
-            LocalNetworkPermissionDeniedException(e),
+        NetworkResult.error(
+            ErrorCode.LOCAL_NETWORK_PERMISSION_DENIED,
+            developerMessage = "Local network permission denied",
+            cause = LocalNetworkPermissionDeniedException(e),
         )
     } catch (e: Exception) {
-        NetworkResult.Error("Failed to send magic packet: ${e.message}", e)
+        NetworkResult.error(
+            ErrorCode.WOL_SEND_FAILED,
+            developerMessage = "Failed to send magic packet: ${e.message}",
+            cause = e,
+        )
     }
 
     private class SocketLease(private val socket: DatagramSocket) : AutoCloseable {

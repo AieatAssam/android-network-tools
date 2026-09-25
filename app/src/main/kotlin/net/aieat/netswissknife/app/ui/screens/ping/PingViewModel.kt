@@ -1,5 +1,6 @@
 package net.aieat.netswissknife.app.ui.screens.ping
 
+import android.annotation.SuppressLint
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.lifecycle.ViewModel
@@ -156,6 +157,8 @@ class PingViewModel @Inject constructor(
     private val recentHostsRepository: RecentHostsRepository,
     private val linkInfoProvider: LinkInfoProvider = LinkInfoProvider { true },
     private val networkStatusProvider: NetworkStatusProvider = NoOpNetworkStatusProvider,
+    // Hilt supplies the owner-backed handle at runtime; this empty default supports direct unit tests.
+    @param:SuppressLint("VisibleForTests")
     private val savedStateHandle: SavedStateHandle = SavedStateHandle(),
 ) : ViewModel() {
 

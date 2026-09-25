@@ -1,6 +1,8 @@
 package net.aieat.netswissknife.core.domain
 
 import net.aieat.netswissknife.core.network.ping.PingPacketResult
+import net.aieat.netswissknife.core.network.ErrorCode
+import net.aieat.netswissknife.core.network.ErrorInfo
 
 /**
  * Items emitted by [PingUseCase].
@@ -14,5 +16,8 @@ sealed interface PingFlowResult {
     data class Packet(val packet: PingPacketResult) : PingFlowResult
 
     /** Validation failed before any probes were sent. */
-    data class ValidationError(val message: String) : PingFlowResult
+    data class ValidationError(val info: ErrorInfo) : PingFlowResult {
+        val message: String get() = info.developerCopy()
+        constructor(message: String) : this(ErrorInfo(ErrorCode.UNKNOWN, developerMessage = message))
+    }
 }
