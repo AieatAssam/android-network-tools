@@ -8,6 +8,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.CancellationException
 import net.aieat.netswissknife.core.network.MonotonicClock
 import net.aieat.netswissknife.core.network.SystemMonotonicClock
+import net.aieat.netswissknife.core.network.elapsedMillisSince
 import net.aieat.netswissknife.core.network.operation.CancellationReason
 import net.aieat.netswissknife.core.network.operation.OperationCancellationException
 import net.aieat.netswissknife.core.network.operation.OperationDeadlineExceededException
@@ -52,7 +53,7 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
             // shares this monotonic total deadline and preserves parent cancellation.
             OperationRunner.run(session) {
                 withContext(Dispatchers.IO) {
-                    val start = System.nanoTime()
+                    val start = clock.nowNanos()
                     when (normalizedQuery.type) {
                         WhoisQueryType.DOMAIN -> performDomainLookup(
                             normalizedQuery.value,
@@ -315,6 +316,7 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
             socketFactory = socketFactory,
             isDisallowedAddress = ::isDisallowedReferralAddress,
             responseBudget = responseBudget,
+            clock = clock,
         )
     }
 
@@ -346,7 +348,7 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
                 netRange = null,
                 orgName = null,
                 country = null,
-                totalQueryTimeMs = (System.nanoTime() - overallStart) / 1_000_000L
+                totalQueryTimeMs = clock.elapsedMillisSince(overallStart)
             )
         )
     }
@@ -379,7 +381,7 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
                 netRange = p.parseNetRange(lastResponse),
                 orgName = p.parseOrgName(lastResponse),
                 country = p.parseCountry(lastResponse),
-                totalQueryTimeMs = (System.nanoTime() - overallStart) / 1_000_000L
+                totalQueryTimeMs = clock.elapsedMillisSince(overallStart)
             )
         )
     }

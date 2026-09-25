@@ -12,6 +12,7 @@ import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.operation.OperationBudget
 import net.aieat.netswissknife.core.network.operation.OperationDeadlineExceededException
 import net.aieat.netswissknife.core.network.operation.OperationSession
+import net.aieat.netswissknife.core.network.testkit.FakeClock
 import net.aieat.netswissknife.core.network.whois.WhoisResult
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
@@ -140,16 +141,21 @@ class WhoisRegistryFailureTest {
     @Test
     @DisplayName("registry connect failure is retained and emitted once as a failed hop")
     fun `registry connect failure is retained and emitted once as a failed hop`() = runTest {
+        val clock = FakeClock()
         val socketCreates = AtomicInteger()
         val ianaSocket = object : Socket() {
             override fun connect(endpoint: SocketAddress?, timeout: Int) = Unit
             override fun getOutputStream() = ByteArrayOutputStream()
-            override fun getInputStream(): InputStream =
-                "refer: whois.verisign-grs.com\nDomain Name: example.com\n".byteInputStream()
+            override fun getInputStream(): InputStream = timedInputStream(
+                "refer: whois.verisign-grs.com\nDomain Name: example.com\n",
+                clock,
+                11,
+            )
             override fun close() = Unit
         }
         val registrySocket = object : Socket() {
             override fun connect(endpoint: SocketAddress?, timeout: Int) {
+                clock.advanceBy(37_000_000L)
                 throw IOException("registry connect failed")
             }
             override fun close() = Unit
@@ -159,8 +165,9 @@ class WhoisRegistryFailureTest {
             socketFactory = WhoisSocketFactory {
                 if (socketCreates.incrementAndGet() == 1) ianaSocket else registrySocket
             },
+            clock = clock,
         )
-        val session = OperationSession(OperationBudget.start())
+        val session = OperationSession(OperationBudget.start(clock = clock))
         val liveProgress = async(start = CoroutineStart.UNDISPATCHED) {
             repository.hopProgress.take(2).toList()
         }
@@ -173,17 +180,47 @@ class WhoisRegistryFailureTest {
         val data = (result as NetworkResult.Success).data
         assertTrue(data.hops.first().rawResponse.contains("Domain Name: example.com"))
         assertEquals(2, data.hops.size)
+        assertEquals(11L, data.hops.first().queryTimeMs)
         val failedRegistry = data.hops.last()
         assertEquals("whois.verisign-grs.com", failedRegistry.server.host)
         assertEquals(WhoisServerRole.REGISTRY, failedRegistry.server.role)
         assertEquals("", failedRegistry.rawResponse)
         assertEquals(0L, failedRegistry.queryTimeMs)
+        assertEquals(48L, data.totalQueryTimeMs)
         assertTrue(failedRegistry.error.orEmpty().contains("registry connect failed"))
         assertEquals(session.budget.operationId, failedRegistry.operationId)
 
         val progress = liveProgress.await()
         assertEquals(data.hops, progress)
         assertEquals(1, progress.count { it.server.role == WhoisServerRole.REGISTRY })
+    }
+
+    private fun timedInputStream(content: String, clock: FakeClock, millis: Long): InputStream {
+        val bytes = content.toByteArray(Charsets.UTF_8)
+        return object : InputStream() {
+            private var offset = 0
+            private var advanced = false
+
+            override fun read(): Int {
+                if (!advanced) {
+                    advanced = true
+                    clock.advanceBy(millis * 1_000_000L)
+                }
+                return if (offset == bytes.size) -1 else bytes[offset++].toInt() and 0xff
+            }
+
+            override fun read(buffer: ByteArray, byteOffset: Int, length: Int): Int {
+                if (!advanced) {
+                    advanced = true
+                    clock.advanceBy(millis * 1_000_000L)
+                }
+                if (offset == bytes.size) return -1
+                val count = minOf(length, bytes.size - offset)
+                bytes.copyInto(buffer, byteOffset, offset, offset + count)
+                offset += count
+                return count
+            }
+        }
     }
 
     @Test

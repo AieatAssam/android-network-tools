@@ -2,6 +2,9 @@ package net.aieat.netswissknife.core.network.whois
 
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.suspendCancellableCoroutine
+import net.aieat.netswissknife.core.network.MonotonicClock
+import net.aieat.netswissknife.core.network.SystemMonotonicClock
+import net.aieat.netswissknife.core.network.elapsedMillisSince
 import net.aieat.netswissknife.core.network.operation.OperationResourcesContext
 import net.aieat.netswissknife.core.network.operation.ResourceScope
 import java.io.ByteArrayOutputStream
@@ -70,6 +73,7 @@ internal object WhoisBlockingTransport {
             net.aieat.netswissknife.core.network.operation.OperationBudget.DEFAULT_MAX_RESPONSE_BYTES,
         ),
         executor: ThreadPoolExecutor = workers,
+        clock: MonotonicClock = SystemMonotonicClock,
     ): Pair<Long, String> {
         val resources = currentCoroutineContext()[OperationResourcesContext]?.resources
         return suspendCancellableCoroutine { continuation ->
@@ -78,7 +82,7 @@ internal object WhoisBlockingTransport {
             val task = FutureTask<Unit> {
                 var result: Pair<Long, String>? = null
                 try {
-                    val startedAt = System.nanoTime()
+                    val startedAt = clock.nowNanos()
                     val address = resolver.resolve(host)
                     checkNotCancelled(cancelled)
                     if (isDisallowedAddress(address)) {
@@ -108,7 +112,7 @@ internal object WhoisBlockingTransport {
                         response.write(buffer, 0, count)
                     }
                     result = Pair(
-                        (System.nanoTime() - startedAt) / 1_000_000L,
+                        clock.elapsedMillisSince(startedAt),
                         String(response.toByteArray(), Charsets.UTF_8),
                     )
                 } catch (failure: Throwable) {
