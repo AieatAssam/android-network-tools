@@ -153,6 +153,11 @@ tasks:
   - id: P08-T3
     title: "Wi-Fi chart text via TextMeasurer + chart contentDescriptions"
     status: in_progress
+    current_progress:
+      date: "2026-09-25"
+      implemented: "Wi-Fi spectrum SSID labels are clamped within the plot bounds for both LTR and RTL layouts. Ping RTT paths now draw contiguous successful packet runs separately, so a failed or missing sample is not visually bridged; packet indexes remain on the original x-axis positions."
+      validation: "The serialized focused `:app:testDebugUnitTest` run passed EnumLabelsTest, WifiSpectrumPlotBoundsTest, PingChartGeometryTest, WifiChartTextDrawingSourceTest, and ToolStateAnnouncerCoverageTest; `:app:compileDebugAndroidTestKotlin` passed. Added LTR/RTL spectrum-label bound tests and Ping chart geometry tests for adjacent successes and gaps at failed/null samples. The no-nativeCanvas.drawText guard and existing chart semantic tests remain in place. Independent QA/adversarial review found no blocker; no emulator/device was used."
+      remaining: "Visual checks at font scales 1.0/1.5, RTL placement, overlapping SSID labels, and narrow plot widths remain open."
     tdd:
       red:
         tests:
