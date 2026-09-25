@@ -4,6 +4,9 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.async
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.flow.buffer
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.toList
@@ -1060,6 +1063,74 @@ class PortScanRepositoryImplTest {
         withContext(Dispatchers.Default) { withTimeout(3_000) { scan.join() } }
 
         assertEquals(1, maximumActive.get())
+    }
+
+    @Test
+    fun `slow collector backpressures completed results and scan resumes without loss`() = runTest {
+        val concurrency = 2
+        val ports = (1..20).toList()
+        val checkerStarts = AtomicInteger()
+        val saturationReached = CountDownLatch(2 * concurrency + 1)
+        val collectorAtStarted = CompletableDeferred<Unit>()
+        val resumeCollector = CompletableDeferred<Unit>()
+        val updates = Collections.synchronizedList(mutableListOf<PortScanUpdate>())
+        val repo = PortScanRepositoryImpl(
+            checker = { _, port ->
+                if (checkerStarts.incrementAndGet() <= 2 * concurrency + 1) {
+                    saturationReached.countDown()
+                }
+                PortConnectResult(PortStatus.CLOSED, responseTimeMs = 1L, banner = null)
+            },
+            hostResolver = { InetAddress.getLoopbackAddress() },
+        )
+        val session = OperationSession(OperationBudget.start(maxConcurrentProbes = concurrency))
+        val scan = backgroundScope.launch(Dispatchers.IO) {
+            repo.scan(
+                host = "localhost",
+                ports = ports,
+                timeoutMs = 5_000,
+                concurrency = concurrency,
+                operationSession = session,
+            ).buffer(0).collect { update ->
+                updates += update
+                if (update is PortScanUpdate.Started) {
+                    collectorAtStarted.complete(Unit)
+                    resumeCollector.await()
+                }
+            }
+        }
+
+        try {
+            withContext(Dispatchers.Default) {
+                withTimeout(3_000) { collectorAtStarted.await() }
+            }
+            assertTrue(
+                withContext(Dispatchers.IO) { saturationReached.await(2, TimeUnit.SECONDS) },
+                "the bounded result path should fill while the downstream collector is blocked",
+            )
+
+            // channelFlow, flowOn, and buffer(0) fuse into a rendezvous at the
+            // downstream boundary. One result is held in the blocked emission,
+            // the completed channel holds `concurrency`, and at most `concurrency`
+            // workers can each hold one completed result while blocked sending.
+            val finiteCheckerBound = 2 * concurrency + 1
+            assertEquals(finiteCheckerBound, checkerStarts.get())
+            assertTrue(checkerStarts.get() < ports.size, "unstarted work must remain queued")
+
+            resumeCollector.complete(Unit)
+            withContext(Dispatchers.Default) { withTimeout(3_000) { scan.join() } }
+        } finally {
+            resumeCollector.complete(Unit)
+            withContext(Dispatchers.Default) { withTimeout(3_000) { scan.cancelAndJoin() } }
+        }
+
+        val completedResults = updates.filterIsInstance<PortScanUpdate.PortResult>()
+        assertEquals(ports.size, completedResults.size)
+        assertEquals(ports.sorted(), completedResults.map { it.result.port }.sorted())
+        assertEquals(ports.size, completedResults.map { it.result.port }.toSet().size)
+        assertEquals(1, updates.count { it is PortScanUpdate.Started })
+        assertEquals(1, updates.count { it is PortScanUpdate.Complete })
+        assertEquals(ports.size, checkerStarts.get())
     }
 
     @Test
