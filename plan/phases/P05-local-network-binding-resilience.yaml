@@ -270,7 +270,7 @@ tasks:
       red:
         tests:
           - "LAN/mDNS/WOL/Topology ViewModel tests classify direct or wrapped LocalNetworkPermissionDeniedException separately from generic errors; topology events retain causes through failed GETs and walks."
-          - "NetworkStatusBannerTest verifies relevant-scope visibility, no-local-before-VPN priority, healthy hidden state, localized permission text, and Grant callback."
+          - "NetworkStatusBannerTest verifies scope priority, definitive offline versus route-uncertain advisories, healthy hidden state, localized permission text, and Grant callback."
           - "NetworkStatusProviderTest verifies cause-chain classification; SpeedTestViewModelTest verifies provider state remains live."
         run: "./gradlew :core-network:test --tests '*LocalNetworkPermissionDeniedExceptionTest' --tests '*TopologyDiscoveryRepositoryTest' :app:testDebugUnitTest --no-daemon --no-parallel"
         expect: "RED before cause classification and banner wiring; PASS after implementation"
@@ -283,10 +283,14 @@ tasks:
         run: "./gradlew :core-network:test --tests '*LocalNetworkPermissionDeniedExceptionTest' --tests '*TopologyDiscoveryRepositoryTest' :app:testDebugUnitTest :app:assembleDebug --no-daemon --no-parallel"
         expect: "PASS"
     acceptance_criteria:
-      - "The four local-network screens and six internet-tool screens render banners with the correct scope; offline state takes precedence over VPN information, and healthy state is hidden."
+      - "The four local-network screens and six internet-tool screens render banners with the correct scope. Internet-offline and fully empty ANY_NETWORK states are definitive errors; unvalidated Internet, VPN-only local state, and unknown observed transport are advisories that do not gate probes. Healthy state is hidden."
       - "Permission causes survive wrappers and topology's per-request handling; affected local-tool states expose a localized Grant card, and the user retries explicitly after granting."
-      - "Banner/error copy is resource-backed and follows CLAUDE.md Compose and accessibility rules; focused unit tests and banner instrumentation pass."
-    environment_follow_up: "On 2026-09-24, Android-test Kotlin compilation passed for NetworkStatusBannerTest and the current handoff UI tests. Connected execution is pending: the API 36 dev36 emulator repeatedly ANR'd in system_server and PackageManager during adb install/instrumentation on 2026-09-23. Rerun on a responsive API 33/API 36 device before release."
+      - "Banner/error copy is resource-backed and follows CLAUDE.md Compose and accessibility rules; focused unit tests and Android-test Kotlin compilation pass, with connected execution still required."
+    validation:
+      - "On source commit 74e2c50, serialized `:app:testDebugUnitTest` passed (574 tests); `:app:compileDebugAndroidTestKotlin`, `:app:lintDebug` (0 errors), and `:app:assembleDebug` passed."
+      - "Banner Compose tests cover Internet offline precedence, unvalidated Internet, VPN-only local route uncertainty, unknown transport, fully empty connectivity, healthy hidden state, and permission action. Instrumentation sources compile; they were not executed."
+      - "Independent QA/adversarial source reviews cleared the route-advisory priority and confirmed banners report status without blocking probes."
+    environment_follow_up: "Latest API 33/API 36 connected execution remains open. The previous API 36 dev36 attempt ANR'd in system_server/PackageManager before instrumentation began; no emulator was started for source commit 74e2c50. Rerun on a responsive release-target device before release."
 
   - id: P05-T6
     title: "Docs"

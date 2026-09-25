@@ -191,10 +191,10 @@ tasks:
       green: { steps: ["Implement injectable SSLSocket handshake engine; keep each connection in OperationSession resources through blocking work; analyze trust, hostname, and chain separately; add explicit supported/unknown/not-testable protocol outcomes, typed pin error metadata, and UI per design."], expect: "PASS" }
     acceptance_criteria: ["Manual: badssl.com hosts – expired.badssl.com (EXPIRED), wrong.host.badssl.com (HOSTNAME_MISMATCH), self-signed.badssl.com, incomplete-chain.badssl.com, tls-v1-0.badssl.com:1010 (probe)"]
     validation:
-      - "Latest serialized ./gradlew :core-network:test :core-domain:test :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin --no-daemon --no-parallel --max-workers=1 --console=plain -> PASS (core-network 1,141 tests/1 skipped; core-domain 206; app 523; zero failures/errors)."
-      - "Serialized :app:lintDebug --no-daemon --no-parallel --max-workers=1 -> PASS."
-      - "Android-test Kotlin sources compiled; instrumentation and manual badssl/API 33 checks were not run. `adb devices` showed no attached or running emulator."
-      - "Independent QA and adversarial source reviews found no remaining source blocker after the probe-result, localized-error, EXPIRED-badge, and PEM assertions were tightened."
+      - "Latest serialized source checks on 74e2c50: `:core-network:test` passed 1,306 tests (1 skipped), `:core-domain:test` passed 216, and `:app:testDebugUnitTest` passed 574; all had 0 failures/errors."
+      - "`:app:compileDebugAndroidTestKotlin`, `:app:lintDebug` (0 errors), and `:app:assembleDebug` also passed in serialized runs."
+      - "Android-test sources compiled; instrumentation and manual BadSSL/API 33 checks were not run. No emulator or live endpoint was used."
+      - "Independent QA and adversarial source reviews cleared the protocol-classification fix and its updated fake-engine assertions; manual endpoint acceptance remains open."
 
   - id: P10-T3
     second_pass_review:

@@ -19,7 +19,7 @@ phase:
   id: P09
   title: "Quality gates and test coverage"
   priority: medium
-  status: todo
+  status: in_progress
   estimated_effort: "M (2-4 agent sessions)"
   depends_on: []
   enables: []
@@ -206,8 +206,11 @@ tasks:
 
   - id: P09-T6
     title: "Lint warnings + suppressions"
-    status: todo
-    steps: ["Apply design §6; run lintDebug; remaining warnings only GradleDependency/NewerVersionAvailable (handled by T7) and MissingTranslation (P07)."]
+    status: in_progress
+    steps: ["Apply design §6 and keep lintDebug at zero errors. Route PluralsCandidate to P07-T4, GradleDependency/NewerVersionAvailable to T7, and triage remaining warnings before closure."]
+    validation:
+      - "On source commit 74e2c50, serialized `:app:lintDebug` passed with 0 errors and 30 warnings: AutoboxingStateCreation 9, GradleDependency 3, NewerVersionAvailable 3, PluralsCandidate 10, VisibleForTests 5."
+      - "Resolved this pass: EmptySuperCall, InlinedApi, InsecureBaseConfiguration, TrustAllX509TrustManager, and three UnusedResources warnings. Remaining category owners are P07-T4 (plurals), P09-T7 (dependency/version), plus T6 triage for AutoboxingStateCreation and VisibleForTests."
   - id: P09-T7
     title: "Dependency bumps"
     status: todo

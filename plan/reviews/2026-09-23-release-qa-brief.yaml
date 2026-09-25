@@ -3,26 +3,26 @@ review:
   status: current_source_and_jvm_audited_device_gates_open
   source: "User-provided Net Swiss Knife QA brief v2026.09.21.1 (API 33, host snmpd at 10.0.2.2)."
   release_baseline_commit: "5e183721e64ce8a8946f1a0b50f52b83544e8898"
-  checked_commit: "283a393"
-  checked_worktree_commit: "283a393"
-  checked_scope: "The supplied release corresponds to origin/main at 5e18372. The brief was rechecked against source and tests at 283a393: the fixed-item behaviors remain present; ISS-05/06/17/20/21/22 are source-covered with item-specific runtime checks still open. The current branch includes Traceroute offline/progress/recovery, host normalization, topology cancellation/progress/labels/details, graceful mDNS failures, strict GeoIP filtering and provider fallback, and bounded HTTP diagnostics. Full serialized suites passed core-network/core-domain/app 1,299 (one skipped)/216/574 with zero failures/errors. Android-test Kotlin compilation, lint, both APK assemblies, all three Kover gates, all-module ktlint and Detekt, four Python quality tests, the 17-site raw-resource inventory, and YAML parsing passed. No emulator, host snmpd, physical Wi-Fi, or live protocol/link endpoint was used; API 33/TalkBack, integrated Skip dismissal, dead-route UI, live SNMP/mDNS, and measured no-ANR responsiveness remain device/lab gates. ISS-20's report-versus-fix wording conflict is preserved: current code trims outer whitespace and rejects embedded spaces."
+  checked_commit: "74e2c50"
+  checked_worktree_commit: "74e2c50"
+  checked_scope: "The supplied release baseline remains origin/main at 5e18372. Source commit 74e2c50 retains the previously audited ISS-01/02/03/04/08/09/15 and off-main-thread SNMP behaviors, and includes typed core errors, the reviewed TLS protocol classification, banner route advisories, strengthened merged-card activation assertions, a real PortsScreen handoff source test, and lint cleanups. Current serialized checks passed core-network/core-domain/app 1,306 (one skipped)/216/574 with zero failures/errors; Android-test Kotlin compilation, lintDebug (0 errors, 30 warnings), and assembleDebug passed. The supplied issue findings remain source-covered as recorded below; API 33/TalkBack, integrated Skip dismissal, dead-route layout, live SNMP/mDNS, and physical Wi-Fi/no-ANR behavior remain device/lab gates. No emulator or live lab endpoint was used. ISS-20 outer-whitespace trim versus embedded-space rejection is retained as the documented wording conflict."
   current_branch_recheck:
-    commit: "283a393"
+    commit: "74e2c50"
     release_baseline: "origin/main at 5e183721e64ce8a8946f1a0b50f52b83544e8898"
-    result: "The full source audit at 766519b was against origin/main at 5e18372. The 283a393 source was rechecked: ISS-01/02/03/04/08/09/15 and off-main-thread SNMP remain present; ISS-05/06/17/20/21/22 remain source-covered with item-specific device follow-ups below. The GeoIP classifier adds non-global and malformed-address filtering without changing Traceroute progress/offline/retry/cancel behavior. Outer whitespace remains normalized and embedded whitespace remains invalid. The scanner keeps passive mode write-free and bounds HTTP/SMTP/TLS exchanges and displayed certificate subjects. Full JVM suites and quality gates pass on current source. Independent QA/adversarial review found no listed release-brief source regression. API 33/TalkBack, integrated Skip dismissal, dead-route layout/behavior, live SNMP cancellation/canvas usability, API 33 ENODEV, physical wlan0, Speed Test link accuracy, live protocol servers, and measured no-ANR responsiveness remain device/lab checks. No emulator or live lab endpoint was used for current validation."
+    result: "The prior full audit against origin/main at 5e18372 remains the baseline. The 74e2c50 changes were reviewed and compiled: ISS-05 tests now activate each visible Home/More label and assert its destination; ISS-17 banner states distinguish offline errors from route advisories; E01-T01 source coverage uses the production AppNavHost and real PortsScreen with a directly constructed ViewModel. Typed core errors, TLS protocol classification, and lint changes also pass their module/build checks. API 33/TalkBack, integrated Skip dismissal, dead-route layout/behavior, live SNMP cancellation/canvas usability, API 33 ENODEV, physical wlan0, and measured no-ANR responsiveness remain device/lab checks. No emulator or live lab endpoint was used."
   latest_source_recheck:
     date: "2026-09-25"
-    commit: "283a393"
+    commit: "74e2c50"
     release_baseline: "origin/main at 5e183721e64ce8a8946f1a0b50f52b83544e8898"
-    result: "The full item-by-item source audit was recorded at 766519b against origin/main at 5e18372. Source commit 283a393 retains the audited fixed behaviors and adds strict GeoIP literal filtering, deterministic Traceroute stop-time coverage, bounded port-banner disclosure, Speed Test multi-stream/loaded-latency reporting, optional HTTP/SMTP/TLS probes, and the E03 classifier/cache primitives. The prior ISS-17 deadline/enrichment gap is fixed in 8286e48: the native hop is emitted before reverse-DNS/GeoIP work and preserved as a partial result if the shared deadline cancels enrichment. No listed source defect is newly missing. ISS-20 wording remains internally inconsistent: its repro asks for a trailing-space error and disabled Start, while its proposed fix asks to trim; current behavior trims outer whitespace and keeps Start enabled, while embedded whitespace remains invalid. API 33/TalkBack, integrated Skip dismissal, dead-route behavior and initial-viewport layout, live SNMP cancellation and sparse-canvas usability, API 33 ENODEV, physical wlan0, Speed Test link accuracy, live HTTP/SMTP/TLS servers, and measured no-ANR responsiveness remain device/lab checks."
-    validation: "Serialized current-source suites passed on 283a393: core-network 1,299 tests (one skipped), core-domain 216, and app 574, all with zero failures/errors. Android-test Kotlin compilation, all three Kover gates, lintDebug, debug/release assembly, all-module ktlint and Detekt, Python quality checks, and the 17-site raw-resource inventory passed. No emulator, host snmpd, physical Wi-Fi device, or live protocol/link probe was used."
-    latest_app_change_validation: "Current commit 283a393 passed the complete JVM suites, Android-test Kotlin compilation, lintDebug, debug/release assembly, all Kover gates, all-module ktlint and Detekt, Python quality tests, raw-resource inventory, and YAML parsing. No emulator or live lab endpoint was used."
+    result: "The item-by-item baseline audit remains against origin/main 5e18372. Source commit 74e2c50 retains the checked fixed behaviors and adds typed core error information, TLS protocol-failure classification tests, advisory messaging for unvalidated/VPN-only/unknown-route connectivity, merged title activation checks for Home and More, and a production-graph LAN-to-real-Ports source test. No listed source defect is newly missing. ISS-20 wording remains internally inconsistent: its repro asks for a trailing-space error and disabled Start, while its proposed fix asks to trim; current behavior trims outer whitespace and keeps Start enabled, while embedded whitespace remains invalid. API 33/TalkBack, integrated Skip dismissal, dead-route behavior and initial-viewport layout, live SNMP cancellation and sparse-canvas usability, API 33 ENODEV, physical wlan0, Speed Test link accuracy, live HTTP/SMTP/TLS servers, and measured no-ANR responsiveness remain device/lab checks."
+    validation: "On 74e2c50, serialized module runs passed core-network 1,306 tests (1 skipped), core-domain 216, and app 574 with zero failures/errors. Android-test Kotlin compilation, lintDebug (0 errors, 30 warnings), and assembleDebug passed. No emulator, host snmpd, physical Wi-Fi device, or live protocol/link probe was used."
+    latest_app_change_validation: "Source commit 74e2c50 passed the app unit suite (574), Android-test Kotlin compilation, lintDebug (0 errors, 30 warnings), and assembleDebug. Instrumentation was not executed; no emulator or live lab endpoint was used."
   latest_code_commit_validation:
-    commit: "283a393"
-    unit_tests: { core_network: 1299, core_domain: 216, app: 574, skipped: 1, failures: 0, errors: 0 }
+    commit: "74e2c50"
+    unit_tests: { core_network: 1306, core_network_skipped: 1, core_domain: 216, app: 574, skipped: 1, failures: 0, errors: 0 }
     android_test_sources: "./gradlew :app:compileDebugAndroidTestKotlin passed"
-    quality_gates: "All three Kover verifications, :app:lintDebug, :app:assembleDebug, :app:assembleRelease, all-module ktlintCheck and Detekt, Python quality checks (4/4), and the 17-site raw-resource inventory passed."
-    device_validation: "No emulator, live SNMP/mDNS endpoint, physical Wi-Fi device, live protocol server, or link-accuracy probe was used; API 33, TalkBack, cancellation, and no-ANR checks remain open."
+    quality_gates: "`:app:compileDebugAndroidTestKotlin`, `:app:lintDebug` (0 errors, 30 warnings), and `:app:assembleDebug` passed. Other Kover/release/ktlint/Detekt checks from prior commits were not rerun on 74e2c50."
+    device_validation: "No emulator, live SNMP/mDNS endpoint, physical Wi-Fi device, live protocol server, or link-accuracy probe was used; API 33, TalkBack, connected instrumentation, cancellation, and no-ANR checks remain open."
   branch: "plan/comprehensive-review-2026-09-22"
   release_metadata:
     app: "Net Swiss Knife"
@@ -36,7 +36,7 @@ review:
     environment_non_goals: "Emulator public ICMP/DNS flakiness is an error-UX check; live Cloudflare success is not required on the target AVD."
   environment:
     connected_emulator: "The initial audit avoided a shared dev36 AVD that another task was using. Before WOL follow-up, adb showed no active device; dev36 was started for targeted Compose checks and shut down afterward. Gradle reported Unknown API Level; direct runner startup stalled with app-process ANRs. No API 33 AVD is available."
-    current_followup: "No emulator was started or used during validation of 283a393. JVM tests, Android-test Kotlin compilation, lint, Kover, APK assembly, static analysis, resource inventory, and YAML parsing ran without emulator interaction; API 33 and live lab validations remain open."
+    current_followup: "No emulator was started or used during validation of 74e2c50. The core-network, core-domain, and app JVM suites, Android-test Kotlin compilation, lintDebug, and debug APK assembly ran without emulator interaction; API 33 and live lab validations remain open."
     host_snmpd: "Not available; no local snmpd process or SNMP lab endpoint verified"
     physical_wifi: "Not available"
   fixed_items_rechecked: [ISS-01, ISS-02, ISS-03, ISS-04, ISS-08, ISS-09, ISS-15, SNMP-threading]
@@ -52,13 +52,13 @@ review:
       classification: source_and_ui_test_present
       evidence:
         - { file: "app/src/main/res/values/strings.xml", lines: "6-10", detail: "Home scroll hint text is `Scroll for more tools`." }
-        - { file: "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/NavigationAccessibilityTest.kt", lines: "69-82", detail: "Home test asserts the scroll cue is displayed." }
+        - { file: "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/NavigationAccessibilityTest.kt", lines: "75-88", detail: "Home test asserts the scroll cue is displayed." }
       limitation: "An earlier API 36 instrumentation pass predates the checked source; the current source was not instrumented, and no API 33 run was available."
     - id: ISS-03
       classification: source_and_ui_test_present
       evidence:
         - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/navigation/NavRoutes.kt", lines: "64-79", detail: "The shared tool list includes WHOIS, HTTP Probe, Subnet Calc, Speed Test, and Wake-on-LAN." }
-        - { file: "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/NavigationAccessibilityTest.kt", lines: "84-112", detail: "More sheet test iterates every shared tool, scrolls to it, and asserts display, click action, and button role." }
+        - { file: "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/NavigationAccessibilityTest.kt", lines: "90-122", detail: "More sheet test iterates each shared tool, activates its visible label as a button, and asserts the exact destination." }
       limitation: "An earlier API 36 instrumentation pass predates the checked source; the current source was not instrumented, and no API 33 run was available."
     - id: ISS-04
       classification: source_and_unit_test_present_ui_error_rendering_test_present
@@ -73,7 +73,7 @@ review:
       evidence:
         - { file: "app/src/main/AndroidManifest.xml", lines: "18-25", detail: "Application launcher label references `@string/app_name`." }
         - { file: "app/src/main/res/values/strings.xml", lines: "2-4", detail: "`app_name` is `NetSwiss`; full in-app brand text remains `Net Swiss Knife`." }
-        - { file: "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/NavigationAccessibilityTest.kt", lines: "132-137", detail: "Instrumentation test reads the package launcher label and compares it with `app_name`, including a length bound." }
+        - { file: "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/NavigationAccessibilityTest.kt", lines: "191-195", detail: "Instrumentation test reads the package launcher label and compares it with `app_name`, including a length bound." }
       limitation: "An earlier API 36 instrumentation pass predates the checked source; the current source was not instrumented, and no API 33 run was available."
     - id: ISS-09
       classification: source_and_ui_test_present
@@ -108,7 +108,7 @@ items:
     release_baseline_status: "Already implemented on origin/main: the clickable card merges descendants and exposes Role.Button semantics. The issue description is stale against that release source."
     evidence:
       - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/HomeScreen.kt", lines: "262-269", detail: "Clickable ElevatedCard merges descendants and sets Role.Button, so the title is part of the card's merged action semantics." }
-      - { file: "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/NavigationAccessibilityTest.kt", lines: "43-67,84-112", detail: "Home and More tests assert each tool label is displayed, clickable, and has button role." }
+      - { file: "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/NavigationAccessibilityTest.kt", lines: "59-72,108-119,125-171", detail: "Current source tests assert each Home/More title is a merged button with a click action, activate the title, and verify the exact route; separate assertions verify pin/unpin actions do not navigate. Android-test Kotlin compilation passed, but connected execution did not run." }
     needed_validation: "Compose tests assert that merged card labels expose button/click semantics, but the fresh API 36 instrumentation attempt stopped before test execution. Verify TalkBack traversal/activation on the API 33 release target; both runtime checks remain open."
 
   - id: ISS-17
@@ -117,7 +117,8 @@ items:
     evidence:
       - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/traceroute/TracerouteViewModel.kt", lines: "178-221,223-280", detail: "Offline state becomes Error('No network connection'); preflight permits Internet, local-network, or VPN status; trace enters Running immediately, owns an operation session, rejects stale emissions, and Stop holds Canceling until collector cleanup before producing retained partial hops. A deadline that won before Stop remains a timeout Error." }
       - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/TracerouteScreen.kt", lines: "171-247,345-504,591-737", detail: "The NetworkStatusBanner is immediately below the hero. Canceling disables host/config/recent-host/start actions and shows cleanup progress; Canceled renders a partial-result label with retained hops. The Error panel still exposes Retry and Clear." }
-      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/NetworkStatusBanner.kt", lines: "45-53", detail: "ANY_NETWORK shows offline status only when Internet, local-network, and VPN states are all false." }
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/NetworkStatusBanner.kt", lines: "45-63", detail: "Internet-offline and fully empty ANY_NETWORK states are definitive errors; unvalidated Internet, VPN-only local, and unknown observed transport use advisory messages. Advisories do not gate probes." }
+      - { file: "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/components/NetworkStatusBannerTest.kt", lines: "26-211", detail: "Compose source tests cover Internet offline priority, unvalidated Internet, VPN-only local route caveat, unknown transport, fully empty offline, healthy hidden states, and Grant callback. The tests compiled but were not executed on-device." }
       - { file: "app/src/test/kotlin/net/aieat/netswissknife/app/ui/screens/traceroute/TracerouteViewModelTest.kt", lines: "118-168,182-273", detail: "TracerouteViewModelTest is covered by the current full app suite (29 test cases), covering offline rejection, local/VPN eligibility, no-route error, blocked cleanup with retained partial hops, duplicate-start gating, and deadline-over-Stop precedence." }
       - { file: "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/screens/TracerouteScreenTest.kt", lines: "150-252", detail: "Compose source coverage asserts progress/Stop, canceling cleanup copy and disabled host-clear/Stop actions, retained partial hops after Canceled, offline error copy, Retry/Clear callbacks, and the connectivity banner. Android-test Kotlin compilation passed; the test was not executed on a device." }
       - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/traceroute/TracerouteReverseDnsLookup.kt", lines: "22-44,83-111", detail: "Current worktree moves optional reverse-DNS work to a cancellable helper with two daemon workers and an eight-entry queue; callers retain numeric hop results after timeout or lookup failure." }
@@ -129,7 +130,7 @@ items:
     release_baseline_status: "The Welcome sheet Skip callback already invokes dismissal on origin/main. The report is an integration-verification request, not a confirmed missing callback."
     evidence:
       - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/onboarding/OnboardingSheet.kt", lines: "93-96", detail: "The top-right Skip action invokes onDismiss directly from the Welcome sheet (the resource key retains its older 'don't show again' name)." }
-      - { file: "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/NavigationAccessibilityTest.kt", lines: "114-130", detail: "Onboarding test clicks the action and asserts the dismiss callback fired." }
+      - { file: "app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/NavigationAccessibilityTest.kt", lines: "173-188", detail: "Onboarding test clicks Skip and asserts the dismiss callback fired." }
     needed_validation: "The Compose test asserts that Skip invokes the dismissal callback, but the fresh API 36 instrumentation attempt stopped before test execution. Verify the integrated Welcome sheet disappears on the release target; no API 33 run was available."
 
   - id: ISS-20
@@ -187,15 +188,15 @@ api36_instrumentation:
     runner_argument: "class=ToolHandoffNavigationTest,LanScanScreenTest,WakeOnLanScreenTest"
     attempted_classes: [ToolHandoffNavigationTest, LanScanScreenTest, WakeOnLanScreenTest]
     outcome: "AndroidTest sources compiled. Gradle connectedDebugAndroidTest detected dev36 but rejected it as Unknown API Level and reported no compatible device. A direct `adb shell am instrument -w` attempt reached the app process, which stalled during startup and logged ANRs; the runner was stopped before tests completed. The API 36 AVD was shut down with `adb emu kill`. No instrumentation results are claimed."
-  note: "Previously recorded API 36 passes are historical and predate current checked HEAD 283a393; they do not validate the latest branch changes. UI tests use fake ViewModels; successful UI instrumentation still does not replace API 33, TalkBack, host snmpd, or physical WLAN checks."
+  note: "Previously recorded API 36 passes are historical and predate current checked HEAD 74e2c50; they do not validate the latest branch changes. UI tests use fake ViewModels; successful UI instrumentation still does not replace API 33, TalkBack, host snmpd, or physical WLAN checks."
 
 unit_validation:
-  command: "./gradlew :core-network:test :core-domain:test :app:testDebugUnitTest --no-daemon --no-parallel --console=plain"
+  command: "Serialized separate runs: :core-network:test, :core-domain:test, :app:testDebugUnitTest, :app:compileDebugAndroidTestKotlin, :app:lintDebug, :app:assembleDebug"
   status: exact_source_suites_and_build_gates_passed_device_checks_open
-  android_test_kotlin_compile: passed_on_283a393
-  results: { core_network_latest_full_report: 1299, core_network_latest_full_report_skipped: 1, core_network_focused_topology_rerun: 26, snmp4j_loopback_tests: 12, lan_worker_cap_test: "6 requested, session max 2, measured max 2", core_domain_latest_report: 216, app_fresh_full_run: 574, failures: 0, errors: 0, core_network_validation_commit: "283a393", app_validation_commit: "283a393", android_test_compile_commit: "283a393" }
+  android_test_kotlin_compile: passed_on_74e2c50
+  results: { core_network_latest_full_report: 1306, core_network_latest_full_report_skipped: 1, core_network_focused_topology_rerun: 26, snmp4j_loopback_tests: 12, lan_worker_cap_test: "6 requested, session max 2, measured max 2", core_domain_latest_report: 216, app_fresh_full_run: 574, failures: 0, errors: 0, core_network_validation_commit: "74e2c50", app_validation_commit: "74e2c50", android_test_compile_commit: "74e2c50" }
   focused_followup: { operation_runner: "14/14", ping_view_model: "50/50", traceroute_view_model: "17/17", android_test_kotlin_compile: "passed" }
-  current_worktree_followup: "At source commit 283a393, full serialized core-network/core-domain/app suites passed 1,299 (one skipped)/216/574 with zero failures or errors. Android-test Kotlin compilation, all three Kover gates, lintDebug, debug/release assembly, all-module ktlint and Detekt, four quality-checker unit tests, the 17-site raw-resource inventory, and YAML parsing passed. No emulator or live network lab was used. API 33, TalkBack, live SNMP/mDNS, physical WLAN, live HTTP/SMTP/TLS servers, Speed Test link accuracy, and no-ANR checks remain open."
+  current_worktree_followup: "At source commit 74e2c50, serialized core-network/core-domain/app suites passed 1,306 (one skipped)/216/574 with zero failures or errors. Android-test Kotlin compilation, lintDebug (0 errors, 30 warnings), and assembleDebug passed. No emulator or live network lab was used. API 33, TalkBack, live SNMP/mDNS, physical WLAN, live HTTP/SMTP/TLS servers, Speed Test link accuracy, and no-ANR checks remain open."
   additional: "Earlier evidence includes the focused TLS repository class (18 tests), OperationRunnerTest (14/14), PingViewModelTest (50/50), TracerouteViewModelTest (17/17), and WOL/codec/route-identity/LAN focused coverage. API 33 instrumentation, TalkBack, host snmpd, physical WLAN, and other device-specific checks remain open."
 
 brief_accuracy:

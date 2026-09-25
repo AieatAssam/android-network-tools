@@ -12,7 +12,7 @@ phase:
   id: P07
   title: "Localization architecture + first translation"
   priority: medium
-  status: todo
+  status: in_progress
   estimated_effort: "L (4-6 agent sessions; mechanical but wide)"
   depends_on: [P06]
   enables: [P08, P10, P12, P13]
@@ -135,7 +135,7 @@ design:
 tasks:
   - id: P07-T1
     title: "core-network: ErrorCode/ErrorInfo + NetworkResult.Error.info + factory; migrate core-network error sites"
-    status: todo
+    status: done
     tdd:
       red:
         test_file: core-network/src/test/kotlin/net/aieat/netswissknife/core/network/ErrorInfoTest.kt
@@ -149,10 +149,14 @@ tasks:
       green: { steps: ["Implement; replace each literal with the factory; keep messages as developer text."], run: "./gradlew :core-network:test --no-daemon", expect: "PASS" }
       refactor: ["SpeedTestEvent.Failed(phase, message) -> Failed(phase, info: ErrorInfo) with message property for compatibility."]
     acceptance_criteria: ["`grep -rn 'NetworkResult.Error(\"' core-network/src/main` returns 0."]
+    validation:
+      - "Latest serialized `./gradlew :core-network:test --no-daemon --no-parallel --max-workers=1 --console=plain` passed 1,306 tests (1 skipped, 0 failures/errors)."
+      - "All production repository errors use the typed factory; `rg 'NetworkResult.Error(\"' core-network/src/main` returns no matches."
+      - "Independent QA and adversarial reviews cleared argument, cause/legacy metadata, timeout bounds, and speed-test typed-error assertions."
 
   - id: P07-T2
     title: "core-domain: ValidationError carries ErrorInfo; validators return codes"
-    status: todo
+    status: done
     depends_on: [P07-T1]
     tdd:
       red:
@@ -165,6 +169,10 @@ tasks:
         expect: "RED"
       green: { steps: ["Migrate all use cases; keep `message` computed properties."], run: "./gradlew :core-domain:test --no-daemon", expect: "PASS" }
     acceptance_criteria: ["`grep -rn 'ValidationError(\"' core-domain/src/main` returns 0."]
+    validation:
+      - "Latest serialized `./gradlew :core-domain:test --no-daemon --no-parallel --max-workers=1 --console=plain` passed 216 tests with 0 failures/errors."
+      - "Ping, port scan, LAN, traceroute, DNS, HTTP, TLS, WHOIS, WOL, and topology validation now carry typed ErrorInfo; ordered topology message compatibility is asserted exactly."
+      - "Legacy string constructors and developer-facing `message` properties remain; independent QA/adversarial reviews confirm the typed data-shape change matches this phase's API migration contract."
 
   - id: P07-T3
     title: "app: UiText + ErrorTextMapper + enum label mapping + ViewModel migration"
