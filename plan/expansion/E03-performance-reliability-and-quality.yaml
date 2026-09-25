@@ -369,10 +369,10 @@ tasks:
     status: in_progress
     current_progress:
       date: "2026-09-25"
-      implemented: "Added a generic process-local NetworkCache with Fresh-by-default access and explicit UseCached opt-in, route/scope-isolated keys, monotonic positive/negative TTLs, a 256-entry LRU bound, concurrent single-flight loads, clear-generation protection, and no retention of failed or cancelled loads."
+      implemented: "Added the bounded route/scope-keyed NetworkCache primitive and a pinned OkHttp 5.5.0 source fork that enforces HTTP/1 and HTTP/2 response metadata limits during parsing. HTTP/2 ordinary fields count cumulatively across informational/final/trailer blocks; pseudo-fields have separate per-block and per-stream caps so status-only interim blocks cannot bypass retained-memory bounds. Typed failures reach the HTTP probe, and bounded body close preserves trailer-limit errors."
       fixed_in: "93522c7"
-      validation: "NetworkCacheTest is included in the passing full core-network suite (1,270 tests, one skipped, zero failures/errors); core-domain passed 216/216 and app passed 549/549. All three Kover gates, lintDebug, Android-test Kotlin compilation, debug/release assembly, and release smoke passed."
-      remaining: "This cache primitive does not complete E03-T04. Shared TimeoutPolicy and overall deadlines, adapter integration for DNS/GeoIP/HTTP/TLS/WHOIS/speed-test, shared response-body caps, explicit stale/offline UI, and parser-time HTTP metadata field/byte limits with transport-level rejection remain open."
+      validation: "Full :core-network:test passed 1,340 tests (one skipped, zero failures/errors); direct parser and HTTP/1+h2c transport regressions include exact/over UTF-8 and aggregate boundaries, 100/101 fields, informational/trailer aggregation, cumulative pseudo-field blocks, and typed trailer rejection after a capped body read. Independent QA/adversarial reviews found no remaining parser bypass. :app:testDebugUnitTest passed 586 tests, and :app:assembleDebug passed with both JVM and Android fork source sets. No emulator was used."
+      remaining: "This cache and parser slice does not complete E03-T04. Shared TimeoutPolicy and overall deadlines, adapter integration for DNS/GeoIP/TLS/WHOIS/speed-test, shared response-body caps, and explicit stale/offline UI remain open."
       parser_limit_feasibility_audit:
         date: "2026-09-25"
         dependency: "OkHttp 5.5.0"
@@ -381,7 +381,14 @@ tasks:
           - "https://github.com/square/okhttp/blob/parent-5.5.0/okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http1/HeadersReader.kt"
           - "https://github.com/square/okhttp/blob/parent-5.5.0/okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http2/Hpack.kt"
           - "https://github.com/square/okhttp/blob/parent-5.5.0/okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http2/Http2Reader.kt"
-        disposition: "Keep parser-time exact limits open. The owning implementation slice must choose an engine that exposes these limits or maintain a parser-level transport fork; do not close the criterion with an adapter-only cap."
+        disposition: "Implemented by maintaining a pinned local OkHttp source fork rather than relying on an adapter-only cap. The fork checks HTTP/1 fields before appending to retained response headers and checks HTTP/2 decoded fields before HPACK header-list insertion; over-budget responses produce ResponseHeaderLimitException and a typed HTTP probe error. HTTP/2 pseudo-fields are excluded from the ordinary HTTP/1-equivalent budget but separately bounded to five per block and 100 cumulatively per stream. Per-call connection pools isolate HPACK parser failures, and bounded HTTP/1/2 close drains preserve trailer-limit errors."
+        implementation_evidence:
+          - "third_party/okhttp/README.md pins OkHttp parent-5.5.0 at a94bdf152084d11acecd44dcd09ffef203f4f0aa and records the parser-fork contract."
+          - "third_party/okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http1/HeadersReader.kt enforces value, occurrence, and aggregate budgets while parsing field lines."
+          - "third_party/okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http2/Hpack.kt enforces decoded budgets before retained header insertion and tracks per-stream accounting across blocks."
+          - "core-network/src/test/.../ResponseHeaderParserLimitTest.kt invokes HeadersReader and Hpack.Reader directly, independent of the response adapter validator."
+          - "core-network/src/test/.../OkHttpEngineTest.kt verifies HTTP/1 and h2c loopback typed rejection, duplicate preservation, informational/trailer totals, and capped-body trailer errors."
+        validation: "Full :core-network:test passed 1,340 tests (one skipped, zero failures/errors), including direct parser, HTTP/1+h2c transport, cumulative pseudo-field, and capped-body trailer regressions. :app:testDebugUnitTest passed 586 tests and :app:assembleDebug passed, compiling the fork's Android source set. Independent QA/adversarial reviews found no remaining parser bypass; no emulator was used."
     source_evidence:
       - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/traceroute/GeoIpRepositoryImpl.kt", lines: "23-55", why: "Successful GeoIP values live in an unbounded process cache and each request reads an unconstrained response body." }
       - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/dns/DnsRepositoryImpl.kt", lines: "70-121", why: "Resolver timeout is per attempt; no overall budget, cache policy, or stale/offline semantics are shared." }
@@ -405,11 +412,15 @@ tasks:
       Count repeated names separately, compare names case-insensitively, and
       retain each normalized name's values in arrival order; never comma-fold
       Set-Cookie. Exceeding any limit rejects the response with a typed
-      `ResponseMetadataLimitExceeded` outcome instead of returning partial
+      `ResponseHeaderLimitException` mapped to `HTTP_RESPONSE_HEADERS_TOO_LARGE`
+      instead of returning partial
       headers that security analysis could mistake for absent headers. The
       selected transport must enforce equivalent limits in its parser before
       full header materialization; a post-materialization adapter cap is not a
-      parser-memory guarantee.
+      parser-memory guarantee. HTTP/2 pseudo-fields have no HTTP/1 field
+      equivalent, so they do not consume the ordinary-field budget; the parser
+      separately limits them to five per header block and 100 cumulatively per
+      stream, bounding status-only informational blocks and duplicate pseudos.
     depends_on: [E03-T01]
     implementation_steps:
       - "Record current timeout and response-size behavior in tests before changing defaults; distinguish measured baseline from the proposed shared defaults."
@@ -428,6 +439,7 @@ tasks:
       - "Cache size never exceeds 256 entries; repeated concurrent identical opt-in cached lookups invoke the fake provider once; expiry, negative expiry, route-key separation, DNS record TTL, clear, fresh-by-default behavior, and stale-offline labeling are tested."
       - "No default response reader retains more than 1 MiB; oversized HTTP/WHOIS/GeoIP fixtures return a typed truncation/size outcome and do not create an unbounded StringBuilder. Fresh DNS/HTTP/TLS diagnostics never silently serve a cache hit."
       - "The selected HTTP engine rejects the 101st field occurrence, the first occurrence over 65,536 aggregate decoded metadata bytes, or a field value over 16,384 decoded UTF-8 bytes before materializing the complete header collection. Exact-limit responses are accepted. Duplicate field names are grouped case-insensitively with per-name arrival order preserved; separate Set-Cookie values stay separate. Scripted repository fixtures verify retained bounds, while engine/parser and loopback transport integration tests prove parser-time rejection. A rejected/unknown header set never reaches security analysis as an empty or partial map."
+      - "HTTP/2 pseudo-fields do not bypass bounded retention: at most five occur in one block and at most 100 accumulate across blocks on one stream; stream end, reset, removal, push cancellation, and ignored stale-stream blocks clear accounting."
       - "Cache contents and exported settings contain no password, authorization header, packet payload, WHOIS body, or raw scan host list."
     validation:
       red: "./gradlew :core-network:test --tests '*Timeout*' --tests '*Cache*' --tests '*GeoIpRepositoryImplTest' --tests '*DnsRepositoryImplTest' --no-daemon"

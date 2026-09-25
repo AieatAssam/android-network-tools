@@ -32,3 +32,5 @@ rootProject.name = "NetSwissKnife"
 include(":app")
 include(":core-network")
 include(":core-domain")
+include(":okhttp-bounded")
+project(":okhttp-bounded").projectDir = file("third_party/okhttp")

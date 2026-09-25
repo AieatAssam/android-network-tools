@@ -5,16 +5,25 @@ import okhttp3.Authenticator
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.CookieJar
+import okhttp3.ConnectionPool
 import okhttp3.EventListener
+import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
+import okhttp3.ResponseHeaderLimitException
+import okhttp3.ResponseHeaderLimitKind
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
 import java.io.FilterInputStream
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resumeWithException
+
+private const val RESPONSE_HEADER_FIELD_LIMIT = ResponseHeaderLimitException.MAX_FIELD_OCCURRENCES
+private const val RESPONSE_HEADER_AGGREGATE_BYTE_LIMIT = ResponseHeaderLimitException.MAX_AGGREGATE_METADATA_BYTES
+private const val RESPONSE_HEADER_VALUE_BYTE_LIMIT = ResponseHeaderLimitException.MAX_VALUE_UTF8_BYTES
+private const val RESPONSE_HEADER_FIELD_OVERHEAD_BYTES = ResponseHeaderLimitException.FIELD_FRAMING_BYTES
 
 /** Default manual-redirect HTTP transport for the HTTP probe. */
 class OkHttpEngine(client: OkHttpClient = OkHttpClient()) : HttpEngine {
@@ -44,7 +53,10 @@ class OkHttpEngine(client: OkHttpClient = OkHttpClient()) : HttpEngine {
         val body = request.body?.toRequestBody(null as okhttp3.MediaType?)
             ?: if (request.method in setOf("POST", "PUT", "PATCH")) ByteArray(0).toRequestBody(null as okhttp3.MediaType?) else null
         builder.method(request.method, body)
-        val call = client.newCall(builder.build())
+        // A parser limit violation fails the HPACK connection to preserve compression state. Give
+        // each HTTP Probe call its own pool so that one rejected response cannot fail sibling calls.
+        val callClient = client.newBuilder().connectionPool(ConnectionPool()).build()
+        val call = callClient.newCall(builder.build())
         call.timeout().timeout(request.timeoutMs.toLong(), TimeUnit.MILLISECONDS)
         return OkHttpEngineCall(call, recorder)
     }
@@ -67,6 +79,13 @@ private class OkHttpEngineCall(
                 this@OkHttpEngineCall.response = response
                 if (!continuation.isActive) {
                     response.close()
+                    return
+                }
+                try {
+                    validateResponseHeaderLimits(response.headers)
+                } catch (e: ResponseHeaderLimitException) {
+                    response.close()
+                    continuation.resumeWithException(e)
                     return
                 }
                 val headers = buildMap<String, List<String>> {
@@ -101,6 +120,29 @@ private class OkHttpEngineCall(
     override fun close() {
         call.cancel()
         response?.close()
+    }
+}
+
+/** Defense in depth for injected clients whose interceptors may synthesize a Response directly. */
+internal fun validateResponseHeaderLimits(headers: Headers) {
+    var fieldCount = 0
+    var metadataByteCount = 0
+    for (index in 0 until headers.size) {
+        fieldCount++
+        if (fieldCount > RESPONSE_HEADER_FIELD_LIMIT) {
+            throw ResponseHeaderLimitException(ResponseHeaderLimitKind.FIELD_COUNT, RESPONSE_HEADER_FIELD_LIMIT)
+        }
+        val name = headers.name(index)
+        val value = headers.value(index)
+        val valueByteCount = value.toByteArray(Charsets.UTF_8).size
+        if (valueByteCount > RESPONSE_HEADER_VALUE_BYTE_LIMIT) {
+            throw ResponseHeaderLimitException(ResponseHeaderLimitKind.VALUE_BYTES, RESPONSE_HEADER_VALUE_BYTE_LIMIT)
+        }
+        val fieldByteCount = name.toByteArray(Charsets.UTF_8).size + valueByteCount + RESPONSE_HEADER_FIELD_OVERHEAD_BYTES
+        if (metadataByteCount + fieldByteCount > RESPONSE_HEADER_AGGREGATE_BYTE_LIMIT) {
+            throw ResponseHeaderLimitException(ResponseHeaderLimitKind.AGGREGATE_BYTES, RESPONSE_HEADER_AGGREGATE_BYTE_LIMIT)
+        }
+        metadataByteCount += fieldByteCount
     }
 }
 

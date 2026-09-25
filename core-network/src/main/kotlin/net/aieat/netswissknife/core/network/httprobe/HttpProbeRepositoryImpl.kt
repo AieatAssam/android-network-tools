@@ -24,6 +24,7 @@ import net.aieat.netswissknife.core.network.operation.OperationSession
 import net.aieat.netswissknife.core.network.operation.ensureCurrentOperationActive
 import java.io.ByteArrayOutputStream
 import java.io.IOException
+import okhttp3.ResponseHeaderLimitException
 import java.net.MalformedURLException
 import java.net.URI
 import java.net.URISyntaxException
@@ -105,6 +106,12 @@ class HttpProbeRepositoryImpl internal constructor(
                 return@withContext NetworkResult.error(
                     ErrorCode.NETWORK_TIMEOUT,
                     developerMessage = "HTTP request timed out",
+                    cause = e,
+                )
+            } catch (e: ResponseHeaderLimitException) {
+                NetworkResult.error(
+                    ErrorCode.HTTP_RESPONSE_HEADERS_TOO_LARGE,
+                    developerMessage = "HTTP response headers exceed the supported size limits",
                     cause = e,
                 )
             } catch (e: IOException) {

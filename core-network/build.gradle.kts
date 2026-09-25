@@ -34,7 +34,7 @@ dependencies {
     implementation(libs.coroutines.core)
     implementation(libs.dnsjava)
     implementation(libs.snmp4j)
-    implementation(libs.okhttp)
+    implementation(project(":okhttp-bounded"))
     implementation(libs.kotlinx.serialization.json)
 
     testImplementation(libs.junit5.api)
@@ -42,8 +42,12 @@ dependencies {
     testRuntimeOnly(libs.junit5.engine)
     testRuntimeOnly(libs.junit5.launcher)
     testImplementation(libs.mockk)
-    testImplementation(libs.mockwebserver3)
-    testImplementation(libs.okhttpTls)
+    testImplementation(libs.mockwebserver3) {
+        exclude(group = "com.squareup.okhttp3", module = "okhttp")
+    }
+    testImplementation(libs.okhttpTls) {
+        exclude(group = "com.squareup.okhttp3", module = "okhttp")
+    }
     testImplementation(libs.coroutines.test)
 }
 
