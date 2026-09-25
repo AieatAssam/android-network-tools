@@ -135,6 +135,11 @@
     <string name="ping_copy_raw">Copy raw output</string>
     <string name="ping_copy_csv">Copy as CSV</string>
     <string name="ping_chart_title">RTT Chart</string>
+    <string name="ping_chart_a11y">RTT chart: %1$d successful samples; axis from %2$d to %3$d ms; %4$s %5$d ms, %6$s %7$.1f ms, %8$s %9$d ms; %10$s</string>
+    <plurals name="ping_chart_failed_markers">
+        <item quantity="one">%1$d failed probe marker at the 0 ms baseline</item>
+        <item quantity="other">%1$d failed probe markers at the 0 ms baseline</item>
+    </plurals>
     <string name="ping_progress_format">%1$d / %2$d</string>
 
     <!-- Port Scanner Screen -->
@@ -385,6 +390,14 @@
     <string name="wifi_network_info_header">Network Information</string>
     <string name="wifi_live_connection_header">Live Connection</string>
     <string name="wifi_spectrum_title">Spectrum Analyser</string>
+    <string name="wifi_spectrum_a11y">Wi-Fi spectrum: %1$d access points on %2$s, strongest access point %3$s at %4$d dBm</string>
+    <string name="wifi_signal_gauge_a11y">Signal quality: %1$d%%, %2$s</string>
+    <string name="wifi_signal_level_excellent">Excellent</string>
+    <string name="wifi_signal_level_good">Good</string>
+    <string name="wifi_signal_level_fair">Fair</string>
+    <string name="wifi_signal_level_weak">Weak</string>
+    <string name="wifi_signal_level_poor">Poor</string>
+    <string name="wifi_unknown_network">unknown network</string>
     <string name="wifi_best_channel_title">Best Channel</string>
     <string name="wifi_best_channel_body">Channel %1$d has the least congestion on 2.4 GHz</string>
     <plurals name="wifi_networks_count">

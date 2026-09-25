@@ -55,6 +55,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -572,14 +573,22 @@ private fun HttpProbeInputCard(
                     }
                     Spacer(Modifier.width(4.dp))
                 }
-                IconButton(onClick = onToggleHeaders, enabled = formEnabled, modifier = Modifier.size(32.dp)) {
+                IconButton(
+                    onClick = onToggleHeaders,
+                    enabled = formEnabled,
+                    modifier = Modifier.minimumInteractiveComponentSize()
+                ) {
                     Icon(
                         imageVector = if (uiState.headersExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                         contentDescription = stringResource(if (uiState.headersExpanded) R.string.action_collapse else R.string.action_expand),
                         modifier = Modifier.size(20.dp)
                     )
                 }
-                IconButton(onClick = onAddHeader, enabled = formEnabled, modifier = Modifier.size(32.dp)) {
+                IconButton(
+                    onClick = onAddHeader,
+                    enabled = formEnabled,
+                    modifier = Modifier.minimumInteractiveComponentSize()
+                ) {
                     Icon(Icons.Default.Add, contentDescription = stringResource(R.string.httprobe_add_header), modifier = Modifier.size(20.dp))
                 }
             }
@@ -617,7 +626,7 @@ private fun HttpProbeInputCard(
                             IconButton(
                                 onClick = { onRemoveHeader(index) },
                                 enabled = formEnabled,
-                                modifier = Modifier.size(32.dp)
+                                modifier = Modifier.minimumInteractiveComponentSize()
                             ) {
                                 Icon(
                                     Icons.Default.Delete,
@@ -1152,7 +1161,7 @@ private fun HeaderSection(
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.weight(1f)
                 )
-                IconButton(onClick = onToggle, modifier = Modifier.size(32.dp)) {
+                IconButton(onClick = onToggle, modifier = Modifier.minimumInteractiveComponentSize()) {
                     Icon(
                         imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                         contentDescription = stringResource(if (expanded) R.string.action_collapse else R.string.action_expand),
@@ -1357,7 +1366,10 @@ private fun SecurityCheckRow(check: SecurityHeaderCheck) {
 
                 SecurityRatingBadge(check.rating)
 
-                IconButton(onClick = { expanded = !expanded }, modifier = Modifier.size(28.dp)) {
+                IconButton(
+                    onClick = { expanded = !expanded },
+                    modifier = Modifier.minimumInteractiveComponentSize()
+                ) {
                     Icon(
                         imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                         contentDescription = stringResource(if (expanded) R.string.action_collapse else R.string.action_expand),

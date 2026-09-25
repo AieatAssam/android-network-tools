@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -17,6 +16,7 @@ import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -75,7 +75,7 @@ fun RecentHostsRow(
                         IconButton(
                             onClick = { onRemoveHost(host) },
                             enabled = actionsEnabled,
-                            modifier = Modifier.size(32.dp).wrapContentSize(Alignment.Center)
+                            modifier = Modifier.minimumInteractiveComponentSize()
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Close,
@@ -90,7 +90,7 @@ fun RecentHostsRow(
             IconButton(
                 onClick = onClearAll,
                 enabled = actionsEnabled,
-                modifier = Modifier.size(40.dp)
+                modifier = Modifier.minimumInteractiveComponentSize()
             ) {
                 Icon(
                     imageVector = Icons.Default.DeleteSweep,

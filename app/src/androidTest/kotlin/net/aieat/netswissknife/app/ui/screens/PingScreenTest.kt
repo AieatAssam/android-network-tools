@@ -82,6 +82,45 @@ class PingScreenTest {
     }
 
     @Test
+    fun rttChartDescription_reportsSuccessfulSampleStatsAndAxisRange() {
+        val packets = listOf(
+            PingPacketResult(1, "example.com", 12L, PingStatus.SUCCESS),
+            PingPacketResult(2, "example.com", null, PingStatus.TIMEOUT),
+            PingPacketResult(3, "example.com", 48L, PingStatus.SUCCESS),
+            PingPacketResult(4, "example.com", null, PingStatus.UNREACHABLE),
+            PingPacketResult(5, "example.com", null, PingStatus.ERROR),
+        )
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                PingScreen(
+                    viewModel = fakePingViewModel(
+                        PingUiState.Running(host = "example.com", packets = packets, totalCount = packets.size)
+                    )
+                )
+            }
+        }
+        composeRule.mainClock.advanceTimeBy(2_000L)
+        composeRule
+            .onNodeWithTag(PingScreenTestTags.CONTENT_LIST)
+            .performScrollToIndex(PingScreenTestTags.RESULTS_PANEL_INDEX)
+
+        val description = context.getString(
+            R.string.ping_chart_a11y,
+            2,
+            0,
+            48L,
+            context.getString(R.string.ping_rtt_min),
+            12L,
+            context.getString(R.string.ping_rtt_avg),
+            30.0,
+            context.getString(R.string.ping_rtt_max),
+            48L,
+            context.resources.getQuantityString(R.plurals.ping_chart_failed_markers, 3, 3),
+        )
+        composeRule.onNodeWithContentDescription(description).assertIsDisplayed()
+    }
+
+    @Test
     fun errorState_showsErrorTitleAndMessage() {
         composeRule.setContent {
             NetSwissKnifeTheme {

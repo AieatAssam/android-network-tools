@@ -62,6 +62,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
@@ -1122,7 +1123,7 @@ private fun DnsRecordCard(record: DnsRecord, index: Int) {
                         onClick = {
                             scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("", record.value))) }
                         },
-                        modifier = Modifier.size(36.dp)
+                        modifier = Modifier.minimumInteractiveComponentSize()
                     ) {
                         Icon(
                             imageVector = Icons.Default.ContentCopy,

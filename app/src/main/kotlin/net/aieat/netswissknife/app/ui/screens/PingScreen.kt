@@ -99,7 +99,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.stringArrayResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -1063,8 +1066,32 @@ private fun LiveStatLabel(label: String, value: String, color: Color = MaterialT
 
 @Composable
 private fun RttChartCard(packets: List<PingPacketResult>) {
-    val successPackets = packets.filter { it.rtTimeMs != null }
-    if (successPackets.isEmpty()) return
+    val successfulPackets = packets.filter { it.status == PingStatus.SUCCESS && it.rtTimeMs != null }
+    val successfulRtts = successfulPackets.mapNotNull { it.rtTimeMs }
+    if (successfulRtts.isEmpty()) return
+
+    val minRtt = successfulRtts.minOrNull() ?: return
+    val measuredMaxRtt = successfulRtts.maxOrNull() ?: return
+    val maxRtt = measuredMaxRtt.coerceAtLeast(1L)
+    val averageRtt = successfulRtts.average()
+    val failedMarkerCount = packets.count { it.status != PingStatus.SUCCESS || it.rtTimeMs == null }
+    val chartDescription = stringResource(
+        R.string.ping_chart_a11y,
+        successfulRtts.size,
+        0,
+        maxRtt,
+        stringResource(R.string.ping_rtt_min),
+        minRtt,
+        stringResource(R.string.ping_rtt_avg),
+        averageRtt,
+        stringResource(R.string.ping_rtt_max),
+        measuredMaxRtt,
+        pluralStringResource(
+            R.plurals.ping_chart_failed_markers,
+            failedMarkerCount,
+            failedMarkerCount,
+        ),
+    )
 
     val primaryColor = MaterialTheme.colorScheme.primary
     val successColor = MaterialTheme.colorScheme.tertiary
@@ -1089,8 +1116,8 @@ private fun RttChartCard(packets: List<PingPacketResult>) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(120.dp)
+                    .semantics { contentDescription = chartDescription }
             ) {
-                val maxRtt = successPackets.mapNotNull { it.rtTimeMs }.maxOrNull() ?: 1L
                 val chartWidth = size.width
                 val chartHeight = size.height
 
@@ -1118,7 +1145,7 @@ private fun RttChartCard(packets: List<PingPacketResult>) {
                 packets.forEachIndexed { index, packet ->
                     val x = leftPad + (chartWidth - leftPad - edgePad) * index / (packets.size - 1).coerceAtLeast(1)
                     val rtt = packet.rtTimeMs
-                    if (rtt != null) {
+                    if (packet.status == PingStatus.SUCCESS && rtt != null) {
                         val y = chartHeight - edgePad - (rtt.toFloat() / maxRtt) * (chartHeight - 2 * edgePad)
                         points.add(Offset(x, y))
                     }
@@ -1153,8 +1180,9 @@ private fun RttChartCard(packets: List<PingPacketResult>) {
                 packets.forEachIndexed { index, packet ->
                     val x = leftPad + (chartWidth - leftPad - edgePad) * index / (packets.size - 1).coerceAtLeast(1)
                     val rtt = packet.rtTimeMs
-                    val dotColor = if (rtt != null) successColor else errorColor
-                    val y = if (rtt != null)
+                    val isSuccessfulResponse = packet.status == PingStatus.SUCCESS && rtt != null
+                    val dotColor = if (isSuccessfulResponse) successColor else errorColor
+                    val y = if (packet.status == PingStatus.SUCCESS && rtt != null)
                         chartHeight - edgePad - (rtt.toFloat() / maxRtt) * (chartHeight - 2 * edgePad)
                     else
                         chartHeight - edgePad

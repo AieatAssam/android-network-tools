@@ -4,6 +4,9 @@ import android.Manifest
 import android.os.Build
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -358,6 +361,65 @@ class WifiScanScreenTest {
             .performScrollToIndex(WifiScreenTestTags.NETWORKS_START_INDEX + 2)
         composeRule.onNodeWithText("Charlie").assertIsDisplayed()
         composeRule.mainClock.autoAdvance = false
+    }
+
+    @Test
+    fun charts_exposeSpectrumAndSignalGaugeValuesToAccessibility() {
+        val ap = fakeAp("HomeNet", "AA:AA:AA:AA:AA:01", -50)
+        val strongestAp = fakeAp("GuestNet", "AA:AA:AA:AA:AA:02", -35)
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                WifiScanScreen(viewModel = fakeViewModel(successState(listOf(ap, strongestAp))))
+            }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        val spectrumDescription = context.getString(
+            R.string.wifi_spectrum_a11y,
+            2,
+            ap.band.displayName,
+            strongestAp.displaySsid,
+            strongestAp.rssi,
+        )
+        composeRule.onNodeWithContentDescription(spectrumDescription).performScrollTo().assertIsDisplayed()
+
+        // Expand the grouped network, then open its BSSID details to expose the arc gauge.
+        composeRule.onNodeWithText(ap.displaySsid).performClick()
+        composeRule.onNodeWithText(ap.bssid).performClick()
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        val levelResource = when (ap.signalLevel) {
+            net.aieat.netswissknife.core.network.wifi.SignalLevel.EXCELLENT -> R.string.wifi_signal_level_excellent
+            net.aieat.netswissknife.core.network.wifi.SignalLevel.GOOD -> R.string.wifi_signal_level_good
+            net.aieat.netswissknife.core.network.wifi.SignalLevel.FAIR -> R.string.wifi_signal_level_fair
+            net.aieat.netswissknife.core.network.wifi.SignalLevel.WEAK -> R.string.wifi_signal_level_weak
+            net.aieat.netswissknife.core.network.wifi.SignalLevel.POOR -> R.string.wifi_signal_level_poor
+        }
+        val levelLabel = context.getString(levelResource)
+        composeRule.onNodeWithContentDescription(
+            context.getString(R.string.wifi_signal_gauge_a11y, ap.signalQualityPercent, levelLabel)
+        ).assertIsDisplayed()
+    }
+
+    @Test
+    fun spectrumChartExposesItsDescriptionInRtlLayout() {
+        val ap = fakeAp("HomeNet", "AA:AA:AA:AA:AA:01", -50)
+        composeRule.setContent {
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                NetSwissKnifeTheme {
+                    WifiScanScreen(viewModel = fakeViewModel(successState(listOf(ap))))
+                }
+            }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        val description = context.getString(
+            R.string.wifi_spectrum_a11y,
+            1,
+            ap.band.displayName,
+            ap.displaySsid,
+            ap.rssi,
+        )
+        composeRule.onNodeWithContentDescription(description).performScrollTo().assertIsDisplayed()
     }
 
     private fun fakeAp(
