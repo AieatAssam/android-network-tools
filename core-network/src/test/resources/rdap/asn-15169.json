@@ -1,0 +1,16 @@
+{
+  "objectClassName": "autnum",
+  "handle": "AS15169",
+  "name": "Google LLC",
+  "startAutnum": 15169,
+  "endAutnum": 15169,
+  "country": "US",
+  "status": ["active"],
+  "entities": [
+    {
+      "objectClassName": "entity",
+      "roles": ["registrant"],
+      "vcardArray": ["vcard", [["org", {}, "text", "Google LLC"]]]
+    }
+  ]
+}

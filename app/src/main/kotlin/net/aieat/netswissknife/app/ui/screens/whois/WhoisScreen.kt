@@ -547,6 +547,7 @@ private fun hopRoleContainerColor(role: WhoisServerRole): Color = when (role) {
     WhoisServerRole.REGISTRY -> MaterialTheme.colorScheme.primaryContainer
     WhoisServerRole.REGISTRAR -> MaterialTheme.colorScheme.secondaryContainer
     WhoisServerRole.RIR -> MaterialTheme.colorScheme.secondaryContainer
+    WhoisServerRole.RDAP -> MaterialTheme.colorScheme.primaryContainer
 }
 
 @Composable
@@ -555,6 +556,7 @@ private fun hopRoleOnContainerColor(role: WhoisServerRole): Color = when (role) 
     WhoisServerRole.REGISTRY -> MaterialTheme.colorScheme.onPrimaryContainer
     WhoisServerRole.REGISTRAR -> MaterialTheme.colorScheme.onSecondaryContainer
     WhoisServerRole.RIR -> MaterialTheme.colorScheme.onSecondaryContainer
+    WhoisServerRole.RDAP -> MaterialTheme.colorScheme.onPrimaryContainer
 }
 
 

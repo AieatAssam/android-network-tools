@@ -18,6 +18,7 @@ dependencies {
     implementation(libs.dnsjava)
     implementation(libs.snmp4j)
     implementation(libs.okhttp)
+    implementation(libs.kotlinx.serialization.json)
 
     testImplementation(libs.junit5.api)
     testImplementation(libs.junit5.params)
