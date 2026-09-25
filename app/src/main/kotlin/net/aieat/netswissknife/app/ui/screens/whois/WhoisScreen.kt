@@ -106,6 +106,7 @@ import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
 import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
 import net.aieat.netswissknife.app.util.shareText
+import net.aieat.netswissknife.core.network.whois.WhoisProtocol
 import net.aieat.netswissknife.core.network.whois.WhoisQueryType
 import net.aieat.netswissknife.core.network.whois.WhoisResult
 import net.aieat.netswissknife.core.network.whois.WhoisServerRole
@@ -190,6 +191,29 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
                         onRemoveHost = viewModel::removeRecentHost,
                         onClearAll = viewModel::clearRecentHosts,
                         selectionEnabled = !uiState.isLoading && !uiState.isCanceling,
+                    )
+                    Text(
+                        text = stringResource(R.string.whois_protocol_label),
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf(
+                            WhoisProtocol.AUTO to R.string.whois_protocol_auto,
+                            WhoisProtocol.RDAP to R.string.whois_protocol_rdap,
+                            WhoisProtocol.WHOIS to R.string.whois_protocol_whois,
+                        ).forEach { (protocol, label) ->
+                            FilterChip(
+                                selected = uiState.protocol == protocol,
+                                onClick = { viewModel.onProtocolChange(protocol) },
+                                enabled = !uiState.isLoading && !uiState.isCanceling,
+                                label = { Text(stringResource(label)) },
+                            )
+                        }
+                    }
+                    Text(
+                        text = stringResource(R.string.whois_protocol_help),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Button(
                         onClick = hapticAction(viewModel::lookup),

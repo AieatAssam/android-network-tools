@@ -21,6 +21,7 @@ import net.aieat.netswissknife.core.domain.WhoisLookupUseCase
 import net.aieat.netswissknife.core.domain.WhoisParams
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.whois.WhoisHop
+import net.aieat.netswissknife.core.network.whois.WhoisProtocol
 import net.aieat.netswissknife.core.network.whois.WhoisQueryTypeDetector
 import net.aieat.netswissknife.core.network.whois.WhoisResult
 import net.aieat.netswissknife.core.network.whois.WhoisServer
@@ -41,6 +42,7 @@ data class HopUiState(
 
 data class WhoisUiState(
     val query: String = "",
+    val protocol: WhoisProtocol = WhoisProtocol.AUTO,
     val isLoading: Boolean = false,
     val isCanceling: Boolean = false,
     val isCanceled: Boolean = false,
@@ -94,6 +96,21 @@ class WhoisViewModel @Inject constructor(
         }
     }
 
+    fun onProtocolChange(protocol: WhoisProtocol) {
+        if (_uiState.value.isLoading || _uiState.value.isCanceling) return
+        if (_uiState.value.protocol == protocol) return
+        _uiState.update {
+            it.copy(
+                protocol = protocol,
+                hopStates = emptyList(),
+                result = null,
+                error = null,
+                isCanceled = false,
+                isLifecyclePaused = false,
+            )
+        }
+    }
+
     private fun lookupIdentity(query: String): String =
         WhoisQueryTypeDetector.normalize(query)?.let { "${it.type}:${it.value}" } ?: query.trim()
 
@@ -132,6 +149,7 @@ class WhoisViewModel @Inject constructor(
     }
 
     private fun startLookup(query: String) {
+        val protocol = _uiState.value.protocol
         _uiState.update {
             it.copy(
                 isLoading = true,
@@ -171,7 +189,7 @@ class WhoisViewModel @Inject constructor(
         resultJob = viewModelScope.launch {
             // Yield so the progress-collection coroutine above can reach collect() first
             kotlinx.coroutines.yield()
-            val result = whoisLookupUseCase(WhoisParams(query = query), session)
+            val result = whoisLookupUseCase(WhoisParams(query = query, protocol = protocol), session)
             if (operationSession !== session) return@launch
             progressJob?.cancel()
             progressJob = null

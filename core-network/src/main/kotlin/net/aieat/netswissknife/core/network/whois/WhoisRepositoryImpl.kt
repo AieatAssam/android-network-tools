@@ -18,6 +18,7 @@ import net.aieat.netswissknife.core.network.operation.OperationRunner
 import net.aieat.netswissknife.core.network.operation.OperationSession
 import net.aieat.netswissknife.core.network.operation.ensureCurrentOperationActive
 import net.aieat.netswissknife.core.network.NetworkResult
+import java.io.IOException
 import java.net.Socket
 
 class WhoisRepositoryImpl @JvmOverloads constructor(
@@ -31,21 +32,38 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
     private val _hopProgress = MutableSharedFlow<WhoisHop>(extraBufferCapacity = 16)
     override val hopProgress: SharedFlow<WhoisHop> = _hopProgress.asSharedFlow()
 
-    override suspend fun lookup(query: String, timeoutMs: Int): NetworkResult<WhoisResult> {
+    override suspend fun lookup(query: String, timeoutMs: Int): NetworkResult<WhoisResult> =
+        lookup(query, timeoutMs, WhoisProtocol.AUTO)
+
+    override suspend fun lookup(
+        query: String,
+        timeoutMs: Int,
+        protocol: WhoisProtocol,
+    ): NetworkResult<WhoisResult> {
         if (query.isBlank()) return NetworkResult.Error("Query must not be blank")
         if (timeoutMs !in 500..30_000) return NetworkResult.Error("Timeout must be between 500 ms and 30 000 ms")
-        return lookup(query, timeoutMs, WhoisOperation.newSession(timeoutMs, clock))
+        return lookup(query, timeoutMs, WhoisOperation.newSession(timeoutMs, clock), protocol)
     }
 
     override suspend fun lookup(
         query: String,
         timeoutMs: Int,
         operationSession: OperationSession,
+    ): NetworkResult<WhoisResult> = lookup(query, timeoutMs, operationSession, WhoisProtocol.AUTO)
+
+    override suspend fun lookup(
+        query: String,
+        timeoutMs: Int,
+        operationSession: OperationSession,
+        protocol: WhoisProtocol,
     ): NetworkResult<WhoisResult> {
         if (timeoutMs < 500) return NetworkResult.Error("Timeout must be between 500 ms and 30 000 ms")
         if (timeoutMs > 30_000) return NetworkResult.Error("Timeout must be between 500 ms and 30 000 ms")
         val normalizedQuery = WhoisQueryTypeDetector.normalize(query)
             ?: return NetworkResult.Error("Enter a valid domain, IP address, or ASN without spaces")
+        if (protocol == WhoisProtocol.RDAP && rdapClient == null) {
+            return NetworkResult.Error("RDAP is unavailable")
+        }
 
         val session = operationSession
         val responseBudget = WhoisResponseBudget(session.budget.maxResponseBytes)
@@ -56,7 +74,7 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
             OperationRunner.run(session) {
                 withContext(Dispatchers.IO) {
                     val start = clock.nowNanos()
-                    if (rdapClient != null) {
+                    if (protocol != WhoisProtocol.WHOIS && rdapClient != null) {
                         val rdapResult = tryRdapLookup(
                             client = rdapClient,
                             query = if (normalizedQuery.type == WhoisQueryType.DOMAIN) {
@@ -68,8 +86,12 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
                             budget = session.budget,
                             operationId = session.budget.operationId,
                             responseBudget = responseBudget,
+                            allowFallback = protocol == WhoisProtocol.AUTO,
                         )
                         if (rdapResult != null) return@withContext rdapResult
+                    }
+                    if (protocol == WhoisProtocol.RDAP) {
+                        return@withContext NetworkResult.Error("RDAP lookup returned no result")
                     }
                     when (normalizedQuery.type) {
                         WhoisQueryType.DOMAIN -> performDomainLookup(
@@ -123,6 +145,7 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
         budget: OperationBudget,
         operationId: OperationId,
         responseBudget: WhoisResponseBudget,
+        allowFallback: Boolean,
     ): NetworkResult<WhoisResult>? {
         budget.throwIfExpired()
         val lookup = try {
@@ -135,15 +158,17 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
             throw budgetExceeded
         } catch (tooLarge: RdapResponseTooLargeException) {
             throw tooLarge
-        } catch (_: RdapHttpException) {
+        } catch (failure: RdapHttpException) {
             budget.throwIfExpired()
             ensureCurrentOperationActive()
+            if (!allowFallback) throw failure
             return null
-        } catch (_: Exception) {
+        } catch (failure: Exception) {
             // The operation runner cancels this suspended exchange when its shared deadline
             // expires. Check explicitly as well before allowing fallback to consume that time.
             budget.throwIfExpired()
             ensureCurrentOperationActive()
+            if (!allowFallback) throw failure
             return null
         }
 
@@ -152,6 +177,7 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
         if (lookup is RdapLookupResult.Unsupported) {
             budget.throwIfExpired()
             ensureCurrentOperationActive()
+            if (!allowFallback) throw IOException("RDAP record was not found")
             return null
         }
 
@@ -169,9 +195,10 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
             throw cancelled
         } catch (deadline: OperationDeadlineExceededException) {
             throw deadline
-        } catch (_: Exception) {
+        } catch (failure: Exception) {
             budget.throwIfExpired()
             ensureCurrentOperationActive()
+            if (!allowFallback) throw failure
             return null
         }
 

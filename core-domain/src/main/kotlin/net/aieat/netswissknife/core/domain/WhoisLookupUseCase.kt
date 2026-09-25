@@ -3,14 +3,16 @@ package net.aieat.netswissknife.core.domain
 import kotlinx.coroutines.flow.SharedFlow
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.whois.WhoisHop
+import net.aieat.netswissknife.core.network.whois.WhoisProtocol
 import net.aieat.netswissknife.core.network.whois.WhoisQueryTypeDetector
 import net.aieat.netswissknife.core.network.whois.WhoisRepository
 import net.aieat.netswissknife.core.network.whois.WhoisResult
 import net.aieat.netswissknife.core.network.operation.OperationSession
 
-data class WhoisParams(
+data class WhoisParams @JvmOverloads constructor(
     val query: String,
-    val timeoutMs: Int = 10_000
+    val timeoutMs: Int = 10_000,
+    val protocol: WhoisProtocol = WhoisProtocol.AUTO,
 )
 
 class WhoisLookupUseCase(private val repository: WhoisRepository) {
@@ -35,7 +37,13 @@ class WhoisLookupUseCase(private val repository: WhoisRepository) {
             ?: return NetworkResult.Error("Enter a valid domain, IP address, or ASN without spaces")
         if (params.timeoutMs !in 500..30_000)
             return NetworkResult.Error("Timeout must be between 500 ms and 30 000 ms")
-        return if (operationSession == null) repository.lookup(query.value, params.timeoutMs)
-        else repository.lookup(query.value, params.timeoutMs, operationSession)
+        return when {
+            operationSession == null && params.protocol == WhoisProtocol.AUTO ->
+                repository.lookup(query.value, params.timeoutMs)
+            operationSession == null -> repository.lookup(query.value, params.timeoutMs, params.protocol)
+            params.protocol == WhoisProtocol.AUTO ->
+                repository.lookup(query.value, params.timeoutMs, operationSession)
+            else -> repository.lookup(query.value, params.timeoutMs, operationSession, params.protocol)
+        }
     }
 }

@@ -611,6 +611,11 @@
     <string name="whois_screen_subtitle">Domain and IP registration lookup</string>
     <string name="whois_query_label">Domain, IP, or ASN</string>
     <string name="whois_query_placeholder">e.g. example.com, 8.8.8.8, AS15169</string>
+    <string name="whois_protocol_label">Lookup protocol</string>
+    <string name="whois_protocol_auto">Auto</string>
+    <string name="whois_protocol_rdap">RDAP</string>
+    <string name="whois_protocol_whois">WHOIS</string>
+    <string name="whois_protocol_help">Auto tries RDAP first and falls back to WHOIS. The other options use only the selected source.</string>
     <string name="whois_lookup_button">Look up</string>
     <string name="whois_stop_button">Stop lookup</string>
     <string name="whois_canceling_button">Canceling…</string>
@@ -1121,6 +1126,7 @@
         <item>Domain - e.g. example.com.</item>
         <item>IP address - e.g. 8.8.8.8.</item>
         <item>ASN - e.g. AS15169; an Autonomous System Number identifies a large network or organization (typically an ISP) that controls a block of addresses and announces routes for them - one level above individual IP ranges.</item>
+        <item>Protocol - Auto tries RDAP first and falls back to WHOIS; RDAP and WHOIS options use only the selected source.</item>
         <item>Use the quick-fill chips to insert an example of each type.</item>
     </string-array>
     <string-array name="help_whois_results_bullets">

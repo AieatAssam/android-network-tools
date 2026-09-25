@@ -21,6 +21,7 @@ import net.aieat.netswissknife.core.domain.WhoisParams
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.whois.WhoisHop
 import net.aieat.netswissknife.core.network.whois.WhoisQueryType
+import net.aieat.netswissknife.core.network.whois.WhoisProtocol
 import net.aieat.netswissknife.core.network.whois.WhoisResult
 import net.aieat.netswissknife.core.network.whois.WhoisServer
 import net.aieat.netswissknife.core.network.whois.WhoisServerRole
@@ -98,6 +99,37 @@ class WhoisViewModelTest {
         assertEquals("", state.query)
         assertNull(state.result)
         assertFalse(state.isLoading)
+    }
+
+    @Test
+    fun `selected protocol is included in the lookup request`() = runTest {
+        coEvery { whoisLookupUseCase(any(), any()) } returns NetworkResult.Success(stubResult)
+        viewModel.onQueryChange("example.com")
+        viewModel.onProtocolChange(WhoisProtocol.RDAP)
+
+        viewModel.lookup()
+        runCurrent()
+
+        coVerify(exactly = 1) {
+            whoisLookupUseCase(WhoisParams(query = "example.com", protocol = WhoisProtocol.RDAP), any())
+        }
+        assertEquals(WhoisProtocol.RDAP, viewModel.uiState.value.protocol)
+    }
+
+    @Test
+    fun `protocol changes are ignored while a lookup is active`() = runTest {
+        coEvery { whoisLookupUseCase(any(), any()) } coAnswers {
+            kotlinx.coroutines.awaitCancellation()
+        }
+        viewModel.onQueryChange("example.com")
+        viewModel.lookup()
+        runCurrent()
+
+        viewModel.onProtocolChange(WhoisProtocol.WHOIS)
+
+        assertEquals(WhoisProtocol.AUTO, viewModel.uiState.value.protocol)
+        viewModel.stopLookup()
+        runCurrent()
     }
 
     @Nested

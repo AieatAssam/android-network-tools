@@ -8,6 +8,8 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.test.runTest
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.whois.WhoisQueryType
+import net.aieat.netswissknife.core.network.whois.WhoisProtocol
+import net.aieat.netswissknife.core.network.whois.WhoisHop
 import net.aieat.netswissknife.core.network.whois.WhoisRepository
 import net.aieat.netswissknife.core.network.whois.WhoisResult
 import net.aieat.netswissknife.core.network.operation.OperationBudget
@@ -85,12 +87,56 @@ class WhoisLookupUseCaseTest {
     fun `caller-owned operation session is forwarded to repository`() = runTest {
         val session = OperationSession(OperationBudget.start(requirement = OperationRequirement.INTERNET))
         val expected = NetworkResult.Success(successResult)
-        coEvery { repository.lookup(any(), any(), any()) } returns expected
+        coEvery { repository.lookup(any(), any(), any<OperationSession>()) } returns expected
 
         val actual = useCase(WhoisParams(query = " example.com "), session)
 
         assertEquals(expected, actual)
         coVerify(exactly = 1) { repository.lookup("example.com", 10_000, session) }
+    }
+
+    @Test
+    @DisplayName("selected protocol is forwarded with and without the caller-owned session")
+    fun `selected protocol is forwarded with and without the caller-owned session`() = runTest {
+        val expected = NetworkResult.Success(successResult)
+        coEvery { repository.lookup(any(), any(), any<WhoisProtocol>()) } returns expected
+        coEvery { repository.lookup(any(), any(), any<OperationSession>(), any<WhoisProtocol>()) } returns expected
+
+        val withoutSession = useCase(WhoisParams(query = "example.com", protocol = WhoisProtocol.RDAP))
+        val session = OperationSession(OperationBudget.start(requirement = OperationRequirement.INTERNET))
+        val withSession = useCase(WhoisParams(query = "example.com", protocol = WhoisProtocol.WHOIS), session)
+
+        assertEquals(expected, withoutSession)
+        assertEquals(expected, withSession)
+        coVerify(exactly = 1) { repository.lookup("example.com", 10_000, WhoisProtocol.RDAP) }
+        coVerify(exactly = 1) { repository.lookup("example.com", 10_000, session, WhoisProtocol.WHOIS) }
+    }
+
+    @Test
+    @DisplayName("legacy repository reports unsupported forced RDAP instead of silently using WHOIS")
+    fun `legacy repository reports unsupported forced RDAP instead of silently using WHOIS`() = runTest {
+        var legacyCalls = 0
+        val legacyRepository = object : WhoisRepository {
+            override val hopProgress = MutableSharedFlow<WhoisHop>()
+
+            override suspend fun lookup(query: String, timeoutMs: Int): NetworkResult<WhoisResult> {
+                legacyCalls++
+                return NetworkResult.Success(successResult)
+            }
+        }
+        val legacyUseCase = WhoisLookupUseCase(legacyRepository)
+
+        val withoutSession = legacyUseCase(WhoisParams(query = "example.com", protocol = WhoisProtocol.RDAP))
+        val session = OperationSession(OperationBudget.start(requirement = OperationRequirement.INTERNET))
+        val withSession = legacyUseCase(WhoisParams(query = "example.com", protocol = WhoisProtocol.RDAP), session)
+
+        assertTrue(withoutSession is NetworkResult.Error)
+        assertTrue(withSession is NetworkResult.Error)
+        assertEquals(0, legacyCalls)
+
+        val fallbackCompatible = legacyUseCase(WhoisParams(query = "example.com", protocol = WhoisProtocol.AUTO))
+        assertEquals(NetworkResult.Success(successResult), fallbackCompatible)
+        assertEquals(1, legacyCalls)
     }
 
     @Test

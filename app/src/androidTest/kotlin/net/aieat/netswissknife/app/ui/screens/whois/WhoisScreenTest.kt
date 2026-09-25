@@ -17,6 +17,7 @@ import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.theme.NetSwissKnifeTheme
+import net.aieat.netswissknife.core.network.whois.WhoisProtocol
 import net.aieat.netswissknife.core.network.whois.WhoisQueryType
 import net.aieat.netswissknife.core.network.whois.WhoisResult
 import net.aieat.netswissknife.core.network.whois.WhoisServer
@@ -113,6 +114,26 @@ class WhoisScreenTest {
             .performClick()
 
         verify(exactly = 1) { viewModel.onQueryChange("example.com") }
+    }
+
+    @Test
+    fun protocolSelection_showsChoicesAndForwardsSelectedMode() {
+        val viewModel = fakeViewModel(WhoisUiState())
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                WhoisScreen(viewModel = viewModel)
+            }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        composeRule.onNodeWithText(context.getString(R.string.whois_protocol_label))
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.whois_protocol_rdap))
+            .performScrollTo()
+            .performClick()
+
+        verify(exactly = 1) { viewModel.onProtocolChange(WhoisProtocol.RDAP) }
     }
 
     @Test

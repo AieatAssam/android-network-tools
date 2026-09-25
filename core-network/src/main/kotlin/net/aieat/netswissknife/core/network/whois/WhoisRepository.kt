@@ -10,6 +10,12 @@ interface WhoisRepository {
 
     suspend fun lookup(query: String, timeoutMs: Int): NetworkResult<WhoisResult>
 
+    /** Source-selecting overload; legacy repositories retain their existing behavior by default. */
+    suspend fun lookup(query: String, timeoutMs: Int, protocol: WhoisProtocol): NetworkResult<WhoisResult> = when (protocol) {
+        WhoisProtocol.RDAP -> NetworkResult.Error("RDAP is not supported by this repository")
+        WhoisProtocol.AUTO, WhoisProtocol.WHOIS -> lookup(query, timeoutMs)
+    }
+
     /**
      * Caller-owned operation overload. The source-compatible default delegates to the legacy
      * method and cannot enforce the session; production repositories that own resources must
@@ -17,4 +23,15 @@ interface WhoisRepository {
      */
     suspend fun lookup(query: String, timeoutMs: Int, operationSession: OperationSession): NetworkResult<WhoisResult> =
         lookup(query, timeoutMs)
+
+    /** Source-selecting caller-owned overload with a source-compatible legacy default. */
+    suspend fun lookup(
+        query: String,
+        timeoutMs: Int,
+        operationSession: OperationSession,
+        protocol: WhoisProtocol,
+    ): NetworkResult<WhoisResult> = when (protocol) {
+        WhoisProtocol.RDAP -> NetworkResult.Error("RDAP is not supported by this repository")
+        WhoisProtocol.AUTO, WhoisProtocol.WHOIS -> lookup(query, timeoutMs, operationSession)
+    }
 }

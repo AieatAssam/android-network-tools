@@ -102,6 +102,35 @@ class WhoisRdapIntegrationTest {
     }
 
     @Test
+    fun `forced WHOIS bypasses RDAP and forced RDAP failure does not fall back`() = runTest {
+        val whoisSockets = AtomicInteger()
+        val rdapRequests = AtomicInteger()
+        val rdapSuccess = client { url ->
+            rdapRequests.incrementAndGet()
+            RdapHttpResponse(200, """{"objectClassName":"ip network","ipVersion":"v4","name":"RDAP"}""", url.toString())
+        }
+        val whoisRepository = repository(rdapSuccess, whoisSockets, listOf("NetName: WHOIS\r\n"))
+
+        val whoisResult = whoisRepository.lookup("8.8.8.8", 2_000, WhoisProtocol.WHOIS)
+
+        assertInstanceOf(NetworkResult.Success::class.java, whoisResult)
+        assertEquals("WHOIS", (whoisResult as NetworkResult.Success).data.netName)
+        assertEquals(0, rdapRequests.get())
+        assertEquals(1, whoisSockets.get())
+
+        val forcedRdapSockets = AtomicInteger()
+        val failingRdap = client { throw IOException("RDAP offline") }
+        val forcedRdapResult = repository(failingRdap, forcedRdapSockets).lookup(
+            "8.8.8.8",
+            2_000,
+            WhoisProtocol.RDAP,
+        )
+
+        assertInstanceOf(NetworkResult.Error::class.java, forcedRdapResult)
+        assertEquals(0, forcedRdapSockets.get())
+    }
+
+    @Test
     fun `progress is not emitted for malformed RDAP before WHOIS fallback`() = runTest {
         val sockets = AtomicInteger()
         val repo = repository(
