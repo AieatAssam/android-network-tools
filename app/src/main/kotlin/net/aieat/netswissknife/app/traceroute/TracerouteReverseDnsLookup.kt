@@ -117,15 +117,18 @@ internal object TracerouteNameResolutionWorkers {
 
     // getCanonicalHostName may remain stuck in the platform resolver after interruption.
     // A fixed worker count and finite queue cap the permanent residue in that case.
-    val executor = ThreadPoolExecutor(
-        REVERSE_DNS_WORKER_COUNT,
-        REVERSE_DNS_WORKER_COUNT,
-        0L,
-        TimeUnit.MILLISECONDS,
-        ArrayBlockingQueue(REVERSE_DNS_QUEUE_CAPACITY),
-        threadFactory,
-        ThreadPoolExecutor.AbortPolicy(),
-    )
+    val executor = createExecutor()
+
+    fun createExecutor(): ThreadPoolExecutor =
+        ThreadPoolExecutor(
+            REVERSE_DNS_WORKER_COUNT,
+            REVERSE_DNS_WORKER_COUNT,
+            0L,
+            TimeUnit.MILLISECONDS,
+            ArrayBlockingQueue(REVERSE_DNS_QUEUE_CAPACITY),
+            threadFactory,
+            ThreadPoolExecutor.AbortPolicy(),
+        )
 }
 
 internal const val REVERSE_DNS_WORKER_COUNT = 2

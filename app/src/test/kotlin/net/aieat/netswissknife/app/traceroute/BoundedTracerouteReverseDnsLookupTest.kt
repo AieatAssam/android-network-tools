@@ -7,9 +7,11 @@ import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.ThreadFactory
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import net.aieat.netswissknife.core.network.operation.OperationBudget
@@ -183,6 +185,71 @@ class BoundedTracerouteReverseDnsLookupTest {
         } finally {
             releaseWorker.countDown()
             executor.shutdownNow()
+        }
+    }
+
+    @Test
+    fun `production worker factory bounds active and queued lookups`() = runBlocking {
+        val executor = TracerouteNameResolutionWorkers.createExecutor()
+        val active = AtomicInteger()
+        val maximumActive = AtomicInteger()
+        val workersStarted = CountDownLatch(REVERSE_DNS_WORKER_COUNT)
+        val releaseWorkers = CountDownLatch(1)
+        val lookup = BoundedTracerouteReverseDnsLookup(executor) {
+            val current = active.incrementAndGet()
+            maximumActive.updateAndGet { previous -> maxOf(previous, current) }
+            workersStarted.countDown()
+            try {
+                releaseWorkers.await()
+                "router.example"
+            } finally {
+                active.decrementAndGet()
+            }
+        }
+        val acceptedCount =
+            REVERSE_DNS_WORKER_COUNT + REVERSE_DNS_QUEUE_CAPACITY
+        val accepted =
+            (0 until acceptedCount).map { index ->
+                async(Dispatchers.IO) {
+                    lookup.lookup("192.0.2.$index", session())
+                }
+            }
+
+        try {
+            assertEquals(REVERSE_DNS_WORKER_COUNT, executor.corePoolSize)
+            assertEquals(REVERSE_DNS_WORKER_COUNT, executor.maximumPoolSize)
+            assertEquals(
+                REVERSE_DNS_QUEUE_CAPACITY,
+                executor.queue.size + executor.queue.remainingCapacity(),
+            )
+            assertTrue(workersStarted.await(2, TimeUnit.SECONDS))
+            withTimeout(2_000) {
+                while (executor.queue.size != REVERSE_DNS_QUEUE_CAPACITY) {
+                    kotlinx.coroutines.delay(1)
+                }
+            }
+            assertEquals(REVERSE_DNS_WORKER_COUNT, executor.activeCount)
+            assertEquals(REVERSE_DNS_QUEUE_CAPACITY, executor.queue.size)
+
+            val overflow =
+                runCatching {
+                    lookup.lookup("192.0.2.250", session())
+                }.exceptionOrNull()
+            assertInstanceOf(RejectedExecutionException::class.java, overflow)
+            assertEquals(REVERSE_DNS_QUEUE_CAPACITY, executor.queue.size)
+
+            releaseWorkers.countDown()
+            assertEquals(List(acceptedCount) { "router.example" }, accepted.awaitAll())
+            assertEquals(REVERSE_DNS_WORKER_COUNT, maximumActive.get())
+            withTimeout(1_000) {
+                while (executor.activeCount != 0) kotlinx.coroutines.delay(1)
+            }
+            assertTrue(executor.queue.isEmpty())
+        } finally {
+            releaseWorkers.countDown()
+            accepted.forEach { it.cancelAndJoin() }
+            executor.shutdownNow()
+            assertTrue(executor.awaitTermination(1, TimeUnit.SECONDS))
         }
     }
 

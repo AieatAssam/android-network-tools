@@ -14,6 +14,17 @@ import kotlinx.coroutines.InternalCoroutinesApi
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 
+/** Builds the bounded executor used for production reverse-DNS enrichment. */
+internal fun createProductionReverseDnsWorkers(): ThreadPoolExecutor = ThreadPoolExecutor(
+    2,
+    2,
+    0L,
+    TimeUnit.MILLISECONDS,
+    ArrayBlockingQueue(4),
+    ThreadFactory { task -> Thread(task, "lan-reverse-dns").apply { isDaemon = true } },
+    ThreadPoolExecutor.AbortPolicy(),
+)
+
 /** Reverse-DNS enrichment probe; DNS failure never affects host presence. */
 class ReverseDnsNameProbe internal constructor(
     private val lookup: (String) -> String?,
@@ -71,14 +82,6 @@ class ReverseDnsNameProbe internal constructor(
             }
         }
 
-        private val sharedWorkers = ThreadPoolExecutor(
-            2,
-            2,
-            0L,
-            TimeUnit.MILLISECONDS,
-            ArrayBlockingQueue(4),
-            ThreadFactory { task -> Thread(task, "lan-reverse-dns").apply { isDaemon = true } },
-            ThreadPoolExecutor.AbortPolicy(),
-        )
+        private val sharedWorkers = createProductionReverseDnsWorkers()
     }
 }
