@@ -223,7 +223,10 @@ class MdnsDiscoveryViewModelTest {
             assertEquals(OperationRequirement.LOCAL_NETWORK, sessionSlot.captured.budget.requirement)
             assertEquals(1, sessionSlot.captured.budget.maxConcurrentProbes)
             assertEquals(65_536L, sessionSlot.captured.budget.maxResponseBytes)
-            assertEquals(5_000_000_000L, sessionSlot.captured.budget.deadline.timeoutNanos)
+            assertEquals(
+                MdnsDiscoveryViewModel.DEFAULT_SCAN_DURATION_MS * 1_000_000L,
+                sessionSlot.captured.budget.deadline.timeoutNanos,
+            )
         }
 
         @Test

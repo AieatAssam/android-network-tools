@@ -84,13 +84,27 @@ class PortScanRepositoryImpl(
                 socket.connect(InetSocketAddress(address, port), timeoutMs)
                 val responseTime = clock.elapsedMillisSince(start)
 
-                // Attempt banner grab for open port (short read)
+                // A banner read shares the configured per-port timeout with connect.
+                // Convert the precise remaining budget to whole milliseconds without
+                // rounding up, since Socket.soTimeout cannot express sub-ms timeouts.
+                val elapsedNanos = (clock.nowNanos() - start).coerceAtLeast(0L)
+                val remainingNanos = timeoutMs.toLong() * NANOS_PER_MILLISECOND - elapsedNanos
+                val bannerTimeoutMs = minOf(
+                    PortScanOperationBudget.MAX_BANNER_READ_TIMEOUT_MILLIS,
+                    remainingNanos.coerceAtLeast(0L) / NANOS_PER_MILLISECOND,
+                ).toInt()
+
+                // Attempt a short banner grab only while the per-port budget remains.
                 val banner: String? = try {
-                    socket.soTimeout = 300
-                    val inputStream = socket.getInputStream()
-                    val bytes = ByteArray(256)
-                    val read = inputStream.read(bytes)
-                    if (read > 0) BannerSanitizer.sanitize(String(bytes, 0, read)) else null
+                    if (bannerTimeoutMs <= 0) {
+                        null
+                    } else {
+                        socket.soTimeout = bannerTimeoutMs
+                        val inputStream = socket.getInputStream()
+                        val bytes = ByteArray(256)
+                        val read = inputStream.read(bytes)
+                        if (read > 0) BannerSanitizer.sanitize(String(bytes, 0, read)) else null
+                    }
                 } catch (error: SecurityException) {
                     throw LocalNetworkPermissionDeniedException(error)
                 } catch (cancelled: CancellationException) {
@@ -115,6 +129,8 @@ class PortScanRepositoryImpl(
                 socket?.let(activeSocket::detach)
             }
         }
+
+        private const val NANOS_PER_MILLISECOND = 1_000_000L
     }
 
     override fun scan(

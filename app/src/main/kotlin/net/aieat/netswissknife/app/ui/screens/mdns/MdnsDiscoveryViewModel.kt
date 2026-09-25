@@ -48,6 +48,11 @@ class MdnsDiscoveryViewModel @Inject constructor(
     networkStatusProvider: NetworkStatusProvider = NoOpNetworkStatusProvider,
 ) : ViewModel() {
 
+    companion object {
+        const val DEFAULT_SCAN_DURATION_MS = 8_000L
+        private const val LIFECYCLE_CLOSEABLE_KEY = "mdns_operation_lifecycle"
+    }
+
     val networkStatus: StateFlow<NetworkStatus> = networkStatusProvider.status
 
     private val _uiState = MutableStateFlow(MdnsDiscoveryUiState())
@@ -69,7 +74,7 @@ class MdnsDiscoveryViewModel @Inject constructor(
         })
     }
 
-    fun startScan(timeoutMs: Long = 5_000L) {
+    fun startScan(timeoutMs: Long = DEFAULT_SCAN_DURATION_MS) {
         if (_uiState.value.isScanning) return
 
         val generation = ++scanGeneration
@@ -190,7 +195,4 @@ class MdnsDiscoveryViewModel @Inject constructor(
         stopTimer()
     }
 
-    private companion object {
-        const val LIFECYCLE_CLOSEABLE_KEY = "mdns_operation_lifecycle"
-    }
 }

@@ -67,6 +67,11 @@ class AppNavigationViewModelTest {
         }
 
         @Test
+        fun `view model default matches route metadata default`() {
+            assertEquals(NavRoutes.defaultPinnedRoutes, AppNavigationViewModel.DEFAULT_PINNED_ROUTES)
+        }
+
+        @Test
         fun `reads stored routes from DataStore on start`() = testScope.runTest {
             dataStore.edit { it[AppPreferenceKeys.PINNED_ROUTES] = "traceroute|wifi_scan" }
             val vm = AppNavigationViewModel(dataStore)

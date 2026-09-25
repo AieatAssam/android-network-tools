@@ -31,7 +31,7 @@ review_follow_up:
   reports:
     - plan/reviews/2026-09-21-network.yaml
     - plan/reviews/2026-09-21-ui-domain.yaml
-  note: "RNET007 is closed: bogon detection now checks only a root boolean true and preserves explicit false/missing responses. RNET008, RUI002, and RUI007 remain open. See report evidence, recommended_action, and validation."
+  note: "RNET007 and RNET008 are closed with regression coverage. RUI002 and RUI007 remain open. See report evidence, resolution, and validation."
 
 context:
   problem: |
@@ -109,7 +109,7 @@ design:
     TracerouteFlowResult += HopEnriched(hopNumber, hostname?, geo?) ; ViewModel merges by hopNumber.
     Repository (app) emits hops immediately (no rDNS inline); TracerouteUseCase runs enrichment in a channelFlow with Semaphore(4): rDNS via HostResolver.reverse(ip, timeoutMs=1500) (core interface; default InetAddress) and GeoIp lookups concurrently; emits HopEnriched as they finish.
     GeoIp: GeoIpProvider interface { name; suspend fun lookup(ip): HopGeoLocation? } ; providers [IpinfoProvider, IpwhoIsProvider, IpapiCoProvider] with kotlinx-serialization models; GeoIpRepositoryImpl(providers, cache LRU 512, breaker: after 3 consecutive failures skip provider for 60 s) ; ReservedRanges (pure): IPv4 list per RFC 6890 + IPv6 (::1, fe80::/10, fc00::/7, ::ffff:0:0/96 mapped -> check v4, 2001:db8::/32) ; countryName via Locale.Builder().setRegion(code).build().getDisplayCountry(Locale.ENGLISH) (the Locale(String,String) constructor is deprecated on JDK 19+; the builder works on JVM and Android; drop the hand map) ; flagEmoji(code) pure (regional indicator symbols).
-    UI: hop row shows min/avg/max (labelSmall) when probesPerHop > 1, per-probe dots (success/timeout), shimmer placeholder for hostname/geo until enriched; flag emoji before country; 'Geo path' summary card listing countries in order.
+    UI: hop row shows min/avg/max (labelSmall) when probesPerHop > 1, per-probe success/no-reply dots with localized values and accessible numbered outcomes, shimmer placeholder for hostname/geo until enriched; flag emoji before country; 'Geo path' summary card listing countries in order.
   portscan: |
     PortConnectResult += bannerTruncated: Boolean, tlsSubject: String?, probeKind: ProbeKind (PASSIVE/HTTP/SMTP/…)
     ServiceProbes (pure registry): port -> greeting bytes (80/8080/8000: 'HEAD / HTTP/1.0\r\nHost: <host>\r\n\r\n'; 25/587: read then 'EHLO netswissknife'; 21/22/110/143: passive read; 443/8443/993/995/465/636: TLS peek) ; buffer 1024, read until timeout 300 ms or buffer full; truncated = read == 1024.
@@ -145,21 +145,21 @@ tasks:
     title: "Traceroute: per-probe RTTs, async enrichment, provider chain, reserved ranges, IPv6, flags"
     status: in_progress
     current_progress:
-      date: "2026-09-24"
-      implemented: "The E03-T01 traceroute slice emits raw hops immediately, performs reverse-DNS and GeoIP enrichment asynchronously under the caller session with bounded concurrency and lookup timeouts, and merges enrichment by hop number without changing row order. A deadline during enrichment preserves the raw partial hop."
-      fixed_in: "8286e48"
-      validation: "core-network 1,141 tests (one skipped), core-domain 211, app 522; focused enrichment/deadline/ViewModel/repository tests 36/36; Android-test Kotlin compilation and lintDebug passed. QA and adversarial reviews cleared this slice. No device or live-network trace was used."
-      remaining: "P11-T2 remains in_progress: per-probe RTT statistics, provider fallback/cache/breaker, reserved-range classification, IPv6 enrichment, country flags, corresponding screen presentation, and the manual 1.1.1.1 three-probe validation remain open."
+      date: "2026-09-25"
+      implemented: "The E03-T01 traceroute slice emits raw hops immediately, performs reverse-DNS and GeoIP enrichment asynchronously under the caller session with bounded concurrency and lookup timeouts, and merges enrichment by hop number without changing row order. Per-probe RTTs now retain nullable ordered slots, show localized success/no-reply markers with accessible numbered descriptions, and display success-only min/average/max. A deadline during enrichment preserves the raw partial hop."
+      fixed_in: "pending commit hash"
+      validation: "Serialized current-tree gates passed: core-network 1,206 (one skipped), core-domain 214, app 536; Android-test Kotlin compilation, all three Kover gates, lintDebug, assembleDebug, and assembleRelease passed. Independent QA/adversarial review cleared probe status wording. No emulator or live-network trace was used."
+      remaining: "P11-T2 remains in_progress: provider fallback/cache/breaker, reserved-range classification, IPv6 enrichment, country flags, and the manual 1.1.1.1 three-probe validation remain open."
     tdd:
       red:
         tests:
-          - "TracerouteHopMapperTest (app, pure mirror): probes [1500us, timeout, 2500us] -> probes [1, null, 2], min 1 avg 1.5 max 2"
+          - "TracerouteHopMapperTest (app, pure mirror): probes [1500us, no reply, 2500us] -> probes [1, null, 2], min 1 avg 1.5 max 2"
           - "TracerouteUseCaseTest: hops emitted before enrichment; HopEnriched arrives with hostname and geo; enrichment failure never drops a hop; parallelism bounded (fake resolver counts concurrent calls <= 4)"
           - "ReservedRangesTest: 100.64.0.1 reserved; 192.0.2.5 reserved; 8.8.8.8 public; fe80::1 reserved; 2001:4860:4860::8888 public; ::ffff:10.0.0.1 reserved"
           - "GeoIpRepositoryImplTest: provider 1 fails -> provider 2 used; 3 consecutive failures open the breaker for 60 s (virtual clock); cache hit avoids network"
           - "Provider parsers: fixtures for each provider -> HopGeoLocation; CountryFlags('GB') == '🇬🇧'; countryName('DE') == 'Germany'"
           - "TracerouteViewModelTest: HopEnriched merges into Running/Finished hop lists without reordering"
-          - "TracerouteScreenTest: min/avg/max text visible when probesPerHop=3; flag emoji present"
+          - "TracerouteScreenTest: per-probe success/no-reply markers and accessible numbered outcomes, min/avg/max visible when probesPerHop=3; flag emoji present"
         expect: "RED"
       green: { steps: ["Implement; IPv6 per A3."], expect: "PASS" }
     acceptance_criteria: ["Trace to 1.1.1.1 with 3 probes: all rows show stats; hostnames/geo fill in within ~2 s after each hop instead of gating it."]

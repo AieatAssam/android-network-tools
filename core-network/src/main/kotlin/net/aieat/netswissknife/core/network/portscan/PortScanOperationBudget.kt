@@ -5,7 +5,7 @@ import net.aieat.netswissknife.core.network.operation.OperationBudget
 /** Conservative deadline for a port scan's bounded connect and open-port banner waves. */
 object PortScanOperationBudget {
     const val HARD_CEILING_MILLIS = 15 * 60 * 1_000L
-    const val BANNER_READ_ALLOWANCE_MILLIS = 300L
+    const val MAX_BANNER_READ_TIMEOUT_MILLIS = 300L
     const val SETUP_AND_RESOLUTION_ALLOWANCE_MILLIS = 10_000L
     const val MAX_CONCURRENCY = 500
     const val OVER_CEILING_MESSAGE =
@@ -32,8 +32,9 @@ object PortScanOperationBudget {
 
         val effectiveConcurrency = minOf(requestedConcurrency, sessionConcurrency, MAX_CONCURRENCY)
         val waves = (portCount.toLong() + effectiveConcurrency - 1) / effectiveConcurrency
-        val perPortAllowance = timeoutMs.toLong() + BANNER_READ_ALLOWANCE_MILLIS
-        val timeoutMillis = SETUP_AND_RESOLUTION_ALLOWANCE_MILLIS + waves * perPortAllowance
+        // The banner read shares each port's timeout with connect, so it needs
+        // no second per-port allowance in the session deadline estimate.
+        val timeoutMillis = SETUP_AND_RESOLUTION_ALLOWANCE_MILLIS + waves * timeoutMs
         return Estimate(portCount, effectiveConcurrency, timeoutMillis)
     }
 

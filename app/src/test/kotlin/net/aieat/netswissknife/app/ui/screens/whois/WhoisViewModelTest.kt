@@ -154,6 +154,7 @@ class WhoisViewModelTest {
             val state = viewModel.uiState.value
             assertNull(state.result)
             assertEquals("lookup failed", state.error)
+            coVerify(exactly = 0) { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_WHOIS_HOSTS, any()) }
         }
 
         @Test
@@ -161,6 +162,7 @@ class WhoisViewModelTest {
             viewModel.onQueryChange("  ")
             viewModel.lookup()
             assertFalse(viewModel.uiState.value.isLoading)
+            coVerify(exactly = 0) { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_WHOIS_HOSTS, any()) }
         }
 
         @Test
@@ -200,11 +202,11 @@ class WhoisViewModelTest {
     }
 
     @Test
-    fun `addRecent is called on lookup`() = runTest {
+    fun `addRecent is called only after lookup success`() = runTest {
         coEvery { whoisLookupUseCase(any(), any()) } returns NetworkResult.Success(stubResult)
         viewModel.onQueryChange("example.com")
         viewModel.lookup()
-        coVerify { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_WHOIS_HOSTS, "example.com") }
+        coVerify(exactly = 1) { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_WHOIS_HOSTS, "example.com") }
     }
 
     @Test

@@ -24,12 +24,12 @@ class AppNavigationViewModel @Inject constructor(
             prefs[AppPreferenceKeys.PINNED_ROUTES]
                 ?.split("|")
                 ?.filter { it.isNotBlank() }
-                ?: DEFAULT_PINNED_ROUTES
+                ?: NavRoutes.defaultPinnedRoutes
         }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.Eagerly,
-            initialValue = DEFAULT_PINNED_ROUTES
+            initialValue = NavRoutes.defaultPinnedRoutes
         )
 
     fun togglePin(route: String) {
@@ -39,7 +39,7 @@ class AppNavigationViewModel @Inject constructor(
                     ?.split("|")
                     ?.filter { it.isNotBlank() }
                     ?.toMutableList()
-                    ?: DEFAULT_PINNED_ROUTES.toMutableList()
+                    ?: NavRoutes.defaultPinnedRoutes.toMutableList()
 
                 if (current.contains(route)) {
                     current.remove(route)
@@ -54,6 +54,6 @@ class AppNavigationViewModel @Inject constructor(
 
     companion object {
         const val MAX_PINNED = 3
-        val DEFAULT_PINNED_ROUTES = listOf("ping", "dns", "ports")
+        val DEFAULT_PINNED_ROUTES = NavRoutes.defaultPinnedRoutes
     }
 }

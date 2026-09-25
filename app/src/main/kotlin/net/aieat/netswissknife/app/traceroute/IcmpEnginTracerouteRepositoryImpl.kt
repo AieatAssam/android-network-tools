@@ -154,22 +154,24 @@ private fun nativeTrace(
         portStrategy = PortStrategy.Sequential(),
         probeSize = probeSize,
     )
-    return tracer.trace().map { icmpHop ->
-        val ip = icmpHop.ips.firstOrNull()
-        val rttMs = icmpHop.probes
-            .filterIsInstance<Response.Success>()
-            .firstOrNull()
-            ?.timeUsec
-            ?.let { it.toLong() / 1_000L }
-        val status = if (ip != null) HopStatus.SUCCESS else HopStatus.TIMEOUT
-        HopResult(
-            hopNumber = icmpHop.num,
-            ip = ip,
-            hostname = null,
-            rtTimeMs = rttMs,
-            status = status,
-        )
+    return tracer.trace().map(::mapNativeHop)
+}
+
+/** Preserve each probe slot so the UI can distinguish replies from timeouts. */
+internal fun mapNativeHop(icmpHop: me.impa.icmpenguin.trace.HopStatus): HopResult {
+    val ip = icmpHop.ips.firstOrNull()
+    val probeRttsMs = icmpHop.probes.map { response ->
+        (response as? Response.Success)?.timeUsec?.toLong()?.div(1_000L)
     }
+    val status = if (ip != null) HopStatus.SUCCESS else HopStatus.TIMEOUT
+    return HopResult(
+        hopNumber = icmpHop.num,
+        ip = ip,
+        hostname = null,
+        rtTimeMs = probeRttsMs.firstOrNull { it != null },
+        status = status,
+        probeRttsMs = probeRttsMs,
+    )
 }
 
 /** Keep the native worker count within requested probes, caller budget, and tool ceiling. */

@@ -79,7 +79,7 @@ Run `./gradlew :core-network:test` – tests should **fail** at this point. That
 
 Create the minimum code to make the tests pass.
 
-**File: `core-network/src/main/kotlin/com/example/netswissknife/core/network/<toolname>/<ToolName>Repository.kt`**
+**File: `core-network/src/main/kotlin/net/aieat/netswissknife/core/network/<toolname>/<ToolName>Repository.kt`**
 
 ```kotlin
 package net.aieat.netswissknife.core.network.<toolname>
@@ -99,7 +99,7 @@ Provide a real or fake implementation just sufficient to make tests pass. Run `.
 
 ### 4. Add `:core-domain` use case
 
-**File: `core-domain/src/main/kotlin/com/example/netswissknife/core/domain/<ToolName>UseCase.kt`**
+**File: `core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/<ToolName>UseCase.kt`**
 
 ```kotlin
 package net.aieat.netswissknife.core.domain
@@ -122,7 +122,7 @@ Add corresponding unit tests in `:core-domain/src/test/.../<ToolName>UseCaseTest
 
 ### 5. Add `:app` ViewModel
 
-**File: `app/src/main/kotlin/com/example/netswissknife/app/ui/screens/<toolname>/<ToolName>ViewModel.kt`**
+**File: `app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/<toolname>/<ToolName>ViewModel.kt`**
 
 ```kotlin
 package net.aieat.netswissknife.app.ui.screens.<toolname>
@@ -166,7 +166,7 @@ class <ToolName>ViewModel @Inject constructor(
 
 ### 6. Add `:app` Compose screen
 
-**File: `app/src/main/kotlin/com/example/netswissknife/app/ui/screens/<ToolName>Screen.kt`**
+**File: `app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/<toolname>/<ToolName>Screen.kt`**
 
 > **CRITICAL – High-Fidelity UI Required**
 > Every tool screen MUST implement the full UI specification below.
@@ -179,17 +179,19 @@ class <ToolName>ViewModel @Inject constructor(
 | **Animated entry** | `LaunchedEffect(Unit) { visible = true }` + `AnimatedVisibility(fadeIn + slideInVertically)` |
 | **State transitions** | `AnimatedContent` or `Crossfade` between idle / loading / success / error |
 | **Loading indicator** | `CircularProgressIndicator` inside the loading state |
-| **Card layout** | `ElevatedCard` with `RoundedCornerShape(16.dp)` for result panels |
+| **Card layout** | Use the shared `AppShapes` and `AppSpacing` tokens with Material 3 cards |
 | **Input field** | `OutlinedTextField` with leading icon and trailing clear button |
 | **Error state** | Red-tinted card with `MaterialTheme.colorScheme.error` + retry button |
 | **Gradient accents** | `Brush.verticalGradient` / `Brush.radialGradient` for hero areas |
-| **Typography** | `displaySmall` → title, `titleMedium` → sections, `bodyMedium` → content |
+| **Typography** | Use the appropriate `MaterialTheme.typography` styles |
 | **Dark mode safe** | All colors via `MaterialTheme.colorScheme.*`, never hardcoded hex |
+
+Use the existing shared components and patterns where they fit: `ToolHeroHeader`, `ToolHelpSheet`, `RecentHostsRow`, `hapticAction`, `AppShapes`, `AppSpacing`, and `AppMotion`. `app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/wol/WakeOnLanScreen.kt` is a current example. Collect flows with `collectAsStateWithLifecycle()` and load all user-visible text from `app/src/main/res/values/strings.xml`, including the tool's `help_<tool>_*` strings.
 
 #### Template
 
 ```kotlin
-package net.aieat.netswissknife.app.ui.screens
+package net.aieat.netswissknife.app.ui.screens.<toolname>
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -200,13 +202,17 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.res.stringResource
+import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.screens.<toolname>.<ToolName>ViewModel
 import net.aieat.netswissknife.app.ui.screens.<toolname>.<ToolName>UiState
+import net.aieat.netswissknife.app.ui.theme.AppSpacing
 
 @Composable
 fun <ToolName>Screen(viewModel: <ToolName>ViewModel = hiltViewModel()) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
@@ -218,20 +224,20 @@ fun <ToolName>Screen(viewModel: <ToolName>ViewModel = hiltViewModel()) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(AppSpacing.screenPadding),
+            verticalArrangement = Arrangement.spacedBy(AppSpacing.cardGap)
         ) {
             // ── Input ──────────────────────────────────────────────────
             var input by remember { mutableStateOf("") }
             OutlinedTextField(
                 value         = input,
                 onValueChange = { input = it },
-                label         = { Text("Host / IP") },
+                label         = { Text(stringResource(R.string.<tool>_input_label)) },
                 leadingIcon   = { Icon(/* tool icon */, null) },
                 trailingIcon  = {
                     if (input.isNotEmpty()) {
                         IconButton(onClick = { input = "" }) {
-                            Icon(Icons.Default.Clear, "Clear")
+                            Icon(Icons.Default.Clear, stringResource(R.string.action_clear))
                         }
                     }
                 },
@@ -244,7 +250,7 @@ fun <ToolName>Screen(viewModel: <ToolName>ViewModel = hiltViewModel()) {
                 modifier = Modifier.fillMaxWidth(),
                 enabled  = input.isNotBlank() && !uiState.isLoading
             ) {
-                Text("Run")
+                Text(stringResource(R.string.<tool>_action_run))
             }
 
             // ── Result / loading / error ──────────────────────────────
@@ -287,19 +293,18 @@ fun <ToolName>Screen(viewModel: <ToolName>ViewModel = hiltViewModel()) {
 }
 ```
 
-### 7. Wire into Navigation and bottom bar
+### 7. Wire into Navigation, Home, and More
 
 #### `NavRoutes.kt`
+
+Add a route object inside `NavRoutes.kt` and add the route to `NavRoutes.allTools`; route strings are not declared in screens or ViewModels. The Home tool grid is sourced from `NavRoutes.allTools`, so verify that it appears there. Add the tool to the appropriate `MoreToolsSheet.TOOL_SECTIONS` group. Bottom navigation uses the user's pinned routes; do not add every tool to the bottom bar.
 
 Add a new object inside the sealed class:
 ```kotlin
 object <ToolName> : NavRoutes("<toolname>", "<Tool Label>", Icons.Default.<SomeIcon>)
 ```
 
-Add it to `bottomNavItems`:
-```kotlin
-val bottomNavItems = listOf(Home, Ping, Traceroute, Ports, Lan, Dns, <ToolName>)
-```
+Bottom navigation is built from the user's persisted pinned routes. Keep the defaults in `NavRoutes.defaultPinnedRoutes`; do not create or maintain a separate `bottomNavItems` list.
 
 #### `AppNavigation.kt`
 
@@ -312,7 +317,7 @@ composable(NavRoutes.<ToolName>.route) { <ToolName>Screen() }
 
 If your repository has a concrete implementation separate from the interface, add a Hilt module:
 
-**File: `app/src/main/kotlin/com/example/netswissknife/app/di/<ToolName>Module.kt`**
+**File: `app/src/main/kotlin/net/aieat/netswissknife/app/di/<ToolName>Module.kt`**
 
 ```kotlin
 @Module
@@ -343,8 +348,17 @@ Both must succeed before committing.
 
 ### 11. Update documentation
 
-- **`README.md`**: Add a row to the "Available Tools" table with the new tool name, route, and a one-line description.
+- **`README.md`**: Add a Features subsection and an Available Tools row with the new tool name, route, and an accurate one-line description.
 - **`claude/tool_instructions.md`**: Add a brief entry at the bottom under "## Tools Added So Far" (create the section if it doesn't exist).
+
+### 12. Complete the project wiring checklist
+
+- Add a Hilt module at `app/src/main/kotlin/net/aieat/netswissknife/app/di/<ToolName>Module.kt` when the repository needs binding or provides dependencies.
+- Add strings for every label, state, error, action, and help-sheet section in `strings.xml`; include `help_<tool>_*` entries.
+- Add an instrumented screen test under `app/src/androidTest/.../screens/<tool>/` for the important user-visible flow.
+- Add pure logic classes to the app Kover include list in `app/build.gradle.kts` and meaningful tests for their behavior.
+- Confirm the route is in `NavRoutes.allTools`, the Home grid, and a `MoreToolsSheet.TOOL_SECTIONS` group; verify pinning and handoffs when applicable.
+- Update README Features and Available Tools, plus the tool table below.
 
 ---
 
@@ -366,7 +380,7 @@ Both must succeed before committing.
 - [ ] `core-domain/src/main/.../domain/<ToolName>UseCase.kt`
 - [ ] `core-domain/src/test/.../domain/<ToolName>UseCaseTest.kt`
 - [ ] `app/src/main/.../app/ui/screens/<toolname>/<ToolName>ViewModel.kt`
-- [ ] `app/src/main/.../app/ui/screens/<ToolName>Screen.kt`
+- [ ] `app/src/main/.../app/ui/screens/<toolname>/<ToolName>Screen.kt`
 - [ ] `app/src/main/.../app/di/<ToolName>Module.kt` (if needed)
 - [ ] `NavRoutes.kt` – add route and icon
 - [ ] `AppNavigation.kt` – add composable
@@ -382,10 +396,17 @@ Both must succeed before committing.
 | Tool | Route | Description |
 |------|-------|-------------|
 | Home | `home` | Welcome screen / overview |
-| Ping | `ping` | Placeholder for ICMP ping |
-| Traceroute | `traceroute` | Placeholder for traceroute |
-| Port Scanner | `ports` | Placeholder for TCP port scanning |
-| LAN Scanner | `lan` | Placeholder for LAN device discovery |
-| DNS Lookup | `dns` | Placeholder for DNS resolution |
+| Ping | `ping` | ICMP echo and reachability latency with packet statistics and CSV export |
+| Traceroute | `traceroute` | ICMP/UDP route tracing with per-hop details and asynchronous enrichment |
+| Port Scanner | `ports` | TCP port reachability and service identification |
+| LAN Scanner | `lan` | Local-network device discovery with host details and port handoff |
+| DNS Lookup | `dns` | Typed DNS record lookup with selectable resolvers and protocol details |
+| Wi-Fi Scanner | `wifi_scan` | Wi-Fi access-point, band, channel, and connection analysis |
+| Network Topology | `topology` | SNMP discovery of devices, interfaces, VLANs, and neighbors |
+| TLS Inspector | `tls` | TLS certificate, trust, hostname, protocol, and pin inspection |
+| WHOIS Lookup | `whois` | Domain, IP, and ASN registration lookup with RDAP/WHOIS modes |
 | HTTP Probe | `httprobe` | HTTP/HTTPS request tester with security header analysis |
-| Subnet Calculator | `subnet` | IPv4 subnet calculator with binary breakdown and notation conversion |
+| Subnet Calculator | `subnet` | IPv4 subnet calculations with binary and notation views |
+| mDNS Browser | `mdns` | Local DNS-SD service discovery with host, port, address, and TXT details |
+| Speed Test | `speedtest` | Cloudflare-backed latency, download, and upload measurement |
+| Wake-on-LAN | `wol` | UDP magic-packet sender with configurable broadcast settings |

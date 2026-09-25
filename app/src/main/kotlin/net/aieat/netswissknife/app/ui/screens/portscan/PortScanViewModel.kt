@@ -38,6 +38,10 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+object PortScanDefaults {
+    const val CONCURRENCY = 50
+}
+
 /** All possible UI states for the port scanner screen. */
 sealed interface PortScanUiState {
     object Idle : PortScanUiState
@@ -123,7 +127,7 @@ class PortScanViewModel @Inject constructor(
     private val _timeoutMs = MutableStateFlow(2000)
     val timeoutMs: StateFlow<Int> = _timeoutMs.asStateFlow()
 
-    private val _concurrency = MutableStateFlow(100)
+    private val _concurrency = MutableStateFlow(PortScanDefaults.CONCURRENCY)
     val concurrency: StateFlow<Int> = _concurrency.asStateFlow()
 
     val recentHosts: StateFlow<List<String>> = recentHostsRepository
@@ -160,7 +164,8 @@ class PortScanViewModel @Inject constructor(
         viewModelScope.launch {
             val prefs = dataStore.data.first()
             _timeoutMs.value = prefs[AppPreferenceKeys.DEFAULT_TIMEOUT_MS] ?: 2_000
-            _concurrency.value = (prefs[AppPreferenceKeys.DEFAULT_CONCURRENCY] ?: 50).coerceIn(1, 500)
+            _concurrency.value = (prefs[AppPreferenceKeys.DEFAULT_CONCURRENCY] ?: PortScanDefaults.CONCURRENCY)
+                .coerceIn(1, 500)
         }
     }
 
@@ -334,11 +339,6 @@ class PortScanViewModel @Inject constructor(
             }
         }
 
-        if (normalizedHost != null) {
-            viewModelScope.launch {
-                recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_PORTS_HOSTS, normalizedHost)
-            }
-        }
         scanStartedAtNanos = monotonicClock.nowNanos()
         _uiState.value = PortScanUiState.Scanning(
             liveResults = emptyList(),
@@ -349,6 +349,7 @@ class PortScanViewModel @Inject constructor(
         val operationSession = portScanUseCase.newSession(params)
         scanOperationSession = operationSession
         scanJob = viewModelScope.launch {
+            var recentSaved = false
             try {
                 portScanUseCase(params, operationSession).collect { result ->
                     if (scanOperationSession !== operationSession) return@collect
@@ -373,6 +374,10 @@ class PortScanViewModel @Inject constructor(
                                 totalCount = result.totalCount,
                                 resolvedIp = (_uiState.value as? PortScanUiState.Scanning)?.resolvedIp
                             )
+                            if (!recentSaved && normalizedHost != null) {
+                                saveRecentHostAfterResult(normalizedHost)
+                                recentSaved = true
+                            }
                         }
                         is PortScanFlowResult.ScanComplete -> {
                             scanStartedAtNanos = null
@@ -407,6 +412,18 @@ class PortScanViewModel @Inject constructor(
                 _uiState.value = PortScanUiState.Error("Scan failed: ${e.message ?: "Unknown error"}")
             } finally {
                 if (scanOperationSession === operationSession) scanOperationSession = null
+            }
+        }
+    }
+
+    private fun saveRecentHostAfterResult(host: String) {
+        viewModelScope.launch {
+            try {
+                recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_PORTS_HOSTS, host)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // Recents are best-effort and must not interrupt a running scan.
             }
         }
     }

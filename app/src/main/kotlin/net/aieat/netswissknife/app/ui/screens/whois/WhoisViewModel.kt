@@ -3,6 +3,7 @@ package net.aieat.netswissknife.app.ui.screens.whois
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -137,9 +138,6 @@ class WhoisViewModel @Inject constructor(
         val query = _uiState.value.query.trim()
         if (query.isBlank()) return
 
-        viewModelScope.launch {
-            recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_WHOIS_HOSTS, query)
-        }
         val activeSession = operationSession
         if (activeSession != null) {
             replaceActiveOperation(query, activeSession)
@@ -191,6 +189,8 @@ class WhoisViewModel @Inject constructor(
             kotlinx.coroutines.yield()
             val result = whoisLookupUseCase(WhoisParams(query = query, protocol = protocol), session)
             if (operationSession !== session) return@launch
+            if (result is NetworkResult.Success) saveRecentHostAfterSuccess(query)
+            if (operationSession !== session) return@launch
             progressJob?.cancel()
             progressJob = null
             operationSession = null
@@ -214,6 +214,18 @@ class WhoisViewModel @Inject constructor(
                         error = result.message
                     )
                 }
+            }
+        }
+    }
+
+    private fun saveRecentHostAfterSuccess(query: String) {
+        viewModelScope.launch {
+            try {
+                recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_WHOIS_HOSTS, query)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // Recents are best-effort and must not replace the lookup result.
             }
         }
     }

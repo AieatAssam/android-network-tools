@@ -213,11 +213,6 @@ class TracerouteViewModel @Inject constructor(
 
         val validatedHost = HostValidator.normalize(_host.value)
         val normalizedHost = validatedHost ?: _host.value.trim()
-        if (validatedHost != null) {
-            viewModelScope.launch {
-                recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_TRACEROUTE_HOSTS, validatedHost)
-            }
-        }
         val params = TracerouteParams(
             host          = normalizedHost,
             maxHops       = _maxHops.value,
@@ -240,6 +235,7 @@ class TracerouteViewModel @Inject constructor(
         _uiState.value = TracerouteUiState.Running(host = trimmedHost, hops = emptyList())
 
         traceJob = viewModelScope.launch {
+            var recentSaved = false
             try {
                 tracerouteUseCase(params, session).collect { result ->
                     // Discard any emission that was dispatched before the cancel took effect.
@@ -254,6 +250,10 @@ class TracerouteViewModel @Inject constructor(
                             val current = _uiState.value
                             if (current is TracerouteUiState.Running) {
                                 _uiState.value = current.copy(hops = accumulated.toList())
+                            }
+                            if (!recentSaved && validatedHost != null) {
+                                saveRecentHostAfterHop(validatedHost)
+                                recentSaved = true
                             }
                         }
                         is TracerouteFlowResult.HopEnriched -> {
@@ -327,6 +327,18 @@ class TracerouteViewModel @Inject constructor(
                         }
                     }
                 }
+            }
+        }
+    }
+
+    private fun saveRecentHostAfterHop(host: String) {
+        viewModelScope.launch {
+            try {
+                recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_TRACEROUTE_HOSTS, host)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // Recents are best-effort and must not interrupt the trace.
             }
         }
     }

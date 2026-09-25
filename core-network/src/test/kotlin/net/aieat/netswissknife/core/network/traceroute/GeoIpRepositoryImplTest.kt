@@ -184,13 +184,25 @@ class GeoIpRepositoryImplTest {
     }
 
     @Test
-    @DisplayName("lookup returns null immediately for private IPs without contacting the server")
-    fun `lookup short-circuits for private IPs`() = runTest {
-        val repo = GeoIpRepositoryImpl(baseUrl = "http://127.0.0.1:1")
+    @DisplayName("private and reserved IPv4 ranges are skipped without opening a connection")
+    fun `private and reserved address cases short-circuit lookup`() = runTest {
+        val connectionAttempts = AtomicInteger()
+        val repo = GeoIpRepositoryImpl("https://example.invalid") {
+            connectionAttempts.incrementAndGet()
+            error("Must not connect")
+        }
 
-        val result = repo.lookup("192.168.1.1")
+        listOf(
+            "192.168.1.100", // RFC 1918 192.168/16
+            "10.0.0.1",      // RFC 1918 10/8
+            "172.16.5.5",    // RFC 1918 172.16/12
+            "127.0.0.1",     // loopback
+            "169.254.1.1",   // link-local
+        ).forEach { ip ->
+            assertNull(repo.lookup(ip), "Expected $ip to be skipped")
+        }
 
-        assertNull(result)
+        assertEquals(0, connectionAttempts.get(), "Private-range lookups must not open connections")
     }
 
     @Test

@@ -22,7 +22,7 @@ ICMP echo and reachability round-trip latency measurement with real-time streami
 - **Continuous mode** — toggle replaces the count slider; pings indefinitely while the app is on screen, screen kept on automatically, stops when backgrounded or screen locked
   - Rolling window of the last 100 packets drives live stats and chart
   - Full session log streamed to a temp CSV file; shareable via the Share button on completion
-- Recent hosts saved per-session and offered as quick-select chips
+- Tools with recent-target support save up to five entries on-device and show quick-select chips; clear recent targets from Settings
 - CSV exports retain the original columns and append reply TTL and payload bytes.
 
 ### Traceroute
@@ -30,7 +30,7 @@ Network path analysis with per-hop geolocation enrichment.
 - Configurable max hops (1–64), timeout (500–30,000 ms), and probes per hop (1–5)
 - Dual protocol support: ICMP and UDP
 - Automatic MTU discovery or custom packet size (28–1,472 bytes)
-- Each hop shows IP address, reverse-DNS hostname, RTT, and geographic location
+- Hops show IP address, per-probe RTTs, and min/average/max when multiple probes are requested; reverse DNS and geolocation fill in asynchronously when available
 
 ### Port Scanner
 TCP port reachability scanning with service identification.
@@ -52,7 +52,7 @@ Local network device discovery across IPv4 subnets.
 ### DNS Lookup
 Full DNS record resolution with multiple resolver options and protocol-level response details.
 - 10 record types: A, AAAA, MX, TXT, CNAME, NS, SOA, PTR, SRV, CAA
-- Resolver options: system default, Google (8.8.8.8), Cloudflare (1.1.1.1), OpenDNS, Quad9, or custom server
+- Resolver options: system default, Google (8.8.8.8), Cloudflare (1.1.1.1), OpenDNS (208.67.222.222), Quad9 (9.9.9.9), or a custom server
 - PTR queries auto-reverse IPv4 addresses to `.in-addr.arpa` and IPv6 to `.ip6.arpa` form — just enter the IP
 - Returns each record's actual RR type and section, RCODE, AA/AD/TC/RD/RA flags, query time, server actually used, and raw DNS response
 - System DNS is never silently replaced with Cloudflare; when Android reports no resolver, the UI explains the failure and offers an explicit Cloudflare fallback. Private DNS status is shown when available.
@@ -156,6 +156,8 @@ LAN-directed sockets use the selected Wi-Fi or Ethernet network when the destina
 
 Tool screens show a status banner when internet access or a local Wi-Fi/Ethernet network is unavailable. LAN tools also explain when a VPN is active. On Android 16 (API 36) and newer, Android's Local Network Protections can require `NEARBY_WIFI_DEVICES` access before local-network operations. If access is denied, the tool shows a Grant action; grant access and retry the operation explicitly.
 
+Settings, pinned tools, and recent targets are stored in app-private preferences. Android cloud backup and device transfer exclude this preference file; clear recent targets from Settings when you want to remove them sooner.
+
 ---
 
 ## Module Layout
@@ -250,7 +252,7 @@ apkanalyzer dex packages app/build/outputs/apk/release/app-release-unsigned.apk 
 
 ### Coverage (Kover)
 ```bash
-./gradlew :app:koverVerify        # enforce 100% on pure, non-Compose app logic
+./gradlew :app:koverVerify        # enforce 90% on the pure, non-Compose classes in the app Kover include list
 ./gradlew :app:koverHtmlReport    # scoped :app report
 ./gradlew :core-network:koverHtmlReport :core-domain:koverHtmlReport
 ```
@@ -289,7 +291,7 @@ Runs on every push to `main` and every PR targeting `main`:
 4. Runs `./gradlew :app:assembleDebug`
 
 ### Release (`release.yml`)
-Triggered by a `v*.*.*` tag push or manual dispatch. Signs and publishes the release APK and AAB to GitHub Releases.
+Triggered by a new `vYYYY.MM.DD.N` tag (where `N` is 1–99) or manual dispatch. Manual dispatch allocates the next unused daily suffix and reserves the immutable tag before building. The version code is `YYYYMMDD × 100 + N`. The workflow signs and publishes the release APK and AAB to GitHub Releases.
 
 Required GitHub Actions secrets:
 

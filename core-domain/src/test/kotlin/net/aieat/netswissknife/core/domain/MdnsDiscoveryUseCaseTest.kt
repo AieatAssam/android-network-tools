@@ -65,6 +65,15 @@ class MdnsDiscoveryUseCaseTest {
     }
 
     @Test
+    fun `default scan duration is eight seconds`() = runTest {
+        every { repository.discover(8_000L) } returns flowOf(MdnsUpdate.DiscoveryComplete(0))
+
+        useCase().toList()
+
+        verify { repository.discover(8_000L) }
+    }
+
+    @Test
     fun `passes caller operation session through to repository`() = runTest {
         val session = MdnsOperation.newSession()
         every { repository.discover(3_000L, session) } returns flowOf(MdnsUpdate.DiscoveryComplete(0))

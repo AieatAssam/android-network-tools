@@ -1,9 +1,11 @@
 package net.aieat.netswissknife.app.ui.screens.traceroute
 
 import io.mockk.coVerify
+import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.awaitCancellation
@@ -105,7 +107,11 @@ class TracerouteViewModelTest {
 
         @Test
         fun `enrichment updates its hop in place without changing order`() = runTest {
-            val first = stubHop.copy(hostname = null, geoLocation = null)
+            val first = stubHop.copy(
+                hostname = null,
+                geoLocation = null,
+                probeRttsMs = listOf(2L, null, 3L),
+            )
             val second = stubHop.copy(hopNumber = 2, ip = "10.0.0.2", hostname = null)
             val firstGeo = HopGeoLocation("10.0.0.1", "United Kingdom", "GB", "London", 51.5, -0.1)
             every { tracerouteUseCase(any(), any()) } returns flowOf(
@@ -121,6 +127,7 @@ class TracerouteViewModelTest {
             assertEquals(listOf(1, 2), finished.result.hops.map { it.hopNumber })
             assertEquals("router.example", finished.result.hops[0].hostname)
             assertEquals(firstGeo, finished.result.hops[0].geoLocation)
+            assertEquals(listOf(2L, null, 3L), finished.result.hops[0].probeRttsMs)
             assertEquals(null, finished.result.hops[1].hostname)
         }
 
@@ -132,6 +139,7 @@ class TracerouteViewModelTest {
             viewModel.onHostChange("")
             viewModel.startTrace()
             assertTrue(viewModel.uiState.value is TracerouteUiState.Error)
+            coVerify(exactly = 0) { recentHostsRepository.addRecent(any(), any()) }
         }
 
         @Test
@@ -265,6 +273,27 @@ class TracerouteViewModelTest {
         }
 
         @Test
+        fun `first hop remains visible and in partial results while recent write is suspended`() = runTest {
+            val recentWrite = CompletableDeferred<Unit>()
+            coEvery {
+                recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_TRACEROUTE_HOSTS, "example.com")
+            } coAnswers { recentWrite.await() }
+            every { tracerouteUseCase(any(), any()) } returns kotlinx.coroutines.flow.flow {
+                emit(TracerouteFlowResult.Hop(stubHop))
+                awaitCancellation()
+            }
+            viewModel.onHostChange("example.com")
+
+            viewModel.startTrace()
+
+            assertEquals(listOf(stubHop), (viewModel.uiState.value as TracerouteUiState.Running).hops)
+            viewModel.onStop()
+            val canceling = viewModel.uiState.value as TracerouteUiState.Canceling
+            assertEquals(listOf(stubHop), canceling.hops)
+            recentWrite.complete(Unit)
+        }
+
+        @Test
         fun `duplicate start during trace does not replace active operation`() = runTest {
             val firstChannel = Channel<TracerouteFlowResult>(Channel.UNLIMITED)
             val firstCollectorCancelled = CountDownLatch(1)
@@ -368,16 +397,21 @@ class TracerouteViewModelTest {
     }
 
     @Test
-    fun `addRecent is called on startTrace`() = runTest {
-        every { tracerouteUseCase(any(), any()) } returns flowOf()
+    fun `addRecent is called once on first hop`() = runTest {
+        every { tracerouteUseCase(any(), any()) } returns flowOf(
+            TracerouteFlowResult.Hop(stubHop),
+            TracerouteFlowResult.Hop(stubHop.copy(hopNumber = 2, ip = "8.8.8.8")),
+        )
         viewModel.onHostChange("example.com")
         viewModel.startTrace()
-        coVerify { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_TRACEROUTE_HOSTS, "example.com") }
+        coVerify(exactly = 1) {
+            recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_TRACEROUTE_HOSTS, "example.com")
+        }
     }
 
     @Test
     fun `startTrace normalizes host before saving and probing`() = runTest {
-        every { tracerouteUseCase(any(), any()) } returns flowOf()
+        every { tracerouteUseCase(any(), any()) } returns flowOf(TracerouteFlowResult.Hop(stubHop))
         viewModel.onHostChange("  Example.COM. ")
 
         viewModel.startTrace()
@@ -386,6 +420,19 @@ class TracerouteViewModelTest {
             recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_TRACEROUTE_HOSTS, "example.com")
         }
         io.mockk.verify { tracerouteUseCase(match { it.host == "example.com" }, any()) }
+    }
+
+    @Test
+    fun `trace completing without a hop does not save a recent host`() = runTest {
+        every { tracerouteUseCase(any(), any()) } returns flowOf()
+        viewModel.onHostChange("example.com")
+
+        viewModel.startTrace()
+
+        assertTrue(viewModel.uiState.value is TracerouteUiState.Error)
+        coVerify(exactly = 0) {
+            recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_TRACEROUTE_HOSTS, any())
+        }
     }
 
     @Test

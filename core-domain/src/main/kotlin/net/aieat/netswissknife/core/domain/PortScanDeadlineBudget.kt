@@ -5,14 +5,13 @@ import net.aieat.netswissknife.core.network.portscan.PortScanOperationBudget
 /**
  * Derives a finite caller-owned deadline from the amount of work a port scan can perform.
  *
- * The estimate assumes every port consumes its full connect timeout and, for open ports, one
- * bounded banner read. Work is divided into waves using the actual session concurrency. A fixed
- * allowance covers target resolution, worker setup, and flow/result delivery. The operation is
- * rejected instead of silently shortened when this conservative estimate exceeds the hard cap.
+ * The estimate assumes every port consumes its full per-port timeout, including any banner read.
+ * Work is divided into waves using the actual session concurrency. A fixed allowance covers
+ * target resolution, worker setup, and flow/result delivery. The operation is rejected instead of
+ * silently shortened when this conservative estimate exceeds the hard cap.
  */
 object PortScanDeadlineBudget {
     const val MAX_OPERATION_TIMEOUT_MILLIS = PortScanOperationBudget.HARD_CEILING_MILLIS
-    const val BANNER_READ_ALLOWANCE_MILLIS = PortScanOperationBudget.BANNER_READ_ALLOWANCE_MILLIS
     const val SETUP_AND_RESOLUTION_ALLOWANCE_MILLIS = PortScanOperationBudget.SETUP_AND_RESOLUTION_ALLOWANCE_MILLIS
 
     fun estimate(

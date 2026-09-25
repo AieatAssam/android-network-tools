@@ -92,6 +92,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
 import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
 import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
@@ -1233,6 +1236,72 @@ private fun HopCard(hop: HopResult, index: Int) {
                             if (hop.geoLocation != null) {
                                 GeoLocationChip(hop.geoLocation!!)
                             }
+                        }
+                    }
+                    if (hop.probeRttsMs.size > 1) {
+                        val probeRttFormat = stringResource(R.string.traceroute_probe_rtt_value)
+                        val probeNoReply = stringResource(R.string.traceroute_probe_no_reply)
+                        val probeLabel = stringResource(R.string.traceroute_hop_probe_rtts)
+                        val listSeparator = stringResource(R.string.traceroute_list_separator)
+                        val probeSuccessColor = MaterialTheme.colorScheme.primary
+                        val probeTimeoutColor = MaterialTheme.colorScheme.outline
+                        val probeDescriptions = mutableListOf<String>()
+                        for ((index, rtt) in hop.probeRttsMs.withIndex()) {
+                            probeDescriptions += if (rtt == null) {
+                                stringResource(R.string.traceroute_probe_no_reply_description, index + 1)
+                            } else {
+                                stringResource(R.string.traceroute_probe_success_description, index + 1, rtt)
+                            }
+                        }
+                        val probesText = buildAnnotatedString {
+                            append(probeLabel)
+                            hop.probeRttsMs.forEach { rtt ->
+                                append(listSeparator)
+                                withStyle(
+                                    SpanStyle(
+                                        color = if (rtt == null) {
+                                            probeTimeoutColor
+                                        } else {
+                                            probeSuccessColor
+                                        },
+                                    ),
+                                ) {
+                                    append(if (rtt == null) "○" else "●")
+                                }
+                                append(" ")
+                                append(
+                                    rtt?.let {
+                                        java.lang.String.format(java.util.Locale.getDefault(), probeRttFormat, it)
+                                    } ?: probeNoReply,
+                                )
+                            }
+                        }
+                        Text(
+                            text = probesText,
+                            modifier = Modifier.semantics {
+                                contentDescription = probeDescriptions.joinToString(", ")
+                            },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        val min = hop.rttMinMs
+                        val avg = hop.rttAvgMs
+                        val max = hop.rttMaxMs
+                        if (min != null && avg != null && max != null) {
+                            Text(
+                                text = stringResource(
+                                    R.string.traceroute_hop_rtt_stats,
+                                    min,
+                                    avg,
+                                    max,
+                                ),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
                         }
                     }
                 }

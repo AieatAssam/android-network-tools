@@ -11,12 +11,17 @@ phase:
   id: P06
   title: "Docs & consistency: README/CLAUDE.md/PRIVACY_POLICY/store/tool_instructions truthfulness; remove dead code; align defaults and recents behaviour"
   priority: high
-  status: todo
+  status: in_progress
   estimated_effort: "S (1-2 agent sessions)"
   depends_on: []
   enables: [P07]
   findings: [F016, F018, F019, F023]
   target_modules: [":app", ":core-network", "docs"]
+  current_progress:
+    date: "2026-09-25"
+    implemented: "P06-T1 through T7 are implemented: README, release docs, privacy policy, Play text, and tool instructions were synced; placeholder/dead test code was removed; pinned-route ownership, PortScan concurrency, mDNS default duration, and success-evidence recents were aligned. DNS already persisted recents only on success."
+    validation: "Play text is 3,626 characters; strings.xml parses; endpoint/source audit, git diff --check, full JVM suites (core-network 1,206/1 skipped, core-domain 214, app 536), Android-test Kotlin compilation, all Kover gates, lintDebug, and debug/release assembly passed. QA/adversarial review cleared the implementation."
+    remaining: "P06 remains in_progress for the plan's manual README-to-device observability pass; source-level feature and endpoint checks are complete. No emulator was used."
 
 context:
   problem: |
@@ -108,29 +113,29 @@ context:
 tasks:
   - id: P06-T1
     title: "README.md fixes (F016a, F016b, F016e) + Settings/backup note"
-    status: todo
+    status: done
     steps: ["Apply exact edits above.", "Re-read every Features subsection against the corresponding ViewModel/UseCase constants (counts, ranges, defaults) and fix any other drift found; list them in the PR."]
     validation: ["`grep -n '100%' README.md` -> no coverage claim; `grep -n 'OpenDNS' README.md` -> present"]
   - id: P06-T2
     title: "CLAUDE.md fixes (F016c, F016d)"
-    status: todo
+    status: done
     steps: ["Remove claude_add_tool.yml references (tree + table).", "Fix release trigger text in CLAUDE.md and README.", "Add to Build Commands: unsigned release + apkanalyzer check (from P02-T5) once P02 lands; otherwise skip."]
   - id: P06-T3
     title: "PRIVACY_POLICY.md rewrite (F016f)"
-    status: todo
+    status: done
     steps: ["Rewrite per fix text; keep the permissions table; add sections per tool group; bump effective date to the merge date.", "Cross-check with AndroidManifest.xml permissions and all external hostnames: `grep -rn 'https\\?://\\|whois\\.\\|\\.cloudflare\\.com\\|ipinfo' core-network/src/main app/src/main --include=*.kt`."]
     validation: ["Every hostname found by the grep is mentioned in the policy."]
   - id: P06-T4
     title: "store/play-description.txt (F016g)"
-    status: todo
+    status: done
     steps: ["Apply conditional fix depending on P04 status; keep <= 4000 chars (Play limit) – check with `wc -c`."]
   - id: P06-T5
     title: "claude/tool_instructions.md (F016h)"
-    status: todo
+    status: done
     steps: ["Apply fix; also update template code to current conventions (collectAsStateWithLifecycle, ToolHeroHeader, ToolHelpSheet, RecentHostsRow, hapticAction, AppShapes tokens) by copying a short reference to WakeOnLanScreen.kt as the canonical modern example."]
   - id: P06-T6
     title: "Code hygiene (F018a-c)"
-    status: todo
+    status: done
     tdd:
       red:
         tests:
@@ -143,7 +148,7 @@ tasks:
         expect: "PASS, 0 errors"
   - id: P06-T7
     title: "Defaults & recents alignment (F019a-c)"
-    status: todo
+    status: done
     tdd:
       red:
         tests:

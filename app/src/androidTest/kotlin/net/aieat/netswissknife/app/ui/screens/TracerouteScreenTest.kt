@@ -164,6 +164,29 @@ class TracerouteScreenTest {
     }
 
     @Test
+    fun runningState_showsPerProbeRttsAndMinAverageMax() {
+        val hop = fakeHop(1, "10.0.0.1").copy(probeRttsMs = listOf(1L, null, 2L))
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                TracerouteScreen(
+                    viewModel = fakeViewModel(
+                        TracerouteUiState.Running(host = "example.com", hops = listOf(hop)),
+                    ),
+                )
+            }
+        }
+
+        composeRule.mainClock.advanceTimeBy(2_000L)
+        composeRule.mainClock.autoAdvance = true
+        composeRule.onNodeWithText("Probes: ● 1 ms · ○ no reply · ● 2 ms").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithContentDescription(
+            "Probe 1 succeeded: 1 ms, Probe 2 received no reply, Probe 3 succeeded: 2 ms",
+        ).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Min 1 ms · Avg 1.5 ms · Max 2 ms").performScrollTo().assertIsDisplayed()
+        composeRule.mainClock.autoAdvance = false
+    }
+
+    @Test
     fun runningState_withoutResponsesShowsProgressAndStopAction() {
         val viewModel = fakeViewModel(
             TracerouteUiState.Running(host = "example.com", hops = emptyList())

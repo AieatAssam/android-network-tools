@@ -162,9 +162,10 @@ findings:
         detail: "The public use-case allows timeoutMs as low as 100 ms and documents it as the per-port timeout, so an open port that sends no banner can run beyond the selected limit."
     impact: "Scans with low per-port timeouts can spend up to an additional 300 ms on every open, silent service; dense scans then exceed the advertised timing and delay completion despite bounded worker concurrency."
     recommended_action: "Use a banner budget derived from timeoutMs (for example min(timeoutMs, BANNER_TIMEOUT_MS)) or explicitly separate and expose connection versus banner timing in the contract."
-    validation: "Exercise defaultChecker against a server that accepts but sends no bytes at timeout values 100, 300, and 2_000 ms; assert the banner phase never exceeds its documented budget and scan duration remains bounded."
+    validation: "Serialized gates passed on 2026-09-25: core-network 1,206 tests (one skipped), core-domain 214, app 536, all with zero failures/errors; Android-test Kotlin compilation, three Kover gates, lintDebug, assembleDebug, and assembleRelease passed. Fake-clock socket tests cover 100/300/2,000 ms configured timeouts, remaining banner budgets, the 300 ms cap, exhausted-budget skip, and elapsed-time bounds. Independent QA and adversarial reviews found no remaining issue."
     related_phase: P11
-    status: todo
+    status: done
+    resolution: "The socket banner read now uses only the remaining per-port timeout, capped at 300 ms, and skips the read when no whole millisecond remains. PortScanOperationBudget and PortScanDeadlineBudget now estimate each per-port timeout once because banner time is included within it; deterministic repository/domain tests cover the revised timing and 15-minute ceiling behavior."
   - id: RNET009
     severity: medium
     kind: bug

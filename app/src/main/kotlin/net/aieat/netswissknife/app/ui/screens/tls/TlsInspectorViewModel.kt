@@ -234,9 +234,6 @@ class TlsInspectorViewModel @Inject constructor(
         val session = TlsInspectorOperation.newSession(INSPECTION_TIMEOUT_MS)
         operationSession = session
         viewModelScope.launch {
-            recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_TLS_HOSTS, normalizedHost)
-        }
-        viewModelScope.launch {
             try {
                 val params = TlsInspectorParams(
                     host      = normalizedHost,
@@ -246,14 +243,17 @@ class TlsInspectorViewModel @Inject constructor(
                     expectedPinSha256 = state.expectedPinSha256.trim().ifEmpty { null },
                 )
                 when (val res = useCase(params, session)) {
-                    is NetworkResult.Success -> _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        isCanceling = false,
-                        isCanceled = false,
-                        result    = res.data,
-                        error     = null,
-                        errorDescriptionKey = null,
-                    )
+                    is NetworkResult.Success -> {
+                        saveRecentHostAfterSuccess(normalizedHost)
+                        _uiState.value = _uiState.value.copy(
+                            isLoading = false,
+                            isCanceling = false,
+                            isCanceled = false,
+                            result    = res.data,
+                            error     = null,
+                            errorDescriptionKey = null,
+                        )
+                    }
                     is NetworkResult.Error   -> _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         isCanceling = false,
@@ -307,6 +307,16 @@ class TlsInspectorViewModel @Inject constructor(
         operationSession?.let { session ->
             operationSession = null
             runCatching { session.cancel(reason) }
+        }
+    }
+
+    private suspend fun saveRecentHostAfterSuccess(host: String) {
+        try {
+            recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_TLS_HOSTS, host)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            // Recents are best-effort and must not replace the inspection result.
         }
     }
 

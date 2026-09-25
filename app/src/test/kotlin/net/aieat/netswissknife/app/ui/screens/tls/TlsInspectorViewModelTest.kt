@@ -466,7 +466,17 @@ class TlsInspectorViewModelTest {
 
         assertEquals("example.com", viewModel.uiState.value.host)
         coVerify { useCase(match { it.host == "example.com" }, any()) }
-        coVerify { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_TLS_HOSTS, "example.com") }
+        coVerify(exactly = 0) { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_TLS_HOSTS, any()) }
+    }
+
+    @Test
+    fun `inspection error does not save a recent host`() = runTest {
+        coEvery { useCase(any(), any()) } returns NetworkResult.Error("connection refused")
+        viewModel.onHostChange("example.com")
+
+        viewModel.inspect()
+
+        coVerify(exactly = 0) { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_TLS_HOSTS, any()) }
     }
 
     @Test

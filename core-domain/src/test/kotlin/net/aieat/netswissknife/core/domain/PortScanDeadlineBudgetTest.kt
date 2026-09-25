@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Test
 
 class PortScanDeadlineBudgetTest {
     @Test
-    fun `budget uses waves at the effective caller concurrency and includes banner allowance`() {
+    fun `budget uses waves at effective concurrency with banner time inside per-port timeout`() {
         val estimate = PortScanDeadlineBudget.estimate(
             portCount = 101,
             timeoutMs = 2_000,
@@ -16,7 +16,7 @@ class PortScanDeadlineBudgetTest {
         )
 
         assertEquals(40, estimate.effectiveConcurrency)
-        assertEquals(10_000L + 3 * (2_000L + 300L), estimate.timeoutMillis)
+        assertEquals(10_000L + 3 * 2_000L, estimate.timeoutMillis)
         assertFalse(estimate.exceedsHardCeiling)
     }
 
@@ -33,9 +33,9 @@ class PortScanDeadlineBudgetTest {
             requestedConcurrency = 1,
         )
 
-        assertEquals(616_000L, parallel.timeoutMillis)
+        assertEquals(610_000L, parallel.timeoutMillis)
         assertFalse(parallel.exceedsHardCeiling)
-        assertEquals(303_010_000L, serial.timeoutMillis)
+        assertEquals(300_010_000L, serial.timeoutMillis)
         assertTrue(serial.exceedsHardCeiling)
         assertEquals(900_000L, PortScanDeadlineBudget.MAX_OPERATION_TIMEOUT_MILLIS)
     }

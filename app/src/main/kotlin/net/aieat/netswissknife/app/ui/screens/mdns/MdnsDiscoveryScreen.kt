@@ -128,7 +128,7 @@ fun MdnsDiscoveryScreen(
 
     PullToRefreshBox(
         isRefreshing = uiState.isScanning,
-        onRefresh = { viewModel.startScan(8_000L) },
+        onRefresh = { viewModel.startScan() },
         modifier = Modifier.fillMaxSize()
     ) {
     AnimatedVisibility(
@@ -162,7 +162,7 @@ fun MdnsDiscoveryScreen(
             ControlRow(
                 isScanning = uiState.isScanning,
                 isCanceling = uiState.isCanceling,
-                onScan = { viewModel.startScan(8_000L) },
+                onScan = { viewModel.startScan() },
                 onStop = { viewModel.stopScan() },
                 onReset = { viewModel.reset() },
                 hasPriorResults = uiState.services.isNotEmpty() || uiState.scanComplete || uiState.scanCanceled

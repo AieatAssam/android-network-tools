@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.mutablePreferencesOf
 import androidx.lifecycle.SavedStateHandle
+import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
@@ -120,6 +121,17 @@ class PortScanViewModelTest {
     @Test
     fun `initial state is Idle`() {
         assertTrue(viewModel.uiState.value is PortScanUiState.Idle)
+    }
+
+    @Test
+    fun `initial concurrency matches the shared default and stored fallback`() = runTest {
+        assertEquals(PortScanDefaults.CONCURRENCY, viewModel.concurrency.value)
+        every { portScanUseCase(any(), any()) } returns flowOf()
+        viewModel.onHostChange("example.com")
+
+        viewModel.startScan()
+
+        verify { portScanUseCase(match { it.concurrency == PortScanDefaults.CONCURRENCY }, any()) }
     }
 
     @Test
@@ -838,15 +850,19 @@ class PortScanViewModelTest {
     }
 
     @Test
-    fun `addRecent is called on startScan`() = runTest {
-        every { portScanUseCase(any(), any()) } returns flowOf()
+    fun `addRecent is called on first port result`() = runTest {
+        every { portScanUseCase(any(), any()) } returns flowOf(
+            PortScanFlowResult.Started("93.184.216.34", 2),
+            PortScanFlowResult.PortScanned(stubResult, 1, 2),
+            PortScanFlowResult.PortScanned(stubResult.copy(port = 443), 2, 2),
+        )
         viewModel.onHostChange("example.com")
         viewModel.startScan()
-        coVerify { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_PORTS_HOSTS, "example.com") }
+        coVerify(exactly = 1) { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_PORTS_HOSTS, "example.com") }
     }
 
     @Test
-    fun `startScan normalizes host before probing and saving`() = runTest {
+    fun `startScan normalizes host before probing and does not save validation failures`() = runTest {
         every { portScanUseCase(any(), any()) } returns flowOf(PortScanFlowResult.ValidationError("test"))
         viewModel.onHostChange("  Example.COM.  ")
 
@@ -854,7 +870,17 @@ class PortScanViewModelTest {
 
         assertEquals("example.com", viewModel.host.value)
         verify { portScanUseCase(match { it.host == "example.com" }, any()) }
-        coVerify { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_PORTS_HOSTS, "example.com") }
+        coVerify(exactly = 0) { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_PORTS_HOSTS, any()) }
+    }
+
+    @Test
+    fun `scan completing without a port result does not save a recent host`() = runTest {
+        every { portScanUseCase(any(), any()) } returns flowOf(PortScanFlowResult.ScanComplete(stubSummary))
+        viewModel.onHostChange("example.com")
+
+        viewModel.startScan()
+
+        coVerify(exactly = 0) { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_PORTS_HOSTS, any()) }
     }
 
     @Test
@@ -939,6 +965,31 @@ class PortScanViewModelTest {
         assertEquals(listOf(80), state.summary.scannedPorts)
         assertEquals(listOf(stubResult), state.summary.results)
         viewModel.onClear()
+    }
+
+    @Test
+    fun `first port remains visible and in partial results while recent write is suspended`() = runTest {
+        val recentWrite = CompletableDeferred<Unit>()
+        coEvery {
+            recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_PORTS_HOSTS, "example.com")
+        } coAnswers { recentWrite.await() }
+        every { portScanUseCase(any(), any()) } returns kotlinx.coroutines.flow.flow {
+            emit(PortScanFlowResult.Started(resolvedIp = "93.184.216.34", totalCount = 2))
+            emit(PortScanFlowResult.PortScanned(stubResult, scannedCount = 1, totalCount = 2))
+            awaitCancellation()
+        }
+        viewModel.onHostChange("example.com")
+
+        viewModel.startScan()
+
+        assertEquals(
+            listOf(stubResult),
+            (viewModel.uiState.value as PortScanUiState.Scanning).liveResults,
+        )
+        viewModel.onStopScan()
+        val finished = viewModel.uiState.value as PortScanUiState.Finished
+        assertEquals(listOf(stubResult), finished.summary.results)
+        recentWrite.complete(Unit)
     }
 
     @Test

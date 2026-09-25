@@ -32,8 +32,28 @@ import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
+import me.impa.icmpenguin.trace.Response
+import me.impa.icmpenguin.trace.HopStatus as NativeHopStatus
 
 class IcmpEnginTracerouteRepositoryImplTest {
+
+    @Test
+    fun `native hop mapping keeps all probe RTT slots and the first successful legacy RTT`() {
+        val hop = mapNativeHop(
+            NativeHopStatus(
+                1,
+                setOf("192.0.2.1"),
+                listOf(Response.Success(1_500, 0), Response.Error, Response.Success(2_500, 0)),
+                false,
+            ),
+        )
+
+        assertEquals(listOf(1L, null, 2L), hop.probeRttsMs)
+        assertEquals(1L, hop.rtTimeMs)
+        assertEquals(1L, hop.rttMinMs)
+        assertEquals(1.5, hop.rttAvgMs)
+        assertEquals(2L, hop.rttMaxMs)
+    }
 
     @Test
     fun `native linkage failure becomes a controlled traceroute error`() {

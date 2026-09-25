@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.Flow
 class MdnsDiscoveryUseCase(
     private val repository: MdnsRepository
 ) {
-    operator fun invoke(timeoutMs: Long = 5_000L): Flow<MdnsUpdate> =
+    operator fun invoke(timeoutMs: Long = 8_000L): Flow<MdnsUpdate> =
         repository.discover(MdnsOperation.requireValidScanDuration(timeoutMs))
 
     operator fun invoke(timeoutMs: Long, operationSession: OperationSession): Flow<MdnsUpdate> =

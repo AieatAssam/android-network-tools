@@ -457,6 +457,13 @@
     <string name="traceroute_hop_detail_ip">IP Address</string>
     <string name="traceroute_hop_detail_hostname">Hostname</string>
     <string name="traceroute_hop_detail_rtt">RTT</string>
+    <string name="traceroute_hop_probe_rtts">Probes:</string>
+    <string name="traceroute_hop_rtt_stats">Min %1$d ms · Avg %2$.1f ms · Max %3$d ms</string>
+    <string name="traceroute_probe_rtt_value">%1$d ms</string>
+    <string name="traceroute_probe_no_reply">no reply</string>
+    <string name="traceroute_probe_success_description">Probe %1$d succeeded: %2$d ms</string>
+    <string name="traceroute_probe_no_reply_description">Probe %1$d received no reply</string>
+    <string name="traceroute_list_separator"> · </string>
     <string name="traceroute_hop_detail_status">Status</string>
     <string name="traceroute_hop_detail_status_success">Responded</string>
     <string name="traceroute_hop_detail_status_timeout">Timed out</string>

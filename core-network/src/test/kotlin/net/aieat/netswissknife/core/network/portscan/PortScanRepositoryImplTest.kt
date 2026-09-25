@@ -35,7 +35,9 @@ import java.util.Collections
 import java.net.InetAddress
 import java.net.Socket
 import java.net.SocketAddress
+import java.net.SocketTimeoutException
 import java.io.ByteArrayInputStream
+import java.io.InputStream
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
@@ -73,7 +75,7 @@ class PortScanRepositoryImplTest {
         val repo = PortScanRepositoryImpl()
         val session = repo.newSession(portCount = 200, timeoutMs = 1_000, concurrency = 1, clock = clock)
 
-        assertEquals(270_000L, session.budget.remainingTimeoutMillis())
+        assertEquals(210_000L, session.budget.remainingTimeoutMillis())
     }
 
     @Test
@@ -436,6 +438,86 @@ class PortScanRepositoryImplTest {
         assertEquals(PortStatus.OPEN, updates.filterIsInstance<PortScanUpdate.PortResult>().single().result.status)
         assertTrue(connected, "the repository must continue probing over the default route")
         assertTrue(binder.boundTcpSockets.isEmpty(), "shouldBind=false must skip NetworkBinder.bind")
+    }
+
+    @Test
+    fun `default socket checker caps banner read by remaining per-port timeout`() = runTest {
+        data class Case(val timeoutMs: Int, val connectElapsedMs: Int, val expectedBannerTimeoutMs: Int)
+        val cases = listOf(
+            Case(timeoutMs = 100, connectElapsedMs = 40, expectedBannerTimeoutMs = 60),
+            Case(timeoutMs = 300, connectElapsedMs = 100, expectedBannerTimeoutMs = 200),
+            Case(timeoutMs = 2_000, connectElapsedMs = 50, expectedBannerTimeoutMs = 300),
+        )
+
+        cases.forEach { case ->
+            val clock = FakeClock()
+            var configuredBannerTimeoutMs: Int? = null
+            var streamRequested = false
+            val socket = object : Socket() {
+                private var timeout = 0
+
+                override fun connect(endpoint: SocketAddress?, timeout: Int) {
+                    clock.advanceBy(case.connectElapsedMs * 1_000_000L)
+                }
+
+                override fun setSoTimeout(timeout: Int) {
+                    this.timeout = timeout
+                    configuredBannerTimeoutMs = timeout
+                }
+
+                override fun getSoTimeout(): Int = timeout
+
+                override fun getInputStream(): InputStream {
+                    streamRequested = true
+                    return object : InputStream() {
+                        override fun read(): Int {
+                            clock.advanceBy(timeout * 1_000_000L)
+                            throw SocketTimeoutException("scripted banner timeout")
+                        }
+                    }
+                }
+            }
+            val repo = PortScanRepositoryImpl(
+                clock = clock,
+                hostResolver = { InetAddress.getLoopbackAddress() },
+                socketFactory = { socket },
+            )
+
+            val updates = repo.scan("localhost", listOf(22), case.timeoutMs, concurrency = 1).toList()
+
+            assertEquals(case.expectedBannerTimeoutMs, configuredBannerTimeoutMs)
+            assertTrue(streamRequested)
+            assertTrue(clock.nowNanos() <= case.timeoutMs * 1_000_000L)
+            assertEquals(PortStatus.OPEN, updates.filterIsInstance<PortScanUpdate.PortResult>().single().result.status)
+        }
+    }
+
+    @Test
+    fun `default socket checker skips banner read when connect exhausts per-port timeout`() = runTest {
+        val timeoutMs = 100
+        val clock = FakeClock()
+        var streamRequested = false
+        val socket = object : Socket() {
+            override fun connect(endpoint: SocketAddress?, timeout: Int) {
+                clock.advanceBy(timeoutMs * 1_000_000L)
+            }
+
+            override fun getInputStream(): InputStream {
+                streamRequested = true
+                return ByteArrayInputStream(ByteArray(0))
+            }
+        }
+        val repo = PortScanRepositoryImpl(
+            clock = clock,
+            hostResolver = { InetAddress.getLoopbackAddress() },
+            socketFactory = { socket },
+        )
+
+        val updates = repo.scan("localhost", listOf(22), timeoutMs, concurrency = 1).toList()
+
+        assertTrue(!streamRequested, "banner input must not be opened after the timeout budget is exhausted")
+        assertEquals(PortStatus.OPEN, updates.filterIsInstance<PortScanUpdate.PortResult>().single().result.status)
+        assertTrue(clock.nowNanos() <= timeoutMs * 1_000_000L)
     }
 
     @Test
