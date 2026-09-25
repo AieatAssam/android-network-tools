@@ -11,7 +11,7 @@ phase:
   id: P08
   title: "Accessibility & UI polish: 48dp targets, live regions, RTL/font-scale-safe chart text, chart descriptions, slider labels, narrow-width layouts, reduced-motion, IME actions, contrast test"
   priority: medium
-  status: todo
+  status: in_progress
   estimated_effort: "M (2-4 agent sessions)"
   depends_on: [P07-T3]
   enables: []
@@ -29,10 +29,10 @@ review_follow_up:
 
 context:
   problem: |
-    Verified defects (2026-09-18):
+    Baseline findings recorded on 2026-09-18; current implementation status is tracked per task below:
       - HttpProbeScreen.kt:387, :394, :876 IconButton size 32.dp; :1050 size 28.dp (< 48dp minimum).
       - `grep -rn liveRegion app/src/main` -> 0: loading/success/error transitions are not announced.
-      - WifiScanScreen.kt has 6 `nativeCanvas.drawText` sites (spectrum + gauge) – bypass Compose text
+      - WifiScanScreen.kt had 5 `nativeCanvas.drawText` sites (spectrum + gauge) – bypassing Compose text
         layout (no font-scale, no RTL mirroring awareness); PingScreen uses TextMeasurer correctly.
       - PortsScreen RangeSlider has no thumb labels (values only visible in a separate label).
       - SubnetCalculatorScreen BinaryBitsRow: 32 cells with weight(1f), no min size/scroll -> unreadable < 360dp.
@@ -46,7 +46,7 @@ context:
       - Colour contrast of hero text over gradients unverified.
   evidence:
     - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/httprobe/HttpProbeScreen.kt", lines: "387,394,876,1050" }
-    - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/WifiScanScreen.kt", grep: "nativeCanvas.drawText (6)" }
+    - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/WifiScanScreen.kt", grep: "baseline nativeCanvas.drawText (5); current source guard expects zero" }
     - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/PortsScreen.kt", grep: "RangeSlider(" }
     - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/subnet/SubnetCalculatorScreen.kt", grep: "BinaryBitsRow" }
     - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/theme/Motion.kt", note: "AppMotion tokens; no reduced-motion handling" }
@@ -118,16 +118,16 @@ design:
 
 tasks:
   - id: P08-T1
-    title: "Touch-target audit test + HttpProbe fixes"
-    status: todo
+    title: "Touch-target audit test + undersized IconButton fixes"
+    status: in_progress
     tdd:
       red:
         test_file: app/src/test/kotlin/net/aieat/netswissknife/app/ui/a11y/TouchTargetAuditTest.kt
-        tests: ["scans app/src/main/kotlin for IconButton/Icon-clickable modifiers with .size(<48.dp) and fails listing HttpProbeScreen lines 387/394/876/1050"]
+        tests: ["scans app/src/main/kotlin for explicit IconButton modifier dimensions below 48dp across IconButton variants"]
         run: "./gradlew :app:testDebugUnitTest --tests '*TouchTargetAuditTest' --no-daemon"
         expect: "RED"
-      green: { steps: ["Replace with minimumInteractiveComponentSize(); adjust row heights if layout shifts."], run: "same + :app:assembleDebug", expect: "PASS" }
-    acceptance_criteria: ["Audit test green; HttpProbeScreenTest green on device."]
+      green: { steps: ["Use minimumInteractiveComponentSize() for undersized controls while preserving compact glyph sizes; confirm the source guard has no current violations."], run: "same + :app:assembleDebug", expect: "PASS" }
+    acceptance_criteria: ["TouchTargetAuditTest passes and the affected HTTP, DNS, and Recent Hosts controls retain accessible interactive bounds; HttpProbeScreenTest remains a device check."]
 
   - id: P08-T2
     title: "ToolStateAnnouncer (live region) in all tool screens"
@@ -147,17 +147,17 @@ tasks:
 
   - id: P08-T3
     title: "Wi-Fi chart text via TextMeasurer + chart contentDescriptions"
-    status: todo
+    status: in_progress
     tdd:
       red:
         tests:
-          - "WifiScanScreenTest: spectrum node has contentDescription containing wifi_spectrum_a11y prefix"
-          - "PingScreenTest: chart node contentDescription contains 'min'/'max' labels"
-          - "Unit: source scan test asserts `nativeCanvas.drawText` count == 0 in app/src/main"
-        run: "./gradlew :app:testDebugUnitTest --no-daemon (scan) + device"
+          - "WifiScanScreenTest: spectrum/gauge descriptions report AP count, strongest RSSI, quality, and level; RTL semantics remain present"
+          - "PingScreenTest: chart description reports successful RTT range/min/avg/max and failed baseline markers"
+          - "Unit: source scan asserts `nativeCanvas.drawText` count == 0 in app/src/main; plot-bounds unit test covers LTR and RTL"
+        run: "./gradlew :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin --no-daemon (no emulator required)"
         expect: "RED"
-      green: { steps: ["Refactor 6 sites; add semantics."], run: "…", expect: "PASS" }
-    acceptance_criteria: ["Charts render identically at fontScale 1.0 (screenshot compare manually); labels scale at 1.5."]
+      green: { steps: ["Migrate five Wi-Fi native-canvas text sites to Compose TextMeasurer; expose Wi-Fi spectrum/gauge and Ping RTT chart semantics."], run: "same", expect: "PASS" }
+    acceptance_criteria: ["Chart text uses font-scaled Compose measurement; source guard reports zero `nativeCanvas.drawText` calls; chart summaries include the plotted values. FontScale 1.0 screenshot comparison, 1.5 scaling, and RTL visual placement remain device checks."]
 
   - id: P08-T4
     title: "RangeSlider labels, binary grid narrow layout, hero 2-line at large font scale"
