@@ -1,7 +1,7 @@
 meta:
   reviewed_on: "2026-09-26"
   source_branch: "plan/comprehensive-review-2026-09-22"
-  source_commit: "pending-source-commit"
+  source_commit: "37fe8a56c8d9802c2d40c312aea347a7444f33d9"
   purpose: "Turn current review findings into explicit interim-release checkpoints. No version is allocated or published by this plan."
   release_policy: "Do not tag a public interim release until IR-3 acceptance is complete. A named checkpoint is evidence-based work, not a release authorization."
   emulator_policy: "Check for an already-running emulator before device work. Reuse it if present; if this task starts one, use it through completion and shut it down afterward."

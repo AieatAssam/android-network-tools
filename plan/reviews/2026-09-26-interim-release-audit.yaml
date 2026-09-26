@@ -3,7 +3,7 @@ meta:
   baseline_commit: "170fb52"
   branch: "plan/comprehensive-review-2026-09-22"
   source: "User-supplied security, lifecycle, correctness, and release-quality review. Findings were rechecked against the current branch and grouped into interim-release gates."
-  implementation_status: "IR-1/IR-2 source changes and local automated checks are complete. Public-release acceptance remains open for device checks, new-diagnostic quality gating, and R4-016 cleartext policy resolution."
+  implementation_status: "Candidate source commit 37fe8a5 contains the IR-1/IR-2 fixes and local automated checks pass. Public-release acceptance remains open for device checks, new-diagnostic quality gating, and R4-016 cleartext policy resolution."
   validation_policy: "Source confirmation is distinguished from runtime reproduction. No emulator or live SNMP endpoint was used for this review."
 
 findings:
