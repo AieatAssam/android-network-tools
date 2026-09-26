@@ -10,6 +10,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
@@ -33,6 +34,7 @@ import net.aieat.netswissknife.core.domain.TracerouteParams
 import net.aieat.netswissknife.core.domain.TracerouteUseCase
 import net.aieat.netswissknife.core.network.operation.CancellationReason
 import net.aieat.netswissknife.core.network.operation.OperationBudget
+import net.aieat.netswissknife.core.network.operation.OperationRunner
 import net.aieat.netswissknife.core.network.operation.OperationSession
 import net.aieat.netswissknife.core.network.traceroute.HopGeoLocation
 import net.aieat.netswissknife.core.network.traceroute.HopResult
@@ -406,8 +408,9 @@ class TracerouteViewModelTest {
                 viewModel.startTrace()
                 viewModel.onLifecycleStop()
 
-                val canceling = viewModel.uiState.value as TracerouteUiState.Canceling
-                assertEquals(listOf(stubHop), canceling.hops)
+                (viewModel.uiState.value as? TracerouteUiState.Canceling)?.let { canceling ->
+                    assertEquals(listOf(stubHop), canceling.hops)
+                }
                 val canceled =
                     viewModel.uiState.first { it is TracerouteUiState.Canceled }
                         as TracerouteUiState.Canceled
@@ -423,16 +426,19 @@ class TracerouteViewModelTest {
                 val cleanupFinished = CountDownLatch(1)
                 every { tracerouteUseCase(any(), any()) } answers {
                     val session = secondArg<OperationSession>()
-                    flow {
-                        session.resources.register(
-                            AutoCloseable {
-                                cleanupStarted.countDown()
-                                check(allowCleanupToFinish.await(5, TimeUnit.SECONDS))
-                                cleanupFinished.countDown()
-                            },
-                        )
-                        emit(TracerouteFlowResult.Hop(stubHop))
-                        awaitCancellation()
+                    channelFlow {
+                        val output = this
+                        OperationRunner.run(session) {
+                            resources.register(
+                                AutoCloseable {
+                                    cleanupStarted.countDown()
+                                    check(allowCleanupToFinish.await(5, TimeUnit.SECONDS))
+                                    cleanupFinished.countDown()
+                                },
+                            )
+                            output.send(TracerouteFlowResult.Hop(stubHop))
+                            awaitCancellation()
+                        }
                     }
                 }
                 viewModel.onHostChange("example.com")

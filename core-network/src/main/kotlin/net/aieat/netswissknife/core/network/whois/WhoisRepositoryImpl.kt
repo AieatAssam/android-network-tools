@@ -19,6 +19,7 @@ import net.aieat.netswissknife.core.network.operation.OperationSession
 import net.aieat.netswissknife.core.network.operation.ensureCurrentOperationActive
 import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.NetworkResult
+import net.aieat.netswissknife.core.network.traceroute.ReservedRanges
 import java.io.IOException
 import java.net.Socket
 
@@ -435,20 +436,9 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
         return buildIpResult(query, queryType, hops, overallStart)
     }
 
-    /**
-     * True for a loopback, private (RFC 1918), link-local, multicast, or wildcard
-     * address. A malicious or compromised WHOIS server can hand back an arbitrary
-     * `refer:`/registrar-server host in its response text (see [WhoisResponseParser]);
-     * without this check that referral is followed blindly, letting a remote WHOIS
-     * server redirect this app's own socket connection to the device's loopback
-     * interface or an internal LAN host.
-     */
+    /** Only resolved public-global destinations may receive an untrusted WHOIS referral. */
     internal fun isDisallowedReferralAddress(address: java.net.InetAddress): Boolean =
-        address.isLoopbackAddress ||
-            address.isLinkLocalAddress ||
-            address.isSiteLocalAddress ||
-            address.isAnyLocalAddress ||
-            address.isMulticastAddress
+        !ReservedRanges.isPublicGlobalLiteral(address.hostAddress)
 
     private suspend fun queryServer(
         host: String,

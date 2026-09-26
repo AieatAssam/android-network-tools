@@ -72,9 +72,9 @@ class DnsRepositoryOperationSessionTest {
         session.cancel(CancellationReason.USER_STOP)
         checkNotNull(queuedTask.get()).run()
 
-        assertTrue(future.isCancelled)
+        assertTrue(awaitCondition { future.isCancelled })
         assertTrue(openedSocket.get() == null, "cancelled queued work must not open a late socket")
-        assertTrue(session.resources.isClosed)
+        assertTrue(awaitCondition { session.resources.isClosed })
     }
 
     @Test
@@ -110,8 +110,7 @@ class DnsRepositoryOperationSessionTest {
         val secondSession = newSession()
         try {
             firstSession.cancel(CancellationReason.USER_STOP)
-            assertTrue(firstFuture.isCancelled)
-            assertTrue(executor.queue.isEmpty(), "cancellation should remove queued transport work")
+            assertTrue(awaitCondition { firstFuture.isCancelled && executor.queue.isEmpty() })
 
             val secondFuture = SessionIoClientFactory(secondSession, taskExecutor = executor)
                 .createOrGetUdpClient()
@@ -200,7 +199,9 @@ class DnsRepositoryOperationSessionTest {
             )
 
             queued.first().first.cancel(CancellationReason.USER_STOP)
-            assertTrue(queued.first().second.isCancelled, "cancelling queued operation should cancel its transport future")
+            withTimeout(3_000) {
+                while (!queued.first().second.isCancelled) kotlinx.coroutines.yield()
+            }
             withTimeout(3_000) {
                 while (executor.queue.size != DNS_IO_QUEUE_CAPACITY - 1) kotlinx.coroutines.yield()
             }
@@ -556,6 +557,15 @@ class DnsRepositoryOperationSessionTest {
             maxConcurrentProbes = 1,
         )
     )
+
+    private fun awaitCondition(timeoutMillis: Long = 2_000, condition: () -> Boolean): Boolean {
+        val deadlineNanos = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis)
+        while (!condition()) {
+            if (System.nanoTime() >= deadlineNanos) return false
+            Thread.sleep(1)
+        }
+        return true
+    }
 
     private class HangingDnsFixture : Closeable {
         private val socket = DatagramSocket(0, InetAddress.getLoopbackAddress())

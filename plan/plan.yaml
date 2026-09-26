@@ -235,6 +235,23 @@ comprehensive_expansion:
       - {"finding":"R3-008","owner_task":"E02-T06","follow_up_status":"done","report":"plan/reviews/2026-09-24-comprehensive-code-review.yaml"}
       - {"finding":"R3-009","owner_task":"P10-T5","follow_up_status":"done","report":"plan/reviews/2026-09-24-comprehensive-code-review.yaml"}
       - {"finding":"R3-010","owner_task":"E01-T10","follow_up_status":"done","report":"plan/reviews/2026-09-24-comprehensive-code-review.yaml"}
+      - {"finding":"R4-001","owner_task":"IR-1","follow_up_status":"done","report":"plan/reviews/2026-09-26-interim-release-audit.yaml"}
+      - {"finding":"R4-002","owner_task":"IR-1","follow_up_status":"done","report":"plan/reviews/2026-09-26-interim-release-audit.yaml"}
+      - {"finding":"R4-003","owner_task":"IR-1","follow_up_status":"done","report":"plan/reviews/2026-09-26-interim-release-audit.yaml"}
+      - {"finding":"R4-004","owner_task":"IR-1","follow_up_status":"in_progress","report":"plan/reviews/2026-09-26-interim-release-audit.yaml"}
+      - {"finding":"R4-005","owner_task":"IR-2","follow_up_status":"done","report":"plan/reviews/2026-09-26-interim-release-audit.yaml"}
+      - {"finding":"R4-006","owner_task":"IR-2","follow_up_status":"done","report":"plan/reviews/2026-09-26-interim-release-audit.yaml"}
+      - {"finding":"R4-007","owner_task":"IR-2","follow_up_status":"done","report":"plan/reviews/2026-09-26-interim-release-audit.yaml"}
+      - {"finding":"R4-008","owner_task":"IR-2","follow_up_status":"done","report":"plan/reviews/2026-09-26-interim-release-audit.yaml"}
+      - {"finding":"R4-009","owner_task":"IR-2","follow_up_status":"done","report":"plan/reviews/2026-09-26-interim-release-audit.yaml"}
+      - {"finding":"R4-010","owner_task":"IR-1","follow_up_status":"done","report":"plan/reviews/2026-09-26-interim-release-audit.yaml"}
+      - {"finding":"R4-011","owner_task":"IR-1","follow_up_status":"done","report":"plan/reviews/2026-09-26-interim-release-audit.yaml"}
+      - {"finding":"R4-012","owner_task":"IR-3","follow_up_status":"todo","report":"plan/reviews/2026-09-26-interim-release-audit.yaml"}
+      - {"finding":"R4-013","owner_task":"IR-1","follow_up_status":"in_progress","report":"plan/reviews/2026-09-26-interim-release-audit.yaml"}
+      - {"finding":"R4-014","owner_task":"IR-3","follow_up_status":"done","report":"plan/reviews/2026-09-26-interim-release-audit.yaml"}
+      - {"finding":"R4-015","owner_task":"IR-1","follow_up_status":"done","report":"plan/reviews/2026-09-26-interim-release-audit.yaml"}
+      - {"finding":"R4-016","owner_task":"IR-3","follow_up_status":"todo","report":"plan/reviews/2026-09-26-interim-release-audit.yaml"}
+      - {"finding":"R4-017","owner_task":"IR-1","follow_up_status":"done","report":"plan/reviews/2026-09-26-interim-release-audit.yaml"}
 
 incremental_review:
   reviewed_on: "2026-09-21"
@@ -247,9 +264,9 @@ incremental_review:
   recommended_first_followups: [E03-T01]
   current_task_snapshot:
     task_id: "E03-T01"
-    commit: "5c44785"
+    commit: "pending-interim-source-commit"
     status: "in_progress"
-    latest_slice: "The committed QA follow-up localizes DNS resolver presets/results/share text into app resources, clamps Wi-Fi spectrum SSID labels within plot bounds, and splits Ping RTT paths across failed or missing samples. It also tests actual Snmp4jClientImpl initialization under the production-configured four-worker/32-queue executor, proving rejection before allocation, queued-cancellation recovery, and exactly-once transport cleanup. Focused app unit tests and Android-test Kotlin compilation passed; focused core-network DNS and SNMP saturation tests passed. Independent QA/adversarial reviews found no blocker. E03-T01 remains open for broader adapter coverage, device behavior, and cleanup-latency measurement; P07/P08 retain translation and visual/device gates. No emulator was used."
+    latest_slice: "Prepared the first interim-release candidate slice against the supplied review: strict WHOIS referral and registrar URL checks, SAN-authoritative TLS identity, Ping-only FileProvider scope, bounded operation cleanup, owned-job cancellation, SNMP walk cancellation, ARP null-result preservation, mDNS accepted-send accounting, pinned workflow actions, release/OUI tests, and narrowed TrustAll lint suppression. The raw resource inventory now matches the selected-network socket factory and has direct bind-before-connect tests. IR-2 is complete; IR-1 awaits provider execution and candidate CI; IR-3 remains open for API 33/TalkBack/live SNMP/physical-Wi-Fi QA, a changed-diagnostic ktlint/detekt gate, and R4-016 cleartext policy resolution. Local serialized Android checks, Python tooling suites, YAML parsing, action-SHA checks, and the resource-site checker pass. No emulator or lab endpoint was used."
   first_followups_rationale: "RAPP003, RAPP004, RNET002, RNET003, RNET006, RNET007, RNET008, RUI007, RBUILD001, RBUILD002, RUI001-RUI004, RUI006, RUI009, R2-006, and the R2-012 plan gap are closed with regressions or completed contract refinements. P05-T1 through T4 and T6 are complete; P05-T5's connectivity banners and typed local-network permission handling pass source review and JVM checks, while the latest API 36 instrumentation attempt stalled in PackageManager before tests started. API 33, live SNMP, TalkBack, VPN, and physical Wi-Fi observations also remain release-device checks. P02.5 remains the highest-severity open gate: the 2026-09-24 topic-branch ADS run resolves every alerted coordinate to a patched version, but main's latest submission is still the 2026-09-21 run and the live alert API still has six open alerts; no later stable AGP candidate is listed. Keep the phase open until main is resubmitted and alerts close or receive approved time-bounded dispositions. E03-T01 is in progress: caller-owned sessions now cover Ping, DNS, Wi-Fi, LAN, Port Scan, and WHOIS; Traceroute reverse DNS uses a bounded asynchronous resolver. The raw-resource ledger inventories 17 scope-registered/reviewed sites with no legacy entries or open reviews; phase-wide gates, device cleanup measurements, and remaining device behavior checks stay open. E03-T01 unlocks E03-T03/T04/T05/T07 and their response-resource follow-ups. E03-T02 has started with literal destination classification and a pure availability decision model, while ViewModel/lifecycle integration and device checks remain open. E03-T04 has the bounded route/scope-keyed NetworkCache primitive and now enforces HTTP response metadata caps inside a pinned OkHttp 5.5.0 parser fork, with direct parser and HTTP/1+h2c transport regressions; shared timeouts, broader adapter integration, response-body caps, and stale/offline UI remain open. E01-T01 has a typed intent/codec and implemented LAN/mDNS handoff paths; compiled production AppNavHost tests check route arguments and Back, and the latest source test uses the production AppNavHost graph, real LanScreen and PortsScreen, production NavBackStackEntry arguments/SavedStateHandle, and a directly constructed PortScanViewModel; it presses Back and confirms the LAN result remains without auto-scan. This does not prove destination-scoped Hilt delivery, retention of a real scan result, or system process restoration. Remaining gates are connected execution, actual LAN scan/no-rescan behavior, Android SavedStateRegistry/process restoration, API 33, and phone/tablet checks. RNET010 remains tracked, and RLAN001's device-only Wi-Fi/VPN and NBSTAT observations remain under E00-T01."
   execution_guidance: "Merge these findings with open phase work by severity; existing unresolved critical/high findings retain precedence. Address confirmed bugs before optional feature waves P13-P15. Follow each finding's related_phase and validation, including follow-ups to historically completed phases."
   reports:
@@ -262,6 +279,8 @@ incremental_review:
     - { area: release-qa-brief-current-source, file: plan/reviews/2026-09-23-release-qa-brief.yaml }
     - { area: wol-port-validation, file: plan/reviews/2026-09-24-wol-port-validation.yaml }
     - { area: comprehensive-code-review, file: plan/reviews/2026-09-24-comprehensive-code-review.yaml }
+    - { area: interim-release-audit, file: plan/reviews/2026-09-26-interim-release-audit.yaml }
+  interim_release_milestones: plan/interim-release-milestones.yaml
   prioritized_findings:
     - { id: RLAN001, severity: high, kind: bug, phase: P01, status: done, title: "A failed TCP connect is promoted to a live host and floods LAN results with false positives" }
     - { id: RAPP001, severity: medium, kind: bug, phase: P03, status: done, title: "Wi-Fi scan failures are reported as completed scans" }
@@ -305,6 +324,23 @@ incremental_review:
     - { id: R3-008, severity: medium, kind: bug, owner: E02-T06, status: done, title: "Wi-Fi channel statistics merge cross-band and aliased-frequency groups, corrupting 2.4 GHz recommendation metadata" }
     - { id: R3-009, severity: low, kind: bug, owner: P10-T5, status: done, title: "WHOIS sends unvalidated, non-IDNA query text to servers" }
     - { id: R3-010, severity: low, kind: bug, owner: E01-T10, status: done, title: "DNS recents persist names that failed validation" }
+    - { id: R4-001, severity: high, kind: security_gap, owner: IR-1, status: done, title: "WHOIS referrals must reject every non-public-global destination" }
+    - { id: R4-002, severity: high, kind: security_gap, owner: IR-1, status: done, title: "WHOIS registrar URLs must use the RDAP HTTP(S)-only gate" }
+    - { id: R4-003, severity: high, kind: security_gap, owner: IR-1, status: done, title: "TLS identity must not use CN fallback when any SAN exists" }
+    - { id: R4-004, severity: high, kind: privacy_gap, owner: IR-1, status: in_progress, title: "FileProvider must expose only Ping log files" }
+    - { id: R4-005, severity: high, kind: resource_lifecycle_gap, owner: IR-2, status: done, title: "Operation cleanup can outlive the deadline and block operation completion" }
+    - { id: R4-006, severity: high, kind: concurrency_gap, owner: IR-2, status: done, title: "Cross-thread reentrant ResourceScope.close can form a wait cycle" }
+    - { id: R4-007, severity: high, kind: cancellation_scope_gap, owner: IR-2, status: done, title: "OperationSession.cancel can cancel caller-owned sibling work" }
+    - { id: R4-008, severity: high, kind: coroutine_context_risk, owner: IR-2, status: done, title: "OperationRunner documents and tests the supported channelFlow emission contract" }
+    - { id: R4-009, severity: high, kind: cancellation_gap, owner: IR-2, status: done, title: "SNMP walk cancellation can leave an in-flight request retransmitting" }
+    - { id: R4-010, severity: high, kind: correctness_bug, owner: IR-1, status: done, title: "A missing final ARP entry must not erase a worker-resolved MAC" }
+    - { id: R4-011, severity: high, kind: supply_chain_gap, owner: IR-1, status: done, title: "CI and release workflows used movable action tags" }
+    - { id: R4-012, severity: medium, kind: quality_gate_gap, owner: IR-3, status: todo, title: "ktlint and detekt do not gate CI regressions" }
+    - { id: R4-013, severity: medium, kind: release_test_gap, owner: IR-1, status: in_progress, title: "Versioning, SNMP retention, and OUI tooling tests were absent from CI" }
+    - { id: R4-014, severity: medium, kind: coverage_signal_gap, owner: IR-3, status: done, title: "The app Kover rule states that its 90% gate covers only selected pure app logic" }
+    - { id: R4-015, severity: low, kind: lint_suppression_gap, owner: IR-1, status: done, title: "TrustAllX509TrustManager lint suppression is limited to TlsHandshakeEngine.kt" }
+    - { id: R4-016, severity: high, kind: cleartext_policy_gap, owner: IR-3, status: todo, title: "HTTP Probe currently requires an app-wide cleartext exception; public-release policy remains unresolved" }
+    - { id: R4-017, severity: medium, kind: correctness_gap, owner: IR-1, status: done, title: "mDNS completion totals could exceed services accepted by a backpressured flow" }
   validation:
     unit_tests:
       command: "./gradlew :core-network:test --rerun :core-domain:test --rerun :app:testDebugUnitTest --rerun --no-daemon --no-parallel"

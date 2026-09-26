@@ -280,9 +280,10 @@ class Snmp4jClientImpl(
     ): SnmpWalkResult {
         ensureInitialized()
         val activeSnmp = checkNotNull(snmp)
-        val (snmpTarget, treeUtils) = withContext(Dispatchers.IO) {
+        val (snmpTarget, treeUtils, treeSession) = withContext(Dispatchers.IO) {
             check(!closed) { "SNMP client is closed" }
-            val treeUtils = TreeUtils(activeSnmp, DefaultPDUFactory())
+            val treeSession = CancellableSnmpSession(activeSnmp)
+            val treeUtils = TreeUtils(treeSession, DefaultPDUFactory())
             treeUtils.maxRepetitions = budget.maxRepetitions
             val (snmpTarget, address) = try {
                 targetFor(target)
@@ -296,7 +297,7 @@ class Snmp4jClientImpl(
                 throw SnmpRequestException.unresolved(target, error)
             }
             ensureAuthoritativeEngineId(target, address)
-            snmpTarget to treeUtils
+            Triple(snmpTarget, treeUtils, treeSession)
         }
 
         return suspendCancellableCoroutine { continuation ->
@@ -313,8 +314,11 @@ class Snmp4jClientImpl(
                 override fun isFinished(): Boolean = collector.isFinished() || !continuation.isActive
             }
 
+            continuation.invokeOnCancellation { treeSession.cancelPendingRequests() }
             try {
-                treeUtils.getSubtree(snmpTarget, OID(oidPrefix), null, listener)
+                if (continuation.isActive) {
+                    treeUtils.getSubtree(snmpTarget, OID(oidPrefix), null, listener)
+                }
             } catch (error: Exception) {
                 if (continuation.isActive) continuation.resumeWith(Result.failure(error))
             }

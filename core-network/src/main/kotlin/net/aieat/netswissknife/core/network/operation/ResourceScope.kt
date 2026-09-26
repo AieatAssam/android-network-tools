@@ -1,9 +1,14 @@
 package net.aieat.netswissknife.core.network.operation
 
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 /** Owns operation resources and closes them once, in reverse registration order. */
 class ResourceScope : AutoCloseable {
+    private companion object {
+        const val CONCURRENT_CLOSE_WAIT_TIMEOUT_MILLIS = 1_000L
+    }
+
     private enum class State { OPEN, CLOSING, CLOSED }
 
     private val lock = Any()
@@ -53,8 +58,9 @@ class ResourceScope : AutoCloseable {
     }
 
     /**
-     * Closes every owned resource in LIFO order. Concurrent callers wait for cleanup. If a
-     * close action fails, all other actions still run and the failures are reported together.
+     * Closes every owned resource in LIFO order. Concurrent callers wait up to one second for
+     * the owner; this bounds cross-thread re-entry cycles. If a close action fails, all other
+     * actions still run and the failures are reported together.
      */
     override fun close() {
         var ownedResources: List<AutoCloseable>? = null
@@ -112,27 +118,43 @@ class ResourceScope : AutoCloseable {
             }
             aggregate?.let { throw it }
         } else {
-            awaitUninterruptibly(checkNotNull(waitForClose))
+            if (!awaitUninterruptibly(
+                    checkNotNull(waitForClose),
+                    CONCURRENT_CLOSE_WAIT_TIMEOUT_MILLIS,
+                )
+            ) {
+                throw ResourceScopeCloseWaitTimeoutException(CONCURRENT_CLOSE_WAIT_TIMEOUT_MILLIS)
+            }
             synchronized(lock) { closeFailure }?.let { throw it }
         }
     }
 
-    private fun awaitUninterruptibly(latch: CountDownLatch) {
+    private fun awaitUninterruptibly(
+        latch: CountDownLatch,
+        timeoutMillis: Long,
+    ): Boolean {
         var interrupted = false
-        while (true) {
+        val deadlineNanos = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis)
+        var completed = false
+        while (!completed) {
+            val remainingNanos = (deadlineNanos - System.nanoTime()).coerceAtLeast(0L)
+            if (remainingNanos == 0L) break
             try {
-                latch.await()
-                break
+                completed = latch.await(remainingNanos, TimeUnit.NANOSECONDS)
             } catch (_: InterruptedException) {
                 interrupted = true
             }
         }
         if (interrupted) Thread.currentThread().interrupt()
+        return completed
     }
 }
 
 class ResourceScopeClosedException(cause: Throwable? = null) :
     IllegalStateException("Cannot register a resource after its scope has started closing", cause)
+
+class ResourceScopeCloseWaitTimeoutException(timeoutMillis: Long) :
+    IllegalStateException("Timed out after ${timeoutMillis}ms waiting for resource-scope closure")
 
 class ResourceScopeCloseException internal constructor(failures: List<Throwable>) :
     Exception("Failed to close ${failures.size} operation resource(s)", failures.firstOrNull()) {

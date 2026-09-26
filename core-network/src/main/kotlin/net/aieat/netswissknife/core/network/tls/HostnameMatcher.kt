@@ -8,7 +8,7 @@ object HostnameMatcher {
 
     /**
      * Returns whether [host] matches the certificate's subject alternative names.
-     * Common-name fallback is used only if the certificate has no DNS SAN entries.
+     * Common-name fallback is used only if the certificate has no subject alternative names.
      */
     fun matches(host: String, certificate: X509Certificate): Boolean {
         val normalizedHost = HostValidator.normalize(host) ?: return false
@@ -26,10 +26,9 @@ object HostnameMatcher {
 
         val dnsNames = mutableListOf<String>()
         val ipAddresses = mutableListOf<ByteArray>()
-        var hasDnsSan = false
+        val hasSubjectAlternativeNames = subjectAlternativeNames.isNotEmpty()
         for (entry in subjectAlternativeNames) {
             val type = entry.getOrNull(0) as? Int ?: continue
-            if (type == DNS_SAN_TYPE) hasDnsSan = true
             val value = entry.getOrNull(1) ?: continue
             when (type) {
                 DNS_SAN_TYPE -> {
@@ -43,8 +42,8 @@ object HostnameMatcher {
             return hostBytes != null && ipAddresses.any(hostBytes::contentEquals)
         }
 
-        // Per certificate identity rules, the presence of any dNSName SAN suppresses CN fallback.
-        if (hasDnsSan) {
+        // SAN is authoritative even when it contains only IP or other SAN types.
+        if (hasSubjectAlternativeNames) {
             return dnsNames.any { matchesDnsName(normalizedHost, it) }
         }
         return matchesDnsName(normalizedHost, TlsCertificateParser.parseCN(certificate.subjectX500Principal.name))

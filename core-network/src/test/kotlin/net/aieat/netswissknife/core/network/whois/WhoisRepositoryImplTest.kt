@@ -336,6 +336,24 @@ class WhoisRepositoryReferralGuardTest {
     }
 
     @Test
+    @DisplayName("reserved and shared address ranges are rejected")
+    fun `reserved and shared referral address ranges are rejected`() {
+        listOf(
+            "100.64.0.1",       // Shared address space /10
+            "198.18.0.1",       // Benchmarking /15
+            "240.0.0.1",        // Reserved /4
+            "fc00::1",          // IPv6 unique-local /7
+            "2001:db8::1",      // Documentation prefix
+            "ff02::1",          // Link-local multicast
+        ).forEach { literal ->
+            assertTrue(
+                repo.isDisallowedReferralAddress(java.net.InetAddress.getByName(literal)),
+                "$literal must be rejected",
+            )
+        }
+    }
+
+    @Test
     @DisplayName("public referral address is allowed")
     fun `public referral address is allowed`() {
         assertTrue(!repo.isDisallowedReferralAddress(java.net.InetAddress.getByName("8.8.8.8")))

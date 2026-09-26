@@ -1,12 +1,13 @@
 package net.aieat.netswissknife.core.network.operation
 
 import java.util.concurrent.CancellationException
+import java.util.concurrent.CompletableFuture
 import kotlinx.coroutines.Job
 
 /**
  * Per-collection owner of one budget, resource scope, and first-wins cancellation reason.
- * The coroutine passed to [OperationRunner.run] must be dedicated to this operation because
- * [cancel] cancels that caller coroutine so a Flow collector cannot re-emit Stop as an error.
+ * [OperationRunner.run] establishes operation ownership. [cancel] only cancels that operation's
+ * child job, leaving unrelated work in a shared caller scope active.
  */
 class OperationSession(
     val budget: OperationBudget,
@@ -17,7 +18,7 @@ class OperationSession(
 
     private val lock = Any()
     private var operationJob: Job? = null
-    private var callerJob: Job? = null
+    private var cleanupFuture: CompletableFuture<Unit>? = null
     private var started = false
     private var finished = false
     private var recordedCancellationReason: CancellationReason? = null
@@ -35,24 +36,23 @@ class OperationSession(
             if (finished) return
             if (recordedCancellationReason != null) return
             recordedCancellationReason = reason
-            callerJob ?: operationJob
+            operationJob
         }
         if (attachedJob != null) {
             attachedJob.cancel(OperationCancellationException(reason))
         } else if (!synchronized(lock) { started }) {
-            resources.close()
+            closeResourcesAsync()
         }
     }
 
-    internal fun attach(job: Job, ownerJob: Job) {
+    internal fun attach(job: Job) {
         val pendingCancellation = synchronized(lock) {
             check(!started) { "An OperationSession can only be run once" }
             started = true
             operationJob = job
-            callerJob = ownerJob
             recordedCancellationReason
         }
-        pendingCancellation?.let { ownerJob.cancel(OperationCancellationException(it)) }
+        pendingCancellation?.let { job.cancel(OperationCancellationException(it)) }
     }
 
     internal fun recordCancellationReason(reason: CancellationReason): CancellationReason =
@@ -70,10 +70,14 @@ class OperationSession(
         }
     }
 
+    /** Starts resource closure once and returns the shared completion for cancellation/finally. */
+    internal fun closeResourcesAsync(): CompletableFuture<Unit> = synchronized(lock) {
+        cleanupFuture ?: OperationCleanupExecutor.submit(resources).also { cleanupFuture = it }
+    }
+
     internal fun finish(job: Job) {
         synchronized(lock) {
             if (operationJob === job) operationJob = null
-            callerJob = null
             finished = true
         }
     }

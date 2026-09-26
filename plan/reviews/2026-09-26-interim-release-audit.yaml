@@ -1,0 +1,208 @@
+meta:
+  reviewed_on: "2026-09-26"
+  baseline_commit: "170fb52"
+  branch: "plan/comprehensive-review-2026-09-22"
+  source: "User-supplied security, lifecycle, correctness, and release-quality review. Findings were rechecked against the current branch and grouped into interim-release gates."
+  implementation_status: "IR-1/IR-2 source changes and local automated checks are complete. Public-release acceptance remains open for device checks, new-diagnostic quality gating, and R4-016 cleartext policy resolution."
+  validation_policy: "Source confirmation is distinguished from runtime reproduction. No emulator or live SNMP endpoint was used for this review."
+
+findings:
+  - id: R4-001
+    priority: high
+    kind: security_gap
+    status: done
+    owner: IR-1
+    title: "WHOIS referrals must reject every non-public-global destination"
+    evidence: "WhoisRepositoryImpl resolved referral addresses but rejected only JVM loopback/link/site-local/multicast flags; ReservedRanges already provides a strict numeric public-global classifier."
+    disposition: "The referral guard now fails closed through ReservedRanges.isPublicGlobalLiteral(address.hostAddress). Added CGNAT, benchmark, reserved, ULA, documentation, and multicast regression cases."
+    validation: "WHOIS repository tests cover strict reserved-range rejection and resolved-address validation; all targeted tests pass."
+
+  - id: R4-002
+    priority: high
+    kind: security_gap
+    status: done
+    owner: IR-1
+    title: "WHOIS registrar URLs must use the RDAP HTTP(S)-only gate"
+    evidence: "WhoisResponseParser returned registry-supplied Registrar URL values, and WhoisScreen launched them through ACTION_VIEW."
+    disposition: "Added shared SafeWebUrl validation to the WHOIS parser and RDAP mapper; tests cover safe HTTPS and javascript, intent, file, and user-info URLs."
+    validation: "WHOIS parser and RDAP mapper tests verify invalid URLs are absent; all targeted tests pass."
+
+  - id: R4-003
+    priority: high
+    kind: security_gap
+    status: done
+    owner: IR-1
+    title: "TLS identity must not use CN fallback when any SAN exists"
+    evidence: "HostnameMatcher suppressed CN fallback only for dNSName SAN entries, so an IP-only/other SAN certificate could match a DNS CN."
+    disposition: "SAN presence is now authoritative for DNS identity. Added a regression for IP-only and URI SAN entries with a matching CN."
+    validation: "HostnameMatcher and ChainAnalyzer tests verify SAN-authoritative identity and CN fallback only when SAN is absent; targeted tests pass."
+
+  - id: R4-004
+    priority: high
+    kind: privacy_gap
+    status: in_progress
+    owner: IR-1
+    title: "FileProvider must expose only Ping log files"
+    evidence: "share_file_paths.xml exposed the entire cache directory, while Ping used an unscoped temporary cache file."
+    disposition: "Ping logs now use cache/ping_logs and FileProvider is restricted to ping_logs/. Added an instrumentation assertion that arbitrary cache files cannot receive share URIs."
+    validation: "Run app unit tests and Android-test Kotlin compilation; execute the provider test on the release API target before publish."
+
+  - id: R4-005
+    priority: high
+    kind: resource_lifecycle_gap
+    status: done
+    owner: IR-2
+    title: "Operation cleanup can outlive the deadline and block operation completion"
+    evidence: "OperationRunner performs NonCancellable final close after stopping its deadline watcher; ResourceScope waits on an unbounded latch; cancellation starts an independent process-lifetime close task."
+    disposition: "Cleanup now uses a fixed-size executor with bounded queue and caller wait, shares one async close per session, and bounds concurrent ResourceScope waits."
+    validation: "OperationRunnerTest verifies blocking cleanup returns within its bound and unrelated cleanup progresses; cleanup remains exactly once when close returns."
+
+  - id: R4-006
+    priority: high
+    kind: concurrency_gap
+    status: done
+    owner: IR-2
+    title: "Cross-thread reentrant ResourceScope.close can form a wait cycle"
+    evidence: "Only same-thread re-entry is exempt; a second thread waits on a latch that the first thread can only release after its close callback returns."
+    disposition: "Cross-thread re-entry now uses the same bounded wait contract instead of waiting indefinitely on the closing thread."
+    validation: "ResourceScopeTest covers two-thread re-entry with bounded joins and exactly-once resource closure."
+
+  - id: R4-007
+    priority: high
+    kind: cancellation_scope_gap
+    status: done
+    owner: IR-2
+    title: "OperationSession.cancel can cancel caller-owned sibling work"
+    evidence: "OperationSession stores and cancels callerJob under a documentation-only dedicated-caller precondition."
+    disposition: "OperationSession now cancels only its owned job; pre-start cancellation schedules the same bounded cleanup path. Tests verify a sibling under the shared parent remains active."
+    validation: "OperationRunnerTest verifies shared-parent sibling isolation and targeted operation/DNS cancellation tests pass."
+
+  - id: R4-008
+    priority: high
+    kind: coroutine_context_risk
+    status: done
+    owner: IR-2
+    title: "OperationRunner's explicit Job/context composition needs a cold-flow invariant test"
+    evidence: "The review flags a hand-built operation Job plus a custom context element as a possible Flow-invariant regression point; existing mDNS uses channelFlow after R3-001."
+    disposition: "OperationRunner retains its custom Job/context architecture. Its supported emission contract is documented as channelFlow/send; direct flow { emit(...) } is explicitly guarded by an invariant regression."
+    validation: "OperationRunnerTest verifies channelFlow emission succeeds and direct flow emission fails with the expected SafeCollector invariant; cancellation and cleanup tests pass."
+
+  - id: R4-009
+    priority: high
+    kind: cancellation_gap
+    status: done
+    owner: IR-2
+    title: "SNMP walk cancellation can leave an in-flight request retransmitting"
+    evidence: "Snmp4jClientImpl.walk checks cancellation between callbacks but does not cancel the currently active TreeUtils request."
+    disposition: "A cancellable SNMP session wrapper tracks active walk requests/listeners and cancels the active request without closing unrelated client work."
+    validation: "Loopback regression black-holes a walk, cancels it, asserts retransmits stop, and verifies the same client remains usable."
+
+  - id: R4-010
+    priority: high
+    kind: correctness_bug
+    status: done
+    owner: IR-1
+    title: "A missing final ARP entry must not erase a worker-resolved MAC"
+    evidence: "The final snapshot pass replaced a worker MAC with null when resolve returned null, despite guarding thrown failures."
+    disposition: "A null final result now preserves the existing host mapping; non-null final entries still refresh MAC, vendor, and source. Added a null-snapshot regression."
+    validation: "LanScanRepositoryImplTest verifies null preservation and non-null refresh; targeted tests pass."
+
+  - id: R4-011
+    priority: high
+    kind: supply_chain_gap
+    status: done
+    owner: IR-1
+    title: "CI and release workflows used movable action tags"
+    evidence: "Every external action in ci.yml and release.yml was referenced by a major tag; release execution has contents:write, and decoded signing material remained on the runner until the last step."
+    disposition: "Actions are pinned to full commit SHAs checked against the matching upstream tags. Release/OUI tooling tests are wired into CI, and an always-run cleanup removes the decoded keystore after signed artifacts are built, before artifact/release actions."
+    validation: "All workflow uses references are pinned to 40-character SHAs; cleanup is unconditional and precedes artifact/release actions. CI YAML and Dependabot configuration are included for remote validation."
+
+  - id: R4-012
+    priority: medium
+    kind: quality_gate_gap
+    status: todo
+    owner: IR-3
+    title: "ktlint and detekt do not gate CI regressions"
+    evidence: "Both jobs use continue-on-error and rely on large baselines containing broad exception-handling categories."
+    disposition: "Add a reviewed fresh-diagnostic/delta gate or otherwise make new findings fail CI without deleting the accepted backlog wholesale."
+    validation: "Demonstrate that a newly introduced lint/detekt issue fails CI while the unchanged baseline backlog does not."
+
+  - id: R4-013
+    priority: medium
+    kind: release_test_gap
+    status: in_progress
+    owner: IR-1
+    title: "Versioning, SNMP retention, and OUI tooling tests were absent from CI"
+    evidence: "The test modules existed under tools/release and tools/oui but CI discovered only tools/quality tests."
+    disposition: "CI now discovers and runs both test directories. Local run passed 14 release tests and 13 OUI tests."
+    validation: "Local release/OUI tests pass (14 and 13 tests); CI wiring makes them required. Verify on the candidate GitHub run before publication."
+
+  - id: R4-014
+    priority: medium
+    kind: coverage_signal_gap
+    status: done
+    owner: IR-3
+    title: "The app Kover percentage covers a narrow set and excludes ViewModels"
+    evidence: "The configured 90% threshold measures a small allowlist of pure classes and does not represent UI/ViewModel logic."
+    disposition: "The Kover rule is renamed 'Selected pure app logic is well covered' and its comments state the allowlisted scope; expand it incrementally with behavioral coverage."
+    validation: ":app:koverVerify passed with the selected-scope label; the allowlisted scope is visible in app/build.gradle.kts."
+
+  - id: R4-015
+    priority: low
+    kind: lint_suppression_gap
+    status: done
+    owner: IR-1
+    title: "TrustAllX509TrustManager lint suppression covered all core-network files"
+    evidence: "app/lint.xml ignored the detector for **/core-network/** to allow the intentional TLS-inspection trust manager."
+    disposition: "The exception is narrowed to TlsHandshakeEngine.kt, the single diagnostic-handshake implementation."
+    validation: "app lint passes with the exception narrowed to TlsHandshakeEngine.kt."
+
+  - id: R4-016
+    priority: high
+    kind: accepted_design_risk
+    status: todo
+    owner: IR-1
+    title: "Android cleartext policy is enabled app-wide for arbitrary-host HTTP Probe"
+    evidence: "network_security_config.xml enables cleartextTrafficPermitted in base-config; HTTP Probe intentionally accepts arbitrary user hosts."
+    disposition: "The current process-wide cleartext exception remains an open public-release blocker. Resolve through a genuinely scoped HTTP Probe transport or disable plain-HTTP requests while setting base cleartext to false; record and test any behavior change."
+    validation: "No source fix yet. Inspect supported Android network-security mechanisms and validate the selected behavior before IR-3; do not claim a manifest-only change can scope this to one client."
+
+  - id: R4-017
+    priority: medium
+    kind: correctness_gap
+    status: done
+    owner: IR-1
+    title: "mDNS DiscoveryComplete could count a discovered service not yet accepted by a backpressured flow"
+    evidence: "Discovery totals were read from the session before all ServiceFound sends completed; repeated snapshots could also count as duplicate services."
+    disposition: "Completion totals now count unique instance names only after collector.send accepts each snapshot. Tests cover updated TXT snapshots and a real deadline during a buffer(0) batch."
+    validation: "Targeted mDNS tests exercise accepted-send accounting, duplicate snapshots, real deadlines, and cleanup."
+
+reconciliation:
+  carry_forward:
+    - id: R2-008
+      status: todo
+      evidence: "plan/plan.yaml still lists the cross-tool share/SAF contract as open under E01-T12."
+      routing: IR-4
+    - id: R2-014
+      status: done
+      evidence: "Current ledger says the completeness-aware topology snapshot diff suppresses unsafe removals (plan/plan.yaml 2026-09-24 note); retain E02-T08's broader identity/persistence/UI/export tasks without reopening this finding."
+    - id: R2-015
+      status: done
+      evidence: "Current source caps mDNS state, per-service address/TXT bytes, query fan-out, outbound datagrams, and packet records; the source and ledger both route the remaining UI work separately."
+    - id: R3-001
+      status: done
+      evidence: "The ledger records channelFlow/send migration and service/partial-result regressions. R4-008 requests an invariant test and does not reopen R3-001 by assumption."
+    - id: R3-002
+      status: done
+      evidence: "The ledger records caller-budget-bounded host resolution and partial-result handling."
+
+  supplied_2026_09_21_1_qa_brief:
+    baseline: "plan/reviews/2026-09-23-release-qa-brief.yaml"
+    source_fixed_or_already_covered: [ISS-05, ISS-17, ISS-20, ISS-21, ISS-22]
+    integration_or_device_checks_open: [ISS-06, ISS-17, ISS-21, ISS-22, "TalkBack activation", "API 33 no-ANR responsiveness", "physical wlan0 mDNS"]
+    note: "ISS-05 merged card semantics and source assertions exist; ISS-17 offline/progress/retry source behavior exists; ISS-20 trims outer whitespace and rejects embedded whitespace (the supplied expected-error wording conflicts with the trim() fix); ISS-21 controls/labels/details exist but live SNMP/canvas usability is unverified; ISS-22 graceful dismissal is source-covered but API 33 and physical wlan0 are unverified. ISS-06 Skip removes Welcome in a stateful Compose test, while MainActivity/DataStore persistence and connected execution remain open."
+
+release_routing:
+  milestone_file: plan/interim-release-milestones.yaml
+  first_public_interim_requires: [IR-1, IR-2, IR-3]
+  no_emulator_used: true

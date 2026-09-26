@@ -237,8 +237,8 @@ class LanScanRepositoryImpl(
             }
 
             // ARP may have been read during concurrent enrichment, or during an earlier scan,
-            // before this scan populated the kernel cache. A readable final snapshot is the
-            // authoritative MAC view for this scan, including clearing stale prior mappings.
+            // before this scan populated the kernel cache. A non-null final entry refreshes the
+            // mapping; a missing entry must not erase a MAC already resolved by a worker.
             val scanMacResolver = try {
                 effectiveMacResolver.snapshot()
             } catch (cancelled: CancellationException) {
@@ -267,11 +267,13 @@ class LanScanRepositoryImpl(
                         continue
                     }
                     ensureOperationActive()
-                    aliveHosts[index] = host.copy(
-                        macAddress = mac,
-                        vendor = mac?.let(OuiDatabase::lookup),
-                        macSource = if (mac == null) MacSource.NONE else MacSource.ARP,
-                    )
+                    if (mac != null) {
+                        aliveHosts[index] = host.copy(
+                            macAddress = mac,
+                            vendor = OuiDatabase.lookup(mac),
+                            macSource = MacSource.ARP,
+                        )
+                    }
                 }
             }
 

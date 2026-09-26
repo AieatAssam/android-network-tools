@@ -732,6 +732,31 @@ class LanScanRepositoryImplTest {
         }
 
         @Test
+        fun `null final snapshot lookup retains worker MAC and source`() = runTest {
+            val resolver = object : MacResolver {
+                override val supported = true
+                override suspend fun resolve(ip: String): String? = "AA:BB:CC:DD:EE:FF"
+                override fun snapshot(): MacResolver = object : MacResolver {
+                    override val supported = true
+                    override suspend fun resolve(ip: String): String? = null
+                }
+            }
+            val repo = LanScanRepositoryImpl(
+                hostChecker = singleAliveChecker,
+                macResolver = resolver,
+                portChecker = noOpenPortsChecker,
+            )
+
+            val host = repo.scan(subnet24, 1000, concurrency = 2)
+                .filterIsInstance<LanScanUpdate.ScanComplete>()
+                .first()
+                .summary.hosts.single()
+
+            assertEquals("AA:BB:CC:DD:EE:FF", host.macAddress)
+            assertEquals(MacSource.ARP, host.macSource)
+        }
+
+        @Test
         fun `snapshot creation failure retains worker MAC and completes scan`() = runTest {
             val resolver = object : MacResolver {
                 override val supported = true

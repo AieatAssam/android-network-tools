@@ -82,16 +82,6 @@
       "status": "scope_registered_reviewed"
     },
     {
-      "id": "RR-020",
-      "file": "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/speedtest/OkHttpTransferEngine.kt",
-      "kind": "Socket",
-      "occurrence": 1,
-      "scope_seam": "connectRtt owns the temporary TCP socket with use and installs a coroutine-completion handler that closes a blocked connect on cancellation",
-      "test_path": "core-network/src/test/kotlin/net/aieat/netswissknife/core/network/speedtest/OkHttpTransferEngineTest.kt",
-      "migration_owner": "E03-T01 / speed-test connect RTT",
-      "status": "scope_registered_reviewed"
-    },
-    {
       "id": "RR-021",
       "file": "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/tls/TlsHandshakeEngine.kt",
       "kind": "SSLSocketFactory.createSocket",
@@ -169,6 +159,16 @@
       "scope_seam": "SessionIoClientFactory registers a close-once TCP socket in the caller-owned DNS OperationSession before connect and releases it after DNS-over-TCP completes",
       "test_path": "core-network/src/test/kotlin/net/aieat/netswissknife/core/network/dns/DnsRepositoryOperationSessionTest.kt",
       "migration_owner": "E03-T01 / DNS operation adapter",
+      "status": "scope_registered_reviewed"
+    },
+    {
+      "id": "RR-022",
+      "file": "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/net/NetworkBindingSocketFactory.kt",
+      "kind": "Socket",
+      "occurrence": 1,
+      "scope_seam": "OkHttp owns the HTTP Probe transport socket lifecycle; this factory binds the unconnected socket to the selected Android Network before connect, and call cancellation closes the transport",
+      "test_path": "core-network/src/test/kotlin/net/aieat/netswissknife/core/network/net/NetworkBindingSocketFactoryTest.kt",
+      "migration_owner": "E03-T01 / HTTP Probe selected-network transport",
       "status": "scope_registered_reviewed"
     }
   ]

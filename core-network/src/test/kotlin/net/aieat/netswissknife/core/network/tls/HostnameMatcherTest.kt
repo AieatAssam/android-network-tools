@@ -32,10 +32,21 @@ class HostnameMatcherTest {
     }
 
     @Test
-    fun `CN fallback applies only when there are no DNS SAN entries`() {
+    fun `CN fallback applies only when there are no SAN entries`() {
         val cnOnlyLeaf = TlsTestCertificates.read("self-signed")
         assertTrue(HostnameMatcher.matches("self-signed.example.com", cnOnlyLeaf))
         assertFalse(HostnameMatcher.matches("cn-fallback.example.com", dnsLeaf))
+    }
+
+    @Test
+    fun `any SAN type suppresses DNS common name fallback`() {
+        val ipOnlySan = certificateWithSans(listOf(listOf(7, byteArrayOf(1, 1, 1, 1))))
+        every { ipOnlySan.subjectX500Principal } returns X500Principal("CN=www.example.com")
+        val otherSan = certificateWithSans(listOf(listOf(6, "https://www.example.com")))
+        every { otherSan.subjectX500Principal } returns X500Principal("CN=www.example.com")
+
+        assertFalse(HostnameMatcher.matches("www.example.com", ipOnlySan))
+        assertFalse(HostnameMatcher.matches("www.example.com", otherSan))
     }
 
     @Test

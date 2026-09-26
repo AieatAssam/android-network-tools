@@ -14,6 +14,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.job
@@ -248,6 +249,37 @@ class MdnsRepositoryImplIoTest {
         }
 
     @Test
+    fun `updated snapshots count once in discovery completion`() =
+        runBlocking {
+            val receiveCount = AtomicInteger()
+            val clock = FakeClock()
+            val fixture =
+                fixture(clock = clock, receive = { packet ->
+                    val response =
+                        when (receiveCount.incrementAndGet()) {
+                            1 -> serviceTypeResponse()
+                            2 -> resolvedServiceResponse()
+                            3 -> updatedServiceTxtResponse()
+                            else -> {
+                                clock.advanceBy(20_000_000_000L)
+                                throw SocketTimeoutException("finish after service update")
+                            }
+                        }
+                    System.arraycopy(response, 0, packet.data, packet.offset, response.size)
+                    packet.length = response.size
+                })
+
+            val updates = fixture.repository.discover(timeoutMs = 20L).toList()
+            val services = updates.filterIsInstance<MdnsUpdate.ServiceFound>()
+            val complete = updates.filterIsInstance<MdnsUpdate.DiscoveryComplete>().single()
+
+            assertEquals(2, services.size, "the TXT change emits an updated service snapshot")
+            assertEquals(setOf("Web._http._tcp.local."), services.map { it.service.instanceName }.toSet())
+            assertEquals("2", services.last().service.txtRecords["version"])
+            assertEquals(1, complete.totalFound, "totalFound counts unique services, not update snapshots")
+        }
+
+    @Test
     fun `slow collector backpressures a large service batch and resumes without losing updates`() =
         runBlocking {
             val secondReceiveEntered = CompletableDeferred<Unit>()
@@ -365,6 +397,84 @@ class MdnsRepositoryImplIoTest {
                 assertTrue(fixture.socket.closed.get())
                 assertTrue(fixture.lock.released.get())
                 assertEquals(1, fixture.socket.closeCount.get())
+            } finally {
+                holdCollector.complete(Unit)
+                if (scan.isActive) scan.cancelAndJoin()
+            }
+        }
+
+    @Test
+    fun `deadline during a backpressured service batch counts only sent services`() =
+        runBlocking {
+            val receiveCount = AtomicInteger()
+            val secondReceiveEntered = CompletableDeferred<Unit>()
+            val clock = FakeClock()
+            val response = manyResolvedServicesResponse(SERVICE_BATCH_SIZE)
+            val fixture =
+                fixture(clock = clock, receive = { packet ->
+                    if (receiveCount.incrementAndGet() == 1) {
+                        System.arraycopy(response, 0, packet.data, packet.offset, response.size)
+                        packet.length = response.size
+                    } else {
+                        secondReceiveEntered.complete(Unit)
+                        throw SocketTimeoutException("unexpected receive after blocked batch")
+                    }
+                })
+            val serviceSendAttempts = AtomicInteger()
+            val acceptedServiceSends = AtomicInteger()
+            val firstServiceSendAccepted = CompletableDeferred<Unit>()
+            val secondServiceSendAttempted = CompletableDeferred<Unit>()
+            fixture.repository.onServiceSendAttempt = {
+                if (serviceSendAttempts.incrementAndGet() == 2) secondServiceSendAttempted.complete(Unit)
+            }
+            fixture.repository.onServiceSendAccepted = {
+                if (acceptedServiceSends.incrementAndGet() == 1) firstServiceSendAccepted.complete(Unit)
+            }
+            val firstServiceReachedCollector = CompletableDeferred<Unit>()
+            val holdCollector = CompletableDeferred<Unit>()
+            val updates = Collections.synchronizedList(mutableListOf<MdnsUpdate>())
+            // Use the real deadline watcher while leaving the repository's scan clock fake.
+            val session = MdnsOperation.newSession(timeoutMs = 5_000L)
+            val scan =
+                async(Dispatchers.Default) {
+                    fixture.repository.discover(20_000L, session).buffer(0).collect { update ->
+                        if (update is MdnsUpdate.ServiceFound && !firstServiceReachedCollector.isCompleted) {
+                            firstServiceReachedCollector.complete(Unit)
+                            holdCollector.await()
+                        }
+                        if (update is MdnsUpdate.DiscoveryComplete) {
+                            assertTrue(fixture.socket.closed.get())
+                            assertTrue(fixture.lock.released.get())
+                        }
+                        updates += update
+                    }
+                }
+
+            try {
+                withTimeout(4_000L) {
+                    firstServiceReachedCollector.await()
+                    firstServiceSendAccepted.await()
+                    secondServiceSendAttempted.await()
+                }
+                withTimeout(7_000L) {
+                    while (session.cancellationReason != CancellationReason.DEADLINE_EXCEEDED) {
+                        delay(5L)
+                    }
+                    while (!fixture.socket.closed.get() || !fixture.lock.released.get()) delay(5L)
+                }
+                holdCollector.complete(Unit)
+                withTimeout(2_000L) { scan.await() }
+
+                val services = updates.filterIsInstance<MdnsUpdate.ServiceFound>()
+                val complete = updates.filterIsInstance<MdnsUpdate.DiscoveryComplete>().single()
+                assertEquals(1, services.size)
+                assertEquals(services.size, complete.totalFound)
+                assertEquals(CancellationReason.DEADLINE_EXCEEDED, session.cancellationReason)
+                assertFalse(secondReceiveEntered.isCompleted, "producer must not pass the blocked service batch")
+                assertTrue(fixture.socket.closed.get())
+                assertTrue(fixture.lock.released.get())
+                assertEquals(1, fixture.socket.closeCount.get())
+                assertEquals(1, fixture.lock.releaseCount.get())
             } finally {
                 holdCollector.complete(Unit)
                 if (scan.isActive) scan.cancelAndJoin()
@@ -654,6 +764,14 @@ class MdnsRepositoryImplIoTest {
                 addRecord(SRVRecord(instance, DClass.IN, 60, 0, 0, 80, host), Section.ANSWER)
                 addRecord(TXTRecord(instance, DClass.IN, 60, listOf("path=/status", "version=1")), Section.ANSWER)
                 addRecord(ARecord(host, DClass.IN, 60, InetAddress.getByName("192.0.2.80")), Section.ANSWER)
+            }.toWire()
+    }
+
+    private fun updatedServiceTxtResponse(): ByteArray {
+        val instance = Name.fromString("Web._http._tcp.local.")
+        return Message()
+            .apply {
+                addRecord(TXTRecord(instance, DClass.IN, 60, listOf("path=/status", "version=2")), Section.ANSWER)
             }.toWire()
     }
 

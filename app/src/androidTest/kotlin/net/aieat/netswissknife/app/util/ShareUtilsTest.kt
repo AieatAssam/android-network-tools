@@ -8,6 +8,7 @@ import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -16,7 +17,8 @@ class ShareUtilsTest {
     @Test
     fun largeCsvShare_usesReadableContentUriAndKeepsIntentTextShort() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val logFile = File.createTempFile("large_ping_session_", ".csv", context.cacheDir)
+        val logDirectory = File(context.cacheDir, "ping_logs").apply { mkdirs() }
+        val logFile = File.createTempFile("large_ping_session_", ".csv", logDirectory)
 
         try {
             logFile.outputStream().buffered().use { output ->
@@ -24,11 +26,12 @@ class ShareUtilsTest {
                 repeat((2 * 1024 * 1024) / row.size) { output.write(row) }
             }
 
-            val intent = context.createCsvShareIntent(
-                file = logFile,
-                subject = "Ping results",
-                summary = "Continuous ping CSV for example.com: 50000 packets.",
-            )
+            val intent =
+                context.createCsvShareIntent(
+                    file = logFile,
+                    subject = "Ping results",
+                    summary = "Continuous ping CSV for example.com: 50000 packets.",
+                )
             val uri = intent.getParcelableExtra(Intent.EXTRA_STREAM) as? Uri
 
             assertEquals(Intent.ACTION_SEND, intent.action)
@@ -40,19 +43,36 @@ class ShareUtilsTest {
             assertTrue(intent.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION != 0)
             assertEquals(uri, intent.clipData?.getItemAt(0)?.uri)
 
-            val streamedBytes = requireNotNull(context.contentResolver.openInputStream(uri)).use { input ->
-                val buffer = ByteArray(16 * 1024)
-                var total = 0L
-                while (true) {
-                    val count = input.read(buffer)
-                    if (count < 0) break
-                    total += count
+            val streamedBytes =
+                requireNotNull(context.contentResolver.openInputStream(uri)).use { input ->
+                    val buffer = ByteArray(16 * 1024)
+                    var total = 0L
+                    while (true) {
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        total += count
+                    }
+                    total
                 }
-                total
-            }
             assertTrue("Expected a multi-megabyte CSV to remain readable", streamedBytes > 1_000_000)
         } finally {
             logFile.delete()
+        }
+    }
+
+    @Test
+    fun csvShare_rejectsFilesOutsidePingLogCacheDirectory() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val privateFile = File.createTempFile("private_cache_", ".bin", context.cacheDir)
+        try {
+            try {
+                context.createCsvShareIntent(privateFile, "Private", "Not a ping log")
+                fail("FileProvider must not mint a URI for arbitrary cache files")
+            } catch (_: IllegalArgumentException) {
+                // Expected: only cache/ping_logs is configured for sharing.
+            }
+        } finally {
+            privateFile.delete()
         }
     }
 }

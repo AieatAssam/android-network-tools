@@ -7,16 +7,20 @@ import java.util.Collections
 import java.util.IdentityHashMap
 import java.util.concurrent.CountDownLatch
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -53,6 +57,36 @@ class OperationRunnerTest {
         assertEquals(1, closeCount)
         assertTrue(session.resources.isClosed)
         assertEquals("nested", result)
+    }
+
+    @Test
+    fun `channel flow can emit from operation block and closes resources after collection`() = runTest {
+        val session = OperationSession(OperationBudget.start(clock = FakeClock()))
+        val events = channelFlow {
+            send("before")
+            OperationRunner.run(session) {
+                send("inside")
+                "complete"
+            }
+            send("after")
+        }.toList()
+
+        assertEquals(listOf("before", "inside", "after"), events)
+        assertTrue(session.resources.isClosed)
+    }
+
+    @Test
+    fun `direct cold flow emission from operation block fails with context invariant`() = runTest {
+        val session = OperationSession(OperationBudget.start(clock = FakeClock()))
+        val failure = runCatching {
+            flow {
+                OperationRunner.run(session) { emit("inside") }
+            }.toList()
+        }.exceptionOrNull()
+
+        assertTrue(failure is IllegalStateException)
+        assertTrue(failure?.message.orEmpty().contains("Flow invariant is violated"))
+        assertTrue(session.resources.isClosed)
     }
 
     @Test
@@ -122,13 +156,17 @@ class OperationRunnerTest {
         assertTrue(sockets.all { it.isClosed })
         assertTrue(sockets.all { it.closeCallCount == 1 })
         assertFalse(collectedEvents.contains("late-success"))
-        assertEquals(listOf("started", "deadline"), collectedEvents)
+        assertEquals(
+            listOf("started", "deadline"),
+            collectedEvents,
+            "deadline failures: ${deadlineFailures.flatMap { it.failureGraph().toList() }.map { it::class.simpleName + ":" + it.message }}",
+        )
         val deadlineFailure = deadlineFailures.single()
         assertTrue(deadlineFailure is OperationDeadlineExceededException)
-        val cleanupFailure = deadlineFailure.failureGraph()
-            .filterIsInstance<ResourceScopeCloseException>()
-            .single()
-        assertEquals(closeFailure, cleanupFailure.failures.single())
+        assertTrue(
+            deadlineFailure.failureGraph().any { it === closeFailure },
+            "deadline cancellation must retain the underlying resource close failure: ${deadlineFailure.failureGraph().map { it::class.simpleName + ":" + it.message }.toList()}",
+        )
     }
 
     @Test
@@ -160,7 +198,10 @@ class OperationRunnerTest {
                     awaitCancellation()
                 }
                 emit("success")
-            }.catch { events += "caught:${it::class.simpleName}" }
+            }.catch { failure ->
+                if (failure is CancellationException) throw failure
+                events += "caught:${failure::class.simpleName}"
+            }
                 .collect(events::add)
         }
         operation.invokeOnCompletion { operationCompleted.countDown() }
@@ -185,6 +226,101 @@ class OperationRunnerTest {
         assertEquals(1, socket.closeCallCount)
         assertEquals(listOf("started"), events)
         assertTrue(operation.isCancelled)
+    }
+
+    @Test
+    fun `session stop leaves sibling work in shared caller scope active`() = runTest {
+        val session = OperationSession(OperationBudget.start(clock = FakeClock()))
+        val siblingStarted = CompletableDeferred<Unit>()
+        val operationStarted = CompletableDeferred<Unit>()
+        val siblingFinished = CompletableDeferred<Unit>()
+        lateinit var sibling: Job
+
+        val caller = launch {
+            coroutineScope {
+                sibling = launch {
+                    siblingStarted.complete(Unit)
+                    try {
+                        awaitCancellation()
+                    } finally {
+                        siblingFinished.complete(Unit)
+                    }
+                }
+                siblingStarted.await()
+                try {
+                    OperationRunner.run(session) {
+                        operationStarted.complete(Unit)
+                        awaitCancellation()
+                    }
+                } catch (cancelled: OperationCancellationException) {
+                    assertEquals(CancellationReason.USER_STOP, cancelled.reason)
+                }
+                assertTrue(sibling.isActive, "stopping this operation must not cancel a sibling")
+                sibling.cancel()
+            }
+        }
+
+        runCurrent()
+        operationStarted.await()
+        session.cancel(CancellationReason.USER_STOP)
+        runCurrent()
+        caller.join()
+
+        assertTrue(siblingFinished.isCompleted)
+        assertEquals(CancellationReason.USER_STOP, session.cancellationReason)
+    }
+
+    @Test
+    fun `blocking cleanup has a bounded wait and does not stall unrelated cleanup`() = runTest {
+        val session = OperationSession(OperationBudget.start(clock = FakeClock()))
+        val operationStarted = CountDownLatch(1)
+        val closeStarted = CountDownLatch(1)
+        val allowClose = CountDownLatch(1)
+        val cancelThread = Thread {
+            check(operationStarted.await(5, TimeUnit.SECONDS))
+            session.cancel(CancellationReason.USER_STOP)
+        }.apply { isDaemon = true; start() }
+
+        val operationFailure = try {
+            OperationRunner.run(session) {
+                resources.register(AutoCloseable {
+                    closeStarted.countDown()
+                    check(allowClose.await(5, TimeUnit.SECONDS))
+                })
+                operationStarted.countDown()
+                awaitCancellation()
+            }
+            null
+        } catch (failure: Throwable) {
+            failure
+        } finally {
+            cancelThread.join(1_000)
+        }
+
+        try {
+            assertTrue(closeStarted.await(1, TimeUnit.SECONDS), "asynchronous cleanup did not start")
+            val cancellationFailure = checkNotNull(operationFailure)
+            assertTrue(cancellationFailure is OperationCancellationException)
+            assertTrue(
+                cancellationFailure.failureGraph().any { it is OperationCleanupTimeoutException },
+                "the bounded cleanup wait must be reported on the cancellation: ${cancellationFailure.failureGraph().map { it::class.simpleName + ":" + it.message }.toList()}",
+            )
+            assertFalse(session.resources.isClosed, "the deliberately blocked close is still running")
+
+            var unrelatedCloseCount = 0
+            val unrelatedSession = OperationSession(OperationBudget.start(clock = FakeClock()))
+            OperationRunner.run(unrelatedSession) {
+                resources.register(AutoCloseable { unrelatedCloseCount++ })
+            }
+            assertEquals(1, unrelatedCloseCount)
+            assertTrue(unrelatedSession.resources.isClosed)
+        } finally {
+            allowClose.countDown()
+        }
+
+        withTimeout(1_000) {
+            while (!session.resources.isClosed) kotlinx.coroutines.delay(5)
+        }
     }
 
     @Test
@@ -215,6 +351,7 @@ class OperationRunnerTest {
                 }
                 emit("success")
             }.catch { failure ->
+                if (failure is CancellationException) throw failure
                 events += "caught:${failure::class.simpleName}"
             }.collect(events::add)
         }
@@ -256,7 +393,10 @@ class OperationRunnerTest {
                     awaitCancellation()
                 }
                 emit("success")
-            }.catch { events += "caught:${it::class.simpleName}" }
+            }.catch { failure ->
+                if (failure is CancellationException) throw failure
+                events += "caught:${failure::class.simpleName}"
+            }
                 .collect(events::add)
         }
 
@@ -365,10 +505,10 @@ class OperationRunnerTest {
         assertEquals(CancellationReason.USER_STOP, session.cancellationReason)
         val surfacedFailure = checkNotNull(completionFailure.get())
         assertTrue(surfacedFailure is OperationCancellationException)
-        val cleanupFailure = surfacedFailure.failureGraph()
-            .filterIsInstance<ResourceScopeCloseException>()
-            .single()
-        assertEquals(closeFailure, cleanupFailure.failures.single())
+        assertTrue(
+            surfacedFailure.failureGraph().any { it === closeFailure },
+            "user-stop cancellation must retain the underlying resource close failure",
+        )
     }
 
     @Test
@@ -501,7 +641,7 @@ class OperationRunnerTest {
     }
 
     @Test
-    fun `runner exposes its resource scope through child coroutine context`() = runTest {
+    fun `runner exposes its resource scope to child coroutines`() = runTest {
         val session = OperationSession(OperationBudget.start(clock = FakeClock()))
         var workerScope: ResourceScope? = null
 

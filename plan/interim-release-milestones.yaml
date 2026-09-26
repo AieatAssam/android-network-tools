@@ -1,0 +1,70 @@
+meta:
+  reviewed_on: "2026-09-26"
+  source_branch: "plan/comprehensive-review-2026-09-22"
+  source_commit: "pending-source-commit"
+  purpose: "Turn current review findings into explicit interim-release checkpoints. No version is allocated or published by this plan."
+  release_policy: "Do not tag a public interim release until IR-3 acceptance is complete. A named checkpoint is evidence-based work, not a release authorization."
+  emulator_policy: "Check for an already-running emulator before device work. Reuse it if present; if this task starts one, use it through completion and shut it down afterward."
+
+open_release_blockers:
+  - id: R4-016
+    area: cleartext_http_probe
+    status: "open"
+    disposition: "The current process-wide cleartext exception is not cleared for public distribution. Before publish, either isolate the HTTP Probe exception or disable plain-HTTP probing while keeping base cleartext denied; document and test the resulting product behavior."
+    rationale: "Android's base cleartext policy applies process-wide. A domain allowlist does not preserve arbitrary user-supplied hosts, so this needs an explicit implementation/product decision rather than being silently accepted."
+
+milestones:
+  - id: IR-1
+    name: "Trust and signed-build candidate"
+    status: in_progress
+    purpose: "Close the confirmed high-risk trust boundaries and lock down release workflow inputs before preparing signed artifacts."
+    required_findings: [R4-001, R4-002, R4-003, R4-004, R4-010, R4-011, R4-013, R4-015, R4-017]
+    acceptance:
+      - "WHOIS referrals fail closed unless the resolved destination is a strict public-global literal; registrar links accept only safe HTTP(S) URLs without user info."
+      - "TLS DNS identity never falls back to CN when any SAN is present."
+      - "FileProvider exposes only cache/ping_logs, and Ping creates logs in that directory."
+      - "Every third-party action in CI and release is pinned to a reviewed 40-character commit SHA; Dependabot remains enabled."
+      - "Release/OUI/versioning/SNMP-retention Python tests run as required CI checks; the decoded signing key is removed before artifact/release actions."
+      - "Changed core-network and app JVM tests, Android-test Kotlin compilation, lint, and debug assembly pass."
+    release_gate: "Required before any signed release candidate is assembled."
+
+  - id: IR-2
+    name: "Operation and discovery reliability candidate"
+    status: done
+    purpose: "Close cancellation/cleanup correctness gaps and preserve truthful partial results across network operations."
+    required_findings: [R4-005, R4-006, R4-007, R4-008, R4-009]
+    recheck_findings: [R2-014, R2-015, R3-001, R3-002]
+    acceptance:
+      - "Operation cleanup has a documented bound and cannot hold the caller forever or create unbounded cleanup work; cross-thread re-entry cannot deadlock."
+      - "Stopping an operation cancels only its owned job and leaves sibling work under a shared caller alive."
+      - "OperationRunner documents its channelFlow/send emission contract and tests supported emission plus direct-flow invariant failure."
+      - "Canceling SNMP walk stops in-flight/retransmitting requests while preserving unrelated requests owned by the client."
+      - "Topology failures remain typed/incomplete and cannot turn into misleading removals; mDNS producer budgets and partial-result counts remain covered."
+    release_gate: "Required before the first public interim release; deterministic JVM regressions must pass. Broader report/export/SAF unification is scheduled for IR-4."
+
+  - id: IR-3
+    name: "Interim release QA and publish"
+    status: todo
+    purpose: "Validate the signed candidate against the current product QA brief and publish only after automated and device evidence is recorded."
+    required_checks: [R4-004, R4-012, R4-014, R4-016, ISS-06, ISS-17, ISS-21, ISS-22]
+    recheck_checks: [ISS-05, ISS-20, "SNMP responsive/no-ANR", "R2-014 topology removal guard", "R2-015 mDNS budgets"]
+    acceptance:
+      - "ktlint and detekt fail on new diagnostics without requiring the existing backlog to be deleted wholesale; Kover labels its selected measured scope truthfully and expands incrementally."
+      - "API 33 smoke covers Welcome Skip, Traceroute no-route progress/error/retry, Topology cancel/progress/node labels/details, mDNS ENODEV dismissal, and responsiveness."
+      - "TalkBack activates Home/More tool cards by their visible labels; confirm the current merged-semantics fix."
+      - "Use error-UX checks for emulator public ICMP/DNS flakiness; do not require public Cloudflare success on the AVD."
+      - "Exercise SNMP against the 10.0.2.2 host agent when the named test environment is available; verify v2c/v3 as relevant, cancellation, labels, and no ANR."
+      - "Record API 33 and physical-wlan0 mDNS outcomes; ENODEV remains a graceful, dismissible error on unsupported emulator networking."
+      - "Run the release workflow's version, signing, R8 SNMP-retention, APK/AAB, tag-identity, and artifact checks on the candidate commit."
+      - "Resolve R4-016 before public distribution: scope cleartext to HTTP Probe or disable plain-HTTP requests with base cleartext denied."
+    release_gate: "All required automated gates and recorded device checks pass; no emulator is started if another is already running."
+
+  - id: IR-4
+    name: "First post-interim maintenance release"
+    status: todo
+    purpose: "Ship the deferred shared report/export/SAF contract and remaining low-risk reliability fixes in the first follow-up release."
+    checkpoints:
+      - "Close R2-008 with one shared privacy, file-scope, and failure contract for report sharing and SAF export."
+      - "Revisit R4-016 only if the public-interim decision explicitly defers it; otherwise it must be resolved before IR-3."
+      - "Keep P07 translation, P08 visual/device, P02.5 dependency propagation, E03 adapter coverage, and E02 tool-depth work on separate release tracks."
+      - "Create later releases only with a bounded task set, regression evidence, and release-note entry; do not carry unresolved high-severity findings silently."

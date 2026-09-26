@@ -1,12 +1,14 @@
 package net.aieat.netswissknife.app.ui.screens.ping
 
 import android.annotation.SuppressLint
+import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineDispatcher
@@ -172,6 +174,7 @@ class PingViewModel @Inject constructor(
     // Hilt supplies the owner-backed handle at runtime; this empty default supports direct unit tests.
     @param:SuppressLint("VisibleForTests")
     private val savedStateHandle: SavedStateHandle = SavedStateHandle(),
+    @param:ApplicationContext private val applicationContext: Context? = null,
 ) : ViewModel() {
 
     companion object {
@@ -250,7 +253,12 @@ class PingViewModel @Inject constructor(
     private val retiringSessions = mutableSetOf<ContinuousPingSession>()
 
     internal var sessionLogFileFactory: () -> File = {
-        File.createTempFile("ping_session_", ".csv")
+        val cacheDirectory = applicationContext?.cacheDir ?: File(System.getProperty("java.io.tmpdir") ?: ".")
+        val logDirectory = File(cacheDirectory, "ping_logs")
+        check(logDirectory.isDirectory || logDirectory.mkdirs()) {
+            "Could not create the Ping log cache directory"
+        }
+        File.createTempFile("ping_session_", ".csv", logDirectory)
     }
     internal var sessionLogAppendHook: suspend (PingSessionLogger, Int, PingPacketResult) -> Unit =
         { logger, sequence, packet -> logger.append(sequence, packet) }

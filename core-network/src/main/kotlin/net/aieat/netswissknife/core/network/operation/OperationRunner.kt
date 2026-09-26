@@ -5,7 +5,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.InternalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
@@ -30,7 +29,11 @@ class OperationContext internal constructor(
     suspend fun ensureOperationActive() = ensureCurrentOperationActive()
 }
 
-/** Runs one operation with structured children, a monotonic deadline, and prompt resource closure. */
+/**
+ * Runs one operation with structured children, a monotonic deadline, and prompt resource closure.
+ * Flow-producing blocks must use `channelFlow`/`send`; the operation-owned context cannot emit
+ * directly through a `flow {}` SafeCollector.
+ */
 object OperationRunner {
     /**
      * Runs a nested adapter in the current scope when it shares [session], otherwise starts
@@ -57,12 +60,12 @@ object OperationRunner {
         session: OperationSession,
         block: suspend OperationContext.() -> T,
     ): T {
-        val callerJob = checkNotNull(currentCoroutineContext()[Job])
+        checkNotNull(currentCoroutineContext()[Job])
         return coroutineScope {
             val parentJob = checkNotNull(currentCoroutineContext()[Job])
             val operationJob = Job(parentJob)
             try {
-                session.attach(operationJob, callerJob)
+                session.attach(operationJob)
             } catch (failure: Throwable) {
                 operationJob.cancel()
                 throw failure
@@ -82,13 +85,12 @@ object OperationRunner {
                             session.recordCancellationReason(CancellationReason.PARENT_CANCELLED)
                         }
                     }
-                    // Job cancellation handlers run synchronously on the thread that requested
-                    // cancellation. Resource close methods may block (for example, while a
-                    // native transport is shutting down), so start eager cleanup on an
-                    // independent process-lifetime IO scope instead of blocking that caller.
-                    OperationCleanupScope.scope.launch {
-                        val closeFailure = runCatching { session.resources.close() }.exceptionOrNull()
+                    // Job cancellation handlers run synchronously on the cancellation caller.
+                    // Start blocking closes on the fixed bounded cleanup executor instead.
+                    session.closeResourcesAsync().whenComplete { _, closeFailure ->
                         if (closeFailure != null) {
+                            // Keep ResourceScopeCloseException intact; its cause is the first
+                            // close failure and generic unwrapping would discard the aggregate.
                             eagerCloseFailure.compareAndSet(null, closeFailure)
                             preserveCleanupFailure(cause, closeFailure)
                         }
@@ -141,12 +143,7 @@ object OperationRunner {
                 deadlineWatcher.cancel()
                 cancellationCloseHandle.dispose()
                 val closeFailure = withContext(NonCancellable + Dispatchers.IO) {
-                    try {
-                        session.resources.close()
-                        null
-                    } catch (failure: Throwable) {
-                        failure
-                    }
+                    OperationCleanupExecutor.await(session.closeResourcesAsync())
                 }
                 val observedCloseFailure = eagerCloseFailure.get() ?: closeFailure
                 if (operationJob.isActive) operationJob.complete()
@@ -179,15 +176,7 @@ object OperationRunner {
         )
 
         val deadlineFailure = OperationDeadlineExceededException()
-        try {
-            session.resources.close()
-        } catch (closeFailure: Throwable) {
-            if (closeFailure is Error) {
-                closeFailure.addSuppressed(deadlineFailure)
-                throw closeFailure
-            }
-            deadlineFailure.addSuppressed(closeFailure)
-        }
+        OperationCleanupExecutor.await(session.closeResourcesAsync())?.let(deadlineFailure::addSuppressed)
         deadlineFailure
     }
 
@@ -223,9 +212,4 @@ object OperationRunner {
         } else {
             OperationCancellationException(this, cause)
         }
-}
-
-/** Eager cancellation cleanup must outlive the cancelling operation and its caller. */
-private object OperationCleanupScope {
-    val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 }

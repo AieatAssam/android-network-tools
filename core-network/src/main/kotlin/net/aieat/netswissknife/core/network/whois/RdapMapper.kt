@@ -7,7 +7,6 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
-import java.net.URI
 import java.util.Locale
 
 /** Converts one RFC 9083 RDAP response into the existing WHOIS presentation model. */
@@ -57,7 +56,7 @@ object RdapMapper {
             hops = listOf(hop),
             domainName = response.ldhName ?: response.unicodeName,
             registrar = registrar?.fullName ?: registrar?.organization,
-            registrarUrl = registrar?.url?.takeIf(::isSafeWebUrl),
+            registrarUrl = registrar?.url?.takeIf(SafeWebUrl::isSafe),
             registeredOn = events["registration"],
             expiresOn = events["expiration"] ?: events["expiry"],
             updatedOn = events["last changed"],
@@ -192,12 +191,6 @@ object RdapMapper {
         start != null && end != null && start <= end -> "$start-$end"
         else -> null
     }
-
-    private fun isSafeWebUrl(value: String): Boolean = runCatching {
-        val uri = URI(value)
-        (uri.scheme.equals("http", ignoreCase = true) || uri.scheme.equals("https", ignoreCase = true)) &&
-            !uri.host.isNullOrBlank() && uri.rawUserInfo == null
-    }.getOrDefault(false)
 
     private fun RdapResponse.matchesQueryType(type: WhoisQueryType): Boolean = when (type) {
         WhoisQueryType.DOMAIN -> objectClassName == "domain"

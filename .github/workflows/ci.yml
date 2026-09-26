@@ -15,16 +15,16 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Set up JDK 21
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
         with:
           java-version: '21'
           distribution: 'temurin'
 
       - name: Cache Gradle packages
-        uses: actions/cache@v5
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
         with:
           path: |
             ~/.gradle/caches
@@ -41,6 +41,11 @@ jobs:
           python3 -B -m unittest discover -s tools/quality -p 'test_*.py' -v
           python3 -B tools/quality/check_resource_sites.py
 
+      - name: Test release and OUI tooling
+        run: |
+          python3 -B -m unittest discover -s tools/release -p 'test_*.py' -v
+          python3 -B -m unittest discover -s tools/oui -p 'test_*.py' -v
+
       # These checks are initially non-blocking. Review their reports, generate
       # and review baselines, then remove continue-on-error after the two-week window.
       - name: Run ktlint
@@ -49,7 +54,7 @@ jobs:
 
       - name: Upload ktlint reports
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ktlint-reports
           path: '**/build/reports/ktlint/**'
@@ -62,7 +67,7 @@ jobs:
 
       - name: Upload detekt reports
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: detekt-reports
           path: '**/build/reports/detekt/**'
@@ -74,7 +79,7 @@ jobs:
 
       - name: Upload lint report
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: lint-report
           path: app/build/reports/lint-results-debug.*
@@ -88,7 +93,7 @@ jobs:
 
       - name: Upload dependency update report
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: dependency-updates
           path: build/dependencyUpdates/
@@ -129,14 +134,14 @@ jobs:
     # Test Lab's CI access, nothing the app links against.
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-java@v5
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
         with:
           java-version: '21'
           distribution: 'temurin'
 
       - name: Cache Gradle packages
-        uses: actions/cache@v5
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
         with:
           path: |
             ~/.gradle/caches
@@ -149,12 +154,12 @@ jobs:
         run: ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --no-parallel
 
       - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2.1.13
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KEY }}
 
       - name: Set up gcloud CLI
-        uses: google-github-actions/setup-gcloud@v2
+        uses: google-github-actions/setup-gcloud@e427ad8a34f8676edf47cf7d7925499adf3eb74f # v2.2.1
         with:
           project_id: net-swiss-knife
 
@@ -197,16 +202,16 @@ jobs:
       contents: read
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Set up JDK 21
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
         with:
           java-version: '21'
           distribution: 'temurin'
 
       - name: Cache Gradle packages
-        uses: actions/cache@v5
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
         with:
           path: |
             ~/.gradle/caches
@@ -246,7 +251,7 @@ jobs:
 
       - name: Upload unsigned APK and R8 mapping
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-smoke-outputs
           path: |
@@ -261,15 +266,15 @@ jobs:
       security-events: write
       contents: read
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       - name: Set up JDK 21
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
         with:
           java-version: '21'
           distribution: 'temurin'
 
       - name: Cache Gradle packages
-        uses: actions/cache@v5
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
         with:
           path: |
             ~/.gradle/caches
@@ -289,7 +294,7 @@ jobs:
 
       # Kotlin is excluded from CodeQL's build-mode none. A real Gradle build
       # lets the Java/Kotlin extractor observe both Kotlin and Java compilation.
-      - uses: github/codeql-action/init@v4
+      - uses: github/codeql-action/init@7999b86c43a865dc79d8923397f35af22de63401 # v4
         with:
           languages: java-kotlin
           build-mode: manual
@@ -299,4 +304,4 @@ jobs:
         # Gradle compilation produces a valid APK but no source extraction.
         run: ./gradlew :app:assembleDebug --no-daemon --no-parallel --rerun-tasks --no-build-cache
 
-      - uses: github/codeql-action/analyze@v4
+      - uses: github/codeql-action/analyze@7999b86c43a865dc79d8923397f35af22de63401 # v4

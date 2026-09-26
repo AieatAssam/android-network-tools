@@ -230,7 +230,7 @@ tasks.withType<Test> {
 
 // ── Coverage ──────────────────────────────────────────────────────────────────
 // Newly added, non-Compose logic must stay fully covered. The :app report is
-// deliberately scoped to that logic: the module's other ~17 Compose screens
+// deliberately scoped to selected logic: the module's other ~17 Compose screens
 // cannot be exercised by plain JVM unit tests, so measuring them here would
 // only dilute the gate. Coverage for the pure-Kotlin modules is reported
 // unfiltered by :core-network and :core-domain.
@@ -260,7 +260,7 @@ extensions.configure<kotlinx.kover.gradle.plugin.dsl.KoverProjectExtension> {
             }
         }
         verify {
-            rule("Pure app logic is well covered") {
+            rule("Selected pure app logic is well covered") {
                 minBound(90)
             }
         }

@@ -15,6 +15,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -561,7 +562,15 @@ class TopologyDiscoveryViewModelTest {
         val closeStarted = CountDownLatch(1)
         val releaseClose = CountDownLatch(1)
         val closeCount = AtomicInteger()
-        every { useCase.invoke(params, capture(sessionSlot)) } returns channel.receiveAsFlow()
+        every { useCase.invoke(params, capture(sessionSlot)) } answers {
+            val session = secondArg<OperationSession>()
+            channelFlow {
+                val output = this
+                OperationRunner.run(session) {
+                    for (event in channel) output.send(event)
+                }
+            }
+        }
 
         viewModel.startDiscovery(params)
         runCurrent()

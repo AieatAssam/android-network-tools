@@ -196,7 +196,7 @@ class ResourceScopeTest {
                 secondReturned.countDown()
             }
             assertTrue(secondStarted.await(5, TimeUnit.SECONDS))
-            awaitThreadState(secondThread, Thread.State.WAITING)
+            awaitThreadState(secondThread, Thread.State.TIMED_WAITING)
             assertEquals(1L, secondReturned.count)
 
             allowClose.countDown()
@@ -205,6 +205,29 @@ class ResourceScopeTest {
             assertTrue(secondReturned.count == 0L)
         } finally {
             allowClose.countDown()
+            executor.shutdownNow()
+            assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS))
+        }
+    }
+
+    @Test
+    fun `cross-thread reentrant close is bounded and lets the owning close finish`() {
+        val scope = ResourceScope()
+        val executor = Executors.newFixedThreadPool(2)
+        val reentrantFailure = AtomicReference<Throwable?>()
+        scope.register(Closeable {
+            val reentrant = executor.submit<Throwable?> {
+                runCatching { scope.close() }.exceptionOrNull()
+            }
+            reentrantFailure.set(reentrant.get(2, TimeUnit.SECONDS))
+        })
+
+        try {
+            executor.submit { scope.close() }.get(3, TimeUnit.SECONDS)
+
+            assertTrue(reentrantFailure.get() is ResourceScopeCloseWaitTimeoutException)
+            assertTrue(scope.isClosed)
+        } finally {
             executor.shutdownNow()
             assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS))
         }

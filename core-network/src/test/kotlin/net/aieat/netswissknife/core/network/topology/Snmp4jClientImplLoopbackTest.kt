@@ -274,6 +274,65 @@ class Snmp4jClientImplLoopbackTest {
     }
 
     @Test
+    fun `v2c walk cancellation stops retransmits and keeps the client usable`() = kotlinx.coroutines.runBlocking {
+        val params = TopologyParams(
+            targetIp = "127.0.0.1",
+            snmpVersion = SnmpVersion.V2C,
+            communityString = "public",
+            timeoutMs = 100,
+            retries = 5,
+        )
+        DatagramSocket(0, InetAddress.getByName("127.0.0.1")).use { silentAgent ->
+            val requestReceived = CountDownLatch(1)
+            val requestCount = AtomicInteger()
+            val receiveThread = Thread {
+                try {
+                    val bytes = ByteArray(65_535)
+                    while (!silentAgent.isClosed) {
+                        silentAgent.receive(DatagramPacket(bytes, bytes.size))
+                        requestCount.incrementAndGet()
+                        requestReceived.countDown()
+                    }
+                } catch (_: Exception) {
+                    // Closing the silent agent after the assertions releases the receiver.
+                }
+            }.apply { isDaemon = true; start() }
+            val client = Snmp4jClientImpl(params)
+            val requestScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+            val walk = requestScope.async {
+                client.walk(
+                    SnmpTarget("127.0.0.1", silentAgent.localPort, params),
+                    "1.3.6.1.2.1.1.1",
+                    SnmpWalkBudget(TopologyResourceLimits()),
+                )
+            }
+
+            try {
+                assertTrue(requestReceived.await(2, TimeUnit.SECONDS), "SNMP WALK should reach the silent agent")
+                assertEquals(1, client.pendingAsyncRequestCount)
+                walk.cancel()
+                withTimeout(2_000) {
+                    walk.join()
+                    assertTrue(walk.isCancelled)
+                }
+                assertEquals(0, client.pendingAsyncRequestCount)
+
+                kotlinx.coroutines.delay(350)
+                assertEquals(1, requestCount.get(), "cancelled WALK must not retransmit after cancellation")
+                withResponder(params) { port ->
+                    val value = client.get(SnmpTarget("127.0.0.1", port, params), sysDescrOid)
+                    assertTrue(!value.isNullOrBlank(), "the shared SNMP client remains usable")
+                }
+            } finally {
+                client.close()
+                requestScope.cancel()
+                silentAgent.close()
+                receiveThread.join(1_000)
+            }
+        }
+    }
+
+    @Test
     fun `unresolvable hostname reports target resolution details`() = runTest {
         val params = TopologyParams(
             targetIp = "does-not-exist.invalid",

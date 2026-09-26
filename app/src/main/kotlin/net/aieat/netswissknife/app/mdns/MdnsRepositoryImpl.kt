@@ -150,6 +150,9 @@ class MdnsRepositoryImpl @Inject constructor(
     }
     internal var monotonicClock: MonotonicClock = SystemMonotonicClock
     internal var discoveryLimits: MdnsDiscoveryLimits = MdnsDiscoveryLimits()
+    /** Optional signals make send-boundary backpressure tests deterministic; production leaves them null. */
+    internal var onServiceSendAttempt: ((String) -> Unit)? = null
+    internal var onServiceSendAccepted: ((String) -> Unit)? = null
 
     companion object {
         private const val MDNS_PORT = 5353
@@ -255,6 +258,10 @@ class MdnsRepositoryImpl @Inject constructor(
         mdnsSocket.soTimeout = SOCKET_TIMEOUT_MS
 
         val discovery = MdnsDiscoverySession(discoveryLimits)
+        val sentServiceNames = linkedSetOf<String>()
+        fun recordOutcome() {
+            updateOutcome(MdnsDiscoveryOutcome(sentServiceNames.size, discovery.truncationReasons))
+        }
         var sentQueries = 0
         suspend fun sendBoundedQuery(name: String, type: Int) {
             if (sentQueries >= discoveryLimits.maxQueries) {
@@ -289,7 +296,7 @@ class MdnsRepositoryImpl @Inject constructor(
                     sendBoundedQuery("$type.local.", Type.PTR)
                 }
                 lastRequeryMs = nowMs
-                updateOutcome(MdnsDiscoveryOutcome(discovery.totalFound, discovery.truncationReasons))
+                recordOutcome()
             }
 
             val packet = receivePacket(mdnsSocket) ?: continue
@@ -335,23 +342,31 @@ class MdnsRepositoryImpl @Inject constructor(
             }
 
             val result = discovery.process(records)
-            updateOutcome(MdnsDiscoveryOutcome(discovery.totalFound, discovery.truncationReasons))
+            recordOutcome()
             for (query in result.queries) {
                 sendBoundedQuery(query.name, query.type.toDnsType())
             }
-            updateOutcome(MdnsDiscoveryOutcome(discovery.totalFound, discovery.truncationReasons))
+            recordOutcome()
             for (service in result.services) {
                 ensureOperationActive()
+                onServiceSendAttempt?.invoke(service.instanceName)
                 collector.send(MdnsUpdate.ServiceFound(service))
+                sentServiceNames += service.instanceName
+                recordOutcome()
+                onServiceSendAccepted?.invoke(service.instanceName)
             }
         }
 
-        updateOutcome(MdnsDiscoveryOutcome(discovery.totalFound, discovery.truncationReasons))
+        recordOutcome()
         for (service in discovery.finish()) {
             ensureOperationActive()
+            onServiceSendAttempt?.invoke(service.instanceName)
             collector.send(MdnsUpdate.ServiceFound(service))
+            sentServiceNames += service.instanceName
+            recordOutcome()
+            onServiceSendAccepted?.invoke(service.instanceName)
         }
-        val outcome = MdnsDiscoveryOutcome(discovery.totalFound, discovery.truncationReasons)
+        val outcome = MdnsDiscoveryOutcome(sentServiceNames.size, discovery.truncationReasons)
         updateOutcome(outcome)
         ensureOperationActive()
         return outcome
