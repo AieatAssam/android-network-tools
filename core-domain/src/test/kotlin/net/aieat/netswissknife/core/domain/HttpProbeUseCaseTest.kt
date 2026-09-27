@@ -82,8 +82,8 @@ class HttpProbeUseCaseTest {
     }
 
     @Test
-    @DisplayName("valid HTTP URLs with paths and query parameters are accepted")
-    fun `valid HTTP URLs with paths and query parameters are accepted`() = runTest {
+    @DisplayName("valid HTTPS URLs with paths and query parameters are accepted")
+    fun `valid HTTPS URLs with paths and query parameters are accepted`() = runTest {
         coEvery { repository.probe(any()) } returns NetworkResult.Success(fakeResult)
 
         val result = useCase(HttpProbeParams(url = "https://example.com/api?v=1"))
@@ -150,13 +150,17 @@ class HttpProbeUseCaseTest {
     }
 
     @Test
-    @DisplayName("invoke passes http URL to repository")
-    fun `invoke passes http URL to repository`() = runTest {
-        coEvery { repository.probe(any()) } returns NetworkResult.Success(fakeResult)
+    @DisplayName("plain HTTP is rejected before repository dispatch")
+    fun `plain HTTP is rejected before repository dispatch`() = runTest {
+        val result = useCase(HttpProbeParams(url = "http://example.com"))
 
-        useCase(HttpProbeParams(url = "http://example.com"))
-
-        coVerify { repository.probe(match { it.url == "http://example.com" }) }
+        assertTrue(result is NetworkResult.Error)
+        assertEquals(ErrorCode.HTTP_CLEARTEXT_DISABLED, (result as NetworkResult.Error).info?.code)
+        assertEquals(
+            "Plain HTTP requests are disabled in this release. Use an HTTPS URL.",
+            validateHttpProbeUrl("http://example.com"),
+        )
+        coVerify(exactly = 0) { repository.probe(any()) }
     }
 
     @Test

@@ -467,10 +467,14 @@ class TracerouteViewModelTest {
         fun `first hop remains visible and in partial results while recent write is suspended`() =
             runTest {
                 val recentWrite = CompletableDeferred<Unit>()
+                val recentWriteStarted = CompletableDeferred<Unit>()
                 val traceCollectorFinished = CountDownLatch(1)
                 coEvery {
                     recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_TRACEROUTE_HOSTS, "example.com")
-                } coAnswers { recentWrite.await() }
+                } coAnswers {
+                    recentWriteStarted.complete(Unit)
+                    recentWrite.await()
+                }
                 every { tracerouteUseCase(any(), any()) } returns
                     kotlinx.coroutines.flow
                         .flow {
@@ -480,11 +484,16 @@ class TracerouteViewModelTest {
                 viewModel.onHostChange("example.com")
 
                 viewModel.startTrace()
+                recentWriteStarted.await()
+                assertTrue(!recentWrite.isCompleted)
 
                 assertEquals(listOf(stubHop), (viewModel.uiState.value as TracerouteUiState.Running).hops)
                 viewModel.onStop()
-                val canceling = viewModel.uiState.value as TracerouteUiState.Canceling
-                assertEquals(listOf(stubHop), canceling.hops)
+                when (val stoppedState = viewModel.uiState.value) {
+                    is TracerouteUiState.Canceling -> assertEquals(listOf(stubHop), stoppedState.hops)
+                    is TracerouteUiState.Canceled -> assertEquals(listOf(stubHop), stoppedState.result.hops)
+                    else -> assertTrue(false, "Expected Canceling or Canceled, got $stoppedState")
+                }
                 recentWrite.complete(Unit)
                 assertTrue(withContext(Dispatchers.IO) { traceCollectorFinished.await(2, TimeUnit.SECONDS) })
                 val canceled =

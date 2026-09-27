@@ -338,11 +338,11 @@ class HttpProbeEnhancementsTest {
     }
 
     @Test
-    fun `curl export quotes request URL and restricts HTTPS redirects`() {
+    fun `curl export restricts both initial and redirected protocols to HTTPS`() {
         val get = CurlExporter.build(HttpProbeRequest(url = "https://example.test/a?x=1"))
-        assertEquals("curl -X 'GET' --proto-redir '=https' --max-redirs 10 -L 'https://example.test/a?x=1'", get)
+        assertEquals("curl -X 'GET' --proto '=https' --proto-redir '=https' --max-redirs 10 -L 'https://example.test/a?x=1'", get)
         val http = CurlExporter.build(HttpProbeRequest(url = "http://example.test/a"))
-        assertEquals("curl -X 'GET' --proto-redir '=http,https' --max-redirs 10 -L 'http://example.test/a'", http)
+        assertEquals("curl -X 'GET' --proto '=https' --proto-redir '=https' --max-redirs 10 -L 'http://example.test/a'", http)
 
         val post =
             CurlExporter.build(
@@ -355,7 +355,7 @@ class HttpProbeEnhancementsTest {
                 ),
             )
         assertEquals(
-            "curl -X 'POST' -H 'X-Name: O'\\''Reilly' --data-raw '{\"message\":\"it'\\''s ok\"}' 'https://example.test/submit'",
+            "curl -X 'POST' -H 'X-Name: O'\\''Reilly' --data-raw '{\"message\":\"it'\\''s ok\"}' --proto '=https' 'https://example.test/submit'",
             post,
         )
     }

@@ -26,12 +26,10 @@
     <ID>CyclomaticComplexMethod:CookieAnalyzer.kt:CookieAnalyzer$private fun analyzeCookie: SecurityHeaderCheck</ID>
     <ID>CyclomaticComplexMethod:DiscoveryProbes.kt:SocketTcpPresenceProbe$override suspend fun probe: TcpPresence</ID>
     <ID>CyclomaticComplexMethod:DnsRepositoryImpl.kt:DnsRepositoryImpl$override suspend fun lookup: NetworkResult&lt;DnsResult&gt;</ID>
-    <ID>CyclomaticComplexMethod:GeoIpRepositoryImpl.kt:GeoIpRepositoryImpl$private suspend fun net.aieat.netswissknife.core.network.operation.OperationContext.fetchGeoIp: HopGeoLocation?</ID>
     <ID>CyclomaticComplexMethod:GeoIpRepositoryImpl.kt:IpApiGeoIpProvider$override fun parse: GeoIpParseOutcome</ID>
     <ID>CyclomaticComplexMethod:HostnameMatcher.kt:HostnameMatcher$fun matches: Boolean</ID>
     <ID>CyclomaticComplexMethod:HttpProbeRepositoryImpl.kt:HttpProbeRepositoryImpl$private suspend fun executeRequest: NetworkResult&lt;HttpProbeResult&gt;</ID>
     <ID>CyclomaticComplexMethod:HttpProbeRepositoryImpl.kt:HttpProbeRepositoryImpl$private suspend fun probeInternal: NetworkResult&lt;HttpProbeResult&gt;</ID>
-    <ID>CyclomaticComplexMethod:HttpSecurityAnalyzer.kt:HttpSecurityAnalyzer$private fun checkHsts: SecurityHeaderCheck</ID>
     <ID>CyclomaticComplexMethod:LanScanRepositoryImpl.kt:LanScanRepositoryImpl$override fun scan: Flow&lt;LanScanUpdate&gt;</ID>
     <ID>CyclomaticComplexMethod:LanScanRepositoryImpl.kt:LanScanRepositoryImpl$private suspend fun discoverPresence: PresenceResult</ID>
     <ID>CyclomaticComplexMethod:LanScanRepositoryImpl.kt:LanScanRepositoryImpl$private suspend fun enrich: LanHost</ID>
@@ -74,9 +72,12 @@
     <ID>LargeClass:TopologyDiscoveryRepositoryTest.kt:TopologyDiscoveryRepositoryTest</ID>
     <ID>LongMethod:DnsRepositoryImpl.kt:DnsRepositoryImpl$override suspend fun lookup: NetworkResult&lt;DnsResult&gt;</ID>
     <ID>LongMethod:DnsRepositoryOperationSessionTest.kt:DnsRepositoryOperationSessionTest$@Test fun `dnsjava retries truncated udp response over the session scoped tcp socket`</ID>
+    <ID>LongMethod:DnsRepositoryOperationSessionTest.kt:DnsRepositoryOperationSessionTest$@Test fun `production dns executor caps workers and queue and rejects before opening a socket`</ID>
     <ID>LongMethod:HttpProbeRepositoryImpl.kt:HttpProbeRepositoryImpl$private suspend fun executeRequest: NetworkResult&lt;HttpProbeResult&gt;</ID>
+    <ID>LongMethod:HttpProbeRepositoryImpl.kt:HttpProbeRepositoryImpl$private suspend fun probeInternal: NetworkResult&lt;HttpProbeResult&gt;</ID>
     <ID>LongMethod:LanScanRepositoryImpl.kt:LanScanRepositoryImpl$override fun scan: Flow&lt;LanScanUpdate&gt;</ID>
     <ID>LongMethod:LanScanRepositoryImplTest.kt:LanScanRepositoryImplTest$@Test @OptIn(ExperimentalCoroutinesApi::class) fun `scan worker count never exceeds the caller session budget`</ID>
+    <ID>LongMethod:LanScanRepositoryImplTest.kt:LanScanRepositoryImplTest$@Test fun `slow collector backpressures completed hosts and scan resumes without loss`</ID>
     <ID>LongMethod:MdnsDiscoverySession.kt:MdnsDiscoverySession$fun process: MdnsSessionResult</ID>
     <ID>LongMethod:OperationRunner.kt:OperationRunner$@OptIn(InternalCoroutinesApi::class) suspend fun &lt;T&gt; run: T</ID>
     <ID>LongMethod:OperationRunnerTest.kt:OperationRunnerTest$@Test fun `deadline closes resources cancels and joins workers without success emission`</ID>
@@ -84,21 +85,26 @@
     <ID>LongMethod:PingRepositoryImpl.kt:PingRepositoryImpl$private fun runContinuousSession: Flow&lt;PingPacketResult&gt;</ID>
     <ID>LongMethod:PortScanRepositoryImpl.kt:PortScanRepositoryImpl$private fun scanInternal: Flow&lt;PortScanUpdate&gt;</ID>
     <ID>LongMethod:PortScanRepositoryImpl.kt:PortScanRepositoryImpl.Companion$private fun scopedDefaultChecker: PortConnectChecker</ID>
+    <ID>LongMethod:ResourceScope.kt:ResourceScope$override fun close</ID>
     <ID>LongMethod:SpeedTestRepositoryImpl.kt:SpeedTestRepositoryImpl$private fun runLegacy: Flow&lt;SpeedTestEvent&gt;</ID>
     <ID>LongMethod:SpeedTestRepositoryImpl.kt:SpeedTestRepositoryImpl$private fun runWithTransferEngine: Flow&lt;SpeedTestEvent&gt;</ID>
     <ID>LongMethod:TlsInspectorRepositoryImpl.kt:TlsInspectorRepositoryImpl$override suspend fun inspect: NetworkResult&lt;TlsInspectorResult&gt;</ID>
+    <ID>LongMethod:TopologyBlockingCallTest.kt:TopologyBlockingCallTest$@Test fun `cancellation between active check and executor enqueue removes the late queued task`</ID>
     <ID>LongMethod:TopologyDiscoveryRepositoryImpl.kt:TopologyDiscoveryRepositoryImpl$override fun discover: Flow&lt;TopologyDiscoveryEvent&gt;</ID>
     <ID>LongMethod:TopologyDiscoveryRepositoryTest.kt:TopologyDiscoveryRepositoryTest$@Test fun `late listener recreating a socket is closed after one-shot init timeout`</ID>
     <ID>LongMethod:TopologyDiscoveryRepositoryTest.kt:TopologyDiscoveryRepositoryTest$@Test fun `repository caps scalar GET requests across sessions and resumes queued request after cancellation`</ID>
     <ID>LongMethod:TopologyDiscoveryRepositoryTest.kt:TopologyDiscoveryRepositoryTest$@Test fun `repository walk cap is shared across sessions and releases queued work after cancellation`</ID>
+    <ID>LongMethod:TopologyParamsValidator.kt:TopologyParamsValidator$fun validate: ValidationResult</ID>
     <ID>LongMethod:TopologySnapshotDiff.kt:TopologySnapshotDiffer$private fun classifyProtocolChanges: Map&lt;TopologyDataTable, TopologyTableChanges&gt;</ID>
     <ID>LongMethod:TopologySnapshotDiff.kt:TopologySnapshotDiffer$private fun tableChanges: TopologyTableChanges</ID>
     <ID>LongMethod:TopologySnapshotDiff.kt:private fun canonicalIpv6: String?</ID>
     <ID>LongMethod:TopologySnapshotDiffTest.kt:TopologySnapshotDiffTest$@Test fun `full graph diff is stable when node link interface and VLAN lists are permuted`</ID>
+    <ID>LongMethod:TopologySnmpAdapterSaturationTest.kt:TopologySnmpAdapterSaturationTest$@Test fun `SNMP initialization rejects overflow and recovers queued capacity without opening rejected transport`</ID>
     <ID>LongMethod:WhoisBlockingTransport.kt:WhoisBlockingTransport$suspend fun query: Pair&lt;Long, String&gt;</ID>
     <ID>LongMethod:WhoisBlockingTransportTest.kt:WhoisBlockingTransportTest$@Test fun `production executor runs two resolver calls queues sixteen and rejects overflow before socket creation`</ID>
     <ID>LongMethod:WhoisRepositoryImpl.kt:WhoisRepositoryImpl$override suspend fun lookup: NetworkResult&lt;WhoisResult&gt;</ID>
     <ID>LongMethod:WhoisRepositoryImpl.kt:WhoisRepositoryImpl$private suspend fun performDomainLookup: NetworkResult&lt;WhoisResult&gt;</ID>
+    <ID>LongMethod:WhoisRepositoryImpl.kt:WhoisRepositoryImpl$private suspend fun performIpAsnLookup: NetworkResult&lt;WhoisResult&gt;</ID>
     <ID>LoopWithTooManyJumpStatements:BannerReader.kt:BannerReader$while</ID>
     <ID>LoopWithTooManyJumpStatements:GeoIpRepositoryImpl.kt:GeoIpRepositoryImpl$for</ID>
     <ID>LoopWithTooManyJumpStatements:HostnameMatcher.kt:HostnameMatcher$for</ID>
@@ -262,6 +268,7 @@
     <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$88</ID>
     <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$9</ID>
     <ID>MagicNumber:ReservedRanges.kt:ReservedRanges$99</ID>
+    <ID>MagicNumber:ReverseDnsNameProbe.kt:4</ID>
     <ID>MagicNumber:ServiceProbes.kt:ServiceProbes$110</ID>
     <ID>MagicNumber:ServiceProbes.kt:ServiceProbes$143</ID>
     <ID>MagicNumber:ServiceProbes.kt:ServiceProbes$21</ID>
@@ -314,6 +321,8 @@
     <ID>MagicNumber:TlsCertificateParser.kt:TlsCertificateParser$16</ID>
     <ID>MagicNumber:TlsCertificateParser.kt:TlsCertificateParser$3</ID>
     <ID>MagicNumber:TlsCertificateParser.kt:TlsCertificateParser$4</ID>
+    <ID>MagicNumber:TlsInspectorRepositoryImpl.kt:TlsInspectorRepositoryImpl$30_000</ID>
+    <ID>MagicNumber:TlsInspectorRepositoryImpl.kt:TlsInspectorRepositoryImpl$500</ID>
     <ID>MagicNumber:TlsInspectorRepositoryImpl.kt:TlsInspectorRepositoryImpl$65_535</ID>
     <ID>MagicNumber:TopologyDiscoveryRepositoryImpl.kt:TopologyDiscoveryRepositoryImpl.GraphByteBudget.Companion$128L</ID>
     <ID>MagicNumber:TopologyDiscoveryRepositoryImpl.kt:TopologyDiscoveryRepositoryImpl.GraphByteBudget.Companion$24L</ID>
@@ -423,8 +432,12 @@
     <ID>MaxLineLength:DiscoveryProbes.kt:SocketTcpPresenceProbe$TcpConnectOutcome.TIMED_OUT -&gt; if (firstFailure == null) firstFailure = TcpPresence.TimedOut(port, detail)</ID>
     <ID>MaxLineLength:DiscoveryProbes.kt:SocketTcpPresenceProbe$TcpConnectOutcome.UNKNOWN_FAILURE -&gt; if (firstFailure == null) firstFailure = TcpPresence.UnknownFailure(port, detail)</ID>
     <ID>MaxLineLength:DiscoveryProbes.kt:SocketTcpPresenceProbe$TcpConnectOutcome.UNREACHABLE -&gt; if (firstFailure == null) firstFailure = TcpPresence.Unreachable(port, detail)</ID>
+    <ID>MaxLineLength:DnsRepositoryImpl.kt:DnsRepositoryImpl$developerMessage = "No system DNS server reported by Android (Private DNS or no network). Choose a resolver."</ID>
+    <ID>MaxLineLength:DnsRepositoryOperationSessionTest.kt:DnsRepositoryOperationSessionTest$assertFalse(recovered.second.isCompletedExceptionally, "a cancelled queue entry should free capacity for a new operation")</ID>
     <ID>MaxLineLength:DnsRepositoryOperationSessionTest.kt:DnsRepositoryOperationSessionTest$assertTrue(interruptedSend.await(2, TimeUnit.SECONDS), "scope cleanup should interrupt blocking resolver wait")</ID>
-    <ID>MaxLineLength:GeoIpRepositoryImpl.kt:GeoIpRepositoryImpl$private</ID>
+    <ID>MaxLineLength:DnsRepositoryOperationSessionTest.kt:DnsRepositoryOperationSessionTest$assertTrue(openedSockets.all { (it as DatagramSocket).isClosed }, "all active DNS sockets should close during cleanup")</ID>
+    <ID>MaxLineLength:DnsRepositoryOperationSessionTest.kt:DnsRepositoryOperationSessionTest$assertTrue(overflow.second.isCompletedExceptionally, "the first task beyond workers plus queue must be rejected")</ID>
+    <ID>MaxLineLength:DnsRepositoryOperationSessionTest.kt:DnsRepositoryOperationSessionTest$assertTrue(sessions.all { it.resources.isClosed }, "all operation scopes should release their task and socket leases")</ID>
     <ID>MaxLineLength:GeoIpRepositoryImpl.kt:GeoIpRepositoryImpl$providers = if (baseUrl.trimEnd('/') == DEFAULT_BASE_URL) defaultProviders() else listOf(IpInfoGeoIpProvider(baseUrl))</ID>
     <ID>MaxLineLength:GeoIpRepositoryImplTest.kt:GeoIpRepositoryImplTest$(failure is OperationCancellationException &amp;&amp; failure.reason == CancellationReason.DEADLINE_EXCEEDED)</ID>
     <ID>MaxLineLength:GeoIpRepositoryImplTest.kt:GeoIpRepositoryImplTest$200 to """{"ip":"8.8.8.8","city":"Mountain View","country":"US","loc":"37.38,-122.08","org":"AS15169 Google LLC","bogon":false}"""</ID>
@@ -434,24 +447,23 @@
     <ID>MaxLineLength:GeoIpRepositoryImplTest.kt:GeoIpRepositoryImplTest$IpApiGeoIpProvider().parse("8.8.8.8", ipApiFixture.replace("\"ip\":\"8.8.8.8\"", "\"ip\":\"8.8.8.8\",\"error\":true"))</ID>
     <ID>MaxLineLength:GeoIpRepositoryImplTest.kt:GeoIpRepositoryImplTest$ScriptedGeoIpConnection(url, 200, """{"ip":"${ipFromPath(url)}","success":false,"message":"quota exceeded"}""")</ID>
     <ID>MaxLineLength:GeoIpRepositoryImplTest.kt:GeoIpRepositoryImplTest$val canonicalIpv6 = """{"ip":"2001:4860:4860:0:0:0:0:8888","city":"Mountain View","country":"US","loc":"37.38,-122.08"}"""</ID>
-    <ID>MaxLineLength:HttpProbeEnhancementsTest.kt:HttpProbeEnhancementsTest$"curl -X 'POST' -H 'X-Name: O'\\''Reilly' --data-raw '{\"message\":\"it'\\''s ok\"}' 'https://example.test/submit'"</ID>
+    <ID>MaxLineLength:HttpProbeEnhancementsTest.kt:HttpProbeEnhancementsTest$"curl -X 'POST' -H 'X-Name: O'\\''Reilly' --data-raw '{\"message\":\"it'\\''s ok\"}' --proto '=https' 'https://example.test/submit'"</ID>
+    <ID>MaxLineLength:HttpProbeEnhancementsTest.kt:HttpProbeEnhancementsTest$assertEquals("curl -X 'GET' --proto '=https' --proto-redir '=https' --max-redirs 10 -L 'http://example.test/a'", http)</ID>
+    <ID>MaxLineLength:HttpProbeEnhancementsTest.kt:HttpProbeEnhancementsTest$assertEquals("curl -X 'GET' --proto '=https' --proto-redir '=https' --max-redirs 10 -L 'https://example.test/a?x=1'", get)</ID>
     <ID>MaxLineLength:HttpProbeEnhancementsTest.kt:HttpProbeEnhancementsTest$mapOf("Content-Security-Policy" to listOf("default-src 'self'; script-src 'self' 'unsafe-inline'; frame-ancestors 'none'"))</ID>
-    <ID>MaxLineLength:HttpProbeEnhancementsTest.kt:HttpProbeEnhancementsTest$mapOf("Content-Security-Policy" to listOf("script-src-elem 'unsafe-inline' 'sha256-${"A".repeat(43)}='; script-src-attr 'self'"))</ID>
     <ID>MaxLineLength:HttpProbeRepositoryImpl.kt:HttpProbeRepositoryImpl$?:</ID>
     <ID>MaxLineLength:HttpProbeRepositoryImpl.kt:HttpProbeRepositoryImpl$CrossOriginEntityReplay(redirect.destination.toString(), redirect.method, response.statusCode)</ID>
-    <ID>MaxLineLength:HttpProbeRepositoryImpl.kt:HttpProbeRepositoryImpl$RedirectPolicy.Decision.TooManyRedirects -&gt; return NetworkResult.Error("Too many redirects (max ${RedirectPolicy.MAX_REDIRECTS})")</ID>
-    <ID>MaxLineLength:HttpProbeRepositoryImpl.kt:HttpProbeRepositoryImpl$RedirectPolicy.Decision.UnsupportedProtocol -&gt; return NetworkResult.Error("Redirected to unsupported protocol")</ID>
-    <ID>MaxLineLength:HttpProbeRepositoryImpl.kt:HttpProbeRepositoryImpl$if (!approved) return NetworkResult.Error("Cross-origin redirect entity replay was not approved")</ID>
-    <ID>MaxLineLength:HttpProbeRepositoryImpl.kt:HttpProbeRepositoryImpl$return NetworkResult.Error("Maximum response body size must be between 0 and $MAX_RESPONSE_BODY_BYTES bytes")</ID>
+    <ID>MaxLineLength:HttpProbeRepositoryImpl.kt:HttpProbeRepositoryImpl$NetworkResult.error(ErrorCode.NETWORK_REQUEST_FAILED, developerMessage = "HTTP request failed", cause = e)</ID>
+    <ID>MaxLineLength:HttpProbeRepositoryImpl.kt:HttpProbeRepositoryImpl$NetworkResult.error(ErrorCode.NETWORK_REQUEST_FAILED, developerMessage = "Network request failed", cause = e)</ID>
+    <ID>MaxLineLength:HttpProbeRepositoryImpl.kt:HttpProbeRepositoryImpl$if (!approved) return NetworkResult.error(ErrorCode.HTTP_REDIRECT_APPROVAL_REQUIRED, developerMessage = "Cross-origin redirect entity replay was not approved")</ID>
+    <ID>MaxLineLength:HttpProbeRepositoryImpl.kt:HttpProbeRepositoryImpl$if (trimmedUrl.isBlank()) return NetworkResult.error(ErrorCode.URL_BLANK, developerMessage = "URL must not be blank")</ID>
+    <ID>MaxLineLength:HttpProbeRepositoryImpl.kt:HttpProbeRepositoryImpl$return NetworkResult.error(ErrorCode.HTTP_REDIRECT_INVALID, developerMessage = "Malformed redirect URL")</ID>
+    <ID>MaxLineLength:HttpProbeRepositoryImpl.kt:HttpProbeRepositoryImpl$return NetworkResult.error(ErrorCode.HTTP_REDIRECT_LIMIT, developerMessage = "Too many redirects (max ${RedirectPolicy.MAX_REDIRECTS})")</ID>
+    <ID>MaxLineLength:HttpProbeRepositoryImpl.kt:HttpProbeRepositoryImpl$return NetworkResult.error(ErrorCode.URL_SCHEME_UNSUPPORTED, developerMessage = "Only HTTP and HTTPS URLs are supported")</ID>
+    <ID>MaxLineLength:HttpProbeRepositoryImpl.kt:HttpProbeRepositoryImpl$return NetworkResult.error(ErrorCode.URL_SCHEME_UNSUPPORTED, developerMessage = "Redirected to unsupported protocol")</ID>
     <ID>MaxLineLength:HttpProbeRepositoryTest.kt:HttpProbeRepositoryRedirectTest$assertEquals("http://bob:destination-secret@destination.test/danger?redirect-token=private#destination-fragment", evidence.destinationUrl)</ID>
     <ID>MaxLineLength:HttpProbeRepositoryTest.kt:HttpProbeRepositoryRedirectTest$assertTrue(sourceConnection.disconnected, "source connection must close before waiting for consent")</ID>
     <ID>MaxLineLength:HttpProbeRepositoryTest.kt:HttpProbeRepositoryRedirectTest$val location = "http://bob:destination-secret@destination.test/danger?redirect-token=private#destination-fragment"</ID>
-    <ID>MaxLineLength:HttpSecurityAnalyzer.kt:HttpSecurityAnalyzer$"(?:https?://)?[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*(?::[0-9]{1,5})?(?:/[^\\s]*)?"</ID>
-    <ID>MaxLineLength:HttpSecurityAnalyzer.kt:HttpSecurityAnalyzer$description = "No Cross-Origin-Embedder-Policy - only required for cross-origin isolation features (e.g. SharedArrayBuffer)."</ID>
-    <ID>MaxLineLength:HttpSecurityAnalyzer.kt:HttpSecurityAnalyzer$descriptionKey = if (value == null) "httprobe_sec_xss_protection_absent" else "httprobe_sec_xss_protection_deprecated"</ID>
-    <ID>MaxLineLength:HttpSecurityAnalyzer.kt:HttpSecurityAnalyzer$headerValues.size == 1 &amp;&amp; headerValues.single().lowercase() in setOf("same-origin", "same-origin-allow-popups")</ID>
-    <ID>MaxLineLength:HttpSecurityAnalyzer.kt:HttpSecurityAnalyzer$return</ID>
-    <ID>MaxLineLength:HttpSecurityAnalyzer.kt:HttpSecurityAnalyzer$xfoValues.size == 1 &amp;&amp; xfoValues.single().let { it.equals("DENY", true) || it.equals("SAMEORIGIN", true) }</ID>
     <ID>MaxLineLength:LanScanRepositoryImpl.kt:LanScanRepositoryImpl$is TcpPresence.PolicyDenied -&gt; LanScanDiagnostic(ip, LanScanDiagnosticReason.TCP_POLICY_DENIED, tcp.port, tcp.detail)</ID>
     <ID>MaxLineLength:LanScanRepositoryImpl.kt:LanScanRepositoryImpl$is TcpPresence.TimedOut -&gt; LanScanDiagnostic(ip, LanScanDiagnosticReason.TCP_TIMED_OUT, tcp.port, tcp.detail)</ID>
     <ID>MaxLineLength:LanScanRepositoryImpl.kt:LanScanRepositoryImpl$is TcpPresence.UnknownFailure -&gt; LanScanDiagnostic(ip, LanScanDiagnosticReason.TCP_UNKNOWN_FAILURE, tcp.port, tcp.detail)</ID>
@@ -466,20 +478,34 @@
     <ID>MaxLineLength:OkHttpEngine.kt:TimingRecorder$override fun connectEnd</ID>
     <ID>MaxLineLength:OkHttpEngine.kt:TimingRecorder$override fun connectStart</ID>
     <ID>MaxLineLength:OkHttpEngine.kt:TimingRecorder$override fun dnsEnd</ID>
+    <ID>MaxLineLength:OkHttpEngine.kt:throw ResponseHeaderLimitException(ResponseHeaderLimitKind.AGGREGATE_BYTES, RESPONSE_HEADER_AGGREGATE_BYTE_LIMIT)</ID>
+    <ID>MaxLineLength:OkHttpEngine.kt:val fieldByteCount = name.toByteArray(Charsets.UTF_8).size + valueByteCount + RESPONSE_HEADER_FIELD_OVERHEAD_BYTES</ID>
     <ID>MaxLineLength:OkHttpEngineTest.kt:OkHttpEngineTest$HttpEngineResponse(200, "OK", emptyMap(), ByteArrayInputStream(byteArrayOf(1)), "h2", HttpTimings(5, 6, 7, 8, 9, 20))</ID>
     <ID>MaxLineLength:OkHttpEngineTest.kt:OkHttpEngineTest$HttpEngineResponse(302, "Found", mapOf("Location" to listOf("/next")), null, "http/1.1", HttpTimings(1, 2, null, 3, 4, 10))</ID>
     <ID>MaxLineLength:OkHttpEngineTest.kt:OkHttpEngineTest$MockResponse.Builder().code(200).body("x".repeat(100)).throttleBody(1, 1, java.util.concurrent.TimeUnit.SECONDS).build()</ID>
+    <ID>MaxLineLength:OkHttpEngineTest.kt:OkHttpEngineTest$assertEquals((0 until 97).map { "v$it" }, data.responseHeaders.entries.first { it.key.equals("X-Test", ignoreCase = true) }.value)</ID>
+    <ID>MaxLineLength:OkHttpEngineTest.kt:OkHttpEngineTest$assertEquals(65_536, decodedMetadataBytes, "$protocol accepted fixture must reach the aggregate limit exactly")</ID>
     <ID>MaxLineLength:OkHttpEngineTest.kt:OkHttpEngineTest$assertFalse((result as net.aieat.netswissknife.core.network.NetworkResult.Error).message.contains("private-token"))</ID>
+    <ID>MaxLineLength:OkHttpEngineTest.kt:OkHttpEngineTest$assertTrue(exact is NetworkResult.Success&lt;*&gt;, "$protocol exact aggregate boundary should be accepted: $exact")</ID>
+    <ID>MaxLineLength:OkHttpEngineTest.kt:OkHttpEngineTest$assertTrue(result is NetworkResult.Success&lt;*&gt;, "$protocol exact field-count response should be accepted: $result")</ID>
     <ID>MaxLineLength:OkHttpEngineTest.kt:OkHttpEngineTest$runCatching { repository.probe(HttpProbeRequest(url = server.url("/").toString()), session) }.exceptionOrNull()</ID>
     <ID>MaxLineLength:OkHttpEngineTest.kt:OkHttpEngineTest$server.enqueue(MockResponse.Builder().code(200).addHeader("Content-Type", "text/plain; charset=UTF-8").body("abcdefgh").build())</ID>
     <ID>MaxLineLength:OkHttpEngineTest.kt:OkHttpEngineTest$source.enqueue(MockResponse.Builder().code(302).addHeader("Location", destination.url("/private?token=secret").toString()).build())</ID>
     <ID>MaxLineLength:OkHttpEngineTest.kt:OkHttpEngineTest$source.enqueue(MockResponse.Builder().code(307).addHeader("Location", credentialedDestination.toString()).build())</ID>
     <ID>MaxLineLength:OkHttpEngineTest.kt:OkHttpEngineTest$val</ID>
     <ID>MaxLineLength:OkHttpEngineTest.kt:OkHttpEngineTest$val result = HttpProbeRepositoryImpl().probe(HttpProbeRequest(url = server.url("/").toString(), maxResponseBodyBytes = 4))</ID>
-    <ID>MaxLineLength:OkHttpTransferEngine.kt:OkHttpTransferEngine$val</ID>
+    <ID>MaxLineLength:OkHttpEngineTest.kt:OkHttpEngineTest$values.sumOf { value -&gt; name.toByteArray(Charsets.UTF_8).size + value.toByteArray(Charsets.UTF_8).size + 4 }</ID>
     <ID>MaxLineLength:OkHttpTransferEngine.kt:OkHttpTransferEngine.Companion$if (!parts.firstOrNull().equals("cfRequestDuration", ignoreCase = true)) return@firstNotNullOfOrNull null</ID>
     <ID>MaxLineLength:OkHttpTransferEngineTest.kt:OkHttpTransferEngineTest$assertEquals(12.5, OkHttpTransferEngine.parseServerTimingMs("cfRequestDuration;desc=\"cache, \\\"warm\\\" origin\";dur=12.5"))</ID>
     <ID>MaxLineLength:OkHttpTransferEngineTest.kt:OkHttpTransferEngineTest$assertEquals(12.5, OkHttpTransferEngine.parseServerTimingMs("cfRequestDuration;desc=\"cache, origin\";dur=12.5"))</ID>
+    <ID>MaxLineLength:OkHttpTransferEngineTest.kt:OkHttpTransferEngineTest$assertTrue(events.none { it is SpeedTestEvent.Failed }, "speed test failed: ${events.filterIsInstance&lt;SpeedTestEvent.Failed&gt;()}")</ID>
+    <ID>MaxLineLength:OkHttpTransferEngineTest.kt:OkHttpTransferEngineTest.&lt;no name provided&gt;$delegate.download(url, streams, durationMs, operationSession).onEach { observedDownloadStreams += it.streamIndex }</ID>
+    <ID>MaxLineLength:OkHttpTransferEngineTest.kt:OkHttpTransferEngineTest.&lt;no name provided&gt;$delegate.upload(url, streams, durationMs, operationSession).onEach { observedUploadStreams += it.streamIndex }</ID>
+    <ID>MaxLineLength:OkHttpTransferEngineTest.kt:OkHttpTransferEngineTest.&lt;no name provided&gt;$override fun download</ID>
+    <ID>MaxLineLength:OkHttpTransferEngineTest.kt:OkHttpTransferEngineTest.&lt;no name provided&gt;$override fun upload</ID>
+    <ID>MaxLineLength:OperationRunnerTest.kt:OperationRunnerTest$"deadline cancellation must retain the underlying resource close failure: ${deadlineFailure.failureGraph().map { it::class.simpleName + ":" + it.message }.toList()}"</ID>
+    <ID>MaxLineLength:OperationRunnerTest.kt:OperationRunnerTest$"deadline failures: ${deadlineFailures.flatMap { it.failureGraph().toList() }.map { it::class.simpleName + ":" + it.message }}"</ID>
+    <ID>MaxLineLength:OperationRunnerTest.kt:OperationRunnerTest$"the bounded cleanup wait must be reported on the cancellation: ${cancellationFailure.failureGraph().map { it::class.simpleName + ":" + it.message }.toList()}"</ID>
     <ID>MaxLineLength:PublicSuffix.kt:PublicSuffix.Rules.Companion$check(contents.startsWith(INDEX_HEADER)) { "Bundled Public Suffix List index has an unsupported header" }</ID>
     <ID>MaxLineLength:PublicSuffixColdStartBenchmarkTest.kt:PublicSuffixColdStartBenchmarkTest$*</ID>
     <ID>MaxLineLength:RdapClient.kt:DnsBootstrap.Companion$if (url.host.isBlank() || url.username.isNotEmpty() || url.password.isNotEmpty() || url.query != null || url.fragment != null) return null</ID>
@@ -494,15 +520,23 @@
     <ID>MaxLineLength:RdapClientTest.kt:RdapClientTest$server.enqueue(MockResponse.Builder().body(bootstrap).addHeader("Expires", "Wed, 21 Oct 2015 07:28:00 GMT").build())</ID>
     <ID>MaxLineLength:RdapClientTest.kt:RdapClientTest$val bootstrap = """{"services":[[["com"],["http://insecure.example.test/rdap", "https://secure.example.test/rdap/"]]]}"""</ID>
     <ID>MaxLineLength:RdapMapperTest.kt:RdapMapperTest$"""{"objectClassName":"domain","events":"bad","nameservers":[null,{},7,{"ldhName":42,"unicodeName":false},{"ldhName":["bad.example"]}],"status":[7,false,["bad"],"ok"],"entities":[null],"secureDNS":"bad","country":["US"]}"""</ID>
-    <ID>MaxLineLength:RedirectPolicy.kt:RedirectPolicy$private</ID>
     <ID>MaxLineLength:RedirectPolicyTest.kt:RedirectPolicyTest$assertFalse(RedirectPolicy.evaluate(source, HttpMethod.GET, null, 200, "/ignored", 0, 10) is RedirectPolicy.Decision.Follow)</ID>
+    <ID>MaxLineLength:ResponseHeaderParserLimitTest.kt:ResponseHeaderParserLimitTest$assertEquals(listOf(Header(":status", "103")), reader.getAndResetHeaderList(streamId = 1, endStream = false))</ID>
+    <ID>MaxLineLength:ResponseHeaderParserLimitTest.kt:ResponseHeaderParserLimitTest$assertEquals(listOf(Header("x-test", exactUtf8Value)), readHpackHeaders(listOf(Header("x-test", exactUtf8Value))))</ID>
     <ID>MaxLineLength:SpeedTestEngineRepositoryTest.kt:SpeedTestEngineRepositoryTest$assertEquals(ServerInfo(colo = "LHR", asn = "AS13335", country = "GB"), (events.first() as SpeedTestEvent.ServerInfoReceived).info)</ID>
     <ID>MaxLineLength:SpeedTestEngineRepositoryTest.kt:SpeedTestEngineRepositoryTest$val down = events.filterIsInstance&lt;SpeedTestEvent.LoadedLatencySample&gt;().filter { it.phase == SpeedTestPhase.DOWNLOAD }</ID>
     <ID>MaxLineLength:SpeedTestEngineRepositoryTest.kt:SpeedTestEngineRepositoryTest$val up = events.filterIsInstance&lt;SpeedTestEvent.LoadedLatencySample&gt;().filter { it.phase == SpeedTestPhase.UPLOAD }</ID>
-    <ID>MaxLineLength:SpeedTestRepositoryImpl.kt:SpeedTestRepositoryImpl$engine.connectRtt(endpoint.host, if (endpoint.port &gt; 0) endpoint.port else if (endpoint.scheme == "https") 443 else 80)</ID>
     <ID>MaxLineLength:SpeedTestRepositoryImpl.kt:SpeedTestRepositoryImpl$if</ID>
-    <ID>MaxLineLength:SpeedTestRepositoryImpl.kt:SpeedTestRepositoryImpl$transfer = engine.download("$baseUrl/__down?bytes=$DOWNLOAD_PAYLOAD_BYTES", config.downloadStreams, config.phaseDurationMs)</ID>
+    <ID>MaxLineLength:SpeedTestRepositoryImpl.kt:SpeedTestRepositoryImpl$send(SpeedTestEvent.Failed(SpeedTestPhase.DOWNLOAD, ErrorInfo(ErrorCode.NETWORK_REQUEST_FAILED, developerMessage = e.message ?: "Download test failed")))</ID>
+    <ID>MaxLineLength:SpeedTestRepositoryImpl.kt:SpeedTestRepositoryImpl$send(SpeedTestEvent.Failed(SpeedTestPhase.LATENCY, ErrorInfo(ErrorCode.NETWORK_REQUEST_FAILED, developerMessage = e.message ?: "Latency probe failed")))</ID>
+    <ID>MaxLineLength:SpeedTestRepositoryImpl.kt:SpeedTestRepositoryImpl$send(SpeedTestEvent.Failed(SpeedTestPhase.UPLOAD, ErrorInfo(ErrorCode.NETWORK_REQUEST_FAILED, developerMessage = e.message ?: "Upload test failed")))</ID>
+    <ID>MaxLineLength:SpeedTestRepositoryImpl.kt:SpeedTestRepositoryImpl$send(SpeedTestEvent.Failed(currentPhase, ErrorInfo(ErrorCode.NETWORK_REQUEST_FAILED, developerMessage = failure.message ?: "Speed test failed")))</ID>
+    <ID>MaxLineLength:SpeedTestRepositoryImpl.kt:SpeedTestRepositoryImpl$send(SpeedTestEvent.Failed(currentPhase, ErrorInfo(ErrorCode.NETWORK_TIMEOUT, developerMessage = "Speed test timed out")))</ID>
+    <ID>MaxLineLength:SpeedTestRepositoryImpl.kt:SpeedTestRepositoryImpl$transfer = engine.download("$baseUrl/__down?bytes=$DOWNLOAD_PAYLOAD_BYTES", config.downloadStreams, config.phaseDurationMs, operationSession)</ID>
+    <ID>MaxLineLength:SpeedTestRepositoryImpl.kt:SpeedTestRepositoryImpl$transfer = engine.upload("$baseUrl/__up", config.uploadStreams, config.phaseDurationMs, operationSession)</ID>
     <ID>MaxLineLength:SpeedTestRepositoryImpl.kt:internal</ID>
+    <ID>MaxLineLength:TlsInspectorRepositoryImpl.kt:TlsInspectorRepositoryImpl$if (host.isBlank()) return NetworkResult.error(ErrorCode.HOST_BLANK, developerMessage = "Host must not be blank")</ID>
+    <ID>MaxLineLength:TlsInspectorRepositoryImpl.kt:TlsInspectorRepositoryImpl$return@withContext NetworkResult.error(ErrorCode.TLS_INSPECTION_FAILED, developerMessage = "TLS inspection timed out", cancelled)</ID>
     <ID>MaxLineLength:TopologyDiscoveryRepositoryImpl.kt:TopologyDiscoveryRepositoryImpl$if (lower.contains("access point") || lower.contains("wireless") || lower.contains("wifi") || lower.contains("wi-fi")) caps.add(DeviceCapability.AP)</ID>
     <ID>MaxLineLength:TopologyDiscoveryRepositoryImpl.kt:TopologyDiscoveryRepositoryImpl$if (lower.contains("switch") || lower.contains("catalyst") || lower.contains("nexus")) caps.add(DeviceCapability.SWITCH)</ID>
     <ID>MaxLineLength:TopologyDiscoveryRepositoryImpl.kt:TopologyDiscoveryRepositoryImpl$queryInterfaces(snmpClient, target, walkBudget, truncationReasons, snmpErrors, sessionRequestLimiter, tableObservations)</ID>
@@ -532,11 +566,17 @@
     <ID>MaxLineLength:TopologyDiscoveryRepositoryTest.kt:TopologyDiscoveryRepositoryTest$val second = withContext(Dispatchers.IO) { runCatching { client.walk(target, "1.3.6.1.2.1.1", SnmpWalkBudget(TopologyResourceLimits())) }.exceptionOrNull() }</ID>
     <ID>MaxLineLength:TopologyNodeParserTest.kt:TopologyNodeParserTest$val vendor = TopologyNodeParser.parseVendor("Juniper Networks, Inc. ex2300 Ethernet Switch, kernel JUNOS 20.4R1")</ID>
     <ID>MaxLineLength:TopologyOperationBudgetTest.kt:TopologyOperationBudgetTest$assertTrue(TopologyOperationBudget.estimatedTimeoutMillis(oversized) &gt; TopologyOperationBudget.HARD_CEILING_MILLIS)</ID>
+    <ID>MaxLineLength:TopologyParamsValidator.kt:TopologyParamsValidator$errors.add(error(ErrorCode.SNMP_COMMUNITY_BLANK, "Community string must not be blank for SNMP v1/v2c"))</ID>
+    <ID>MaxLineLength:TopologyParamsValidator.kt:TopologyParamsValidator$errors.add(error(ErrorCode.SNMP_V3_AUTH_PASSWORD_BLANK, "Authentication password must not be blank when authentication is enabled"))</ID>
+    <ID>MaxLineLength:TopologyParamsValidator.kt:TopologyParamsValidator$errors.add(error(ErrorCode.SNMP_V3_PRIV_PASSWORD_BLANK, "Privacy password must not be blank when privacy is enabled"))</ID>
+    <ID>MaxLineLength:TopologyParamsValidator.kt:TopologyParamsValidator$errors.add(error(ErrorCode.SNMP_V3_PRIV_WITHOUT_AUTH, "SNMP v3 privacy requires an authentication protocol"))</ID>
     <ID>MaxLineLength:WhoisBlockingTransportTest.kt:WhoisBlockingTransportTest$fun</ID>
     <ID>MaxLineLength:WhoisRdapIntegrationTest.kt:WhoisRdapIntegrationTest$Triple("8.8.8.8", WhoisQueryType.IPV4, """{"objectClassName":"ip network","ipVersion":"v4","name":"PUBLIC"}""")</ID>
     <ID>MaxLineLength:WhoisRdapIntegrationTest.kt:WhoisRdapIntegrationTest$Triple("AS15169", WhoisQueryType.ASN, """{"objectClassName":"autnum","name":"GOOGLE","startAutnum":15169,"endAutnum":15169}""")</ID>
     <ID>MaxLineLength:WhoisRdapIntegrationTest.kt:WhoisRdapIntegrationTest$client { url -&gt; if (url == bootstrapUrl) bootstrapResponse() else RdapHttpResponse(200, "{}", url.toString()) }</ID>
+    <ID>MaxLineLength:WhoisRepository.kt:WhoisRepository$WhoisProtocol.RDAP -&gt; NetworkResult.error(ErrorCode.WHOIS_UNAVAILABLE, developerMessage = "RDAP is not supported by this repository")</ID>
     <ID>MaxLineLength:WhoisRepository.kt:WhoisRepository$suspend</ID>
+    <ID>MaxLineLength:WhoisRepositoryImpl.kt:WhoisRepositoryImpl$if (query.isBlank()) return NetworkResult.error(ErrorCode.QUERY_BLANK, developerMessage = "Query must not be blank")</ID>
     <ID>NestedBlockDepth:MdnsDiscoverySession.kt:MdnsDiscoverySession$fun process: MdnsSessionResult</ID>
     <ID>NestedBlockDepth:PortScanRepositoryImpl.kt:PortScanRepositoryImpl.Companion$private fun scopedDefaultChecker: PortConnectChecker</ID>
     <ID>NestedBlockDepth:ResourceScope.kt:ResourceScope$override fun close</ID>
@@ -625,9 +665,9 @@
     <ID>ThrowingExceptionFromFinally:OperationRunner.kt:OperationRunner$throw observedCloseFailure</ID>
     <ID>ThrowingExceptionFromFinally:TlsInspectorRepositoryImpl.kt:TlsInspectorRepositoryImpl$throw closeFailure</ID>
     <ID>ThrowsCount:BoundSockets.kt:private fun &lt;T : Closeable&gt; NetworkBinder.createBoundSocket: T</ID>
-    <ID>ThrowsCount:GeoIpRepositoryImpl.kt:GeoIpRepositoryImpl$private suspend fun net.aieat.netswissknife.core.network.operation.OperationContext.fetchGeoIp: HopGeoLocation?</ID>
     <ID>ThrowsCount:HttpProbeRepositoryImpl.kt:HttpProbeRepositoryImpl$private suspend fun probeInternal: NetworkResult&lt;HttpProbeResult&gt;</ID>
     <ID>ThrowsCount:LanScanRepositoryImpl.kt:LanScanRepositoryImpl$private suspend fun enrich: LanHost</ID>
+    <ID>ThrowsCount:OkHttpEngine.kt:internal fun validateResponseHeaderLimits</ID>
     <ID>ThrowsCount:OperationRunner.kt:OperationRunner$@OptIn(InternalCoroutinesApi::class) suspend fun &lt;T&gt; run: T</ID>
     <ID>ThrowsCount:PortScanBlockingResolver.kt:PortScanBlockingResolver$suspend fun resolve: java.net.InetAddress</ID>
     <ID>ThrowsCount:PortScanRepositoryImpl.kt:P10TlsSubjectProbe$override fun inspect: String?</ID>
@@ -640,6 +680,7 @@
     <ID>ThrowsCount:Snmp4jClientImpl.kt:Snmp4jClientImpl$private fun initializeBlocking</ID>
     <ID>ThrowsCount:Snmp4jClientImpl.kt:Snmp4jClientImpl$private suspend fun ensureInitialized</ID>
     <ID>ThrowsCount:Snmp4jClientImpl.kt:Snmp4jClientImpl$private suspend fun targetFor: Pair&lt;Target&lt;*&gt;, UdpAddress&gt;</ID>
+    <ID>ThrowsCount:TlsInspectorRepositoryFakeEngineTest.kt:TlsInspectorRepositoryFakeEngineTest.FakeEngine.&lt;no name provided&gt;$override fun handshake</ID>
     <ID>ThrowsCount:TlsInspectorRepositoryImpl.kt:TlsInspectorRepositoryImpl$private suspend fun performHandshake: TimedHandshake</ID>
     <ID>ThrowsCount:UdpExchange.kt:NetworkBoundUdpExchange$private fun openSocket: DatagramSocket</ID>
     <ID>ThrowsCount:UsmUserSpecFactory.kt:UsmUserSpecFactory$fun from: UsmUserSpec</ID>
@@ -648,12 +689,13 @@
     <ID>ThrowsCount:WhoisRepositoryImpl.kt:WhoisRepositoryImpl$private suspend fun performIpAsnLookup: NetworkResult&lt;WhoisResult&gt;</ID>
     <ID>ThrowsCount:WhoisRepositoryImpl.kt:WhoisRepositoryImpl$private suspend fun tryRdapLookup: NetworkResult&lt;WhoisResult&gt;?</ID>
     <ID>TooGenericExceptionCaught:BoundSockets.kt:error: Exception</ID>
+    <ID>TooGenericExceptionCaught:CancellableSnmpSession.kt:CancellableSnmpSession$failure: Throwable</ID>
     <ID>TooGenericExceptionCaught:DnsRepositoryImpl.kt:DnsRepositoryImpl$e: Exception</ID>
     <ID>TooGenericExceptionCaught:DnsRepositoryImpl.kt:DnsRepositoryImpl$failure: Throwable</ID>
     <ID>TooGenericExceptionCaught:HttpProbeRepositoryImpl.kt:HttpProbeRepositoryImpl$e: Exception</ID>
     <ID>TooGenericExceptionCaught:HttpProbeRepositoryImpl.kt:HttpProbeRepositoryImpl$failure: Exception</ID>
     <ID>TooGenericExceptionCaught:NetworkCache.kt:NetworkCache$failure: Throwable</ID>
-    <ID>TooGenericExceptionCaught:OperationRunner.kt:OperationRunner$closeFailure: Throwable</ID>
+    <ID>TooGenericExceptionCaught:OperationCleanupExecutor.kt:OperationCleanupExecutor$failure: Throwable</ID>
     <ID>TooGenericExceptionCaught:OperationRunner.kt:OperationRunner$failure: Throwable</ID>
     <ID>TooGenericExceptionCaught:PingBlockingCallExecutor.kt:PingBlockingCallExecutor$failure: Exception</ID>
     <ID>TooGenericExceptionCaught:PingBlockingCallExecutor.kt:PingBlockingCallExecutor.ScopedFutureTask$failure: Exception</ID>
@@ -673,6 +715,8 @@
     <ID>TooGenericExceptionCaught:Snmp4jClientImpl.kt:Snmp4jClientImpl$failure: Exception</ID>
     <ID>TooGenericExceptionCaught:Snmp4jClientImpl.kt:Snmp4jClientImpl$failure: Throwable</ID>
     <ID>TooGenericExceptionCaught:Snmp4jClientImpl.kt:Snmp4jClientImpl.&lt;no name provided&gt;$error: Exception</ID>
+    <ID>TooGenericExceptionCaught:SpeedTestHostResolver.kt:SpeedTestHostResolver$failure: Exception</ID>
+    <ID>TooGenericExceptionCaught:SpeedTestHostResolver.kt:SpeedTestHostResolver.ResolverTask$failure: Exception</ID>
     <ID>TooGenericExceptionCaught:SpeedTestRepositoryImpl.kt:SpeedTestRepositoryImpl$e: Exception</ID>
     <ID>TooGenericExceptionCaught:SpeedTestRepositoryImpl.kt:SpeedTestRepositoryImpl$failure: Exception</ID>
     <ID>TooGenericExceptionCaught:SpeedTestRepositoryImpl.kt:SpeedTestRepositoryImpl.ConnectionLease$closeFailure: Throwable</ID>
@@ -705,6 +749,8 @@
     <ID>TooManyFunctions:WhoisRepositoryImpl.kt:WhoisRepositoryImpl : WhoisRepository</ID>
     <ID>TooManyFunctions:WhoisResponseParser.kt:WhoisResponseParser</ID>
     <ID>UnusedParameter:TopologyDiscoveryRepositoryImpl.kt:TopologyDiscoveryRepositoryImpl$vendor: String?</ID>
+    <ID>UnusedParameter:TransferEngine.kt:durationMs: Long</ID>
+    <ID>UnusedParameter:TransferEngine.kt:url: String</ID>
     <ID>WildcardImport:TopologyDiscoveryRepositoryTest.kt:import io.mockk.*</ID>
     <ID>WildcardImport:TopologyDiscoveryRepositoryTest.kt:import org.junit.jupiter.api.Assertions.*</ID>
     <ID>WildcardImport:TopologyNodeParserTest.kt:import org.junit.jupiter.api.Assertions.*</ID>

@@ -207,21 +207,18 @@ class RecentHostsRepositoryTest {
             repository.sanitizeRecents(AppPreferenceKeys.RECENT_HTTP_HOSTS, ::safeHttpRecentOrigin)
 
             assertEquals(
-                listOf("https://example.com", "http://other.example"),
+                listOf("https://example.com"),
                 repository.getRecents(AppPreferenceKeys.RECENT_HTTP_HOSTS).first()
             )
             val stored = dataStore.data.first()
-            assertEquals("https://example.com|http://other.example", stored[AppPreferenceKeys.RECENT_HTTP_HOSTS])
+            assertEquals("https://example.com", stored[AppPreferenceKeys.RECENT_HTTP_HOSTS])
             assertEquals("dns.example", stored[AppPreferenceKeys.RECENT_DNS_HOSTS])
 
             repository.sanitizeRecents(AppPreferenceKeys.RECENT_HTTP_HOSTS, ::safeHttpRecentOrigin)
-            assertEquals("https://example.com|http://other.example", dataStore.data.first()[AppPreferenceKeys.RECENT_HTTP_HOSTS])
+            assertEquals("https://example.com", dataStore.data.first()[AppPreferenceKeys.RECENT_HTTP_HOSTS])
 
             repository.removeRecent(AppPreferenceKeys.RECENT_HTTP_HOSTS, "https://example.com")
-            assertEquals(
-                listOf("http://other.example"),
-                repository.getRecents(AppPreferenceKeys.RECENT_HTTP_HOSTS).first()
-            )
+            assertTrue(repository.getRecents(AppPreferenceKeys.RECENT_HTTP_HOSTS).first().isEmpty())
         }
     }
 }

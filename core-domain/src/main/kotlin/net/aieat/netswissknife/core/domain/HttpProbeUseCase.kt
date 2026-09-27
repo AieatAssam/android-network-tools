@@ -91,12 +91,17 @@ fun validateHttpProbeUrlInfo(rawUrl: String): net.aieat.netswissknife.core.netwo
     if (parsedUrl.protocol.lowercase(Locale.ROOT) !in setOf("http", "https")) {
         return validationError(ErrorCode.URL_SCHEME_UNSUPPORTED, "Only HTTP and HTTPS URLs are supported")
     }
-
     val host = uri.host ?: parsedUrl.host.takeIf { it.isNotBlank() }
         ?: return validationError(ErrorCode.URL_INVALID, "URL must include a valid host")
     if (host.endsWith('.')) return validationError(ErrorCode.URL_INVALID, "URL host is incomplete")
     if (!HostValidator.isValidHostname(host)) return validationError(ErrorCode.URL_INVALID, "URL must include a valid host")
     if (uri.port != -1 && uri.port !in 1..65_535) return validationError(ErrorCode.PORT_OUT_OF_RANGE, "URL port must be between 1 and 65535", uri.port, 1, 65_535)
+    if (parsedUrl.protocol.equals("http", ignoreCase = true)) {
+        return validationError(
+            ErrorCode.HTTP_CLEARTEXT_DISABLED,
+            "Plain HTTP requests are disabled in this release. Use an HTTPS URL.",
+        )
+    }
 
     return null
 }

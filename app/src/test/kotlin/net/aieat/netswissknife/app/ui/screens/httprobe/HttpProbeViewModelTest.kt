@@ -163,7 +163,7 @@ class HttpProbeViewModelTest {
     }
 
     @Test
-    fun `IPv6 targets get a valid bracketed editable HTTP URL`() {
+    fun `IPv6 HTTP targets get a bracketed URL and cleartext guidance`() {
         listOf("fe80::1%wlan0", "[fe80::1%wlan0]", "[2001:db8::1]").forEach { host ->
             val target =
                 ToolDestination.HostTarget(
@@ -176,7 +176,10 @@ class HttpProbeViewModelTest {
 
             val expectedHost = if ("%" in host) "fe80::1%25wlan0" else "2001:db8::1"
             assertEquals("http://[$expectedHost]:8080/", url)
-            assertNull(validateHttpProbeUrl(url))
+            assertEquals(
+                "Plain HTTP requests are disabled in this release. Use an HTTPS URL.",
+                validateHttpProbeUrl(url),
+            )
         }
     }
 
@@ -382,7 +385,7 @@ class HttpProbeViewModelTest {
 
         val recoveringState = SavedStateHandle(mapOf("intent" to "ti1.invalid", "host" to "printer.local"))
         val recovering = HttpProbeViewModel(useCase, recentHostsRepository, savedStateHandle = recoveringState)
-        recovering.onUrlChange("http://replacement.local/")
+        recovering.onUrlChange("https://replacement.local/")
         assertFalse(recovering.hasInvalidHandoff.value)
         assertEquals(true, recoveringState.get<Boolean>("handoffRecovered"))
 
@@ -395,13 +398,13 @@ class HttpProbeViewModelTest {
                         mapOf(
                             "intent" to "ti1.invalid",
                             "host" to "printer.local",
-                            "editedHttpUrl" to "http://replacement.local/",
+                            "editedHttpUrl" to "https://replacement.local/",
                             "handoffRecovered" to true,
                         ),
                     ),
             )
         assertFalse(restored.hasInvalidHandoff.value)
-        assertEquals("http://replacement.local/", restored.uiState.value.url)
+        assertEquals("https://replacement.local/", restored.uiState.value.url)
         coVerify(exactly = 0) { useCase(any(), any()) }
     }
 
@@ -615,8 +618,10 @@ class HttpProbeViewModelTest {
 
                 finishRequest.complete(NetworkResult.Success(stubResult.copy(request = request)))
                 val completed =
-                    withTimeout(5_000) {
-                        inFlightViewModel.uiState.first { !it.isLoading }
+                    withContext(Dispatchers.Default) {
+                        withTimeout(5_000) {
+                            inFlightViewModel.uiState.first { !it.isLoading }
+                        }
                     }
                 assertEquals(request, completed.result?.request)
                 assertEquals(request.url, completed.url)
@@ -816,7 +821,7 @@ class HttpProbeViewModelTest {
 
                 assertEquals(
                     "curl -X 'POST' -H 'Content-Type: application/json' " +
-                        "--data-raw '{\"ok\":true}' 'https://example.com/api'",
+                        "--data-raw '{\"ok\":true}' --proto '=https' 'https://example.com/api'",
                     viewModel.copyAsCurl(),
                 )
                 assertEquals(false, viewModel.uiState.value.prettyJson)

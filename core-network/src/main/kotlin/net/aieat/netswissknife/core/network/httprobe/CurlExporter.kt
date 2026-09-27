@@ -20,10 +20,9 @@ object CurlExporter {
             if (request.method.supportsBody && request.body != null) {
                 append(" --data-raw ").append(quote(request.body))
             }
+            append(" --proto '=https'")
             if (request.followRedirects && !redirectFollowingSuppressed(request)) {
-                val redirectProtocols =
-                    if (request.url.startsWith("https://", ignoreCase = true)) "https" else "http,https"
-                append(" --proto-redir '").append('=').append(redirectProtocols).append('\'')
+                append(" --proto-redir '=https'")
                 append(" --max-redirs ").append(RedirectPolicy.MAX_REDIRECTS)
                 append(" -L")
             }

@@ -132,7 +132,9 @@ import net.aieat.netswissknife.core.network.httprobe.SecurityHeaderCheck
 import net.aieat.netswissknife.core.network.httprobe.SecurityRating
 import net.aieat.netswissknife.core.network.httprobe.engine.HttpTimings
 import net.aieat.netswissknife.core.network.httprobe.engine.HttpTimingBreakdown
-import net.aieat.netswissknife.core.domain.validateHttpProbeUrl
+import net.aieat.netswissknife.app.ui.i18n.ErrorTextMapper
+import net.aieat.netswissknife.app.ui.i18n.asString
+import net.aieat.netswissknife.core.domain.validateHttpProbeUrlInfo
 import net.aieat.netswissknife.app.ui.navigation.ToolSource
 
 // ── Screen ────────────────────────────────────────────────────────────────────
@@ -484,7 +486,8 @@ private fun HttpProbeInputCard(
     val focusManager = LocalFocusManager.current
     val url = uiState.url
     val formEnabled = !uiState.isLoading
-    val isUrlInvalid = url.isNotBlank() && validateHttpProbeUrl(url) != null
+    val urlValidationError = if (url.isNotBlank()) validateHttpProbeUrlInfo(url) else null
+    val isUrlInvalid = urlValidationError != null
 
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -508,7 +511,14 @@ private fun HttpProbeInputCard(
                 },
                 isError = isUrlInvalid,
                 supportingText = if (isUrlInvalid) {
-                    { Text(stringResource(R.string.error_invalid_url)) }
+                    {
+                        Text(
+                            ErrorTextMapper.map(
+                                urlValidationError,
+                                stringResource(R.string.error_invalid_url),
+                            ).asString(),
+                        )
+                    }
                 } else null,
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),

@@ -15,10 +15,10 @@ class HttpRecentOriginTest {
     }
 
     @Test
-    fun `keeps a non-default port`() {
+    fun `keeps a non-default HTTPS port`() {
         assertEquals(
-            "http://example.com:8080",
-            safeHttpRecentOrigin("http://example.com:8080/private?token=secret")
+            "https://example.com:8443",
+            safeHttpRecentOrigin("https://example.com:8443/private?token=secret"),
         )
     }
 
@@ -26,7 +26,7 @@ class HttpRecentOriginTest {
     fun `normalizes internationalized hostnames`() {
         assertEquals(
             "https://xn--bcher-kva.example",
-            safeHttpRecentOrigin("https://Bücher.example/private")
+            safeHttpRecentOrigin("https://Bücher.example/private"),
         )
     }
 
@@ -34,18 +34,19 @@ class HttpRecentOriginTest {
     fun `normalizes ipv6 address and preserves custom port`() {
         assertEquals(
             "https://[2001:db8::1]:8443",
-            safeHttpRecentOrigin("https://[2001:DB8::1]:8443/path")
+            safeHttpRecentOrigin("https://[2001:DB8::1]:8443/path"),
         )
     }
 
     @Test
-    fun `rejects invalid and non-http urls`() {
+    fun `rejects invalid non-HTTP and cleartext HTTP URLs`() {
         listOf(
             "",
             "https:///missing-host?token=secret",
             "https://example.com:0/secret",
+            "http://example.com:8080/private",
             "ftp://example.com/private?token=secret",
-            "not a URL"
+            "not a URL",
         ).forEach { raw -> assertNull(safeHttpRecentOrigin(raw), raw) }
     }
 }

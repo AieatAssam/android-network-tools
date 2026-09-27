@@ -39,6 +39,7 @@ object ErrorTextMapper {
         ErrorCode.URL_INVALID -> R.string.err_url_invalid
         ErrorCode.URL_MALFORMED -> R.string.err_url_malformed
         ErrorCode.URL_SCHEME_UNSUPPORTED -> R.string.err_url_scheme_unsupported
+        ErrorCode.HTTP_CLEARTEXT_DISABLED -> R.string.err_http_cleartext_disabled
         ErrorCode.HTTPS_DOWNGRADE_BLOCKED -> R.string.err_https_downgrade_blocked
         ErrorCode.TIMEOUT_OUT_OF_RANGE -> R.string.err_timeout_out_of_range
         ErrorCode.RESPONSE_SIZE_OUT_OF_RANGE -> R.string.err_response_size_out_of_range

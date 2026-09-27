@@ -20,6 +20,7 @@ detekt {
     config.setFrom(rootProject.file("config/detekt/detekt.yml"))
     buildUponDefaultConfig = true
     baseline = rootProject.file("config/detekt/app-baseline.xml")
+    failOnSeverity = dev.detekt.gradle.extensions.FailOnSeverity.Warning
     parallel = false
     basePath.set(projectDir)
 }

@@ -124,7 +124,7 @@ sealed class NavRoutes(
             ToolInfo("topology",   "Network Topology", "Topology", Icons.Default.AccountTree, "SNMP switch & neighbour discovery"),
             ToolInfo("tls",        "TLS Inspector",    "TLS",      Icons.Default.Lock,         "SSL/TLS certificate chain inspector"),
             ToolInfo("whois",      "WHOIS Lookup",  "WHOIS", Icons.AutoMirrored.Filled.ManageSearch, "Domain and IP registration lookup"),
-            ToolInfo("httprobe",   "HTTP Probe",    "HTTP",  Icons.Default.Http,          "HTTP/HTTPS request tester with security header analysis"),
+            ToolInfo("httprobe",   "HTTP Probe",    "HTTP",  Icons.Default.Http,          "HTTPS request tester with security header analysis"),
             ToolInfo("subnet",     "Subnet Calc",   "Subnet", Icons.Default.Calculate,     "IPv4 subnet calculator with binary breakdown and notation conversion"),
             ToolInfo("mdns",       "mDNS Browser",  "mDNS",  Icons.Default.CellTower,      "Discover LAN services via multicast DNS"),
             ToolInfo("speedtest",  "Speed Test",    "Speed", Icons.Default.Speed,          "Download, upload speed and latency via Cloudflare"),

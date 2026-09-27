@@ -14,6 +14,7 @@
     <string name="err_url_invalid">The URL is invalid.</string>
     <string name="err_url_malformed">The URL could not be parsed.</string>
     <string name="err_url_scheme_unsupported">This URL scheme is not supported.</string>
+    <string name="err_http_cleartext_disabled">Plain HTTP requests are disabled in this release. Use an HTTPS URL.</string>
     <string name="err_https_downgrade_blocked">The HTTPS redirect to an insecure connection was blocked.</string>
     <string name="err_timeout_out_of_range">The timeout must be between %1$d and %2$d milliseconds.</string>
     <string name="err_response_size_out_of_range">The response size limit must be between %1$d and %2$d bytes.</string>
@@ -773,7 +774,7 @@
 
     <!-- HTTP Probe Screen -->
     <string name="httprobe_screen_title">HTTP Probe</string>
-    <string name="httprobe_screen_subtitle">Test HTTP/HTTPS requests with full header and security analysis</string>
+    <string name="httprobe_screen_subtitle">Test HTTPS requests with full header and security analysis. Plain HTTP is disabled in this release.</string>
 
     <!-- HTTP Probe Input -->
     <string name="httprobe_url_label">URL</string>
@@ -799,7 +800,7 @@
 
     <!-- HTTP Probe States -->
     <string name="httprobe_idle_title">Enter a URL to probe</string>
-    <string name="httprobe_idle_subtitle">Supports GET, POST, PUT, PATCH, DELETE, HEAD, and OPTIONS. Includes security header analysis.</string>
+    <string name="httprobe_idle_subtitle">Supports HTTPS GET, POST, PUT, PATCH, DELETE, HEAD, and OPTIONS. Includes security header analysis.</string>
     <string name="httprobe_error_title">Request failed</string>
     <string name="httprobe_blocked_redirect_title">Insecure redirect blocked</string>
     <string name="httprobe_blocked_redirect_message">The HTTPS server returned HTTP %1$d and pointed to an insecure HTTP address. The destination was not contacted.</string>
@@ -1293,7 +1294,7 @@
     <string name="help_httprobe_concept_heading">What happens when you "visit" a URL?</string>
     <string name="help_httprobe_concept_body">When you request a URL, your device opens a connection to a server and sends a small text message describing what you want - the method, headers, maybe a body. The server replies with a status code, its own headers, and the content. This tool lets you send that request directly and inspect the entire exchange, including security-related response headers browsers check automatically but rarely show you.</string>
     <string name="help_httprobe_what_heading">What it does</string>
-    <string name="help_httprobe_what_body">Sends an HTTP or HTTPS request to a URL and displays status, headers, body, redirect chain, timing breakdown, and security checks. Copy the request as cURL or pretty-print a JSON response.</string>
+    <string name="help_httprobe_what_body">Sends an HTTPS request to a URL and displays status, headers, body, redirect chain, timing breakdown, and security checks. Plain HTTP is disabled in this release. Copy the request as cURL or pretty-print a JSON response.</string>
     <string name="help_httprobe_params_heading">Key parameters</string>
     <string name="help_httprobe_results_heading">Reading the results</string>
     <string name="help_httprobe_security_heading">Security header checks</string>
