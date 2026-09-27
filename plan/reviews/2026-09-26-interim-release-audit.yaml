@@ -1,9 +1,10 @@
 meta:
-  reviewed_on: "2026-09-26"
+  reviewed_on: "2026-09-27"
   baseline_commit: "170fb52"
   branch: "plan/comprehensive-review-2026-09-22"
+  implementation_commit: "f0fade5de340cae6c19d3645bfe3797c142fc013"
   source: "User-supplied security, lifecycle, correctness, and release-quality review. Findings were rechecked against the current branch and grouped into interim-release gates."
-  implementation_status: "Candidate source commit 37fe8a5 contains the IR-1/IR-2 fixes and local automated checks pass. Public-release acceptance remains open for device checks, new-diagnostic quality gating, and R4-016 cleartext policy resolution."
+  implementation_status: "Commit f0fade5 closes the controllable source and quality-gate findings. The full serialized Android verification, required Python suites, resource-site inventory, and workflow SHA checks pass. HTTP Probe is HTTPS-only with Android base cleartext denied. Device checks and candidate GitHub workflow evidence remain open before public release."
   validation_policy: "Source confirmation is distinguished from runtime reproduction. No emulator or live SNMP endpoint was used for this review."
 
 findings:
@@ -120,12 +121,12 @@ findings:
   - id: R4-012
     priority: medium
     kind: quality_gate_gap
-    status: todo
+    status: done
     owner: IR-3
     title: "ktlint and detekt do not gate CI regressions"
     evidence: "Both jobs use continue-on-error and rely on large baselines containing broad exception-handling categories."
-    disposition: "Add a reviewed fresh-diagnostic/delta gate or otherwise make new findings fail CI without deleting the accepted backlog wholesale."
-    validation: "Demonstrate that a newly introduced lint/detekt issue fails CI while the unchanged baseline backlog does not."
+    disposition: "CI now treats ktlint and Detekt as blocking checks. Refreshed finding-specific baselines snapshot the existing backlog; Detekt fails from Warning severity upward. Temporary unbaselined style and Detekt canaries each made their task fail, then were removed."
+    validation: "Local ktlintCheck and detekt pass against the refreshed baselines; canaries confirmed each analyzer rejects a new diagnostic. Candidate GitHub CI remains a release gate."
 
   - id: R4-013
     priority: medium
@@ -160,12 +161,12 @@ findings:
   - id: R4-016
     priority: high
     kind: accepted_design_risk
-    status: todo
+    status: done
     owner: IR-1
     title: "Android cleartext policy is enabled app-wide for arbitrary-host HTTP Probe"
     evidence: "network_security_config.xml enables cleartextTrafficPermitted in base-config; HTTP Probe intentionally accepts arbitrary user hosts."
-    disposition: "The current process-wide cleartext exception remains an open public-release blocker. Resolve through a genuinely scoped HTTP Probe transport or disable plain-HTTP requests while setting base cleartext to false; record and test any behavior change."
-    validation: "No source fix yet. Inspect supported Android network-security mechanisms and validate the selected behavior before IR-3; do not claim a manifest-only change can scope this to one client."
+    disposition: "The interim release disables cleartext globally. The HTTP Probe validates and rejects plain-http URLs before dispatch with a localized HTTPS-only explanation; recent history drops persisted cleartext entries and cURL exports restrict both initial and redirected protocols to HTTPS."
+    validation: "Domain validation tests prove HTTP is rejected before repository dispatch; app tests cover visible URL validation, HTTPS recents, and HTTPS-only cURL output. Android base network policy is false. Plain-HTTP probing is intentionally unavailable in this interim build."
 
   - id: R4-017
     priority: medium
