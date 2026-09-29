@@ -17,11 +17,14 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
+import me.impa.icmpenguin.trace.Response
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
 import net.aieat.netswissknife.app.platform.LinkInfoProvider
@@ -29,6 +32,8 @@ import net.aieat.netswissknife.app.platform.NetworkStatus
 import net.aieat.netswissknife.app.platform.NetworkStatusProvider
 import net.aieat.netswissknife.app.platform.Transport
 import net.aieat.netswissknife.app.traceroute.IcmpEnginTracerouteRepositoryImpl
+import net.aieat.netswissknife.app.traceroute.TracerouteHostResolver
+import net.aieat.netswissknife.app.traceroute.mapNativeHop
 import net.aieat.netswissknife.core.domain.TracerouteFlowResult
 import net.aieat.netswissknife.core.domain.TracerouteParams
 import net.aieat.netswissknife.core.domain.TracerouteUseCase
@@ -36,6 +41,7 @@ import net.aieat.netswissknife.core.network.operation.CancellationReason
 import net.aieat.netswissknife.core.network.operation.OperationBudget
 import net.aieat.netswissknife.core.network.operation.OperationRunner
 import net.aieat.netswissknife.core.network.operation.OperationSession
+import net.aieat.netswissknife.core.network.traceroute.GeoIpRepository
 import net.aieat.netswissknife.core.network.traceroute.HopGeoLocation
 import net.aieat.netswissknife.core.network.traceroute.HopResult
 import net.aieat.netswissknife.core.network.traceroute.HopStatus
@@ -50,6 +56,7 @@ import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import me.impa.icmpenguin.trace.HopStatus as NativeHopStatus
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @DisplayName("TracerouteViewModel")
@@ -86,16 +93,44 @@ class TracerouteViewModelTest {
                 transport = Transport.WIFI,
             )
         localNetworkPermissionAllowed = true
-        viewModel =
-            TracerouteViewModel(
-                tracerouteUseCase,
-                recentHostsRepository,
-                object : NetworkStatusProvider {
-                    override val status = networkStatus
-                },
-                LinkInfoProvider({ true }, { localNetworkPermissionAllowed }),
-            )
+        viewModel = createViewModel()
     }
+
+    private fun createViewModel() =
+        TracerouteViewModel(
+            tracerouteUseCase,
+            recentHostsRepository,
+            object : NetworkStatusProvider {
+                override val status = networkStatus
+            },
+            LinkInfoProvider({ true }, { localNetworkPermissionAllowed }),
+        )
+
+    private fun createNativeAdapterUseCase(
+        resolvedTarget: String,
+        enrichment: CompletableDeferred<HopGeoLocation?>,
+    ) = TracerouteUseCase(
+        IcmpEnginTracerouteRepositoryImpl(
+            nativeTraceFactory = { _, _, _, _, _, _, _ ->
+                flowOf(
+                    mapNativeHop(
+                        NativeHopStatus(
+                            1,
+                            setOf("192.0.2.1"),
+                            listOf(Response.Success(1_500, 0)),
+                            false,
+                        ),
+                    ),
+                    HopResult(2, null, null, null, HopStatus.TIMEOUT),
+                )
+            },
+            hostResolver = TracerouteHostResolver { _, _ -> resolvedTarget },
+            dispatcher = Dispatchers.Unconfined,
+        ),
+        object : GeoIpRepository {
+            override suspend fun lookup(ip: String): HopGeoLocation? = enrichment.await()
+        },
+    )
 
     @AfterEach
     fun tearDown() {
@@ -344,6 +379,56 @@ class TracerouteViewModelTest {
                 viewModel.startTrace()
                 val state = viewModel.uiState.value as TracerouteUiState.Finished
                 assertEquals(2, state.result.hops.size)
+                assertEquals(null, state.result.resolvedIp)
+                assertEquals(false, state.result.reachedDestination)
+            }
+
+        @Test
+        fun `native adapter destination is retained through late enrichment when final hop fails`() =
+            runBlocking {
+                Dispatchers.setMain(Dispatchers.Unconfined)
+                viewModel = createViewModel()
+
+                val resolvedTarget = "203.0.113.7"
+                val enrichment = CompletableDeferred<HopGeoLocation?>()
+                val geoLocation =
+                    HopGeoLocation(
+                        ip = "192.0.2.1",
+                        country = "Example",
+                        countryCode = "EX",
+                        city = "Router",
+                        lat = 1.0,
+                        lon = 2.0,
+                    )
+                val useCase = createNativeAdapterUseCase(resolvedTarget, enrichment)
+                every { tracerouteUseCase(any(), any()) } answers {
+                    useCase(firstArg<TracerouteParams>(), secondArg<OperationSession>())
+                }
+
+                viewModel.onHostChange("example.com")
+                viewModel.startTrace()
+
+                val partial =
+                    withTimeout(2_000) {
+                        viewModel.uiState.first {
+                            it is TracerouteUiState.Running && it.hops.size == 2
+                        }
+                    } as TracerouteUiState.Running
+                assertEquals(2, partial.hops.size)
+                assertEquals(resolvedTarget, partial.hops.first().resolvedDestinationIp)
+                enrichment.complete(geoLocation)
+
+                val finished =
+                    withTimeout(2_000) {
+                        viewModel.uiState.first { it is TracerouteUiState.Finished }
+                    } as TracerouteUiState.Finished
+                val result = finished.result
+                assertEquals(resolvedTarget, result.resolvedIp)
+                assertEquals(HopStatus.TIMEOUT, result.hops.last().status)
+                assertEquals(resolvedTarget, result.hops.first().resolvedDestinationIp)
+                assertEquals(resolvedTarget, result.hops.last().resolvedDestinationIp)
+                assertEquals(geoLocation, result.hops.first().geoLocation)
+                assertEquals(false, result.reachedDestination)
             }
     }
 
@@ -567,7 +652,11 @@ class TracerouteViewModelTest {
 
         @Test
         fun `repository deadline after first native hop is retained as partial in ViewModel`() =
-            runTest {
+            runBlocking {
+                Dispatchers.setMain(Dispatchers.Unconfined)
+                viewModel = createViewModel()
+
+                val expectedHop = stubHop.copy(resolvedDestinationIp = "192.0.2.1")
                 val repository =
                     IcmpEnginTracerouteRepositoryImpl(
                         nativeTraceFactory = { _, _, _, _, _, _, _ ->
@@ -605,16 +694,20 @@ class TracerouteViewModelTest {
                 viewModel.startTrace()
 
                 val running =
-                    viewModel.uiState.first {
-                        it is TracerouteUiState.Running && stubHop in it.hops
+                    withTimeout(2_000) {
+                        viewModel.uiState.first {
+                            it is TracerouteUiState.Running && expectedHop in it.hops
+                        }
                     } as TracerouteUiState.Running
-                assertEquals(listOf(stubHop), running.hops)
+                assertEquals(listOf(expectedHop), running.hops)
 
                 val partial =
-                    viewModel.uiState.first { it is TracerouteUiState.Finished }
+                    withTimeout(2_000) {
+                        viewModel.uiState.first { it is TracerouteUiState.Finished }
+                    }
                         as TracerouteUiState.Finished
                 assertTrue(partial.timeLimitReached)
-                assertEquals(listOf(stubHop), partial.result.hops)
+                assertEquals(listOf(expectedHop), partial.result.hops)
             }
 
         @Test

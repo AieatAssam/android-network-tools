@@ -21,8 +21,22 @@ interface NetworkBinder {
      * that same network when local. Implementations must return false without binding when the
      * destination is not local or the selected network is no longer available.
      */
-    fun bindIfLocal(socket: Socket, destinationIp: String): Boolean
+    fun bindIfLocal(
+        socket: Socket,
+        destinationIp: String,
+    ): Boolean
 
+    /**
+     * Atomically classifies [destinationIp] against the selected network and binds [socket] to
+     * that same network when local. Implementations must return false without binding when the
+     * destination is not local or the selected network is no longer available.
+     */
+    fun bindIfLocal(
+        socket: DatagramSocket,
+        destinationIp: String,
+    ): Boolean
+
+    /** Binds [socket] to the selected local network, failing if required binding is unavailable. */
     fun bind(socket: DatagramSocket)
 
     fun localInterface(): NetworkInterface?
@@ -40,7 +54,15 @@ object NoOpNetworkBinder : NetworkBinder {
 
     override fun bind(socket: Socket) = Unit
 
-    override fun bindIfLocal(socket: Socket, destinationIp: String): Boolean = false
+    override fun bindIfLocal(
+        socket: Socket,
+        destinationIp: String,
+    ): Boolean = false
+
+    override fun bindIfLocal(
+        socket: DatagramSocket,
+        destinationIp: String,
+    ): Boolean = false
 
     override fun bind(socket: DatagramSocket) = Unit
 

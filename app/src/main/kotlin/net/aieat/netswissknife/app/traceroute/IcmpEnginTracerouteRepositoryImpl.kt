@@ -1,15 +1,7 @@
 package net.aieat.netswissknife.app.traceroute
 
-import net.aieat.netswissknife.core.network.traceroute.HopResult
-import net.aieat.netswissknife.core.network.traceroute.HopStatus
-import net.aieat.netswissknife.core.network.traceroute.TracerouteProbeType
-import net.aieat.netswissknife.core.network.traceroute.TracerouteRepository
-import net.aieat.netswissknife.core.network.traceroute.TracerouteOperation
-import net.aieat.netswissknife.core.network.operation.OperationRunner
-import net.aieat.netswissknife.core.network.operation.OperationSession
-import net.aieat.netswissknife.core.network.operation.OperationDeadlineExceededException
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
@@ -18,14 +10,22 @@ import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withTimeoutOrNull
 import me.impa.icmpenguin.ProbeType
 import me.impa.icmpenguin.trace.PortStrategy
 import me.impa.icmpenguin.trace.ProbeSize
 import me.impa.icmpenguin.trace.Response
 import me.impa.icmpenguin.trace.SimpleTracer
+import net.aieat.netswissknife.core.network.operation.OperationDeadlineExceededException
+import net.aieat.netswissknife.core.network.operation.OperationRunner
+import net.aieat.netswissknife.core.network.operation.OperationSession
+import net.aieat.netswissknife.core.network.traceroute.HopResult
+import net.aieat.netswissknife.core.network.traceroute.HopStatus
+import net.aieat.netswissknife.core.network.traceroute.TracerouteOperation
+import net.aieat.netswissknife.core.network.traceroute.TracerouteProbeType
+import net.aieat.netswissknife.core.network.traceroute.TracerouteRepository
 
 /**
  * [TracerouteRepository] implementation powered by the **icmpenguin** library.
@@ -51,27 +51,27 @@ class IcmpEnginTracerouteRepositoryImpl(
     private val hostResolver: TracerouteHostResolver = BoundedTracerouteHostResolver(),
     private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : TracerouteRepository {
-
     override fun trace(
         host: String,
         maxHops: Int,
         timeoutMs: Int,
         probesPerHop: Int,
         probeType: TracerouteProbeType,
-        packetSize: Int
-    ): Flow<HopResult> = flow {
-        emitAll(
-            trace(
-                host,
-                maxHops,
-                timeoutMs,
-                probesPerHop,
-                probeType,
-                packetSize,
-                TracerouteOperation.newSession(maxHops, timeoutMs, probesPerHop),
+        packetSize: Int,
+    ): Flow<HopResult> =
+        flow {
+            emitAll(
+                trace(
+                    host,
+                    maxHops,
+                    timeoutMs,
+                    probesPerHop,
+                    probeType,
+                    packetSize,
+                    TracerouteOperation.newSession(maxHops, timeoutMs, probesPerHop),
+                ),
             )
-        )
-    }.flowOn(dispatcher)
+        }.flowOn(dispatcher)
 
     override fun trace(
         host: String,
@@ -81,56 +81,62 @@ class IcmpEnginTracerouteRepositoryImpl(
         probeType: TracerouteProbeType,
         packetSize: Int,
         operationSession: OperationSession,
-    ): Flow<HopResult> = channelFlow {
-        OperationRunner.runOrJoin(operationSession) {
-            val remainingMillis = operationSession.budget.remainingTimeoutMillis()
-            if (operationSession.budget.hasDeadline && remainingMillis <= 0L) {
-                throw OperationDeadlineExceededException()
-            }
-            val resolutionBudgetMillis = if (operationSession.budget.hasDeadline) {
-                minOf(MAX_HOSTNAME_RESOLUTION_WAIT_MILLIS, remainingMillis)
-            } else {
-                MAX_HOSTNAME_RESOLUTION_WAIT_MILLIS
-            }
-            val resolvedHost = withTimeoutOrNull(resolutionBudgetMillis) {
-                hostResolver.resolve(host, operationSession)
-            } ?: run {
-                operationSession.budget.throwIfExpired()
-                throw TracerouteHostResolutionTimeoutException()
-            }
-            currentCoroutineContext().ensureActive()
-            operationSession.budget.throwIfExpired()
-            val nativeConcurrency = nativeTraceConcurrency(
-                probesPerHop,
-                operationSession.budget.maxConcurrentProbes,
-            )
-            val nativeFlow = try {
-                nativeTraceFactory(
-                    resolvedHost,
-                    maxHops,
-                    timeoutMs,
-                    probesPerHop,
-                    probeType,
-                    packetSize,
-                    nativeConcurrency,
-                )
-            } catch (_: LinkageError) {
-                throw NativeTracerouteUnavailableException()
-            }
-            operationSession.concurrencyLimiter.withPermits(nativeConcurrency) {
-                nativeFlow.catch { failure ->
-                    if (failure is LinkageError) throw NativeTracerouteUnavailableException()
-                    throw failure
+    ): Flow<HopResult> =
+        channelFlow {
+            OperationRunner.runOrJoin(operationSession) {
+                val remainingMillis = operationSession.budget.remainingTimeoutMillis()
+                if (operationSession.budget.hasDeadline && remainingMillis <= 0L) {
+                    throw OperationDeadlineExceededException()
                 }
-                    .collect { hop ->
-                        currentCoroutineContext().ensureActive()
-                        operationSession.budget.throwIfExpired()
-                        this@channelFlow.send(hop)
+                val resolutionBudgetMillis =
+                    if (operationSession.budget.hasDeadline) {
+                        minOf(MAX_HOSTNAME_RESOLUTION_WAIT_MILLIS, remainingMillis)
+                    } else {
+                        MAX_HOSTNAME_RESOLUTION_WAIT_MILLIS
                     }
+                val resolvedHost =
+                    withTimeoutOrNull(resolutionBudgetMillis) {
+                        hostResolver.resolve(host, operationSession)
+                    } ?: run {
+                        operationSession.budget.throwIfExpired()
+                        throw TracerouteHostResolutionTimeoutException()
+                    }
+                currentCoroutineContext().ensureActive()
+                operationSession.budget.throwIfExpired()
+                val nativeConcurrency =
+                    nativeTraceConcurrency(
+                        probesPerHop,
+                        operationSession.budget.maxConcurrentProbes,
+                    )
+                val nativeFlow =
+                    try {
+                        nativeTraceFactory(
+                            resolvedHost,
+                            maxHops,
+                            timeoutMs,
+                            probesPerHop,
+                            probeType,
+                            packetSize,
+                            nativeConcurrency,
+                        )
+                    } catch (_: LinkageError) {
+                        throw NativeTracerouteUnavailableException()
+                    }
+                operationSession.concurrencyLimiter.withPermits(nativeConcurrency) {
+                    nativeFlow
+                        .catch { failure ->
+                            if (failure is LinkageError) throw NativeTracerouteUnavailableException()
+                            throw failure
+                        }.map { hop ->
+                            hop.copy(resolvedDestinationIp = resolvedHost.takeIf(String::isNotBlank))
+                        }.collect { hop ->
+                            currentCoroutineContext().ensureActive()
+                            operationSession.budget.throwIfExpired()
+                            this@channelFlow.send(hop)
+                        }
+                }
             }
-        }
-    }.flowOn(dispatcher)
-
+        }.flowOn(dispatcher)
 }
 
 /** Stable failure when the bounded hostname lookup reaches its independent time limit. */
@@ -145,30 +151,35 @@ private fun nativeTrace(
     packetSize: Int,
     concurrency: Int,
 ): Flow<HopResult> {
-    val icmpProbeType = when (probeType) {
-        TracerouteProbeType.ICMP -> ProbeType.ICMP
-        TracerouteProbeType.UDP -> ProbeType.UDP
-    }
+    val icmpProbeType =
+        when (probeType) {
+            TracerouteProbeType.ICMP -> ProbeType.ICMP
+            TracerouteProbeType.UDP -> ProbeType.UDP
+        }
     val probeSize = if (packetSize == 0) ProbeSize.MtuDiscovery else ProbeSize.Static(packetSize)
-    val tracer = SimpleTracer(
-        host = host,
-        probeType = icmpProbeType,
-        timeout = timeoutMs,
-        maxHops = maxHops,
-        probesPerHop = probesPerHop,
-        concurrency = concurrency,
-        portStrategy = PortStrategy.Sequential(),
-        probeSize = probeSize,
-    )
+    val tracer =
+        SimpleTracer(
+            host = host,
+            probeType = icmpProbeType,
+            timeout = timeoutMs,
+            maxHops = maxHops,
+            probesPerHop = probesPerHop,
+            concurrency = concurrency,
+            portStrategy = PortStrategy.Sequential(),
+            probeSize = probeSize,
+        )
     return tracer.trace().map(::mapNativeHop)
 }
 
 /** Preserve each probe slot so the UI can distinguish replies from timeouts. */
 internal fun mapNativeHop(icmpHop: me.impa.icmpenguin.trace.HopStatus): HopResult {
+    // A TTL can have replies from multiple routers. Keep the responder selection separate
+    // from destination evidence: icmpenguin's isLast identifies a destination response.
     val ip = icmpHop.ips.firstOrNull()
-    val probeRttsMs = icmpHop.probes.map { response ->
-        (response as? Response.Success)?.timeUsec?.toLong()?.div(1_000L)
-    }
+    val probeRttsMs =
+        icmpHop.probes.map { response ->
+            (response as? Response.Success)?.timeUsec?.toLong()?.div(1_000L)
+        }
     val status = if (ip != null) HopStatus.SUCCESS else HopStatus.TIMEOUT
     return HopResult(
         hopNumber = icmpHop.num,
@@ -177,11 +188,15 @@ internal fun mapNativeHop(icmpHop: me.impa.icmpenguin.trace.HopStatus): HopResul
         rtTimeMs = probeRttsMs.firstOrNull { it != null },
         status = status,
         probeRttsMs = probeRttsMs,
+        destinationReached = icmpHop.isLast,
     )
 }
 
 /** Reserve one session slot for concurrent enrichment when the budget has room for both. */
-internal fun nativeTraceConcurrency(probesPerHop: Int, sessionLimit: Int): Int =
+internal fun nativeTraceConcurrency(
+    probesPerHop: Int,
+    sessionLimit: Int,
+): Int =
     minOf(
         probesPerHop.coerceAtLeast(1),
         nativeSessionConcurrency(sessionLimit),
@@ -193,8 +208,8 @@ private fun nativeSessionConcurrency(sessionLimit: Int): Int {
     return if (normalizedLimit > 1) normalizedLimit - 1 else 1
 }
 
-
 /** A stable, user-displayable failure when the optional JNI traceroute engine cannot load. */
-class NativeTracerouteUnavailableException : Exception(
-    "Native traceroute engine is unavailable on this device."
-)
+class NativeTracerouteUnavailableException :
+    Exception(
+        "Native traceroute engine is unavailable on this device.",
+    )

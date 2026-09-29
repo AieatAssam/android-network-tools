@@ -2,10 +2,11 @@ package net.aieat.netswissknife.app.traceroute
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
@@ -30,101 +31,141 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertInstanceOf
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import java.util.concurrent.atomic.AtomicLong
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class TraceroutePartialEnrichmentDeadlineTest {
+    @Test
+    fun `deadline during reverse DNS preserves the raw native hop exactly once`() =
+        runTest {
+            assertDeadlineDuringEnrichment(blockReverseDns = true)
+        }
 
     @Test
-    fun `deadline during reverse DNS preserves the raw native hop exactly once`() = runTest {
-        assertDeadlineDuringEnrichment(blockReverseDns = true)
-    }
-
-    @Test
-    fun `deadline during GeoIP preserves the raw native hop exactly once`() = runTest {
-        assertDeadlineDuringEnrichment(blockReverseDns = false)
-    }
+    fun `deadline during GeoIP preserves the raw native hop exactly once`() =
+        runTest {
+            assertDeadlineDuringEnrichment(blockReverseDns = false)
+        }
 
     private suspend fun TestScope.assertDeadlineDuringEnrichment(blockReverseDns: Boolean) {
-        val rawHop = HopResult(1, "192.0.2.1", null, 4L, HopStatus.SUCCESS)
-        val reverseDnsStarted = CompletableDeferred<Unit>()
-        val geoIpStarted = CompletableDeferred<Unit>()
-        var nowNanos = 0L
-        val clock = MonotonicClock { nowNanos }
-        val session = OperationSession(
-            OperationBudget.start(
-                timeoutMillis = DEADLINE_MILLIS,
-                // Keep both optional lookups runnable alongside one native worker; this test
-                // exercises deadline retention, while aggregate limiting has its own test.
-                maxConcurrentProbes = 3,
-                clock = clock,
-            ),
-        )
-        val dispatcher = StandardTestDispatcher(testScheduler)
-        val repository = IcmpEnginTracerouteRepositoryImpl(
-            nativeTraceFactory = { _, _, _, _, _, _, _ ->
-                kotlinx.coroutines.flow.flow {
-                    emit(rawHop)
-                    awaitCancellation()
-                }
-            },
-            dispatcher = dispatcher,
-        )
-        val reverseDns = object : TracerouteReverseDnsRepository {
-            override suspend fun lookup(
-                ip: String,
-                operationSession: OperationSession,
-            ): String? {
-                reverseDnsStarted.complete(Unit)
-                if (blockReverseDns) awaitCancellation()
-                return "router.example"
-            }
-        }
-        val geoIp = object : GeoIpRepository {
-            override suspend fun lookup(ip: String) = null
-
-            override suspend fun lookup(ip: String, operationSession: OperationSession): HopGeoLocation? {
-                geoIpStarted.complete(Unit)
-                if (!blockReverseDns) awaitCancellation()
-                return null
-            }
-        }
-        val useCase = TracerouteUseCase(repository, geoIp, reverseDns)
-        val events = mutableListOf<TracerouteFlowResult>()
-        val collection = async {
-            runCatching {
-                useCase(
-                    TracerouteParams(
-                        host = "192.0.2.7",
-                        maxHops = 2,
-                        timeoutMs = 500,
-                    ),
-                    session,
-                ).collect(events::add)
-            }
-        }
+        val trace = startDeadlineEnrichment(blockReverseDns)
 
         runCurrent()
-        reverseDnsStarted.await()
-        geoIpStarted.await()
-        assertEquals(listOf(TracerouteFlowResult.Hop(rawHop)), events)
+        trace.reverseDnsStarted.await()
+        trace.geoIpStarted.await()
+        assertEquals(listOf(TracerouteFlowResult.Hop(trace.resolvedHop)), trace.events)
 
         // Drive the real OperationRunner deadline watcher with a virtual clock.
-        nowNanos = DEADLINE_MILLIS * NANOS_PER_MILLISECOND
+        trace.nowNanos.set(DEADLINE_MILLIS * NANOS_PER_MILLISECOND)
         advanceTimeBy(DEADLINE_MILLIS)
         runCurrent()
-        val failure = collection.await().exceptionOrNull()
+        val failure = trace.collection.await().exceptionOrNull()
 
+        assertDeadlineFailure(failure)
+        assertEquals(CancellationReason.DEADLINE_EXCEEDED, trace.session.cancellationReason)
+        assertEquals(listOf(TracerouteFlowResult.Hop(trace.resolvedHop)), trace.events)
+        assertInstanceOf(TracerouteFlowResult.Hop::class.java, trace.events.single())
+    }
+
+    private fun TestScope.startDeadlineEnrichment(blockReverseDns: Boolean): DeadlineEnrichmentTrace {
+        val rawHop = HopResult(1, "192.0.2.1", null, 4L, HopStatus.SUCCESS)
+        val resolvedHop = rawHop.copy(resolvedDestinationIp = "192.0.2.7")
+        val reverseDnsStarted = CompletableDeferred<Unit>()
+        val geoIpStarted = CompletableDeferred<Unit>()
+        val nowNanos = AtomicLong(0L)
+        val clock = MonotonicClock { nowNanos.get() }
+        val session =
+            OperationSession(
+                OperationBudget.start(
+                    timeoutMillis = DEADLINE_MILLIS,
+                    // Keep both optional lookups runnable alongside one native worker; this test
+                    // exercises deadline retention, while aggregate limiting has its own test.
+                    maxConcurrentProbes = 3,
+                    clock = clock,
+                ),
+            )
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val repository =
+            IcmpEnginTracerouteRepositoryImpl(
+                nativeTraceFactory = { _, _, _, _, _, _, _ ->
+                    kotlinx.coroutines.flow.flow {
+                        emit(rawHop)
+                        awaitCancellation()
+                    }
+                },
+                dispatcher = dispatcher,
+            )
+        val reverseDns =
+            object : TracerouteReverseDnsRepository {
+                override suspend fun lookup(
+                    ip: String,
+                    operationSession: OperationSession,
+                ): String? {
+                    reverseDnsStarted.complete(Unit)
+                    if (blockReverseDns) awaitCancellation()
+                    return "router.example"
+                }
+            }
+        val geoIp =
+            object : GeoIpRepository {
+                override suspend fun lookup(ip: String) = null
+
+                override suspend fun lookup(
+                    ip: String,
+                    operationSession: OperationSession,
+                ): HopGeoLocation? {
+                    geoIpStarted.complete(Unit)
+                    if (!blockReverseDns) awaitCancellation()
+                    return null
+                }
+            }
+        val useCase = TracerouteUseCase(repository, geoIp, reverseDns)
+        val events = mutableListOf<TracerouteFlowResult>()
+        val collection =
+            async {
+                runCatching {
+                    useCase(
+                        TracerouteParams(
+                            host = "192.0.2.7",
+                            maxHops = 2,
+                            timeoutMs = 500,
+                        ),
+                        session,
+                    ).collect(events::add)
+                }
+            }
+        return DeadlineEnrichmentTrace(
+            resolvedHop = resolvedHop,
+            reverseDnsStarted = reverseDnsStarted,
+            geoIpStarted = geoIpStarted,
+            nowNanos = nowNanos,
+            session = session,
+            events = events,
+            collection = collection,
+        )
+    }
+
+    private fun assertDeadlineFailure(failure: Throwable?) {
         assertTrue(
             failure is OperationDeadlineExceededException ||
-                (failure is OperationCancellationException &&
-                    failure.reason == CancellationReason.DEADLINE_EXCEEDED) ||
+                (
+                    failure is OperationCancellationException &&
+                        failure.reason == CancellationReason.DEADLINE_EXCEEDED
+                ) ||
                 failure is CancellationException,
             "Expected deadline cancellation, got ${failure?.javaClass?.simpleName}: ${failure?.message}",
         )
-        assertEquals(CancellationReason.DEADLINE_EXCEEDED, session.cancellationReason)
-        assertEquals(listOf(TracerouteFlowResult.Hop(rawHop)), events)
-        assertInstanceOf(TracerouteFlowResult.Hop::class.java, events.single())
     }
+
+    private data class DeadlineEnrichmentTrace(
+        val resolvedHop: HopResult,
+        val reverseDnsStarted: CompletableDeferred<Unit>,
+        val geoIpStarted: CompletableDeferred<Unit>,
+        val nowNanos: AtomicLong,
+        val session: OperationSession,
+        val events: MutableList<TracerouteFlowResult>,
+        val collection: Deferred<Result<Unit>>,
+    )
 
     private companion object {
         const val DEADLINE_MILLIS = 1_000L

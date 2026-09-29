@@ -13,6 +13,8 @@ class FakeNetworkBinder(
     private val throwTcpBindSecurityException: Boolean = false,
     private val localDestinationIps: Set<String>? = null,
     private val tcpBindIfLocalReturnsFalse: Boolean = false,
+    private val datagramBindIfLocalReturnsFalse: Boolean = false,
+    private val throwDatagramBindSecurityException: Boolean = false,
 ) : NetworkBinder {
     val boundTcpSockets = mutableListOf<Socket>()
     val boundDatagramSockets = mutableListOf<DatagramSocket>()
@@ -20,6 +22,7 @@ class FakeNetworkBinder(
     val tcpSocketConnectedStatesAtBind = mutableListOf<Boolean>()
     val shouldBindDestinations = mutableListOf<String>()
     val atomicBindDestinations = mutableListOf<String>()
+    val atomicDatagramBindDestinations = mutableListOf<String>()
     val datagramSocketBoundStatesAtBind = mutableListOf<Boolean>()
 
     override fun localSubnet(): String? = subnet
@@ -29,7 +32,10 @@ class FakeNetworkBinder(
         return isLocalDestination(destinationIp)
     }
 
-    override fun bindIfLocal(socket: Socket, destinationIp: String): Boolean {
+    override fun bindIfLocal(
+        socket: Socket,
+        destinationIp: String,
+    ): Boolean {
         atomicBindDestinations += destinationIp
         if (!isLocalDestination(destinationIp) || tcpBindIfLocalReturnsFalse) return false
         bind(socket)
@@ -46,12 +52,25 @@ class FakeNetworkBinder(
     override fun bind(socket: DatagramSocket) {
         boundDatagramSockets += socket
         datagramSocketBoundStatesAtBind += socket.isBound
+        if (throwDatagramBindSecurityException) throw SecurityException("local network permission denied")
+    }
+
+    override fun bindIfLocal(
+        socket: DatagramSocket,
+        destinationIp: String,
+    ): Boolean {
+        atomicDatagramBindDestinations += destinationIp
+        if (!isLocalDestination(destinationIp) || datagramBindIfLocalReturnsFalse) return false
+        bind(socket)
+        return true
     }
 
     override fun localInterface(): NetworkInterface? = null
 
     override fun localAddress(): InetAddress? = null
 
-    private fun isLocalDestination(destinationIp: String): Boolean =
-        localDestinationIps?.contains(destinationIp) ?: shouldBindResult
+    private fun isLocalDestination(destinationIp: String): Boolean {
+        val destinations = localDestinationIps ?: return shouldBindResult
+        return destinations.contains(destinationIp)
+    }
 }

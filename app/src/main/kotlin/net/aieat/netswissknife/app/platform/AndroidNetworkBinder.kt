@@ -6,7 +6,9 @@ import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import net.aieat.netswissknife.core.network.net.LocalDestinationPolicy
+import net.aieat.netswissknife.core.network.net.LocalNetworkBindingUnavailableException
 import net.aieat.netswissknife.core.network.net.NetworkBinder
+import java.io.IOException
 import java.net.DatagramSocket
 import java.net.Inet4Address
 import java.net.InetAddress
@@ -16,6 +18,7 @@ import java.net.Socket
 /** Binds local-scope traffic to the preferred non-VPN Wi-Fi or Ethernet network. */
 class AndroidNetworkBinder(
     private val connectivityManager: ConnectivityManager,
+    private val registerNetworkCallback: ((ConnectivityManager.NetworkCallback) -> Unit)? = null,
 ) : NetworkBinder {
     private data class ObservedNetwork(
         val network: Network,
@@ -46,14 +49,19 @@ class AndroidNetworkBinder(
     init {
         refreshNetworks()
         runCatching {
-            connectivityManager.registerNetworkCallback(
-                NetworkRequest
-                    .Builder()
-                    .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
-                    .addTransportType(NetworkCapabilities.TRANSPORT_ETHERNET)
-                    .build(),
-                networkCallback,
-            )
+            val callbackRegistrar = registerNetworkCallback
+            if (callbackRegistrar != null) {
+                callbackRegistrar(networkCallback)
+            } else {
+                connectivityManager.registerNetworkCallback(
+                    NetworkRequest
+                        .Builder()
+                        .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+                        .addTransportType(NetworkCapabilities.TRANSPORT_ETHERNET)
+                        .build(),
+                    networkCallback,
+                )
+            }
         }
     }
 
@@ -79,6 +87,23 @@ class AndroidNetworkBinder(
         return true
     }
 
+    override fun bindIfLocal(
+        socket: DatagramSocket,
+        destinationIp: String,
+    ): Boolean {
+        // Keep classification and binding on one observation so a callback-driven subnet change
+        // cannot send a formerly local destination through the process default route.
+        val selected = selectedLocalNetwork ?: return false
+        val subnet = localSubnet(selected) ?: return false
+        if (!LocalDestinationPolicy(subnet).isLocal(destinationIp)) return false
+        try {
+            selected.network.bindSocket(socket)
+        } catch (error: IOException) {
+            throw LocalNetworkBindingUnavailableException(destinationIp).also { it.initCause(error) }
+        }
+        return true
+    }
+
     private fun localSubnet(selected: ObservedNetwork): String? {
         val properties = selected.linkProperties ?: return null
         val address = properties.linkAddresses.firstOrNull { it.address is Inet4Address } ?: return null
@@ -92,7 +117,14 @@ class AndroidNetworkBinder(
     }
 
     override fun bind(socket: DatagramSocket) {
-        selectedLocalNetwork?.network?.bindSocket(socket)
+        val selected =
+            selectedLocalNetwork
+                ?: throw LocalNetworkBindingUnavailableException("required UDP network traffic")
+        try {
+            selected.network.bindSocket(socket)
+        } catch (error: IOException) {
+            throw LocalNetworkBindingUnavailableException("required UDP network traffic").also { it.initCause(error) }
+        }
     }
 
     override fun localInterface(): NetworkInterface? =

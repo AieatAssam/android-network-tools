@@ -22,7 +22,6 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
 class TopologySnmpAdapterSaturationTest {
-
     @Test
     fun `SNMP initialization rejects overflow and recovers queued capacity without opening rejected transport`() =
         runBlocking {
@@ -36,23 +35,26 @@ class TopologySnmpAdapterSaturationTest {
                 val clients = CopyOnWriteArrayList<Snmp4jClientImpl>()
                 val jobs = CopyOnWriteArrayList<kotlinx.coroutines.Deferred<Throwable?>>()
 
-                fun newClient(): Snmp4jClientImpl = Snmp4jClientImpl(
-                    sessionParams = TopologyParams(targetIp = "192.0.2.7", timeoutMs = 60_000, retries = 0),
-                    operationDeadline = OperationBudget.start(timeoutMillis = 60_000).deadline,
-                    transportFactory = TopologyTransportFactory { _, _ ->
-                        transportFactoryCalls.incrementAndGet()
-                        TrackingTransport().also(createdTransports::add)
-                    },
-                    transportStarter = TopologyTransportStarter {
-                        starterCalls.incrementAndGet()
-                        activeInitializersEntered.countDown()
-                        // Intentionally do not listen or send packets. Release makes every
-                        // accepted initialization fail before the adapter can issue an SNMP GET.
-                        releaseInitializers.await()
-                        throw IllegalStateException("released saturation fixture")
-                    },
-                    deferInitialization = true,
-                ).also(clients::add)
+                fun newClient(): Snmp4jClientImpl =
+                    Snmp4jClientImpl(
+                        sessionParams = TopologyParams(targetIp = "192.0.2.7", timeoutMs = 60_000, retries = 0),
+                        operationDeadline = OperationBudget.start(timeoutMillis = 60_000).deadline,
+                        transportFactory =
+                            TopologyTransportFactory { _, _ ->
+                                transportFactoryCalls.incrementAndGet()
+                                TrackingTransport().also(createdTransports::add)
+                            },
+                        transportStarter =
+                            TopologyTransportStarter {
+                                starterCalls.incrementAndGet()
+                                activeInitializersEntered.countDown()
+                                // Intentionally do not listen or send packets. Release makes every
+                                // accepted initialization fail before the adapter can issue an SNMP GET.
+                                releaseInitializers.await()
+                                throw IllegalStateException("released saturation fixture")
+                            },
+                        deferInitialization = true,
+                    ).also(clients::add)
 
                 fun submit(client: Snmp4jClientImpl): kotlinx.coroutines.Deferred<Throwable?> =
                     async(Dispatchers.Default) {
@@ -130,6 +132,9 @@ class TopologySnmpAdapterSaturationTest {
                     assertEquals(starterCalls.get(), createdTransports.size)
                     assertTrue(createdTransports.all { it.closeCount.get() == 1 })
                     assertTrue(executor.queue.isEmpty())
+                    withTimeout(3_000) {
+                        while (executor.activeCount != 0) yield()
+                    }
                     assertEquals(0, executor.activeCount)
                 } finally {
                     releaseInitializers.countDown()

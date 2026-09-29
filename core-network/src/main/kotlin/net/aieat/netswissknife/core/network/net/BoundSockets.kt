@@ -10,12 +10,16 @@ import java.net.SocketAddress
 internal fun NetworkBinder.newTcpSocket(
     destinationIp: String,
     socketFactory: () -> Socket,
-): Socket = createBoundSocket(socketFactory) { socket ->
-    bindTcpSocket(socket, destinationIp)
-}
+): Socket =
+    createBoundSocket(socketFactory) { socket ->
+        bindTcpSocket(socket, destinationIp)
+    }
 
 /** Binds an already-created, still-unconnected TCP socket only for a selected local destination. */
-internal fun NetworkBinder.bindTcpSocket(socket: Socket, destinationIp: String) {
+internal fun NetworkBinder.bindTcpSocket(
+    socket: Socket,
+    destinationIp: String,
+) {
     if (!shouldBind(destinationIp)) return
     if (!bindTcpSocketIfLocal(socket, destinationIp)) {
         throw LocalNetworkBindingUnavailableException(destinationIp)
@@ -23,13 +27,17 @@ internal fun NetworkBinder.bindTcpSocket(socket: Socket, destinationIp: String) 
 }
 
 /** Performs the atomic platform bind and maps Android permission failures to a typed I/O error. */
-internal fun NetworkBinder.bindTcpSocketIfLocal(socket: Socket, destinationIp: String): Boolean = try {
-    bindIfLocal(socket, destinationIp)
-} catch (permissionDenied: LocalNetworkPermissionDeniedException) {
-    throw permissionDenied
-} catch (error: SecurityException) {
-    throw LocalNetworkPermissionDeniedException(error)
-}
+internal fun NetworkBinder.bindTcpSocketIfLocal(
+    socket: Socket,
+    destinationIp: String,
+): Boolean =
+    try {
+        bindIfLocal(socket, destinationIp)
+    } catch (permissionDenied: LocalNetworkPermissionDeniedException) {
+        throw permissionDenied
+    } catch (error: SecurityException) {
+        throw LocalNetworkPermissionDeniedException(error)
+    }
 
 /**
  * Creates an unbound UDP socket and applies network binding before the caller binds a local port.
@@ -41,12 +49,36 @@ internal fun NetworkBinder.newUdpSocket(
     socketFactory: () -> DatagramSocket = { DatagramSocket(null as SocketAddress?) },
     bindMulticastDestinations: Boolean = false,
     forceBind: Boolean = false,
-): DatagramSocket = createBoundSocket(socketFactory) { socket ->
-    val isMulticast = bindMulticastDestinations && runCatching {
-        InetAddress.getByName(destinationIp).isMulticastAddress
-    }.getOrDefault(false)
-    if (forceBind || shouldBind(destinationIp) || isMulticast) bind(socket)
-}
+): DatagramSocket =
+    createBoundSocket(socketFactory) { socket ->
+        val isMulticast =
+            bindMulticastDestinations &&
+                runCatching {
+                    InetAddress.getByName(destinationIp).isMulticastAddress
+                }.getOrDefault(false)
+        when {
+            forceBind || isMulticast -> {
+                bind(socket)
+            }
+
+            shouldBind(destinationIp) && !bindUdpSocketIfLocal(socket, destinationIp) -> {
+                throw LocalNetworkBindingUnavailableException(destinationIp)
+            }
+        }
+    }
+
+/** Performs the atomic platform bind and maps Android permission failures to a typed I/O error. */
+private fun NetworkBinder.bindUdpSocketIfLocal(
+    socket: DatagramSocket,
+    destinationIp: String,
+): Boolean =
+    try {
+        bindIfLocal(socket, destinationIp)
+    } catch (permissionDenied: LocalNetworkPermissionDeniedException) {
+        throw permissionDenied
+    } catch (error: SecurityException) {
+        throw LocalNetworkPermissionDeniedException(error)
+    }
 
 private fun <T : Closeable> NetworkBinder.createBoundSocket(
     socketFactory: () -> T,
