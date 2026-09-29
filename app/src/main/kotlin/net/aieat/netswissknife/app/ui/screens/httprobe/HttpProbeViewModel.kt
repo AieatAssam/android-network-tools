@@ -275,7 +275,7 @@ class HttpProbeViewModel @Inject constructor(
             )
         }
         val runId = UUID.randomUUID().toString()
-        val session = HttpProbeOperation.newSession()
+        val session = HttpProbeOperation.newInteractiveSession()
         operationSession = session
 
         viewModelScope.launch {

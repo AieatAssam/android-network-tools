@@ -12,6 +12,7 @@ import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -33,6 +34,7 @@ import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.httprobe.CrossOriginEntityReplay
 import net.aieat.netswissknife.core.network.httprobe.HttpMethod
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeBlockedRedirectException
+import net.aieat.netswissknife.core.network.httprobe.HttpProbeOperation
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeRepository
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeRequest
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeResult
@@ -917,6 +919,41 @@ class HttpProbeViewModelTest {
 
             viewModel.respondToEntityReplayApproval(hopB.runId, hopB.approvalId, approved = true)
             assertNull(viewModel.uiState.value.pendingEntityReplayApproval)
+            assertFalse(viewModel.uiState.value.isLoading)
+            assertEquals(stubResult, viewModel.uiState.value.result)
+        }
+
+    @Test
+    fun `interactive approval can wait beyond the former operation deadline`() =
+        runTest {
+            coEvery { useCase(any(), any()) } coAnswers {
+                val params = firstArg<HttpProbeParams>()
+                val session = secondArg<OperationSession>()
+                assertFalse(session.budget.hasDeadline)
+                assertTrue(
+                    requireNotNull(params.approveCrossOriginEntityReplay)(
+                        CrossOriginEntityReplay(
+                            destinationUrl = "https://destination.example/path",
+                            method = HttpMethod.POST,
+                            statusCode = 307,
+                        ),
+                    ),
+                )
+                NetworkResult.Success(stubResult)
+            }
+            viewModel.onUrlChange("https://source.example/start")
+            viewModel.onMethodChange(HttpMethod.POST)
+            viewModel.onBodyChange("payload")
+
+            viewModel.send()
+            val pending = requireNotNull(viewModel.uiState.value.pendingEntityReplayApproval)
+            advanceTimeBy(HttpProbeOperation.DEFAULT_TIMEOUT_MILLIS.toLong() + 1)
+
+            assertTrue(viewModel.uiState.value.isLoading)
+            assertEquals(pending, viewModel.uiState.value.pendingEntityReplayApproval)
+
+            viewModel.respondToEntityReplayApproval(pending.runId, pending.approvalId, approved = true)
+
             assertFalse(viewModel.uiState.value.isLoading)
             assertEquals(stubResult, viewModel.uiState.value.result)
         }

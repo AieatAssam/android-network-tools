@@ -410,6 +410,25 @@ class HttpProbeEnhancementsTest {
     }
 
     @Test
+    fun `JSON pretty printer rejects malformed syntax and bounded resource abuse`() {
+        listOf(
+            "[1,]",
+            "{\"a\" 1}",
+            "\"\\x\"",
+            "01",
+            "\"line\nfeed\"",
+        ).forEach { input ->
+            assertNull(JsonPrettyPrinter.prettyPrint(input), input)
+        }
+
+        val tooDeep = "[".repeat(201) + "0" + "]".repeat(201)
+        assertNull(JsonPrettyPrinter.prettyPrint(tooDeep))
+
+        val oversizedString = "{\"payload\":\"${"x".repeat(16 * 1024 * 1024)}\"}"
+        assertNull(JsonPrettyPrinter.prettyPrint(oversizedString))
+    }
+
+    @Test
     fun `JSON pretty printer handles a half megabyte document within the planned budget`() {
         val input = "{\"payload\":\"${"x".repeat(512 * 1024)}\"}"
         val threadBean = ManagementFactory.getThreadMXBean()

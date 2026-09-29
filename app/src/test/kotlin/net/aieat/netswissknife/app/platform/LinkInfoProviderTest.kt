@@ -32,6 +32,22 @@ class LinkInfoProviderTest {
     }
 
     @Test
+    fun `local link selection skips wifi without usable ipv4 and falls back to ethernet`() {
+        val wifi =
+            NetworkSnapshot(
+                id = "wifi",
+                capabilities = CapabilitySnapshot(setOf(Transport.WIFI), hasInternet = false, notVpn = true),
+            )
+        val ethernet =
+            NetworkSnapshot(
+                id = "ethernet",
+                capabilities = CapabilitySnapshot(setOf(Transport.ETHERNET), hasInternet = false, notVpn = true),
+            )
+
+        assertEquals(ethernet, LinkInfoMapper.selectLocalWithIpv4(listOf(wifi, ethernet), setOf("ethernet")))
+    }
+
+    @Test
     fun `network availability can be injected without Android connectivity`() {
         assertTrue(LinkInfoProvider { true }.hasValidatedNetwork())
         assertFalse(LinkInfoProvider { false }.hasValidatedNetwork())

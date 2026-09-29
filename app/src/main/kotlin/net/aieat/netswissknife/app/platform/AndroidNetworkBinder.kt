@@ -17,7 +17,6 @@ import java.net.Socket
 class AndroidNetworkBinder(
     private val connectivityManager: ConnectivityManager,
 ) : NetworkBinder {
-
     private data class ObservedNetwork(
         val network: Network,
         val linkProperties: LinkProperties?,
@@ -27,18 +26,29 @@ class AndroidNetworkBinder(
     @Volatile
     private var selectedLocalNetwork: ObservedNetwork? = null
 
-    private val networkCallback = object : ConnectivityManager.NetworkCallback() {
-        override fun onAvailable(network: Network) = refreshNetworks()
-        override fun onLost(network: Network) = refreshNetworks()
-        override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) = refreshNetworks()
-        override fun onLinkPropertiesChanged(network: Network, linkProperties: LinkProperties) = refreshNetworks()
-    }
+    private val networkCallback =
+        object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) = refreshNetworks()
+
+            override fun onLost(network: Network) = refreshNetworks()
+
+            override fun onCapabilitiesChanged(
+                network: Network,
+                capabilities: NetworkCapabilities,
+            ) = refreshNetworks()
+
+            override fun onLinkPropertiesChanged(
+                network: Network,
+                linkProperties: LinkProperties,
+            ) = refreshNetworks()
+        }
 
     init {
         refreshNetworks()
         runCatching {
             connectivityManager.registerNetworkCallback(
-                NetworkRequest.Builder()
+                NetworkRequest
+                    .Builder()
                     .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
                     .addTransportType(NetworkCapabilities.TRANSPORT_ETHERNET)
                     .build(),
@@ -55,7 +65,10 @@ class AndroidNetworkBinder(
         return localSubnet(selected)
     }
 
-    override fun bindIfLocal(socket: Socket, destinationIp: String): Boolean {
+    override fun bindIfLocal(
+        socket: Socket,
+        destinationIp: String,
+    ): Boolean {
         // Keep network selection and subnet classification on one immutable observation. If the
         // selected network disappears after the caller's initial local-route check, return false
         // so the caller can fail closed instead of silently using the process default route.
@@ -72,8 +85,7 @@ class AndroidNetworkBinder(
         return LinkInfoMapper.cidrOf(address.address.hostAddress ?: return null, address.prefixLength)
     }
 
-    override fun shouldBind(destinationIp: String): Boolean =
-        LocalDestinationPolicy(localSubnet()).isLocal(destinationIp)
+    override fun shouldBind(destinationIp: String) = LocalDestinationPolicy(localSubnet()).isLocal(destinationIp)
 
     override fun bind(socket: Socket) {
         selectedLocalNetwork?.network?.bindSocket(socket)
@@ -83,43 +95,62 @@ class AndroidNetworkBinder(
         selectedLocalNetwork?.network?.bindSocket(socket)
     }
 
-    override fun localInterface(): NetworkInterface? = selectedLocalNetwork
-        ?.linkProperties
-        ?.interfaceName
-        ?.let { name -> runCatching { NetworkInterface.getByName(name) }.getOrNull() }
+    override fun localInterface(): NetworkInterface? =
+        selectedLocalNetwork
+            ?.linkProperties
+            ?.interfaceName
+            ?.let { name -> runCatching { NetworkInterface.getByName(name) }.getOrNull() }
 
-    override fun localAddress(): InetAddress? = selectedLocalNetwork
-        ?.linkProperties
-        ?.linkAddresses
-        ?.firstOrNull { it.address is Inet4Address }
-        ?.address
+    override fun localAddress(): InetAddress? =
+        selectedLocalNetwork
+            ?.linkProperties
+            ?.linkAddresses
+            ?.firstOrNull { it.address is Inet4Address }
+            ?.address
 
     @Suppress("DEPRECATION")
     private fun refreshNetworks() {
-        val refreshed = runCatching {
-            connectivityManager.allNetworks.mapNotNull { network ->
-                val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return@mapNotNull null
-                val snapshot = NetworkSnapshot(network.toString(), capabilities.toCapabilitySnapshot())
-                ObservedNetwork(
-                    network = network,
-                    linkProperties = connectivityManager.getLinkProperties(network),
-                    snapshot = snapshot,
-                )
+        val refreshed =
+            runCatching {
+                connectivityManager.allNetworks.mapNotNull { network ->
+                    val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return@mapNotNull null
+                    val snapshot = NetworkSnapshot(network.toString(), capabilities.toCapabilitySnapshot())
+                    ObservedNetwork(
+                        network = network,
+                        linkProperties = connectivityManager.getLinkProperties(network),
+                        snapshot = snapshot,
+                    )
+                }
+            }.getOrDefault(emptyList())
+        val ipv4NetworkIds =
+            refreshed.mapNotNullTo(mutableSetOf()) { observed ->
+                val address =
+                    observed.linkProperties
+                        ?.linkAddresses
+                        ?.firstOrNull { it.address is Inet4Address }
+                        ?: return@mapNotNullTo null
+                val hostAddress = address.address.hostAddress ?: return@mapNotNullTo null
+                val cidr = LinkInfoMapper.cidrOf(hostAddress, address.prefixLength)
+                observed.snapshot.id.takeIf { cidr != null }
             }
-        }.getOrDefault(emptyList())
-        val selectedId = NetworkSelection.selectLocal(refreshed.map(ObservedNetwork::snapshot))?.id
+        val selectedId =
+            LinkInfoMapper
+                .selectLocalWithIpv4(
+                    refreshed.map(ObservedNetwork::snapshot),
+                    ipv4NetworkIds,
+                )?.id
         selectedLocalNetwork = refreshed.firstOrNull { it.snapshot.id == selectedId }
     }
-
 }
 
 internal fun NetworkCapabilities.toCapabilitySnapshot(): CapabilitySnapshot {
-    val transports = buildSet {
-        if (hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) add(Transport.WIFI)
-        if (hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) add(Transport.ETHERNET)
-        if (hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) add(Transport.CELLULAR)
-        if (hasTransport(NetworkCapabilities.TRANSPORT_VPN)) add(Transport.VPN)
-    }.ifEmpty { setOf(Transport.OTHER) }
+    val transports =
+        buildSet {
+            if (hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) add(Transport.WIFI)
+            if (hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) add(Transport.ETHERNET)
+            if (hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) add(Transport.CELLULAR)
+            if (hasTransport(NetworkCapabilities.TRANSPORT_VPN)) add(Transport.VPN)
+        }.ifEmpty { setOf(Transport.OTHER) }
     return CapabilitySnapshot(
         transports = transports,
         hasInternet = hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET),

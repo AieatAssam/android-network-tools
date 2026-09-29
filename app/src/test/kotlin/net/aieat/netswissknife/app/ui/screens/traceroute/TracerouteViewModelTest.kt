@@ -377,8 +377,20 @@ class TracerouteViewModelTest {
                 nowNanos += 2_350_000_000L
                 viewModel.onStop()
 
-                val canceling = viewModel.uiState.value as TracerouteUiState.Canceling
-                assertEquals(2_350L, canceling.elapsedMs)
+                when (val stoppedState = viewModel.uiState.value) {
+                    is TracerouteUiState.Canceling -> {
+                        assertEquals(2_350L, stoppedState.elapsedMs)
+                    }
+
+                    is TracerouteUiState.Canceled -> {
+                        assertEquals(2_350L, stoppedState.result.totalTimeMs)
+                        assertEquals(listOf(stubHop), stoppedState.result.hops)
+                    }
+
+                    else -> {
+                        assertTrue(false, "Expected Canceling or Canceled, got $stoppedState")
+                    }
+                }
                 assertTrue(withContext(Dispatchers.IO) { cleanupStarted.await(2, TimeUnit.SECONDS) })
                 allowCleanupToFinish.countDown()
 
