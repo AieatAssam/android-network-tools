@@ -66,6 +66,8 @@ fun interface TopologyTransportStarter {
     fun start(transport: DefaultUdpTransportMapping)
 }
 
+internal const val DEFAULT_SNMP_TRANSPORT_INITIALIZATION_TIMEOUT_MS = 15_000L
+
 /**
  * One SNMP4J transport/session for one topology discovery run.
  *
@@ -87,6 +89,7 @@ class Snmp4jClientImpl(
     },
     private val transportStarter: TopologyTransportStarter = TopologyTransportStarter { it.listen() },
     private val deferInitialization: Boolean = false,
+    private val transportInitializationTimeoutMillis: Long = DEFAULT_SNMP_TRANSPORT_INITIALIZATION_TIMEOUT_MS,
 ) : SnmpClient {
 
     @Volatile private var transport: DefaultUdpTransportMapping? = null
@@ -103,6 +106,12 @@ class Snmp4jClientImpl(
     @Volatile private var closed = false
     private val initializationLock = Any()
     private val initializationMutex = Mutex()
+
+    init {
+        require(transportInitializationTimeoutMillis > 0) {
+            "SNMP transport initialization timeout must be positive"
+        }
+    }
 
     internal val pendingAsyncRequestCount: Int get() = snmp?.pendingAsyncRequestCount ?: 0
 
@@ -169,8 +178,8 @@ class Snmp4jClientImpl(
                 } else {
                     TopologyBlockingCall.run(
                         deadline = operationDeadline,
-                        requestTimeoutMillis = sessionParams.timeoutMs.toLong(),
-                        timeoutMessage = "SNMP transport initialization timed out after ${sessionParams.timeoutMs} ms",
+                        requestTimeoutMillis = transportInitializationTimeoutMillis,
+                        timeoutMessage = "SNMP transport initialization timed out after ${transportInitializationTimeoutMillis} ms",
                     ) { initializeBlocking() }
                 }
             } catch (failure: Throwable) {

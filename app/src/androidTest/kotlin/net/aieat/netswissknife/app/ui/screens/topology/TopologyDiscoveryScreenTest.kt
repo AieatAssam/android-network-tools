@@ -1,5 +1,7 @@
 package net.aieat.netswissknife.app.ui.screens.topology
 
+import android.Manifest
+import android.os.Build
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -14,6 +16,7 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.rule.GrantPermissionRule
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -46,6 +49,14 @@ import org.junit.runner.RunWith
  */
 @RunWith(AndroidJUnit4::class)
 class TopologyDiscoveryScreenTest {
+    @get:Rule
+    val permissionRule: GrantPermissionRule =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
+            GrantPermissionRule.grant(Manifest.permission.NEARBY_WIFI_DEVICES)
+        } else {
+            GrantPermissionRule.grant()
+        }
+
     @get:Rule
     val composeRule = createComposeRule()
 

@@ -7,10 +7,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import net.aieat.netswissknife.core.network.net.FakeNetworkBinder
 import net.aieat.netswissknife.core.network.net.LocalNetworkPermissionDeniedException
 import net.aieat.netswissknife.core.network.net.NetworkBinder
+import net.aieat.netswissknife.core.network.operation.OperationBudget
 import org.snmp4j.CommandResponder
 import org.snmp4j.CommandResponderEvent
 import org.snmp4j.MessageDispatcherImpl
@@ -116,6 +118,37 @@ class Snmp4jClientImplLoopbackTest {
         withResponder(params) { port ->
             Snmp4jClientImpl(params).use { client ->
                 val value = client.get(SnmpTarget("127.0.0.1", port, params), sysDescrOid)
+                assertEquals("loopback-agent", value)
+            }
+        }
+    }
+
+    @Test
+    fun `transport startup may exceed SNMP response timeout and still serve requests`() = runTest {
+        val params = TopologyParams(
+            targetIp = "127.0.0.1",
+            snmpVersion = SnmpVersion.V2C,
+            communityString = "public",
+            timeoutMs = 3_000,
+            retries = 0,
+        )
+
+        withResponder(params) { port ->
+            val client = Snmp4jClientImpl(
+                sessionParams = params,
+                operationDeadline = OperationBudget.start(timeoutMillis = 20_000).deadline,
+                transportStarter = TopologyTransportStarter {
+                    // Reproduce slow cellular route setup beyond the old 3 s cap, while
+                    // keeping request response timing at the configured 3 s.
+                    Thread.sleep(3_250)
+                    it.listen()
+                },
+                deferInitialization = true,
+            )
+            client.use {
+                val value = withContext(Dispatchers.Default) {
+                    client.get(SnmpTarget("127.0.0.1", port, params), sysDescrOid)
+                }
                 assertEquals("loopback-agent", value)
             }
         }

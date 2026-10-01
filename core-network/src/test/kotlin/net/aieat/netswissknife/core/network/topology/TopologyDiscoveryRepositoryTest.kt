@@ -479,6 +479,7 @@ class TopologyDiscoveryRepositoryTest {
                         initReturned.countDown()
                     },
                     deferInitialization = true,
+                    transportInitializationTimeoutMillis = 40,
                 ).also(createdClient::set)
         }
         val deadlineRepository = TopologyDiscoveryRepositoryImpl(factory)
@@ -563,6 +564,7 @@ class TopologyDiscoveryRepositoryTest {
                 initReturned.countDown()
             },
             deferInitialization = true,
+            transportInitializationTimeoutMillis = 40,
         )
         val target = SnmpTarget("192.168.1.1", params = defaultParams.copy(timeoutMs = 40))
 
