@@ -274,6 +274,7 @@ fun LanScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
+                .testTag("lan_content")
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -1044,7 +1045,7 @@ private fun LanFinishedContent(
                 }
             } else {
                 LazyColumn(
-                    modifier = Modifier.heightIn(max = 600.dp),
+                    modifier = Modifier.heightIn(max = 600.dp).testTag("lan_hosts_list"),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     items(filteredHosts, key = { it.ip }) { host ->
@@ -1265,6 +1266,7 @@ private fun HostCard(
         modifier = Modifier
             .fillMaxWidth()
             .animateContentSize(spring(stiffness = Spring.StiffnessMediumLow))
+            .testTag("lan_host_card_${host.ip}")
             .clickable(onClick = onClick),
     ) {
         Box(modifier = Modifier.background(containerColor)) {
@@ -1523,7 +1525,10 @@ private fun HostDetailPanel(
         TextButton(onClick = { onPingHost(host.ip) }, modifier = Modifier.testTag("lan_action_ping")) {
             Text(stringResource(R.string.lan_action_ping))
         }
-        TextButton(onClick = { onScanPorts(host.ip) }) {
+        TextButton(
+            onClick = { onScanPorts(host.ip) },
+            modifier = Modifier.testTag("lan_action_ports"),
+        ) {
             Text(stringResource(R.string.lan_action_scan_ports))
         }
         val httpPort = preferredHttpProbePort(host.openPorts)

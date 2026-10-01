@@ -15,7 +15,7 @@ import java.net.InetAddress
 import java.net.NetworkInterface
 import java.net.Socket
 
-/** Binds local-scope traffic to the preferred non-VPN Wi-Fi or Ethernet network. */
+/** Binds local-scope traffic to the preferred non-VPN Wi-Fi, Ethernet, or routed cellular network. */
 class AndroidNetworkBinder(
     private val connectivityManager: ConnectivityManager,
     private val registerNetworkCallback: ((ConnectivityManager.NetworkCallback) -> Unit)? = null,
@@ -58,6 +58,7 @@ class AndroidNetworkBinder(
                         .Builder()
                         .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
                         .addTransportType(NetworkCapabilities.TRANSPORT_ETHERNET)
+                        .addTransportType(NetworkCapabilities.TRANSPORT_CELLULAR)
                         .build(),
                     networkCallback,
                 )

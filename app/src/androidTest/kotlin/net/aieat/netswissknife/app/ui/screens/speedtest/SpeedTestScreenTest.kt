@@ -13,7 +13,9 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.platform.NetworkStatus
 import net.aieat.netswissknife.app.ui.theme.NetSwissKnifeTheme
+import net.aieat.netswissknife.core.network.speedtest.SpeedTestConfig
 import net.aieat.netswissknife.core.network.speedtest.LatencyStats
 import net.aieat.netswissknife.core.network.speedtest.SpeedTestPhase
 import net.aieat.netswissknife.core.network.speedtest.SpeedTestResult
@@ -193,6 +195,10 @@ class SpeedTestScreenTest {
     ): SpeedTestViewModel {
         val viewModel = mockk<SpeedTestViewModel>(relaxed = true)
         every { viewModel.uiState } returns (flow ?: MutableStateFlow(state ?: SpeedTestUiState.Idle))
+        every { viewModel.config } returns MutableStateFlow(SpeedTestConfig())
+        every { viewModel.networkStatus } returns MutableStateFlow(
+            NetworkStatus(hasInternet = true, hasLocalNetwork = true)
+        )
         return viewModel
     }
 }

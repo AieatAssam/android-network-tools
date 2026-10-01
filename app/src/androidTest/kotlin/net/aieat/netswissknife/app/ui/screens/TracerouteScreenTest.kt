@@ -5,13 +5,18 @@ import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.isToggleable
+import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeUp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.rule.GrantPermissionRule
@@ -176,13 +181,12 @@ class TracerouteScreenTest {
         }
 
         composeRule.mainClock.advanceTimeBy(2_000L)
-        composeRule.mainClock.autoAdvance = true
-        composeRule.onNodeWithText("Probes: ● 1 ms · ○ no reply · ● 2 ms").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("traceroute_content_list").performScrollToIndex(2)
         composeRule.onNodeWithContentDescription(
             "Probe 1 succeeded: 1 ms, Probe 2 received no reply, Probe 3 succeeded: 2 ms",
         ).performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Min 1 ms · Avg 1.5 ms · Max 2 ms").performScrollTo().assertIsDisplayed()
-        composeRule.mainClock.autoAdvance = false
+        composeRule.onNodeWithText("Min 1 ms · Avg 1.5 ms · Max 2 ms")
+            .performScrollTo().assertIsDisplayed()
     }
 
     @Test
@@ -274,36 +278,21 @@ class TracerouteScreenTest {
 
     @Test
     fun offlineErrorState_showsMessageAndRecoveryActions() {
-        val viewModel = fakeViewModel(TracerouteUiState.Error("No network connection"))
+        val viewModel = fakeViewModel(TracerouteUiState.Error("No network connection"), host = "example.com")
         composeRule.setContent {
             NetSwissKnifeTheme {
                 TracerouteScreen(viewModel = viewModel)
             }
         }
         composeRule.mainClock.advanceTimeBy(1_000L)
-        composeRule.mainClock.autoAdvance = true
+        composeRule.onNodeWithTag("traceroute_content_list").performScrollToIndex(2)
+        composeRule.onNodeWithText(context.getString(R.string.traceroute_error_title))
+            .performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("No network connection").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("traceroute_error_retry").performScrollTo().assertIsDisplayed().performClick()
+        composeRule.onNodeWithTag("traceroute_error_clear").performScrollTo().assertIsDisplayed().performClick()
 
-        composeRule
-            .onNodeWithText(context.getString(R.string.traceroute_error_title))
-            .performScrollTo()
-            .assertIsDisplayed()
-        composeRule
-            .onNodeWithText("No network connection")
-            .performScrollTo()
-            .assertIsDisplayed()
-        composeRule
-            .onNodeWithText(context.getString(R.string.traceroute_retry_button))
-            .performScrollTo()
-            .assertIsDisplayed()
-            .performClick()
-        composeRule
-            .onNodeWithText(context.getString(R.string.traceroute_clear_button))
-            .performScrollTo()
-            .assertIsDisplayed()
-            .performClick()
-        composeRule.mainClock.autoAdvance = false
-
-        verify(exactly = 1) { viewModel.onRetry() }
+        verify(exactly = 1) { viewModel.startTrace() }
         verify(exactly = 1) { viewModel.onClear() }
     }
 

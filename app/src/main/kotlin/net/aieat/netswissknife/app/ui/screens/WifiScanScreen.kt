@@ -176,6 +176,7 @@ object WifiScreenTestTags {
     const val CONTENT_LIST = "wifi_content_list"
     const val UNKNOWN_SECURITY_ICON = "wifi_unknown_security_icon"
     const val UNKNOWN_SECURITY_LABEL = "wifi_unknown_security_label"
+    const val AP_DETAIL_CONTENT = "wifi_ap_detail_content"
     const val NETWORKS_START_INDEX = 7
 }
 
@@ -918,7 +919,10 @@ private fun WifiSortRow(
 
     ElevatedCard(
         onClick  = onToggleExpanded,
-        modifier = Modifier.fillMaxWidth().semantics { role = Role.Button }
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("wifi_network_card_${network.displaySsid}")
+            .semantics { role = Role.Button }
     ) {
         Column {
             // ── Header row ────────────────────────────────────────────────────
@@ -1100,6 +1104,7 @@ private fun signalLevelColor(level: net.aieat.netswissknife.core.network.wifi.Si
             modifier = Modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
+                .testTag(WifiScreenTestTags.AP_DETAIL_CONTENT)
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)

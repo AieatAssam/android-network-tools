@@ -44,7 +44,24 @@ class LinkInfoProviderTest {
                 capabilities = CapabilitySnapshot(setOf(Transport.ETHERNET), hasInternet = false, notVpn = true),
             )
 
-        assertEquals(ethernet, LinkInfoMapper.selectLocalWithIpv4(listOf(wifi, ethernet), setOf("ethernet")))
+        assertEquals(
+            ethernet.copy(hasIpv4Address = true),
+            LinkInfoMapper.selectLocalWithIpv4(listOf(wifi, ethernet), setOf("ethernet")),
+        )
+    }
+
+    @Test
+    fun `local link selection accepts cellular with a usable ipv4 address`() {
+        val cellular =
+            NetworkSnapshot(
+                id = "cellular",
+                capabilities = CapabilitySnapshot(setOf(Transport.CELLULAR), hasInternet = true, notVpn = true),
+            )
+
+        assertEquals(
+            cellular.copy(hasIpv4Address = true),
+            LinkInfoMapper.selectLocalWithIpv4(listOf(cellular), setOf("cellular")),
+        )
     }
 
     @Test

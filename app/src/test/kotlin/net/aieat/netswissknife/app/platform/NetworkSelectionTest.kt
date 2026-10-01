@@ -29,6 +29,15 @@ class NetworkSelectionTest {
     }
 
     @Test
+    fun `selects cellular only when Android reports an IPv4 address on its link`() {
+        val cellularWithoutIpv4 = network("cellular-no-ipv4", Transport.CELLULAR)
+        val cellularWithIpv4 = network("cellular-ipv4", Transport.CELLULAR).copy(hasIpv4Address = true)
+
+        assertNull(NetworkSelection.selectLocal(listOf(cellularWithoutIpv4)))
+        assertEquals(cellularWithIpv4, NetworkSelection.selectLocal(listOf(cellularWithoutIpv4, cellularWithIpv4)))
+    }
+
+    @Test
     fun `does not select a VPN or any network marked as VPN`() {
         val vpnOnly = network("vpn", Transport.VPN, notVpn = false, hasInternet = true)
         val wifiOnVpn = network("wifi", Transport.WIFI, notVpn = false)

@@ -116,10 +116,10 @@ class ConnectivityObserver(
                 val localNetworkRequest =
                     NetworkRequest
                         .Builder()
-                        .removeCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
                         .addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
                         .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
                         .addTransportType(NetworkCapabilities.TRANSPORT_ETHERNET)
+                        .addTransportType(NetworkCapabilities.TRANSPORT_CELLULAR)
                         .build()
                 connectivityManager.registerNetworkCallback(localNetworkRequest, localNetworkCallback)
                 localNetworkRegistered = true
@@ -149,7 +149,15 @@ class ConnectivityObserver(
             val snapshots =
                 networks.mapNotNull { network ->
                     connectivityManager.getNetworkCapabilities(network)?.let { capabilities ->
-                        NetworkSnapshot(network.toString(), capabilities.toCapabilitySnapshot())
+                        val hasIpv4Address =
+                            connectivityManager.getLinkProperties(network)
+                                ?.linkAddresses
+                                ?.any { it.address is java.net.Inet4Address } == true
+                        NetworkSnapshot(
+                            network.toString(),
+                            capabilities.toCapabilitySnapshot(),
+                            hasIpv4Address = hasIpv4Address,
+                        )
                     }
                 }
             NetworkSelection.status(snapshots, activeNetwork?.toString())

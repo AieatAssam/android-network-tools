@@ -20,6 +20,7 @@ import androidx.compose.ui.geometry.*
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.*
 import androidx.compose.ui.input.pointer.*
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
@@ -696,13 +697,16 @@ private fun TopologyProgressContent(
                 color = MaterialTheme.colorScheme.tertiaryContainer,
                 contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
             ) {
-                Row(
+                Column(
                     modifier = Modifier.padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(text = statusMessage, style = MaterialTheme.typography.bodySmall)
                     if (onClearPartialResults != null) {
-                        TextButton(onClick = onClearPartialResults) {
+                        TextButton(
+                            onClick = onClearPartialResults,
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                            modifier = Modifier.testTag("topology_clear_partial_results"),
+                        ) {
                             Text(stringResource(R.string.topology_clear_partial_results))
                         }
                     }
@@ -873,6 +877,7 @@ private fun ErrorContent(message: String, retryEnabled: Boolean, onRetry: () -> 
                 Button(
                     onClick = onRetry,
                     enabled = retryEnabled,
+                    modifier = Modifier.testTag("topology_error_retry"),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.error
                     )

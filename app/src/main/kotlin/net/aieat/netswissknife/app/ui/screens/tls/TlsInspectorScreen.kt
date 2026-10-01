@@ -145,7 +145,8 @@ fun TlsInspectorScreen(viewModel: TlsInspectorViewModel = hiltViewModel()) {
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .alpha(alpha),
+                .alpha(alpha)
+                .testTag("tls_content_list"),
             verticalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(
                 horizontal = 16.dp, vertical = 16.dp

@@ -18,6 +18,8 @@ data class CapabilitySnapshot(
 data class NetworkSnapshot(
     val id: String,
     val capabilities: CapabilitySnapshot,
+    /** True when Android reports an IPv4 address on this network's link properties. */
+    val hasIpv4Address: Boolean = false,
 )
 
 data class NetworkStatus(
@@ -30,7 +32,7 @@ data class NetworkStatus(
 
 /** Pure network choice and status mapping, independent of Android framework objects. */
 object NetworkSelection {
-    private val localTransportPreference = listOf(Transport.WIFI, Transport.ETHERNET)
+    private val localTransportPreference = listOf(Transport.WIFI, Transport.ETHERNET, Transport.CELLULAR)
     private val transportPreference = listOf(
         Transport.WIFI,
         Transport.ETHERNET,
@@ -42,7 +44,9 @@ object NetworkSelection {
     fun selectLocal(networks: List<NetworkSnapshot>): NetworkSnapshot? =
         localTransportPreference.firstNotNullOfOrNull { preferred ->
             networks.firstOrNull { network ->
-                network.capabilities.notVpn && preferred in network.capabilities.transports
+                network.capabilities.notVpn &&
+                    preferred in network.capabilities.transports &&
+                    (preferred != Transport.CELLULAR || network.hasIpv4Address)
             }
         }
 

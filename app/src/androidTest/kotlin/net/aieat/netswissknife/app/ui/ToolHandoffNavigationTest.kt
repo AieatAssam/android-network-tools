@@ -12,13 +12,21 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.swipeUp
+import androidx.compose.ui.test.click
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.NavType
@@ -131,6 +139,9 @@ class ToolHandoffNavigationTest {
 
         InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
         composeRule.mainClock.advanceTimeBy(2_000L)
+        composeRule.waitUntil(5_000L) {
+            composeRule.onAllNodesWithText("LAN result screen").fetchSemanticsNodes().isNotEmpty()
+        }
 
         composeRule.onNodeWithText("LAN result screen").assertIsDisplayed()
         composeRule.onNodeWithText("LAN scan starts: 1").assertIsDisplayed()
@@ -211,8 +222,22 @@ class ToolHandoffNavigationTest {
         composeRule.onNodeWithText("LAN Scanner").performClick()
         composeRule.mainClock.advanceTimeBy(2_000L)
         composeRule.onNodeWithText("Discovered Hosts (1)").performScrollTo()
-        composeRule.onNodeWithText("192.0.2.8", substring = false).performScrollTo().performClick()
-        composeRule.onNodeWithText("Scan ports").performScrollTo().performClick()
+        repeat(2) {
+            composeRule.onAllNodes(isRoot()).onFirst().performTouchInput { swipeUp() }
+        }
+        composeRule.onNodeWithTag("lan_host_card_192.0.2.8")
+            .assertIsDisplayed()
+            .assertHasClickAction()
+            .performTouchInput { click() }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        verify(exactly = 1) { lanViewModel.onToggleHostExpanded("192.0.2.8") }
+        composeRule.waitUntil(5_000L) {
+            composeRule.onAllNodesWithTag("lan_action_ports").fetchSemanticsNodes().isNotEmpty()
+        }
+        repeat(2) {
+            composeRule.onAllNodes(isRoot()).onFirst().performTouchInput { swipeUp() }
+        }
+        composeRule.onNodeWithTag("lan_action_ports").assertIsDisplayed().performClick()
         composeRule.mainClock.advanceTimeBy(2_000L)
         composeRule.onNodeWithTag(PortsScreenTestTags.HOST_FIELD).assertTextContains("192.0.2.8")
         composeRule.onNodeWithTag(PortsScreenTestTags.SOURCE_CONTEXT).assertIsDisplayed()

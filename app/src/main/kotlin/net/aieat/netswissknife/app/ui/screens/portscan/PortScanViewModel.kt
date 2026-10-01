@@ -114,6 +114,7 @@ class PortScanViewModel @Inject constructor(
 
     /** Context for a prefilled handoff, retained only while its form value is retained. */
     val sourceContext: ToolSource? get() = _sourceContext.value
+    val sourceContextState: StateFlow<ToolSource?> = _sourceContext.asStateFlow()
 
     private val _uiState = MutableStateFlow<PortScanUiState>(PortScanUiState.Idle)
     val uiState: StateFlow<PortScanUiState> = _uiState.asStateFlow()

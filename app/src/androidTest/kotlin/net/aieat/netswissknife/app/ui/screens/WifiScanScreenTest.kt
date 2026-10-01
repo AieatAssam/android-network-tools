@@ -13,6 +13,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeUp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.rule.GrantPermissionRule
@@ -367,9 +369,26 @@ class WifiScanScreenTest {
     fun charts_exposeSpectrumAndSignalGaugeValuesToAccessibility() {
         val ap = fakeAp("HomeNet", "AA:AA:AA:AA:AA:01", -50)
         val strongestAp = fakeAp("GuestNet", "AA:AA:AA:AA:AA:02", -35)
+        val state = MutableStateFlow<WifiScanUiState>(successState(listOf(ap, strongestAp)))
+        val expandedNetworks = MutableStateFlow(emptySet<String>())
+        val viewModel = fakeViewModel(state.value)
+        every { viewModel.uiState } returns state
+        every { viewModel.expandedNetworks } returns expandedNetworks
+        every { viewModel.toggleNetworkExpanded(any()) } answers {
+            val networkId = firstArg<String>()
+            expandedNetworks.value = if (networkId in expandedNetworks.value) {
+                expandedNetworks.value - networkId
+            } else {
+                expandedNetworks.value + networkId
+            }
+        }
+        every { viewModel.selectAccessPoint(any()) } answers {
+            val current = state.value as WifiScanUiState.Success
+            state.value = current.copy(selectedAp = firstArg())
+        }
         composeRule.setContent {
             NetSwissKnifeTheme {
-                WifiScanScreen(viewModel = fakeViewModel(successState(listOf(ap, strongestAp))))
+                WifiScanScreen(viewModel = viewModel)
             }
         }
         composeRule.mainClock.advanceTimeBy(1_000L)
@@ -384,8 +403,15 @@ class WifiScanScreenTest {
         composeRule.onNodeWithContentDescription(spectrumDescription).performScrollTo().assertIsDisplayed()
 
         // Expand the grouped network, then open its BSSID details to expose the arc gauge.
-        composeRule.onNodeWithText(ap.displaySsid).performClick()
-        composeRule.onNodeWithText(ap.bssid).performClick()
+        composeRule.onNodeWithTag(WifiScreenTestTags.CONTENT_LIST)
+            .performScrollToIndex(WifiScreenTestTags.NETWORKS_START_INDEX + 1)
+        composeRule.onNodeWithTag("wifi_network_card_${ap.displaySsid}")
+            .performScrollTo()
+            .performClick()
+        composeRule.mainClock.advanceTimeBy(500L)
+        composeRule.onNodeWithTag(WifiScreenTestTags.CONTENT_LIST)
+            .performTouchInput { swipeUp() }
+        composeRule.onNodeWithText(ap.bssid).assertIsDisplayed().performClick()
         composeRule.mainClock.advanceTimeBy(1_000L)
         val levelResource = when (ap.signalLevel) {
             net.aieat.netswissknife.core.network.wifi.SignalLevel.EXCELLENT -> R.string.wifi_signal_level_excellent
@@ -395,6 +421,8 @@ class WifiScanScreenTest {
             net.aieat.netswissknife.core.network.wifi.SignalLevel.POOR -> R.string.wifi_signal_level_poor
         }
         val levelLabel = context.getString(levelResource)
+        composeRule.onNodeWithTag(WifiScreenTestTags.AP_DETAIL_CONTENT)
+            .performTouchInput { swipeUp() }
         composeRule.onNodeWithContentDescription(
             context.getString(R.string.wifi_signal_gauge_a11y, ap.signalQualityPercent, levelLabel)
         ).assertIsDisplayed()

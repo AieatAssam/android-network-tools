@@ -4,6 +4,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertContentDescriptionEquals
+import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
@@ -14,6 +15,8 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.test.assertCountEquals
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -165,7 +168,11 @@ class DnsScreenTest {
 
         composeRule.mainClock.advanceTimeBy(1_000L)
         scrollToStatePanel()
-        composeRule.onNodeWithText(context.getString(R.string.dns_canceling)).assertIsDisplayed()
+        composeRule
+            .onAllNodesWithText(context.getString(R.string.dns_canceling))
+            .assertCountEquals(2)
+            .onFirst()
+            .assertIsDisplayed()
     }
 
     @Test
@@ -384,15 +391,16 @@ class DnsScreenTest {
 
         composeRule.mainClock.advanceTimeBy(1_000L)
         scrollToStatePanel()
-        composeRule.onNodeWithText(expectedTitle).performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText(expectedSubtitle).performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText(context.getString(R.string.dns_rcode, rcode)).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText(expectedTitle).assertIsDisplayed()
+        composeRule.onNodeWithText(expectedSubtitle).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.dns_rcode, rcode)).assertIsDisplayed()
+        swipeContentUp()
         composeRule.onNodeWithText(context.getString(R.string.dns_raw_response))
-            .performScrollTo()
             .assertIsDisplayed()
             .performClick()
         composeRule.mainClock.advanceTimeBy(1_000L)
-        composeRule.onNodeWithText("raw response for $rcode").performScrollTo().assertIsDisplayed()
+        swipeContentUp()
+        composeRule.onNodeWithText("raw response for $rcode").assertIsDisplayed()
     }
 
     @Test
@@ -457,6 +465,11 @@ class DnsScreenTest {
         composeRule
             .onNodeWithTag(DnsScreenTestTags.CONTENT_LIST)
             .performScrollToIndex(DnsScreenTestTags.STATE_PANEL_INDEX)
+    }
+
+    private fun swipeContentUp() {
+        composeRule.onAllNodes(isRoot()).onFirst().performTouchInput { swipeUp() }
+        composeRule.mainClock.advanceTimeBy(500L)
     }
 
     private fun fakeDnsViewModel(

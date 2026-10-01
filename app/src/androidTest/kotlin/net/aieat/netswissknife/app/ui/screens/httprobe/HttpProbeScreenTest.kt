@@ -5,6 +5,7 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
@@ -15,6 +16,9 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.swipeUp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import io.mockk.every
@@ -22,6 +26,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.platform.NetworkStatus
 import net.aieat.netswissknife.app.ui.theme.NetSwissKnifeTheme
 import net.aieat.netswissknife.app.ui.navigation.ToolSource
 import net.aieat.netswissknife.core.network.httprobe.HttpMethod
@@ -155,14 +160,14 @@ class HttpProbeScreenTest {
             .performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText(context.getString(R.string.httprobe_blocked_redirect_message, 302))
             .performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("https://source.example/[path omitted]")
-            .performScrollTo().assertIsDisplayed()
-        composeRule.onAllNodesWithText("http://target.example/[path omitted]")
+        composeRule.onAllNodesWithText("https://source.example/[path omitted]", substring = true)
+            .onFirst().performScrollTo().assertIsDisplayed()
+        composeRule.onAllNodesWithText("http://target.example/[path omitted]", substring = true)
             .assertCountEquals(2)
-        composeRule.onNodeWithText("//target.example/[path omitted]")
-            .performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("http://target.example/[path omitted]")
-            .performScrollTo().assertIsDisplayed()
+        composeRule.onAllNodesWithText("//target.example/[path omitted]", substring = true)
+            .onFirst().performScrollTo().assertIsDisplayed()
+        composeRule.onAllNodesWithText("http://target.example/[path omitted]", substring = true)
+            .onFirst().performScrollTo().assertIsDisplayed()
         listOf(
             "source-secret", "destination-secret", "source-token", "redirect-token", "consent-token", "frag"
         ).forEach { secret ->
@@ -239,23 +244,18 @@ class HttpProbeScreenTest {
         composeRule.mainClock.advanceTimeBy(1_000L)
         composeRule
             .onNodeWithText(context.getString(R.string.httprobe_stopping))
-            .performScrollTo()
             .assertIsDisplayed()
         composeRule.onNodeWithText(context.getString(R.string.httprobe_url_label))
             .assertIsNotEnabled()
         composeRule.onNodeWithText("POST")
             .assertIsNotEnabled()
         composeRule.onNodeWithText(context.getString(R.string.httprobe_header_key))
-            .performScrollTo()
             .assertIsNotEnabled()
         composeRule.onNodeWithText(context.getString(R.string.httprobe_header_value))
-            .performScrollTo()
             .assertIsNotEnabled()
         composeRule.onNodeWithText(context.getString(R.string.httprobe_body_label))
-            .performScrollTo()
             .assertIsNotEnabled()
         composeRule.onNodeWithText("https://recent.example")
-            .performScrollTo()
             .assertIsNotEnabled()
     }
 
@@ -333,6 +333,9 @@ class HttpProbeScreenTest {
         every { viewModel.recentHosts } returns MutableStateFlow(emptyList())
         every { viewModel.sourceContextState } returns MutableStateFlow(ToolSource.MDNS)
         every { viewModel.hasInvalidHandoff } returns MutableStateFlow(false)
+        every { viewModel.networkStatus } returns MutableStateFlow(
+            NetworkStatus(hasInternet = true, hasLocalNetwork = true)
+        )
 
         composeRule.setContent {
             NetSwissKnifeTheme {
@@ -360,6 +363,9 @@ class HttpProbeScreenTest {
         every { viewModel.recentHosts } returns MutableStateFlow(emptyList())
         every { viewModel.sourceContextState } returns MutableStateFlow(ToolSource.LAN)
         every { viewModel.hasInvalidHandoff } returns MutableStateFlow(false)
+        every { viewModel.networkStatus } returns MutableStateFlow(
+            NetworkStatus(hasInternet = true, hasLocalNetwork = true)
+        )
 
         composeRule.setContent { NetSwissKnifeTheme { HttpProbeScreen(viewModel = viewModel) } }
         composeRule.mainClock.advanceTimeBy(1_000L)
@@ -379,6 +385,9 @@ class HttpProbeScreenTest {
         every { viewModel.recentHosts } returns MutableStateFlow(emptyList())
         every { viewModel.sourceContextState } returns sourceContext
         every { viewModel.hasInvalidHandoff } returns MutableStateFlow(false)
+        every { viewModel.networkStatus } returns MutableStateFlow(
+            NetworkStatus(hasInternet = true, hasLocalNetwork = true)
+        )
         every { viewModel.clearPrefill() } answers {
             uiState.value = uiState.value.copy(url = "")
             sourceContext.value = null
@@ -422,16 +431,22 @@ class HttpProbeScreenTest {
 
     @Test
     fun invalidUrl_showsValidationError() {
+        val viewModel = fakeViewModel(HttpProbeUiState(url = "http://example.com"))
         composeRule.setContent {
             NetSwissKnifeTheme {
-                HttpProbeScreen(viewModel = fakeViewModel(HttpProbeUiState(url = "not-a-url.com")))
+                HttpProbeScreen(viewModel = viewModel)
             }
         }
 
         composeRule.mainClock.advanceTimeBy(1_000L)
         composeRule
-            .onNodeWithText(context.getString(R.string.error_invalid_url))
+            .onNodeWithText(context.getString(R.string.err_http_cleartext_disabled))
+            .performScrollTo()
             .assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.httprobe_send_button))
+            .performScrollTo()
+            .assertIsNotEnabled()
+        verify(exactly = 0) { viewModel.send() }
     }
 
     @Test
@@ -445,8 +460,12 @@ class HttpProbeScreenTest {
 
         composeRule.mainClock.advanceTimeBy(1_000L)
         composeRule
-            .onNodeWithText(context.getString(R.string.error_invalid_url))
+            .onNodeWithText(context.getString(R.string.err_url_invalid))
+            .performScrollTo()
             .assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.httprobe_send_button))
+            .performScrollTo()
+            .assertIsNotEnabled()
         verify(exactly = 0) { viewModel.send() }
     }
 
@@ -620,6 +639,9 @@ class HttpProbeScreenTest {
         every { viewModel.recentHosts } returns MutableStateFlow(recentHostValues)
         every { viewModel.sourceContextState } returns MutableStateFlow(null)
         every { viewModel.hasInvalidHandoff } returns MutableStateFlow(false)
+        every { viewModel.networkStatus } returns MutableStateFlow(
+            NetworkStatus(hasInternet = true, hasLocalNetwork = true)
+        )
         return viewModel
     }
 
@@ -642,6 +664,9 @@ class HttpProbeScreenTest {
         every { viewModel.recentHosts } returns MutableStateFlow(emptyList())
         every { viewModel.sourceContextState } returns MutableStateFlow(null)
         every { viewModel.hasInvalidHandoff } returns MutableStateFlow(false)
+        every { viewModel.networkStatus } returns MutableStateFlow(
+            NetworkStatus(hasInternet = true, hasLocalNetwork = true)
+        )
 
         composeRule.setContent {
             NetSwissKnifeTheme {
@@ -654,11 +679,10 @@ class HttpProbeScreenTest {
             .onNodeWithTag(HttpProbeScreenTestTags.CONTENT_LIST)
             .performScrollToIndex(HttpProbeScreenTestTags.RESULT_PANEL_INDEX)
 
-        // The security checks render as a plain (non-lazy) Column inside this list item, so on
-        // shorter/lower-density screens the item's top can be in view while later checks are
-        // still clipped below the viewport. Scroll each target node individually rather than
-        // relying on the whole item fitting on screen.
-        composeRule.onNodeWithText("Cross-Origin-Opener-Policy").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Cross-Origin-Embedder-Policy").performScrollTo().assertIsDisplayed()
+        repeat(3) {
+            composeRule.onAllNodes(isRoot()).onFirst().performTouchInput { swipeUp() }
+        }
+        composeRule.onNodeWithText("Cross-Origin-Opener-Policy").assertIsDisplayed()
+        composeRule.onNodeWithText("Cross-Origin-Embedder-Policy").assertIsDisplayed()
     }
 }

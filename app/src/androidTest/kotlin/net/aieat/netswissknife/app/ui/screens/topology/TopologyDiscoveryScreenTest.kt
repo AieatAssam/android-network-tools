@@ -4,8 +4,11 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
@@ -16,6 +19,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.platform.NetworkStatus
 import net.aieat.netswissknife.app.ui.theme.NetSwissKnifeTheme
 import net.aieat.netswissknife.core.network.topology.TopologyGraph
 import net.aieat.netswissknife.core.network.topology.TopologyNode
@@ -187,7 +191,8 @@ class TopologyDiscoveryScreenTest {
 
         val partialStatus = context.resources.getQuantityString(R.plurals.topology_canceled_partial_status, 1, 1)
         composeRule.onNodeWithText(partialStatus).assertIsDisplayed()
-        composeRule.onNodeWithText(context.getString(R.string.topology_clear_partial_results))
+        composeRule.onNodeWithTag("topology_clear_partial_results")
+            .assertIsDisplayed()
             .performClick()
         verify(exactly = 1) { viewModel.reset() }
 
@@ -204,7 +209,8 @@ class TopologyDiscoveryScreenTest {
                 .fetchSemanticsNodes().size > 1
         }
         composeRule.mainClock.autoAdvance = false
-        composeRule.onNodeWithText("core-switch").assertIsDisplayed()
+        composeRule.onAllNodesWithText("core-switch").onLast().assertIsDisplayed()
+        composeRule.onAllNodesWithText("10.0.0.1").onLast().assertIsDisplayed()
     }
 
     private fun scanningBadgeText(count: Int): String =
@@ -330,6 +336,8 @@ class TopologyDiscoveryScreenTest {
             .onNodeWithText(context.getString(R.string.topology_node_detail_system), ignoreCase = true)
             .performScrollTo()
             .assertIsDisplayed()
+        composeRule.onAllNodesWithText("core-switch").onLast().assertIsDisplayed()
+        composeRule.onAllNodesWithText("10.0.0.1").onLast().assertIsDisplayed()
     }
 
     @Test
@@ -377,6 +385,8 @@ class TopologyDiscoveryScreenTest {
     @Test
     fun failureState_showsErrorAndRetryResets() {
         val viewModel = fakeViewModel(TopologyUiState.Failure("SNMP timeout"))
+        var submitted: TopologyParams? = null
+        every { viewModel.retryDiscovery(any()) } answers { submitted = firstArg() }
         composeRule.setContent {
             NetSwissKnifeTheme {
                 TopologyDiscoveryScreen(viewModel = viewModel)
@@ -385,11 +395,16 @@ class TopologyDiscoveryScreenTest {
         composeRule.mainClock.advanceTimeBy(500L)
 
         composeRule.onNodeWithText("SNMP timeout").assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.topology_target_ip_label))
+            .performTextInput("192.168.1.1")
+        composeRule.mainClock.advanceTimeBy(200L)
         composeRule
-            .onNodeWithText(context.getString(R.string.topology_error_retry))
+            .onNodeWithTag("topology_error_retry")
+            .assertIsEnabled()
             .performClick()
 
-        verify(exactly = 1) { viewModel.reset() }
+        verify(exactly = 1) { viewModel.retryDiscovery(any()) }
+        assertEquals("192.168.1.1", submitted?.targetIp)
     }
 
     private fun fakeNode(ip: String, sysName: String) = TopologyNode(
@@ -414,6 +429,9 @@ class TopologyDiscoveryScreenTest {
         val viewModel = mockk<TopologyDiscoveryViewModel>(relaxed = true)
         every { viewModel.uiState } returns (flow ?: MutableStateFlow(state ?: TopologyUiState.Idle))
         every { viewModel.recentSeeds } returns MutableStateFlow(emptyList())
+        every { viewModel.networkStatus } returns MutableStateFlow(
+            NetworkStatus(hasInternet = true, hasLocalNetwork = true)
+        )
         return viewModel
     }
 }

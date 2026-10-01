@@ -409,6 +409,7 @@ class MdnsDiscoveryScreenTest {
         composeRule.onNodeWithContentDescription(
             context.getString(R.string.mdns_http_probe_description, "printer"),
         ).performScrollTo().performClick()
+        composeRule.mainClock.advanceTimeBy(1_000L)
         composeRule.onNodeWithText("HTTP Probe route host: printer.local").assertIsDisplayed()
         composeRule.onNodeWithText("Decoded target: printer.local:8080").assertIsDisplayed()
         composeRule.onNodeWithText("Prefilled URL: http://printer.local:8080/").assertIsDisplayed()
@@ -416,6 +417,7 @@ class MdnsDiscoveryScreenTest {
         composeRule.onNodeWithText("Requests sent: 0").assertIsDisplayed()
 
         composeRule.onNodeWithText("Back to mDNS").performClick()
+        composeRule.mainClock.advanceTimeBy(1_000L)
         composeRule.onNodeWithText("printer").assertIsDisplayed()
         assertEquals(0, sends)
     }
@@ -473,6 +475,9 @@ class MdnsDiscoveryScreenTest {
     ): MdnsDiscoveryViewModel {
         val viewModel = mockk<MdnsDiscoveryViewModel>(relaxed = true)
         every { viewModel.uiState } returns (flow ?: MutableStateFlow(state ?: MdnsDiscoveryUiState()))
+        every { viewModel.networkStatus } returns MutableStateFlow(
+            NetworkStatus(hasInternet = true, hasLocalNetwork = true)
+        )
         return viewModel
     }
 }

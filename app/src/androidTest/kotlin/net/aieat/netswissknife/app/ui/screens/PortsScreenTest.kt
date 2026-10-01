@@ -8,6 +8,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextEquals
+import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -19,7 +20,9 @@ import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assert
@@ -135,10 +138,7 @@ class PortsScreenTest {
 
     @Test
     fun lanHandoff_prefillsHostAndShowsSourceWithoutStartingScan() {
-        val viewModel = fakePortScanViewModel(host = "192.0.2.8")
-        every { viewModel.sourceContext } answers {
-            ToolSource.LAN.takeIf { viewModel.host.value.isNotBlank() }
-        }
+        val viewModel = fakePortScanViewModel(host = "192.0.2.8", sourceContext = ToolSource.LAN)
 
         composeRule.setContent {
             NetSwissKnifeTheme { PortsScreen(viewModel = viewModel) }
@@ -154,8 +154,9 @@ class PortsScreenTest {
         composeRule.onNodeWithContentDescription(context.getString(R.string.clear))
             .performScrollTo()
             .performClick()
-        composeRule.onAllNodesWithTag(PortsScreenTestTags.SOURCE_CONTEXT).assertCountEquals(0)
+        composeRule.mainClock.advanceTimeBy(500L)
         io.mockk.verify(exactly = 1) { viewModel.onHostChange("") }
+        composeRule.onAllNodesWithTag(PortsScreenTestTags.SOURCE_CONTEXT).assertCountEquals(0)
         io.mockk.verify(exactly = 0) { viewModel.startScan() }
     }
 
@@ -192,7 +193,7 @@ class PortsScreenTest {
             .assertTextEquals(context.getString(R.string.ports_invalid_handoff))
         composeRule.onNodeWithTag(PortsScreenTestTags.SCAN_BUTTON)
             .performScrollTo()
-            .assertIsEnabled()
+            .assertIsNotEnabled()
         io.mockk.verify(exactly = 0) { viewModel.startScan() }
 
         composeRule.onNodeWithText(context.getString(R.string.ports_host_label))
@@ -334,16 +335,19 @@ class PortsScreenTest {
         }
         composeRule.mainClock.advanceTimeBy(1_000L)
 
+        repeat(4) {
+            composeRule.onAllNodes(isRoot()).onFirst().performTouchInput { swipeUp() }
+        }
         composeRule.onNodeWithContentDescription(
             context.getString(R.string.ports_banner_truncated_content_description, banner)
-        ).performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("$banner…").performScrollTo().assertIsDisplayed()
+        ).assertIsDisplayed()
+        composeRule.onNodeWithText("$banner…").assertIsDisplayed()
         composeRule.onNodeWithContentDescription(
             context.getString(R.string.ports_banner_truncated_content_description, smtpBanner),
-        ).performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("$smtpBanner…").performScrollTo().assertIsDisplayed()
+        ).assertIsDisplayed()
+        composeRule.onNodeWithText("$smtpBanner…").assertIsDisplayed()
         composeRule.onNodeWithText(context.getString(R.string.ports_tls_subject, "example.com Injected host"))
-            .performScrollTo().assertIsDisplayed()
+            .assertIsDisplayed()
     }
 
     @Test
@@ -428,6 +432,24 @@ class PortsScreenTest {
     }
 
     @Test
+    fun pastedIpv4WithTrailingSpace_keepsStartEnabled() {
+        val viewModel = fakePortScanViewModel()
+        composeRule.setContent {
+            NetSwissKnifeTheme { PortsScreen(viewModel = viewModel) }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        composeRule.onNodeWithTag(PortsScreenTestTags.HOST_FIELD).performTextInput("10.0.2.2 ")
+        composeRule.mainClock.advanceTimeBy(200L)
+        composeRule.onNodeWithTag(PortsScreenTestTags.SCAN_BUTTON)
+            .performScrollTo()
+            .assertIsEnabled()
+            .performClick()
+
+        io.mockk.verify(exactly = 1) { viewModel.startScan() }
+    }
+
+    @Test
     fun hostWithInternalSpace_showsValidationAndBlocksButtonAndIme() {
         val viewModel = fakePortScanViewModel()
         composeRule.setContent {
@@ -453,6 +475,7 @@ class PortsScreenTest {
         host: String = "",
         concurrency: Int = 50,
         state: PortScanUiState = PortScanUiState.Idle,
+        sourceContext: ToolSource? = null,
         aggressiveProbes: Boolean = true,
         selectedPreset: PortScanPreset = PortScanPreset.COMMON,
         startPort: String = "1",
@@ -461,13 +484,16 @@ class PortsScreenTest {
     ): PortScanViewModel {
         val viewModel = mockk<PortScanViewModel>(relaxed = true)
         val hostFlow = MutableStateFlow(host)
+        val sourceContextFlow = MutableStateFlow(sourceContext)
         every { viewModel.uiState } returns MutableStateFlow(state)
         every { viewModel.host } returns hostFlow
         every { viewModel.onHostChange(any()) } answers {
             val value = firstArg<String>()
             hostFlow.value = value
+            if (value.isEmpty()) sourceContextFlow.value = null
             if (HostValidator.normalize(value) != null) invalidHandoffState.value = false
         }
+        every { viewModel.sourceContextState } returns sourceContextFlow
         every { viewModel.selectedPreset } returns MutableStateFlow(selectedPreset)
         every { viewModel.startPort } returns MutableStateFlow(startPort)
         every { viewModel.endPort } returns MutableStateFlow(endPort)
@@ -476,6 +502,7 @@ class PortsScreenTest {
         every { viewModel.aggressiveProbes } returns MutableStateFlow(aggressiveProbes)
         every { viewModel.recentHosts } returns MutableStateFlow(emptyList())
         every { viewModel.hasInvalidHandoff } returns invalidHandoffState
+        every { viewModel.clearPrefill() } answers { hostFlow.value = "" }
         return viewModel
     }
 }

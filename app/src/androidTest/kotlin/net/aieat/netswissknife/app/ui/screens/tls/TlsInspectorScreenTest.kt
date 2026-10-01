@@ -12,6 +12,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeUp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import io.mockk.every
@@ -19,6 +21,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.platform.NetworkStatus
 import net.aieat.netswissknife.app.ui.navigation.ToolSource
 import net.aieat.netswissknife.app.ui.theme.NetSwissKnifeTheme
 import net.aieat.netswissknife.core.network.tls.TlsCertificate
@@ -121,6 +124,7 @@ class TlsInspectorScreenTest {
         composeRule.onNodeWithTag(TlsInspectorScreenTestTags.CLEAR_PREFILL_ACTION)
             .performScrollTo()
             .performClick()
+        composeRule.mainClock.advanceTimeBy(500L)
         composeRule.onNodeWithTag(TlsInspectorScreenTestTags.SOURCE_CONTEXT).assertDoesNotExist()
         verify(exactly = 1) { viewModel.clearPrefill() }
     }
@@ -280,6 +284,26 @@ class TlsInspectorScreenTest {
     }
 
     @Test
+    fun inspectionFailureAfterProgress_showsRetryAction() {
+        val stateFlow = MutableStateFlow(TlsInspectorUiState(host = "example.com", isLoading = true))
+        val viewModel = fakeViewModel(TlsInspectorUiState(host = "example.com", isLoading = true), stateFlow)
+        composeRule.setContent {
+            NetSwissKnifeTheme { TlsInspectorScreen(viewModel = viewModel) }
+        }
+        composeRule.mainClock.advanceTimeBy(500L)
+        composeRule.onAllNodesWithText(context.getString(R.string.tls_inspecting))
+            .onFirst()
+            .assertIsDisplayed()
+
+        stateFlow.value = stateFlow.value.copy(isLoading = false, error = "Connection reset")
+        composeRule.mainClock.advanceTimeBy(500L)
+        composeRule.onNodeWithText("Connection reset").assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.tls_retry)).performClick()
+
+        verify(exactly = 1) { viewModel.inspect() }
+    }
+
+    @Test
     fun pinValidationError_usesLocalizedDescriptionKey() {
         val viewModel = fakeViewModel(
             TlsInspectorUiState(
@@ -403,21 +427,39 @@ class TlsInspectorScreenTest {
             "TLSv1.2",
             "TLSv1.0",
         ).forEach { label ->
-            composeRule.onNodeWithText(label, substring = true).performScrollTo().assertIsDisplayed()
+            var visible = false
+            repeat(8) {
+                if (!visible) {
+                    try {
+                        composeRule.onAllNodesWithText(label, substring = true).onFirst().assertIsDisplayed()
+                        visible = true
+                    } catch (_: AssertionError) {
+                        val content = composeRule.onNodeWithTag("tls_content_list")
+                        val height = content.fetchSemanticsNode().boundsInRoot.height
+                        content.performTouchInput {
+                            swipeUp(startY = height * 0.75f, endY = height * 0.55f)
+                        }
+                    }
+                }
+            }
+            if (!visible) composeRule.onAllNodesWithText(label, substring = true).onFirst().assertIsDisplayed()
         }
     }
 
     private fun fakeViewModel(
         state: TlsInspectorUiState,
+        stateFlow: MutableStateFlow<TlsInspectorUiState> = MutableStateFlow(state),
         sourceContext: ToolSource? = null,
     ): TlsInspectorViewModel {
         val viewModel = mockk<TlsInspectorViewModel>(relaxed = true)
-        val stateFlow = MutableStateFlow(state)
         val sourceContextFlow = MutableStateFlow(sourceContext)
         every { viewModel.uiState } returns stateFlow
         every { viewModel.recentHosts } returns MutableStateFlow(emptyList())
         every { viewModel.hasInvalidHandoff } returns MutableStateFlow(false)
         every { viewModel.sourceContextState } returns sourceContextFlow
+        every { viewModel.networkStatus } returns MutableStateFlow(
+            NetworkStatus(hasInternet = true, hasLocalNetwork = true)
+        )
         every { viewModel.clearPrefill() } answers { sourceContextFlow.value = null }
         // onHostChange is otherwise a no-op on a relaxed mock, so typing into the host
         // field would never be reflected back through uiState.host — feed it back into

@@ -21,6 +21,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.platform.NetworkStatus
 import net.aieat.netswissknife.app.ui.theme.NetSwissKnifeTheme
 import net.aieat.netswissknife.app.ui.navigation.ToolSource
 import net.aieat.netswissknife.core.network.wol.WolSendReport
@@ -124,6 +125,7 @@ class WakeOnLanScreenTest {
         composeRule.onNodeWithTag(WakeOnLanScreenTestTags.CLEAR_PREFILL_ACTION)
             .performScrollTo()
             .performClick()
+        composeRule.mainClock.advanceTimeBy(500L)
         composeRule.onNodeWithTag(WakeOnLanScreenTestTags.SOURCE_CONTEXT).assertDoesNotExist()
         verify(exactly = 1) { viewModel.clearPrefill() }
     }
@@ -257,6 +259,9 @@ class WakeOnLanScreenTest {
         every { viewModel.sourceContext } returns sourceContext
         val sourceContextFlow = MutableStateFlow(sourceContext)
         every { viewModel.sourceContextState } returns sourceContextFlow
+        every { viewModel.networkStatus } returns MutableStateFlow(
+            NetworkStatus(hasInternet = true, hasLocalNetwork = true)
+        )
         every { viewModel.clearPrefill() } answers { sourceContextFlow.value = null }
         every { viewModel.hasInvalidHandoff } returns MutableStateFlow(invalidHandoff)
         return viewModel

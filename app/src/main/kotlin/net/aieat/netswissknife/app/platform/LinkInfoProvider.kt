@@ -38,7 +38,12 @@ object LinkInfoMapper {
     fun selectLocalWithIpv4(
         networks: List<NetworkSnapshot>,
         ipv4NetworkIds: Set<String>,
-    ): NetworkSnapshot? = NetworkSelection.selectLocal(networks.filter { it.id in ipv4NetworkIds })
+    ): NetworkSnapshot? =
+        NetworkSelection.selectLocal(
+            networks
+                .filter { it.id in ipv4NetworkIds }
+                .map { it.copy(hasIpv4Address = true) },
+        )
 
     fun cidrOf(
         address: String,

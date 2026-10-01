@@ -3,12 +3,15 @@ package net.aieat.netswissknife.app.ui.screens.whois
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeUp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import io.mockk.every
@@ -16,6 +19,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.platform.NetworkStatus
 import net.aieat.netswissknife.app.ui.theme.NetSwissKnifeTheme
 import net.aieat.netswissknife.core.network.whois.WhoisProtocol
 import net.aieat.netswissknife.core.network.whois.WhoisQueryType
@@ -170,8 +174,8 @@ class WhoisScreenTest {
         verify(exactly = 1) { viewModel.stopLookup() }
         composeRule.onNodeWithContentDescription(context.getString(R.string.clear))
             .assertIsNotEnabled()
+        scrollWhoisToBottom()
         composeRule.onNodeWithText("saved.example")
-            .performScrollTo()
             .assertIsNotEnabled()
         verify(exactly = 0) { viewModel.onQueryChange("saved.example") }
         stateFlow.value = stateFlow.value.copy(isCanceling = true)
@@ -187,14 +191,20 @@ class WhoisScreenTest {
             isCanceled = true
         )
         composeRule.mainClock.advanceTimeBy(500L)
+        scrollWhoisToBottom()
         composeRule.onNodeWithText(context.getString(R.string.whois_canceled_title))
-            .performScrollTo()
             .assertIsDisplayed()
         composeRule.onNodeWithText("whois.iana.org").assertIsDisplayed()
+        scrollWhoisToBottom()
         composeRule.onNodeWithText(context.getString(R.string.whois_retry))
-            .performScrollTo()
             .performClick()
         verify(exactly = 1) { viewModel.lookup() }
+    }
+
+    private fun scrollWhoisToBottom() {
+        repeat(4) {
+            composeRule.onAllNodes(isRoot()).onFirst().performTouchInput { swipeUp() }
+        }
     }
 
     private fun fakeHop(host: String) = HopUiState(
@@ -232,6 +242,9 @@ class WhoisScreenTest {
         val viewModel = mockk<WhoisViewModel>(relaxed = true)
         every { viewModel.uiState } returns (flow ?: MutableStateFlow(state ?: WhoisUiState()))
         every { viewModel.recentHosts } returns MutableStateFlow(emptyList())
+        every { viewModel.networkStatus } returns MutableStateFlow(
+            NetworkStatus(hasInternet = true, hasLocalNetwork = true)
+        )
         return viewModel
     }
 }

@@ -10,6 +10,9 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -29,6 +32,7 @@ import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.platform.LocalNetworkPermissionPolicy
+import net.aieat.netswissknife.app.platform.NetworkStatus
 import net.aieat.netswissknife.app.ui.i18n.ErrorTextMapper
 import net.aieat.netswissknife.app.ui.screens.ping.PingUiState
 import net.aieat.netswissknife.app.ui.screens.ping.PingViewModel
@@ -305,7 +309,9 @@ class PingScreenTest {
         composeRule.mainClock.advanceTimeBy(100L)
 
         composeRule.onAllNodesWithTag(PingScreenTestTags.SOURCE_CONTEXT).assertCountEquals(0)
-        composeRule.onNodeWithTag(PingScreenTestTags.HOST_FIELD).assertTextEquals("")
+        composeRule.onNodeWithTag(PingScreenTestTags.HOST_FIELD).assert(
+            SemanticsMatcher.expectValue(SemanticsProperties.EditableText, AnnotatedString("")),
+        )
         verify(exactly = 1) { viewModel.clearPrefill() }
         verify(exactly = 0) { viewModel.startPing() }
     }
@@ -355,6 +361,7 @@ class PingScreenTest {
 
         hostField.performTextClearance()
         hostField.performTextInput("replacement.example")
+        composeRule.mainClock.advanceTimeBy(500L)
 
         composeRule.onAllNodesWithTag(PingScreenTestTags.INVALID_HANDOFF).assertCountEquals(0)
         composeRule.onNodeWithText(context.getString(R.string.ping_start_button)).assertIsEnabled()
@@ -533,6 +540,9 @@ class PingScreenTest {
         every { viewModel.intervalMs } returns intervalMs
         every { viewModel.continuousMode } returns MutableStateFlow(false)
         every { viewModel.recentHosts } returns MutableStateFlow(emptyList())
+        every { viewModel.networkStatus } returns MutableStateFlow(
+            NetworkStatus(hasInternet = true, hasLocalNetwork = true)
+        )
         every { viewModel.sourceContext } returns sourceContext
         every { viewModel.sourceContextState } returns sourceContextFlow
         every { viewModel.clearPrefill() } answers {

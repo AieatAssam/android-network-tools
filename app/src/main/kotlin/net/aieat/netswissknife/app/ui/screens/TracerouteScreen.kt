@@ -204,7 +204,7 @@ fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
     var showHelp by remember { mutableStateOf(false) }
 
     LazyColumn(
-        modifier          = Modifier.fillMaxSize().alpha(screenAlpha),
+        modifier          = Modifier.fillMaxSize().alpha(screenAlpha).testTag("traceroute_content_list"),
         contentPadding    = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
@@ -1527,10 +1527,10 @@ private fun TracerouteErrorPanel(
         title = stringResource(R.string.traceroute_error_title),
         message = state.message,
     ) {
-        FilledTonalButton(onClick = onClear) {
+        FilledTonalButton(onClick = onClear, modifier = Modifier.testTag("traceroute_error_clear")) {
             Text(stringResource(R.string.traceroute_clear_button))
         }
-        Button(onClick = onRetry) {
+        Button(onClick = onRetry, modifier = Modifier.testTag("traceroute_error_retry")) {
             Icon(Icons.Default.Refresh, null)
             Spacer(Modifier.width(4.dp))
             Text(stringResource(R.string.traceroute_retry_button))
