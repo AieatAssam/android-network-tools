@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
@@ -16,8 +17,8 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import net.aieat.netswissknife.app.R
@@ -42,8 +43,7 @@ class NavigationAccessibilityTest {
     private val context
         get() = InstrumentationRegistry.getInstrumentation().targetContext
 
-    private fun hasButtonRole(): SemanticsMatcher =
-        SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button)
+    private fun hasButtonRole(): SemanticsMatcher = SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button)
 
     @Test
     fun home_everyToolCard_isMergedClickableButton() {
@@ -57,18 +57,19 @@ class NavigationAccessibilityTest {
         composeRule.mainClock.advanceTimeBy(2_000L)
 
         NavRoutes.allTools.forEach { tool ->
+            val label = context.getString(tool.labelRes)
             composeRule
                 .onNodeWithTag(HomeScreenTestTags.TOOL_GRID)
-                .performScrollToNode(hasText(tool.label))
+                .performScrollToNode(hasText(label))
             composeRule
-                .onNodeWithText(tool.label)
+                .onNodeWithText(label)
                 .assertIsDisplayed()
                 .assertHasClickAction()
                 .assert(hasButtonRole())
                 // Matching and activating the visible title proves it is part of the
                 // merged card action, rather than a separate non-clickable Text node.
                 .performClick()
-            assertEquals("Activating ${tool.label} should navigate to its tool", tool.route, destination)
+            assertEquals("Activating $label should navigate to its tool", tool.route, destination)
         }
     }
 
@@ -106,16 +107,22 @@ class NavigationAccessibilityTest {
         val toolList = composeRule.onNodeWithTag(MoreToolsSheetTestTags.TOOL_LIST)
 
         NavRoutes.allTools.forEach { tool ->
-            composeRule.onNodeWithText(tool.label).performScrollTo()
+            val label = context.getString(tool.labelRes)
+            composeRule.onNodeWithText(label).performScrollTo()
             composeRule
-                .onNodeWithText(tool.label)
+                .onNodeWithText(label)
                 .assertIsDisplayed()
                 .assertHasClickAction()
                 .assert(hasButtonRole())
+            composeRule
+                .onNodeWithText(context.getString(tool.descriptionRes))
+                .assertIsDisplayed()
+            composeRule
+                .onNodeWithText(label)
                 // The label itself must activate the row. The nested pin button stays
                 // independently available through its own content description.
                 .performClick()
-            assertEquals("Activating ${tool.label} should navigate to its tool", tool.route, navigated.last())
+            assertEquals("Activating $label should navigate to its tool", tool.route, navigated.last())
         }
 
         toolList.assertIsDisplayed()
@@ -135,11 +142,12 @@ class NavigationAccessibilityTest {
                     onNavigate = navigatedRoutes::add,
                     onTogglePin = { route ->
                         toggledRoutes += route
-                        pinnedRoutes = if (route in pinnedRoutes) {
-                            pinnedRoutes - route
-                        } else {
-                            pinnedRoutes + route
-                        }
+                        pinnedRoutes =
+                            if (route in pinnedRoutes) {
+                                pinnedRoutes - route
+                            } else {
+                                pinnedRoutes + route
+                            }
                     },
                     maxPinned = 3,
                     onDismiss = {},
@@ -147,7 +155,8 @@ class NavigationAccessibilityTest {
             }
         }
 
-        val pinDescription = context.getString(R.string.more_pin_description, ping.label)
+        val pingLabel = context.getString(ping.labelRes)
+        val pinDescription = context.getString(R.string.more_pin_description, pingLabel)
         composeRule
             .onNodeWithContentDescription(pinDescription)
             .assertIsDisplayed()
@@ -158,7 +167,7 @@ class NavigationAccessibilityTest {
         assertEquals(listOf(ping.route), toggledRoutes)
         assertTrue("Pin action must not navigate", navigatedRoutes.isEmpty())
 
-        val unpinDescription = context.getString(R.string.more_unpin_description, ping.label)
+        val unpinDescription = context.getString(R.string.more_unpin_description, pingLabel)
         composeRule
             .onNodeWithContentDescription(unpinDescription)
             .assertIsDisplayed()
@@ -190,6 +199,27 @@ class NavigationAccessibilityTest {
             .performClick()
 
         composeRule.onNodeWithText(welcomeTitle).assertDoesNotExist()
+    }
+
+    @Test
+    fun onboardingAnnouncesCurrentPageAndTotal() {
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                OnboardingSheet(onDismiss = {})
+            }
+        }
+
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        composeRule
+            .onNodeWithContentDescription(context.getString(R.string.onboarding_page_position, 1, 4))
+            .assertIsDisplayed()
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite))
+
+        composeRule.onNodeWithText(context.getString(R.string.onboarding_next)).performClick()
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        composeRule
+            .onNodeWithContentDescription(context.getString(R.string.onboarding_page_position, 2, 4))
+            .assertIsDisplayed()
     }
 
     @Test

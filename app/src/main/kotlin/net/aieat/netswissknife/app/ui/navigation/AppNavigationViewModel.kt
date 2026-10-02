@@ -15,45 +15,51 @@ import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import javax.inject.Inject
 
 @HiltViewModel
-class AppNavigationViewModel @Inject constructor(
-    private val dataStore: DataStore<Preferences>
-) : ViewModel() {
+class AppNavigationViewModel
+    @Inject
+    constructor(
+        private val dataStore: DataStore<Preferences>,
+    ) : ViewModel() {
+        val pinnedRoutes: StateFlow<List<String>> =
+            dataStore.data
+                .map { prefs ->
+                    normalizedPinnedRoutes(prefs[AppPreferenceKeys.PINNED_ROUTES])
+                }.stateIn(
+                    scope = viewModelScope,
+                    started = SharingStarted.Eagerly,
+                    initialValue = NavRoutes.defaultPinnedRoutes,
+                )
 
-    val pinnedRoutes: StateFlow<List<String>> = dataStore.data
-        .map { prefs ->
-            prefs[AppPreferenceKeys.PINNED_ROUTES]
-                ?.split("|")
-                ?.filter { it.isNotBlank() }
-                ?: NavRoutes.defaultPinnedRoutes
-        }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.Eagerly,
-            initialValue = NavRoutes.defaultPinnedRoutes
-        )
+        fun togglePin(route: String) {
+            if (route !in validToolRoutes) return
+            viewModelScope.launch {
+                dataStore.edit { prefs ->
+                    val current = normalizedPinnedRoutes(prefs[AppPreferenceKeys.PINNED_ROUTES]).toMutableList()
 
-    fun togglePin(route: String) {
-        viewModelScope.launch {
-            dataStore.edit { prefs ->
-                val current = prefs[AppPreferenceKeys.PINNED_ROUTES]
-                    ?.split("|")
-                    ?.filter { it.isNotBlank() }
-                    ?.toMutableList()
-                    ?: NavRoutes.defaultPinnedRoutes.toMutableList()
+                    if (current.contains(route)) {
+                        current.remove(route)
+                    } else if (current.size < MAX_PINNED) {
+                        current.add(route)
+                    }
 
-                if (current.contains(route)) {
-                    current.remove(route)
-                } else if (current.size < MAX_PINNED) {
-                    current.add(route)
+                    prefs[AppPreferenceKeys.PINNED_ROUTES] = current.joinToString("|")
                 }
-
-                prefs[AppPreferenceKeys.PINNED_ROUTES] = current.joinToString("|")
             }
         }
-    }
 
-    companion object {
-        const val MAX_PINNED = 3
-        val DEFAULT_PINNED_ROUTES = NavRoutes.defaultPinnedRoutes
+        companion object {
+            const val MAX_PINNED = 3
+            val DEFAULT_PINNED_ROUTES = NavRoutes.defaultPinnedRoutes
+
+            private val validToolRoutes = NavRoutes.allTools.map { it.route }.toSet()
+
+            private fun normalizedPinnedRoutes(serialized: String?): List<String> =
+                serialized
+                    ?.split("|")
+                    ?.map { it.trim() }
+                    ?.filter { it in validToolRoutes }
+                    ?.distinct()
+                    ?.take(MAX_PINNED)
+                    ?: DEFAULT_PINNED_ROUTES
+        }
     }
-}

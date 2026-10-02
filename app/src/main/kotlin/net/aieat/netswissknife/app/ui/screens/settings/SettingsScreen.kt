@@ -1,8 +1,11 @@
 package net.aieat.netswissknife.app.ui.screens.settings
 
+import android.os.Build
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,24 +13,23 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.foundation.clickable
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -37,38 +39,36 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
-import android.os.Build
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.platform.LocalUriHandler
-import androidx.compose.ui.text.style.TextDecoration
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.activity.compose.BackHandler
-import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.delay
 import net.aieat.netswissknife.app.BuildConfig
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
@@ -84,7 +84,7 @@ object SettingsScreenTestTags {
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit = {},
-    viewModel: SettingsViewModel = hiltViewModel()
+    viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     BackHandler(onBack = onBack)
 
@@ -101,21 +101,25 @@ fun SettingsScreen(
     var visibleSections by remember { mutableIntStateOf(0) }
     LaunchedEffect(visible) {
         if (visible) {
-            repeat(8) { delay(60L); visibleSections++ }
+            repeat(8) {
+                delay(60L)
+                visibleSections++
+            }
         }
     }
 
     AnimatedVisibility(
         visible = visible,
-        enter = fadeIn(AppMotion.enter(300)) + slideInVertically(AppMotion.enter(300)) { it / 8 }
+        enter = fadeIn(AppMotion.enter(300)) + slideInVertically(AppMotion.enter(300)) { it / 8 },
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .navigationBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .navigationBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             SettingsHeader(onBack = onBack)
             AnimatedVisibility(visible = visibleSections >= 1, enter = fadeIn(AppMotion.enter(250)) + slideInVertically(AppMotion.enter(250)) { it / 3 }) {
@@ -123,7 +127,7 @@ fun SettingsScreen(
                     themeOverride = themeOverride,
                     onThemeChange = viewModel::setThemeOverride,
                     dynamicColor = dynamicColor,
-                    onDynamicColorChange = viewModel::setDynamicColor
+                    onDynamicColorChange = viewModel::setDynamicColor,
                 )
             }
             AnimatedVisibility(visible = visibleSections >= 2, enter = fadeIn(AppMotion.enter(250)) + slideInVertically(AppMotion.enter(250)) { it / 3 }) {
@@ -135,7 +139,7 @@ fun SettingsScreen(
                     onPingCountChange = viewModel::setDefaultPingCount,
                     onTimeoutChange = viewModel::setDefaultTimeoutMs,
                     onConcurrencyChange = viewModel::setDefaultConcurrency,
-                    onWifiRefreshIntervalChange = viewModel::setWifiRefreshInterval
+                    onWifiRefreshIntervalChange = viewModel::setWifiRefreshInterval,
                 )
             }
             AnimatedVisibility(visible = visibleSections >= 3, enter = fadeIn(AppMotion.enter(250)) + slideInVertically(AppMotion.enter(250)) { it / 3 }) {
@@ -168,9 +172,10 @@ private fun SettingsHeader(onBack: () -> Unit) {
         iconContent = {
             IconButton(
                 onClick = onBack,
-                modifier = Modifier
-                    .size(52.dp)
-                    .semantics { contentDescription = backDescription },
+                modifier =
+                    Modifier
+                        .size(52.dp)
+                        .semantics { contentDescription = backDescription },
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -188,7 +193,7 @@ private fun ThemeSection(
     themeOverride: String,
     onThemeChange: (String) -> Unit,
     dynamicColor: Boolean,
-    onDynamicColorChange: (Boolean) -> Unit
+    onDynamicColorChange: (Boolean) -> Unit,
 ) {
     SectionHeader(Icons.Default.DarkMode, stringResource(R.string.settings_theme_section))
 
@@ -197,20 +202,21 @@ private fun ThemeSection(
             Text(
                 text = stringResource(R.string.settings_theme_label),
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             val options = listOf("SYSTEM", "LIGHT", "DARK")
-            val labels = listOf(
-                stringResource(R.string.settings_theme_system),
-                stringResource(R.string.settings_theme_light),
-                stringResource(R.string.settings_theme_dark)
-            )
+            val labels =
+                listOf(
+                    stringResource(R.string.settings_theme_system),
+                    stringResource(R.string.settings_theme_light),
+                    stringResource(R.string.settings_theme_dark),
+                )
             SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                 options.forEachIndexed { index, option ->
                     SegmentedButton(
                         selected = themeOverride == option,
                         onClick = { onThemeChange(option) },
-                        shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size)
+                        shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size),
                     ) {
                         Text(labels[index])
                     }
@@ -221,22 +227,22 @@ private fun ThemeSection(
                 HorizontalDivider()
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(Modifier.weight(1f)) {
                         Text(
                             text = stringResource(R.string.settings_dynamic_color_label),
-                            style = MaterialTheme.typography.bodyMedium
+                            style = MaterialTheme.typography.bodyMedium,
                         )
                         Text(
                             text = stringResource(R.string.settings_dynamic_color_subtitle),
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                     Switch(
                         checked = dynamicColor,
-                        onCheckedChange = onDynamicColorChange
+                        onCheckedChange = onDynamicColorChange,
                     )
                 }
             }
@@ -253,7 +259,7 @@ private fun DefaultsSection(
     onPingCountChange: (Int) -> Unit,
     onTimeoutChange: (Int) -> Unit,
     onConcurrencyChange: (Int) -> Unit,
-    onWifiRefreshIntervalChange: (Long?) -> Unit
+    onWifiRefreshIntervalChange: (Long?) -> Unit,
 ) {
     SectionHeader(Icons.Default.Tune, stringResource(R.string.settings_defaults_section))
 
@@ -264,14 +270,14 @@ private fun DefaultsSection(
                 value = pingCount.toFloat(),
                 valueRange = 1f..100f,
                 steps = 98,
-                onValueChange = { onPingCountChange(it.roundToInt()) }
+                onValueChange = { onPingCountChange(it.roundToInt()) },
             )
             SliderSetting(
                 label = stringResource(R.string.settings_timeout_label, timeoutMs),
                 value = timeoutMs.toFloat(),
                 valueRange = 500f..10_000f,
                 steps = 18,
-                onValueChange = { onTimeoutChange((it / 500).roundToInt() * 500) }
+                onValueChange = { onTimeoutChange((it / 500).roundToInt() * 500) },
             )
             SliderSetting(
                 label = stringResource(R.string.settings_concurrency_label, concurrency),
@@ -279,16 +285,16 @@ private fun DefaultsSection(
                 valueRange = 1f..500f,
                 steps = 498,
                 onValueChange = { onConcurrencyChange(it.roundToInt()) },
-                testTag = SettingsScreenTestTags.DEFAULT_CONCURRENCY_SLIDER
+                testTag = SettingsScreenTestTags.DEFAULT_CONCURRENCY_SLIDER,
             )
             Text(
                 stringResource(R.string.settings_wifi_refresh_interval_label),
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             WifiRefreshIntervalPicker(
                 selectedIntervalMs = wifiRefreshIntervalMs,
-                onSelected = onWifiRefreshIntervalChange
+                onSelected = onWifiRefreshIntervalChange,
             )
         }
     }
@@ -301,22 +307,25 @@ private fun SliderSetting(
     valueRange: ClosedFloatingPointRange<Float>,
     steps: Int,
     onValueChange: (Float) -> Unit,
-    testTag: String? = null
+    testTag: String? = null,
 ) {
     Column {
         Text(
             text = label,
             style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Slider(
             value = value,
             onValueChange = onValueChange,
             valueRange = valueRange,
             steps = steps,
-            modifier = Modifier.fillMaxWidth().semantics {
-                contentDescription = "$label: ${value.toInt()}"
-            }.then(testTag?.let { Modifier.testTag(it) } ?: Modifier)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .semantics {
+                        contentDescription = "$label: ${value.toInt()}"
+                    }.then(testTag?.let { Modifier.testTag(it) } ?: Modifier),
         )
     }
 }
@@ -332,19 +341,20 @@ private fun DataSection(onClearRecents: () -> Unit) {
             Text(
                 text = stringResource(R.string.settings_clear_recents_label),
                 style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.SemiBold,
             )
             Text(
                 text = stringResource(R.string.settings_clear_recents_subtitle),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Button(
                 onClick = { showConfirmDialog = true },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.errorContainer,
-                    contentColor = MaterialTheme.colorScheme.onErrorContainer
-                )
+                colors =
+                    ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                    ),
             ) {
                 Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
@@ -364,9 +374,10 @@ private fun DataSection(onClearRecents: () -> Unit) {
                         onClearRecents()
                         showConfirmDialog = false
                     },
-                    colors = ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error
-                    )
+                    colors =
+                        ButtonDefaults.textButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error,
+                        ),
                 ) {
                     Text(stringResource(R.string.settings_clear_recents_confirm_button))
                 }
@@ -375,7 +386,7 @@ private fun DataSection(onClearRecents: () -> Unit) {
                 TextButton(onClick = { showConfirmDialog = false }) {
                     Text(stringResource(R.string.cancel))
                 }
-            }
+            },
         )
     }
 }
@@ -391,12 +402,12 @@ private fun OnboardingResetSection(onReset: () -> Unit) {
             Text(
                 text = stringResource(R.string.settings_reset_onboarding_label),
                 style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.SemiBold,
             )
             Text(
                 text = stringResource(R.string.settings_reset_onboarding_subtitle),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             OutlinedButton(onClick = { showConfirmDialog = true }) {
                 Text(stringResource(R.string.settings_reset_onboarding_button))
@@ -410,7 +421,10 @@ private fun OnboardingResetSection(onReset: () -> Unit) {
             title = { Text(stringResource(R.string.settings_reset_onboarding_confirm_title)) },
             text = { Text(stringResource(R.string.settings_reset_onboarding_confirm_message)) },
             confirmButton = {
-                TextButton(onClick = { onReset(); showConfirmDialog = false }) {
+                TextButton(onClick = {
+                    onReset()
+                    showConfirmDialog = false
+                }) {
                     Text(stringResource(R.string.settings_reset_onboarding_confirm_button))
                 }
             },
@@ -418,7 +432,7 @@ private fun OnboardingResetSection(onReset: () -> Unit) {
                 TextButton(onClick = { showConfirmDialog = false }) {
                     Text(stringResource(R.string.cancel))
                 }
-            }
+            },
         )
     }
 }
@@ -432,50 +446,52 @@ private fun AboutSection() {
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     text = stringResource(R.string.settings_version_label),
-                    style = MaterialTheme.typography.bodyMedium
+                    style = MaterialTheme.typography.bodyMedium,
                 )
                 Text(
                     text = BuildConfig.VERSION_NAME,
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { uriHandler.openUri("https://github.com/AieatAssam/android-network-tools") }
-                    .padding(16.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { uriHandler.openUri("https://github.com/AieatAssam/android-network-tools") }
+                        .padding(16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     text = stringResource(R.string.settings_source_code_label),
-                    style = MaterialTheme.typography.bodyMedium
+                    style = MaterialTheme.typography.bodyMedium,
                 )
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     Text(
                         text = stringResource(R.string.settings_source_code_url),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.primary,
-                        textDecoration = TextDecoration.Underline
+                        textDecoration = TextDecoration.Underline,
                     )
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.OpenInNew,
                         contentDescription = null,
                         modifier = Modifier.size(14.dp),
-                        tint = MaterialTheme.colorScheme.primary
+                        tint = MaterialTheme.colorScheme.primary,
                     )
                 }
             }
@@ -496,34 +512,35 @@ private fun AttributionsSection() {
                 Text(
                     text = stringResource(R.string.settings_attribution_speedtest_title),
                     style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.SemiBold,
                 )
             }
             Spacer(Modifier.height(6.dp))
             Text(
                 text = stringResource(R.string.settings_attribution_speedtest_body),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(8.dp))
             Row(
-                modifier = Modifier
-                    .clickable { uriHandler.openUri("https://speed.cloudflare.com") }
-                    .padding(vertical = 4.dp),
+                modifier =
+                    Modifier
+                        .clickable { uriHandler.openUri("https://speed.cloudflare.com") }
+                        .padding(vertical = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     text = "speed.cloudflare.com",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary,
-                    textDecoration = TextDecoration.Underline
+                    textDecoration = TextDecoration.Underline,
                 )
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.OpenInNew,
                     contentDescription = null,
                     modifier = Modifier.size(14.dp),
-                    tint = MaterialTheme.colorScheme.primary
+                    tint = MaterialTheme.colorScheme.primary,
                 )
             }
         }
@@ -534,19 +551,24 @@ private data class LibraryInfo(
     val name: String,
     val version: String,
     val license: String,
-    val copyright: String? = null
+    val copyright: String? = null,
 )
 
-private val THIRD_PARTY_LIBRARIES = listOf(
-    LibraryInfo("dnsjava", "3.6.2", "BSD 3-Clause",
-        "Copyright (c) 1998-2024, Brian Wellington and the dnsjava contributors"),
-    LibraryInfo("SNMP4J", "3.8.0", "Apache 2.0"),
-    LibraryInfo("icmpenguin", "1.0.0-rc.3", "Apache 2.0"),
-    LibraryInfo("Dagger Hilt", "2.59.2", "Apache 2.0"),
-    LibraryInfo("Kotlin Coroutines", "1.9.0", "Apache 2.0"),
-    LibraryInfo("AndroidX / Jetpack Compose", "N/A", "Apache 2.0"),
-    LibraryInfo("AndroidX DataStore", "1.1.4", "Apache 2.0"),
-)
+private val THIRD_PARTY_LIBRARIES =
+    listOf(
+        LibraryInfo(
+            "dnsjava",
+            "3.6.5",
+            "BSD 3-Clause",
+            "Copyright (c) 1998-2024, Brian Wellington and the dnsjava contributors",
+        ),
+        LibraryInfo("SNMP4J", "3.13.1", "Apache 2.0"),
+        LibraryInfo("icmpenguin", "1.0.0-rc.4", "Apache 2.0"),
+        LibraryInfo("Dagger Hilt", "2.60.1", "Apache 2.0"),
+        LibraryInfo("Kotlin Coroutines", "1.11.0", "Apache 2.0"),
+        LibraryInfo("AndroidX / Jetpack Compose", "N/A", "Apache 2.0"),
+        LibraryInfo("AndroidX DataStore", "1.2.1", "Apache 2.0"),
+    )
 
 @Composable
 private fun LicensesSection() {
@@ -558,7 +580,7 @@ private fun LicensesSection() {
                 text = stringResource(R.string.settings_licenses_subtitle),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
             )
             HorizontalDivider(modifier = Modifier.padding(top = 8.dp))
             THIRD_PARTY_LIBRARIES.forEachIndexed { index, lib ->
@@ -574,30 +596,31 @@ private fun LicensesSection() {
 @Composable
 private fun LibraryRow(lib: LibraryInfo) {
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp)
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
                 text = lib.name,
                 style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.SemiBold,
             )
             Surface(
                 color = MaterialTheme.colorScheme.secondaryContainer,
-                shape = RoundedCornerShape(4.dp)
+                shape = RoundedCornerShape(4.dp),
             ) {
                 Text(
                     text = lib.license,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSecondaryContainer,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                 )
             }
         }
@@ -605,36 +628,40 @@ private fun LibraryRow(lib: LibraryInfo) {
             Text(
                 text = "v${lib.version}",
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         if (lib.copyright != null) {
             Text(
                 text = lib.copyright,
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
 }
 
 @Composable
-private fun SectionHeader(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String) {
+@Suppress("ktlint:standard:function-naming")
+private fun SectionHeader(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(18.dp)
+            modifier = Modifier.size(18.dp),
         )
         Text(
             text = title,
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onBackground
+            color = MaterialTheme.colorScheme.onBackground,
         )
     }
 }

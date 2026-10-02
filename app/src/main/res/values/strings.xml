@@ -85,6 +85,50 @@
     <string name="nav_home">Home</string>
     <string name="nav_more">More</string>
 
+    <!-- Tool catalog: Home cards, More sheet, and pinned navigation -->
+    <string name="tool_ping_label">Ping</string>
+    <string name="tool_ping_short_label">Ping</string>
+    <string name="tool_ping_description">Reachability and round-trip latency</string>
+    <string name="tool_traceroute_label">Traceroute</string>
+    <string name="tool_traceroute_short_label">Trace</string>
+    <string name="tool_traceroute_description">Network path hop analysis</string>
+    <string name="tool_ports_label">Port Scanner</string>
+    <string name="tool_ports_short_label">Ports</string>
+    <string name="tool_ports_description">TCP port reachability</string>
+    <string name="tool_lan_label">LAN Scanner</string>
+    <string name="tool_lan_short_label">LAN</string>
+    <string name="tool_lan_description">Local device discovery</string>
+    <string name="tool_dns_label">DNS Lookup</string>
+    <string name="tool_dns_short_label">DNS</string>
+    <string name="tool_dns_description">Resolve hostnames &amp; records</string>
+    <string name="tool_wifi_label">Wi-Fi Scanner</string>
+    <string name="tool_wifi_short_label">Wi-Fi</string>
+    <string name="tool_wifi_description">Scan channels &amp; access points</string>
+    <string name="tool_topology_label">Network Topology</string>
+    <string name="tool_topology_short_label">Topology</string>
+    <string name="tool_topology_description">SNMP switch &amp; neighbour discovery</string>
+    <string name="tool_tls_label">TLS Inspector</string>
+    <string name="tool_tls_short_label">TLS</string>
+    <string name="tool_tls_description">SSL/TLS certificate chain inspector</string>
+    <string name="tool_whois_label">WHOIS Lookup</string>
+    <string name="tool_whois_short_label">WHOIS</string>
+    <string name="tool_whois_description">Domain and IP registration lookup</string>
+    <string name="tool_httprobe_label">HTTP Probe</string>
+    <string name="tool_httprobe_short_label">HTTP</string>
+    <string name="tool_httprobe_description">HTTPS request tester with security header analysis</string>
+    <string name="tool_subnet_label">Subnet Calc</string>
+    <string name="tool_subnet_short_label">Subnet</string>
+    <string name="tool_subnet_description">IPv4 subnet calculator with binary breakdown and notation conversion</string>
+    <string name="tool_mdns_label">mDNS Browser</string>
+    <string name="tool_mdns_short_label">mDNS</string>
+    <string name="tool_mdns_description">Discover LAN services via multicast DNS</string>
+    <string name="tool_speedtest_label">Speed Test</string>
+    <string name="tool_speedtest_short_label">Speed</string>
+    <string name="tool_speedtest_description">Download, upload speed and latency via Cloudflare</string>
+    <string name="tool_wol_label">Wake-on-LAN</string>
+    <string name="tool_wol_short_label">WOL</string>
+    <string name="tool_wol_description">Wake sleeping devices with a magic packet</string>
+
     <!-- Generic action content descriptions (used on standalone icon-only buttons) -->
     <string name="action_expand">Expand</string>
     <string name="action_collapse">Collapse</string>
@@ -608,6 +652,10 @@
     <string name="topology_v3_priv_password_label">Priv Password</string>
     <string name="topology_v3_priv_requires_auth">Privacy requires an authentication protocol.</string>
     <string name="topology_max_hops_label">Max Hops: %1$d</string>
+    <string name="topology_query_neighbors_label">Query advertised LLDP/CDP neighbors</string>
+    <string name="topology_query_neighbors_description">Off by default. Turn on to send SNMP queries using this profile to IP addresses advertised by discovered LLDP/CDP devices. Reported links remain visible when off.</string>
+    <string name="topology_reported_neighbor_label">Reported neighbor: %1$s</string>
+    <string name="topology_reported_only">Reported only; device not queried</string>
     <string name="topology_discover_button">Discover Topology</string>
     <string name="topology_cancel_button">Cancel discovery</string>
     <string name="topology_canceling_button">Canceling…</string>
@@ -1059,6 +1107,7 @@
     <string name="onboarding_dont_show_again">Skip</string>
     <string name="onboarding_next">Next</string>
     <string name="onboarding_back">Back</string>
+    <string name="onboarding_page_position">Page %1$d of %2$d</string>
 
     <!-- Onboarding – Page 1: Welcome -->
     <string name="onboarding_page1_title">Welcome to Net Swiss Knife</string>
@@ -1229,9 +1278,9 @@
     <!-- Topology help -->
     <string name="help_topology_title">Network Topology</string>
     <string name="help_topology_concept_heading">What is network topology discovery?</string>
-    <string name="help_topology_concept_body">Switches and routers understand SNMP (Simple Network Management Protocol), a standard way for network gear to report its status and configuration - like each device having its own public status page a tool can read. This app asks one device "who are you connected to?", then asks each of those neighbours the same question, building a map hop by hop, the way you\'d trace a chain of introductions at a party. The result is a picture of how your switches and routers are physically wired together.</string>
+    <string name="help_topology_concept_body">Switches and routers understand SNMP (Simple Network Management Protocol), a standard way for network gear to report its status and configuration - like each device having its own public status page a tool can read. This app asks the seed device "who are you connected to?" and shows its reported links. Neighbor queries are off by default. If you enable them, the app also queries advertised LLDP/CDP IP addresses using the same SNMP profile, extending the map hop by hop.</string>
     <string name="help_topology_what_heading">What it does</string>
-    <string name="help_topology_what_body">Uses SNMP to query a seed switch or router and discover its neighbours, building an interactive topology graph of your network infrastructure.</string>
+    <string name="help_topology_what_body">Uses SNMP to query a seed switch or router and display its reported neighbor links in an interactive topology graph. Neighbor queries require you to enable the option before the app uses the same SNMP profile on advertised LLDP/CDP IP addresses.</string>
     <string name="help_topology_params_heading">Key parameters</string>
     <string name="help_topology_results_heading">Reading the results</string>
     <string-array name="help_topology_params_bullets">
@@ -1239,10 +1288,11 @@
         <item>SNMP version - v1, v2c, or v3; v3 adds authentication and encryption the older versions lack.</item>
         <item>Community string - a shared password required for v1/v2c (default is \'public\', a notoriously insecure default many devices still ship with - change it if you can).</item>
         <item>SNMP v3 privacy requires authentication first; auth and privacy passwords are kept in memory for the scan and are never logged.</item>
-        <item>Max hops - how many device-to-device introductions to follow before stopping.</item>
+        <item>Max hops - how many device-to-device introductions to follow when neighbor queries are enabled.</item>
+        <item>Query advertised LLDP/CDP neighbors - off by default. Turn it on to use the configured SNMP profile to query advertised IP addresses. Leave it off to show reported links without querying their devices.</item>
     </string-array>
     <string-array name="help_topology_results_bullets">
-        <item>Nodes represent discovered devices; lines represent the SNMP-reported links between them.</item>
+        <item>Filled nodes represent queried devices. Outlined markers show reported neighbors that were not queried. Lines represent SNMP-reported links.</item>
         <item>Pinch to zoom, drag to pan around the graph.</item>
         <item>Tap a node to view its system information, interfaces, VLANs, and neighbours.</item>
         <item>Useful for mapping an office network, spotting unexpected devices, or documenting infrastructure before troubleshooting a connectivity issue.</item>

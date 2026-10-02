@@ -45,7 +45,7 @@ class FullAppSubnetEndToEndTest {
         val subnetIndex = NavRoutes.allTools.indexOfFirst { it.route == NavRoutes.SubnetCalculator.route }
         check(subnetIndex >= 0) { "Subnet Calculator must be listed on Home" }
         composeRule.onNodeWithTag(HomeScreenTestTags.TOOL_GRID).performScrollToIndex(subnetIndex)
-        composeRule.onNodeWithText("Subnet Calc").performClick()
+        composeRule.onNodeWithText(context.getString(R.string.tool_subnet_label)).performClick()
         composeRule.mainClock.advanceTimeBy(1_000L)
 
         composeRule.onNodeWithText(context.getString(R.string.subnet_screen_title)).assertIsDisplayed()
