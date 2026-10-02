@@ -89,7 +89,9 @@ data class TopologyParams(
      * Optional opaque, non-secret profile token. Never derive it from credentials; null means
      * snapshots cannot be safely compared across credential scopes.
      */
-    val credentialScopeId: String? = null
+    val credentialScopeId: String? = null,
+    /** Explicitly permits SNMP queries to IPs advertised through LLDP or CDP. */
+    val queryDiscoveredNeighbors: Boolean = false,
 )
 
 data class SnmpInterface(

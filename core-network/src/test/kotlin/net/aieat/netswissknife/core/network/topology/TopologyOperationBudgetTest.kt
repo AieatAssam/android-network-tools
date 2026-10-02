@@ -13,6 +13,7 @@ class TopologyOperationBudgetTest {
             maxHops = 3,
             timeoutMs = 3_000,
             retries = 1,
+            queryDiscoveredNeighbors = true,
         )
 
         // 20 bounded SNMP request windows × 2 attempts × 3 seconds; branching is capped to 3 nodes.
@@ -24,18 +25,32 @@ class TopologyOperationBudgetTest {
     }
 
     @Test
+    fun `seed-only discovery reserves one node and a shorter deadline`() {
+        val request = TopologyParams(targetIp = "192.168.1.1", timeoutMs = 3_000, retries = 1)
+
+        val seedOnly = checkNotNull(TopologyOperationBudget.estimate(request))
+        val optedInRequest = request.copy(queryDiscoveredNeighbors = true)
+        val followingNeighbors = checkNotNull(TopologyOperationBudget.estimate(optedInRequest))
+
+        assertEquals(1, seedOnly.maxNodes)
+        assertTrue(seedOnly.timeoutMillis < followingNeighbors.timeoutMillis)
+    }
+
+    @Test
     fun `small request gets a smaller budget and requests above hard ceiling are rejected`() {
         val small = TopologyParams(
             targetIp = "192.168.1.1",
             maxHops = 1,
             timeoutMs = 500,
             retries = 0,
+            queryDiscoveredNeighbors = true,
         )
         val oversized = TopologyParams(
             targetIp = "192.168.1.1",
             maxHops = 10,
             timeoutMs = 30_000,
             retries = 5,
+            queryDiscoveredNeighbors = true,
         )
 
         val smallEstimate = TopologyOperationBudget.estimate(small)
@@ -52,6 +67,7 @@ class TopologyOperationBudgetTest {
             maxHops = 1,
             timeoutMs = 1_000,
             retries = 0,
+            queryDiscoveredNeighbors = true,
         )
 
         val estimate = TopologyOperationBudget.estimate(request)
@@ -66,6 +82,7 @@ class TopologyOperationBudgetTest {
             targetIp = "192.168.1.1",
             timeoutMs = 3_000,
             retries = 1,
+            queryDiscoveredNeighbors = true,
         )
 
         val default = TopologyOperationBudget.estimate(request)
@@ -83,6 +100,7 @@ class TopologyOperationBudgetTest {
             maxHops = 1,
             timeoutMs = 500,
             retries = 0,
+            queryDiscoveredNeighbors = true,
         )
         val hostname = literal.copy(targetIp = "switch.example")
         val v3Hostname = hostname.copy(snmpVersion = SnmpVersion.V3, v3Username = "tester")

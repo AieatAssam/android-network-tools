@@ -78,7 +78,12 @@ object TopologyOperationBudget {
         val availableForNodes = HARD_CEILING_MILLIS - FINAL_CLEANUP_ALLOWANCE_MILLIS - setupWithMargin
         val nodeCapacity = (availableForNodes / perNodeWithMargin).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
         if (nodeCapacity < 1) return null
-        val maxNodes = minOf(configuredMaxNodes, nodeCapacity)
+        val maxNodes =
+            if (params.queryDiscoveredNeighbors) {
+                minOf(configuredMaxNodes, nodeCapacity)
+            } else {
+                1
+            }
         val rawWork = saturatingMultiply(perNodeTimeout, maxNodes.toLong())
         val timeoutMillis = saturatingAdd(
             saturatingAdd(

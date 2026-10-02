@@ -56,7 +56,9 @@ data class TopologyScanContext(
      * Opaque caller-provided profile token. It can correlate scans, so it must not identify a
      * person or contain/derive from credentials. Raw credentials and their hashes are never kept.
      */
-    val credentialScopeId: String?
+    val credentialScopeId: String?,
+    /** Seed-only and neighbor-querying scans observe different sets of devices. */
+    val queryDiscoveredNeighbors: Boolean = false,
 ) {
     companion object {
         fun from(seedIp: String, params: TopologyParams) = TopologyScanContext(
@@ -68,7 +70,8 @@ data class TopologyScanContext(
             retries = params.retries,
             v3AuthProtocol = params.v3AuthProtocol,
             v3PrivProtocol = params.v3PrivProtocol,
-            credentialScopeId = params.credentialScopeId
+            credentialScopeId = params.credentialScopeId,
+            queryDiscoveredNeighbors = params.queryDiscoveredNeighbors,
         )
     }
 }

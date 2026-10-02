@@ -105,7 +105,9 @@ class TopologyDiscoveryRepositoryTest {
         )
         // Return empty for all walks by default, LLDP data for the specific prefix
         coEvery { snmpClient.walk(any(), any(), any()) } returns SnmpWalkResult(emptyMap())
-        coEvery { snmpClient.walk(any(), "1.0.8802.1.1.2.1.4", any()) } returns SnmpWalkResult(lldpData)
+        coEvery {
+            snmpClient.walk(match { it.ip == defaultParams.targetIp }, "1.0.8802.1.1.2.1.4", any())
+        } returns SnmpWalkResult(lldpData)
 
         val events = repository.discover(defaultParams.copy(maxHops = 1)).toList()
 
@@ -113,10 +115,23 @@ class TopologyDiscoveryRepositoryTest {
         val linkEvents = events.filterIsInstance<TopologyDiscoveryEvent.LinkDiscovered>()
         val completeEvents = events.filterIsInstance<TopologyDiscoveryEvent.Complete>()
 
-        // Seed + 2 neighbours
-        assertTrue(nodeEvents.size >= 1)
-        assertTrue(linkEvents.size >= 2)
+        assertEquals(listOf(defaultParams.targetIp), nodeEvents.map { it.node.ip })
+        assertEquals(setOf("192.168.1.2", "192.168.1.3"), linkEvents.map { it.link.toIp }.toSet())
         assertEquals(1, completeEvents.size)
+        coVerify(exactly = 0) { snmpClient.get(match { it.ip != defaultParams.targetIp }, any()) }
+        coVerify(exactly = 0) { snmpClient.walk(match { it.ip != defaultParams.targetIp }, any(), any()) }
+
+        val optedInParams = defaultParams.copy(maxHops = 1, queryDiscoveredNeighbors = true)
+        val optedInEvents = repository.discover(optedInParams).toList()
+        val optedInNodes = optedInEvents.filterIsInstance<TopologyDiscoveryEvent.NodeDiscovered>()
+        val optedInLinks = optedInEvents.filterIsInstance<TopologyDiscoveryEvent.LinkDiscovered>()
+
+        assertEquals(setOf("192.168.1.1", "192.168.1.2", "192.168.1.3"), optedInNodes.map { it.node.ip }.toSet())
+        assertEquals(setOf("192.168.1.2", "192.168.1.3"), optedInLinks.map { it.link.toIp }.toSet())
+        coVerify(atLeast = 1) { snmpClient.get(match { it.ip == "192.168.1.2" }, any()) }
+        coVerify(atLeast = 1) { snmpClient.get(match { it.ip == "192.168.1.3" }, any()) }
+        coVerify(atLeast = 1) { snmpClient.walk(match { it.ip == "192.168.1.2" }, any(), any()) }
+        coVerify(atLeast = 1) { snmpClient.walk(match { it.ip == "192.168.1.3" }, any(), any()) }
     }
 
     @Test
@@ -642,7 +657,8 @@ class TopologyDiscoveryRepositoryTest {
             snmpClient.walk(match { it.ip == "192.168.1.3" }, "1.3.6.1.4.1.9.9.23.1.2.1", any())
         } returns SnmpWalkResult(emptyMap())
 
-        val events = repository.discover(defaultParams.copy(maxHops = 1)).toList()
+        val params = defaultParams.copy(maxHops = 1, queryDiscoveredNeighbors = true)
+        val events = repository.discover(params).toList()
         val links = events.filterIsInstance<TopologyDiscoveryEvent.LinkDiscovered>().map { it.link }
 
         assertEquals(1, links.size)
@@ -955,7 +971,8 @@ class TopologyDiscoveryRepositoryTest {
             SnmpWalkResult(if (target.ip == seedIp && oid == cdpOid) neighbours else emptyMap())
         }
 
-        val events = boundedRepository.discover(defaultParams).toList()
+        val params = defaultParams.copy(queryDiscoveredNeighbors = true)
+        val events = boundedRepository.discover(params).toList()
         val graph = events.filterIsInstance<TopologyDiscoveryEvent.Complete>().single().graph
 
         assertEquals(3, graph.nodes.size)
@@ -1232,7 +1249,7 @@ class TopologyDiscoveryRepositoryTest {
             }
         }
         return TopologyDiscoveryRepositoryImpl(client, limits)
-            .discover(defaultParams.copy(maxHops = maxHops))
+            .discover(defaultParams.copy(maxHops = maxHops, queryDiscoveredNeighbors = true))
             .toList()
     }
 }

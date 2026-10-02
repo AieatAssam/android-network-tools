@@ -434,14 +434,15 @@ class TopologySnapshotDiffTest {
     }
 
     @Test
-    fun `changed target hops timeout or retries make contexts incomparable`() {
+    fun `changed target hops timeout retries or traversal make contexts incomparable`() {
         val graph = graph(node(name = "old", interfaces = listOf(iface(1))))
         val base = TopologyParams("10.0.0.1", maxHops = 3, timeoutMs = 2_000, retries = 1)
         val changed = listOf(
             base.copy(targetIp = "10.0.0.2"),
             base.copy(maxHops = 4),
             base.copy(timeoutMs = 2_001),
-            base.copy(retries = 2)
+            base.copy(retries = 2),
+            base.copy(queryDiscoveredNeighbors = true),
         )
         val before = snapshot(graph, base)
 

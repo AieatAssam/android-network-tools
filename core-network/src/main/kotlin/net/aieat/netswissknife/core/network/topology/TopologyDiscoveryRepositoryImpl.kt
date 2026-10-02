@@ -257,18 +257,20 @@ class TopologyDiscoveryRepositoryImpl(
                     }
                     if (graphByteLimitReached) break
 
-                    (lldpNeighbourIps + cdpNeighbourIps).forEach { neighbourIp ->
-                        if (neighbourIp.isBlank() || neighbourIp in scheduledTargets) return@forEach
-                        if (allNodes.size + queue.size >= effectiveMaxNodes) {
-                            truncationReasons.add(TopologyTruncationReason.NODE_LIMIT)
-                            return@forEach
+                    if (effectiveParams.queryDiscoveredNeighbors) {
+                        (lldpNeighbourIps + cdpNeighbourIps).forEach { neighbourIp ->
+                            if (neighbourIp.isBlank() || neighbourIp in scheduledTargets) return@forEach
+                            if (allNodes.size + queue.size >= effectiveMaxNodes) {
+                                truncationReasons.add(TopologyTruncationReason.NODE_LIMIT)
+                                return@forEach
+                            }
+                            if (queue.size >= limits.maxPendingTargets) {
+                                truncationReasons.add(TopologyTruncationReason.PENDING_TARGET_LIMIT)
+                                return@forEach
+                            }
+                            scheduledTargets.add(neighbourIp)
+                            queue.add(neighbourIp to currentHop + 1)
                         }
-                        if (queue.size >= limits.maxPendingTargets) {
-                            truncationReasons.add(TopologyTruncationReason.PENDING_TARGET_LIMIT)
-                            return@forEach
-                        }
-                        scheduledTargets.add(neighbourIp)
-                        queue.add(neighbourIp to currentHop + 1)
                     }
                 }
 
