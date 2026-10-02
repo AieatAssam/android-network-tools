@@ -57,7 +57,7 @@ class OkHttpEngine(
         var hasAcceptEncoding = false
         request.headers.forEach { (name, value) ->
             if (name.equals("Accept-Encoding", ignoreCase = true)) hasAcceptEncoding = true
-            builder.header(name, value)
+            builder.addHeader(name, value)
         }
         if (!hasAcceptEncoding) builder.header("Accept-Encoding", "identity")
 

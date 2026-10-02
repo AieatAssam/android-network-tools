@@ -73,6 +73,22 @@ class OkHttpEngineTest {
     }
 
     @Test
+    fun `HTTP sends every configured value of a repeated request header`() = runTest {
+        val server = server()
+        server.enqueue(MockResponse.Builder().code(200).body("ok").build())
+
+        val result = HttpProbeRepositoryImpl().probe(
+            HttpProbeRequest(
+                url = server.url("/").toString(),
+                headers = listOf("X-Trace" to "first", "x-trace" to "second"),
+            ),
+        )
+
+        assertTrue(result is NetworkResult.Success<*>, "$result")
+        assertEquals(listOf("first", "second"), server.takeRequest()!!.headers.values("X-Trace"))
+    }
+
+    @Test
     fun `HTTP binds selected local destination before connect`() = runTest {
         val server = server()
         server.enqueue(MockResponse.Builder().code(200).body("local").build())
