@@ -1,6 +1,6 @@
 # Privacy Policy - Net Swiss Knife
 
-**Effective date:** 2026-09-25
+**Effective date:** 2026-10-02
 
 ---
 
@@ -20,7 +20,8 @@ When you use a diagnostic tool you enter targets such as hostnames, IP addresses
 
 | Data | Where it lives | How long |
 |------|----------------|----------|
-| Diagnostic results (ping statistics, open ports, DNS records, Wi-Fi channel info, etc.) | Device RAM only | Until the screen is reset or the app is closed |
+| Diagnostic results (ping statistics, open ports, DNS records, Wi-Fi channel info, etc.) | Device RAM only, except for the continuous Ping session log described below | Until the screen is reset or the app is closed |
+| Continuous Ping session log (CSV) | Temporary file in app-private cache | Until the result is discarded, the app removes it during cleanup, or Android clears the cache; sharing sends a copy to the app you choose |
 | Recent target entries (up to five for each tool with recent selections) | App-private on-device preferences | Until removed in the tool, cleared in Settings, or app storage is removed |
 | Settings and pinned tools | App-private on-device preferences | Until changed, app storage is cleared, or the app is uninstalled |
 | Debug log | Android Logcat and app-private files in debug builds only | Android manages Logcat retention; the Debug Logs screen clears the files, which otherwise remain until app storage is cleared or the app is uninstalled |
