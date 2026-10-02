@@ -33,6 +33,19 @@ jobs:
         with:
           fetch-depth: 0   # full history for version tagging
 
+      # Both a pushed version tag and a manually selected ref can point at an
+      # unmerged commit. Check before reserving a version or building artifacts.
+      - name: Require release commit on main
+        run: |
+          if ! git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main; then
+            echo "::error::Could not fetch main to verify the release commit"
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$GITHUB_SHA^{commit}" refs/remotes/origin/main; then
+            echo "::error::Release commit $GITHUB_SHA is not on main"
+            exit 1
+          fi
+
       # ── 2. Java toolchain ─────────────────────────────────────────────────
       - name: Set up JDK 21
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
@@ -200,9 +213,9 @@ jobs:
             -PversionCode="${{ steps.version.outputs.code }}" \
             --no-daemon
 
-      # P02: fail the release if R8 removes SNMP4J's reflectively-loaded USM
-      # and protocol implementations.
-      - name: Verify SNMP4J classes survived R8
+      # Check the exact APK being published. The CI release-smoke job checks
+      # these files too, but a tag can point to a commit without that CI result.
+      - name: Verify release APK contents
         run: |
           APK=$(find app/build/outputs/apk/release -name '*.apk' | head -1)
           SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
@@ -217,6 +230,11 @@ jobs:
           echo "Using apkanalyzer: $APK_ANALYZER"
           "$APK_ANALYZER" dex packages --defined-only "$APK" > "$RUNNER_TEMP/apk-packages.txt"
           python3 tools/release/check_snmp_classes.py "$RUNNER_TEMP/apk-packages.txt"
+          grep -q 'me\.impa\.icmpenguin' "$RUNNER_TEMP/apk-packages.txt"
+          unzip -Z1 "$APK" > "$RUNNER_TEMP/apk-files.txt"
+          grep -q '^lib/arm64-v8a/libicmpenguin\.so$' "$RUNNER_TEMP/apk-files.txt"
+          grep -q '^oui/oui-prefixes\.tsv$' "$RUNNER_TEMP/apk-files.txt"
+          grep -q '^psl/public_suffix_list\.index$' "$RUNNER_TEMP/apk-files.txt"
 
       # ── 9. Build release AAB ──────────────────────────────────────────────
       - name: Build release AAB
