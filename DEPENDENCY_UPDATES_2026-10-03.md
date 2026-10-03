@@ -30,3 +30,22 @@ Reviewed `build/dependencyUpdates/report.txt` and verified the material candidat
 - Gradle `9.7.1 → 9.8.0` requires a separate wrapper/build compatibility decision. It is not applied here.
 
 The report marks the remaining direct application versions (including Kotlin, AGP, Coroutines, OkHttp, SNMP4J, dnsjava, Hilt, MockK, and DataStore) as latest release versions at scan time.
+
+## Default-branch security alerts checked after push
+
+GitHub reported seven open Dependabot alerts on the repository's default branch.
+The alert API identifies older build dependency versions. A read-only Gradle
+classpath resolution on this review branch confirmed the following selections:
+
+| Dependency | Resolved version here | Alert fix threshold |
+| --- | --- | --- |
+| FreeMarker | 2.3.35 | 2.3.35 |
+| Bouncy Castle provider | 1.86 | 1.84 or 1.85, depending on the alert |
+| Bouncy Castle PKIX | 1.86 | 1.84 |
+| Commons Lang | 3.18.0 | 3.18.0 |
+| Apache HttpClient | 4.5.14 | 4.5.13 |
+
+These resolved versions are outside all seven alerted vulnerable ranges. The
+settings plugin classpath contained none of these artifacts. This confirms the
+review branch's resolution; it does not close alerts on the default branch or
+constitute an exhaustive vulnerability scan. [Repository security alerts](https://github.com/AieatAssam/android-network-tools/security/dependabot)

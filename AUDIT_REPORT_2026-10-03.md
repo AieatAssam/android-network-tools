@@ -60,6 +60,7 @@ The final combined Gradle verification succeeded:
 | `:app:lintDebug` final resource/package check | Passed; 0 errors, 41 warnings, 9 hints |
 | Python quality/release/OUI tests | 31 passed; resource ownership check passed |
 | `dependencyUpdates` | Completed; candidates reviewed in the dependency report |
+| Default-branch Dependabot alerts | Seven checked against this branch's resolved build classpath; selected versions are outside the alerted ranges |
 | `git diff --check` | Passed |
 
 The initial lint run was canceled after a long-running source walk; a fresh
