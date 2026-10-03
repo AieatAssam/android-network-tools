@@ -100,7 +100,7 @@ Domain, IP, and ASN registration lookup using RDAP with WHOIS fallback.
 - Live relay-chain visualiser shows the RDAP or WHOIS servers used; raw responses are available for inspection
 
 ### HTTP Probe
-Full HTTP/HTTPS request tester with security header analysis.
+HTTPS request tester with security header analysis. Plain HTTP requests are disabled in this release.
 - Supports GET, POST, PUT, PATCH, DELETE, HEAD, and OPTIONS methods
 - Custom request headers: add/remove key-value pairs dynamically
 - Request body editor for POST, PUT, and PATCH
@@ -111,7 +111,7 @@ Full HTTP/HTTPS request tester with security header analysis.
   - **Headers**: collapsible request and response header sections
   - **Body**: scrollable monospace response body with copy-to-clipboard, JSON validity, and optional pretty-print; response data is capped at 512 KB with a truncation notice
   - **Security**: grades HSTS strength, CSP enforcement and script directives, clickjacking protection, deprecated X-XSS-Protection, MIME sniffing, referrer and permissions policies, cross-origin opener/embedder policies, Server version disclosure, and each Set-Cookie flag set. HTTPS-to-HTTP downgrade evidence appears separately in a blocked-redirect warning.
-- Copy the configured request as a shell-quoted cURL command, including method, custom headers, body, and redirect behavior. Redirect following is omitted when custom headers, a body, or a non-GET/HEAD method could diverge from the app's redirect handling; otherwise HTTPS requests only follow HTTPS redirects and HTTP requests allow HTTP or HTTPS redirects. The UI explains when following is suppressed.
+- Copy the configured request as a shell-quoted cURL command, including method, custom headers, body, and redirect behavior. Redirect following is omitted when custom headers, a body, or a non-GET/HEAD method could diverge from the app's redirect handling; otherwise exported commands only follow HTTPS redirects to prevent downgrades. The UI explains when following is suppressed.
 
 ### mDNS Service Browser
 LAN service discovery via multicast DNS (RFC 6762 / DNS-SD RFC 6763).

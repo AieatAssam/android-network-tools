@@ -1,6 +1,7 @@
 package net.aieat.netswissknife.core.network.net
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -51,5 +52,12 @@ class NetworkBindingSocketFactoryTest {
         }
 
         assertTrue(binder.boundTcpSockets.single().isClosed)
+    }
+
+    @Test
+    fun `multicast classification only parses IP literals`() {
+        assertTrue(isMulticastIpLiteral("224.0.0.251"))
+        assertTrue(isMulticastIpLiteral("ff02::fb"))
+        assertFalse(isMulticastIpLiteral("multicast.example.test"))
     }
 }

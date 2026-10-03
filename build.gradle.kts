@@ -15,8 +15,8 @@ buildscript {
         // AGP currently brings these build-time libraries transitively at
         // vulnerable versions. Keep the patched resolution on the Gradle
         // classpath without adding any of them to the Android runtime graph.
-        classpath("org.bouncycastle:bcpkix-jdk18on:1.85")
-        classpath("org.bouncycastle:bcprov-jdk18on:1.85")
+        classpath("org.bouncycastle:bcpkix-jdk18on:1.86")
+        classpath("org.bouncycastle:bcprov-jdk18on:1.86")
         classpath("org.bitbucket.b_c:jose4j:0.9.6")
         classpath("org.jdom:jdom2:2.0.6.1")
         classpath("org.apache.commons:commons-lang3:3.18.0")

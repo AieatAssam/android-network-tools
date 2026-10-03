@@ -265,7 +265,10 @@ class HttpProbeEnhancementsTest {
     fun `CSP unsafe script directives warn and frame ancestors satisfy frame protection`() {
         val checks =
             HttpSecurityAnalyzer.analyze(
-                mapOf("Content-Security-Policy" to listOf("default-src 'self'; script-src 'self' 'unsafe-inline'; frame-ancestors 'none'")),
+                mapOf(
+                    "Content-Security-Policy" to
+                        listOf("default-src 'self'; script-src 'self' 'unsafe-inline'; frame-ancestors 'none'"),
+                ),
                 isHttps = true,
             )
         val csp = checks.first { it.headerName == "Content-Security-Policy" }
@@ -338,11 +341,17 @@ class HttpProbeEnhancementsTest {
     }
 
     @Test
-    fun `curl export restricts both initial and redirected protocols to HTTPS`() {
+    fun `curl export allows the requested protocol and blocks HTTPS downgrades`() {
         val get = CurlExporter.build(HttpProbeRequest(url = "https://example.test/a?x=1"))
-        assertEquals("curl -X 'GET' --proto '=https' --proto-redir '=https' --max-redirs 10 -L 'https://example.test/a?x=1'", get)
+        assertEquals(
+            "curl -X 'GET' --proto '=https' --proto-redir '=https' --max-redirs 10 -L 'https://example.test/a?x=1'",
+            get,
+        )
         val http = CurlExporter.build(HttpProbeRequest(url = "http://example.test/a"))
-        assertEquals("curl -X 'GET' --proto '=https' --proto-redir '=https' --max-redirs 10 -L 'http://example.test/a'", http)
+        assertEquals(
+            "curl -X 'GET' --proto '=http,https' --proto-redir '=https' --max-redirs 10 -L 'http://example.test/a'",
+            http,
+        )
 
         val post =
             CurlExporter.build(
@@ -355,7 +364,8 @@ class HttpProbeEnhancementsTest {
                 ),
             )
         assertEquals(
-            "curl -X 'POST' -H 'X-Name: O'\\''Reilly' --data-raw '{\"message\":\"it'\\''s ok\"}' --proto '=https' 'https://example.test/submit'",
+            "curl -X 'POST' -H 'X-Name: O'\\''Reilly' --data-raw '{\"message\":\"it'\\''s ok\"}' " +
+                "--proto '=https' 'https://example.test/submit'",
             post,
         )
     }

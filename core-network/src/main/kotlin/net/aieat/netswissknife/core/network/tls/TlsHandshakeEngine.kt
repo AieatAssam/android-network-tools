@@ -38,7 +38,9 @@ internal interface TlsHandshakeEngine {
 
 internal interface TlsHandshakeConnection : AutoCloseable {
     fun connect()
+
     fun handshake()
+
     fun snapshot(): TlsHandshakeSnapshot
 }
 
@@ -54,9 +56,10 @@ internal class SocketTlsHandshakeEngine(
     private val socketFactory: TlsInspectorSocketFactory,
     private val networkBinder: NetworkBinder = NoOpNetworkBinder,
 ) : TlsHandshakeEngine {
-    private val context: SSLContext = SSLContext.getInstance("TLS").apply {
-        init(null, arrayOf(TrustAllManager), null)
-    }
+    private val context: SSLContext =
+        SSLContext.getInstance("TLS").apply {
+            init(null, arrayOf(TrustAllManager), null)
+        }
 
     override fun enabledProtocols(): Set<String> {
         val socket = socketFactory.create(context)
@@ -124,11 +127,17 @@ internal class SocketTlsHandshakeEngine(
         }
     }
 
-    private fun configureTlsParameters(socket: SSLSocket, host: String) {
+    private fun configureTlsParameters(
+        socket: SSLSocket,
+        host: String,
+    ) {
         try {
             val params = socket.sslParameters
-            if (!host.contains(':') && !HostValidator.isValidIpv4(host)) {
-                params.serverNames = listOf(javax.net.ssl.SNIHostName(host))
+            val normalizedHost = HostValidator.normalize(host)
+            if (normalizedHost != null && !normalizedHost.contains(':') && !HostValidator.isValidIpv4(normalizedHost)) {
+                // SNIHostName rejects a trailing DNS root dot. Normalize valid hostnames
+                // first so absolute DNS names retain SNI instead of silently skipping it.
+                params.serverNames = listOf(javax.net.ssl.SNIHostName(normalizedHost))
             }
             try {
                 params.javaClass
@@ -138,7 +147,9 @@ internal class SocketTlsHandshakeEngine(
                 // ALPN is unavailable on older Android providers; TLS inspection still works.
             }
             socket.sslParameters = params
-        } catch (_: Exception) { /* SNI/ALPN are best-effort, as before. */ }
+        } catch (_: Exception) {
+            // SNI/ALPN are best-effort, as before.
+        }
     }
 
     private class SocketConnection(
@@ -155,12 +166,16 @@ internal class SocketTlsHandshakeEngine(
                     socket.connect(InetSocketAddress(host, port), timeoutMs)
                     return
                 }
-                val addresses = java.net.InetAddress.getAllByName(host)
-                val localDestination = addresses.firstOrNull { address ->
-                    networkBinder.shouldBind(address.hostAddress ?: return@firstOrNull false)
-                }
-                val destination = localDestination ?: addresses.firstOrNull()
-                    ?: throw java.net.UnknownHostException(host)
+                val addresses =
+                    java.net.InetAddress.getAllByName(host)
+                val localDestination =
+                    addresses.firstOrNull { address ->
+                        networkBinder.shouldBind(address.hostAddress ?: return@firstOrNull false)
+                    }
+                val destination =
+                    localDestination
+                        ?: addresses.firstOrNull()
+                        ?: throw java.net.UnknownHostException(host)
                 if (localDestination != null &&
                     !networkBinder.bindTcpSocketIfLocal(socket, destination.hostAddress)
                 ) {
@@ -186,18 +201,27 @@ internal class SocketTlsHandshakeEngine(
 
         override fun close() = socket.close()
 
-        private fun applicationProtocol(socket: SSLSocket): String? = try {
-            // Reflection keeps this adapter usable on Android versions before SSLSocket exposed ALPN.
-            (socket.javaClass.getMethod("getApplicationProtocol").invoke(socket) as? String)
-                ?.takeIf { it.isNotEmpty() }
-        } catch (_: Exception) {
-            null
-        }
+        private fun applicationProtocol(socket: SSLSocket): String? =
+            try {
+                // Reflection keeps this adapter usable on Android versions before SSLSocket exposed ALPN.
+                (socket.javaClass.getMethod("getApplicationProtocol").invoke(socket) as? String)
+                    ?.takeIf { it.isNotEmpty() }
+            } catch (_: Exception) {
+                null
+            }
     }
 
     private object TrustAllManager : X509TrustManager {
-        override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) = Unit
-        override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) = Unit
+        override fun checkClientTrusted(
+            chain: Array<out X509Certificate>?,
+            authType: String?,
+        ) = Unit
+
+        override fun checkServerTrusted(
+            chain: Array<out X509Certificate>?,
+            authType: String?,
+        ) = Unit
+
         override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
     }
 }

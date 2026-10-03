@@ -237,7 +237,7 @@
     <!-- Ping Continuous Mode -->
     <string name="ping_continuous_label">Continuous</string>
     <string name="ping_pings_sent">Pings sent: %1$d</string>
-    <string name="ping_share_summary">Continuous ping CSV for %1$s: %2$d packets, %3$d received, %4$.1f%% loss.</string>
+    <string name="ping_share_summary">Continuous ping CSV for %1$s: sent %2$d, received %3$d, %4$.1f%% loss.</string>
     <string name="ping_continuous_running_title">Pinging continuously…</string>
 
     <!-- Ping States -->
@@ -265,7 +265,7 @@
     <string name="ping_copy_raw">Copy raw output</string>
     <string name="ping_copy_csv">Copy as CSV</string>
     <string name="ping_chart_title">RTT Chart</string>
-    <string name="ping_chart_a11y">RTT chart: %1$d successful samples; axis from %2$d to %3$d ms; %4$s %5$d ms, %6$s %7$.1f ms, %8$s %9$d ms; %10$s</string>
+    <string name="ping_chart_a11y">RTT chart: successful sample count %1$d; axis from %2$d to %3$d ms; %4$s %5$d ms, %6$s %7$.1f ms, %8$s %9$d ms; %10$s</string>
     <plurals name="ping_chart_failed_markers">
         <item quantity="one">%1$d failed probe marker at the 0 ms baseline</item>
         <item quantity="other">%1$d failed probe markers at the 0 ms baseline</item>
@@ -527,7 +527,7 @@
     <string name="wifi_network_info_header">Network Information</string>
     <string name="wifi_live_connection_header">Live Connection</string>
     <string name="wifi_spectrum_title">Spectrum Analyser</string>
-    <string name="wifi_spectrum_a11y">Wi-Fi spectrum: %1$d access points on %2$s, strongest access point %3$s at %4$d dBm</string>
+    <string name="wifi_spectrum_a11y">Wi-Fi spectrum on %2$s: access point count %1$d, strongest access point %3$s at %4$d dBm</string>
     <string name="wifi_signal_gauge_a11y">Signal quality: %1$d%%, %2$s</string>
     <string name="wifi_signal_level_excellent">Excellent</string>
     <string name="wifi_signal_level_good">Good</string>

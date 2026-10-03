@@ -6,7 +6,6 @@ package net.aieat.netswissknife.core.network.topology
  * not the Integer32 value of lldpRemManAddrIfId.
  */
 object TopologyMibParser {
-
     private const val LLDP_REM_PREFIX = "1.0.8802.1.1.2.1.4.1.1."
     private const val LLDP_MAN_ADDR_PREFIX = "1.0.8802.1.1.2.1.4.2.1.4."
     private const val CDP_CACHE_PREFIX = "1.3.6.1.4.1.9.9.23.1.2.1.1."
@@ -38,7 +37,7 @@ object TopologyMibParser {
                 chassisId = columns[5],
                 portId = columns[7],
                 portDescription = columns[8],
-                sysName = columns[9]
+                sysName = columns[9],
             )
         }
     }
@@ -62,14 +61,20 @@ object TopologyMibParser {
             val remIndex = parts[2]
             val addressType = parts[3].toIntOrNull() ?: return@forEach
             val addressLength = parts[4].toIntOrNull() ?: return@forEach
-            val octets = parts.drop(5).mapNotNull { it.toIntOrNull() }
-            if (octets.size != addressLength) return@forEach
+            // The encoded address is the complete OID suffix after its length. Do not
+            // discard malformed arcs: doing so can shift later octets into a plausible,
+            // but incorrect, address (for example `192.bad.168.1.2` becoming
+            // `192.168.1.2`).
+            val octetParts = parts.drop(5)
+            if (octetParts.size != addressLength) return@forEach
+            val octets = octetParts.map { it.toIntOrNull() ?: return@forEach }
 
             val key = "$localPort.$remIndex"
             when {
                 addressType == 1 && addressLength == 4 && octets.all { it in 0..255 } -> {
                     ipv4[key] = octets.joinToString(".")
                 }
+
                 addressType == 2 && addressLength == 16 && octets.all { it in 0..255 } -> {
                     ipv6[key] = formatIpv6(octets)
                 }
@@ -105,7 +110,7 @@ object TopologyMibParser {
                 deviceId = columns[6],
                 port = columns[7],
                 platform = columns[8],
-                capabilities = columns[9]
+                capabilities = columns[9],
             )
         }
     }
@@ -120,10 +125,11 @@ object TopologyMibParser {
 
         val hex = value.replace(" ", "").split(':')
         if (hex.size != 4) return null
-        val octets = hex.map { part ->
-            if (part.length !in 1..2) return null
-            part.toIntOrNull(16) ?: return null
-        }
+        val octets =
+            hex.map { part ->
+                if (part.length !in 1..2) return null
+                part.toIntOrNull(16) ?: return null
+            }
         return octets.takeIf { it.all { octet -> octet in 0..255 } }?.joinToString(".")
     }
 
@@ -142,12 +148,12 @@ data class LldpRemEntry(
     val chassisId: String?,
     val portId: String?,
     val portDescription: String?,
-    val sysName: String?
+    val sysName: String?,
 )
 
 data class LldpManagementAddresses(
     val ipv4: Map<String, String>,
-    val ipv6: Map<String, String>
+    val ipv6: Map<String, String>,
 ) : Map<String, String> by ipv4
 
 data class CdpEntry(
@@ -156,5 +162,5 @@ data class CdpEntry(
     val deviceId: String?,
     val port: String?,
     val platform: String?,
-    val capabilities: String?
+    val capabilities: String?,
 )

@@ -205,10 +205,10 @@ dependencies {
     // transitive requests on patched versions without adding these libraries to
     // app or test runtime configurations.
     constraints {
-        add("androidLintTool", "org.bouncycastle:bcpkix-jdk18on:1.85") {
+        add("androidLintTool", "org.bouncycastle:bcpkix-jdk18on:1.86") {
             because("Keep AGP's lint tool classpath on the patched Bouncy Castle line")
         }
-        add("androidLintTool", "org.bouncycastle:bcprov-jdk18on:1.85") {
+        add("androidLintTool", "org.bouncycastle:bcprov-jdk18on:1.86") {
             because("Keep AGP's lint tool classpath on the patched Bouncy Castle line")
         }
         add("androidLintTool", "org.apache.commons:commons-lang3:3.18.0") {

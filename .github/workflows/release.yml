@@ -166,11 +166,7 @@ jobs:
           [ -n "$KEYSTORE_PASSWORD" ] || missing+=(RELEASE_KEYSTORE_PASSWORD)
           [ -n "$KEY_ALIAS" ] || missing+=(RELEASE_KEY_ALIAS)
           [ -n "$KEY_PASSWORD" ] || missing+=(RELEASE_KEY_PASSWORD)
-          if [ "$present" -eq 0 ]; then
-            echo "signed=false" >> "$GITHUB_OUTPUT"
-            echo "store_file=" >> "$GITHUB_OUTPUT"
-            echo "Release signing secrets are absent; building unsigned artifacts."
-          elif [ "$present" -ne 4 ]; then
+          if [ "$present" -ne 4 ]; then
             echo "::error::Release signing secrets must be supplied together; missing secret(s): ${missing[*]}"
             exit 1
           else

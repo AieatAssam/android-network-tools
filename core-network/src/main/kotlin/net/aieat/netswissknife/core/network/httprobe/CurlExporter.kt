@@ -26,7 +26,21 @@ object CurlExporter {
             if (request.method.supportsBody && request.body != null) {
                 append(" --data-raw ").append(quote(request.body))
             }
-            append(" --proto '=https'")
+            val isHttp =
+                request.url.startsWith("http://", ignoreCase = true)
+            // curl's --proto applies across the transfer chain. Keep HTTPS available to
+            // HTTP-origin requests so they can upgrade, while --proto-redir prevents a later
+            // HTTPS-to-HTTP downgrade that the probe itself refuses. This also disallows
+            // HTTP-to-HTTP redirects because curl cannot express a per-hop downgrade policy.
+            val allowedProtocols =
+                when {
+                    !isHttp -> "=https"
+                    request.followRedirects && !redirectFollowingSuppressed(request) -> "=http,https"
+                    else -> "=http"
+                }
+            append(" --proto '")
+                .append(allowedProtocols)
+                .append('\'')
             if (request.followRedirects && !redirectFollowingSuppressed(request)) {
                 append(" --proto-redir '=https'")
                 append(" --max-redirs ").append(RedirectPolicy.MAX_REDIRECTS)

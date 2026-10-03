@@ -250,7 +250,7 @@ private fun ToolGrid(onNavigate: (String) -> Unit) {
 }
 
 @Composable
-@Suppress("ktlint:standard:function-naming")
+@Suppress("FunctionNaming", "ktlint:standard:function-naming")
 private fun AnimatedToolCard(
     tool: ToolInfo,
     delayMs: Int,

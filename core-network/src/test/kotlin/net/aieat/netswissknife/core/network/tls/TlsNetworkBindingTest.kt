@@ -1,5 +1,7 @@
 package net.aieat.netswissknife.core.network.tls
 
+import io.mockk.every
+import io.mockk.mockk
 import net.aieat.netswissknife.core.network.net.FakeNetworkBinder
 import net.aieat.netswissknife.core.network.net.LocalNetworkBindingUnavailableException
 import net.aieat.netswissknife.core.network.net.LocalNetworkPermissionDeniedException
@@ -10,17 +12,21 @@ import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.net.ServerSocket
+import javax.net.ssl.SNIHostName
+import javax.net.ssl.SSLParameters
 import javax.net.ssl.SSLSocket
 
 class TlsNetworkBindingTest {
     private fun unusedPort(): Int = ServerSocket(0).use { it.localPort }
 
-    private fun engine(binder: FakeNetworkBinder) = SocketTlsHandshakeEngine(
-        socketFactory = TlsInspectorSocketFactory { context ->
-            context.socketFactory.createSocket() as SSLSocket
-        },
-        networkBinder = binder,
-    )
+    private fun engine(binder: FakeNetworkBinder) =
+        SocketTlsHandshakeEngine(
+            socketFactory =
+                TlsInspectorSocketFactory { context ->
+                    context.socketFactory.createSocket() as SSLSocket
+                },
+            networkBinder = binder,
+        )
 
     @Test
     fun `TLS binds local destination before connect`() {
@@ -52,16 +58,18 @@ class TlsNetworkBindingTest {
 
     @Test
     fun `TLS preserves typed local permission denial from socket binding`() {
-        val binder = FakeNetworkBinder(
-            shouldBindResult = true,
-            throwTcpBindSecurityException = true,
-        )
+        val binder =
+            FakeNetworkBinder(
+                shouldBindResult = true,
+                throwTcpBindSecurityException = true,
+            )
         val connection = engine(binder).openConnection("127.0.0.1", unusedPort(), 500)
 
         try {
-            val failure = assertThrows(LocalNetworkPermissionDeniedException::class.java) {
-                connection.connect()
-            }
+            val failure =
+                assertThrows(LocalNetworkPermissionDeniedException::class.java) {
+                    connection.connect()
+                }
             assertTrue(failure.containsLocalNetworkPermissionDenied())
             assertEquals(listOf(false), binder.tcpSocketConnectedStatesAtBind)
         } finally {
@@ -71,10 +79,11 @@ class TlsNetworkBindingTest {
 
     @Test
     fun `TLS fails closed if selected local network disappears before bind`() {
-        val binder = FakeNetworkBinder(
-            shouldBindResult = true,
-            tcpBindIfLocalReturnsFalse = true,
-        )
+        val binder =
+            FakeNetworkBinder(
+                shouldBindResult = true,
+                tcpBindIfLocalReturnsFalse = true,
+            )
         val connection = engine(binder).openConnection("127.0.0.1", unusedPort(), 500)
 
         try {
@@ -83,6 +92,27 @@ class TlsNetworkBindingTest {
             }
             assertEquals(0, binder.boundTcpSockets.size)
             assertEquals(listOf("127.0.0.1"), binder.atomicBindDestinations)
+        } finally {
+            connection.close()
+        }
+    }
+
+    @Test
+    fun `TLS sends SNI for a hostname with a trailing DNS root dot`() {
+        val socket = mockk<SSLSocket>(relaxed = true)
+        val parameters = SSLParameters()
+        var appliedParameters: SSLParameters? = null
+        every { socket.sslParameters } returns parameters
+        every { socket.sslParameters = any() } answers {
+            appliedParameters = firstArg()
+        }
+        val connection =
+            SocketTlsHandshakeEngine(TlsInspectorSocketFactory { socket })
+                .openConnection("example.com.", 443, 1_000)
+
+        try {
+            val serverName = appliedParameters?.serverNames?.single() as SNIHostName
+            assertEquals("example.com", serverName.asciiName)
         } finally {
             connection.close()
         }

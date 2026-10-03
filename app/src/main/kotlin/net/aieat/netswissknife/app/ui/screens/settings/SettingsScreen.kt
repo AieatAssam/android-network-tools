@@ -642,7 +642,7 @@ private fun LibraryRow(lib: LibraryInfo) {
 }
 
 @Composable
-@Suppress("ktlint:standard:function-naming")
+@Suppress("FunctionNaming", "ktlint:standard:function-naming")
 private fun SectionHeader(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     title: String,

@@ -1480,7 +1480,7 @@ private fun InterfaceRow(iface: SnmpInterface) {
 }
 
 @Composable
-@Suppress("ktlint:standard:function-naming")
+@Suppress("FunctionNaming", "ktlint:standard:function-naming")
 private fun NeighbourRow(
     link: TopologyLink,
     currentNodeIp: String,

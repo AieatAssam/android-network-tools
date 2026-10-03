@@ -1,5 +1,6 @@
 package net.aieat.netswissknife.core.network.net
 
+import net.aieat.netswissknife.core.network.HostValidator
 import java.io.Closeable
 import java.net.DatagramSocket
 import java.net.InetAddress
@@ -52,10 +53,7 @@ internal fun NetworkBinder.newUdpSocket(
 ): DatagramSocket =
     createBoundSocket(socketFactory) { socket ->
         val isMulticast =
-            bindMulticastDestinations &&
-                runCatching {
-                    InetAddress.getByName(destinationIp).isMulticastAddress
-                }.getOrDefault(false)
+            bindMulticastDestinations && isMulticastIpLiteral(destinationIp)
         when {
             forceBind || isMulticast -> {
                 bind(socket)
@@ -101,3 +99,11 @@ private fun <T : Closeable> NetworkBinder.createBoundSocket(
         throw error
     }
 }
+
+/** Checks multicast status only for syntax-validated address literals, never hostnames. */
+internal fun isMulticastIpLiteral(destinationIp: String): Boolean =
+    if (!HostValidator.isValidIpv4(destinationIp) && !HostValidator.isValidIpv6(destinationIp)) {
+        false
+    } else {
+        runCatching { InetAddress.getByName(destinationIp).isMulticastAddress }.getOrDefault(false)
+    }
