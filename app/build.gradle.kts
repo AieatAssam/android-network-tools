@@ -199,25 +199,6 @@ dependencies {
     androidTestImplementation(libs.mockk.android)
     androidTestImplementation(composeBom)
     androidTestImplementation(libs.compose.ui.test.junit4)
-
-    // AGP's Android lint tool is resolved in its own build-only configuration,
-    // separate from the root buildscript classpath. Keep the vulnerable AGP
-    // transitive requests on patched versions without adding these libraries to
-    // app or test runtime configurations.
-    constraints {
-        add("androidLintTool", "org.bouncycastle:bcpkix-jdk18on:1.86") {
-            because("Keep AGP's lint tool classpath on the patched Bouncy Castle line")
-        }
-        add("androidLintTool", "org.bouncycastle:bcprov-jdk18on:1.86") {
-            because("Keep AGP's lint tool classpath on the patched Bouncy Castle line")
-        }
-        add("androidLintTool", "org.apache.commons:commons-lang3:3.18.0") {
-            because("Keep AGP's lint tool classpath on patched Commons Lang")
-        }
-        add("androidLintTool", "org.apache.httpcomponents:httpclient:4.5.14") {
-            because("Keep AGP's lint tool classpath on patched Apache HttpClient")
-        }
-    }
 }
 
 tasks.withType<Test> {
@@ -252,7 +233,7 @@ extensions.configure<kotlinx.kover.gradle.plugin.dsl.KoverProjectExtension> {
                     "net.aieat.netswissknife.app.platform.CapabilitySnapshot",
                     "net.aieat.netswissknife.app.platform.NetworkSnapshot",
                     "net.aieat.netswissknife.app.platform.NetworkStatus",
-                    "net.aieat.netswissknife.app.platform.Transport"
+                    "net.aieat.netswissknife.app.platform.Transport",
                 )
             }
             excludes {

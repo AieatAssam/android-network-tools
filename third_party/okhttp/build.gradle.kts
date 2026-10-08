@@ -42,7 +42,7 @@ kotlin {
 
                 dependencies {
                     api("com.squareup.okio:okio:3.18.2")
-                    compileOnly("org.codehaus.mojo:animal-sniffer-annotations:1.27")
+                    compileOnly("org.codehaus.mojo:animal-sniffer-annotations:1.28")
                 }
             }
 
@@ -51,12 +51,12 @@ kotlin {
             kotlin.srcDir("src/androidMain/kotlin")
 
             dependencies {
-                implementation("androidx.annotation:annotation:1.10.0")
+                implementation("androidx.annotation:annotation:1.11.0")
                 implementation("androidx.startup:startup-runtime:1.2.0")
-                compileOnly("org.conscrypt:conscrypt-openjdk-uber:2.6.2")
+                compileOnly("org.conscrypt:conscrypt-openjdk-uber:2.7.0")
                 compileOnly("org.bouncycastle:bcprov-jdk18on:1.86")
                 compileOnly("org.bouncycastle:bcutil-jdk18on:1.86")
-                compileOnly("org.bouncycastle:bctls-jdk18on:1.86.1")
+                compileOnly("org.bouncycastle:bctls-jdk18on:1.86.2")
             }
         }
 
@@ -66,10 +66,10 @@ kotlin {
             resources.srcDir("src/jvmMain/resources")
 
             dependencies {
-                compileOnly("org.conscrypt:conscrypt-openjdk-uber:2.6.2")
+                compileOnly("org.conscrypt:conscrypt-openjdk-uber:2.7.0")
                 compileOnly("org.bouncycastle:bcprov-jdk18on:1.86")
                 compileOnly("org.bouncycastle:bcutil-jdk18on:1.86")
-                compileOnly("org.bouncycastle:bctls-jdk18on:1.86.1")
+                compileOnly("org.bouncycastle:bctls-jdk18on:1.86.2")
                 compileOnly("org.openjsse:openjsse:1.1.14")
                 compileOnly("org.graalvm.nativeimage:svm:25.0.4")
             }

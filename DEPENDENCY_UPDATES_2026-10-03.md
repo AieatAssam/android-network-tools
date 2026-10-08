@@ -49,3 +49,8 @@ These resolved versions are outside all seven alerted vulnerable ranges. The
 settings plugin classpath contained none of these artifacts. This confirms the
 review branch's resolution; it does not close alerts on the default branch or
 constitute an exhaustive vulnerability scan. [Repository security alerts](https://github.com/AieatAssam/android-network-tools/security/dependabot)
+
+## Follow-up on 2026-10-08
+
+Resolving every configuration in every module showed that the earlier pins did not cover two build-only paths. `:okhttp-bounded`'s Android lint tool still resolved Bouncy Castle 1.80.2, Commons Lang 3.16.0 and HttpClient 4.5.6. The ktlint 1.8.0 CLI also brings Logback 1.3.16. The root build now applies the patched versions to those configurations in every module (Logback 1.5.38). Commons Lang 3.21.0 is now published on Maven Central, so the earlier hold no longer applies. The routine updates applied in the same change are listed under R5-007 in `plan/reviews/2026-10-08-branch-pr-review.yaml`.
+
