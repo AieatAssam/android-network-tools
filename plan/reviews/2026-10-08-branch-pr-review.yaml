@@ -15,6 +15,8 @@ findings:
     resolution:
       status: done
       summary: "Blocking cancelAndJoin stays on IO. The check and the state write now run under withContext(NonCancellable + Dispatchers.Main.immediate). MutableStateFlow.compareAndSet was rejected because it compares with equals, and a fresh empty Running state can equal the stale one."
+    validation:
+      - "Coverage is indirect. The existing lifecycle cleanup tests pass, but PingViewModelTest uses UnconfinedTestDispatcher as Main, so the Main.immediate hop runs inline and the interleaving is not reproduced."
     owner: E03-T02
 
   - id: R5-002
