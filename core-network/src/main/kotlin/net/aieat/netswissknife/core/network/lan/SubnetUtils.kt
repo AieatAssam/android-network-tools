@@ -28,21 +28,10 @@ object SubnetUtils {
     /** Injectable interface-address source used to verify detection and prefix forwarding. */
     internal fun getCurrentSubnet(
         interfaceAddressesProvider: () -> Sequence<InterfaceAddressCandidate>,
-    ): String? = try {
-        interfaceAddressesProvider()
-            .filter { !it.interfaceIsLoopback && it.interfaceIsUp && !it.interfaceIsVirtual }
-            .filter { candidate ->
-                val name = candidate.interfaceName.lowercase()
-                !name.contains("dummy") && !name.contains("tun") && !name.contains("p2p")
-            }
-            .filter { !it.addressIsLoopback }
-            .mapNotNull { candidate -> cidrOf(candidate.address, candidate.prefixLength) }
-            .firstOrNull()
-    } catch (_: Exception) {
-        null
-    }
+    ): String? =
+        LocalSubnet.currentCandidate(interfaceAddressesProvider)?.let { cidrOf(it.address, it.prefixLength) }
 
-    private fun platformInterfaceAddressCandidates(): Sequence<InterfaceAddressCandidate> = sequence {
+    internal fun platformInterfaceAddressCandidates(): Sequence<InterfaceAddressCandidate> = sequence {
         val interfaces = NetworkInterface.getNetworkInterfaces() ?: return@sequence
         while (interfaces.hasMoreElements()) {
             val iface = interfaces.nextElement()
@@ -159,10 +148,10 @@ object SubnetUtils {
         }
     }
 
-    private fun longToIp(ip: Long): String =
+    internal fun longToIp(ip: Long): String =
         "${(ip ushr 24) and 0xFF}.${(ip ushr 16) and 0xFF}.${(ip ushr 8) and 0xFF}.${ip and 0xFF}"
 
-    private fun maskForPrefix(prefix: Int): Long =
+    internal fun maskForPrefix(prefix: Int): Long =
         if (prefix == 0) 0L
         else (0xFFFFFFFFL shl (32 - prefix)) and 0xFFFFFFFFL
 }

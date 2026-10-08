@@ -238,6 +238,7 @@ fun LanScreen(
     val timeoutMs by viewModel.timeoutMs.collectAsStateWithLifecycle()
     val concurrency by viewModel.concurrency.collectAsStateWithLifecycle()
     val isSubnetLoading by viewModel.isSubnetLoading.collectAsStateWithLifecycle()
+    val subnetNarrowedFrom by viewModel.subnetNarrowedFrom.collectAsStateWithLifecycle()
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val recentSubnets by viewModel.recentSubnets.collectAsStateWithLifecycle()
 
@@ -292,6 +293,7 @@ fun LanScreen(
                 timeoutMs = timeoutMs,
                 concurrency = concurrency,
                 isSubnetLoading = isSubnetLoading,
+                subnetNarrowedFrom = subnetNarrowedFrom,
                 isScanning = uiState is LanScanUiState.Scanning,
                 isCanceling = uiState is LanScanUiState.Canceling,
                 recentSubnets = recentSubnets,
@@ -367,6 +369,8 @@ fun LanScreen(
                         } else state.message,
                         onRetry = viewModel::startScan,
                         onClear = viewModel::onClear,
+                        suggestedSubnet = state.suggestedSubnet,
+                        onScanSuggested = viewModel::scanSubnet,
                     )
                 }
             }
@@ -417,6 +421,7 @@ private fun LanInputCard(
     timeoutMs: Int,
     concurrency: Int,
     isSubnetLoading: Boolean,
+    subnetNarrowedFrom: String?,
     isScanning: Boolean,
     isCanceling: Boolean,
     recentSubnets: List<String>,
@@ -472,6 +477,10 @@ private fun LanInputCard(
                         }
                     }
                 },
+                supportingText =
+                    subnetNarrowedFrom?.let { network ->
+                        { Text(stringResource(R.string.lan_subnet_narrowed_hint, network)) }
+                    },
                 singleLine = true,
                 enabled = !isScanning && !isCanceling,
                 modifier = Modifier.fillMaxWidth(),
@@ -1601,6 +1610,8 @@ private fun LanErrorContent(
     message: String,
     onRetry: () -> Unit,
     onClear: () -> Unit,
+    suggestedSubnet: String? = null,
+    onScanSuggested: (String) -> Unit = {},
 ) {
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -1629,6 +1640,14 @@ private fun LanErrorContent(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
             )
+            if (suggestedSubnet != null) {
+                Button(
+                    onClick = { onScanSuggested(suggestedSubnet) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(stringResource(R.string.lan_scan_suggested_button, suggestedSubnet))
+                }
+            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),

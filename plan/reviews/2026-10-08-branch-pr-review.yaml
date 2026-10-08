@@ -72,6 +72,40 @@ findings:
       - "ktlint, detekt, all JVM tests and all three koverVerify tasks pass locally. The core-network ktlint baseline blocks for the three edited files only lost entries; none were added."
     owner: E03-T02
 
+  - id: R5-006
+    severity: high
+    kind: security
+    title: "Dependabot alerts: vulnerable build-tool libraries still resolved in some configurations"
+    evidence:
+      - { file: "build.gradle.kts", detail: "The seven default-branch alerts (FreeMarker, Bouncy Castle bcprov/bcpkix, Commons Lang, Apache HttpClient) were already fixed on the root buildscript classpath and :app's androidLintTool. A full resolution of every configuration found :okhttp-bounded's androidLintTool still on bcprov/bcpkix/bcutil 1.80.2, commons-lang3 3.16.0 and httpclient 4.5.6." }
+      - { file: "build.gradle.kts", detail: "GitHub's dependency-graph comparison for PR #109 showed the branch adding logback-core 1.3.16 (GHSA-qqpg-mvqg-649v, GHSA-p47f-322f-whfh, GHSA-jhq6-gfmj-v8fx), bundled by the ktlint 1.8.0 CLI in each module's ktlint configuration. All three fixes are on Logback 1.5.x." }
+    resolution:
+      status: done
+      summary: "The root build applies build-tool constraints to every module: androidLintTool gets Bouncy Castle 1.86 (including bcutil), Commons Lang 3.21.0 and HttpClient 4.5.14, and ktlint gets Logback 1.5.38. This replaces :app's own lint constraints. No app or test runtime configuration changes. The default-branch alerts close once this graph reaches main."
+    owner: E01-T07
+
+  - id: R5-007
+    severity: low
+    kind: maintenance
+    title: "Routine dependency updates"
+    resolution:
+      status: done
+      summary: "Applied the stable updates from the dependencyUpdates report: Kotlin 2.4.21, Compose BOM 2026.09.00, core-ktx 1.19.1, navigation-compose 2.10.2, JUnit 6.1.3, Kover 0.9.11, the versions settings plugin 0.65.0, jose4j 0.9.7, Commons Lang 3.21.0 (now published on Maven Central), and, in the OkHttp fork, androidx.annotation 1.11.0, animal-sniffer 1.28, Conscrypt 2.7.0 and bctls 1.86.2. Gradle 9.7.1 to 9.8.1 with the published wrapper checksum. The CodeQL job's Kotlin downgrade now matches any 2.4.x patch and fails if it stops matching. Not applied: GraalVM svm 25.0.4.1.1 (an unusual version line for a compileOnly GraalVM stub), detekt pre-releases, and ktlint-internal artifacts (sarif4k, kotlin-logging) that belong to the ktlint CLI."
+    owner: E01-T07
+
+  - id: R5-008
+    severity: medium
+    kind: bug
+    title: "LAN scan defaults to networks too large to scan within the 10-minute limit"
+    evidence:
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanViewModel.kt", detail: "refreshSubnet() pre-filled the whole detected network. On corporate or campus Wi-Fi (for example a /16), or on CI runners (R5-003), the first Scan immediately showed the over-limit error with no way forward except editing the CIDR by hand." }
+    resolution:
+      status: done
+      summary: "LinkInfo exposes this device's IPv4 address, and the new core-network LocalSubnet picks the /24 around it. After saved timeout and concurrency load, a detected network that would exceed the ceiling is pre-filled as that /24, with a hint naming the full network. Editing the field clears the hint. Hand-entered over-limit ranges, including prefixes broader than /16 that previously failed generic validation, show the limit error with a one-tap 'Scan <device /24>' action. Networks that fit (for example a /22 at default settings) are kept whole."
+    validation:
+      - "LanScanSubnetSizeViewModelTest (6 tests) and LocalSubnetTest (7 tests) are new."
+    owner: E01-T07
+
 observations:
   - "ci.yml re-runs the full build-and-test job on every PR label change because of the labeled/unlabeled triggers needed for run-instrumented. Left unchanged; it costs CI minutes but is not a correctness issue."
   - "release.yml concurrency `queue: max` is valid GitHub Actions syntax, added in the 2026-05-07 changelog."

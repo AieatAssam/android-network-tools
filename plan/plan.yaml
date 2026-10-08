@@ -253,6 +253,9 @@ comprehensive_expansion:
       - {"finding":"R5-003","owner_task":"E01-T07","follow_up_status":"done","report":"plan/reviews/2026-10-08-branch-pr-review.yaml"}
       - {"finding":"R5-004","owner_task":"E03-T02","follow_up_status":"done","report":"plan/reviews/2026-10-08-branch-pr-review.yaml"}
       - {"finding":"R5-005","owner_task":"E03-T02","follow_up_status":"done","report":"plan/reviews/2026-10-08-branch-pr-review.yaml"}
+      - {"finding":"R5-006","owner_task":"E01-T07","follow_up_status":"done","report":"plan/reviews/2026-10-08-branch-pr-review.yaml"}
+      - {"finding":"R5-007","owner_task":"E01-T07","follow_up_status":"done","report":"plan/reviews/2026-10-08-branch-pr-review.yaml"}
+      - {"finding":"R5-008","owner_task":"E01-T07","follow_up_status":"done","report":"plan/reviews/2026-10-08-branch-pr-review.yaml"}
       - {"finding":"R4-014","owner_task":"IR-3","follow_up_status":"done","report":"plan/reviews/2026-09-26-interim-release-audit.yaml"}
       - {"finding":"R4-015","owner_task":"IR-1","follow_up_status":"done","report":"plan/reviews/2026-09-26-interim-release-audit.yaml"}
       - {"finding":"R4-016","owner_task":"IR-1","follow_up_status":"done","report":"plan/reviews/2026-09-26-interim-release-audit.yaml"}

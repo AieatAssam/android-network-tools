@@ -41,6 +41,7 @@ TCP port reachability scanning with service identification.
 ### LAN Scanner
 Local network device discovery across IPv4 subnets.
 - CIDR subnet scanning (/16–/30) with automatic current-subnet detection
+- Scans are capped at an estimated 10 minutes. When the detected network is too large for that at the current timeout and concurrency (for example a /16 on corporate Wi-Fi), the subnet field is pre-filled with the /24 around this device and a hint names the full network. An over-limit range entered by hand, including prefixes broader than /16, offers a one-tap scan of this device's /24 instead
 - Multi-method presence detection: successful ICMP, completed TCP connections, and correlated NetBIOS NBSTAT or mDNS replies; each confirmed host shows the method(s) that found it
 - Failed connects, timeouts, unreachable routes, and policy failures remain opt-in diagnostics and never inflate the confirmed device count or confirmed-host exports
 - Per-host details: IP, hostname, MAC address, OUI vendor name, open ports, RTT when ICMP answers, and gateway flag from the active default route

@@ -518,26 +518,24 @@
         <error line="11" column="1" source="standard:no-empty-first-line-in-class-body" />
         <error line="30" column="9" source="standard:function-signature" />
         <error line="30" column="79" source="standard:function-signature" />
-        <error line="31" column="18" source="standard:multiline-expression-wrapping" />
-        <error line="31" column="18" source="standard:function-signature" />
-        <error line="38" column="13" source="standard:chain-method-continuation" />
-        <error line="45" column="93" source="standard:multiline-expression-wrapping" />
-        <error line="45" column="93" source="standard:function-signature" />
-        <error line="49" column="28" source="standard:multiline-expression-wrapping" />
-        <error line="54" column="17" source="standard:chain-method-continuation" />
-        <error line="76" column="25" source="standard:function-signature" />
-        <error line="76" column="42" source="standard:function-signature" />
-        <error line="76" column="59" source="standard:function-signature" />
-        <error line="108" column="18" source="standard:function-signature" />
-        <error line="108" column="32" source="standard:function-signature" />
-        <error line="108" column="42" source="standard:function-signature" />
-        <error line="131" column="22" source="standard:multiline-expression-wrapping" />
-        <error line="155" column="25" source="standard:multiline-expression-wrapping" />
-        <error line="162" column="45" source="standard:function-signature" />
-        <error line="166" column="26" source="standard:if-else-wrapping" />
-        <error line="166" column="26" source="standard:multiline-if-else" />
-        <error line="167" column="14" source="standard:if-else-wrapping" />
-        <error line="167" column="14" source="standard:multiline-if-else" />
+        <error line="31" column="17" source="standard:function-signature" />
+        <error line="34" column="94" source="standard:multiline-expression-wrapping" />
+        <error line="34" column="94" source="standard:function-signature" />
+        <error line="38" column="28" source="standard:multiline-expression-wrapping" />
+        <error line="43" column="17" source="standard:chain-method-continuation" />
+        <error line="65" column="25" source="standard:function-signature" />
+        <error line="65" column="42" source="standard:function-signature" />
+        <error line="65" column="59" source="standard:function-signature" />
+        <error line="97" column="18" source="standard:function-signature" />
+        <error line="97" column="32" source="standard:function-signature" />
+        <error line="97" column="42" source="standard:function-signature" />
+        <error line="120" column="22" source="standard:multiline-expression-wrapping" />
+        <error line="144" column="25" source="standard:multiline-expression-wrapping" />
+        <error line="151" column="46" source="standard:function-signature" />
+        <error line="155" column="26" source="standard:if-else-wrapping" />
+        <error line="155" column="26" source="standard:multiline-if-else" />
+        <error line="156" column="14" source="standard:if-else-wrapping" />
+        <error line="156" column="14" source="standard:multiline-if-else" />
     </file>
     <file name="src/main/kotlin/net/aieat/netswissknife/core/network/mdns/MdnsDiscoverySession.kt">
         <error line="5" column="20" source="standard:class-signature" />

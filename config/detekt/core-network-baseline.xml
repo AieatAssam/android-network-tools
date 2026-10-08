@@ -49,7 +49,7 @@
     <ID>CyclomaticComplexMethod:ReservedRanges.kt:ReservedRanges$private fun parseIpv6: IntArray?</ID>
     <ID>CyclomaticComplexMethod:ResourceScope.kt:ResourceScope$override fun close</ID>
     <ID>CyclomaticComplexMethod:SpeedTestRepositoryImpl.kt:SpeedTestRepositoryImpl$private fun runLegacy: Flow&lt;SpeedTestEvent&gt;</ID>
-    <ID>CyclomaticComplexMethod:SubnetUtils.kt:SubnetUtils$private fun platformInterfaceAddressCandidates: Sequence&lt;InterfaceAddressCandidate&gt;</ID>
+    <ID>CyclomaticComplexMethod:SubnetUtils.kt:SubnetUtils$internal fun platformInterfaceAddressCandidates: Sequence&lt;InterfaceAddressCandidate&gt;</ID>
     <ID>CyclomaticComplexMethod:TlsInspectorRepositoryImpl.kt:TlsInspectorRepositoryImpl$override suspend fun inspect: NetworkResult&lt;TlsInspectorResult&gt;</ID>
     <ID>CyclomaticComplexMethod:TopologyDiscoveryRepositoryImpl.kt:TopologyDiscoveryRepositoryImpl$override fun discover: Flow&lt;TopologyDiscoveryEvent&gt;</ID>
     <ID>CyclomaticComplexMethod:TopologyParamsValidator.kt:TopologyParamsValidator$fun validate: ValidationResult</ID>

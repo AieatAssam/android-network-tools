@@ -20,6 +20,8 @@ data class LinkInfo(
     val interfaceName: String?,
     val isWifi: Boolean,
     val isVpnActive: Boolean,
+    /** This device's IPv4 address on the link, used to pick the local slice of large subnets. */
+    val localIp: String? = null,
 )
 
 private data class ObservedLinkNetwork(
@@ -189,6 +191,7 @@ class LinkInfoProvider private constructor(
                 interfaceName = properties.interfaceName,
                 isWifi = capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI),
                 isVpnActive = vpnActive,
+                localIp = ipv4,
             )
         }.getOrNull()
 }

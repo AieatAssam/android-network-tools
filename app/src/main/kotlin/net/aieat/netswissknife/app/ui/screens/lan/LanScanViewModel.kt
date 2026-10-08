@@ -24,6 +24,7 @@ import net.aieat.netswissknife.core.network.SystemMonotonicClock
 import net.aieat.netswissknife.core.network.elapsedMillisSince
 import net.aieat.netswissknife.app.ui.navigation.ToolMacAddress
 import net.aieat.netswissknife.core.network.lan.SubnetUtils
+import net.aieat.netswissknife.core.network.lan.LocalSubnet
 import net.aieat.netswissknife.core.network.operation.CancellationReason
 import net.aieat.netswissknife.core.network.operation.OperationBudget
 import net.aieat.netswissknife.core.network.operation.OperationRequirement
@@ -47,6 +48,9 @@ import kotlin.coroutines.coroutineContext
 import javax.inject.Inject
 
 private const val TAG = "LanScanViewModel"
+
+/** Broadest prefix the scanner accepts; validation rejects anything wider. */
+private const val MIN_SCANNABLE_PREFIX = 16
 
 /** Prefer a reported conventional cleartext HTTP port; otherwise keep the editable form on port 80. */
 internal fun preferredHttpProbePort(openPorts: Collection<Int>): Int =
@@ -107,6 +111,8 @@ sealed interface LanScanUiState {
         val message: String,
         val networkErrorKind: NetworkErrorKind = NetworkErrorKind.GENERAL,
         val isBudgetLimit: Boolean = false,
+        /** A smaller range around this device that fits the scan limit, offered after a budget error. */
+        val suggestedSubnet: String? = null,
     ) : LanScanUiState
 }
 
@@ -148,6 +154,15 @@ class LanScanViewModel @Inject constructor(
 
     private val _gatewayIp = MutableStateFlow<String?>(null)
     val gatewayIp: StateFlow<String?> = _gatewayIp.asStateFlow()
+
+    private val _subnetNarrowedFrom = MutableStateFlow<String?>(null)
+
+    /** The detected network when it was too large to scan and the default was narrowed. */
+    val subnetNarrowedFrom: StateFlow<String?> = _subnetNarrowedFrom.asStateFlow()
+
+    /** This device's IPv4 address from the last detection, used to pick a local /24. */
+    private var localIp: String? = null
+    private var settingsLoad: Job? = null
 
     private val navigationEventsChannel = Channel<LanNavEvent>(Channel.BUFFERED)
     val navigationEvents = navigationEventsChannel.receiveAsFlow()
@@ -201,17 +216,27 @@ class LanScanViewModel @Inject constructor(
         recentSubnets = recentHostsRepository
             .getRecents(AppPreferenceKeys.RECENT_LAN_SUBNETS)
             .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
-        viewModelScope.launch {
-            val prefs = dataStore.data.first()
-            _timeoutMs.value = prefs[AppPreferenceKeys.DEFAULT_TIMEOUT_MS] ?: 1_000
-            _concurrency.value = prefs[AppPreferenceKeys.DEFAULT_CONCURRENCY] ?: 50
-        }
+        settingsLoad =
+            viewModelScope.launch {
+                val prefs = dataStore.data.first()
+                _timeoutMs.value = prefs[AppPreferenceKeys.DEFAULT_TIMEOUT_MS] ?: 1_000
+                _concurrency.value = prefs[AppPreferenceKeys.DEFAULT_CONCURRENCY] ?: 50
+            }
         refreshSubnet()
     }
 
     // ── User actions ──────────────────────────────────────────────────────────
 
-    fun onSubnetChange(value: String) { _subnet.value = value }
+    fun onSubnetChange(value: String) {
+        _subnet.value = value
+        _subnetNarrowedFrom.value = null
+    }
+
+    /** Replaces the subnet with [subnet], typically a suggested slice, and starts scanning it. */
+    fun scanSubnet(subnet: String) {
+        onSubnetChange(subnet)
+        startScan()
+    }
 
     fun onTimeoutChange(value: Int) { _timeoutMs.value = value }
 
@@ -231,12 +256,15 @@ class LanScanViewModel @Inject constructor(
                     AppLogger.d(TAG, "refreshSubnet: starting subnet detection")
                     val linkInfo = linkInfoProvider?.getLinkInfo()
                     _gatewayIp.value = linkInfo?.gatewayIp
+                    localIp = linkInfo?.localIp ?: LocalSubnet.deviceAddress()
                     (linkInfo?.cidr ?: SubnetUtils.getCurrentSubnet()).also { result ->
                         AppLogger.i(TAG, "refreshSubnet: detected subnet = $result")
                     }
                 }
+                // The size check depends on the saved timeout and concurrency.
+                settingsLoad?.join()
                 if (_subnet.value.isBlank()) {
-                    _subnet.value = detected ?: "192.168.1.0/24"
+                    applyDetectedSubnet(detected ?: "192.168.1.0/24")
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.IO) {
@@ -249,6 +277,43 @@ class LanScanViewModel @Inject constructor(
                 _isSubnetLoading.value = false
             }
         }
+    }
+
+    /**
+     * Uses [detected] as the default subnet, or this device's /24 inside it when the whole
+     * network could not be scanned within the time limit at the current settings.
+     */
+    private fun applyDetectedSubnet(detected: String) {
+        val slice =
+            LocalSubnet
+                .hostSlice(detected, localIp)
+                ?.takeIf { it != detected && exceedsScanCeiling(detected) }
+        _subnet.value = slice ?: detected
+        _subnetNarrowedFrom.value = detected.takeIf { slice != null }
+    }
+
+    /**
+     * True when [cidr] would exceed the hard scan ceiling at the current settings. Prefixes
+     * broader than /16 fail ordinary validation, so they count as oversized here.
+     */
+    private fun exceedsScanCeiling(cidr: String): Boolean {
+        if (!SubnetUtils.isValidCidr(cidr)) {
+            val prefix = cidr.substringAfter('/', "").trim().toIntOrNull()
+            return prefix != null && prefix < MIN_SCANNABLE_PREFIX && LocalSubnet.hostSlice(cidr, null) != null
+        }
+        val params =
+            LanScanParams(
+                subnet = cidr,
+                timeoutMs = _timeoutMs.value.coerceIn(100, 10_000),
+                concurrency = _concurrency.value.coerceIn(1, 500),
+            )
+        return LanScanTimeBudget
+            .estimate(
+                targetCount = SubnetUtils.parseSubnet(params.subnet).size,
+                timeoutMs = params.timeoutMs,
+                concurrency = params.concurrency,
+                enableNameProbes = params.enableNameProbes,
+            ).exceedsHardCeiling
     }
 
     fun removeRecentSubnet(subnet: String) {
@@ -282,23 +347,20 @@ class LanScanViewModel @Inject constructor(
         )
 
         // Preserve the normal validator's field-specific errors for malformed values. Only
-        // valid requests are eligible for a resource estimate and early size warning.
-        if (SubnetUtils.isValidCidr(params.subnet) &&
-            params.timeoutMs in 100..10_000 && params.concurrency in 1..500
+        // well-formed ranges get the early size warning, including prefixes broader than /16.
+        if (params.timeoutMs in 100..10_000 && params.concurrency in 1..500 &&
+            exceedsScanCeiling(params.subnet)
         ) {
-            val estimate = LanScanTimeBudget.estimate(
-                targetCount = SubnetUtils.parseSubnet(params.subnet).size,
-                timeoutMs = params.timeoutMs,
-                concurrency = params.concurrency,
-                enableNameProbes = params.enableNameProbes,
-            )
-            if (estimate.exceedsHardCeiling) {
-                _uiState.value = LanScanUiState.Error(
+            _uiState.value =
+                LanScanUiState.Error(
                     LanScanOperationBudget.OVER_CEILING_MESSAGE,
                     isBudgetLimit = true,
+                    suggestedSubnet =
+                        LocalSubnet
+                            .hostSlice(params.subnet, localIp)
+                            ?.takeIf { it != params.subnet && !exceedsScanCeiling(it) },
                 )
-                return
-            }
+            return
         }
 
         _uiState.value = LanScanUiState.Scanning(
