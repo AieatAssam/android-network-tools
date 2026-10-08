@@ -1,13 +1,25 @@
 package net.aieat.netswissknife.app.ui.screens.ping
 
+import android.annotation.SuppressLint
+import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.ClosedSendChannelException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -15,9 +27,25 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
 import net.aieat.netswissknife.app.platform.LinkInfoProvider
+import net.aieat.netswissknife.app.platform.LiteralDestinationClassifier
+import net.aieat.netswissknife.app.platform.NetworkStatus
+import net.aieat.netswissknife.app.platform.NetworkStatusProvider
+import net.aieat.netswissknife.app.ui.navigation.HostTool
+import net.aieat.netswissknife.app.ui.navigation.ToolDestination
+import net.aieat.netswissknife.app.ui.navigation.ToolHost
+import net.aieat.netswissknife.app.ui.navigation.ToolIntentCodec
+import net.aieat.netswissknife.app.ui.navigation.ToolSource
+import net.aieat.netswissknife.app.ui.i18n.ErrorTextMapper
+import net.aieat.netswissknife.app.ui.i18n.UiText
+import net.aieat.netswissknife.app.platform.NoOpNetworkStatusProvider
+import net.aieat.netswissknife.app.platform.AvailabilityReason
+import net.aieat.netswissknife.app.platform.OperationAvailability
+import net.aieat.netswissknife.app.platform.denialMessage
 import net.aieat.netswissknife.core.domain.ContinuousPingParams
 import net.aieat.netswissknife.core.domain.ContinuousPingUseCase
 import net.aieat.netswissknife.core.domain.PingFlowResult
@@ -25,13 +53,92 @@ import net.aieat.netswissknife.core.domain.PingParams
 import net.aieat.netswissknife.core.domain.PingSessionLogger
 import net.aieat.netswissknife.core.domain.PingUseCase
 import net.aieat.netswissknife.core.network.ping.PingPacketResult
+import net.aieat.netswissknife.core.network.ping.PingRequest
 import net.aieat.netswissknife.core.network.ping.PingResult
 import net.aieat.netswissknife.core.network.ping.PingStats
+import net.aieat.netswissknife.core.network.ping.PingStatsAccumulator
 import net.aieat.netswissknife.core.network.ping.PingStatus
 import net.aieat.netswissknife.core.network.ping.PingEngineKind
 import net.aieat.netswissknife.core.network.HostValidator
+import net.aieat.netswissknife.core.network.ErrorInfo
+import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationRequirement
+import net.aieat.netswissknife.core.network.operation.OperationSession
+import net.aieat.netswissknife.core.network.ping.PingOperation
 import java.io.File
 import javax.inject.Inject
+
+internal class ContinuousPingLogWriter(
+    scope: CoroutineScope,
+    private val logger: PingSessionLogger,
+    private val appendPacket: suspend (PingSessionLogger, Int, PingPacketResult) -> Unit,
+    dispatcher: CoroutineDispatcher = Dispatchers.IO,
+) {
+    private val packets = Channel<Pair<Int, PingPacketResult>>(PACKET_QUEUE_CAPACITY)
+
+    internal companion object {
+        /** Bounds queued log data while allowing brief bursts during disk writes. */
+        const val PACKET_QUEUE_CAPACITY = 64
+    }
+
+    @Volatile
+    private var initializationFailed = false
+
+    private val writerJob = scope.launch(dispatcher) {
+        try {
+            logger.init()
+            for ((sequence, packet) in packets) {
+                try {
+                    appendPacket(logger, sequence, packet)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    // Logging is best-effort; the live ping results remain available.
+                }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            initializationFailed = true
+            packets.close()
+        }
+    }
+
+    suspend fun append(sequence: Int, packet: PingPacketResult) {
+        try {
+            packets.send(sequence to packet)
+        } catch (_: ClosedSendChannelException) {
+            // Logging remains best-effort if initialization has failed or the writer
+            // has already been closed. Cancellation still propagates to the producer.
+        }
+    }
+
+    suspend fun closeAndJoin(): Boolean {
+        packets.close()
+        writerJob.join()
+        return !initializationFailed && !writerJob.isCancelled
+    }
+
+    fun cancel() {
+        packets.cancel()
+        writerJob.cancel()
+    }
+}
+
+private class ContinuousPingSession(
+    val file: File,
+    val logWriter: ContinuousPingLogWriter,
+    val operationSession: OperationSession,
+) {
+    var producerJob: Job? = null
+    var stopRequested: Boolean = false
+}
+
+private class ContinuousPingValidationException(
+    val info: ErrorInfo,
+    val validationMessage: String,
+) :
+    RuntimeException(validationMessage)
 
 /** All possible states for the Ping UI. */
 sealed interface PingUiState {
@@ -41,14 +148,22 @@ sealed interface PingUiState {
         val packets: List<PingPacketResult>,
         val totalCount: Int,
         val isContinuous: Boolean = false,
-        val pingsSent: Int = 0
+        val pingsSent: Int = 0,
+        /** All-session statistics in continuous mode, independent of [packets]' rolling window. */
+        val stats: PingStats? = null
     ) : PingUiState
     data class Finished(
         val result: PingResult,
         val showRaw: Boolean = false,
         val sessionLogFile: File? = null
     ) : PingUiState
-    data class Error(val message: String) : PingUiState
+    data class Error(
+        val text: UiText,
+        /** Developer-facing compatibility copy for logs and existing state consumers. */
+        val message: String,
+    ) : PingUiState {
+        constructor(message: String) : this(UiText.Plain(message), message)
+    }
 }
 
 @HiltViewModel
@@ -58,20 +173,59 @@ class PingViewModel @Inject constructor(
     private val dataStore: DataStore<Preferences>,
     private val recentHostsRepository: RecentHostsRepository,
     private val linkInfoProvider: LinkInfoProvider = LinkInfoProvider { true },
+    private val networkStatusProvider: NetworkStatusProvider = NoOpNetworkStatusProvider,
+    // Hilt supplies the owner-backed handle at runtime; this empty default supports direct unit tests.
+    @param:SuppressLint("VisibleForTests")
+    private val savedStateHandle: SavedStateHandle = SavedStateHandle(),
+    @param:ApplicationContext private val applicationContext: Context? = null,
 ) : ViewModel() {
 
     companion object {
+        // The operation's finally block closes native/socket resources. Keep this
+        // join alive if the screen's ViewModel is cleared while cleanup is blocked.
+        private val lifecycleCleanupScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         private const val ROLLING_WINDOW = 100
-        private const val NO_NETWORK_CONNECTION = "No network connection"
+        private const val HANDOFF_CONSUMED_KEY = "pingHandoffConsumed"
+        private const val HANDOFF_SOURCE_KEY = "pingHandoffSource"
+        private const val EDITED_HOST_KEY = "editedHost"
     }
 
     private val _uiState = MutableStateFlow<PingUiState>(PingUiState.Idle)
     val uiState: StateFlow<PingUiState> = _uiState.asStateFlow()
+    val networkStatus: StateFlow<NetworkStatus> = networkStatusProvider.status
 
     // ── Form field state ─────────────────────────────────────────────────────
 
     private val _host = MutableStateFlow("")
     val host: StateFlow<String> = _host.asStateFlow()
+
+    private val rawIntentArgument = savedStateHandle.get<String>("intent")
+    private val hasIntentArgument = rawIntentArgument != null
+    private val decodedIntent = rawIntentArgument?.let(ToolIntentCodec::decode)
+    private val intentHost = (decodedIntent?.destination as? ToolDestination.HostTarget)
+        ?.takeIf { it.tool == HostTool.PING }
+    private val routeHost = savedStateHandle.get<String>("host")
+    private val routeArgumentsMatch = !hasIntentArgument || (
+        intentHost != null &&
+            (routeHost == null || ToolHost.parse(routeHost)?.canonical == intentHost.host.canonical)
+        )
+
+    /** A present typed handoff must be valid and intended for Ping. */
+    private val _hasInvalidHandoff = MutableStateFlow(
+        hasIntentArgument && !routeArgumentsMatch && savedStateHandle.get<Boolean>("handoffRecovered") != true,
+    )
+    val hasInvalidHandoff: StateFlow<Boolean> = _hasInvalidHandoff.asStateFlow()
+    private val _sourceContext = MutableStateFlow(
+        if (savedStateHandle.get<Boolean>(HANDOFF_CONSUMED_KEY) == true) {
+            savedStateHandle.get<String>(HANDOFF_SOURCE_KEY)?.let { wireName ->
+                ToolSource.entries.singleOrNull { it.wireName == wireName }
+            }?.takeIf { intentHost != null && routeArgumentsMatch && decodedIntent?.source == it }
+        } else {
+            decodedIntent?.source?.takeIf { routeArgumentsMatch }
+        },
+    )
+    val sourceContext: ToolSource? get() = _sourceContext.value
+    val sourceContextState: StateFlow<ToolSource?> = _sourceContext.asStateFlow()
 
     private val _count = MutableStateFlow(10)
     val count: StateFlow<Int> = _count.asStateFlow()
@@ -96,9 +250,50 @@ class PingViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private var pingJob: Job? = null
-    private var sessionLogFile: File? = null
+    private var pingOperationSession: OperationSession? = null
+    private var lifecyclePingCleanupState: PingUiState.Running? = null
+
+    /** The latest detached lifecycle cleanup, which outlives viewModelScope; tests join it before resetting Main. */
+    internal var lifecycleCleanupJob: Job? = null
+        private set
+    private var continuousSession: ContinuousPingSession? = null
+    private val retiringSessions = mutableSetOf<ContinuousPingSession>()
+
+    internal var sessionLogFileFactory: () -> File = {
+        val cacheDirectory = applicationContext?.cacheDir ?: File(System.getProperty("java.io.tmpdir") ?: ".")
+        val logDirectory = File(cacheDirectory, "ping_logs")
+        check(logDirectory.isDirectory || logDirectory.mkdirs()) {
+            "Could not create the Ping log cache directory"
+        }
+        File.createTempFile("ping_session_", ".csv", logDirectory)
+    }
+    internal var sessionLogAppendHook: suspend (PingSessionLogger, Int, PingPacketResult) -> Unit =
+        { logger, sequence, packet -> logger.append(sequence, packet) }
 
     init {
+        val handoffConsumed = savedStateHandle.get<Boolean>(HANDOFF_CONSUMED_KEY) == true
+        val restoredEdit = savedStateHandle.get<String>(EDITED_HOST_KEY)
+        if (handoffConsumed) {
+            // The NavBackStackEntry retains route arguments across recreation. Once
+            // consumed, only the SavedStateHandle form snapshot is authoritative;
+            // an empty string is an intentional clear and must not fall back to args.
+            _host.value = restoredEdit.orEmpty()
+        } else {
+            val initialHost = when {
+                restoredEdit != null -> restoredEdit
+                _hasInvalidHandoff.value -> null
+                hasIntentArgument -> intentHost?.host?.value
+                else -> routeHost
+            }
+            initialHost?.let { host ->
+                _host.value = host
+                savedStateHandle[EDITED_HOST_KEY] = host
+            }
+            _sourceContext.value?.let { source ->
+                savedStateHandle[HANDOFF_SOURCE_KEY] = source.wireName
+            }
+            savedStateHandle[HANDOFF_CONSUMED_KEY] = true
+        }
         viewModelScope.launch {
             val prefs = dataStore.data.first()
             _count.value = prefs[AppPreferenceKeys.DEFAULT_PING_COUNT] ?: 10
@@ -108,7 +303,24 @@ class PingViewModel @Inject constructor(
 
     // ── User actions ─────────────────────────────────────────────────────────
 
-    fun onHostChange(value: String) { _host.value = value }
+    fun onHostChange(value: String) {
+        _host.value = value
+        savedStateHandle[EDITED_HOST_KEY] = value
+        if (_hasInvalidHandoff.value && HostValidator.normalize(value) != null) {
+            savedStateHandle["handoffRecovered"] = true
+            _hasInvalidHandoff.value = false
+        }
+    }
+
+    /** Clear a supplied handoff while recording the blank form as the consumed state. */
+    fun clearPrefill() {
+        if (_uiState.value is PingUiState.Running) return
+        _host.value = ""
+        _sourceContext.value = null
+        savedStateHandle[EDITED_HOST_KEY] = ""
+        savedStateHandle.remove<String>(HANDOFF_SOURCE_KEY)
+        savedStateHandle[HANDOFF_CONSUMED_KEY] = true
+    }
 
     fun onCountChange(value: Int) { _count.value = value.coerceIn(1, 100) }
 
@@ -130,20 +342,27 @@ class PingViewModel @Inject constructor(
     }
 
     fun onClearResults() {
+        pingOperationSession?.cancel(CancellationReason.USER_STOP)
+        pingOperationSession = null
         pingJob?.cancel()
         pingJob = null
-        cleanupSessionFile()
+        discardContinuousSession()
         _uiState.value = PingUiState.Idle
     }
 
     fun onStop() {
+        val current = _uiState.value
+        if (current is PingUiState.Running && current.isContinuous) {
+            stopContinuousPing(CancellationReason.USER_STOP)
+            return
+        }
+
+        pingOperationSession?.cancel(CancellationReason.USER_STOP)
+        pingOperationSession = null
         pingJob?.cancel()
         pingJob = null
-        val current = _uiState.value
         if (current is PingUiState.Running) {
-            if (current.isContinuous) {
-                finalizeContinuousSession(current)
-            } else if (current.packets.isNotEmpty()) {
+            if (current.packets.isNotEmpty()) {
                 _uiState.value = PingUiState.Finished(
                     buildResult(current.host, current.packets, current.totalCount)
                 )
@@ -156,7 +375,43 @@ class PingViewModel @Inject constructor(
     fun onLifecycleStop() {
         val current = _uiState.value
         if (current is PingUiState.Running && current.isContinuous) {
-            onStop()
+            stopContinuousPing(CancellationReason.LIFECYCLE_PAUSE)
+        } else if (current is PingUiState.Running) {
+            if (lifecyclePingCleanupState === current) return
+            val session = pingOperationSession
+            val job = pingJob
+            // Detach the canceled run immediately so late packets are ignored and a
+            // deliberate new run may start while this run closes its resources.
+            pingOperationSession = null
+            pingJob = null
+            lifecyclePingCleanupState = current
+            lifecycleCleanupJob =
+                lifecycleCleanupScope.launch {
+                    try {
+                        session?.cancel(CancellationReason.LIFECYCLE_PAUSE)
+                        job?.cancelAndJoin()
+                    } finally {
+                        // Blocking cleanup stays on IO, but the identity check and state write
+                        // must run on the main thread with every other ViewModel state mutation;
+                        // otherwise a run started during this check could be overwritten.
+                        withContext(NonCancellable + Dispatchers.Main.immediate) {
+                            if (lifecyclePingCleanupState === current) {
+                                lifecyclePingCleanupState = null
+                            }
+                            // Do not let an old cleanup replace a newer run or an explicit
+                            // user action that changed the state while cleanup was pending.
+                            if (_uiState.value === current) {
+                                _uiState.value = if (current.packets.isNotEmpty()) {
+                                    PingUiState.Finished(
+                                        buildResult(current.host, current.packets, current.totalCount),
+                                    )
+                                } else {
+                                    PingUiState.Idle
+                                }
+                            }
+                        }
+                    }
+                }
         }
     }
 
@@ -181,36 +436,51 @@ class PingViewModel @Inject constructor(
     // ── Normal (bounded) ping ────────────────────────────────────────────────
 
     private fun startNormalPing() {
+        pingOperationSession?.cancel(CancellationReason.USER_STOP)
+        pingOperationSession = null
         pingJob?.cancel()
+        pingJob = null
+        discardContinuousSession()
 
-        if (!linkInfoProvider.hasValidatedNetwork()) {
-            _uiState.value = PingUiState.Error(NO_NETWORK_CONNECTION)
+        val trimmedHost = HostValidator.normalize(_host.value) ?: _host.value.trim()
+        val availability = availabilityFor(trimmedHost)
+        if (!availability.allowed) {
+            _uiState.value = PingUiState.Error(availability.denialMessage())
             return
         }
-
         val params = PingParams(
-            host = _host.value,
+            host = trimmedHost,
             count = _count.value,
             timeoutMs = _timeoutMs.value,
             intervalMs = _intervalMs.value,
             payloadBytes = _payloadBytes.value,
             ttl = _ttl.value
         )
-        val trimmedHost = HostValidator.normalize(params.host) ?: params.host.trim()
-
         _uiState.value = PingUiState.Running(
             host = trimmedHost, packets = emptyList(), totalCount = params.count
         )
 
+        val operationSession = PingOperation.newSession(
+            PingRequest(
+                host = trimmedHost,
+                count = params.count,
+                timeoutMs = params.timeoutMs,
+                intervalMs = params.intervalMs,
+                payloadBytes = params.payloadBytes,
+                ttl = params.ttl,
+            )
+        )
+        pingOperationSession = operationSession
         pingJob = viewModelScope.launch {
             val accumulated = mutableListOf<PingPacketResult>()
             var savedToRecents = false
 
             try {
-                pingUseCase(params).collect { result ->
+                pingUseCase(params, operationSession).collect { result ->
+                    if (pingOperationSession !== operationSession) return@collect
                     when (result) {
                         is PingFlowResult.ValidationError -> {
-                            _uiState.value = PingUiState.Error(result.message)
+                            _uiState.value = typedError(result.info, result.message)
                             return@collect
                         }
                         is PingFlowResult.Packet -> {
@@ -229,7 +499,7 @@ class PingViewModel @Inject constructor(
                 }
 
                 val current = _uiState.value
-                if (current is PingUiState.Running) {
+                if (pingOperationSession === operationSession && current is PingUiState.Running) {
                     _uiState.value = if (current.packets.isEmpty()) {
                         PingUiState.Error("No response received from $trimmedHost")
                     } else {
@@ -239,7 +509,11 @@ class PingViewModel @Inject constructor(
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _uiState.value = PingUiState.Error(e.message ?: "Ping failed")
+                if (pingOperationSession === operationSession) {
+                    _uiState.value = PingUiState.Error(e.message ?: "Ping failed")
+                }
+            } finally {
+                if (pingOperationSession === operationSession) pingOperationSession = null
             }
         }
     }
@@ -247,15 +521,21 @@ class PingViewModel @Inject constructor(
     // ── Continuous ping ──────────────────────────────────────────────────────
 
     private fun startContinuousPing() {
+        pingOperationSession?.cancel(CancellationReason.USER_STOP)
+        pingOperationSession = null
         pingJob?.cancel()
-        cleanupSessionFile()
-
-        if (!linkInfoProvider.hasValidatedNetwork()) {
-            _uiState.value = PingUiState.Error(NO_NETWORK_CONNECTION)
-            return
-        }
+        pingJob = null
+        discardContinuousSession()
 
         val trimmedHost = HostValidator.normalize(_host.value) ?: _host.value.trim()
+        val availability = availabilityFor(trimmedHost)
+        if (!availability.allowed || availability.reason == AvailabilityReason.CONNECTIVITY_UNVALIDATED) {
+            _uiState.value = PingUiState.Error(
+                if (availability.allowed) "Continuous ping requires validated connectivity"
+                else availability.denialMessage(),
+            )
+            return
+        }
         val params = ContinuousPingParams(
             host = trimmedHost,
             timeoutMs = _timeoutMs.value,
@@ -264,38 +544,55 @@ class PingViewModel @Inject constructor(
             ttl = _ttl.value
         )
 
-        val logFile = File.createTempFile("ping_session_", ".csv")
-        sessionLogFile = logFile
+        // Log creation touches the cache directory and runs on the caller's (UI) thread.
+        // A full or unavailable cache must surface as an error state, not crash the app.
+        val logFile =
+            try {
+                sessionLogFileFactory()
+            } catch (e: Exception) {
+                val developerMessage = "Could not create the continuous Ping session log: ${e.message}"
+                val text = UiText.Res(R.string.ping_continuous_log_unavailable, developerFallback = developerMessage)
+                _uiState.value = PingUiState.Error(text, developerMessage)
+                return
+            }
         val logger = PingSessionLogger(logFile)
+        val operationSession = PingOperation.newSession(
+            PingRequest(
+                host = trimmedHost,
+                count = 0,
+                timeoutMs = params.timeoutMs,
+                intervalMs = params.intervalMs,
+                payloadBytes = params.payloadBytes,
+                ttl = params.ttl,
+            )
+        )
+        val session = ContinuousPingSession(
+            file = logFile,
+            logWriter = ContinuousPingLogWriter(
+                scope = viewModelScope,
+                logger = logger,
+                appendPacket = sessionLogAppendHook
+            ),
+            operationSession = operationSession,
+        )
+        continuousSession = session
 
         _uiState.value = PingUiState.Running(
             host = trimmedHost, packets = emptyList(), totalCount = 0,
-            isContinuous = true, pingsSent = 0
+            isContinuous = true, pingsSent = 0, stats = PingStatsAccumulator().snapshot()
         )
 
-        pingJob = viewModelScope.launch {
-            // File writes are dispatched to IO via a channel so the collect loop
-            // is never blocked on disk. The channel is cancelled with the pingJob.
-            val logChannel = Channel<Pair<Int, PingPacketResult>>(Channel.UNLIMITED)
-            launch(Dispatchers.IO) {
-                logger.init()
-                for ((seq, packet) in logChannel) {
-                    runCatching { logger.append(seq, packet) }
-                }
-            }
-
+        val producer = viewModelScope.launch(start = CoroutineStart.LAZY) {
             val window = ArrayDeque<PingPacketResult>(ROLLING_WINDOW)
+            val stats = PingStatsAccumulator()
             var seq = 0
             var savedToRecents = false
 
             try {
-                continuousPingUseCase(params).collect { result ->
+                continuousPingUseCase(params, operationSession).collect { result ->
                     when (result) {
                         is PingFlowResult.ValidationError -> {
-                            logChannel.close()
-                            cleanupSessionFile()
-                            _uiState.value = PingUiState.Error(result.message)
-                            return@collect
+                            throw ContinuousPingValidationException(result.info, result.message)
                         }
                         is PingFlowResult.Packet -> {
                             seq++
@@ -303,7 +600,8 @@ class PingViewModel @Inject constructor(
                                 savedToRecents = true
                                 recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_PING_HOSTS, trimmedHost)
                             }
-                            logChannel.trySend(Pair(seq, result.packet))
+                            session.logWriter.append(seq, result.packet)
+                            stats.add(result.packet)
                             if (window.size >= ROLLING_WINDOW) window.removeFirst()
                             window.addLast(result.packet)
                             _uiState.value = PingUiState.Running(
@@ -311,54 +609,152 @@ class PingViewModel @Inject constructor(
                                 packets = window.toList(),
                                 totalCount = 0,
                                 isContinuous = true,
-                                pingsSent = seq
+                                pingsSent = seq,
+                                stats = stats.snapshot()
                             )
                         }
                     }
                 }
 
-                logChannel.close()
+                val logAvailable = session.logWriter.closeAndJoin()
                 val current = _uiState.value
-                if (current is PingUiState.Running && current.isContinuous) {
-                    finalizeContinuousSession(current)
+                if (continuousSession === session && current is PingUiState.Running && current.isContinuous) {
+                    finalizeContinuousSession(current, session, logAvailable)
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
-                logChannel.close()
                 throw e
+            } catch (e: ContinuousPingValidationException) {
+                session.logWriter.closeAndJoin()
+                if (continuousSession === session) {
+                    continuousSession = null
+                    session.file.deleteSessionLog()
+                    _uiState.value = typedError(e.info, e.validationMessage)
+                }
             } catch (e: Exception) {
-                logChannel.close()
-                cleanupSessionFile()
-                _uiState.value = PingUiState.Error(e.message ?: "Ping failed")
+                session.logWriter.closeAndJoin()
+                if (continuousSession === session) {
+                    continuousSession = null
+                    session.file.deleteSessionLog()
+                    _uiState.value = PingUiState.Error(e.message ?: "Ping failed")
+                }
             }
         }
+        session.producerJob = producer
+        pingJob = producer
+        producer.start()
     }
 
-    private fun finalizeContinuousSession(current: PingUiState.Running) {
-        val file = sessionLogFile
+    private fun availabilityFor(host: String): OperationAvailability {
+        val target = LiteralDestinationClassifier.target(host)
+        val requirement = OperationAvailability.requirementFor(target)
+        val localPermission = if (
+            requirement == OperationRequirement.LOCAL_NETWORK
+        ) {
+            linkInfoProvider.localNetworkPermissionAllowed()
+        } else {
+            null
+        }
+        return OperationAvailability.classifyObserved(
+            target = target,
+            status = networkStatusProvider.status.value,
+            localNetworkPermissionAllowed = localPermission,
+        )
+    }
+
+    private fun typedError(info: ErrorInfo, developerMessage: String): PingUiState.Error =
+        PingUiState.Error(
+            text = ErrorTextMapper.map(info, developerMessage),
+            message = developerMessage,
+        )
+
+    private fun finalizeContinuousSession(
+        current: PingUiState.Running,
+        session: ContinuousPingSession,
+        logAvailable: Boolean
+    ) {
+        if (continuousSession !== session) return
         val pingsSent = current.pingsSent
-        val result = buildResult(current.host, current.packets, pingsSent)
+        val result = buildResult(
+            current.host,
+            current.packets,
+            pingsSent,
+            statsOverride = current.stats ?: PingStats.compute(current.packets),
+        )
+        val logFile = session.file.takeIf { pingsSent > 0 && logAvailable }
+        if (logFile == null) {
+            continuousSession = null
+            session.file.deleteSessionLog()
+        }
         _uiState.value = PingUiState.Finished(
             result = result,
-            sessionLogFile = if (pingsSent > 0) file else null
+            sessionLogFile = logFile
         )
-        if (pingsSent == 0) cleanupSessionFile()
     }
 
     // ── Cleanup ──────────────────────────────────────────────────────────────
 
-    private fun cleanupSessionFile() {
-        sessionLogFile?.delete()
-        sessionLogFile = null
+    private fun discardContinuousSession() {
+        val session = continuousSession ?: return
+        continuousSession = null
+        session.stopRequested = true
+        retiringSessions += session
+        val producer = session.producerJob
+        session.operationSession.cancel(CancellationReason.USER_STOP)
+        producer?.cancel()
+        viewModelScope.launch {
+            try {
+                producer?.join()
+                session.logWriter.closeAndJoin()
+            } finally {
+                session.file.deleteSessionLog()
+                retiringSessions.remove(session)
+            }
+        }
     }
 
     override fun onCleared() {
-        cleanupSessionFile()
+        pingOperationSession?.cancel(CancellationReason.LIFECYCLE_PAUSE)
+        pingOperationSession = null
+        val sessions = retiringSessions.toList() + listOfNotNull(continuousSession)
+        continuousSession = null
+        sessions.forEach { session ->
+            session.operationSession.cancel(CancellationReason.LIFECYCLE_PAUSE)
+            session.producerJob?.cancel()
+            session.logWriter.cancel()
+            session.file.deleteSessionLog()
+        }
+        retiringSessions.clear()
+    }
+
+    private fun stopContinuousPing(reason: CancellationReason) {
+        val current = _uiState.value
+        val session = continuousSession
+        if (current !is PingUiState.Running || !current.isContinuous || session == null) return
+        if (session.stopRequested) return
+        session.stopRequested = true
+        val producer = session.producerJob
+        session.operationSession.cancel(reason)
+        producer?.cancel()
+        if (pingJob === producer) pingJob = null
+        viewModelScope.launch {
+            producer?.join()
+            val logAvailable = session.logWriter.closeAndJoin()
+            val latest = _uiState.value
+            if (continuousSession === session && latest is PingUiState.Running && latest.isContinuous) {
+                finalizeContinuousSession(latest, session, logAvailable)
+            }
+        }
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
-    private fun buildResult(host: String, packets: List<PingPacketResult>, totalCount: Int): PingResult {
-        val stats = PingStats.compute(packets)
+    private fun buildResult(
+        host: String,
+        packets: List<PingPacketResult>,
+        totalCount: Int,
+        statsOverride: PingStats? = null,
+    ): PingResult {
+        val stats = statsOverride ?: PingStats.compute(packets)
         val raw = buildRawOutput(host, packets, stats)
         return PingResult(
             host = host,
@@ -414,4 +810,12 @@ class PingViewModel @Inject constructor(
 
     private fun observedEngine(): PingEngineKind? =
         runCatching { pingUseCase.lastEngineUsed?.value }.getOrNull()
+}
+
+/** Removes a discarded session log; a file left behind is logged and reclaimed with the cache. */
+private fun File.deleteSessionLog() {
+    if (!delete() && exists()) {
+        net.aieat.netswissknife.app.util.AppLogger
+            .w("PingViewModel", "Could not delete Ping session log $name")
+    }
 }

@@ -16,62 +16,77 @@ class TracerouteResultTest {
         number: Int,
         ip: String? = "1.2.3.$number",
         status: HopStatus = HopStatus.SUCCESS,
-        geo: HopGeoLocation? = null
+        geo: HopGeoLocation? = null,
+        destinationReached: Boolean = false,
     ) = HopResult(
-        hopNumber   = number,
-        ip          = ip,
-        hostname    = null,
-        rtTimeMs    = if (status == HopStatus.SUCCESS) 10L else null,
-        status      = status,
-        geoLocation = geo
+        hopNumber = number,
+        ip = ip,
+        hostname = null,
+        rtTimeMs = if (status == HopStatus.SUCCESS) 10L else null,
+        status = status,
+        geoLocation = geo,
+        destinationReached = destinationReached,
     )
 
-    private fun result(vararg hops: HopResult) = TracerouteResult(
-        host        = "example.com",
-        resolvedIp  = hops.lastOrNull { it.status == HopStatus.SUCCESS }?.ip,
-        hops        = hops.toList(),
-        rawOutput   = "",
-        totalTimeMs = 0L
+    private fun result(
+        vararg hops: HopResult,
+        resolvedIp: String? = null,
+    ) = TracerouteResult(
+        host = "example.com",
+        resolvedIp = resolvedIp,
+        hops = hops.toList(),
+        rawOutput = "",
+        totalTimeMs = 0L,
     )
 
-    private val sampleGeo = HopGeoLocation(
-        ip          = "8.8.8.8",
-        country     = "United States",
-        countryCode = "US",
-        city        = "Mountain View",
-        lat         = 37.39,
-        lon         = -122.08
-    )
+    private val sampleGeo =
+        HopGeoLocation(
+            ip = "8.8.8.8",
+            country = "United States",
+            countryCode = "US",
+            city = "Mountain View",
+            lat = 37.39,
+            lon = -122.08,
+        )
 
     // ── reachedDestination ────────────────────────────────────────────────────
 
     @Nested
     @DisplayName("reachedDestination")
     inner class ReachedDestination {
+        @Test
+        fun `responding max hop does not prove the destination responded`() {
+            val r =
+                result(
+                    hop(1),
+                    hop(2),
+                    hop(3),
+                    resolvedIp = "203.0.113.9",
+                )
+            assertFalse(r.reachedDestination)
+            assertEquals("203.0.113.9", r.resolvedIp)
+        }
 
         @Test
-        fun `returns true when last hop responded successfully`() {
-            val r = result(hop(1), hop(2), hop(3))
+        fun `returns true when native destination evidence exists in a partial out of order trace`() {
+            val r =
+                result(
+                    hop(5, ip = null, status = HopStatus.TIMEOUT),
+                    hop(3, destinationReached = true),
+                    hop(1),
+                )
             assertTrue(r.reachedDestination)
         }
 
         @Test
-        fun `returns false when last hop timed out`() {
-            val r = result(
-                hop(1),
-                hop(2),
-                hop(3, ip = null, status = HopStatus.TIMEOUT)
-            )
+        fun `does not infer destination from a successful router when no target was resolved`() {
+            val r =
+                result(
+                    hop(1),
+                    hop(2),
+                )
             assertFalse(r.reachedDestination)
-        }
-
-        @Test
-        fun `returns false when all hops timed out`() {
-            val r = result(
-                hop(1, ip = null, status = HopStatus.TIMEOUT),
-                hop(2, ip = null, status = HopStatus.TIMEOUT)
-            )
-            assertFalse(r.reachedDestination)
+            assertEquals(null, r.resolvedIp)
         }
 
         @Test
@@ -81,34 +96,24 @@ class TracerouteResultTest {
         }
 
         @Test
-        fun `uses highest hop number not list position to find last hop`() {
-            // Hops provided out of insertion order; hop 5 is the last by hopNumber
-            // and it timed out, so destination was not reached.
-            val r = result(
-                hop(3),
-                hop(1),
-                hop(5, ip = null, status = HopStatus.TIMEOUT),
-                hop(2),
-                hop(4)
-            )
+        fun `native destination refusal evidence counts without a successful hop`() {
+            val r =
+                result(
+                    hop(2, ip = null, status = HopStatus.ERROR, destinationReached = true),
+                    resolvedIp = "203.0.113.5",
+                )
+            assertTrue(r.reachedDestination)
+            assertEquals("203.0.113.5", r.resolvedIp)
+        }
+
+        @Test
+        fun `all timed out hops without destination evidence remain unreached`() {
+            val r =
+                result(
+                    hop(1, ip = null, status = HopStatus.TIMEOUT),
+                    hop(2, ip = null, status = HopStatus.TIMEOUT),
+                )
             assertFalse(r.reachedDestination)
-        }
-
-        @Test
-        fun `returns true when intermediate hops time out but final hop succeeds`() {
-            val r = result(
-                hop(1),
-                hop(2, ip = null, status = HopStatus.TIMEOUT),
-                hop(3, ip = null, status = HopStatus.TIMEOUT),
-                hop(4)
-            )
-            assertTrue(r.reachedDestination)
-        }
-
-        @Test
-        fun `single successful hop is considered reached`() {
-            val r = result(hop(1))
-            assertTrue(r.reachedDestination)
         }
 
         @Test
@@ -123,10 +128,9 @@ class TracerouteResultTest {
     @Nested
     @DisplayName("geoLocatedHops")
     inner class GeoLocatedHops {
-
         @Test
         fun `returns only hops that have a geoLocation`() {
-            val withGeo    = hop(2, ip = "8.8.8.8", geo = sampleGeo)
+            val withGeo = hop(2, ip = "8.8.8.8", geo = sampleGeo)
             val withoutGeo = hop(1)
             val r = result(withoutGeo, withGeo)
             assertEquals(listOf(withGeo), r.geoLocatedHops)

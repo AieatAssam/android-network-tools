@@ -117,16 +117,15 @@ class CrashActivity : ComponentActivity() {
         threadName: String,
         timestamp: String,
         stackTrace: String,
-    ): String = buildString {
-        appendLine("=== Net Swiss Knife Crash Report ===")
-        appendLine("Time:      $timestamp")
-        appendLine("Thread:    $threadName")
-        appendLine("Exception: $exceptionClass")
-        appendLine("Message:   $exceptionMessage")
-        appendLine()
-        appendLine("--- Stack Trace ---")
-        appendLine(stackTrace)
-    }
+    ): String = CrashReportBuilder.buildFullReport(
+        CrashReport(
+            stackTrace = stackTrace,
+            exceptionClass = exceptionClass,
+            exceptionMessage = exceptionMessage,
+            threadName = threadName,
+            timestamp = timestamp,
+        ),
+    )
 
     companion object {
         const val EXTRA_STACK_TRACE = "extra_stack_trace"

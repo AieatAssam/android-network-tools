@@ -37,7 +37,7 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.Eagerly, 2000)
 
     val defaultConcurrency: StateFlow<Int> = dataStore.data
-        .map { it[AppPreferenceKeys.DEFAULT_CONCURRENCY] ?: 50 }
+        .map { (it[AppPreferenceKeys.DEFAULT_CONCURRENCY] ?: 50).coerceIn(1, 500) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, 50)
 
     val wifiRefreshIntervalMs: StateFlow<Long?> = dataStore.data

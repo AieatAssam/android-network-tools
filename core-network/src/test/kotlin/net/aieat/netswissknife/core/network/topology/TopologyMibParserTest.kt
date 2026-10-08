@@ -6,7 +6,6 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class TopologyMibParserTest {
-
     @Test
     fun `hex octets and dotted addresses are parsed`() {
         assertEquals("192.168.1.1", TopologyMibParser.hexOctetsToIpv4("c0:a8:01:01"))
@@ -18,12 +17,13 @@ class TopologyMibParserTest {
 
     @Test
     fun `LLDP management address is decoded from the row index`() {
-        val walk = mapOf(
-            "1.0.8802.1.1.2.1.4.2.1.4.0.1.1.1.4.192.168.1.2" to "1",
-            // Same row index, but different columns. These must not create duplicate entries.
-            "1.0.8802.1.1.2.1.4.2.1.3.0.1.1.1.4.192.168.1.2" to "1",
-            "1.0.8802.1.1.2.1.4.2.1.5.0.1.1.1.4.192.168.1.2" to "1"
-        )
+        val walk =
+            mapOf(
+                "1.0.8802.1.1.2.1.4.2.1.4.0.1.1.1.4.192.168.1.2" to "1",
+                // Same row index, but different columns. These must not create duplicate entries.
+                "1.0.8802.1.1.2.1.4.2.1.3.0.1.1.1.4.192.168.1.2" to "1",
+                "1.0.8802.1.1.2.1.4.2.1.5.0.1.1.1.4.192.168.1.2" to "1",
+            )
 
         val addresses = TopologyMibParser.parseLldpManAddrTable(walk)
 
@@ -34,14 +34,29 @@ class TopologyMibParserTest {
     @Test
     fun `LLDP IPv6 management addresses are retained separately`() {
         val ipv6 = (1..16).joinToString(".")
-        val walk = mapOf(
-            "1.0.8802.1.1.2.1.4.2.1.4.0.2.7.2.16.$ipv6" to "1"
-        )
+        val walk =
+            mapOf(
+                "1.0.8802.1.1.2.1.4.2.1.4.0.2.7.2.16.$ipv6" to "1",
+            )
 
         val addresses = TopologyMibParser.parseLldpManAddrTable(walk)
 
         assertTrue(addresses.isEmpty())
-        assertEquals("2.7", addresses.ipv6.keys.single())
+        assertEquals("0102:0304:0506:0708:090a:0b0c:0d0e:0f10", addresses.ipv6["2.7"])
+    }
+
+    @Test
+    fun `LLDP management address skips rows with malformed encoded octets`() {
+        val walk =
+            mapOf(
+                // Dropping "bad" used to shift the remaining arcs and emit 192.168.1.2.
+                "1.0.8802.1.1.2.1.4.2.1.4.0.1.1.1.4.192.bad.168.1.2" to "1",
+                "1.0.8802.1.1.2.1.4.2.1.4.0.1.2.1.4.192.168.1.256" to "1",
+            )
+
+        val addresses = TopologyMibParser.parseLldpManAddrTable(walk)
+
+        assertTrue(addresses.isEmpty())
     }
 
     @Test
@@ -77,12 +92,13 @@ class TopologyMibParserTest {
         requireNotNull(javaClass.getResourceAsStream("/snmp/$name")) { "Missing fixture $name" }
             .bufferedReader()
             .useLines { lines ->
-                lines.mapNotNull { line ->
-                    val trimmed = line.trim()
-                    if (trimmed.isEmpty() || trimmed.startsWith("#")) return@mapNotNull null
-                    val separator = trimmed.indexOf(" = ")
-                    require(separator > 0) { "Invalid fixture line: $line" }
-                    trimmed.substring(0, separator) to trimmed.substring(separator + 3)
-                }.toMap()
+                lines
+                    .mapNotNull { line ->
+                        val trimmed = line.trim()
+                        if (trimmed.isEmpty() || trimmed.startsWith("#")) return@mapNotNull null
+                        val separator = trimmed.indexOf(" = ")
+                        require(separator > 0) { "Invalid fixture line: $line" }
+                        trimmed.substring(0, separator) to trimmed.substring(separator + 3)
+                    }.toMap()
             }
 }

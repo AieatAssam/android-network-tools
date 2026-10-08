@@ -12,6 +12,9 @@
     <!-- Android 13+: nearby Wi-Fi access; scan APIs still require fine location. -->
     <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES"
         tools:targetApi="tiramisu" />
+    <!-- Android 17 / target SDK 37+: runtime local-network access protection. -->
+    <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK"
+        tools:targetApi="37" />
     <!-- Feature declaration: app requires Wi-Fi (soft requirement) -->
     <uses-feature android:name="android.hardware.wifi" android:required="false" />
 
@@ -26,6 +29,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:enableOnBackInvokedCallback="true"
+        tools:targetApi="33"
         android:theme="@style/Theme.NetSwissKnife">
 
         <activity
@@ -44,6 +48,16 @@
             android:exported="false"
             android:theme="@style/Theme.NetSwissKnife"
             android:excludeFromRecents="true" />
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/share_file_paths" />
+        </provider>
 
     </application>
 

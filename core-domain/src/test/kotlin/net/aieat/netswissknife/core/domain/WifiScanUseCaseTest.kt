@@ -3,6 +3,8 @@ package net.aieat.netswissknife.core.domain
 import net.aieat.netswissknife.core.network.wifi.WifiBand
 import net.aieat.netswissknife.core.network.wifi.WifiScanRepository
 import net.aieat.netswissknife.core.network.wifi.WifiScanResult
+import net.aieat.netswissknife.core.network.operation.OperationBudget
+import net.aieat.netswissknife.core.network.operation.OperationSession
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -71,6 +73,16 @@ class WifiScanUseCaseTest {
             val result = useCase()
             assertEquals(emptyResult, result)
             coVerify(exactly = 1) { repository.scan(true) }
+        }
+
+        @Test
+        fun `forwards the caller owned operation session`() = runTest {
+            every { repository.isSupported } returns true
+            val session = OperationSession(OperationBudget.start(timeoutMillis = 5_000))
+            coEvery { repository.scan(true, session) } returns emptyResult
+
+            assertEquals(emptyResult, useCase(trigger = true, operationSession = session))
+            coVerify(exactly = 1) { repository.scan(true, session) }
         }
 
         @Test

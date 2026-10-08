@@ -2,6 +2,11 @@
 # P15 – New tools wave 3: Bandwidth Monitor · Certificate Transparency Lookup · BGP Looking Glass · IP Lookup hub
 # =============================================================================
 # Audience: AI coding agent. Self-contained. Read plan/plan.yaml `agent_execution_rules` first.
+expansion_tasks:
+  index: plan/plan.yaml
+  tasks: [E00-T04, E02-T19]
+  rule: "Coordinate with these expansion tasks; do not duplicate existing scope or block independent regression fixes on optional enhancements. See comprehensive_expansion.regression_delivery for fresh follow-up ownership."
+
 phase:
   id: P15
   title: "New tools wave 3 (platform stats + public API backed; each optional and independent)"
@@ -15,6 +20,11 @@ phase:
 
 new_tool_checklist: "Identical to plan/phases/P13-new-tools-wave-1.yaml `new_tool_checklist` – apply to every tool below."
 
+expansion_refinements:
+  - task: E00-T04
+    scope: "P15-T1 bandwidth, P15-T2 certificate records, P15-T3 routing evidence"
+    precedence: "E00-T04 defines accounting caveats, certificate identity/completeness and per-origin RPKI provenance; these override conflicting older shorthand."
+
 tools:
   # ---------------------------------------------------------------------------
   - id: P15-BANDWIDTH
@@ -25,7 +35,7 @@ tools:
     more_section: "Diagnostics"
     why: "Live throughput of the device without running a test; complements Speed Test; no permission needed for device totals."
     behaviour: |
-      Samples android.net.TrafficStats every 1 s (total rx/tx, mobile rx/tx; Wi-Fi = total − mobile) while the screen is visible: live Rx/Tx rate (Mbps) big numbers, 60-sample sparkline chart, session totals, since-boot totals, peak; interface split (Wi-Fi vs mobile). Keep-screen-on optional. Share summary.
+      Samples android.net.TrafficStats every 1 s (total rx/tx, mobile rx/tx; non-cellular residual estimate = total − mobile, not exact Wi-Fi) while the screen is visible: live Rx/Tx rate (Mbps) big numbers, 60-sample sparkline chart, session totals, since-boot totals, peak; source-labelled totals/mobile/residual estimates, with VPN and interface-accounting caveats. Keep-screen-on optional. Share summary.
       Optional second step (flagged, separate task): per-app usage for today/7 days via NetworkStatsManager (requires PACKAGE_USAGE_STATS granted through Settings.ACTION_USAGE_ACCESS_SETTINGS) – show top 10 apps with icons; hidden until permission granted; explain privacy (local only).
     core_network:
       models: "TrafficSample(elapsedMs, rxBytes, txBytes, mobileRx, mobileTx) ; RateSample(elapsedMs, rxBps, txBps) ; BandwidthSession(samples, peakRxBps, peakTxBps, totalRx, totalTx)"
@@ -44,12 +54,12 @@ tools:
     package: "ctlog"
     icon: "Icons.Default.VerifiedUser"
     more_section: "Security"
-    why: "Find every certificate publicly issued for a domain (shadow IT, phishing look-alikes, expired lingering certs); complements TLS Inspector."
+    why: "Inspect provider-observed public issuance records for a domain (not guaranteed complete) (shadow IT, phishing look-alikes, expired lingering certs); complements TLS Inspector."
     behaviour: |
-      Query https://crt.sh/?q=<domain>&output=json (and %.<domain> for subdomains toggle), 15 s timeout, bounded to 2 000 rows; parse (id, issuer_name, common_name, name_value (SAN list, newline separated), not_before, not_after, serial). Group by leaf (dedupe pre-cert/cert pairs by serial), sort newest first; filters: active only / expired / issuer; summary chips (total, active, issuers count, subdomains count); row -> details sheet (SANs, validity, issuer, 'Open crt.sh' link, 'Inspect host' hand-off to TLS Inspector for a SAN). Recent-issue highlight (< 7 days).
+      Query https://crt.sh/?q=<domain>&output=json (and %.<domain> for subdomains toggle), 15 s timeout, bounded to 2 000 rows; parse (id, issuer_name, common_name, name_value (SAN list, newline separated), not_before, not_after, serial). Group by leaf (preserve issuer/serial identity; merge precert/cert records only with sufficient evidence), sort newest first; filters: active only / expired / issuer; summary chips (total, active, issuers count, subdomains count); row -> details sheet (SANs, validity, issuer, 'Open crt.sh' link, 'Inspect host' hand-off to TLS Inspector for a SAN). Recent-issue highlight (< 7 days).
     core_network:
       models: "CtEntry(id, issuer, commonName, sans, notBefore, notAfter, serial, isExpired, isPrecert?) ; CtReport(domain, entries, issuers, subdomains, fetchedAt)"
-      pure_logic: "CtJsonParser (kotlinx-serialization; tolerant to missing fields) ; CtGrouper (dedupe by serial, subdomain extraction) ; CtFilters"
+      pure_logic: "CtJsonParser (kotlinx-serialization; tolerant to missing fields) ; CtGrouper (issuer-aware identity, preserve ambiguous records, subdomain extraction) ; CtFilters"
       repository: "interface CtLogRepository { suspend fun search(domain, includeSubdomains): NetworkResult<CtReport> } ; impl via HttpEngine/OkHttp with an in-memory cache (10 min)"
     app: "Module, VM (query, toggles, filters, expansion), Screen (input, summary chips, LazyColumn rows, details sheet), Settings attribution 'crt.sh (Sectigo)'."
     tests:

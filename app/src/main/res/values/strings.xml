@@ -1,5 +1,78 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Stable UI messages for typed core failures. Diagnostic developer copy remains on ErrorInfo. -->
+    <string name="err_unknown">The operation failed.</string>
+    <string name="err_host_blank">Enter a host name or IP address.</string>
+    <string name="err_host_invalid">The host name or IP address %1$s is invalid.</string>
+    <string name="err_count_out_of_range">The count must be between %1$d and %2$d.</string>
+    <string name="err_concurrency_out_of_range">Concurrency must be between %1$d and %2$d.</string>
+    <string name="err_query_blank">Enter a query.</string>
+    <string name="err_domain_too_long">The domain name must not exceed %1$d characters.</string>
+    <string name="err_custom_dns_blank">Enter a DNS server address.</string>
+    <string name="err_custom_dns_invalid">The DNS server address is invalid.</string>
+    <string name="err_url_blank">Enter a URL.</string>
+    <string name="err_url_invalid">The URL is invalid.</string>
+    <string name="err_url_malformed">The URL could not be parsed.</string>
+    <string name="err_url_scheme_unsupported">This URL scheme is not supported.</string>
+    <string name="err_http_cleartext_disabled">Plain HTTP requests are disabled in this release. Use an HTTPS URL.</string>
+    <string name="err_https_downgrade_blocked">The HTTPS redirect to an insecure connection was blocked.</string>
+    <string name="err_timeout_out_of_range">The timeout must be between %1$d and %2$d milliseconds.</string>
+    <string name="err_response_size_out_of_range">The response size limit must be between %1$d and %2$d bytes.</string>
+    <string name="err_http_response_headers_too_large">The response headers exceed the supported size.</string>
+    <string name="err_port_out_of_range">Port %1$d must be between %2$d and %3$d.</string>
+    <string name="err_port_range_inverted">Start port %1$d must not exceed end port %2$d.</string>
+    <string name="err_port_range_too_large">The range contains %2$d ports; the maximum is %1$d.</string>
+    <string name="err_port_selection_empty">Select at least one port.</string>
+    <string name="err_max_hops_out_of_range">The maximum hop count must be between %1$d and %2$d.</string>
+    <string name="err_probes_out_of_range">The probe count must be between %1$d and %2$d.</string>
+    <string name="err_packet_size_out_of_range">Packet size %1$d must be 0 or between %2$d and %3$d bytes.</string>
+    <string name="err_payload_out_of_range">Payload size must be between %1$d and %2$d bytes.</string>
+    <string name="err_ttl_out_of_range">TTL must be between %1$d and %2$d.</string>
+    <string name="err_interval_out_of_range">The interval must be between %1$d and %2$d milliseconds.</string>
+    <string name="err_retries_out_of_range">The retry count must be between %1$d and %2$d.</string>
+    <string name="err_operation_deadline_exceeded">The operation took too long and was stopped.</string>
+    <string name="err_snmp_community_blank">Enter an SNMP community string.</string>
+    <string name="err_snmp_v3_user_blank">Enter the SNMPv3 user name.</string>
+    <string name="err_snmp_v3_priv_without_auth">SNMPv3 privacy requires authentication.</string>
+    <string name="err_snmp_v3_auth_password_blank">Enter the SNMPv3 authentication password.</string>
+    <string name="err_snmp_v3_priv_password_blank">Enter the SNMPv3 privacy password.</string>
+    <string name="err_mac_blank">Enter a MAC address.</string>
+    <string name="err_broadcast_blank">Enter a broadcast address.</string>
+    <string name="err_dns_no_system_resolver">No system DNS resolver is available.</string>
+    <string name="err_dns_invalid_name">The DNS name is invalid.</string>
+    <string name="err_dns_lookup_failed">The DNS lookup failed.</string>
+    <string name="err_dns_no_result">The DNS lookup returned no results.</string>
+    <string name="err_network_timeout">The network request timed out.</string>
+    <string name="err_network_request_failed">The network request failed.</string>
+    <string name="err_whois_invalid_query">The WHOIS query is invalid.</string>
+    <string name="err_whois_iana_failed">The IANA registry lookup failed.</string>
+    <string name="err_whois_response_too_large">The WHOIS response is too large.</string>
+    <string name="err_whois_referral_refused">The WHOIS referral could not be followed.</string>
+    <string name="err_whois_unavailable">The WHOIS service is unavailable.</string>
+    <string name="err_whois_no_result">The WHOIS lookup returned no result.</string>
+    <string name="err_whois_lookup_failed">The WHOIS lookup failed.</string>
+    <string name="err_http_redirect_invalid">The redirect target is invalid.</string>
+    <string name="err_http_redirect_malformed">The redirect response is malformed.</string>
+    <string name="err_http_redirect_unsupported">This redirect cannot be followed.</string>
+    <string name="err_http_redirect_unsupported_scheme">The redirect uses an unsupported URL scheme.</string>
+    <string name="err_http_insecure_downgrade">The redirect to an insecure connection was blocked.</string>
+    <string name="err_http_redirect_limit">The redirect limit was reached.</string>
+    <string name="err_http_redirect_approval_required">This redirect requires your approval.</string>
+    <string name="err_http_redirect_replay_rejected">The redirect request could not be replayed safely.</string>
+    <string name="err_http_too_many_redirects">Too many redirects were received.</string>
+    <string name="err_http_network_error">The HTTP request failed.</string>
+    <string name="err_tls_inspection_failed">TLS inspection failed.</string>
+    <string name="err_tls_handshake_failed">The TLS handshake failed.</string>
+    <string name="err_tls_pin_invalid">The certificate pin is invalid.</string>
+    <string name="err_mac_invalid">The MAC address is invalid.</string>
+    <string name="err_local_network_permission_denied">Local network access is not available.</string>
+    <string name="err_wol_send_failed">The Wake-on-LAN packet could not be sent.</string>
+    <string name="err_subnet_blank">Enter a subnet.</string>
+    <string name="err_subnet_invalid">The subnet is invalid.</string>
+    <string name="err_subnet_range_invalid">The subnet range is invalid.</string>
+    <string name="err_no_response">No response was received.</string>
+    <string name="err_network_io">A network error occurred.</string>
+
     <string name="app_name">NetSwiss</string>
     <string name="app_name_full">Net Swiss Knife</string>
 
@@ -11,6 +84,50 @@
     <!-- Bottom Navigation -->
     <string name="nav_home">Home</string>
     <string name="nav_more">More</string>
+
+    <!-- Tool catalog: Home cards, More sheet, and pinned navigation -->
+    <string name="tool_ping_label">Ping</string>
+    <string name="tool_ping_short_label">Ping</string>
+    <string name="tool_ping_description">Reachability and round-trip latency</string>
+    <string name="tool_traceroute_label">Traceroute</string>
+    <string name="tool_traceroute_short_label">Trace</string>
+    <string name="tool_traceroute_description">Network path hop analysis</string>
+    <string name="tool_ports_label">Port Scanner</string>
+    <string name="tool_ports_short_label">Ports</string>
+    <string name="tool_ports_description">TCP port reachability</string>
+    <string name="tool_lan_label">LAN Scanner</string>
+    <string name="tool_lan_short_label">LAN</string>
+    <string name="tool_lan_description">Local device discovery</string>
+    <string name="tool_dns_label">DNS Lookup</string>
+    <string name="tool_dns_short_label">DNS</string>
+    <string name="tool_dns_description">Resolve hostnames &amp; records</string>
+    <string name="tool_wifi_label">Wi-Fi Scanner</string>
+    <string name="tool_wifi_short_label">Wi-Fi</string>
+    <string name="tool_wifi_description">Scan channels &amp; access points</string>
+    <string name="tool_topology_label">Network Topology</string>
+    <string name="tool_topology_short_label">Topology</string>
+    <string name="tool_topology_description">SNMP switch &amp; neighbour discovery</string>
+    <string name="tool_tls_label">TLS Inspector</string>
+    <string name="tool_tls_short_label">TLS</string>
+    <string name="tool_tls_description">SSL/TLS certificate chain inspector</string>
+    <string name="tool_whois_label">WHOIS Lookup</string>
+    <string name="tool_whois_short_label">WHOIS</string>
+    <string name="tool_whois_description">Domain and IP registration lookup</string>
+    <string name="tool_httprobe_label">HTTP Probe</string>
+    <string name="tool_httprobe_short_label">HTTP</string>
+    <string name="tool_httprobe_description">HTTPS request tester with security header analysis</string>
+    <string name="tool_subnet_label">Subnet Calc</string>
+    <string name="tool_subnet_short_label">Subnet</string>
+    <string name="tool_subnet_description">IPv4 subnet calculator with binary breakdown and notation conversion</string>
+    <string name="tool_mdns_label">mDNS Browser</string>
+    <string name="tool_mdns_short_label">mDNS</string>
+    <string name="tool_mdns_description">Discover LAN services via multicast DNS</string>
+    <string name="tool_speedtest_label">Speed Test</string>
+    <string name="tool_speedtest_short_label">Speed</string>
+    <string name="tool_speedtest_description">Download, upload speed and latency via Cloudflare</string>
+    <string name="tool_wol_label">Wake-on-LAN</string>
+    <string name="tool_wol_short_label">WOL</string>
+    <string name="tool_wol_description">Wake sleeping devices with a magic packet</string>
 
     <!-- Generic action content descriptions (used on standalone icon-only buttons) -->
     <string name="action_expand">Expand</string>
@@ -46,9 +163,21 @@
     <string name="dns_record_types_scroll_hint">More record types; swipe horizontally</string>
     <string name="dns_server_label">DNS server</string>
     <string name="dns_server_custom">Custom server…</string>
+    <string name="dns_server_system_name">System DNS</string>
+    <string name="dns_server_system_description">Uses the DNS server configured on your device</string>
+    <string name="dns_server_google_name">Google DNS</string>
+    <string name="dns_server_google_description">8.8.8.8 - Google\'s fast &amp; reliable public resolver</string>
+    <string name="dns_server_cloudflare_name">Cloudflare DNS</string>
+    <string name="dns_server_cloudflare_description">1.1.1.1 - Cloudflare\'s privacy-focused public resolver</string>
+    <string name="dns_server_opendns_name">OpenDNS</string>
+    <string name="dns_server_opendns_description">208.67.222.222 - Cisco OpenDNS with optional content filtering</string>
+    <string name="dns_server_quad9_name">Quad9</string>
+    <string name="dns_server_quad9_description">9.9.9.9 - Security-focused resolver that blocks malicious domains</string>
+    <string name="dns_server_custom_name">Custom</string>
+    <string name="dns_result_server">via %1$s</string>
+    <string name="dns_share_server">Server: %1$s</string>
     <string name="dns_custom_server_placeholder">e.g. 192.168.1.1</string>
     <string name="dns_lookup_button">Look up</string>
-    <string name="dns_looking_up">Looking up…</string>
     <string name="clear">Clear</string>
     <string name="error_no_details">No additional details were provided.</string>
     <string name="action_back">Back</string>
@@ -58,6 +187,9 @@
     <string name="dns_idle_subtitle">Supports A, AAAA, MX, TXT, CNAME, NS, SOA, PTR and more</string>
     <string name="dns_querying">Querying DNS…</string>
     <string name="dns_querying_subtitle">Sending query to DNS server</string>
+    <string name="dns_canceling">Stopping DNS lookup…</string>
+    <string name="dns_canceled">DNS lookup canceled</string>
+    <string name="dns_canceled_subtitle">The lookup stopped and cleanup has finished.</string>
     <string name="dns_error_title">Lookup failed</string>
     <string name="dns_retry">Retry</string>
     <string name="dns_use_cloudflare">Use Cloudflare</string>
@@ -70,7 +202,11 @@
     <string name="dns_copy_raw">Copy raw response</string>
     <string name="dns_raw_response">Raw DNS response</string>
     <string name="dns_no_records_title">No records found</string>
-    <string name="dns_no_records_subtitle">No %1$s records exist for %2$s</string>
+    <string name="dns_no_records_subtitle">No %1$s records were returned for %2$s.</string>
+    <string name="dns_nxdomain_title">Domain does not exist</string>
+    <string name="dns_nxdomain_subtitle">The DNS server reports that %1$s does not exist.</string>
+    <string name="dns_rcode_error_title">DNS lookup was not completed</string>
+    <string name="dns_rcode_error_subtitle">The DNS server returned %1$s for %2$s.</string>
     <string name="dns_rcode">RCODE: %1$s</string>
     <string name="dns_flags">Flags: %1$s</string>
     <string name="dns_server_used">Server used: %1$s</string>
@@ -81,6 +217,9 @@
     <!-- Ping Screen -->
     <string name="ping_screen_title">Ping</string>
     <string name="ping_screen_subtitle">Measure round-trip time and packet loss to any host</string>
+    <string name="ping_source_lan">Prefilled from LAN Scanner</string>
+    <string name="ping_source_mdns">Prefilled from mDNS Browser</string>
+    <string name="ping_invalid_handoff">The supplied destination could not be verified. Enter a host to continue.</string>
 
     <!-- Ping Input -->
     <string name="ping_host_label">Host or IP address</string>
@@ -98,7 +237,9 @@
     <!-- Ping Continuous Mode -->
     <string name="ping_continuous_label">Continuous</string>
     <string name="ping_pings_sent">Pings sent: %1$d</string>
+    <string name="ping_share_summary">Continuous ping CSV for %1$s: sent %2$d, received %3$d, %4$.1f%% loss.</string>
     <string name="ping_continuous_running_title">Pinging continuously…</string>
+    <string name="ping_continuous_log_unavailable">Continuous ping could not create its session log. Free up storage and try again.</string>
 
     <!-- Ping States -->
     <string name="ping_idle_title">Enter a host to ping</string>
@@ -125,16 +266,30 @@
     <string name="ping_copy_raw">Copy raw output</string>
     <string name="ping_copy_csv">Copy as CSV</string>
     <string name="ping_chart_title">RTT Chart</string>
+    <string name="ping_chart_a11y">RTT chart: successful sample count %1$d; axis from %2$d to %3$d ms; %4$s %5$d ms, %6$s %7$.1f ms, %8$s %9$d ms; %10$s</string>
+    <plurals name="ping_chart_failed_markers">
+        <item quantity="one">%1$d failed probe marker at the 0 ms baseline</item>
+        <item quantity="other">%1$d failed probe markers at the 0 ms baseline</item>
+    </plurals>
     <string name="ping_progress_format">%1$d / %2$d</string>
 
     <!-- Port Scanner Screen -->
     <string name="ports_screen_title">Port Scanner</string>
     <string name="ports_screen_subtitle">Probe TCP ports and identify running services</string>
+    <string name="ports_source_lan">Prefilled from LAN Scanner</string>
+    <string name="ports_invalid_handoff">The supplied destination could not be verified. Enter a host to continue.</string>
 
     <!-- Port Scanner Input -->
     <string name="ports_host_label">Host or IP address</string>
     <string name="ports_host_placeholder">e.g. example.com or 192.168.1.1</string>
     <string name="ports_preset_label">Port preset</string>
+    <string name="ports_preset_common_services">Common services</string>
+    <string name="ports_preset_well_known">Well-known (1–1024)</string>
+    <string name="ports_preset_web_services">Web services</string>
+    <string name="ports_preset_databases">Databases</string>
+    <string name="ports_preset_mail_services">Mail services</string>
+    <string name="ports_preset_remote_access">Remote access</string>
+    <string name="ports_preset_custom_range">Custom range</string>
     <string name="ports_start_port_label">Start port</string>
     <string name="ports_end_port_label">End port</string>
     <string name="ports_range_error">1–65535</string>
@@ -146,6 +301,12 @@
     <string name="ports_timeout_label">Timeout (ms)</string>
     <string name="ports_concurrency_label">Concurrency</string>
     <string name="ports_concurrency_high_warning">High concurrency may overwhelm devices on the local network</string>
+    <string name="ports_aggressive_probes_label">Protocol greetings and TLS subject</string>
+    <string name="ports_aggressive_probes_description">Send a bounded greeting or TLS probe to open services; turn off for passive banners only.</string>
+    <string name="ports_aggressive_probes_a11y_label">Active service probes</string>
+    <string name="ports_aggressive_probes_enabled_a11y">Enabled. Sends bounded HTTP or SMTP greetings and TLS handshakes to open ports.</string>
+    <string name="ports_aggressive_probes_disabled_a11y">Disabled. Reads passive service banners only.</string>
+    <string name="ports_tls_subject">TLS subject CN: %1$s</string>
     <string name="ports_scan_button">Scan Ports</string>
     <string name="ports_stop_button">Stop Scan</string>
     <string name="ports_clear_button">Clear</string>
@@ -170,6 +331,7 @@
         <item quantity="other">%1$d / %2$d ports</item>
     </plurals>
     <string name="ports_ms_suffix">ms</string>
+    <string name="ports_banner_truncated_content_description">Banner truncated: %1$s</string>
     <string name="ports_no_open_ports">No open ports found</string>
     <string name="ports_open_label">OPEN</string>
     <string name="ports_closed_label">CLOSED</string>
@@ -203,7 +365,12 @@
     <string name="lan_idle_title">Enter a subnet to scan</string>
     <string name="lan_idle_subtitle">Discovers live hosts, MAC addresses, vendors and open ports</string>
     <string name="lan_scanning_title">Scanning…</string>
+    <string name="lan_canceling_title">Stopping scan…</string>
     <string name="lan_scan_complete_title">Scan Complete</string>
+    <string name="lan_scan_paused_title">Scan paused</string>
+    <string name="lan_scan_paused_subtitle">These are partial results from the scan paused when the app went to the background.</string>
+    <string name="lan_scan_canceled_title">Scan stopped</string>
+    <string name="lan_scan_canceled_subtitle">These are partial results from the stopped scan.</string>
     <string name="lan_error_title">Scan failed</string>
 
     <!-- LAN Results -->
@@ -212,13 +379,22 @@
         <item quantity="one">%1$d host found so far</item>
         <item quantity="other">%1$d hosts found so far</item>
     </plurals>
-    <string name="lan_live_hosts_header">Live Hosts</string>
+    <string name="lan_live_hosts_header">Confirmed Hosts</string>
     <string name="lan_hosts_header">Discovered Hosts (%1$d)</string>
     <string name="lan_empty_title">No hosts found</string>
-    <string name="lan_empty_body">No devices responded on this subnet. Verify the network range and try increasing the timeout.</string>
+    <string name="lan_empty_body">No endpoints were confirmed during this scan. Inconclusive probe attempts may be available under diagnostics. Verify the network range and try increasing the timeout.</string>
     <string name="lan_stat_scanned">Scanned</string>
-    <string name="lan_stat_alive">Alive</string>
+    <string name="lan_stat_alive">Confirmed</string>
     <string name="lan_stat_subnet">Subnet</string>
+    <string name="lan_show_diagnostics">Show uncertain probes (%1$d)</string>
+    <string name="lan_hide_diagnostics">Hide uncertain probes</string>
+    <string name="lan_diagnostic_entry">%1$s: %2$s%3$s</string>
+    <string name="lan_diagnostic_tcp_refused">TCP connection refusal reported</string>
+    <string name="lan_diagnostic_tcp_timed_out">TCP probe timed out</string>
+    <string name="lan_diagnostic_tcp_unreachable">TCP route unreachable</string>
+    <string name="lan_diagnostic_tcp_policy_denied">TCP probe denied by policy</string>
+    <string name="lan_diagnostic_tcp_unknown">TCP probe failed (unknown cause)</string>
+    <string name="lan_diagnostics_truncated">Showing %1$d of %2$d uncertain probe details.</string>
     <string name="lan_duration_format">%1$d ms</string>
     <string name="lan_ping_format">%1$d ms</string>
     <string name="lan_unknown_device">Unknown device</string>
@@ -239,6 +415,10 @@
     <string name="lan_detail_role">Role</string>
     <string name="lan_mac_unavailable_api29">Not available on Android 10+ (ARP is restricted)</string>
     <string name="lan_action_scan_ports">Scan ports</string>
+    <string name="lan_action_ping">Ping host</string>
+    <string name="lan_action_probe_http_port">Probe HTTP (port %1$d)</string>
+    <string name="lan_action_inspect_tls_port">Inspect TLS on open port %1$d</string>
+    <string name="lan_action_wake_device">Wake device</string>
     <string name="lan_discovery_icmp">ICMP</string>
     <string name="lan_discovery_tcp_open">TCP open</string>
     <string name="lan_discovery_tcp_refused">TCP refused</string>
@@ -257,6 +437,9 @@
     <string name="lan_filter_has_ports">Has Ports</string>
     <string name="lan_hosts_filtered_header">Results (%1$d of %2$d)</string>
     <string name="lan_no_search_results">No devices match your search</string>
+    <string name="lan_no_filter_results">No devices match this filter</string>
+    <string name="lan_no_search_filter_results">No devices match your search and filter</string>
+    <string name="lan_show_all_devices">Show all devices</string>
 
     <!-- Debug Log Screen -->
     <string name="debug_log_title">Debug Logs</string>
@@ -298,6 +481,10 @@
     <string name="wifi_not_supported_title">Wi-Fi Not Available</string>
     <string name="wifi_not_supported_body">This device does not have Wi-Fi hardware.</string>
     <string name="wifi_error_title">Scan Failed</string>
+    <string name="wifi_scan_cancelled_title">Scan cancelled</string>
+    <string name="wifi_scan_cancelled_body">The scan was stopped. Retry to scan for nearby networks.</string>
+    <string name="wifi_scan_paused_title">Scan paused</string>
+    <string name="wifi_scan_paused_body">The scan stopped when Wi-Fi Scanner left the foreground. Retry when you are ready.</string>
     <string name="wifi_retry">Retry</string>
     <string name="wifi_ap_disappeared">This network is no longer in range</string>
     <string name="wifi_value_unavailable">N/A</string>
@@ -312,7 +499,11 @@
         <item quantity="other">Updated %1$d seconds ago</item>
     </plurals>
     <string name="wifi_results_age_unknown">Result age unavailable</string>
-    <string name="wifi_scan_throttled">Scan throttled by Android</string>
+    <string name="wifi_scan_not_updated">Scan completed without new results</string>
+    <string name="wifi_scan_timed_out">Scan timed out; showing cached results</string>
+    <string name="wifi_scan_rejected">Android rejected the scan request</string>
+    <string name="wifi_scan_failed_cached">Scan failed; showing cached results</string>
+    <string name="wifi_scan_permission_denied_cached">Scan permission unavailable; showing cached results</string>
     <string name="wifi_connected_badge">Connected</string>
     <string name="wifi_hidden_badge">Hidden</string>
     <string name="wifi_detail_band">Band</string>
@@ -322,6 +513,7 @@
     <string name="wifi_detail_max_speed">Max Speed</string>
     <string name="wifi_detail_vendor">Vendor</string>
     <string name="wifi_detail_security">Security</string>
+    <string name="wifi_security_unknown">Security type unknown</string>
     <string name="wifi_detail_ip">IP Address</string>
     <string name="wifi_detail_ipv6">IPv6 Addresses</string>
     <string name="wifi_detail_gateway">Gateway</string>
@@ -336,6 +528,14 @@
     <string name="wifi_network_info_header">Network Information</string>
     <string name="wifi_live_connection_header">Live Connection</string>
     <string name="wifi_spectrum_title">Spectrum Analyser</string>
+    <string name="wifi_spectrum_a11y">Wi-Fi spectrum on %2$s: access point count %1$d, strongest access point %3$s at %4$d dBm</string>
+    <string name="wifi_signal_gauge_a11y">Signal quality: %1$d%%, %2$s</string>
+    <string name="wifi_signal_level_excellent">Excellent</string>
+    <string name="wifi_signal_level_good">Good</string>
+    <string name="wifi_signal_level_fair">Fair</string>
+    <string name="wifi_signal_level_weak">Weak</string>
+    <string name="wifi_signal_level_poor">Poor</string>
+    <string name="wifi_unknown_network">unknown network</string>
     <string name="wifi_best_channel_title">Best Channel</string>
     <string name="wifi_best_channel_body">Channel %1$d has the least congestion on 2.4 GHz</string>
     <plurals name="wifi_networks_count">
@@ -362,6 +562,7 @@
     <string name="traceroute_packet_size_label">Packet size</string>
     <string name="traceroute_start_button">Start Trace</string>
     <string name="traceroute_stop_button">Stop</string>
+    <string name="traceroute_canceling_button">Stopping…</string>
     <string name="traceroute_retry_button">Retry</string>
     <string name="traceroute_clear_button">Clear</string>
 
@@ -369,6 +570,12 @@
     <string name="traceroute_idle_title">Enter a host to trace</string>
     <string name="traceroute_idle_subtitle">Supports hostnames and IPv4 addresses. Shows each hop with geolocation and journey statistics.</string>
     <string name="traceroute_running_title">Tracing to %1$s…</string>
+    <string name="traceroute_canceling_title">Stopping trace…</string>
+    <string name="traceroute_canceling_subtitle">Waiting for probe cleanup. Any hops found will be kept.</string>
+    <plurals name="traceroute_canceled_partial_status">
+        <item quantity="one">Trace canceled. %1$d hop retained as a partial result.</item>
+        <item quantity="other">Trace canceled. %1$d hops retained as partial results.</item>
+    </plurals>
     <plurals name="traceroute_running_subtitle">
         <item quantity="one">%1$d hop discovered so far</item>
         <item quantity="other">%1$d hops discovered so far</item>
@@ -407,6 +614,13 @@
     <string name="traceroute_hop_detail_ip">IP Address</string>
     <string name="traceroute_hop_detail_hostname">Hostname</string>
     <string name="traceroute_hop_detail_rtt">RTT</string>
+    <string name="traceroute_hop_probe_rtts">Probes:</string>
+    <string name="traceroute_hop_rtt_stats">Min %1$d ms · Avg %2$.1f ms · Max %3$d ms</string>
+    <string name="traceroute_probe_rtt_value">%1$d ms</string>
+    <string name="traceroute_probe_no_reply">no reply</string>
+    <string name="traceroute_probe_success_description">Probe %1$d succeeded: %2$d ms</string>
+    <string name="traceroute_probe_no_reply_description">Probe %1$d received no reply</string>
+    <string name="traceroute_list_separator"> · </string>
     <string name="traceroute_hop_detail_status">Status</string>
     <string name="traceroute_hop_detail_status_success">Responded</string>
     <string name="traceroute_hop_detail_status_timeout">Timed out</string>
@@ -439,8 +653,19 @@
     <string name="topology_v3_priv_password_label">Priv Password</string>
     <string name="topology_v3_priv_requires_auth">Privacy requires an authentication protocol.</string>
     <string name="topology_max_hops_label">Max Hops: %1$d</string>
+    <string name="topology_query_neighbors_label">Query advertised LLDP/CDP neighbors</string>
+    <string name="topology_query_neighbors_description">Off by default. Turn on to send SNMP queries using this profile to IP addresses advertised by discovered LLDP/CDP devices. Reported links remain visible when off.</string>
+    <string name="topology_reported_neighbor_label">Reported neighbor: %1$s</string>
+    <string name="topology_reported_only">Reported only; device not queried</string>
     <string name="topology_discover_button">Discover Topology</string>
-    <string name="topology_cancel_button">Cancel / Reset</string>
+    <string name="topology_cancel_button">Cancel discovery</string>
+    <string name="topology_canceling_button">Canceling…</string>
+    <string name="topology_canceling_status">Canceling discovery. Keeping discovered nodes until cleanup finishes.</string>
+    <string name="topology_clear_partial_results">Clear results</string>
+    <plurals name="topology_canceled_partial_status">
+        <item quantity="one">Discovery canceled. %1$d discovered node retained as a partial result.</item>
+        <item quantity="other">Discovery canceled. %1$d discovered nodes retained as partial results.</item>
+    </plurals>
     <string name="topology_idle_tagline">Discover your network topology</string>
     <plurals name="topology_scanning_badge">
         <item quantity="one">Scanning… %1$d node found</item>
@@ -452,24 +677,39 @@
     <string name="topology_node_detail_neighbours">Neighbours</string>
     <string name="topology_error_retry">Retry</string>
     <string name="topology_fit_button_cd">Fit graph to screen</string>
+    <string name="topology_partial_results">Partial results. Some details were omitted because of resource limits or SNMP errors.</string>
     <string name="topology_vlan_label">%1$d: %2$s</string>
 
     <!-- TLS Inspector Screen -->
     <string name="tls_screen_title">TLS Inspector</string>
     <string name="tls_screen_subtitle">SSL/TLS certificate chain inspector</string>
+    <string name="tls_source_lan">Prefilled from LAN Scanner</string>
+    <string name="tls_invalid_handoff">The supplied destination could not be verified. Enter a host and valid port to continue.</string>
 
     <!-- TLS Input -->
     <string name="tls_host_label">Host or IP address</string>
     <string name="tls_host_placeholder">e.g. example.com or 192.168.1.1</string>
     <string name="tls_port_label">Port (default 443)</string>
+    <string name="tls_probe_protocols_label">Probe older TLS versions</string>
+    <string name="tls_probe_protocols_help">Try supported protocol versions separately; this adds connection attempts.</string>
+    <string name="tls_expected_pin_label">Expected SHA-256 certificate pin (optional)</string>
+    <string name="tls_expected_pin_placeholder">64 hexadecimal characters</string>
+    <string name="tls_expected_pin_help">Compare against the leaf certificate fingerprint. Colons are optional.</string>
+    <string name="tls_pin_invalid">Enter a valid 64-character SHA-256 certificate pin.</string>
+    <string name="tls_share_pem">Share PEM</string>
+    <string name="tls_share_pem_subject">TLS certificate PEM for %1$s:%2$d</string>
+    <string name="error_invalid_port">Port must be a number from 1 to 65535</string>
     <string name="tls_inspect_button">Inspect</string>
     <string name="tls_inspecting">Inspecting…</string>
+    <string name="tls_cancel_inspection">Cancel</string>
+    <string name="tls_stopping">Stopping…</string>
 
     <!-- TLS States -->
     <string name="tls_idle_title">Enter a host to inspect</string>
     <string name="tls_idle_subtitle">Connects via TLS and returns the full certificate chain, including expired or self-signed certificates</string>
     <string name="tls_error_title">Inspection failed</string>
     <string name="tls_retry">Retry</string>
+    <string name="tls_inspection_canceled">Inspection canceled</string>
 
     <!-- TLS Connection Card -->
     <string name="tls_connection_header">Connection</string>
@@ -480,6 +720,26 @@
     <string name="tls_cipher_suite">Cipher Suite</string>
     <string name="tls_handshake_time">Handshake</string>
     <string name="tls_ms_format">%1$d ms</string>
+    <string name="tls_connect_time">Connect time</string>
+    <string name="tls_hostname_match">Hostname</string>
+    <string name="tls_match">Match</string>
+    <string name="tls_no_match">Mismatch</string>
+    <string name="tls_alpn">ALPN</string>
+    <string name="tls_pin_match">Expected pin</string>
+    <string name="tls_supported">Supported</string>
+    <string name="tls_not_supported">Not supported</string>
+    <string name="tls_probe_unknown">Could not determine</string>
+    <string name="tls_probe_not_testable">Not testable on this device</string>
+    <string name="tls_findings">Certificate findings</string>
+    <string name="tls_issue_expired">A certificate has expired</string>
+    <string name="tls_issue_not_yet_valid">A certificate is not yet valid</string>
+    <string name="tls_issue_expires_soon">A certificate expires soon</string>
+    <string name="tls_issue_self_signed">The chain contains a self-signed certificate</string>
+    <string name="tls_issue_untrusted">The certificate chain is not trusted</string>
+    <string name="tls_issue_hostname_mismatch">The certificate does not match this hostname</string>
+    <string name="tls_issue_weak_signature">A weak signature algorithm was found</string>
+    <string name="tls_issue_weak_key">A weak public key was found</string>
+    <string name="tls_issue_incomplete_chain">The supplied certificate chain appears incomplete</string>
 
     <!-- TLS Certificate Labels -->
     <string name="tls_cert_leaf">Leaf</string>
@@ -502,6 +762,9 @@
     <string name="tls_issuer_org">Issuer Org</string>
     <string name="tls_valid_from">Valid From</string>
     <string name="tls_valid_to">Valid To</string>
+    <string name="tls_not_yet_valid">NOT YET VALID</string>
+    <string name="tls_ca_certificate">Certificate Authority</string>
+    <string name="tls_key_usage">Key Usage</string>
     <string name="tls_self_signed">Self-Signed</string>
     <string name="tls_sans_label">Subject Alternative Names</string>
     <string name="tls_serial">Serial Number</string>
@@ -516,14 +779,34 @@
     <string name="whois_screen_subtitle">Domain and IP registration lookup</string>
     <string name="whois_query_label">Domain, IP, or ASN</string>
     <string name="whois_query_placeholder">e.g. example.com, 8.8.8.8, AS15169</string>
+    <string name="whois_protocol_label">Lookup protocol</string>
+    <string name="whois_protocol_auto">Auto</string>
+    <string name="whois_protocol_rdap">RDAP</string>
+    <string name="whois_protocol_whois">WHOIS</string>
+    <string name="whois_protocol_help">Auto tries RDAP first and falls back to WHOIS. The other options use only the selected source.</string>
     <string name="whois_lookup_button">Look up</string>
+    <string name="whois_stop_button">Stop lookup</string>
+    <string name="whois_canceling_button">Canceling…</string>
+    <string name="whois_canceling_status">Stopping this lookup…</string>
+    <string name="whois_canceled_title">Lookup canceled</string>
+    <string name="whois_canceled_message">The lookup stopped. Any servers already checked are kept above. You can try again when ready.</string>
+    <string name="whois_lifecycle_paused_message">The lookup stopped when WHOIS left the foreground. Retry when ready.</string>
+    <string name="ports_scan_budget_exceeded">This scan may exceed the 15-minute limit. Increase concurrency or reduce the port range or timeout.</string>
+    <string name="ports_scan_deadline_partial">The 15-minute time limit was reached. Showing the results completed so far.</string>
+    <string name="traceroute_time_limit_reached">Time limit reached. Showing hops found so far.</string>
+    <string name="lan_scan_estimate_too_large">Estimated scan time exceeds the 10-minute limit. Use a smaller subnet, increase concurrency, or lower the probe timeout.</string>
+    <string name="lan_subnet_narrowed_hint">Your network (%1$s) is too large to scan within 10 minutes, so the range around this device is filled in. Edit it to scan another part.</string>
+    <string name="lan_scan_suggested_button">Scan %1$s</string>
+    <string name="lan_scan_time_limit_subtitle">The scan reached its time limit. These are partial results.</string>
+    <string name="topology_budget_exceeded">Topology discovery settings exceed the 10-minute limit. Reduce max hops, timeout, or retries.</string>
+    <string name="topology_time_limit_partial_status">Time limit reached. Showing the devices and links discovered so far.</string>
     <string name="whois_idle_title">Enter a domain or IP to look up</string>
     <string name="whois_error_title">Lookup failed</string>
     <string name="whois_retry">Retry</string>
     <string name="whois_relay_chain">Query Chain</string>
     <string name="whois_hop_latency_ms">%1$d ms</string>
     <string name="whois_querying_server">Querying %1$s…</string>
-    <string name="whois_raw_responses">Raw WHOIS Responses</string>
+    <string name="whois_raw_responses">Raw RDAP/WHOIS Responses</string>
     <string name="whois_show_raw">Show raw response</string>
     <string name="whois_lifecycle">Lifecycle</string>
     <string name="whois_registered">Registered</string>
@@ -542,7 +825,7 @@
 
     <!-- HTTP Probe Screen -->
     <string name="httprobe_screen_title">HTTP Probe</string>
-    <string name="httprobe_screen_subtitle">Test HTTP/HTTPS requests with full header and security analysis</string>
+    <string name="httprobe_screen_subtitle">Test HTTPS requests with full header and security analysis. Plain HTTP is disabled in this release.</string>
 
     <!-- HTTP Probe Input -->
     <string name="httprobe_url_label">URL</string>
@@ -557,14 +840,26 @@
     <string name="httprobe_body_placeholder">{"key": "value"}</string>
     <string name="httprobe_follow_redirects_label">Follow Redirects</string>
     <string name="httprobe_follow_redirects_sub">Automatically follow HTTP 3xx responses</string>
+    <string name="httprobe_cross_origin_replay_title">Confirm request body redirect</string>
+    <string name="httprobe_cross_origin_replay_message">HTTP %1$d changes origin and will resend the %2$s request body to:</string>
+    <string name="httprobe_cross_origin_replay_approve">Send body</string>
+    <string name="httprobe_cross_origin_replay_deny">Cancel redirect</string>
     <string name="httprobe_send_button">Send Request</string>
     <string name="httprobe_sending">Sending…</string>
+    <string name="httprobe_cancel_request">Cancel</string>
+    <string name="httprobe_stopping">Stopping…</string>
 
     <!-- HTTP Probe States -->
     <string name="httprobe_idle_title">Enter a URL to probe</string>
-    <string name="httprobe_idle_subtitle">Supports GET, POST, PUT, PATCH, DELETE, HEAD, and OPTIONS. Includes security header analysis.</string>
+    <string name="httprobe_idle_subtitle">Supports HTTPS GET, POST, PUT, PATCH, DELETE, HEAD, and OPTIONS. Includes security header analysis.</string>
     <string name="httprobe_error_title">Request failed</string>
+    <string name="httprobe_blocked_redirect_title">Insecure redirect blocked</string>
+    <string name="httprobe_blocked_redirect_message">The HTTPS server returned HTTP %1$d and pointed to an insecure HTTP address. The destination was not contacted.</string>
+    <string name="httprobe_blocked_redirect_source">Source: %1$s</string>
+    <string name="httprobe_blocked_redirect_destination">Resolved destination: %1$s</string>
+    <string name="httprobe_blocked_redirect_location">Location header: %1$s</string>
     <string name="httprobe_retry">Retry</string>
+    <string name="httprobe_request_canceled">Request canceled</string>
 
     <!-- HTTP Probe Tabs -->
     <string name="httprobe_tab_overview">Overview</string>
@@ -579,6 +874,7 @@
         <item quantity="other">%1$d redirects</item>
     </plurals>
     <string name="httprobe_method_used">Method</string>
+    <string name="httprobe_protocol_label">Protocol</string>
     <string name="httprobe_final_url">Final URL</string>
     <string name="httprobe_response_size">Body size</string>
     <string name="httprobe_content_type">Content-Type</string>
@@ -592,6 +888,40 @@
     <string name="httprobe_body_truncated">Showing first %1$s of the response body</string>
     <string name="httprobe_response_size_at_least">≥ %1$s</string>
     <string name="httprobe_empty_body">Empty body (HEAD or no content)</string>
+    <string name="httprobe_copy_curl">Copy as cURL</string>
+    <string name="httprobe_curl_redirect_safety">Redirect following was disabled to avoid forwarding custom headers or a body, or changing the app’s redirect method behavior. The command sends only the initial request.</string>
+    <string name="httprobe_pretty_json">Pretty JSON</string>
+    <string name="httprobe_json_valid">Valid JSON</string>
+    <string name="httprobe_json_invalid">Not valid JSON</string>
+    <string name="httprobe_json_incomplete">JSON validity unavailable because the response was truncated.</string>
+    <string name="httprobe_timing_breakdown">Timing breakdown</string>
+    <string name="httprobe_timing_dns">DNS</string>
+    <string name="httprobe_timing_connect">Connect</string>
+    <string name="httprobe_timing_tls">TLS</string>
+    <string name="httprobe_timing_ttfb">Time to first byte</string>
+    <string name="httprobe_timing_server_wait">Server and headers</string>
+    <string name="httprobe_timing_transfer">Transfer</string>
+    <string name="httprobe_timing_unavailable">Timing details are unavailable.</string>
+    <string name="httprobe_timing_value_ms">%1$d ms</string>
+    <string name="httprobe_sec_hsts_pass_strong">HSTS max-age is at least one year.</string>
+    <string name="httprobe_sec_hsts_short">HSTS max-age is shorter than one year.</string>
+    <string name="httprobe_sec_hsts_invalid">HSTS does not contain a valid max-age directive.</string>
+    <string name="httprobe_sec_hsts_ignored_http">Browsers ignore HSTS received over HTTP.</string>
+    <string name="httprobe_sec_csp_unsafe_inline">CSP permits unsafe inline or evaluated script content.</string>
+    <string name="httprobe_sec_csp_ambiguous">Conflicting or malformed CSP values were received.</string>
+    <string name="httprobe_sec_csp_report_only">Only a report-only CSP is set; it does not enforce restrictions.</string>
+    <string name="httprobe_sec_xfo_via_csp">CSP frame-ancestors provides clickjacking protection.</string>
+    <string name="httprobe_sec_xss_protection_absent">X-XSS-Protection is not set; modern browsers rely on Content Security Policy.</string>
+    <string name="httprobe_sec_xss_protection_deprecated">X-XSS-Protection is deprecated; use Content Security Policy instead.</string>
+    <string name="httprobe_sec_cookie_flags_complete">Cookie has Secure, HttpOnly, and a valid SameSite attribute.</string>
+    <string name="httprobe_sec_cookie_missing_secure">Cookie is missing the Secure flag on an HTTPS response.</string>
+    <string name="httprobe_sec_cookie_missing_httponly">Cookie is missing the HttpOnly flag.</string>
+    <string name="httprobe_sec_cookie_missing_secure_httponly">Cookie is missing Secure and HttpOnly flags.</string>
+    <string name="httprobe_sec_cookie_missing_samesite">Cookie is missing a valid SameSite attribute.</string>
+    <string name="httprobe_sec_cookie_samesite_none_requires_secure">SameSite=None cookies require Secure; browsers reject them without it.</string>
+    <string name="httprobe_sec_cookie_secure_from_http">Browsers reject Secure cookies received over an insecure HTTP response.</string>
+    <string name="httprobe_sec_cookie_secure_not_applicable">Cookie omits Secure on a non-HTTPS response.</string>
+    <string name="httprobe_sec_cookie_malformed">Cookie does not contain a valid name and value pair.</string>
 
     <!-- DNS Record labels -->
     <string name="dns_ipv4_prefix">IPv4</string>
@@ -733,6 +1063,7 @@
 
     <!-- Share subjects per tool -->
     <string name="share_subject_ping">Ping – %1$s</string>
+    <string name="share_file_unavailable">Unable to share this file.</string>
     <string name="share_subject_traceroute">Traceroute – %1$s</string>
     <string name="share_subject_ports">Port scan – %1$s</string>
     <string name="share_subject_tls">TLS – %1$s:%2$d</string>
@@ -755,17 +1086,31 @@
     <string name="mdns_error_dismiss">Dismiss</string>
     <string name="mdns_scan_button">Scan Network</string>
     <string name="mdns_stop_button">Stop</string>
+    <string name="mdns_canceling_button">Canceling…</string>
+    <string name="mdns_canceling_hint">Stopping discovery…</string>
+    <string name="mdns_canceled_title">Discovery canceled</string>
+    <string name="mdns_canceled_empty_body">No services were found before discovery stopped.</string>
+    <string name="mdns_canceled_partial">Discovery canceled. Showing services found so far.</string>
+    <string name="mdns_partial_results_status">Discovery reached a safety limit. Showing the services found so far.</string>
     <string name="mdns_clear_button">Clear</string>
     <string name="mdns_empty_title">No services found</string>
     <string name="mdns_empty_body">No mDNS services responded. Ensure devices are on the same network and try again.</string>
     <string name="mdns_txt_records_label">TXT Records</string>
+    <string name="mdns_ping_hostname">Ping hostname</string>
+    <string name="mdns_ping_hostname_description">Ping hostname %1$s</string>
+    <string name="mdns_http_probe">Open in HTTP Probe</string>
+    <string name="mdns_http_probe_description">Open %1$s in HTTP Probe</string>
+    <string name="httprobe_source_mdns">Prefilled from mDNS Browser</string>
+    <string name="httprobe_source_lan">Prefilled from LAN Scanner</string>
+    <string name="httprobe_invalid_handoff">The supplied destination could not be verified. Enter a valid HTTP URL to continue.</string>
+    <string name="mdns_ping_address">Ping %1$s</string>
 
     <!-- Onboarding -->
-    <string name="onboarding_subtitle">Your all-in-one Android networking toolkit</string>
     <string name="onboarding_get_started">Get Started</string>
     <string name="onboarding_dont_show_again">Skip</string>
     <string name="onboarding_next">Next</string>
     <string name="onboarding_back">Back</string>
+    <string name="onboarding_page_position">Page %1$d of %2$d</string>
 
     <!-- Onboarding – Page 1: Welcome -->
     <string name="onboarding_page1_title">Welcome to Net Swiss Knife</string>
@@ -872,9 +1217,9 @@
     <!-- LAN Scanner help -->
     <string name="help_lan_title">LAN Scanner</string>
     <string name="help_lan_concept_heading">What is a subnet sweep?</string>
-    <string name="help_lan_concept_body">Devices on your home or office network share a private range of addresses, like 192.168.1.1 through 192.168.1.254. That range is written in CIDR notation as 192.168.1.0/24, where the "/24" says how many addresses are included. The scanner uses ICMP, TCP, and optional local name probes to find devices that answer even when ordinary ping is blocked.</string>
+    <string name="help_lan_concept_body">Devices on your home or office network share a private range of addresses, like 192.168.1.1 through 192.168.1.254. That range is written in CIDR notation as 192.168.1.0/24, where the "/24" says how many addresses are included. The scanner confirms endpoints that answer ICMP, complete a TCP connection, or return a validated local protocol reply. Failed probes remain inconclusive diagnostics.</string>
     <string name="help_lan_what_heading">What it does</string>
-    <string name="help_lan_what_body">Checks every address in a subnet with ICMP and TCP, then uses NetBIOS or mDNS names as additional presence evidence. Responsive hosts are enriched with hostnames, open ports, and a best-effort ARP MAC/vendor lookup.</string>
+    <string name="help_lan_what_body">Checks every address in a subnet with ICMP and TCP, then uses correlated NetBIOS or mDNS replies as additional presence evidence. Confirmed hosts are enriched with hostnames, open ports, and a best-effort ARP MAC/vendor lookup. Refusals, timeouts, and unreachable routes can be viewed separately without affecting the confirmed count.</string>
     <string name="help_lan_params_heading">Key parameters</string>
     <string name="help_lan_results_heading">Reading the results</string>
     <string-array name="help_lan_params_bullets">
@@ -883,7 +1228,8 @@
         <item>Concurrency - how many hosts to probe at the same time.</item>
     </string-array>
     <string-array name="help_lan_results_bullets">
-        <item>Discovery chips explain whether ICMP, TCP, NetBIOS, mDNS, or reverse DNS contributed to the result.</item>
+        <item>Discovery chips explain whether ICMP, completed TCP, validated NetBIOS/mDNS, or reverse DNS contributed to the result.</item>
+        <item>Use Show uncertain probes to inspect bounded diagnostics; these entries do not enter the host list, topology, or share export.</item>
         <item>MAC addresses may be unavailable on Android 10 and later because apps cannot read the ARP cache.</item>
         <item>The gateway comes from the active network default route. Tap a host for details or Scan ports.</item>
     </string-array>
@@ -935,9 +1281,9 @@
     <!-- Topology help -->
     <string name="help_topology_title">Network Topology</string>
     <string name="help_topology_concept_heading">What is network topology discovery?</string>
-    <string name="help_topology_concept_body">Switches and routers understand SNMP (Simple Network Management Protocol), a standard way for network gear to report its status and configuration - like each device having its own public status page a tool can read. This app asks one device "who are you connected to?", then asks each of those neighbours the same question, building a map hop by hop, the way you\'d trace a chain of introductions at a party. The result is a picture of how your switches and routers are physically wired together.</string>
+    <string name="help_topology_concept_body">Switches and routers understand SNMP (Simple Network Management Protocol), a standard way for network gear to report its status and configuration - like each device having its own public status page a tool can read. This app asks the seed device "who are you connected to?" and shows its reported links. Neighbor queries are off by default. If you enable them, the app also queries advertised LLDP/CDP IP addresses using the same SNMP profile, extending the map hop by hop.</string>
     <string name="help_topology_what_heading">What it does</string>
-    <string name="help_topology_what_body">Uses SNMP to query a seed switch or router and discover its neighbours, building an interactive topology graph of your network infrastructure.</string>
+    <string name="help_topology_what_body">Uses SNMP to query a seed switch or router and display its reported neighbor links in an interactive topology graph. Neighbor queries require you to enable the option before the app uses the same SNMP profile on advertised LLDP/CDP IP addresses.</string>
     <string name="help_topology_params_heading">Key parameters</string>
     <string name="help_topology_results_heading">Reading the results</string>
     <string-array name="help_topology_params_bullets">
@@ -945,10 +1291,11 @@
         <item>SNMP version - v1, v2c, or v3; v3 adds authentication and encryption the older versions lack.</item>
         <item>Community string - a shared password required for v1/v2c (default is \'public\', a notoriously insecure default many devices still ship with - change it if you can).</item>
         <item>SNMP v3 privacy requires authentication first; auth and privacy passwords are kept in memory for the scan and are never logged.</item>
-        <item>Max hops - how many device-to-device introductions to follow before stopping.</item>
+        <item>Max hops - how many device-to-device introductions to follow when neighbor queries are enabled.</item>
+        <item>Query advertised LLDP/CDP neighbors - off by default. Turn it on to use the configured SNMP profile to query advertised IP addresses. Leave it off to show reported links without querying their devices.</item>
     </string-array>
     <string-array name="help_topology_results_bullets">
-        <item>Nodes represent discovered devices; lines represent the SNMP-reported links between them.</item>
+        <item>Filled nodes represent queried devices. Outlined markers show reported neighbors that were not queried. Lines represent SNMP-reported links.</item>
         <item>Pinch to zoom, drag to pan around the graph.</item>
         <item>Tap a node to view its system information, interfaces, VLANs, and neighbours.</item>
         <item>Useful for mapping an office network, spotting unexpected devices, or documenting infrastructure before troubleshooting a connectivity issue.</item>
@@ -965,11 +1312,13 @@
     <string-array name="help_tls_params_bullets">
         <item>Host - the domain name or IP to connect to.</item>
         <item>Port - the TLS port (default 443 for HTTPS; 8443, 993, 465 are common alternatives).</item>
+        <item>Optional checks - probe older TLS versions or compare the leaf certificate with an expected SHA-256 pin.</item>
     </string-array>
     <string-array name="help_tls_results_bullets">
-        <item>The connection card shows the TLS version, cipher suite, and handshake time.</item>
-        <item>Each certificate in the chain (leaf, intermediate, root) expands to show subject, issuer, validity dates, SANs, and the SHA-256 fingerprint.</item>
-        <item>A red badge means expired - the site\'s ID card is out of date and your connection can\'t be fully verified, similar to a browser warning page.</item>
+        <item>The connection card shows trust, hostname match, TLS version, ALPN, cipher suite, connect time, and handshake time.</item>
+        <item>Each certificate presented by the server expands to show subject, issuer, validity dates, SANs, and the SHA-256 fingerprint.</item>
+        <item>Findings include expired or not-yet-valid certificates, hostname mismatch, incomplete chains, weak keys or signatures, and self-signed certificates.</item>
+        <item>Share PEM exports the certificates in the presented chain.</item>
     </string-array>
 
     <!-- WHOIS help -->
@@ -977,19 +1326,20 @@
     <string name="help_whois_concept_heading">What is WHOIS?</string>
     <string name="help_whois_concept_body">WHOIS is a public registry of who owns a domain name or block of IP addresses and since when - like checking a property deed. Every domain and IP range has an owner on record somewhere, and WHOIS servers let anyone look that record up.</string>
     <string name="help_whois_what_heading">What it does</string>
-    <string name="help_whois_what_body">Queries WHOIS servers to retrieve registration information for a domain name, IP address, or Autonomous System Number (ASN).</string>
+    <string name="help_whois_what_body">Looks up registration information for domains, IP addresses, and ASNs using RDAP or the classic WHOIS protocol. Auto tries RDAP first and falls back to WHOIS.</string>
     <string name="help_whois_params_heading">What to enter</string>
     <string name="help_whois_results_heading">Reading the results</string>
     <string-array name="help_whois_params_bullets">
         <item>Domain - e.g. example.com.</item>
         <item>IP address - e.g. 8.8.8.8.</item>
         <item>ASN - e.g. AS15169; an Autonomous System Number identifies a large network or organization (typically an ISP) that controls a block of addresses and announces routes for them - one level above individual IP ranges.</item>
+        <item>Protocol - Auto tries RDAP first and falls back to WHOIS; RDAP and WHOIS options use only the selected source.</item>
         <item>Use the quick-fill chips to insert an example of each type.</item>
     </string-array>
     <string-array name="help_whois_results_bullets">
-        <item>For domains: registrant, registration/expiry dates, name servers, and status codes - handy for checking if a domain is about to expire or investigating who\'s behind a site.</item>
-        <item>For IPs: the network range, owning organisation, and country - useful for finding the ISP or hosting provider behind an address.</item>
-        <item>The Raw section shows the unprocessed WHOIS server response.</item>
+        <item>For domains: registrar and registrant, registration/expiry dates, name servers, DNSSEC, and status codes.</item>
+        <item>For IPs and ASNs: network range, organization, and country where the registry provides them.</item>
+        <item>The Raw section shows the unprocessed RDAP JSON or WHOIS server response.</item>
     </string-array>
 
     <!-- HTTP Probe help -->
@@ -997,7 +1347,7 @@
     <string name="help_httprobe_concept_heading">What happens when you "visit" a URL?</string>
     <string name="help_httprobe_concept_body">When you request a URL, your device opens a connection to a server and sends a small text message describing what you want - the method, headers, maybe a body. The server replies with a status code, its own headers, and the content. This tool lets you send that request directly and inspect the entire exchange, including security-related response headers browsers check automatically but rarely show you.</string>
     <string name="help_httprobe_what_heading">What it does</string>
-    <string name="help_httprobe_what_body">Sends an HTTP or HTTPS request to a URL and displays the full response including status, headers, body, redirect chain, and a security header analysis.</string>
+    <string name="help_httprobe_what_body">Sends an HTTPS request to a URL and displays status, headers, body, redirect chain, timing breakdown, and security checks. Plain HTTP is disabled in this release. Copy the request as cURL or pretty-print a JSON response.</string>
     <string name="help_httprobe_params_heading">Key parameters</string>
     <string name="help_httprobe_results_heading">Reading the results</string>
     <string name="help_httprobe_security_heading">Security header checks</string>
@@ -1005,14 +1355,16 @@
         <item>URL - the full address including https://</item>
         <item>Method - GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS.</item>
         <item>Custom headers - add Authorization, Accept, Content-Type, etc.</item>
-        <item>Request body - JSON or other payload for POST/PUT.</item>
-        <item>Follow redirects - automatically follow 3xx responses.</item>
+        <item>Request body - text or JSON for POST, PUT, and PATCH.</item>
+        <item>Follow redirects - automatically follow 3xx responses and show each hop.</item>
+        <item>HTTPS-to-HTTP redirects are blocked. Before a cross-origin redirect resends a request body, the app asks you to approve that destination.</item>
     </string-array>
     <string-array name="help_httprobe_results_bullets">
-        <item>Overview - status code, response time, and final URL after redirects.</item>
+        <item>Overview - status code, DNS/connect/TLS/server-wait/transfer phases, total time to first byte, HTTP protocol, and final URL after redirects.</item>
         <item>Headers - every request and response header.</item>
-        <item>Body - the response body, with size and truncation shown if applicable.</item>
-        <item>Security - see below.</item>
+        <item>Body - inspect, copy, and optionally pretty-print valid JSON; size and truncation are shown when applicable.</item>
+        <item>Copy as cURL exports the configured method, headers, body, URL, and redirect behavior as a shell-safe command.</item>
+        <item>Security - header, cookie-flag, and HTTPS downgrade checks; see below.</item>
     </string-array>
     <string-array name="help_httprobe_security_bullets">
         <item>HSTS - forces browsers to always use the encrypted (https) version of this site.</item>
@@ -1024,6 +1376,8 @@
         <item>Cross-Origin-Opener-Policy - isolates this tab from being manipulated by a malicious page it opened or was opened by.</item>
         <item>Cross-Origin-Embedder-Policy - requires cross-origin resources to explicitly opt in before this page can use them, closing another cross-tab attack path.</item>
         <item>Server - whether the response reveals software/version info attackers could use to look up known vulnerabilities.</item>
+        <item>Set-Cookie - each response cookie is checked for Secure, HttpOnly, and SameSite attributes.</item>
+        <item>X-XSS-Protection - reports the legacy header as informational because modern browsers rely on CSP.</item>
     </string-array>
 
     <!-- Subnet Calculator help -->
@@ -1092,6 +1446,15 @@
 
     <string name="speedtest_idle_title">Ready to test your connection</string>
     <string name="speedtest_idle_subtitle">Measures latency, download, and upload speed in sequence</string>
+    <string name="speedtest_download_streams">Download streams: %1$d</string>
+    <string name="speedtest_upload_streams">Upload streams: %1$d</string>
+    <string name="speedtest_server_info">Cloudflare %1$s · %2$s</string>
+    <string name="speedtest_server_global_edge">Global edge</string>
+    <string name="speedtest_server_unknown_asn">ASN unavailable</string>
+    <string name="speedtest_connect_latency">Connect</string>
+    <string name="speedtest_idle_latency_header">Idle latency</string>
+    <string name="speedtest_loaded_latency_download">Latency under download load</string>
+    <string name="speedtest_loaded_latency_upload">Latency under upload load</string>
     <string name="speedtest_start_button">Start Test</string>
     <string name="speedtest_cancel_button">Cancel</string>
     <string name="speedtest_retry">Run again</string>
@@ -1110,7 +1473,6 @@
     <string name="speedtest_mbps_suffix">Mbps</string>
     <string name="speedtest_ms_suffix">ms</string>
 
-    <string name="speedtest_latency_header">Latency</string>
     <string name="speedtest_latency_min">Min</string>
     <string name="speedtest_latency_avg">Avg</string>
     <string name="speedtest_latency_max">Max</string>
@@ -1131,14 +1493,17 @@
     <!-- Wake-on-LAN -->
     <string name="wol_screen_title">Wake-on-LAN</string>
     <string name="wol_screen_subtitle">Wake sleeping devices with a magic packet</string>
+    <string name="wol_source_lan">MAC address from LAN Scanner</string>
+    <string name="wol_invalid_handoff">The supplied MAC could not be verified. Enter a valid MAC address to continue.</string>
     <string name="wol_mac_label">MAC address</string>
     <string name="wol_mac_placeholder">AA:BB:CC:DD:EE:FF</string>
-    <string name="wol_mac_invalid">Enter a valid MAC address (AA:BB:CC:DD:EE:FF)</string>
+    <string name="wol_mac_invalid">Enter a valid unicast MAC address (AA:BB:CC:DD:EE:FF)</string>
     <string name="wol_advanced_options">Advanced options</string>
     <string name="wol_broadcast_label">Broadcast address</string>
     <string name="wol_broadcast_hint">255.255.255.255 reaches the whole local network</string>
     <string name="wol_port_label">UDP port</string>
     <string name="wol_port_hint">Port 9 (discard) is the convention; some devices use 7</string>
+    <string name="wol_port_invalid">Enter a UDP port from 1 to 65535</string>
     <string name="wol_send_button">Send magic packet</string>
     <string name="wol_sending">Sending magic packet…</string>
     <string name="wol_success_title">Magic packet sent</string>
@@ -1168,5 +1533,30 @@
     <string name="security_rating_warn">Warn</string>
     <string name="security_rating_fail">Fail</string>
     <string name="security_rating_info">Info</string>
+
+    <!-- Network state and local-network permission -->
+    <string name="network_banner_no_internet">No internet connection. This tool may not reach public hosts.</string>
+    <string name="network_banner_internet_unvalidated">Internet access is unverified. This tool may not reach public hosts.</string>
+    <string name="network_banner_no_network">No network connection. Connect to Wi-Fi, Ethernet, or the internet to run this tool.</string>
+    <string name="network_banner_route_unknown">Network type is unknown. This tool may still be able to connect.</string>
+    <string name="network_banner_no_local">No Wi-Fi or Ethernet network. LAN tools need a local network.</string>
+    <string name="network_banner_local_vpn_route_unknown">No Wi-Fi or Ethernet network is detected. VPN reachability varies by destination.</string>
+    <string name="network_banner_vpn_info">VPN active. Routing can differ by destination.</string>
+    <string name="network_error_local_permission">Local network permission was denied. Grant access, then retry.</string>
+    <string name="network_action_grant_permission">Grant</string>
+
+    <!-- Polite accessibility announcements for tool operation state changes -->
+    <string name="a11y_tool_running">%1$s is running</string>
+    <string name="a11y_tool_canceled">%1$s stopped</string>
+    <string name="a11y_tool_finished">%1$s finished</string>
+    <string name="a11y_tool_finished_detail">%1$s finished. %2$s</string>
+    <string name="a11y_tool_partial">%1$s stopped with partial results</string>
+    <string name="a11y_tool_partial_detail">%1$s stopped with partial results. %2$s</string>
+    <string name="a11y_tool_error">%1$s failed</string>
+    <string name="a11y_tool_error_detail">%1$s failed. %2$s</string>
+    <plurals name="a11y_dns_record_count">
+        <item quantity="one">%1$d record found</item>
+        <item quantity="other">%1$d records found</item>
+    </plurals>
 
 </resources>

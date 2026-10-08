@@ -5,10 +5,12 @@ import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import net.aieat.netswissknife.core.network.NetworkResult
+import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.httprobe.HttpMethod
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeRepository
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeRequest
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeResult
+import net.aieat.netswissknife.core.network.httprobe.HttpProbeOperation
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
@@ -45,7 +47,9 @@ class HttpProbeUseCaseTest {
     fun `invoke returns Error for blank URL`() = runTest {
         val result = useCase(HttpProbeParams(url = "  "))
         assertTrue(result is NetworkResult.Error)
-        assertTrue((result as NetworkResult.Error).message.contains("blank", ignoreCase = true))
+        val error = result as NetworkResult.Error
+        assertTrue(error.message.contains("blank", ignoreCase = true))
+        assertEquals(ErrorCode.URL_BLANK, error.info?.code)
     }
 
     @Test
@@ -72,11 +76,14 @@ class HttpProbeUseCaseTest {
             "URL port must be between 1 and 65535",
             validateHttpProbeUrl("https://example.com:0")
         )
+        val error = validateHttpProbeUrlInfo("https://example.com:0")
+        assertEquals(ErrorCode.PORT_OUT_OF_RANGE, error?.code)
+        assertEquals(listOf(0, 1, 65_535), error?.args)
     }
 
     @Test
-    @DisplayName("valid HTTP URLs with paths and query parameters are accepted")
-    fun `valid HTTP URLs with paths and query parameters are accepted`() = runTest {
+    @DisplayName("valid HTTPS URLs with paths and query parameters are accepted")
+    fun `valid HTTPS URLs with paths and query parameters are accepted`() = runTest {
         coEvery { repository.probe(any()) } returns NetworkResult.Success(fakeResult)
 
         val result = useCase(HttpProbeParams(url = "https://example.com/api?v=1"))
@@ -111,6 +118,18 @@ class HttpProbeUseCaseTest {
     }
 
     @Test
+    @DisplayName("caller-owned operation session reaches the repository")
+    fun `invoke forwards caller-owned operation session`() = runTest {
+        coEvery { repository.probe(any(), any()) } returns NetworkResult.Success(fakeResult)
+        val session = HttpProbeOperation.newSession(timeoutMillis = 2_000)
+
+        val result = useCase(HttpProbeParams(url = "https://example.com"), session)
+
+        assertTrue(result is NetworkResult.Success)
+        coVerify { repository.probe(match { it.url == "https://example.com" }, session) }
+    }
+
+    @Test
     @DisplayName("invoke strips body for GET requests")
     fun `invoke strips body for GET requests`() = runTest {
         coEvery { repository.probe(any()) } returns NetworkResult.Success(fakeResult)
@@ -131,13 +150,17 @@ class HttpProbeUseCaseTest {
     }
 
     @Test
-    @DisplayName("invoke passes http URL to repository")
-    fun `invoke passes http URL to repository`() = runTest {
-        coEvery { repository.probe(any()) } returns NetworkResult.Success(fakeResult)
+    @DisplayName("plain HTTP is rejected before repository dispatch")
+    fun `plain HTTP is rejected before repository dispatch`() = runTest {
+        val result = useCase(HttpProbeParams(url = "http://example.com"))
 
-        useCase(HttpProbeParams(url = "http://example.com"))
-
-        coVerify { repository.probe(match { it.url == "http://example.com" }) }
+        assertTrue(result is NetworkResult.Error)
+        assertEquals(ErrorCode.HTTP_CLEARTEXT_DISABLED, (result as NetworkResult.Error).info?.code)
+        assertEquals(
+            "Plain HTTP requests are disabled in this release. Use an HTTPS URL.",
+            validateHttpProbeUrl("http://example.com"),
+        )
+        coVerify(exactly = 0) { repository.probe(any()) }
     }
 
     @Test

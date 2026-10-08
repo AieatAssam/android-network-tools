@@ -12,13 +12,16 @@ import java.util.Locale
  * from the UI thread while the user is still typing.
  */
 object HostValidator {
-    private val ipv4Regex = Regex(
-        """^((25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(25[0-5]|2[0-4]\d|[01]?\d\d?)$"""
-    )
-    private val hostnameRegex = Regex(
-        """^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$"""
-    )
+    private val ipv4Regex =
+        Regex(
+            """^((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$""",
+        )
+    private val hostnameRegex =
+        Regex(
+            """^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$""",
+        )
     private val hextetRegex = Regex("""^[0-9a-fA-F]{1,4}$""")
+    private val zoneIdRegex = Regex("""^[a-zA-Z0-9_.~-]+$""")
 
     /** Number of 16-bit groups in a full IPv6 address. */
     private const val IPV6_GROUPS = 8
@@ -26,6 +29,7 @@ object HostValidator {
     /** A trailing dotted-quad occupies the last two 16-bit groups. */
     private const val IPV4_TAIL_GROUPS = 2
 
+    /** Accepts canonical dotted-decimal IPv4 only; use [normalize] to canonicalize zero-padded octets. */
     fun isValidIpv4(address: String): Boolean = ipv4Regex.matches(address)
 
     /**
@@ -44,6 +48,7 @@ object HostValidator {
         if (zoneStart >= 0) {
             // A zone id must qualify a non-empty address and must not be empty.
             if (zoneStart == 0 || zoneStart == text.length - 1) return false
+            if (!zoneIdRegex.matches(text.substring(zoneStart + 1))) return false
             text = text.substring(0, zoneStart)
         }
 
@@ -69,7 +74,10 @@ object HostValidator {
      * not a valid hextet. An empty run contributes zero groups. When
      * [allowIpv4Tail] is set, a trailing dotted-quad counts as two groups.
      */
-    private fun countGroups(run: String, allowIpv4Tail: Boolean): Int? {
+    private fun countGroups(
+        run: String,
+        allowIpv4Tail: Boolean,
+    ): Int? {
         if (run.isEmpty()) return 0
         val parts = run.split(':')
         var groups = 0
@@ -80,8 +88,14 @@ object HostValidator {
                     if (!isValidIpv4(part)) return null
                     groups += IPV4_TAIL_GROUPS
                 }
-                hextetRegex.matches(part) -> groups += 1
-                else -> return null
+
+                hextetRegex.matches(part) -> {
+                    groups += 1
+                }
+
+                else -> {
+                    return null
+                }
             }
         }
         return groups
@@ -93,29 +107,42 @@ object HostValidator {
      * Returns the canonical value accepted by network clients.
      *
      * Hostnames are trimmed, lower-cased, converted to ASCII (IDNA), and have
-     * one optional DNS root dot removed. Literal IP addresses are returned as
-     * entered apart from surrounding whitespace and the root dot.
+     * one optional DNS root dot removed. IPv4 octets with leading zeroes are
+     * interpreted as decimal and returned without those zeroes; other literal
+     * IP addresses are returned as entered apart from surrounding whitespace.
      */
     fun normalize(input: String): String? {
         var host = input.trim()
-        if (host.endsWith('.')) host = host.dropLast(1)
         if (host.isEmpty()) return null
 
-        if (looksLikeIpv4.matches(host)) {
-            return host.takeIf(::isValidIpv4)
-        }
         if (host.contains(':')) {
             return host.takeIf(::isValidIpv6)
         }
+        if (host.endsWith('.')) host = host.dropLast(1)
+        if (looksLikeIpv4.matches(host)) {
+            return parseIpv4Octets(host)?.joinToString(".")
+        }
 
         return try {
-            IDN.toASCII(host, IDN.ALLOW_UNASSIGNED)
+            IDN
+                .toASCII(host, IDN.ALLOW_UNASSIGNED)
                 .lowercase(Locale.ROOT)
-                .takeIf { hostnameRegex.matches(it) }
+                .takeIf { it.length <= MAX_HOSTNAME_LENGTH && hostnameRegex.matches(it) }
         } catch (_: IllegalArgumentException) {
             null
         }
     }
+
+    private fun parseIpv4Octets(address: String): List<Int>? {
+        val parts = address.split('.')
+        if (parts.size != 4) return null
+        return parts.map { part ->
+            if (part.isEmpty() || part.length > 3 || part.any { it !in '0'..'9' }) return null
+            part.toIntOrNull()?.takeIf { it in 0..255 } ?: return null
+        }
+    }
+
+    private const val MAX_HOSTNAME_LENGTH = 253
 
     fun isValidHostname(host: String): Boolean {
         val normalized = normalize(host) ?: return false

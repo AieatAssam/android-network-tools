@@ -1,0 +1,29 @@
+review:
+  area: E03-T01 Port Scan result backpressure
+  status: source_review_and_full_core_network_passed_device_gates_open
+  date: 2026-09-25
+  checked_commit: b584ca5aa19bdfa2698eed7499f4c9aea106ac90
+  branch: plan/comprehensive-review-2026-09-22
+
+scope:
+  - "A slow-collector regression applies downstream buffer(0) to the production channelFlow/flowOn path, creating a rendezvous output boundary."
+  - "With effective concurrency two, the test derives the maximum checker-start plateau as 2*concurrency+1: one result held at the blocked downstream emission, two buffered completed results, and two workers each holding a completed result while blocked on send."
+  - "The collector remains paused after Started while the test proves the checker count reaches and stays at the finite bound."
+  - "After collector release, all 20 submitted ports produce exactly one PortResult and one Complete event."
+  - "The test releases its gate and cancels/joins the collector from finally on both success and assertion failure."
+
+validation:
+  focused:
+    command: "./gradlew :core-network:test --tests 'net.aieat.netswissknife.core.network.portscan.PortScanRepositoryImplTest' --no-daemon --no-parallel --max-workers=1 --console=plain"
+    result: "Passed 34 tests, zero skipped/failures/errors."
+  full:
+    command: "./gradlew :core-network:test --no-daemon --no-parallel --max-workers=1 --console=plain"
+    result: "Passed 1,312 tests (one skipped), zero failures/errors."
+  reviewers:
+    qa: "Confirmed flow fusion, the finite-bound derivation, resume/no-loss assertions, and finally cleanup; no blocker."
+    adversarial: "Found no false positive/negative, saturation race, or cleanup leak in the test."
+
+limits:
+  - "This slice adds deterministic boundary verification; it does not change the existing Port Scan channel capacities or memory-retention policy."
+  - "No emulator or device was used."
+  - "E03-T01 remains open for other adapter boundaries, phase-wide operation/resource coverage, device behavior, and the <=500 ms cleanup measurement."

@@ -86,6 +86,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 // collectAsState replaced by collectAsStateWithLifecycle below
 import androidx.compose.runtime.getValue
@@ -114,7 +115,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
+import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
+import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
 import net.aieat.netswissknife.app.ui.components.ToolStopButton
@@ -123,10 +129,23 @@ import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.RecentHostsRow
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
+import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
+import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
+import net.aieat.netswissknife.app.platform.NetworkErrorKind
 import net.aieat.netswissknife.app.util.shareText
+import net.aieat.netswissknife.app.ui.navigation.HostTool
+import net.aieat.netswissknife.app.ui.navigation.NavRoutes
+import net.aieat.netswissknife.app.ui.navigation.ToolDestination
+import net.aieat.netswissknife.app.ui.navigation.ToolHost
+import net.aieat.netswissknife.app.ui.navigation.ToolIntent
+import net.aieat.netswissknife.app.ui.navigation.ToolMacAddress
+import net.aieat.netswissknife.app.ui.navigation.ToolPort
+import net.aieat.netswissknife.app.ui.navigation.ToolSource
 import net.aieat.netswissknife.core.network.lan.LanHost
+import net.aieat.netswissknife.core.network.lan.MacSource
 import net.aieat.netswissknife.core.network.lan.LanScanSummary
 import net.aieat.netswissknife.core.network.lan.DiscoveryMethod
+import net.aieat.netswissknife.core.network.lan.LanScanDiagnosticReason
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
@@ -136,32 +155,112 @@ fun LanScreen(
     viewModel: LanScanViewModel = hiltViewModel(),
     onNavigate: (String) -> Unit = {},
 ) {
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, viewModel) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) viewModel.onLifecyclePause()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            viewModel.onLifecyclePause()
+        }
+    }
+
     val requestLocalNetworkPermission = rememberLocalNetworkPermissionRequester()
     LaunchedEffect(Unit) { requestLocalNetworkPermission() }
     LaunchedEffect(viewModel) {
         viewModel.navigationEvents.collect { event ->
             when (event) {
-                is LanNavEvent.NavigateToPorts -> onNavigate(
-                    net.aieat.netswissknife.app.ui.navigation.NavRoutes.Ports.createRoute(event.host),
+                is LanNavEvent.NavigateToPorts -> ToolHost.parse(event.host)?.let { host ->
+                    onNavigate(
+                        NavRoutes.Ports.createRoute(
+                            ToolIntent(
+                                destination = ToolDestination.HostTarget(HostTool.PORTS, host),
+                                source = ToolSource.LAN,
+                            ),
+                        ),
+                    )
+                }
+                is LanNavEvent.NavigateToPing -> ToolHost.parse(event.host)?.let { host ->
+                    onNavigate(
+                        NavRoutes.Ping.createRoute(
+                            ToolIntent(
+                                destination = ToolDestination.HostTarget(HostTool.PING, host),
+                                source = ToolSource.LAN,
+                            ),
+                        ),
+                    )
+                }
+                is LanNavEvent.NavigateToHttp -> {
+                    val host = ToolHost.parse(event.host)
+                    val port = ToolPort.parse(event.port)
+                    if (host != null && port != null) {
+                        onNavigate(
+                            NavRoutes.HttpProbe.createRoute(
+                                ToolIntent(
+                                    destination = ToolDestination.HostTarget(HostTool.HTTP, host, port),
+                                    source = ToolSource.LAN,
+                                ),
+                            ),
+                        )
+                    }
+                }
+                is LanNavEvent.NavigateToTls -> {
+                    val host = ToolHost.parse(event.host)
+                    val port = ToolPort.parse(event.port)
+                    if (host != null && port != null) {
+                        onNavigate(
+                            NavRoutes.TlsInspector.createRoute(
+                                ToolIntent(
+                                    destination = ToolDestination.HostTarget(HostTool.TLS, host, port),
+                                    source = ToolSource.LAN,
+                                ),
+                            ),
+                        )
+                    }
+                }
+                is LanNavEvent.NavigateToWakeOnLan -> onNavigate(
+                    NavRoutes.WakeOnLan.createRoute(
+                        ToolIntent(
+                            destination = ToolDestination.WakeOnLan(event.mac),
+                            source = ToolSource.LAN,
+                        ),
+                    ),
                 )
             }
         }
     }
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val networkStatus by viewModel.networkStatus.collectAsStateWithLifecycle()
     val subnet by viewModel.subnet.collectAsStateWithLifecycle()
     val timeoutMs by viewModel.timeoutMs.collectAsStateWithLifecycle()
     val concurrency by viewModel.concurrency.collectAsStateWithLifecycle()
     val isSubnetLoading by viewModel.isSubnetLoading.collectAsStateWithLifecycle()
+    val subnetNarrowedFrom by viewModel.subnetNarrowedFrom.collectAsStateWithLifecycle()
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val recentSubnets by viewModel.recentSubnets.collectAsStateWithLifecycle()
+
+    val announcementPhase = when (val state = uiState) {
+        LanScanUiState.Idle -> null
+        is LanScanUiState.Scanning, is LanScanUiState.Canceling -> ToolAnnouncementPhase.RUNNING
+        is LanScanUiState.Canceled -> ToolAnnouncementPhase.PARTIAL
+        is LanScanUiState.Finished -> if (state.partial) {
+            ToolAnnouncementPhase.PARTIAL
+        } else {
+            ToolAnnouncementPhase.FINISHED
+        }
+        is LanScanUiState.Error -> ToolAnnouncementPhase.ERROR
+    }
+    ToolStateAnnouncer(stringResource(R.string.help_lan_title), announcementPhase)
 
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
     var showHelp by remember { mutableStateOf(false) }
 
-    val isRefreshing = uiState is LanScanUiState.Scanning
-    val canRefresh = uiState is LanScanUiState.Finished || uiState is LanScanUiState.Error
+    val isRefreshing = uiState is LanScanUiState.Scanning || uiState is LanScanUiState.Canceling
+    val canRefresh = uiState is LanScanUiState.Finished || uiState is LanScanUiState.Canceled || uiState is LanScanUiState.Error
 
     PullToRefreshBox(
         isRefreshing = isRefreshing,
@@ -176,17 +275,27 @@ fun LanScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
+                .testTag("lan_content")
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             LanHeaderCard(onHelpClick = { showHelp = true })
+
+            NetworkStatusBanner(
+                status = networkStatus,
+                scope = NetworkStatusScope.LOCAL_NETWORK,
+                permissionDenied = (uiState as? LanScanUiState.Error)?.networkErrorKind == NetworkErrorKind.LOCAL_NETWORK_PERMISSION_DENIED,
+                onGrantPermission = requestLocalNetworkPermission,
+            )
 
             LanInputCard(
                 subnet = subnet,
                 timeoutMs = timeoutMs,
                 concurrency = concurrency,
                 isSubnetLoading = isSubnetLoading,
+                subnetNarrowedFrom = subnetNarrowedFrom,
                 isScanning = uiState is LanScanUiState.Scanning,
+                isCanceling = uiState is LanScanUiState.Canceling,
                 recentSubnets = recentSubnets,
                 onSubnetChange = viewModel::onSubnetChange,
                 onTimeoutChange = viewModel::onTimeoutChange,
@@ -210,20 +319,58 @@ fun LanScreen(
                 when (state) {
                     is LanScanUiState.Idle -> LanIdleContent()
                     is LanScanUiState.Scanning -> LanScanningContent(state)
-                    is LanScanUiState.Finished -> LanFinishedContent(
+                    is LanScanUiState.Canceling -> LanCancelingContent(state.summary)
+                    is LanScanUiState.Canceled -> LanFinishedContent(
                         summary = state.summary,
                         expandedHostIp = state.expandedHostIp,
+                        showDiagnostics = state.showDiagnostics,
                         searchQuery = searchQuery,
                         onSearchQueryChange = viewModel::onSearchQueryChange,
                         onToggleExpand = viewModel::onToggleHostExpanded,
                         onScanPorts = viewModel::onScanPorts,
+                        onPingHost = viewModel::onPingHost,
+                        onProbeHttp = viewModel::onProbeHttp,
+                        onInspectTls = viewModel::onInspectTls,
+                        onWakeDevice = viewModel::onWakeDevice,
                         onClear = viewModel::onClear,
                         onRescan = viewModel::startScan,
+                        onToggleDiagnostics = viewModel::onToggleDiagnostics,
+                        title = stringResource(R.string.lan_scan_canceled_title),
+                        subtitle = stringResource(R.string.lan_scan_canceled_subtitle),
+                        isCanceled = true,
+                    )
+                    is LanScanUiState.Finished -> LanFinishedContent(
+                        summary = state.summary,
+                        expandedHostIp = state.expandedHostIp,
+                        showDiagnostics = state.showDiagnostics,
+                        searchQuery = searchQuery,
+                        onSearchQueryChange = viewModel::onSearchQueryChange,
+                        onToggleExpand = viewModel::onToggleHostExpanded,
+                        onScanPorts = viewModel::onScanPorts,
+                        onPingHost = viewModel::onPingHost,
+                        onProbeHttp = viewModel::onProbeHttp,
+                        onInspectTls = viewModel::onInspectTls,
+                        onWakeDevice = viewModel::onWakeDevice,
+                        onClear = viewModel::onClear,
+                        onRescan = viewModel::startScan,
+                        onToggleDiagnostics = viewModel::onToggleDiagnostics,
+                        title = stringResource(
+                            if (state.partial) R.string.lan_scan_paused_title else R.string.lan_scan_complete_title,
+                        ),
+                        subtitle = when {
+                            state.timeLimitReached -> stringResource(R.string.lan_scan_time_limit_subtitle)
+                            state.partial -> stringResource(R.string.lan_scan_paused_subtitle)
+                            else -> null
+                        },
                     )
                     is LanScanUiState.Error -> LanErrorContent(
-                        message = state.message,
+                        message = if (state.isBudgetLimit) {
+                            stringResource(R.string.lan_scan_estimate_too_large)
+                        } else state.message,
                         onRetry = viewModel::startScan,
                         onClear = viewModel::onClear,
+                        suggestedSubnet = state.suggestedSubnet,
+                        onScanSuggested = viewModel::scanSubnet,
                     )
                 }
             }
@@ -274,7 +421,9 @@ private fun LanInputCard(
     timeoutMs: Int,
     concurrency: Int,
     isSubnetLoading: Boolean,
+    subnetNarrowedFrom: String?,
     isScanning: Boolean,
+    isCanceling: Boolean,
     recentSubnets: List<String>,
     onSubnetChange: (String) -> Unit,
     onTimeoutChange: (Int) -> Unit,
@@ -328,8 +477,12 @@ private fun LanInputCard(
                         }
                     }
                 },
+                supportingText =
+                    subnetNarrowedFrom?.let { network ->
+                        { Text(stringResource(R.string.lan_subnet_narrowed_hint, network)) }
+                    },
                 singleLine = true,
-                enabled = !isScanning,
+                enabled = !isScanning && !isCanceling,
                 modifier = Modifier.fillMaxWidth(),
             )
 
@@ -337,7 +490,9 @@ private fun LanInputCard(
                 recentHosts = recentSubnets,
                 onHostSelected = onSubnetChange,
                 onRemoveHost = onRemoveRecentSubnet,
-                onClearAll = onClearRecentSubnets
+                onClearAll = onClearRecentSubnets,
+                selectionEnabled = !isScanning && !isCanceling,
+                actionsEnabled = !isScanning && !isCanceling,
             )
 
             // Timeout slider
@@ -347,7 +502,7 @@ private fun LanInputCard(
                 onValueChange = { onTimeoutChange(it.toInt()) },
                 valueRange = 100f..10_000f,
                 steps = 0,
-                enabled = !isScanning,
+                enabled = !isScanning && !isCanceling,
             )
 
             // Concurrency slider
@@ -357,11 +512,21 @@ private fun LanInputCard(
                 onValueChange = { onConcurrencyChange(it.toInt()) },
                 valueRange = 1f..500f,
                 steps = 0,
-                enabled = !isScanning,
+                enabled = !isScanning && !isCanceling,
             )
 
             // Action button
-            if (isScanning) {
+            if (isCanceling) {
+                FilledTonalButton(
+                    onClick = {},
+                    enabled = false,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.lan_canceling_title))
+                }
+            } else if (isScanning) {
                 ToolStopButton(
                     text = stringResource(R.string.lan_stop_button),
                     onClick = onStopScan,
@@ -524,9 +689,37 @@ private fun LanScanningContent(state: LanScanUiState.Scanning) {
                             onClick = {},
                             macResolutionSupported = true,
                             onScanPorts = {},
+                            onPingHost = {},
+                            onProbeHttp = { _, _ -> },
+                            onInspectTls = { _, _ -> },
+                            onWakeDevice = {},
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LanCancelingContent(summary: LanScanSummary) {
+    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            CircularProgressIndicator()
+            Text(stringResource(R.string.lan_canceling_title), style = MaterialTheme.typography.titleMedium)
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                StatChip(
+                    label = stringResource(R.string.lan_stat_scanned),
+                    value = summary.totalScanned.toString(),
+                )
+                StatChip(
+                    label = stringResource(R.string.lan_stat_alive),
+                    value = summary.aliveHosts.toString(),
+                )
             }
         }
     }
@@ -592,12 +785,21 @@ private fun HostFilterChips(activeFilter: HostFilter, onFilterChange: (HostFilte
 private fun LanFinishedContent(
     summary: LanScanSummary,
     expandedHostIp: String?,
+    showDiagnostics: Boolean,
     searchQuery: String,
     onSearchQueryChange: (String) -> Unit,
     onToggleExpand: (String) -> Unit,
     onScanPorts: (String) -> Unit,
+    onPingHost: (String) -> Unit,
+    onProbeHttp: (String, Int) -> Unit,
+    onInspectTls: (String, Int) -> Unit,
+    onWakeDevice: (String) -> Unit,
     onClear: () -> Unit,
     onRescan: () -> Unit,
+    onToggleDiagnostics: () -> Unit,
+    title: String = stringResource(R.string.lan_scan_complete_title),
+    subtitle: String? = null,
+    isCanceled: Boolean = false,
 ) {
     val context = LocalContext.current
     val shareSubject = stringResource(R.string.share_subject_lan, summary.subnet)
@@ -632,13 +834,13 @@ private fun LanFinishedContent(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Icon(
-                            Icons.Default.CheckCircle,
+                            if (isCanceled) Icons.Default.Stop else Icons.Default.CheckCircle,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(22.dp),
                         )
                         Text(
-                            text = stringResource(R.string.lan_scan_complete_title),
+                            text = title,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold,
                         )
@@ -648,6 +850,53 @@ private fun LanFinishedContent(
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                }
+
+                subtitle?.let {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
+                if (summary.uncertainCount > 0) {
+                    TextButton(onClick = onToggleDiagnostics) {
+                        Text(
+                            if (showDiagnostics) {
+                                stringResource(R.string.lan_hide_diagnostics)
+                            } else {
+                                stringResource(R.string.lan_show_diagnostics, summary.uncertainCount)
+                            },
+                        )
+                    }
+                    if (showDiagnostics) {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            summary.uncertainHosts.forEach { diagnostic ->
+                                Text(
+                                    text = stringResource(
+                                        R.string.lan_diagnostic_entry,
+                                        diagnostic.ip,
+                                        stringResource(diagnosticReasonLabel(diagnostic.reason)),
+                                        diagnostic.detail?.let { " ($it)" }.orEmpty(),
+                                    ),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            if (summary.uncertainCount > summary.uncertainHosts.size) {
+                                Text(
+                                    text = stringResource(
+                                        R.string.lan_diagnostics_truncated,
+                                        summary.uncertainHosts.size,
+                                        summary.uncertainCount,
+                                    ),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
                 }
 
                 Row(
@@ -773,22 +1022,39 @@ private fun LanFinishedContent(
 
             if (filteredHosts.isEmpty()) {
                 OutlinedCard(modifier = Modifier.fillMaxWidth()) {
-                    Box(
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(32.dp),
-                        contentAlignment = Alignment.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Text(
-                            text = stringResource(R.string.lan_no_search_results),
+                            text = stringResource(
+                                when {
+                                    searchQuery.isNotBlank() && activeFilter != HostFilter.All ->
+                                        R.string.lan_no_search_filter_results
+                                    searchQuery.isNotBlank() -> R.string.lan_no_search_results
+                                    else -> R.string.lan_no_filter_results
+                                },
+                            ),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
                         )
+                        TextButton(
+                            onClick = {
+                                onSearchQueryChange("")
+                                activeFilter = HostFilter.All
+                            },
+                        ) {
+                            Text(stringResource(R.string.lan_show_all_devices))
+                        }
                     }
                 }
             } else {
                 LazyColumn(
-                    modifier = Modifier.heightIn(max = 600.dp),
+                    modifier = Modifier.heightIn(max = 600.dp).testTag("lan_hosts_list"),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     items(filteredHosts, key = { it.ip }) { host ->
@@ -798,12 +1064,24 @@ private fun LanFinishedContent(
                             onClick = { onToggleExpand(host.ip) },
                             macResolutionSupported = summary.macResolutionSupported,
                             onScanPorts = onScanPorts,
+                            onPingHost = onPingHost,
+                            onProbeHttp = onProbeHttp,
+                            onInspectTls = onInspectTls,
+                            onWakeDevice = onWakeDevice,
                         )
                     }
                 }
             }
         }
     }
+}
+
+private fun diagnosticReasonLabel(reason: LanScanDiagnosticReason): Int = when (reason) {
+    LanScanDiagnosticReason.TCP_REFUSED -> R.string.lan_diagnostic_tcp_refused
+    LanScanDiagnosticReason.TCP_TIMED_OUT -> R.string.lan_diagnostic_tcp_timed_out
+    LanScanDiagnosticReason.TCP_UNREACHABLE -> R.string.lan_diagnostic_tcp_unreachable
+    LanScanDiagnosticReason.TCP_POLICY_DENIED -> R.string.lan_diagnostic_tcp_policy_denied
+    LanScanDiagnosticReason.TCP_UNKNOWN_FAILURE -> R.string.lan_diagnostic_tcp_unknown
 }
 
 @Composable
@@ -979,6 +1257,10 @@ private fun HostCard(
     onClick: () -> Unit,
     macResolutionSupported: Boolean,
     onScanPorts: (String) -> Unit,
+    onPingHost: (String) -> Unit,
+    onProbeHttp: (String, Int) -> Unit,
+    onInspectTls: (String, Int) -> Unit,
+    onWakeDevice: (String) -> Unit,
 ) {
     val containerColor by animateColorAsState(
         targetValue = if (expanded)
@@ -993,6 +1275,7 @@ private fun HostCard(
         modifier = Modifier
             .fillMaxWidth()
             .animateContentSize(spring(stiffness = Spring.StiffnessMediumLow))
+            .testTag("lan_host_card_${host.ip}")
             .clickable(onClick = onClick),
     ) {
         Box(modifier = Modifier.background(containerColor)) {
@@ -1121,6 +1404,10 @@ private fun HostCard(
                         host = host,
                         macResolutionSupported = macResolutionSupported,
                         onScanPorts = onScanPorts,
+                        onPingHost = onPingHost,
+                        onProbeHttp = onProbeHttp,
+                        onInspectTls = onInspectTls,
+                        onWakeDevice = onWakeDevice,
                     )
                 }
             }
@@ -1165,10 +1452,15 @@ private fun DiscoveryMethod.labelRes(): Int = when (this) {
 }
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 private fun HostDetailPanel(
     host: LanHost,
     macResolutionSupported: Boolean,
     onScanPorts: (String) -> Unit,
+    onPingHost: (String) -> Unit,
+    onProbeHttp: (String, Int) -> Unit,
+    onInspectTls: (String, Int) -> Unit,
+    onWakeDevice: (String) -> Unit,
 ) {
     Column(
         modifier = Modifier.padding(top = 8.dp),
@@ -1188,6 +1480,15 @@ private fun HostDetailPanel(
         }
         host.macAddress?.let { macAddress ->
             DetailRow(label = stringResource(R.string.lan_detail_mac), value = macAddress)
+            val wakeMac = macAddress.takeIf { host.macSource == MacSource.ARP }?.let(ToolMacAddress::parse)
+            if (wakeMac != null) {
+                TextButton(
+                    onClick = { onWakeDevice(wakeMac.value) },
+                    modifier = Modifier.testTag("lan_action_wake_device"),
+                ) {
+                    Text(stringResource(R.string.lan_action_wake_device))
+                }
+            }
         } ?: if (!macResolutionSupported) {
             DetailRow(
                 label = stringResource(R.string.lan_detail_mac),
@@ -1230,8 +1531,34 @@ private fun HostDetailPanel(
             )
         }
 
-        TextButton(onClick = { onScanPorts(host.ip) }) {
+        TextButton(onClick = { onPingHost(host.ip) }, modifier = Modifier.testTag("lan_action_ping")) {
+            Text(stringResource(R.string.lan_action_ping))
+        }
+        TextButton(
+            onClick = { onScanPorts(host.ip) },
+            modifier = Modifier.testTag("lan_action_ports"),
+        ) {
             Text(stringResource(R.string.lan_action_scan_ports))
+        }
+        val httpPort = preferredHttpProbePort(host.openPorts)
+        TextButton(
+            onClick = { onProbeHttp(host.ip, httpPort) },
+            modifier = Modifier.testTag("lan_action_http"),
+        ) {
+            Text(stringResource(R.string.lan_action_probe_http_port, httpPort))
+        }
+        val tlsPorts = host.openPorts.distinct().sorted()
+        if (tlsPorts.isNotEmpty()) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                tlsPorts.forEach { port ->
+                    TextButton(
+                        onClick = { onInspectTls(host.ip, port) },
+                        modifier = Modifier.testTag("lan_action_tls_$port"),
+                    ) {
+                        Text(stringResource(R.string.lan_action_inspect_tls_port, port))
+                    }
+                }
+            }
         }
     }
 }
@@ -1283,6 +1610,8 @@ private fun LanErrorContent(
     message: String,
     onRetry: () -> Unit,
     onClear: () -> Unit,
+    suggestedSubnet: String? = null,
+    onScanSuggested: (String) -> Unit = {},
 ) {
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -1311,6 +1640,14 @@ private fun LanErrorContent(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
             )
+            if (suggestedSubnet != null) {
+                Button(
+                    onClick = { onScanSuggested(suggestedSubnet) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(stringResource(R.string.lan_scan_suggested_button, suggestedSubnet))
+                }
+            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1364,19 +1701,4 @@ private fun portServiceName(port: Int): String = when (port) {
     8080 -> "HTTP-Alt"
     8443 -> "HTTPS-Alt"
     else -> "TCP/$port"
-}
-
-private fun buildLanShareText(summary: LanScanSummary): String = buildString {
-    appendLine("LAN scan – ${summary.subnet}")
-    appendLine("Hosts found: ${summary.aliveHosts} / ${summary.totalScanned}")
-    appendLine("Duration: ${summary.scanDurationMs}ms")
-    appendLine()
-    summary.hosts.forEach { host ->
-        append(host.ip)
-        host.hostname?.let { append(" ($it)") }
-        host.vendor?.let { append(" [$it]") }
-        append(" ${host.pingTimeMs}ms")
-        if (host.openPorts.isNotEmpty()) append(" ports:${host.openPorts.joinToString(",")}")
-        appendLine()
-    }
 }

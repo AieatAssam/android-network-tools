@@ -3,10 +3,13 @@ package net.aieat.netswissknife.app.ui.screens.lan
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.emptyPreferences
+import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.viewModelScope
 import io.mockk.coVerify
+import io.mockk.slot
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.job
@@ -14,17 +17,32 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.FlowCollector
+import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationSession
+import net.aieat.netswissknife.core.network.operation.OperationDeadlineExceededException
+import net.aieat.netswissknife.app.ui.navigation.ToolMacAddress
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
+import net.aieat.netswissknife.app.platform.NetworkErrorKind
+import net.aieat.netswissknife.core.network.net.LocalNetworkPermissionDeniedException
 import net.aieat.netswissknife.core.domain.LanScanFlowResult
 import net.aieat.netswissknife.core.domain.LanScanUseCase
 import net.aieat.netswissknife.core.network.lan.LanHost
+import net.aieat.netswissknife.core.network.lan.LanScanDiagnostic
+import net.aieat.netswissknife.core.network.lan.LanScanDiagnosticReason
 import net.aieat.netswissknife.core.network.lan.LanScanSummary
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -34,9 +52,25 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 
-@OptIn(ExperimentalCoroutinesApi::class)
+@OptIn(ExperimentalCoroutinesApi::class, kotlinx.coroutines.InternalCoroutinesApi::class)
 @DisplayName("LanScanViewModel")
 class LanScanViewModelTest {
+
+    @Test
+    fun `LAN scan budget uses target waves and bounded per-host probe allowances`() {
+        val twoWaves = LanScanTimeBudget.estimate(targetCount = 51, timeoutMs = 1_000, concurrency = 50)
+        val oneWave = LanScanTimeBudget.estimate(targetCount = 50, timeoutMs = 1_000, concurrency = 50)
+        val slower = LanScanTimeBudget.estimate(targetCount = 50, timeoutMs = 2_000, concurrency = 50)
+
+        // 1s ICMP + 10 x 400ms TCP + 2 x 300ms name + 1s reverse DNS + 16 x 500ms ports.
+        assertEquals(19_250L, oneWave.timeoutMillis)
+        assertEquals(37_500L, twoWaves.timeoutMillis)
+        assertTrue(slower.timeoutMillis > oneWave.timeoutMillis)
+        assertTrue(
+            LanScanTimeBudget.estimate(65_534, 1_000, 1).exceedsHardCeiling,
+            "A very large serial scan must be rejected before it can start",
+        )
+    }
 
     private val testDispatcher = UnconfinedTestDispatcher()
 
@@ -72,6 +106,10 @@ class LanScanViewModelTest {
             every { getRecents(any()) } returns flowOf(emptyList())
         }
         viewModel = LanScanViewModel(lanScanUseCase, dataStore, recentHostsRepository)
+        // Without a LinkInfoProvider the ViewModel falls back to the host's real interfaces.
+        // CI runners sit on large subnets (for example a /16) that exceed the scan ceiling, so
+        // pin a /24. Detection only fills a blank subnet, so it cannot overwrite this value.
+        viewModel.onSubnetChange("192.168.1.0/24")
     }
 
     @AfterEach
@@ -94,13 +132,47 @@ class LanScanViewModelTest {
         }
     }
 
+    @Test
+    fun `TLS handoff event includes selected host and discovered port`() = runTest {
+        viewModel.onInspectTls("192.0.2.8", 8443)
+
+        assertEquals(LanNavEvent.NavigateToTls("192.0.2.8", 8443), viewModel.navigationEvents.first())
+    }
+
+    @Test
+    fun `HTTP handoff event includes selected host and chosen port`() = runTest {
+        viewModel.onProbeHttp("192.0.2.8", 8080)
+
+        assertEquals(LanNavEvent.NavigateToHttp("192.0.2.8", 8080), viewModel.navigationEvents.first())
+    }
+
+    @Test
+    fun `HTTP handoff prefers a discovered conventional port and falls back to port 80`() {
+        assertEquals(80, preferredHttpProbePort(listOf(443, 8080, 80)))
+        assertEquals(8080, preferredHttpProbePort(listOf(443, 8080)))
+        assertEquals(8000, preferredHttpProbePort(listOf(8888, 8000)))
+        assertEquals(8888, preferredHttpProbePort(listOf(8888)))
+        assertEquals(80, preferredHttpProbePort(listOf(443, 8443)))
+        assertEquals(80, preferredHttpProbePort(emptyList()))
+    }
+
+    @Test
+    fun `Wake-on-LAN handoff event canonicalizes observed unicast MAC`() = runTest {
+        viewModel.onWakeDevice("02-23-45-67-89-ab")
+
+        assertEquals(
+            LanNavEvent.NavigateToWakeOnLan(requireNotNull(ToolMacAddress.parse("02:23:45:67:89:AB"))),
+            viewModel.navigationEvents.first(),
+        )
+    }
+
     @Nested
     @DisplayName("startScan state transitions")
     inner class StartScanStateTransitions {
 
         @Test
         fun `transitions to Finished on ScanComplete`() = runTest {
-            every { lanScanUseCase(any()) } returns flowOf(
+            every { lanScanUseCase(any(), any()) } returns flowOf(
                 LanScanFlowResult.ScanComplete(stubSummary)
             )
             viewModel.onSubnetChange("192.168.1.0/24")
@@ -113,8 +185,24 @@ class LanScanViewModelTest {
         }
 
         @Test
+        fun `starting a new scan clears the previous results search`() = runTest {
+            every { lanScanUseCase(any(), any()) } returns flowOf(
+                LanScanFlowResult.ScanComplete(stubSummary)
+            )
+            viewModel.onSearchQueryChange("old-host")
+
+            viewModel.startScan()
+
+            assertEquals("", viewModel.searchQuery.value)
+            val state = withContext(Dispatchers.Default) {
+                withTimeout(2_000) { viewModel.uiState.first { it !is LanScanUiState.Scanning } }
+            }
+            assertTrue(state is LanScanUiState.Finished)
+        }
+
+        @Test
         fun `transitions to Error on ValidationError`() = runTest {
-            every { lanScanUseCase(any()) } returns flowOf(
+            every { lanScanUseCase(any(), any()) } returns flowOf(
                 LanScanFlowResult.ValidationError("invalid subnet")
             )
             viewModel.onSubnetChange("bad")
@@ -127,8 +215,58 @@ class LanScanViewModelTest {
         }
 
         @Test
+    fun `deadline returns all discovered hosts as an explicit partial result`() = runTest {
+            every { lanScanUseCase(any(), any()) } returns flow {
+                emit(LanScanFlowResult.HostFound(stubHost, scannedCount = 1, totalCount = 254))
+                throw OperationDeadlineExceededException()
+            }
+            viewModel.onSubnetChange("192.168.1.0/24")
+            viewModel.startScan()
+
+            val state = withContext(Dispatchers.Default) {
+                withTimeout(2_000) {
+                    viewModel.uiState.first { it is LanScanUiState.Finished }
+                }
+            } as LanScanUiState.Finished
+
+            assertTrue(state.partial)
+            assertTrue(state.timeLimitReached)
+            assertEquals(listOf(stubHost), state.summary.hosts)
+            assertEquals(1, state.summary.totalScanned)
+        }
+
+        @Test
+        fun `over-ceiling scan estimate is rejected before invoking scan`() = runTest {
+            viewModel.onSubnetChange("10.0.0.0/16")
+            viewModel.startScan()
+
+            val state = viewModel.uiState.value as LanScanUiState.Error
+            assertTrue(state.message.contains("10-minute limit"))
+            verify(exactly = 0) { lanScanUseCase(any(), any()) }
+        }
+
+        @Test
+        fun `marks thrown local permission denial distinctly from generic scan errors`() = runTest {
+            every { lanScanUseCase(any(), any()) } returns flow {
+                throw LocalNetworkPermissionDeniedException(SecurityException("denied"))
+            }
+            viewModel.startScan()
+            val denied = withContext(Dispatchers.Default) {
+                withTimeout(2_000) { viewModel.uiState.first { it is LanScanUiState.Error } }
+            } as LanScanUiState.Error
+            assertEquals(NetworkErrorKind.LOCAL_NETWORK_PERMISSION_DENIED, denied.networkErrorKind)
+
+            every { lanScanUseCase(any(), any()) } returns flow { throw IllegalStateException("timeout") }
+            viewModel.startScan()
+            val generic = withContext(Dispatchers.Default) {
+                withTimeout(2_000) { viewModel.uiState.first { it is LanScanUiState.Error } }
+            } as LanScanUiState.Error
+            assertEquals(NetworkErrorKind.GENERAL, generic.networkErrorKind)
+        }
+
+        @Test
         fun `accumulates hosts during scan`() = runTest {
-            every { lanScanUseCase(any()) } returns flowOf(
+            every { lanScanUseCase(any(), any()) } returns flowOf(
                 LanScanFlowResult.HostFound(stubHost, scannedCount = 1, totalCount = 10),
                 LanScanFlowResult.ScanComplete(stubSummary)
             )
@@ -139,6 +277,234 @@ class LanScanViewModelTest {
             } as LanScanUiState.Finished
             assertEquals(1, state.summary.hosts.size)
         }
+
+        @Test
+        fun `keeps confirmed and uncertain counts separate through a stopped scan`() = runTest {
+            every { lanScanUseCase(any(), any()) } returns flow {
+                emit(LanScanFlowResult.HostFound(stubHost, scannedCount = 1, totalCount = 10, uncertainCount = 1))
+                emit(
+                    LanScanFlowResult.ScanProgress(
+                        scannedCount = 2,
+                        totalCount = 10,
+                        uncertainCount = 2,
+                        diagnostic = LanScanDiagnostic(
+                            ip = "192.168.1.3",
+                            reason = LanScanDiagnosticReason.TCP_REFUSED,
+                            port = 80,
+                        ),
+                    ),
+                )
+                awaitCancellation()
+            }
+            viewModel.onSubnetChange("192.168.1.0/24")
+            viewModel.startScan()
+            withContext(Dispatchers.Default) {
+                withTimeout(2000) { viewModel.uiState.first { it is LanScanUiState.Scanning && it.scannedCount == 2 } }
+            }
+
+            viewModel.onStopScan()
+            withContext(Dispatchers.Default) {
+                withTimeout(2_000) { viewModel.uiState.first { it is LanScanUiState.Canceled } }
+            }
+            val state = viewModel.uiState.value as LanScanUiState.Canceled
+            assertEquals(1, state.summary.aliveHosts)
+            assertEquals(2, state.summary.uncertainCount)
+            assertEquals(2, state.summary.totalScanned)
+            assertEquals("192.168.1.3", state.summary.uncertainHosts.single().ip)
+        }
+
+        @Test
+        fun `forwards an owned session and cancels it as user stop while preserving partial results`() = runTest {
+            val sessionSlot = slot<OperationSession>()
+            every { lanScanUseCase(any(), capture(sessionSlot)) } returns flow {
+                emit(LanScanFlowResult.HostFound(stubHost, scannedCount = 1, totalCount = 8))
+                awaitCancellation()
+            }
+            viewModel.onSubnetChange("192.168.1.0/24")
+
+            viewModel.startScan()
+            withContext(Dispatchers.Default) {
+                withTimeout(2_000) {
+                    viewModel.uiState.first { it is LanScanUiState.Scanning && it.hosts.isNotEmpty() }
+                }
+            }
+            viewModel.onStopScan()
+            withContext(Dispatchers.Default) {
+                withTimeout(2_000) { viewModel.uiState.first { it is LanScanUiState.Canceled } }
+            }
+
+            assertEquals(CancellationReason.USER_STOP, sessionSlot.captured.cancellationReason)
+            val partial = viewModel.uiState.value as LanScanUiState.Canceled
+            assertEquals(listOf(stubHost), partial.summary.hosts)
+            assertEquals(1, partial.summary.totalScanned)
+        }
+
+        @Test
+        fun `shows Canceling until upstream resource cleanup finishes`() = runTest {
+            val cleanupStarted = CompletableDeferred<Unit>()
+            val allowCleanup = CompletableDeferred<Unit>()
+            every { lanScanUseCase(any(), any()) } returns flow {
+                emit(LanScanFlowResult.HostFound(stubHost, scannedCount = 1, totalCount = 8))
+                try {
+                    awaitCancellation()
+                } finally {
+                    withContext(NonCancellable) {
+                        cleanupStarted.complete(Unit)
+                        allowCleanup.await()
+                    }
+                }
+            }
+            viewModel.onSubnetChange("192.168.1.0/24")
+            viewModel.startScan()
+            withContext(Dispatchers.Default) {
+                withTimeout(2_000) {
+                    viewModel.uiState.first { it is LanScanUiState.Scanning && it.hosts.isNotEmpty() }
+                }
+            }
+
+            viewModel.onStopScan()
+            withContext(Dispatchers.Default) { withTimeout(2_000) { cleanupStarted.await() } }
+            assertTrue(viewModel.uiState.value is LanScanUiState.Canceling)
+            allowCleanup.complete(Unit)
+            withContext(Dispatchers.Default) {
+                withTimeout(2_000) { viewModel.uiState.first { it is LanScanUiState.Canceled } }
+            }
+        }
+
+        @Test
+        fun `duplicate start while prior scan is active does not replace or cancel it`() = runTest {
+            val sessionSlot = slot<OperationSession>()
+            val collectorStarted = CompletableDeferred<Unit>()
+            every { lanScanUseCase(any(), capture(sessionSlot)) } returns flow {
+                collectorStarted.complete(Unit)
+                awaitCancellation()
+            }
+            viewModel.startScan()
+            withContext(Dispatchers.Default) { withTimeout(2_000) { collectorStarted.await() } }
+
+            viewModel.startScan()
+
+            verify(exactly = 1) { lanScanUseCase(any(), any()) }
+            assertEquals(null, sessionSlot.captured.cancellationReason)
+        }
+
+        @Test
+        fun `lifecycle pause finishes partial scan without user-canceled state`() = runTest {
+            val sessionSlot = slot<OperationSession>()
+            every { lanScanUseCase(any(), capture(sessionSlot)) } returns flow {
+                emit(LanScanFlowResult.HostFound(stubHost, scannedCount = 1, totalCount = 8))
+                awaitCancellation()
+            }
+            viewModel.startScan()
+            withContext(Dispatchers.Default) {
+                withTimeout(2_000) { viewModel.uiState.first { it is LanScanUiState.Scanning && it.hosts.isNotEmpty() } }
+            }
+
+            viewModel.onLifecyclePause()
+
+            assertEquals(CancellationReason.LIFECYCLE_PAUSE, sessionSlot.captured.cancellationReason)
+            val state = viewModel.uiState.value
+            assertTrue(state is LanScanUiState.Canceling || state is LanScanUiState.Finished)
+            withContext(Dispatchers.Default) {
+                withTimeout(2_000) { viewModel.uiState.first { it is LanScanUiState.Finished } }
+            }
+            assertTrue(viewModel.uiState.value !is LanScanUiState.Canceled)
+            val finished = viewModel.uiState.value as LanScanUiState.Finished
+            assertTrue(finished.partial)
+            assertEquals(listOf(stubHost), finished.summary.hosts)
+        }
+
+        @Test
+        fun `late completion from cancelled scan cannot replace newer scan result`() = runTest {
+            val oldCollectorStarted = CompletableDeferred<Unit>()
+            val allowOldCompletion = CompletableDeferred<Unit>()
+            val oldCollectorFinished = CompletableDeferred<Unit>()
+            val oldSession = slot<OperationSession>()
+            val oldSummary = stubSummary.copy(subnet = "192.168.1.0/24", aliveHosts = 0, hosts = emptyList())
+            val newSummary = stubSummary.copy(subnet = "10.0.0.0/24")
+            every { lanScanUseCase(match { it.subnet == "192.168.1.0/24" }, capture(oldSession)) } returns
+                object : Flow<LanScanFlowResult> {
+                    override suspend fun collect(collector: FlowCollector<LanScanFlowResult>) {
+                        oldCollectorStarted.complete(Unit)
+                        try {
+                            awaitCancellation()
+                        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                            withContext(NonCancellable) {
+                                allowOldCompletion.await()
+                                try {
+                                    collector.emit(LanScanFlowResult.ScanComplete(oldSummary))
+                                } finally {
+                                    oldCollectorFinished.complete(Unit)
+                                }
+                            }
+                        }
+                    }
+                }
+            every { lanScanUseCase(match { it.subnet == "10.0.0.0/24" }, any()) } returns
+                flowOf(LanScanFlowResult.ScanComplete(newSummary))
+
+            viewModel.onSubnetChange("192.168.1.0/24")
+            viewModel.startScan()
+            withContext(Dispatchers.Default) { withTimeout(2_000) { oldCollectorStarted.await() } }
+            viewModel.onStopScan()
+            assertTrue(viewModel.uiState.value is LanScanUiState.Canceling)
+            viewModel.startScan()
+            assertTrue(viewModel.uiState.value is LanScanUiState.Canceling)
+            allowOldCompletion.complete(Unit)
+            withContext(Dispatchers.Default) {
+                withTimeout(2_000) { viewModel.uiState.first { it is LanScanUiState.Canceled } }
+            }
+            withContext(Dispatchers.Default) { withTimeout(2_000) { oldCollectorFinished.await() } }
+
+            assertEquals(CancellationReason.USER_STOP, oldSession.captured.cancellationReason)
+            viewModel.onSubnetChange("10.0.0.0/24")
+            viewModel.startScan()
+            withContext(Dispatchers.Default) {
+                withTimeout(2_000) { viewModel.uiState.first { it is LanScanUiState.Finished } }
+            }
+            assertEquals(newSummary, (viewModel.uiState.value as LanScanUiState.Finished).summary)
+        }
+    }
+
+    @Test
+    fun `deadline that wins before Stop keeps the time-limit terminal state`() = runTest {
+        val sessionSlot = slot<OperationSession>()
+        val cleanupStarted = CompletableDeferred<Unit>()
+        val allowCleanup = CompletableDeferred<Unit>()
+        val deadlineSignal = CompletableDeferred<Unit>()
+        every { lanScanUseCase(any(), capture(sessionSlot)) } returns flow {
+            emit(LanScanFlowResult.HostFound(stubHost, scannedCount = 1, totalCount = 8))
+            deadlineSignal.await()
+            throw OperationDeadlineExceededException()
+        }.onCompletion {
+            withContext(NonCancellable) {
+                cleanupStarted.complete(Unit)
+                allowCleanup.await()
+            }
+        }
+
+        viewModel.onSubnetChange("192.168.1.0/24")
+        viewModel.startScan()
+        withContext(Dispatchers.Default) {
+            withTimeout(2_000) {
+                viewModel.uiState.first { it is LanScanUiState.Scanning && it.hosts.isNotEmpty() }
+            }
+        }
+
+        sessionSlot.captured.cancel(CancellationReason.DEADLINE_EXCEEDED)
+        deadlineSignal.complete(Unit)
+        withContext(Dispatchers.Default) { withTimeout(2_000) { cleanupStarted.await() } }
+        viewModel.onStopScan()
+        assertTrue(viewModel.uiState.value is LanScanUiState.Canceling)
+
+        allowCleanup.complete(Unit)
+        withContext(Dispatchers.Default) {
+            withTimeout(2_000) { viewModel.uiState.first { it is LanScanUiState.Finished } }
+        }
+        val finished = viewModel.uiState.value as LanScanUiState.Finished
+        assertTrue(finished.partial)
+        assertTrue(finished.timeLimitReached)
+        assertEquals(listOf(stubHost), finished.summary.hosts)
     }
 
     @Nested
@@ -147,7 +513,7 @@ class LanScanViewModelTest {
 
         @Test
         fun `onClear resets to Idle`() = runTest {
-            every { lanScanUseCase(any()) } returns flowOf(
+            every { lanScanUseCase(any(), any()) } returns flowOf(
                 LanScanFlowResult.ScanComplete(stubSummary)
             )
             viewModel.onSubnetChange("192.168.1.0/24")
@@ -158,6 +524,49 @@ class LanScanViewModelTest {
             viewModel.onClear()
             assertTrue(viewModel.uiState.value is LanScanUiState.Idle)
         }
+
+        @Test
+        fun `ViewModelStore clear cancels active operation as lifecycle pause`() = runTest {
+            val sessionSlot = slot<OperationSession>()
+            val collectorStarted = CompletableDeferred<Unit>()
+            every { lanScanUseCase(any(), capture(sessionSlot)) } returns flow {
+                collectorStarted.complete(Unit)
+                awaitCancellation()
+            }
+
+            viewModel.startScan()
+            withContext(Dispatchers.Default) { withTimeout(2_000) { collectorStarted.await() } }
+            ViewModelStore().also { store ->
+                store.put("lan", viewModel)
+                store.clear()
+            }
+
+            assertTrue(viewModel.viewModelScope.coroutineContext.job.isCancelled)
+            assertEquals(CancellationReason.LIFECYCLE_PAUSE, sessionSlot.captured.cancellationReason)
+        }
+
+        @Test
+        fun `foreground pause cancels operation and preserves partial result`() = runTest {
+            val sessionSlot = slot<OperationSession>()
+            every { lanScanUseCase(any(), capture(sessionSlot)) } returns flow {
+                emit(LanScanFlowResult.HostFound(stubHost, scannedCount = 1, totalCount = 8))
+                awaitCancellation()
+            }
+
+            viewModel.startScan()
+            withContext(Dispatchers.Default) {
+                withTimeout(2_000) { viewModel.uiState.first { it is LanScanUiState.Scanning && it.hosts.isNotEmpty() } }
+            }
+            viewModel.onLifecyclePause()
+
+            assertEquals(CancellationReason.LIFECYCLE_PAUSE, sessionSlot.captured.cancellationReason)
+            withContext(Dispatchers.Default) {
+                withTimeout(2_000) { viewModel.uiState.first { it is LanScanUiState.Finished } }
+            }
+            val partial = viewModel.uiState.value as LanScanUiState.Finished
+            assertTrue(partial.partial)
+            assertEquals(listOf(stubHost), partial.summary.hosts)
+        }
     }
 
     @Nested
@@ -166,7 +575,7 @@ class LanScanViewModelTest {
 
         @Test
         fun `addRecent is called on first host found`() = runTest {
-            every { lanScanUseCase(any()) } returns flowOf(
+            every { lanScanUseCase(any(), any()) } returns flowOf(
                 LanScanFlowResult.HostFound(stubHost, scannedCount = 1, totalCount = 1),
                 LanScanFlowResult.ScanComplete(stubSummary)
             )
@@ -180,7 +589,7 @@ class LanScanViewModelTest {
 
         @Test
         fun `addRecent is NOT called when ValidationError fires`() = runTest {
-            every { lanScanUseCase(any()) } returns flowOf(
+            every { lanScanUseCase(any(), any()) } returns flowOf(
                 LanScanFlowResult.ValidationError("invalid subnet")
             )
             viewModel.onSubnetChange("bad")

@@ -14,9 +14,10 @@ interface SnmpClient : AutoCloseable {
 
     /**
      * Perform an SNMP WALK starting at the given OID prefix.
-     * @return map of full OID string → string value
+     * @param budget shared walk-entry and byte budget for this device
+     * @return retained rows plus any resource limits that stopped the walk
      */
-    suspend fun walk(target: SnmpTarget, oidPrefix: String): Map<String, String>
+    suspend fun walk(target: SnmpTarget, oidPrefix: String, budget: SnmpWalkBudget): SnmpWalkResult
 
     override fun close()
 }

@@ -24,7 +24,6 @@ android-network-tools/
 │   └── workflows/
 │       ├── ci.yml               # Build & test on every push/PR to main
 │       ├── release.yml          # Package & publish signed release APK/AAB
-│       └── claude_add_tool.yml  # Claude-driven tool addition via workflow_dispatch
 ├── claude/
 │   └── tool_instructions.md    # Step-by-step guide for adding new tools
 ├── CLAUDE.md                   # ← this file
@@ -175,6 +174,12 @@ REFACTOR: Clean up → ./gradlew test (all pass)
 # Build release AAB (for Play Store)
 ./gradlew :app:bundleRelease
 
+# Check Kotlin formatting and static analysis
+./gradlew ktlintCheck detekt --no-daemon --no-parallel
+
+# Regenerate per-module lint baselines after reviewing the current findings
+./gradlew ktlintGenerateBaseline detektBaseline --no-daemon --no-parallel
+
 # Clean
 ./gradlew clean
 
@@ -205,12 +210,13 @@ REFACTOR: Clean up → ./gradlew test (all pass)
 | Workflow | Trigger | Purpose |
 |----------|---------|---------|
 | `ci.yml` | Push / PR to `main` | Run tests + build debug APK |
-| `release.yml` | Push tag `v*.*.*` or manual dispatch | Sign + publish release APK/AAB to GitHub Releases |
-| `claude_add_tool.yml` | Manual (`workflow_dispatch`) | Claude-driven tool addition with TDD verification |
+| `release.yml` | New `vYYYY.MM.DD.N` tag (N=1–99) or manual dispatch | Sign + publish release APK/AAB to GitHub Releases |
 
 ### Publishing (release.yml)
 
 The release workflow uses GitHub Actions secrets for signing:
+
+Release tags use `vYYYY.MM.DD.N`, with a daily suffix from 1 to 99. Manual dispatch allocates and reserves the next unused suffix for the current UTC date. The version code is `YYYYMMDD × 100 + N`; release tags are immutable.
 
 | Secret | Description |
 |--------|-------------|

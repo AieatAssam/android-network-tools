@@ -1,0 +1,5 @@
+# Keep Detekt's versioned default rules active. Add project-specific overrides
+# only after reviewing the generated reports and agreeing on the policy.
+config:
+  validation: true
+  warningsAsErrors: false

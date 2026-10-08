@@ -1,0 +1,63 @@
+{
+  "objectClassName": "domain",
+  "handle": "EXAMPLE-1",
+  "ldhName": "example.com",
+  "unicodeName": "example.com",
+  "status": ["active", "client transfer prohibited"],
+  "events": [
+    {"eventAction": "registration", "eventDate": "1995-08-14T04:00:00Z"},
+    {"eventAction": " Registration ", "eventDate": "2024-01-01T00:00:00Z"},
+    {"eventAction": "expiration", "eventDate": "2030-08-14T04:00:00.125+02:00"},
+    {"eventAction": "last changed", "eventDate": "2025-08-14T04:00:00Z"},
+    {"eventAction": "unknown future action", "eventDate": "2025-08-14T04:00:00Z"}
+  ],
+  "nameservers": [
+    {"ldhName": "a.iana-servers.net"},
+    {"ldhName": "B.IANA-SERVERS.NET"},
+    {"ldhName": "a.iana-servers.net"},
+    {"unicodeName": "ns.unicode.example"}
+  ],
+  "entities": [
+    {
+      "objectClassName": "entity",
+      "handle": "ABUSE",
+      "roles": ["abuse"],
+      "vcardArray": ["vcard", [["fn", {}, "text", "Abuse Contact"]]],
+      "entities": [
+        {
+          "objectClassName": "entity",
+          "handle": "REGISTRAR-1",
+          "roles": ["registrar"],
+          "vcardArray": ["vcard", [
+            ["version", {}, "text", "4.0"],
+            ["fn", {}, "text", "Example Registrar"],
+            ["org", {}, "text", "Example Registrar LLC"],
+            ["url", {}, "uri", "https://registrar.example"]
+          ]]
+        }
+      ]
+    },
+    {
+      "objectClassName": "entity",
+      "handle": "REG-1",
+      "roles": ["registrant"],
+      "vcardArray": ["vcard", [
+        ["version", {}, "text", "4.0"],
+        ["org", {}, "text", ["Example Holdings", "Inc."]],
+        ["adr", {}, "text", ["", "", "", "", "", "", "US"]]
+      ]]
+    },
+    {
+      "objectClassName": "entity",
+      "handle": "DOMAIN-REGISTRAR-1",
+      "roles": ["registrar"],
+      "vcardArray": ["vcard", [
+        ["version", {}, "text", "4.0"],
+        ["fn", {}, "text", "Domain Registrar"],
+        ["url", {}, "uri", "https://registrar.example"]
+      ]]
+    }
+  ],
+  "secureDNS": {"delegationSigned": false},
+  "rdapConformance": ["rdap_level_0", "example_extension"]
+}

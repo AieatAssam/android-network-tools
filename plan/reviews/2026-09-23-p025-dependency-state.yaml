@@ -1,0 +1,497 @@
+review:
+  id: P02.5-dependency-state
+  checked_at: "2026-09-25T01:13:51Z"
+  branch: "plan/comprehensive-review-2026-09-22"
+  commit: "b9f3d232739b1bb636b030393a7a974892b75fb3"
+  status: "open"
+  worktree_delta: "At pushed HEAD b9f3d23, exact-head Automatic Dependency Submission confirms patched versions for all alerted coordinates, including the new OkHttp 5.5.0 dependencies. Compared with the prior exact-head artifact at 8b902c7, no dependency coordinates or versions changed. Only the pre-existing untracked comprehensive-review YAML remains outside the commit."
+  initial_snapshot: { checked_at: "2026-09-23T22:37:21Z", commit: "7106a5bafa21bf0b30b91afb98470d8d10b184c8", worktree_delta: "Uncommitted app/build.gradle.kts constraints for :app:androidLintTool; this source change had not yet been submitted to GitHub." }
+  sources:
+    alerts_command: "gh api --paginate repos/AieatAssam/android-network-tools/dependabot/alerts"
+    sbom_command: "gh api repos/AieatAssam/android-network-tools/dependency-graph/sbom"
+    dependency_submission_runs: "gh api 'repos/AieatAssam/android-network-tools/actions/runs?per_page=30'"
+    dependency_submission_artifact: "gh run download 35601558226 -n dependency-graph_dynamicdependency-graphauto-submission-submit-gradle.json -D /tmp/p025-main-submission"
+    google_maven_metadata: "https://dl.google.com/dl/android/maven2/com/android/tools/build/gradle/maven-metadata.xml"
+    gradle_command: "./gradlew help --debug --offline --no-daemon --no-parallel --no-configuration-cache"
+    isolated_settings_plugin_command: "./gradlew -p /tmp/nsk-settings-plugin-isolated-20260923 help --debug --offline --no-daemon --no-parallel --no-configuration-cache"
+    runtime_graph_command: "./gradlew :app:dependencies --configuration releaseRuntimeClasspath --no-daemon"
+
+dependabot_alerts:
+  checked_date: "2026-09-23"
+  fixed: [3, 4, 7]
+  open: [1, 2, 5, 6, 8, 9]
+  open_alerts_have_fixed_at: false
+  open_alerts_have_dismissed_at: false
+  note: "Six alerts remain open, including critical #8 and high #9. Their update timestamps remain 2026-09-18."
+
+github_sbom:
+  generated_at: "2026-09-23T02:01:07Z"
+  sha256: "91f002e2c043ead575ef04872153c2474298fc6eec48e0f43fa9517d1a5d5e6a"
+  reported_versions:
+    "org.bouncycastle:bcprov-jdk18on": ["1.80.2", "1.85"]
+    "org.bouncycastle:bcpkix-jdk18on": ["1.80.2", "1.85"]
+    "org.apache.commons:commons-lang3": ["3.16.0", "3.18.0"]
+    "org.apache.httpcomponents:httpclient": ["4.5.6", "4.5.14"]
+  reported_dependency_edges:
+    - "com.android.tools:sdk-common:32.4.1 -> org.bouncycastle:bcpkix-jdk18on:1.80.2"
+    - "com.android.tools:sdk-common:32.4.1 -> org.bouncycastle:bcprov-jdk18on:1.80.2"
+    - "org.apache.commons:commons-compress:1.27.1 -> org.apache.commons:commons-lang3:3.16.0"
+    - "org.apache.httpcomponents:httpmime:4.5.6 -> org.apache.httpcomponents:httpclient:4.5.6"
+  interpretation: "This repository dependency-graph SBOM is not a release APK SBOM. It reports old and patched build coordinates but does not itself preserve configuration selection details. The later configuration-scoped Gradle report below proves the old versions were selected by :app:androidLintTool before the app-level constraints; they are build-time exposure, not evidence that they ship in releaseRuntimeClasspath."
+
+dependency_submission:
+  default_branch:
+    run_id: 35601558226
+    run_url: "https://github.com/AieatAssam/android-network-tools/actions/runs/35601558226"
+    ref: "refs/heads/main"
+    commit: "5e183721e64ce8a8946f1a0b50f52b83544e8898"
+    generated_at: "2026-09-21T12:48:59Z"
+    manifest: "settings.gradle.kts"
+    resolved_component_count: 415
+    artifact_sha256: "c57002192acc246aab58ed90b13a8bac297ebbea7f7add6344e93cfb1a08cd57"
+  reviewed_branch:
+    run_id: 35809846158
+    run_url: "https://github.com/AieatAssam/android-network-tools/actions/runs/35809846158"
+    ref: "refs/heads/plan/comprehensive-review-2026-09-22"
+    commit: "ca8b7f8cd7be464db7077e26aa4a2f22e2004bc5"
+    artifact_sha256: "5e5e2a66e96030fc5415bb5eb547bcf27ff11da8d5dc77d28c1a1313fcd6d685"
+    note: "The managed submission run accepted this non-default-branch snapshot but did not replace the default-branch results."
+  graph_observations:
+    - "The default-branch report lists AGP 9.4.1 -> sdk-common 32.4.1 and includes both old and patched Bouncy Castle versions on the sdk-common entry; commons-compress likewise lists commons-lang3 3.16.0 and 3.18.0; httpmime 4.5.6 lists httpclient 4.5.6 and 4.5.14."
+    - "The GitHub submission aggregates Gradle configurations and does not report each selected configuration in its compact payload. Do not infer that an old coordinate is merely an upstream request edge from this payload alone."
+    - "The upstream Google Maven POM for sdk-common:32.4.1 requests bcpkix-jdk18on:1.80.2 and bcprov-jdk18on:1.80.2; the AGP:9.4.1 graph also requests old Commons Lang and HttpClient through sdk-common/commons-compress/httpmime. The root :classpath conflict-resolves these requests to patched versions, but :app:androidLintTool is an independent configuration and selected the old versions before the app-level constraints."
+    - "The latest default-branch submission still describes the source before the app-level constraints. The earlier reviewed-branch submission recorded above also predates those constraints; the successful post-constraint topic-branch snapshot at 98d2fa9 is retained in `prior_recheck_2026_09_24T0908`, and the newer exact implementation-head submission is in `exact_head_recheck`."
+    - "The workflow is GitHub-managed Automatic Dependency Submission for Gradle; the repository CI workflow does not define this submission step."
+  upstream_metadata:
+    sdk_common_pom: "https://dl.google.com/dl/android/maven2/com/android/tools/sdk-common/32.4.1/sdk-common-32.4.1.pom"
+    agp_pom: "https://dl.google.com/dl/android/maven2/com/android/tools/build/gradle/9.4.1/gradle-9.4.1.pom"
+    observed_agp_versions: "Google Maven metadata checked 2026-09-23 lists AGP 9.4.1 and then 9.5.0-alpha01 through 9.5.0-alpha06; no later stable candidate was identified. Do not move to the prerelease line without the plan's stability/compatibility review."
+
+gradle_evidence:
+  trace_sha256: "a614de05d4dbc4433112f298bfe9f243d7eb1b5edfd973dbe0c3ae4706908b36"
+  observed_patched_artifacts:
+    "org.bouncycastle:bcprov-jdk18on": "1.85"
+    "org.bouncycastle:bcpkix-jdk18on": "1.85"
+    "org.bitbucket.b_c:jose4j": "0.9.6"
+    "org.jdom:jdom2": "2.0.6.1"
+    "org.apache.commons:commons-lang3": "3.18.0"
+    "org.apache.httpcomponents:httpclient": "4.5.14"
+  scope_limitations:
+    - "A standalone offline resolution of io.github.ben-manes.versions.settings 0.61.0 completed successfully and loaded no alerted vulnerable coordinates (log SHA-256 48afcd35d4eaaa99a574a52ba29d9eaf0a7f10b2ae9e6327e3fc1ae4e49ed47e). This covers that settings plugin only, not the AGP/project plugin graph."
+    - "The full help trace and root buildEnvironment show patched artifacts on the root classpath, but neither is a substitute for resolving every project configuration."
+    - "The app androidLintTool configuration selected vulnerable build-only versions before the new constraints; post-change dependencyInsight proves selection of patched versions there."
+    - "The releaseRuntimeClasspath report excludes the affected packages from Android runtime. The constraints are attached only to androidLintTool and add no runtime dependencies."
+
+disposition:
+  phase_status: "in_progress"
+  blockers:
+    - "Propagate the reviewed scoped constraints to main, then obtain a fresh default-branch dependency submission, SBOM, and alert scan. Verify the selected main graph contains only patched versions for the alerted coordinates; record approved time-bounded dispositions for any alert that remains actionable."
+    - "Confirm all nine alerts have a recorded disposition and every remaining actionable critical/high alert has an explicit, time-bounded approval before closing the phase."
+  closure_rule: "Do not close P02.5 based only on local artifact-resolution evidence or the expectation of a later rescan."
+
+artifact_note: "Compact evidence, source run IDs, and artifact hashes are retained here. Raw submission JSON and Gradle logs remain under /tmp and are not committed."
+
+current_recheck_2026_09_25T0023Z:
+  checked_at: "2026-09-25T00:23:31Z"
+  topic_branch_head: "bb10833cea79b05a1b4754cb5d8f3152567d6215"
+  default_branch_head: "5e183721e64ce8a8946f1a0b50f52b83544e8898"
+  default_branch_ads:
+    run_id: 35601558226
+    url: "https://github.com/AieatAssam/android-network-tools/actions/runs/35601558226"
+    result: "Still the newest successful main submission, created 2026-09-21 at the pre-remediation SHA; 415 components. Its artifact retains vulnerable build-graph selections alongside patched duplicates."
+    vulnerable_versions: { "org.freemarker:freemarker": "2.3.32", "org.bouncycastle:bcprov-jdk18on": "1.80.2", "org.bouncycastle:bcpkix-jdk18on": "1.80.2", "org.apache.commons:commons-lang3": "3.16.0", "org.apache.httpcomponents:httpclient": "4.5.6" }
+  topic_branch_ads:
+    run_id: 36076957560
+    url: "https://github.com/AieatAssam/android-network-tools/actions/runs/36076957560"
+    commit: "bb10833cea79b05a1b4754cb5d8f3152567d6215"
+    result: "Exact-head submission succeeded with 410 components and only patched versions for every alerted coordinate. This confirms P02.5-T3 for the pushed branch snapshot, not for main; it does not include current uncommitted P10 changes."
+    patched_versions: { "org.freemarker:freemarker": "2.3.35", "org.bouncycastle:bcprov-jdk18on": "1.85", "org.bouncycastle:bcpkix-jdk18on": "1.85", "org.apache.commons:commons-lang3": "3.18.0", "org.apache.httpcomponents:httpclient": "4.5.14", "org.bitbucket.b_c:jose4j": "0.9.6", "org.jdom:jdom2": "2.0.6.1", "org.jetbrains.kotlin:kotlin-gradle-plugin": "2.4.20" }
+  repository_sbom:
+    command: "gh api repos/AieatAssam/android-network-tools/dependency-graph/sbom"
+    generated_at: "2026-09-25T00:23:31Z"
+    format: "SPDX-2.3"
+    package_count: 425
+    sha256: "426ed3ba67d3d241110fded63d31b188e5a0cf941a6a1d3ea45080df86a339a6"
+    interpretation: "The repository SBOM still reflects the default-branch graph and includes the vulnerable build-time versions; it is not the exact-head topic-branch submission artifact or a release APK SBOM."
+  dependabot_alerts:
+    checked_at: "2026-09-25"
+    total: 10
+    open: [1, 2, 5, 6, 8, 9, 10]
+    fixed: [3, 4, 7]
+    open_alerts:
+      - { id: 10, severity: critical, package: "org.freemarker:freemarker", version: "2.3.32", advisory: "CVE-2026-84939 / GHSA-27j2-h3m2-8237", patched: "2.3.35" }
+      - { id: 9, severity: high, package: "org.bouncycastle:bcprov-jdk18on", version: "1.80.2", advisory: "CVE-2026-13506 / GHSA-qp49-qgx5-5m26", patched: "1.85" }
+      - { id: 8, severity: critical, package: "org.bouncycastle:bcprov-jdk18on", version: "1.80.2", advisory: "CVE-2026-8763 / GHSA-9pwp-9qqc-pr26", patched: "1.85" }
+      - { id: 6, severity: medium, package: "org.bouncycastle:bcprov-jdk18on", version: "1.80.2", advisory: "CVE-2026-0636 / GHSA-c3fc-8qff-9hwx", patched: "1.84" }
+      - { id: 5, severity: medium, package: "org.bouncycastle:bcpkix-jdk18on", version: "1.80.2", advisory: "CVE-2026-5588 / GHSA-wg6q-6289-32hp", patched: "1.84" }
+      - { id: 2, severity: medium, package: "org.apache.commons:commons-lang3", version: "3.16.0", advisory: "CVE-2025-48924 / GHSA-j288-q9x7-2f5v", patched: "3.18.0" }
+      - { id: 1, severity: medium, package: "org.apache.httpcomponents:httpclient", version: "4.5.6", advisory: "CVE-2020-13956 / GHSA-7r82-7xv7-xcpj", patched: "4.5.13" }
+    note: "All seven alerts are currently visible in the live GitHub alert API. No dismissal or time-bounded exception is recorded."
+  pull_request_state:
+    result: "No pull request exists for this topic branch."
+    disposition: "P02.5 remains in progress until the reviewed changes reach protected main, a fresh main ADS/SBOM and alert scan runs, and every still-actionable alert is closed or has an approved time-bounded disposition."
+
+current_recheck_2026_09_25T0103Z:
+  checked_at: "2026-09-25T01:03:45Z"
+  topic_branch_head: "8b902c7de20182581849eed13aa16cb2b9e218e4"
+  exact_head_ads:
+    run_id: 36080254374
+    url: "https://github.com/AieatAssam/android-network-tools/actions/runs/36080254374"
+    completed_at: "2026-09-25T01:03:26Z"
+    artifact_id: 10841039981
+    artifact_bytes: 13248
+    component_count: 417
+    result: "Successful exact-HEAD submission; artifact SHA/ref match 8b902c7. Includes com.squareup.okhttp3:okhttp:5.5.0 and mockwebserver3:5.5.0; okhttp:4.12.0 also appears as a separate resolved version. Every currently alerted coordinate resolves to a patched version. Confirms P02.5-T3 for this pushed snapshot, not local P02.5-T4 gates."
+    patched_alert_coordinates: { "org.freemarker:freemarker": "2.3.35", "org.bouncycastle:bcprov-jdk18on": "1.85", "org.bouncycastle:bcpkix-jdk18on": "1.85", "org.apache.commons:commons-lang3": "3.18.0", "org.apache.httpcomponents:httpclient": "4.5.14", "org.bitbucket.b_c:jose4j": "0.9.6", "org.jdom:jdom2": "2.0.6.1", "org.jetbrains.kotlin:kotlin-gradle-plugin": "2.4.20" }
+  default_branch_state:
+    head: "5e183721e64ce8a8946f1a0b50f52b83544e8898"
+    latest_successful_ads_run: 35601558226
+    ads_component_count: 415
+    note: "No newer main ADS run exists; the default branch remains on the pre-remediation snapshot."
+  repository_sbom:
+    generated_at: "2026-09-25T01:03:45Z"
+    format: "SPDX-2.3"
+    package_count: 425
+    sha256: "6ac004f29b222256a21d841b44c83a26f3206709234348035cc4e7e5f2b70dda"
+    interpretation: "This remains the main/default-branch graph: it shows okhttp:4.12.0 but not topic-only okhttp/mockwebserver3 5.5.0, and retains old plus patched versions of alerted coordinates."
+  dependabot_alerts:
+    checked_at: "2026-09-25T01:03:45Z"
+    total: 10
+    open: [1, 2, 5, 6, 8, 9, 10]
+    fixed: [3, 4, 7]
+    changed_since_prior_recheck: false
+  pull_request_state:
+    result: "No pull request exists for this topic branch."
+    disposition: "P02.5-T3 is confirmed for 8b902c7. P02.5-T4 and the phase remain open until reviewed changes reach protected main, a fresh main ADS/SBOM/alert scan completes, and each actionable alert is closed or has an approved time-bounded disposition."
+
+current_recheck_2026_09_25T0112Z:
+  checked_at: "2026-09-25T01:12:29Z"
+  topic_branch_head: "b9f3d232739b1bb636b030393a7a974892b75fb3"
+  exact_head_ads:
+    run_id: 36080957304
+    url: "https://github.com/AieatAssam/android-network-tools/actions/runs/36080957304"
+    completed_at: "2026-09-25T01:12:29Z"
+    artifact_id: 10842300363
+    artifact_created_at: "2026-09-25T01:12:26Z"
+    artifact_bytes: 13252
+    component_count: 417
+    result: "Successful exact-HEAD submission; artifact SHA/ref match b9f3d23. Includes okhttp and mockwebserver3 5.5.0; all currently alerted coordinates remain patched. Comparison with artifact 10841039981 for 8b902c7 found identical 417-component maps with zero additions, removals, or version changes. Confirms P02.5-T3 for the current dependency graph; it does not close local T4 or protected-main gates."
+    patched_alert_coordinates: { "org.freemarker:freemarker": "2.3.35", "org.bouncycastle:bcprov-jdk18on": "1.85", "org.bouncycastle:bcpkix-jdk18on": "1.85", "org.apache.commons:commons-lang3": "3.18.0", "org.apache.httpcomponents:httpclient": "4.5.14", "org.bitbucket.b_c:jose4j": "0.9.6", "org.jdom:jdom2": "2.0.6.1", "org.jetbrains.kotlin:kotlin-gradle-plugin": "2.4.20" }
+  default_branch_state:
+    head: "5e183721e64ce8a8946f1a0b50f52b83544e8898"
+    latest_successful_ads_run: 35601558226
+    ads_component_count: 415
+    note: "No newer main ADS run exists; its default-branch dependency graph and open alerts are unchanged."
+  repository_sbom:
+    last_fetched_at: "2026-09-25T01:03:45Z"
+    format: "SPDX-2.3"
+    package_count: 425
+    sha256: "6ac004f29b222256a21d841b44c83a26f3206709234348035cc4e7e5f2b70dda"
+    interpretation: "The latest repository SBOM still reflects the main/default-branch graph, not topic-only OkHttp 5.5.0. No newer SBOM was generated in this recheck."
+  dependabot_alerts:
+    checked_at: "2026-09-25T01:12:29Z"
+    total: 10
+    open: [1, 2, 5, 6, 8, 9, 10]
+    fixed: [3, 4, 7]
+    changed_since_prior_recheck: false
+  pull_request_state:
+    result: "No pull request exists for this topic branch."
+    disposition: "P02.5-T3 remains confirmed for b9f3d23. P02.5-T4 and the phase remain open until reviewed changes reach protected main, a fresh main ADS/SBOM/alert scan completes, and actionable alerts are closed or have approved time-bounded dispositions."
+
+prior_recheck_2026_09_23:
+  checked_at: "2026-09-23T22:34:40Z"
+  current_branch_submission:
+    run_id: 35925554802
+    ref: "refs/heads/plan/comprehensive-review-2026-09-22"
+    commit: "7106a5bafa21bf0b30b91afb98470d8d10b184c8"
+    generated_at: "2026-09-23T21:58:04Z"
+    artifact_sha256: "8a84c301c2c0dc0ba13823258076f2aab6c8a4bb90ffefed347f8791d3b42f04"
+    result: "Predates app-level constraints and contains the old and patched coordinates in the aggregate graph. The latest source change has not yet been submitted."
+  default_branch:
+    ref: "refs/heads/main"
+    commit: "5e183721e64ce8a8946f1a0b50f52b83544e8898"
+    latest_submission_run_id: 35601558226
+    latest_submission_generated_at: "2026-09-21T12:48:59Z"
+  github_sbom_generated_at: "2026-09-23T22:34:40Z"
+  github_sbom_sha256: "0d6127935bdc437f842f2fc4d833a00562e508ac0295b4932b13e00e5a03e48a"
+  github_sbom_reported_versions:
+    "org.bouncycastle:bcprov-jdk18on": ["1.80.2", "1.85"]
+    "org.bouncycastle:bcpkix-jdk18on": ["1.80.2", "1.85"]
+    "org.apache.commons:commons-lang3": ["3.16.0", "3.18.0"]
+    "org.apache.httpcomponents:httpclient": ["4.5.6", "4.5.14"]
+  dependabot_open_alerts: [1, 2, 5, 6, 8, 9]
+  newest_stable_agp: "9.4.1"
+  outcome: "Six alerts remain open. The live GitHub graph predates the local constraints; keep P02.5 open until the post-constraint main-branch submission clears the old versions or approved time-bounded dispositions are recorded."
+
+prior_recheck_2026_09_24T0908:
+  checked_at: "2026-09-24T09:08:24Z"
+  reviewed_branch_submission:
+    run_id: 35979037038
+    run_url: "https://github.com/AieatAssam/android-network-tools/actions/runs/35979037038"
+    ref: "refs/heads/plan/comprehensive-review-2026-09-22"
+    commit: "98d2fa96828795893f6090ce706c619329143a47"
+    submitted_at: "2026-09-24T09:04:41Z"
+    scanned_at: "2026-09-24T09:05:14Z"
+    resolved_component_count: 410
+    artifact_sha256: "21ce41bc51493b2afce4a5c90a7d4b718132662b346b347ebb778c0dea159371"
+    artifact_path: "/tmp/p025-submission-98d2fa9/dependency-graph-reports/dynamicdependency-graphauto-submission-submit-gradle.json"
+    result: "Run 35979037038 succeeded. The resolved map contains only patched versions for all alerted coordinates; no vulnerable versions of those coordinates are selected in the pushed topic-branch snapshot."
+    patched_resolved_versions:
+      "org.bouncycastle:bcprov-jdk18on": "1.85"
+      "org.bouncycastle:bcpkix-jdk18on": "1.85"
+      "org.bitbucket.b_c:jose4j": "0.9.6"
+      "org.jdom:jdom2": "2.0.6.1"
+      "org.jetbrains.kotlin:kotlin-gradle-plugin": "2.4.20"
+      "org.apache.commons:commons-lang3": "3.18.0"
+      "org.apache.httpcomponents:httpclient": "4.5.14"
+    graph_note: "The report includes AGP/Lint dependencies. It still contains unalerted httpmime:4.5.6, whose edge resolves httpclient to 4.5.14; httpmime itself is not an alert coordinate. This confirms the current branch snapshot's selected dependency graph, not main's graph or GitHub alert closure."
+  default_branch_submission:
+    run_id: 35601558226
+    run_url: "https://github.com/AieatAssam/android-network-tools/actions/runs/35601558226"
+    ref: "refs/heads/main"
+    commit: "5e183721e64ce8a8946f1a0b50f52b83544e8898"
+    submitted_at: "2026-09-21T12:47:10Z"
+    artifact_sha256: "c57002192acc246aab58ed90b13a8bac297ebbea7f7add6344e93cfb1a08cd57"
+    state: "Still the newest main submission; it predates the scoped app constraints. The topic-branch ADS run does not update this default-branch result."
+  github_sbom:
+    generated_at: "2026-09-24T09:07:59Z"
+    sha256: "e80d40645299500025b7b38741f3c1388c9a00e892f81806f3075cd22f15c84b"
+    package_count: 425
+    reported_versions:
+      "org.bouncycastle:bcprov-jdk18on": ["1.80.2", "1.85"]
+      "org.bouncycastle:bcpkix-jdk18on": ["1.80.2", "1.85"]
+      "org.apache.commons:commons-lang3": ["3.16.0", "3.18.0"]
+      "org.apache.httpcomponents:httpclient": ["4.5.6", "4.5.14"]
+    interpretation: "The repository-level GitHub SBOM still aggregates old and patched build coordinates; it is separate from the clean resolved map for topic-branch HEAD 98d2fa9 and does not identify per-configuration selections."
+  dependabot_alerts:
+    checked_at: "2026-09-24T09:08:24Z"
+    fixed: [3, 4, 7]
+    open: [1, 2, 5, 6, 8, 9]
+    open_alerts_have_fixed_at: false
+    open_alerts_have_dismissed_at: false
+    note: "The alert API still reports six open alerts, including critical #8 and high #9; all open alert records retain their 2026-09-18 creation/update era. The topic-branch submission has not refreshed main's alert state."
+  upstream_toolchain_metadata:
+    checked_at: "2026-09-24"
+    source: "https://dl.google.com/dl/android/maven2/com/android/tools/build/gradle/maven-metadata.xml"
+    latest_stable_agp: "9.4.1"
+    latest_preview: "9.5.0-alpha06"
+    metadata_sha256: "d7d7780ea4d67ba3107fe38ad4a7c82151a6171792e27fcefb0651921450cd98"
+    outcome: "No later stable AGP release is listed; retain the stable toolchain rather than move production builds to the preview line solely to change transitive resolution."
+  quality_gates:
+    latest_recorded_run: "2026-09-24 current-worktree verification after Wi-Fi/topology fixes; full app JVM suite, Kover, lintDebug, and debug/release assembly passed. Core-network and core-domain test tasks were UP-TO-DATE."
+    current_head_rerun: "The initial combined run on f740cf0, without an emulator, exposed two timing-sensitive topology assertion failures and one Wi-Fi permission-state assertion failure, then stalled in `WifiScanViewModelTest.changing refresh interval while paused does not restart refresh`. After cleanup barriers and test scheduling were fixed, the serialized current-worktree JVM command `./gradlew :core-network:test :core-domain:test :app:testDebugUnitTest --no-daemon --no-parallel --console=plain` passed. App tests executed freshly: 448 tests, zero failures/errors; Wi-Fi passed 38/38 and topology 19/19. Core-network/domain tasks were UP-TO-DATE and their latest reports show 1,023 tests (one skipped) and 188 tests, zero failures/errors. The follow-up `./gradlew :core-network:koverVerify :core-domain:koverVerify :app:koverVerify :app:lintDebug :app:assembleDebug :app:assembleRelease --no-daemon --no-parallel --console=plain` passed in 7m44: all Kover verifications, lintDebug, debug assembly, release lintVital, and unsigned release assembly completed. Release R8 reported the existing missing dnsjava service-provider class warnings. No emulator was used. This closes the current-worktree quality gates, but T4 remains open until main receives a fresh dependency submission and alert statuses are cleared or approved time-bounded dispositions are recorded."
+    exact_head_followup: "For implementation HEAD 9314251, the full app JVM suite passed 462/462, focused TopologyDiscoveryRepositoryTest passed 24/24, affected HTTP/Ports/TLS/WOL/Ping ViewModel suites passed, Android-test Kotlin sources compiled, and lintDebug passed without an emulator. The full core-network suite was not rerun after the topology session limiter; its 1,023-test/one-skip result is earlier evidence only. Kover and debug/release assembly have not been rerun after 9314251, so keep final full-head gates open."
+  outcome: "P02.5-T3 is complete for the reviewed branch snapshot: its managed ADS graph resolves all alerted coordinates to patched versions. Keep P02.5 and T4 in progress because main still has stale submission evidence, the live alert API has six open alerts, and the repository SBOM still contains old and patched build coordinates. Recheck main after the change lands there and confirm fresh alert closure or approved time-bounded dispositions before closing the phase."
+
+exact_head_recheck:
+  checked_at: "2026-09-24T09:55:22Z"
+  reviewed_branch_submission:
+    run_id: 35983688792
+    run_url: "https://github.com/AieatAssam/android-network-tools/actions/runs/35983688792"
+    ref: "refs/heads/plan/comprehensive-review-2026-09-22"
+    commit: "931425185f3fffe4d25fcb6b1357c04895d5ad51"
+    event: "dynamic"
+    completed_at: "2026-09-24T09:51Z"
+    scanned_at: "2026-09-24T09:51:08Z"
+    resolved_component_count: 410
+    manifest_count: 1
+    snapshot_json_sha256: "abe7c5b954cae07782f0cddddada0685067bc6189d15cd92b9622fdad3ce7909"
+    result: "Automatic Dependency Submission succeeded for the exact pushed HEAD. All seven alerted coordinates in the submitted resolved map use patched versions. This proves the reviewed topic-branch graph only; it does not refresh main's submission or close Dependabot alerts."
+    patched_resolved_versions:
+      "org.apache.httpcomponents:httpclient": "4.5.14"
+      "org.apache.commons:commons-lang3": "3.18.0"
+      "org.jdom:jdom2": "2.0.6.1"
+      "org.bitbucket.b_c:jose4j": "0.9.6"
+      "org.bouncycastle:bcpkix-jdk18on": "1.85"
+      "org.bouncycastle:bcprov-jdk18on": "1.85"
+      "org.jetbrains.kotlin:kotlin-gradle-plugin": "2.4.20"
+  dependabot_alerts:
+    checked_at: "2026-09-24T09:55:22Z"
+    total: 9
+    fixed: [3, 4, 7]
+    open: [1, 2, 5, 6, 8, 9]
+    open_alerts_have_fixed_at: false
+    open_alerts_have_dismissed_at: false
+    interpretation: "Six alerts remain open even though the exact-head snapshot now resolves their coordinates to patched versions. Alert state has not refreshed or closed; critical #8 and high #9 remain actionable until main receives a fresh submission or approved time-bounded dispositions are recorded."
+  default_branch:
+    latest_submission_run_id: 35601558226
+    commit: "5e183721e64ce8a8946f1a0b50f52b83544e8898"
+    state: "Still the latest main submission; it predates the scoped dependency constraints."
+  outcome: "P02.5-T3 is confirmed for exact topic-branch HEAD 9314251. P02.5/T4 remain open for a fresh default-branch submission and current alert closure or approved time-bounded dispositions; do not infer that the exact-head topic submission updates main."
+
+configuration_scoped_remediation:
+  checked_at: "2026-09-23T22:37:21Z"
+  source_commit: "7106a5bafa21bf0b30b91afb98470d8d10b184c8"
+  local_changes:
+    file: "app/build.gradle.kts"
+    scope: ":app:androidLintTool only"
+    reason: "Pre-change resolution found vulnerable versions in the AGP lint-tool configuration, while root :classpath already selected patched versions. Constraints avoid adding implementation/runtime dependencies."
+    coordinates:
+      - "org.bouncycastle:bcpkix-jdk18on:1.85"
+      - "org.bouncycastle:bcprov-jdk18on:1.85"
+      - "org.apache.commons:commons-lang3:3.18.0"
+      - "org.apache.httpcomponents:httpclient:4.5.14"
+  dependency_graph_plugin:
+    version: "1.5.0"
+    init_script_sha256: "2aee7c3529fc5b9b40f59b838a2ba66e97ef97bcb69cc253bd7453c356865338"
+    init_script: |
+      initscript {
+          repositories { gradlePluginPortal() }
+          dependencies {
+              classpath "org.gradle:github-dependency-graph-gradle-plugin:1.5.0"
+          }
+      }
+      apply plugin: org.gradle.dependencygraph.simple.SimpleDependencyGraphPlugin
+    command: "DEPENDENCY_GRAPH_REPORT_DIR=/tmp/p025-simple-report ./gradlew -I /tmp/p025-simple.init.gradle --dependency-verification=off --no-configuration-cache --no-configure-on-demand --no-daemon --no-parallel --console=plain :ForceDependencyResolutionPlugin_resolveAllDependencies"
+    result: "BUILD SUCCESSFUL. Pre-change dependency-resolution.json resolved patched versions on root :classpath and vulnerable 1.80.2/3.16.0/4.5.6 versions only in :app:androidLintTool among the alert coordinates. JDOM 2.0.6.1, jose4j 0.9.6, and KGP 2.4.20 resolved on root :classpath."
+    dependency_resolution_sha256: "63a7d196d63ecbc4eba4b8c64fd434d59c07a550fc1d1b853d189bd0357f459c"
+    dependency_graph_sha256: "d2bc47295a7f32cdc03f9249330f141265d4b5fb057921308f713236688b1ff1"
+  post_constraint_verification:
+    android_lint_tool_command: "./gradlew :app:dependencies --configuration androidLintTool --no-daemon --no-parallel --no-configuration-cache --console=plain"
+    android_lint_tool_output_sha256: "00c6657499a8441e2a51fcc078450d725c7d862c5b45a04c9faa205af70a7c76"
+    dependency_insight_commands:
+      - command: "./gradlew :app:dependencyInsight --configuration androidLintTool --dependency org.bouncycastle --no-daemon --no-parallel --no-configuration-cache --console=plain"
+        result: "bcprov and bcpkix 1.85 selected by constraint; old 1.80.2 requests resolve to 1.85. BUILD SUCCESSFUL."
+        output_sha256: "ea820d78f471d028f6bfd9831adaff1d2e264e7dbd2ec0d50a011a9a10b38454"
+      - command: "./gradlew :app:dependencyInsight --configuration androidLintTool --dependency org.apache.commons:commons-lang3 --no-daemon --no-parallel --no-configuration-cache --console=plain"
+        result: "commons-lang3 3.18.0 selected by constraint; old 3.16.0 request resolves to 3.18.0. BUILD SUCCESSFUL."
+        output_sha256: "67727332c983376cb9b2bb5253265ba2f9287dc5d2c2e22f6038d3cf47cee81b"
+      - command: "./gradlew :app:dependencyInsight --configuration androidLintTool --dependency org.apache.httpcomponents:httpclient --no-daemon --no-parallel --no-configuration-cache --console=plain"
+        result: "httpclient 4.5.14 selected by constraint; old 4.5.6 request resolves to 4.5.14. BUILD SUCCESSFUL."
+        output_sha256: "e0276a4b95c628f93839e8e3c6c60d6793c1034c800cfefd8f8a64ff8e210bca"
+    runtime_command: "./gradlew :app:dependencies --configuration releaseRuntimeClasspath --no-daemon --no-parallel --no-configuration-cache --console=plain"
+    runtime_result: "BUILD SUCCESSFUL; no affected package coordinate appears."
+    runtime_output_sha256: "1b55a4977027441dd970e2162b768628501f6a076abde53495db173120417cca"
+    build_command: "./gradlew :app:assembleDebug :app:assembleRelease --no-daemon --no-parallel --no-configuration-cache --console=plain"
+    build_result: "BUILD SUCCESSFUL in 6m. Debug APK SHA-256 6790229712f16222c87264d50da5f62cff80d7113c096fa14d333408005f1670; unsigned release APK SHA-256 144e9886a008a45fd07a8d18c52e297f3bb66935a3aff95406e468a7736393b6. Release lintVital passed. R8 emitted existing dnsjava service-provider reference warnings."
+    lint_command: "./gradlew :app:lintDebug :app:assembleDebug :app:assembleRelease --no-daemon --no-parallel --console=plain"
+    lint_result: "Initial BUILD FAILED at :app:lintAnalyzeDebug after 9m26. AGP Lint crashed while analyzing app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/ping/PingViewModel.kt: androidx.annotation.experimental.lint.ExperimentalDetector reported `Unexpected owner function: null` in Kotlin FIR analysis. This is retained as historical transient failure; a later clean :app:lintDebug rerun passed with zero errors after the Ping edit stabilized."
+    lint_problem_report_path: "build/reports/problems/problems-report.html"
+    lint_problem_report_sha256: "b6ae604a9d2f6a33c070d0cb4a195a6a4a95905054f0d7d54d6c25e4dd27a08"
+    lint_crash_log_path: "/home/dev/.gradle/daemon/9.7.1/daemon-2935701.out.log"
+    lint_crash_log_sha256: "caed86d3850340e59424c55402cc9f2fcb50d55d56340f6318a0cd05c297bb2a"
+    lint_crash_evidence: "The daemon log reports ExperimentalDetector.visitClass after Kotlin FIR symbol-light-class method enumeration: KaFirKotlinPropertyKtParameterBasedSymbol.<init> -> KaFirKotlinPropertySymbol.create -> VariableSymbolBuilder.buildPropertySymbol/buildVariableSymbol -> FirClassDeclaredMemberScopeImpl.processPropertiesByName -> SymbolLightClassForClassOrObject.getOwnMethods -> ExperimentalDetector.visitClass. This identifies class property/method enumeration but not the particular PingViewModel member that triggers the null owner function. The changed OperationSession constructor/property and session lifecycle methods are plausible inputs to the changed class shape, but the stack does not establish any one as causal; no immediate offending construct is identified."
+    resolution_warnings: "No new dependency-resolution warnings. Gradle emits the existing experimental android.disallowKotlinSourceSets=false warning; Kotlin emits unrelated unnecessary-safe-call warnings in IcmpenguinPingEngine.kt during compilation."
+    phase_disposition: "in_progress: local build-configuration exposure is constrained and local lint/build gates now pass, but six GitHub alerts remain open and the updated source has not been represented by a clean default-branch dependency submission."
+
+toolchain_recheck:
+  checked_at: "2026-09-23"
+  candidate: "AGP 9.5.0-alpha06 is a preview; AGP 9.4.1 remains the current stable release."
+  compatibility:
+    gradle_wrapper: "Gradle 9.7.1 satisfies AGP 9.4's documented minimum of 9.6.0."
+    kotlin: "Kotlin 2.4.20 documents Gradle 9.7.0 support, and Android's Kotlin/AGP table requires AGP 8.5.2+ for Kotlin 2.4."
+    ksp: "KSP 2.3.12 documents AGP 8.12.0 as its minimum; this does not by itself establish full-stack compatibility."
+  primary_sources:
+    - "https://developer.android.com/reference/tools/gradle-api"
+    - "https://developer.android.com/build/releases/agp-9-4-0-release-notes"
+    - "https://developer.android.com/build/kotlin-support"
+    - "https://kotlinlang.org/docs/whatsnew2420.html"
+    - "https://github.com/google/ksp/releases/tag/2.3.12"
+  conclusion: "Do not move the production stack to the 9.5 alpha solely to silence the remaining alerts. No stable upgrade path is presently available; continue evidence-driven dependency-submission/selection analysis or obtain explicit time-bounded dispositions."
+
+verification_rerun:
+  checked_date: "2026-09-23"
+  command_results:
+    lint_debug: "./gradlew :app:lintDebug --no-daemon --no-parallel --console=plain — BUILD SUCCESSFUL in 3m39; zero lint errors. The earlier ExperimentalDetector/Kotlin FIR crash did not recur."
+    full_jvm: "./gradlew :core-network:test :core-domain:test :app:testDebugUnitTest --no-daemon --no-parallel --console=plain — passed: core-network 1005 tests (1 skipped), core-domain 182, app 373; zero failures/errors."
+    kover: "./gradlew :core-network:koverVerify :core-domain:koverVerify :app:koverVerify --no-daemon --no-parallel --console=plain — BUILD SUCCESSFUL; all three module coverage gates passed."
+    assembly: "./gradlew :app:assembleDebug :app:assembleRelease --no-daemon --no-parallel --console=plain — BUILD SUCCESSFUL in 6m11; release lintVital passed. Existing dnsjava service-provider warnings appeared during R8."
+  artifacts:
+    debug_apk_sha256: "cde425a3ee3c055ea5f3651c480471a320671544c0fe9d7b32047b48d3dd81d7"
+    unsigned_release_apk_sha256: "11bf0459aa314266ad2316e04f29ea9494f0d5a3791176c64c1c4e7747eed229"
+  remaining_gate: "The local JVM, Kover, lint, and build gates pass. Six Dependabot alerts and a clean default-branch dependency submission are still required before P02.5 can close."
+
+current_follow_up_2026_09_24T2147Z:
+  checked_date: "2026-09-24"
+  branch: "plan/comprehensive-review-2026-09-22"
+  source_head_before_fix: "ecbe4835512d07c1f9ed0d99e7a4f9323d35c59a (pushed topic branch)"
+  live_dependabot_state:
+    total: 10
+    fixed: [3, 4, 7]
+    open: [1, 2, 5, 6, 8, 9, 10]
+    new_alert:
+      number: 10
+      state: open
+      severity: critical
+      package: "org.freemarker:freemarker"
+      cve: "CVE-2026-84939"
+      ghsa: "GHSA-27j2-h3m2-8237"
+      vulnerable: ">= 2.2.0, <= 2.3.34"
+      patched: "2.3.35"
+      manifest: "settings.gradle.kts"
+      created_at: "2026-09-24T20:22:40Z"
+    note: "The alert API was queried on 2026-09-24. Topic-branch evidence does not update the default-branch alert state."
+  prior_exact_head_submission:
+    run_id: 36059542138
+    ref: "refs/heads/plan/comprehensive-review-2026-09-22"
+    commit: "ecbe4835512d07c1f9ed0d99e7a4f9323d35c59a"
+    result: "The ADS graph selected FreeMarker 2.3.32 on the Kover 0.9.9 implementation path; this brought the newly reported critical alert into scope."
+  post_fix_exact_head_submission:
+    run_id: 36063894666
+    run_url: "https://github.com/AieatAssam/android-network-tools/actions/runs/36063894666"
+    ref: "refs/heads/plan/comprehensive-review-2026-09-22"
+    commit: "7090f4bbcba476988577ebfdbd9e95cbd31fbc3c"
+    completed_at: "2026-09-24T21:51:00Z"
+    artifact_sha256: "7f00579b80b7f1e5fd4f8fffe70e23dc8811540b1dd8f5874f6abb99f1f789fa"
+    artifact_path: "/tmp/p025-7090f4/dependency-graph-reports/dynamicdependency-graphauto-submission-submit-gradle.json"
+    resolved_component_count: 410
+    result: "Succeeded for the exact pushed commit. The resolved graph contains only FreeMarker 2.3.35 and no 2.3.32; every alerted coordinate is resolved at a patched version. This is topic-branch evidence and does not refresh main's dependency submission or close the Dependabot alert."
+    freemarker_path: "org.jetbrains.kotlinx:kover-gradle-plugin:0.9.9 -> org.jetbrains.kotlinx:kover-features-jvm:0.9.9 -> org.jetbrains.intellij.deps:intellij-coverage-reporter:1.0.765 -> org.jetbrains.intellij.deps:coverage-report:1.0.25 -> org.freemarker:freemarker:2.3.35"
+    patched_resolved_versions:
+      "org.freemarker:freemarker": "2.3.35"
+      "org.bouncycastle:bcprov-jdk18on": "1.85"
+      "org.bouncycastle:bcpkix-jdk18on": "1.85"
+      "org.bitbucket.b_c:jose4j": "0.9.6"
+      "org.jdom:jdom2": "2.0.6.1"
+      "org.jetbrains.kotlin:kotlin-gradle-plugin": "2.4.20"
+      "org.apache.commons:commons-lang3": "3.18.0"
+      "org.apache.httpcomponents:httpclient": "4.5.14"
+  github_default_branch_state_after_push:
+    default_branch_submission:
+      run_id: 35601558226
+      commit: "5e183721e64ce8a8946f1a0b50f52b83544e8898"
+      state: "Still the newest completed Automatic Dependency Submission run for main. It predates all current remediation changes."
+    repository_sbom:
+      command: "gh api repos/AieatAssam/android-network-tools/dependency-graph/sbom"
+      generated_at: "2026-09-24T21:51:48Z"
+      sha256: "1e6f666dfe8f92c9f161c75a6d66083cd3d57a0c7e2941902fb3f2efc2a6989c"
+      package_count: 425
+      freemarker_versions: ["2.3.32"]
+      interpretation: "The repository-level SBOM still reflects the old/default-branch graph and reports FreeMarker 2.3.32, plus old and patched Bouncy Castle, Commons Lang, and HttpClient coordinates. It is not evidence that the exact topic-branch submission selected 2.3.32; the exact run artifact above records 2.3.35 only."
+    dependabot_alerts:
+      checked_date: "2026-09-24"
+      total: 10
+      fixed: [3, 4, 7]
+      open: [1, 2, 5, 6, 8, 9, 10]
+      note: "Alert #10 remains open after the topic-branch submission; the API state has not refreshed from a main-branch submission."
+  remediation:
+    files:
+      - "build.gradle.kts"
+      - "gradle/libs.versions.toml"
+      - "app/build.gradle.kts"
+      - "core-network/build.gradle.kts"
+      - "core-domain/build.gradle.kts"
+    approach: "Move Kover 0.9.9 from versioned plugin-DSL requests to the root buildscript classpath, force org.freemarker:freemarker:2.3.35 on that build-only configuration, and configure the public KoverProjectExtension explicitly after applying the plugin in each module. The FreeMarker and Kover artifacts do not enter app runtime dependencies."
+    root_build_environment:
+      command: "./gradlew buildEnvironment --no-daemon --no-parallel --max-workers=1 --console=plain"
+      artifact: "/tmp/p025-kover-buildenvironment-2026-09-24.txt"
+      sha256: "da07af82a2facbe842108f68543c9dee135cff173680a200b55704084a0f42bb"
+      result: "BUILD SUCCESSFUL. The Kover 0.9.9 dependency edge requested FreeMarker 2.3.32 and Gradle selected 2.3.35."
+      excerpt: "kover-gradle-plugin:0.9.9 -> kover-features-jvm:0.9.9 -> intellij-coverage-reporter:1.0.765 -> coverage-report:1.0.25 -> freemarker:2.3.32 -> 2.3.35"
+    runtime_graph:
+      command: "./gradlew :app:dependencyInsight --configuration releaseRuntimeClasspath --dependency org.freemarker:freemarker --no-daemon --no-parallel --max-workers=1 --console=plain"
+      result: "BUILD SUCCESSFUL; no dependencies matching FreeMarker were found in :app:releaseRuntimeClasspath."
+  verification:
+    first_combined_kover_run: "One PortScanRepositoryImplTest failed after the test framework's 60-second limit with UncompletedCoroutinesError."
+    focused_retry: "./gradlew :core-network:test --tests 'net.aieat.netswissknife.core.network.portscan.PortScanRepositoryImplTest.resolution phase cap expires within session budget and reports host resolution timeout' --no-daemon --no-parallel --max-workers=1 --console=plain — BUILD SUCCESSFUL."
+    complete_kover_command: "./gradlew :app:koverVerify :core-network:koverVerify :core-domain:koverVerify --no-daemon --no-parallel --max-workers=1 --console=plain"
+    complete_kover_result: "BUILD SUCCESSFUL. All three Kover verification tasks passed; the subsequent full core-network suite passed. JUnit reports: app 519 tests, core-network 1,109 tests with one skipped, core-domain 203 tests; zero failures or errors in all reports."
+    lint_and_assembly_command: "./gradlew :app:lintDebug :app:assembleDebug :app:assembleRelease --no-daemon --no-parallel --max-workers=1 --console=plain"
+    lint_and_assembly_result: "BUILD SUCCESSFUL in 12m17s. lintDebug, debug assembly, release lintVital, and unsigned release assembly passed. Existing release R8 warnings remain for dnsjava resolver service-provider classes. No emulator was used."
+    artifacts:
+      debug_apk_sha256: "e23a6a831f0d4533b788b5efb04491f8bc4d2df7b7e73417a4dc68b151e2cbb6"
+      unsigned_release_apk_sha256: "6de3a4235ad63c7c5aa4dccbfd5d1ac866438b2d0056870d2b6b8437ed1fff2c"
+  independent_reviews:
+    qa: "Static review found the plugin coordinate, patched buildscript force, typed extension configuration, and runtime scope consistent. Its requested Gradle proofs passed as recorded above."
+    adversarial: "No source blocker found. The reviewer noted the root :classpath force technically affects any FreeMarker requested by that classpath and that Kover is loaded through the shared buildscript classloader; exact build and task verification passed."
+  outcome: "Local dependency selection and quality gates pass for the new configuration, and exact-head ADS confirms FreeMarker 2.3.35. The default-branch ADS/SBOM still records old selections and Dependabot still has seven open alerts, so keep P02.5/T4 in_progress."

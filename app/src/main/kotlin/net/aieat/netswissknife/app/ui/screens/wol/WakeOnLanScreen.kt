@@ -52,6 +52,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
@@ -70,14 +71,27 @@ import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
+import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
+import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
+import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
+import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
+import net.aieat.netswissknife.app.platform.NetworkErrorKind
 import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.ui.theme.AppShapes
 import net.aieat.netswissknife.app.ui.theme.AppSpacing
-import net.aieat.netswissknife.core.network.wol.WolMagicPacket
+import net.aieat.netswissknife.app.ui.navigation.ToolSource
+import net.aieat.netswissknife.core.domain.WakeOnLanParams
 import net.aieat.netswissknife.core.network.wol.WolSendReport
+import net.aieat.netswissknife.app.ui.navigation.ToolMacAddress
 
 // ── Screen ────────────────────────────────────────────────────────────────────
+
+object WakeOnLanScreenTestTags {
+    const val SOURCE_CONTEXT = "wol_source_context"
+    const val INVALID_HANDOFF = "wol_invalid_handoff"
+    const val CLEAR_PREFILL_ACTION = "wol_clear_prefill_action"
+}
 
 @Composable
 fun WakeOnLanScreen(viewModel: WakeOnLanViewModel = hiltViewModel()) {
@@ -85,9 +99,19 @@ fun WakeOnLanScreen(viewModel: WakeOnLanViewModel = hiltViewModel()) {
     LaunchedEffect(Unit) { requestLocalNetworkPermission() }
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val networkStatus by viewModel.networkStatus.collectAsStateWithLifecycle()
     val macAddress by viewModel.macAddress.collectAsStateWithLifecycle()
+    val hasInvalidHandoff by viewModel.hasInvalidHandoff.collectAsStateWithLifecycle()
+    val sourceContext by viewModel.sourceContextState.collectAsStateWithLifecycle()
     val broadcastAddress by viewModel.broadcastAddress.collectAsStateWithLifecycle()
     val port by viewModel.port.collectAsStateWithLifecycle()
+    val announcementPhase = when (uiState) {
+        WolUiState.Idle -> null
+        WolUiState.Sending -> ToolAnnouncementPhase.RUNNING
+        is WolUiState.Success -> ToolAnnouncementPhase.FINISHED
+        is WolUiState.Error -> ToolAnnouncementPhase.ERROR
+    }
+    ToolStateAnnouncer(stringResource(R.string.wol_screen_title), announcementPhase)
 
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
@@ -112,6 +136,43 @@ fun WakeOnLanScreen(viewModel: WakeOnLanViewModel = hiltViewModel()) {
                 onHelpClick = { showHelp = true },
             )
 
+            NetworkStatusBanner(
+                status = networkStatus,
+                scope = NetworkStatusScope.LOCAL_NETWORK,
+                permissionDenied = (uiState as? WolUiState.Error)?.networkErrorKind == NetworkErrorKind.LOCAL_NETWORK_PERMISSION_DENIED,
+                onGrantPermission = requestLocalNetworkPermission,
+            )
+
+            if (sourceContext == ToolSource.LAN) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = stringResource(R.string.wol_source_lan),
+                        color = MaterialTheme.colorScheme.secondary,
+                        style = MaterialTheme.typography.labelLarge,
+                        modifier = Modifier.testTag(WakeOnLanScreenTestTags.SOURCE_CONTEXT),
+                    )
+                    TextButton(
+                        onClick = viewModel::clearPrefill,
+                        enabled = uiState !is WolUiState.Sending,
+                        modifier = Modifier.testTag(WakeOnLanScreenTestTags.CLEAR_PREFILL_ACTION),
+                    ) {
+                        Text(stringResource(R.string.clear))
+                    }
+                }
+            }
+            if (hasInvalidHandoff) {
+                Text(
+                    text = stringResource(R.string.wol_invalid_handoff),
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.testTag(WakeOnLanScreenTestTags.INVALID_HANDOFF),
+                )
+            }
+
             WolInputCard(
                 macAddress = macAddress,
                 broadcastAddress = broadcastAddress,
@@ -130,7 +191,7 @@ fun WakeOnLanScreen(viewModel: WakeOnLanViewModel = hiltViewModel()) {
             ) { state ->
                 when (state) {
                     is WolUiState.Idle -> Spacer(Modifier.height(0.dp))
-                    is WolUiState.Sending -> WolSendingCard()
+                    is WolUiState.Sending -> WolSendingCard(onCancel = viewModel::stopSending)
                     is WolUiState.Success -> WolSuccessCard(state.report, onSendAgain = viewModel::reset)
                     is WolUiState.Error -> WolErrorCard(state.message, onRetry = viewModel::send)
                 }
@@ -178,10 +239,10 @@ private fun WolInputCard(
     val focusManager = LocalFocusManager.current
     var showAdvanced by remember { mutableStateOf(false) }
 
-    val isMacInvalid = macAddress.isNotBlank() && !WolMagicPacket.isValidMac(macAddress)
-    val isPortInvalid = port.toIntOrNull() !in 0..65_535
+    val isMacInvalid = macAddress.isNotBlank() && ToolMacAddress.parse(macAddress) == null
+    val isPortInvalid = port.toIntOrNull() !in WakeOnLanParams.MIN_PORT..WakeOnLanParams.MAX_PORT
     val canSend = !isSending && !isPortInvalid &&
-        broadcastAddress.isNotBlank() && WolMagicPacket.isValidMac(macAddress)
+        broadcastAddress.isNotBlank() && ToolMacAddress.parse(macAddress) != null
 
     ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = AppShapes.large) {
         Column(
@@ -247,7 +308,13 @@ private fun WolInputCard(
                         value = port,
                         onValueChange = onPortChange,
                         label = { Text(stringResource(R.string.wol_port_label)) },
-                        supportingText = { Text(stringResource(R.string.wol_port_hint)) },
+                        supportingText = {
+                            Text(
+                                stringResource(
+                                    if (isPortInvalid) R.string.wol_port_invalid else R.string.wol_port_hint
+                                )
+                            )
+                        },
                         isError = isPortInvalid,
                         singleLine = true,
                         enabled = !isSending,
@@ -277,7 +344,7 @@ private fun WolInputCard(
 // ── State cards ───────────────────────────────────────────────────────────────
 
 @Composable
-private fun WolSendingCard() {
+private fun WolSendingCard(onCancel: () -> Unit) {
     val sendingLabel = stringResource(R.string.wol_sending)
     ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = AppShapes.large) {
         Row(
@@ -285,7 +352,7 @@ private fun WolSendingCard() {
                 .fillMaxWidth()
                 .padding(AppSpacing.l),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
             CircularProgressIndicator(
                 modifier = Modifier
@@ -298,6 +365,9 @@ private fun WolSendingCard() {
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            TextButton(onClick = onCancel) {
+                Text(stringResource(R.string.cancel))
+            }
         }
     }
 }

@@ -1,26 +1,65 @@
 package net.aieat.netswissknife.app.ui.screens.httprobe
 
+import android.annotation.SuppressLint
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
+import net.aieat.netswissknife.app.platform.NetworkStatus
+import net.aieat.netswissknife.app.platform.NetworkStatusProvider
+import net.aieat.netswissknife.app.platform.NoOpNetworkStatusProvider
+import net.aieat.netswissknife.app.ui.navigation.HostTool
+import net.aieat.netswissknife.app.ui.navigation.ToolDestination
+import net.aieat.netswissknife.app.ui.navigation.ToolHost
+import net.aieat.netswissknife.app.ui.navigation.ToolIntentCodec
+import net.aieat.netswissknife.app.ui.navigation.ToolSource
 import net.aieat.netswissknife.core.domain.HttpProbeParams
 import net.aieat.netswissknife.core.domain.HttpProbeUseCase
+import net.aieat.netswissknife.core.domain.validateHttpProbeUrl
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.httprobe.HttpMethod
+import net.aieat.netswissknife.core.network.httprobe.HttpProbeOperation
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeResult
+import net.aieat.netswissknife.core.network.httprobe.HttpProbeBlockedRedirectException
+import net.aieat.netswissknife.core.network.httprobe.CrossOriginEntityReplay
+import net.aieat.netswissknife.core.network.httprobe.CurlExporter
+import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationSession
+import java.util.UUID
 import javax.inject.Inject
 
 data class HeaderEntry(val key: String = "", val value: String = "")
+
+data class PendingEntityReplayApproval(
+    val runId: String,
+    val approvalId: String,
+    val destinationUrl: String,
+    val method: HttpMethod,
+    val statusCode: Int
+)
+
+data class BlockedHttpRedirectWarning(
+    val sourceUrl: String,
+    val destinationUrl: String,
+    val statusCode: Int,
+    val location: String,
+)
 
 data class HttpProbeUiState(
     val url: String = "",
@@ -29,55 +68,178 @@ data class HttpProbeUiState(
     val body: String = "",
     val followRedirects: Boolean = true,
     val isLoading: Boolean = false,
+    val isCanceling: Boolean = false,
+    val isCanceled: Boolean = false,
     val result: HttpProbeResult? = null,
     val error: String? = null,
+    val blockedRedirectWarning: BlockedHttpRedirectWarning? = null,
+    val pendingEntityReplayApproval: PendingEntityReplayApproval? = null,
     val selectedTab: Int = 0,
-    val headersExpanded: Boolean = false
+    val headersExpanded: Boolean = false,
+    val prettyJson: Boolean = false,
 )
 
 @HiltViewModel
 class HttpProbeViewModel @Inject constructor(
     private val useCase: HttpProbeUseCase,
-    private val recentHostsRepository: RecentHostsRepository
+    private val recentHostsRepository: RecentHostsRepository,
+    private val networkStatusProvider: NetworkStatusProvider = NoOpNetworkStatusProvider,
+    // Hilt supplies the owner-backed handle at runtime; this empty default supports direct unit tests.
+    @param:SuppressLint("VisibleForTests")
+    private val savedStateHandle: SavedStateHandle = SavedStateHandle(),
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(HttpProbeUiState())
-    val uiState: StateFlow<HttpProbeUiState> = _uiState.asStateFlow()
+    private val routeHost = savedStateHandle.get<String>("host")
+    private val rawIntentArgument = savedStateHandle.get<String>("intent")
+    private val typedIntent = rawIntentArgument?.let(ToolIntentCodec::decode)
+    private val handoffTarget = (typedIntent?.destination as? ToolDestination.HostTarget)
+        ?.takeIf { target ->
+            target.tool == HostTool.HTTP && target.port != null &&
+            routeHost != null && ToolHost.parse(routeHost)?.canonical == target.host.canonical
+        }
+    private val _hasInvalidHandoff = MutableStateFlow(
+        (rawIntentArgument != null || routeHost != null) && handoffTarget == null &&
+            savedStateHandle.get<Boolean>(HANDOFF_RECOVERED_KEY) != true,
+    )
+    val hasInvalidHandoff: StateFlow<Boolean> = _hasInvalidHandoff.asStateFlow()
+    private val _sourceContext = MutableStateFlow(
+        if (savedStateHandle.get<Boolean>(HANDOFF_CONSUMED_KEY) == true) {
+            savedStateHandle.get<String>(HANDOFF_SOURCE_KEY)?.let { wireName ->
+                ToolSource.entries.singleOrNull { it.wireName == wireName }
+            }?.takeIf { handoffTarget != null && typedIntent?.source == it }
+        } else {
+            handoffTarget?.let { typedIntent?.source }
+        },
+    )
+    val sourceContext: ToolSource? get() = _sourceContext.value
+    val sourceContextState: StateFlow<ToolSource?> = _sourceContext.asStateFlow()
 
-    val recentHosts: StateFlow<List<String>> = recentHostsRepository
-        .getRecents(AppPreferenceKeys.RECENT_HTTP_HOSTS)
+    private val _uiState = MutableStateFlow(
+        HttpProbeUiState(
+            url = if (savedStateHandle.get<Boolean>(HANDOFF_CONSUMED_KEY) == true) {
+                savedStateHandle.get<String>(EDITED_URL_KEY).orEmpty()
+            } else {
+                savedStateHandle.get<String>(EDITED_URL_KEY)
+                    ?: if (_hasInvalidHandoff.value) "" else handoffTarget?.let(::httpUrlForTarget).orEmpty()
+            },
+        ),
+    )
+    val uiState: StateFlow<HttpProbeUiState> = _uiState.asStateFlow()
+    val networkStatus: StateFlow<NetworkStatus> = networkStatusProvider.status
+    private data class ActiveReplayDecision(
+        val runId: String,
+        val approvalId: String,
+        val decision: CompletableDeferred<Boolean>
+    )
+
+    private var activeReplayDecision: ActiveReplayDecision? = null
+    private var operationSession: OperationSession? = null
+
+    init {
+        if (savedStateHandle.get<Boolean>(HANDOFF_CONSUMED_KEY) != true) {
+            // NavBackStackEntry arguments remain present after recreation. Snapshot the
+            // initial form and provenance once so a later clear/edit cannot be replaced
+            // by the original handoff route.
+            savedStateHandle[EDITED_URL_KEY] = _uiState.value.url
+            _sourceContext.value?.let { source ->
+                savedStateHandle[HANDOFF_SOURCE_KEY] = source.wireName
+            } ?: savedStateHandle.remove<String>(HANDOFF_SOURCE_KEY)
+            savedStateHandle[HANDOFF_CONSUMED_KEY] = true
+        }
+        addCloseable(LIFECYCLE_CLOSEABLE_KEY, AutoCloseable {
+            cancelRequest(CancellationReason.LIFECYCLE_PAUSE)
+        })
+    }
+
+    val recentHosts: StateFlow<List<String>> = flow {
+        recentHostsRepository.sanitizeRecents(
+            AppPreferenceKeys.RECENT_HTTP_HOSTS,
+            ::safeHttpRecentOrigin
+        )
+        emitAll(recentHostsRepository.getRecents(AppPreferenceKeys.RECENT_HTTP_HOSTS))
+    }
+        .map { entries -> entries.mapNotNull(::safeHttpRecentOrigin).distinct().take(5) }
+        .catch { error ->
+            if (error is CancellationException) throw error
+            emit(emptyList())
+        }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    fun onUrlChange(url: String) = _uiState.update { it.copy(url = url) }
+    fun onUrlChange(url: String) {
+        if (!updateRequestInput { it.copy(url = url) }) return
+        savedStateHandle[EDITED_URL_KEY] = url
+        if (_hasInvalidHandoff.value && validateHttpProbeUrl(url) == null) {
+            savedStateHandle[HANDOFF_RECOVERED_KEY] = true
+            _hasInvalidHandoff.value = false
+        }
+    }
 
-    fun onMethodChange(method: HttpMethod) = _uiState.update { it.copy(method = method) }
+    /** Clears the incoming handoff and its provenance; the blank URL survives recreation. */
+    fun clearPrefill() {
+        if (_uiState.value.isLoading) return
+        _sourceContext.value = null
+        savedStateHandle.remove<String>(HANDOFF_SOURCE_KEY)
+        savedStateHandle[HANDOFF_CONSUMED_KEY] = true
+        onUrlChange("")
+    }
 
-    fun onBodyChange(body: String) = _uiState.update { it.copy(body = body) }
+    fun onMethodChange(method: HttpMethod) {
+        updateRequestInput { it.copy(method = method) }
+    }
 
-    fun onFollowRedirectsToggle() =
-        _uiState.update { it.copy(followRedirects = !it.followRedirects) }
+    fun onBodyChange(body: String) {
+        updateRequestInput { it.copy(body = body) }
+    }
+
+    fun onFollowRedirectsToggle() {
+        updateRequestInput { it.copy(followRedirects = !it.followRedirects) }
+    }
 
     fun onTabSelected(tab: Int) = _uiState.update { it.copy(selectedTab = tab) }
 
-    fun onToggleHeadersExpanded() =
-        _uiState.update { it.copy(headersExpanded = !it.headersExpanded) }
+    fun onPrettyJsonToggle() = _uiState.update { it.copy(prettyJson = !it.prettyJson) }
 
-    fun addHeader() =
-        _uiState.update { it.copy(customHeaders = it.customHeaders + HeaderEntry()) }
+    /** Returns a shell-safe command for the current successful request, if one is available. */
+    fun copyAsCurl(): String? = _uiState.value.result?.let { CurlExporter.build(it.request) }
 
-    fun removeHeader(index: Int) =
-        _uiState.update { it.copy(customHeaders = it.customHeaders.toMutableList().also { list -> list.removeAt(index) }) }
-
-    fun updateHeaderKey(index: Int, key: String) = _uiState.update { state ->
-        val updated = state.customHeaders.toMutableList()
-        updated[index] = updated[index].copy(key = key)
-        state.copy(customHeaders = updated)
+    fun respondToEntityReplayApproval(runId: String, approvalId: String, approved: Boolean) {
+        val active = activeReplayDecision ?: return
+        val pending = _uiState.value.pendingEntityReplayApproval
+        if (active.runId != runId || active.approvalId != approvalId || pending == null ||
+            pending.runId != runId || pending.approvalId != approvalId
+        ) return
+        active.decision.complete(approved)
     }
 
-    fun updateHeaderValue(index: Int, value: String) = _uiState.update { state ->
-        val updated = state.customHeaders.toMutableList()
-        updated[index] = updated[index].copy(value = value)
-        state.copy(customHeaders = updated)
+    fun onToggleHeadersExpanded() {
+        if (_uiState.value.isLoading) return
+        _uiState.update { it.copy(headersExpanded = !it.headersExpanded) }
+    }
+
+    fun addHeader() {
+        updateRequestInput { it.copy(customHeaders = it.customHeaders + HeaderEntry()) }
+    }
+
+    fun removeHeader(index: Int) {
+        updateRequestInput {
+            it.copy(customHeaders = it.customHeaders.toMutableList().also { list -> list.removeAt(index) })
+        }
+    }
+
+    fun updateHeaderKey(index: Int, key: String) {
+        updateRequestInput { state ->
+            val updated = state.customHeaders.toMutableList()
+            updated[index] = updated[index].copy(key = key)
+            state.copy(customHeaders = updated)
+        }
+    }
+
+    fun updateHeaderValue(index: Int, value: String) {
+        updateRequestInput { state ->
+            val updated = state.customHeaders.toMutableList()
+            updated[index] = updated[index].copy(value = value)
+            state.copy(customHeaders = updated)
+        }
     }
 
     fun removeRecentHost(host: String) {
@@ -96,10 +258,25 @@ class HttpProbeViewModel @Inject constructor(
         val state = _uiState.value
         if (state.url.isBlank() || state.isLoading) return
 
-        viewModelScope.launch {
-            recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_HTTP_HOSTS, state.url.trim())
+        safeHttpRecentOrigin(state.url)?.let { safeOrigin ->
+            viewModelScope.launch {
+                recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_HTTP_HOSTS, safeOrigin)
+            }
         }
-        _uiState.update { it.copy(isLoading = true, result = null, error = null, selectedTab = 0) }
+        _uiState.update {
+            it.copy(
+                isLoading = true,
+                isCanceling = false,
+                isCanceled = false,
+                result = null,
+                error = null,
+                blockedRedirectWarning = null,
+                selectedTab = 0,
+            )
+        }
+        val runId = UUID.randomUUID().toString()
+        val session = HttpProbeOperation.newInteractiveSession()
+        operationSession = session
 
         viewModelScope.launch {
             val headers = state.customHeaders
@@ -113,31 +290,151 @@ class HttpProbeViewModel @Inject constructor(
                         method = state.method,
                         headers = headers,
                         body = state.body.takeIf { it.isNotBlank() && state.method.supportsBody },
-                        followRedirects = state.followRedirects
-                    )
+                        followRedirects = state.followRedirects,
+                        approveCrossOriginEntityReplay = { replay ->
+                            val approvalId = UUID.randomUUID().toString()
+                            val decision = CompletableDeferred<Boolean>()
+                            val active = ActiveReplayDecision(runId, approvalId, decision)
+                            activeReplayDecision = active
+                            _uiState.update { current ->
+                                current.copy(
+                                    pendingEntityReplayApproval = PendingEntityReplayApproval(
+                                        runId = runId,
+                                        approvalId = approvalId,
+                                        destinationUrl = replay.destinationUrl,
+                                        method = replay.method,
+                                        statusCode = replay.statusCode
+                                    )
+                                )
+                            }
+                            try {
+                                decision.await()
+                            } finally {
+                                if (activeReplayDecision == active) activeReplayDecision = null
+                                _uiState.update { current ->
+                                    val pending = current.pendingEntityReplayApproval
+                                    if (pending?.runId == runId && pending.approvalId == approvalId) {
+                                        current.copy(pendingEntityReplayApproval = null)
+                                    } else current
+                                }
+                            }
+                        }
+                    ),
+                    session
                 )
 
                 _uiState.update { current ->
                     when (result) {
                         is NetworkResult.Success -> current.copy(
                             isLoading = false,
+                            isCanceling = false,
+                            isCanceled = false,
                             result = result.data,
+                            blockedRedirectWarning = null,
+                            pendingEntityReplayApproval = null,
                             selectedTab = 0
                         )
-                        is NetworkResult.Error -> current.copy(
-                            isLoading = false,
-                            error = result.message
-                        )
+                        is NetworkResult.Error -> {
+                            val blocked = result.cause as? HttpProbeBlockedRedirectException
+                            current.copy(
+                                isLoading = false,
+                                isCanceling = false,
+                                isCanceled = false,
+                                pendingEntityReplayApproval = null,
+                                error = result.message.takeUnless { blocked != null },
+                                blockedRedirectWarning = blocked?.let {
+                                    BlockedHttpRedirectWarning(
+                                        sourceUrl = it.sourceUrl,
+                                        destinationUrl = it.destinationUrl,
+                                        statusCode = it.statusCode,
+                                        location = it.location,
+                                    )
+                                },
+                            )
+                        }
                     }
                 }
             } catch (e: CancellationException) {
+                if (session.cancellationReason == CancellationReason.USER_STOP) {
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            isCanceling = false,
+                            isCanceled = true,
+                            pendingEntityReplayApproval = null,
+                        )
+                    }
+                }
                 throw e
             } catch (e: Exception) {
                 val detail = e.message?.trim().takeUnless { it.isNullOrEmpty() }
                     ?: e::class.simpleName
                     ?: "Unknown request error"
-                _uiState.update { it.copy(isLoading = false, error = "Request failed: $detail") }
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        isCanceling = false,
+                        isCanceled = false,
+                        pendingEntityReplayApproval = null,
+                        error = "Request failed: $detail",
+                    )
+                }
+            } finally {
+                if (operationSession === session) operationSession = null
             }
         }
     }
+
+    fun cancel() {
+        if (!_uiState.value.isLoading || _uiState.value.isCanceling || operationSession == null) return
+        _uiState.update { it.copy(isCanceling = true) }
+        cancelRequest(CancellationReason.USER_STOP)
+    }
+
+    private fun cancelRequest(reason: CancellationReason) {
+        operationSession?.let { session ->
+            operationSession = null
+            runCatching { session.cancel(reason) }
+        }
+    }
+
+    /** Applies a real request-parameter edit only while idle and discards output for old input. */
+    private fun updateRequestInput(transform: (HttpProbeUiState) -> HttpProbeUiState): Boolean {
+        while (true) {
+            val current = _uiState.value
+            if (current.isLoading) return false
+            val updated = transform(current)
+            if (updated == current) return false
+            val next = updated.copy(
+                isCanceling = false,
+                isCanceled = false,
+                result = null,
+                error = null,
+                blockedRedirectWarning = null,
+                pendingEntityReplayApproval = null,
+                selectedTab = 0,
+            )
+            if (_uiState.compareAndSet(current, next)) return true
+        }
+    }
+
+    override fun onCleared() {
+        cancelRequest(CancellationReason.LIFECYCLE_PAUSE)
+    }
+
+    private companion object {
+        const val LIFECYCLE_CLOSEABLE_KEY = "http_probe_operation_lifecycle"
+        const val EDITED_URL_KEY = "editedHttpUrl"
+        const val HANDOFF_CONSUMED_KEY = "httpHandoffConsumed"
+        const val HANDOFF_SOURCE_KEY = "httpHandoffSource"
+        const val HANDOFF_RECOVERED_KEY = "handoffRecovered"
+    }
+}
+
+internal fun httpUrlForTarget(target: ToolDestination.HostTarget): String {
+    val host = target.host.canonical.let { canonical ->
+        val address = canonical.removeSurrounding("[", "]")
+        if (':' in address) "[${address.replace("%", "%25")}]" else address
+    }
+    return "http://$host:${requireNotNull(target.port).value}/"
 }

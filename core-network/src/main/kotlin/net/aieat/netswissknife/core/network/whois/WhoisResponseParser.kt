@@ -37,7 +37,7 @@ object WhoisResponseParser {
         findFirstValue(response, "Registrar", "registrar")
 
     fun parseRegistrarUrl(response: String): String? =
-        findFirstValue(response, "Registrar URL")
+        findFirstValue(response, "Registrar URL")?.takeIf(SafeWebUrl::isSafe)
 
     fun parseRegisteredOn(response: String): Long? =
         parseDate(findFirstValue(response, "Creation Date", "created", "Registered On"))

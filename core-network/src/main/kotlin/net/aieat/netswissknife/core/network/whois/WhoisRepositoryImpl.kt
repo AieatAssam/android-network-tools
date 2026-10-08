@@ -5,40 +5,248 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.CancellationException
+import net.aieat.netswissknife.core.network.MonotonicClock
+import net.aieat.netswissknife.core.network.SystemMonotonicClock
+import net.aieat.netswissknife.core.network.elapsedMillisSince
+import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationCancellationException
+import net.aieat.netswissknife.core.network.operation.OperationDeadlineExceededException
+import net.aieat.netswissknife.core.network.operation.OperationId
+import net.aieat.netswissknife.core.network.operation.OperationBudget
+import net.aieat.netswissknife.core.network.operation.OperationRunner
+import net.aieat.netswissknife.core.network.operation.OperationSession
+import net.aieat.netswissknife.core.network.operation.ensureCurrentOperationActive
+import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.NetworkResult
-import java.io.InputStreamReader
+import net.aieat.netswissknife.core.network.traceroute.ReservedRanges
+import java.io.IOException
 import java.net.Socket
 
-class WhoisRepositoryImpl : WhoisRepository {
+class WhoisRepositoryImpl @JvmOverloads constructor(
+    private val resolver: WhoisHostResolver = InetAddressWhoisHostResolver,
+    private val socketFactory: WhoisSocketFactory = WhoisSocketFactory { Socket() },
+    private val clock: MonotonicClock = SystemMonotonicClock,
+    /** Null keeps legacy callers and tests on the WHOIS-only path. Production opts in explicitly. */
+    private val rdapClient: RdapClient? = null,
+) : WhoisRepository {
 
     private val _hopProgress = MutableSharedFlow<WhoisHop>(extraBufferCapacity = 16)
     override val hopProgress: SharedFlow<WhoisHop> = _hopProgress.asSharedFlow()
 
-    override suspend fun lookup(query: String, timeoutMs: Int): NetworkResult<WhoisResult> {
-        if (query.isBlank()) return NetworkResult.Error("Query must not be blank")
-        if (timeoutMs < 500) return NetworkResult.Error("Timeout must be between 500 ms and 30 000 ms")
-        if (timeoutMs > 30_000) return NetworkResult.Error("Timeout must be between 500 ms and 30 000 ms")
+    override suspend fun lookup(query: String, timeoutMs: Int): NetworkResult<WhoisResult> =
+        lookup(query, timeoutMs, WhoisProtocol.AUTO)
 
-        return withContext(Dispatchers.IO) {
-            val start = System.currentTimeMillis()
-            try {
-                val queryType = WhoisQueryTypeDetector.detect(query)
-                val result = when (queryType) {
-                    WhoisQueryType.DOMAIN -> performDomainLookup(query, timeoutMs, start)
-                    WhoisQueryType.IPV4, WhoisQueryType.IPV6, WhoisQueryType.ASN ->
-                        performIpAsnLookup(query, queryType, timeoutMs, start)
-                }
-                result
-            } catch (e: Exception) {
-                NetworkResult.Error(e.message ?: "WHOIS lookup failed", e)
-            }
+    override suspend fun lookup(
+        query: String,
+        timeoutMs: Int,
+        protocol: WhoisProtocol,
+    ): NetworkResult<WhoisResult> {
+        if (query.isBlank()) return NetworkResult.error(ErrorCode.QUERY_BLANK, developerMessage = "Query must not be blank")
+        if (timeoutMs !in 500..30_000) return NetworkResult.error(
+            ErrorCode.TIMEOUT_OUT_OF_RANGE,
+            developerMessage = "Timeout must be between 500 ms and 30 000 ms",
+            args = listOf(500, 30_000),
+        )
+        return lookup(query, timeoutMs, WhoisOperation.newSession(timeoutMs, clock), protocol)
+    }
+
+    override suspend fun lookup(
+        query: String,
+        timeoutMs: Int,
+        operationSession: OperationSession,
+    ): NetworkResult<WhoisResult> = lookup(query, timeoutMs, operationSession, WhoisProtocol.AUTO)
+
+    override suspend fun lookup(
+        query: String,
+        timeoutMs: Int,
+        operationSession: OperationSession,
+        protocol: WhoisProtocol,
+    ): NetworkResult<WhoisResult> {
+        if (timeoutMs < 500) return NetworkResult.error(
+            ErrorCode.TIMEOUT_OUT_OF_RANGE,
+            developerMessage = "Timeout must be between 500 ms and 30 000 ms",
+            args = listOf(500, 30_000),
+        )
+        if (timeoutMs > 30_000) return NetworkResult.error(
+            ErrorCode.TIMEOUT_OUT_OF_RANGE,
+            developerMessage = "Timeout must be between 500 ms and 30 000 ms",
+            args = listOf(500, 30_000),
+        )
+        val normalizedQuery = WhoisQueryTypeDetector.normalize(query)
+            ?: return NetworkResult.error(
+                ErrorCode.WHOIS_INVALID_QUERY,
+                developerMessage = "Enter a valid domain, IP address, or ASN without spaces",
+            )
+        if (protocol == WhoisProtocol.RDAP && rdapClient == null) {
+            return NetworkResult.error(ErrorCode.WHOIS_UNAVAILABLE, developerMessage = "RDAP is unavailable")
         }
+
+        val session = operationSession
+        val responseBudget = WhoisResponseBudget(session.budget.maxResponseBytes)
+        return try {
+            // A chain contains at most three hops. Keep each socket operation bounded
+            // by timeoutMs and cap the whole lookup at three such timeouts. OperationRunner
+            // shares this monotonic total deadline and preserves parent cancellation.
+            OperationRunner.run(session) {
+                withContext(Dispatchers.IO) {
+                    val start = clock.nowNanos()
+                    if (protocol != WhoisProtocol.WHOIS && rdapClient != null) {
+                        val rdapResult = tryRdapLookup(
+                            client = rdapClient,
+                            query = if (normalizedQuery.type == WhoisQueryType.DOMAIN) {
+                                extractRegistrableDomain(normalizedQuery.value)
+                            } else normalizedQuery.value,
+                            resultQuery = normalizedQuery.value,
+                            queryType = normalizedQuery.type,
+                            start = start,
+                            budget = session.budget,
+                            operationId = session.budget.operationId,
+                            responseBudget = responseBudget,
+                            allowFallback = protocol == WhoisProtocol.AUTO,
+                        )
+                        if (rdapResult != null) return@withContext rdapResult
+                    }
+                    if (protocol == WhoisProtocol.RDAP) {
+                        return@withContext NetworkResult.error(
+                            ErrorCode.WHOIS_NO_RESULT,
+                            developerMessage = "RDAP lookup returned no result",
+                        )
+                    }
+                    when (normalizedQuery.type) {
+                        WhoisQueryType.DOMAIN -> performDomainLookup(
+                            normalizedQuery.value,
+                            timeoutMs,
+                            start,
+                            session.budget,
+                            session.budget.operationId,
+                            responseBudget
+                        )
+                        WhoisQueryType.IPV4, WhoisQueryType.IPV6, WhoisQueryType.ASN ->
+                            performIpAsnLookup(
+                                normalizedQuery.value,
+                                normalizedQuery.type,
+                                timeoutMs,
+                                start,
+                                session.budget,
+                                session.budget.operationId,
+                                responseBudget
+                            )
+                    }
+                }
+            }
+        } catch (e: OperationDeadlineExceededException) {
+            NetworkResult.error(
+                ErrorCode.WHOIS_LOOKUP_FAILED,
+                developerMessage = "WHOIS lookup exceeded its total deadline",
+                cause = e,
+            )
+        } catch (e: OperationCancellationException) {
+            if (e.reason == CancellationReason.DEADLINE_EXCEEDED) {
+                NetworkResult.error(
+                    ErrorCode.WHOIS_LOOKUP_FAILED,
+                    developerMessage = "WHOIS lookup exceeded its total deadline",
+                    cause = e,
+                )
+            } else if (e.reason == CancellationReason.PARENT_CANCELLED && e.cause is CancellationException) {
+                // OperationRunner records cancellation from a blocking adapter as a
+                // parent reason; retain the adapter's original cancellation contract.
+                val originalCancellation = e.cause as CancellationException
+                throw originalCancellation
+            } else {
+                throw e
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            NetworkResult.error(
+                ErrorCode.WHOIS_LOOKUP_FAILED,
+                developerMessage = e.message ?: "WHOIS lookup failed",
+                cause = e,
+            )
+        }
+    }
+
+    /** Returns a mapped success, or null when ordinary RDAP failures should use WHOIS. */
+    private suspend fun tryRdapLookup(
+        client: RdapClient,
+        query: String,
+        resultQuery: String,
+        queryType: WhoisQueryType,
+        start: Long,
+        budget: OperationBudget,
+        operationId: OperationId,
+        responseBudget: WhoisResponseBudget,
+        allowFallback: Boolean,
+    ): NetworkResult<WhoisResult>? {
+        budget.throwIfExpired()
+        val lookup = try {
+            client.lookup(query, queryType) { bodyBytes -> responseBudget.consume(bodyBytes) }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (deadline: OperationDeadlineExceededException) {
+            throw deadline
+        } catch (budgetExceeded: WhoisResponseBudgetExceededException) {
+            throw budgetExceeded
+        } catch (tooLarge: RdapResponseTooLargeException) {
+            throw tooLarge
+        } catch (failure: RdapHttpException) {
+            budget.throwIfExpired()
+            ensureCurrentOperationActive()
+            if (!allowFallback) throw failure
+            return null
+        } catch (failure: Exception) {
+            // The operation runner cancels this suspended exchange when its shared deadline
+            // expires. Check explicitly as well before allowing fallback to consume that time.
+            budget.throwIfExpired()
+            ensureCurrentOperationActive()
+            if (!allowFallback) throw failure
+            return null
+        }
+
+        budget.throwIfExpired()
+        ensureCurrentOperationActive()
+        if (lookup is RdapLookupResult.Unsupported) {
+            budget.throwIfExpired()
+            ensureCurrentOperationActive()
+            if (!allowFallback) throw IOException("RDAP record was not found")
+            return null
+        }
+
+        lookup as RdapLookupResult.Found
+        val elapsed = clock.elapsedMillisSince(start)
+        val mapped = try {
+            RdapMapper.map(
+                rawJson = lookup.rawJson,
+                query = resultQuery,
+                queryType = queryType,
+                serverHost = lookup.finalResponseHost,
+                queryTimeMs = elapsed,
+            )
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (deadline: OperationDeadlineExceededException) {
+            throw deadline
+        } catch (failure: Exception) {
+            budget.throwIfExpired()
+            ensureCurrentOperationActive()
+            if (!allowFallback) throw failure
+            return null
+        }
+
+        val hop = mapped.hops.single().copy(operationId = operationId)
+        ensureCurrentOperationActive()
+        _hopProgress.emit(hop)
+        return NetworkResult.Success(mapped.copy(hops = listOf(hop)))
     }
 
     private suspend fun performDomainLookup(
         domain: String,
         timeoutMs: Int,
-        overallStart: Long
+        overallStart: Long,
+        budget: OperationBudget,
+        operationId: OperationId,
+        responseBudget: WhoisResponseBudget,
     ): NetworkResult<WhoisResult> {
         // Strip subdomains — WHOIS registries only know about the registrable domain (eTLD+1)
         val registrableDomain = extractRegistrableDomain(domain)
@@ -46,18 +254,30 @@ class WhoisRepositoryImpl : WhoisRepository {
 
         // Hop 1 — IANA
         val ianaHop = try {
-            queryServer(IANA_SERVER, registrableDomain, timeoutMs)
+            queryServer(IANA_SERVER, registrableDomain, timeoutMs, budget, responseBudget)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: OperationDeadlineExceededException) {
+            throw e
+        } catch (e: WhoisResponseBudgetExceededException) {
+            throw e
         } catch (e: Exception) {
-            return NetworkResult.Error("IANA lookup failed: ${e.message}", e)
+            return NetworkResult.error(
+                ErrorCode.WHOIS_LOOKUP_FAILED,
+                developerMessage = "IANA lookup failed: ${e.message}",
+                cause = e,
+            )
         }
         val ianaReferral = WhoisResponseParser.parseReferral(ianaHop.second)
         val hop1 = WhoisHop(
             server = WhoisServer(IANA_SERVER, WhoisServerRole.IANA),
             rawResponse = ianaHop.second,
             queryTimeMs = ianaHop.first,
-            referral = ianaReferral
+            referral = ianaReferral,
+            operationId = operationId,
         )
         hops.add(hop1)
+        ensureCurrentOperationActive()
         _hopProgress.emit(hop1)
 
         // Hop 2 — TLD Registry
@@ -66,8 +286,25 @@ class WhoisRepositoryImpl : WhoisRepository {
             ?: return buildDomainResult(domain, WhoisQueryType.DOMAIN, hops, overallStart)
 
         val registryHop = try {
-            queryServer(registryHost, registrableDomain, timeoutMs)
+            queryServer(registryHost, registrableDomain, timeoutMs, budget, responseBudget)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: OperationDeadlineExceededException) {
+            throw e
+        } catch (e: WhoisResponseBudgetExceededException) {
+            throw e
         } catch (e: Exception) {
+            val failedHop = WhoisHop(
+                server = WhoisServer(registryHost, WhoisServerRole.REGISTRY),
+                rawResponse = "",
+                queryTimeMs = 0L,
+                referral = null,
+                error = e.message ?: "Connection failed",
+                operationId = operationId,
+            )
+            hops.add(failedHop)
+            ensureCurrentOperationActive()
+            _hopProgress.emit(failedHop)
             return buildDomainResult(domain, WhoisQueryType.DOMAIN, hops, overallStart)
         }
         val registrarWhoisServer = WhoisResponseParser.parseRegistrarWhoisServer(registryHop.second)
@@ -75,24 +312,34 @@ class WhoisRepositoryImpl : WhoisRepository {
             server = WhoisServer(registryHost, WhoisServerRole.REGISTRY),
             rawResponse = registryHop.second,
             queryTimeMs = registryHop.first,
-            referral = registrarWhoisServer
+            referral = registrarWhoisServer,
+            operationId = operationId,
         )
         hops.add(hop2)
+        ensureCurrentOperationActive()
         _hopProgress.emit(hop2)
 
         // Hop 3 — Registrar
         if (registrarWhoisServer != null) {
             val registrarHop = try {
-                queryServer(registrarWhoisServer, registrableDomain, timeoutMs)
+                queryServer(registrarWhoisServer, registrableDomain, timeoutMs, budget, responseBudget)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: OperationDeadlineExceededException) {
+                throw e
+            } catch (e: WhoisResponseBudgetExceededException) {
+                throw e
             } catch (e: Exception) {
                 val failedHop = WhoisHop(
                     server = WhoisServer(registrarWhoisServer, WhoisServerRole.REGISTRAR),
                     rawResponse = "",
                     queryTimeMs = 0L,
                     referral = null,
-                    error = e.message ?: "Connection failed"
+                    error = e.message ?: "Connection failed",
+                    operationId = operationId,
                 )
                 hops.add(failedHop)
+                ensureCurrentOperationActive()
                 _hopProgress.emit(failedHop)
                 return buildDomainResult(domain, WhoisQueryType.DOMAIN, hops, overallStart)
             }
@@ -100,9 +347,11 @@ class WhoisRepositoryImpl : WhoisRepository {
                 server = WhoisServer(registrarWhoisServer, WhoisServerRole.REGISTRAR),
                 rawResponse = registrarHop.second,
                 queryTimeMs = registrarHop.first,
-                referral = null
+                referral = null,
+                operationId = operationId,
             )
             hops.add(hop3)
+            ensureCurrentOperationActive()
             _hopProgress.emit(hop3)
         }
 
@@ -113,97 +362,113 @@ class WhoisRepositoryImpl : WhoisRepository {
         query: String,
         queryType: WhoisQueryType,
         timeoutMs: Int,
-        overallStart: Long
+        overallStart: Long,
+        budget: OperationBudget,
+        operationId: OperationId,
+        responseBudget: WhoisResponseBudget,
     ): NetworkResult<WhoisResult> {
         val hops = mutableListOf<WhoisHop>()
 
         // Hop 1 — ARIN
         val arinHop = try {
-            queryServer(ARIN_SERVER, query, timeoutMs)
+            queryServer(ARIN_SERVER, query, timeoutMs, budget, responseBudget)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: OperationDeadlineExceededException) {
+            throw e
+        } catch (e: WhoisResponseBudgetExceededException) {
+            throw e
         } catch (e: Exception) {
-            return NetworkResult.Error("ARIN lookup failed: ${e.message}", e)
+            return NetworkResult.error(
+                ErrorCode.WHOIS_LOOKUP_FAILED,
+                developerMessage = "ARIN lookup failed: ${e.message}",
+                cause = e,
+            )
         }
         val referral = WhoisResponseParser.parseRirReferral(arinHop.second)
         val hop1 = WhoisHop(
             server = WhoisServer(ARIN_SERVER, WhoisServerRole.RIR),
             rawResponse = arinHop.second,
             queryTimeMs = arinHop.first,
-            referral = referral
+            referral = referral,
+            operationId = operationId,
         )
         hops.add(hop1)
+        ensureCurrentOperationActive()
         _hopProgress.emit(hop1)
 
         // Hop 2 — Referred RIR (if any)
         if (referral != null && referral != ARIN_SERVER) {
             val referralHop = try {
-                queryServer(referral, query, timeoutMs)
+                queryServer(referral, query, timeoutMs, budget, responseBudget)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: OperationDeadlineExceededException) {
+                throw e
+            } catch (e: WhoisResponseBudgetExceededException) {
+                throw e
             } catch (e: Exception) {
+                val failedHop = WhoisHop(
+                    server = WhoisServer(referral, WhoisServerRole.RIR),
+                    rawResponse = "",
+                    queryTimeMs = 0L,
+                    referral = null,
+                    error = e.message ?: "Connection failed",
+                    operationId = operationId,
+                )
+                hops.add(failedHop)
+                ensureCurrentOperationActive()
+                _hopProgress.emit(failedHop)
                 return buildIpResult(query, queryType, hops, overallStart)
             }
             val hop2 = WhoisHop(
                 server = WhoisServer(referral, WhoisServerRole.RIR),
                 rawResponse = referralHop.second,
                 queryTimeMs = referralHop.first,
-                referral = null
+                referral = null,
+                operationId = operationId,
             )
             hops.add(hop2)
+            ensureCurrentOperationActive()
             _hopProgress.emit(hop2)
         }
 
         return buildIpResult(query, queryType, hops, overallStart)
     }
 
-    /**
-     * True for a loopback, private (RFC 1918), link-local, multicast, or wildcard
-     * address. A malicious or compromised WHOIS server can hand back an arbitrary
-     * `refer:`/registrar-server host in its response text (see [WhoisResponseParser]);
-     * without this check that referral is followed blindly, letting a remote WHOIS
-     * server redirect this app's own socket connection to the device's loopback
-     * interface or an internal LAN host.
-     */
+    /** Only resolved public-global destinations may receive an untrusted WHOIS referral. */
     internal fun isDisallowedReferralAddress(address: java.net.InetAddress): Boolean =
-        address.isLoopbackAddress ||
-            address.isLinkLocalAddress ||
-            address.isSiteLocalAddress ||
-            address.isAnyLocalAddress ||
-            address.isMulticastAddress
+        !ReservedRanges.isPublicGlobalLiteral(address.hostAddress)
 
-    private fun queryServer(host: String, query: String, timeoutMs: Int): Pair<Long, String> {
-        val start = System.currentTimeMillis()
-        val resolved = java.net.InetAddress.getByName(host)
-        if (isDisallowedReferralAddress(resolved)) {
-            throw java.io.IOException("Refused to connect to non-public WHOIS referral address: $host")
-        }
-        val socket = Socket()
-        try {
-            socket.connect(java.net.InetSocketAddress(resolved, WHOIS_PORT), timeoutMs)
-            socket.soTimeout = timeoutMs
-            socket.getOutputStream().write("$query\r\n".toByteArray(Charsets.UTF_8))
-            // A malicious or misbehaving WHOIS server could otherwise stream data
-            // indefinitely (soTimeout only bounds idle time between reads, not total
-            // bytes) and exhaust device memory; no real WHOIS response is anywhere
-            // near this size.
-            val response = InputStreamReader(socket.getInputStream(), Charsets.UTF_8)
-                .buffered()
-                .use { reader ->
-                    val buffer = CharArray(READ_CHUNK_SIZE)
-                    val sb = StringBuilder()
-                    var totalRead = 0
-                    while (true) {
-                        val read = reader.read(buffer)
-                        if (read == -1) break
-                        totalRead += read
-                        if (totalRead > MAX_RESPONSE_BYTES) {
-                            throw java.io.IOException("WHOIS response exceeded ${MAX_RESPONSE_BYTES} bytes")
-                        }
-                        sb.append(buffer, 0, read)
-                    }
-                    sb.toString()
-                }
-            return Pair(System.currentTimeMillis() - start, response)
-        } finally {
-            try { socket.close() } catch (_: Exception) {}
-        }
+    private suspend fun queryServer(
+        host: String,
+        query: String,
+        timeoutMs: Int,
+        budget: OperationBudget,
+        responseBudget: WhoisResponseBudget,
+    ): Pair<Long, String> {
+        // OperationBudget performs an overflow-safe ceiling conversion. Adding a
+        // rounding constant to a saturated Long.MAX_VALUE deadline would overflow
+        // and turn a large but valid remaining budget into a negative socket timeout.
+        val remainingMs = budget.remainingTimeoutMillis()
+        if (remainingMs <= 0L) throw OperationDeadlineExceededException()
+        // A positive remaining sub-millisecond deadline rounds up to 1 ms. Reject
+        // zero because Socket.connect(timeout = 0) means "no timeout" in the JDK API.
+        val remainingTimeoutMs = remainingMs
+            .coerceAtMost(Int.MAX_VALUE.toLong())
+            .toInt()
+        ensureCurrentOperationActive()
+        return WhoisBlockingTransport.query(
+            host = host,
+            query = query,
+            port = WHOIS_PORT,
+            timeoutMs = minOf(timeoutMs, remainingTimeoutMs),
+            resolver = resolver,
+            socketFactory = socketFactory,
+            isDisallowedAddress = ::isDisallowedReferralAddress,
+            responseBudget = responseBudget,
+            clock = clock,
+        )
     }
 
     private fun buildDomainResult(
@@ -234,7 +499,7 @@ class WhoisRepositoryImpl : WhoisRepository {
                 netRange = null,
                 orgName = null,
                 country = null,
-                totalQueryTimeMs = System.currentTimeMillis() - overallStart
+                totalQueryTimeMs = clock.elapsedMillisSince(overallStart)
             )
         )
     }
@@ -245,7 +510,7 @@ class WhoisRepositoryImpl : WhoisRepository {
         hops: List<WhoisHop>,
         overallStart: Long
     ): NetworkResult<WhoisResult> {
-        val lastResponse = hops.lastOrNull()?.rawResponse ?: ""
+        val lastResponse = hops.lastOrNull { it.error == null }?.rawResponse ?: ""
         val p = WhoisResponseParser
         return NetworkResult.Success(
             WhoisResult(
@@ -267,27 +532,17 @@ class WhoisRepositoryImpl : WhoisRepository {
                 netRange = p.parseNetRange(lastResponse),
                 orgName = p.parseOrgName(lastResponse),
                 country = p.parseCountry(lastResponse),
-                totalQueryTimeMs = System.currentTimeMillis() - overallStart
+                totalQueryTimeMs = clock.elapsedMillisSince(overallStart)
             )
         )
     }
 
     /**
-     * Strips subdomains to return the registrable domain (eTLD+1).
-     * e.g. "sub.example.co.uk" → "example.co.uk", "sub.example.com" → "example.com"
+     * Selects the domain boundary relevant to registry WHOIS queries.
+     * PRIVATE PSL rules are excluded because they describe hosted tenants,
+     * not domains registered with the TLD registry.
      */
-    internal fun extractRegistrableDomain(domain: String): String {
-        val parts = domain.lowercase(java.util.Locale.ROOT).split('.')
-        if (parts.size <= 2) return domain
-        val lastTwo = "${parts[parts.size - 2]}.${parts.last()}"
-        return if (COMPOUND_TLDS.contains(lastTwo)) {
-            // e.g. co.uk → take 3 labels: example.co.uk
-            if (parts.size >= 3) parts.takeLast(3).joinToString(".") else domain
-        } else {
-            // Standard TLD → take 2 labels: example.com
-            parts.takeLast(2).joinToString(".")
-        }
-    }
+    internal fun extractRegistrableDomain(domain: String): String = PublicSuffix.domainForWhois(domain)
 
     private fun getTldFallback(domain: String): String? {
         val parts = domain.lowercase(java.util.Locale.ROOT).split('.')
@@ -303,21 +558,9 @@ class WhoisRepositoryImpl : WhoisRepository {
 
     companion object {
         private const val WHOIS_PORT = 43
+        private const val MAX_HOPS = 3
         private const val IANA_SERVER = "whois.iana.org"
         private const val ARIN_SERVER = "whois.arin.net"
-        private const val READ_CHUNK_SIZE = 8192
-        internal const val MAX_RESPONSE_BYTES = 1_048_576
-
-        private val COMPOUND_TLDS = setOf(
-            "co.uk", "org.uk", "me.uk", "net.uk", "ltd.uk", "plc.uk",
-            "co.nz", "net.nz", "org.nz", "gov.nz",
-            "com.au", "net.au", "org.au", "gov.au",
-            "co.jp", "or.jp", "ne.jp",
-            "co.in", "net.in", "org.in",
-            "com.br", "net.br", "org.br",
-            "com.cn", "net.cn", "org.cn",
-            "com.mx", "com.ar", "com.sg", "com.hk"
-        )
 
         private val TLD_FALLBACK = mapOf(
             "com"   to "whois.verisign-grs.com",

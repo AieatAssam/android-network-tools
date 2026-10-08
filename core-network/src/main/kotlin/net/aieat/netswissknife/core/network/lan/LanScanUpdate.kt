@@ -14,6 +14,7 @@ sealed interface LanScanUpdate {
         val host: LanHost,
         val scannedCount: Int,
         val totalCount: Int,
+        val uncertainCount: Int = 0,
     ) : LanScanUpdate
 
     /**
@@ -25,6 +26,9 @@ sealed interface LanScanUpdate {
     data class ScanProgress(
         val scannedCount: Int,
         val totalCount: Int,
+        val uncertainCount: Int = 0,
+        /** One bounded diagnostic sample for partial results; null when none was recorded. */
+        val diagnostic: LanScanDiagnostic? = null,
     ) : LanScanUpdate
 
     /** Emitted once when the scan finishes (always the last event). */

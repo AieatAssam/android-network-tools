@@ -6,25 +6,29 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.net.wifi.WifiManager
 import androidx.core.content.ContextCompat
+import net.aieat.netswissknife.core.network.wifi.WifiScanRefreshStatus
+import net.aieat.netswissknife.core.network.operation.OperationSession
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.resume
 
 /** Outcome of one platform scan request. */
-data class ScanRequestOutcome(
-    val startScanReturned: Boolean,
-    val broadcastArrived: Boolean
-) {
-    /** Android returns false when the request is rejected, including throttling. */
-    val throttled: Boolean get() = !startScanReturned
-}
+data class ScanRequestOutcome(val status: WifiScanRefreshStatus)
 
 /** Pure decision function used by the Android adapter and JVM tests. */
-fun decideOutcome(startScanReturned: Boolean, broadcastArrived: Boolean): ScanRequestOutcome =
-    ScanRequestOutcome(
-        startScanReturned = startScanReturned,
-        broadcastArrived = broadcastArrived
-    )
+fun decideOutcome(
+    startScanReturned: Boolean,
+    broadcastArrived: Boolean,
+    resultsUpdated: Boolean = false
+): ScanRequestOutcome = ScanRequestOutcome(
+    status = when {
+        !startScanReturned -> WifiScanRefreshStatus.REJECTED
+        !broadcastArrived -> WifiScanRefreshStatus.TIMED_OUT
+        resultsUpdated -> WifiScanRefreshStatus.UPDATED
+        else -> WifiScanRefreshStatus.NOT_UPDATED
+    }
+)
 
 /**
  * Starts one foreground Wi-Fi scan and waits for the platform completion event.
@@ -33,37 +37,56 @@ fun decideOutcome(startScanReturned: Boolean, broadcastArrived: Boolean): ScanRe
  */
 class ScanRequestAwaiter(
     private val context: Context,
-    private val wifiManager: WifiManager
+    private val wifiManager: WifiManager,
+    private val registerReceiver: (BroadcastReceiver, IntentFilter) -> Unit = { scanReceiver, filter ->
+        ContextCompat.registerReceiver(
+            context,
+            scanReceiver,
+            filter,
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
+    },
+    private val unregisterReceiver: (BroadcastReceiver) -> Unit = { context.unregisterReceiver(it) },
+    private val createIntentFilter: (String) -> IntentFilter = ::IntentFilter
 ) {
 
     @Suppress("DEPRECATION")
-    suspend fun requestAndAwait(timeoutMs: Long): ScanRequestOutcome {
+    suspend fun requestAndAwait(timeoutMs: Long): ScanRequestOutcome = requestAndAwait(timeoutMs, null)
+
+    /** The Android scan request itself cannot be cancelled; the receiver wait can. */
+    @Suppress("DEPRECATION")
+    suspend fun requestAndAwait(timeoutMs: Long, operationSession: OperationSession?): ScanRequestOutcome {
         var startScanReturned = false
         var broadcastArrived = false
-        var receiver: BroadcastReceiver? = null
-        var receiverRegistered = false
+        var resultsUpdated = false
+        var receiverLease: ReceiverLease? = null
 
         try {
             withTimeoutOrNull(timeoutMs) {
                 suspendCancellableCoroutine { continuation ->
+                    if (!continuation.isActive) return@suspendCancellableCoroutine
                     val scanReceiver = object : BroadcastReceiver() {
                         override fun onReceive(receiverContext: Context?, intent: Intent?) {
                             if (intent?.action != WifiManager.SCAN_RESULTS_AVAILABLE_ACTION) return
                             broadcastArrived = true
+                            resultsUpdated = intent.getBooleanExtra(
+                                WifiManager.EXTRA_RESULTS_UPDATED,
+                                false
+                            )
                             if (continuation.isActive) continuation.resume(Unit)
                         }
                     }
-                    receiver = scanReceiver
-                    ContextCompat.registerReceiver(
-                        context,
+                    registerReceiver(
                         scanReceiver,
-                        IntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION),
-                        ContextCompat.RECEIVER_NOT_EXPORTED
+                        createIntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION)
                     )
-                    receiverRegistered = true
+                    val lease = ReceiverLease { unregisterQuietly(scanReceiver) }
+                    receiverLease = lease
+                    operationSession?.resources?.register(lease)
                     continuation.invokeOnCancellation {
-                        if (receiverRegistered) unregisterQuietly(scanReceiver)
+                        lease.close()
                     }
+                    if (!continuation.isActive) return@suspendCancellableCoroutine
 
                     // startScan() is deprecated since API 28, but remains the
                     // documented foreground trigger on API 26–37. Android's
@@ -75,18 +98,29 @@ class ScanRequestAwaiter(
                 }
             }
         } finally {
-            receiver?.let { unregisterQuietly(it) }
-            receiverRegistered = false
+            val lease = receiverLease
+            if (lease != null &&
+                (operationSession == null || operationSession.resources.release(lease))
+            ) {
+                lease.close()
+            }
         }
 
-        return decideOutcome(startScanReturned, broadcastArrived)
+        return decideOutcome(startScanReturned, broadcastArrived, resultsUpdated)
     }
 
     private fun unregisterQuietly(receiver: BroadcastReceiver) {
         try {
-            context.unregisterReceiver(receiver)
+            unregisterReceiver(receiver)
         } catch (_: IllegalArgumentException) {
             // The receiver may already have been removed by cancellation cleanup.
+        }
+    }
+
+    private class ReceiverLease(private val unregister: () -> Unit) : AutoCloseable {
+        private val closed = AtomicBoolean(false)
+        override fun close() {
+            if (closed.compareAndSet(false, true)) unregister()
         }
     }
 }

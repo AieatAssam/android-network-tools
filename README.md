@@ -22,7 +22,7 @@ ICMP echo and reachability round-trip latency measurement with real-time streami
 - **Continuous mode** — toggle replaces the count slider; pings indefinitely while the app is on screen, screen kept on automatically, stops when backgrounded or screen locked
   - Rolling window of the last 100 packets drives live stats and chart
   - Full session log streamed to a temp CSV file; shareable via the Share button on completion
-- Recent hosts saved per-session and offered as quick-select chips
+- Tools with recent-target support save up to five entries on-device and show quick-select chips; clear recent targets from Settings
 - CSV exports retain the original columns and append reply TTL and payload bytes.
 
 ### Traceroute
@@ -30,7 +30,7 @@ Network path analysis with per-hop geolocation enrichment.
 - Configurable max hops (1–64), timeout (500–30,000 ms), and probes per hop (1–5)
 - Dual protocol support: ICMP and UDP
 - Automatic MTU discovery or custom packet size (28–1,472 bytes)
-- Each hop shows IP address, reverse-DNS hostname, RTT, and geographic location
+- Hops show IP address, per-probe RTTs, and min/average/max when multiple probes are requested; reverse DNS and geolocation fill in asynchronously when available
 
 ### Port Scanner
 TCP port reachability scanning with service identification.
@@ -41,7 +41,9 @@ TCP port reachability scanning with service identification.
 ### LAN Scanner
 Local network device discovery across IPv4 subnets.
 - CIDR subnet scanning (/16–/30) with automatic current-subnet detection
-- Multi-method presence detection: ICMP, TCP open/reset, NetBIOS NBSTAT, and mDNS reverse lookup; each host shows the method(s) that found it
+- Scans are capped at an estimated 10 minutes. When the detected network is too large for that at the current timeout and concurrency (for example a /16 on corporate Wi-Fi), the subnet field is pre-filled with the /24 around this device and a hint names the full network. An over-limit range entered by hand, including prefixes broader than /16, offers a one-tap scan of this device's /24 instead
+- Multi-method presence detection: successful ICMP, completed TCP connections, and correlated NetBIOS NBSTAT or mDNS replies; each confirmed host shows the method(s) that found it
+- Failed connects, timeouts, unreachable routes, and policy failures remain opt-in diagnostics and never inflate the confirmed device count or confirmed-host exports
 - Per-host details: IP, hostname, MAC address, OUI vendor name, open ports, RTT when ICMP answers, and gateway flag from the active default route
 - MAC resolution is best-effort: Android 10+ restricts the ARP source, so the UI explains when a MAC cannot be read
 - Concurrent host probes (1–500) with real-time progress streaming, post-probe ARP enrichment, and final summary
@@ -51,7 +53,7 @@ Local network device discovery across IPv4 subnets.
 ### DNS Lookup
 Full DNS record resolution with multiple resolver options and protocol-level response details.
 - 10 record types: A, AAAA, MX, TXT, CNAME, NS, SOA, PTR, SRV, CAA
-- Resolver options: system default, Google (8.8.8.8), Cloudflare (1.1.1.1), OpenDNS, Quad9, or custom server
+- Resolver options: system default, Google (8.8.8.8), Cloudflare (1.1.1.1), OpenDNS (208.67.222.222), Quad9 (9.9.9.9), or a custom server
 - PTR queries auto-reverse IPv4 addresses to `.in-addr.arpa` and IPv6 to `.ip6.arpa` form — just enter the IP
 - Returns each record's actual RR type and section, RCODE, AA/AD/TC/RD/RA flags, query time, server actually used, and raw DNS response
 - System DNS is never silently replaced with Cloudflare; when Android reports no resolver, the UI explains the failure and offers an explicit Cloudflare fallback. Private DNS status is shown when available.
@@ -68,13 +70,12 @@ Wi-Fi environment analysis with SSID grouping and spectrum visualisation.
 - Each refresh requests a platform scan; auto-refresh is configurable (Off / 15 / 30 / 60 seconds, default 30 seconds). Android throttles foreground scans to four per two minutes, so the screen shows result age and when a request was throttled; Location Services must be enabled.
 
 ### TLS Inspector
-SSL/TLS certificate chain analysis for any TCP host.
+SSL/TLS certificate analysis for any TCP host, without sending an HTTP request.
 - Configurable host, port (default 443), and timeout (500–30 000 ms)
-- Full certificate chain: leaf, intermediates, and root
-- Per-certificate: subject/issuer CN & org, validity dates, SANs, serial number, signature algorithm, public key algorithm & bit length, SHA-256 fingerprint
-- Connection summary: TLS version, cipher suite, handshake time, chain trust status
-- Highlights expired certificates and self-signed certs
-- Works with any TCP host, not just HTTPS — does not send an HTTP request
+- Presented peer chain: subject/issuer, validity dates, SANs, serial number, signature and public-key details, and SHA-256 fingerprint per certificate
+- Checks device trust, hostname match, expiry/not-yet-valid dates, incomplete chains, self-signed certificates, weak signatures, and weak keys
+- Connection summary includes negotiated TLS version, ALPN, cipher suite, connect time, and handshake time
+- Optional older-TLS-version probes, expected SHA-256 leaf-certificate pin comparison, and PEM chain sharing
 
 ### Network Topology Discovery
 SNMP-based network topology discovery via BFS traversal.
@@ -90,27 +91,28 @@ SNMP-based network topology discovery via BFS traversal.
 - LLDP neighbour addresses are decoded from the LLDP management-address index; CDP accepts dotted and hex-octet cache addresses
 
 ### WHOIS Lookup
-Domain and IP registration lookup via three-hop WHOIS referral chain.
+Domain, IP, and ASN registration lookup using RDAP with WHOIS fallback.
 - Supports domain names, IPv4, IPv6, and ASN queries
-- Three-hop chain for domains: IANA referral → TLD registry → registrar
-- Two-hop chain for IPs/ASNs: ARIN → referred RIR if needed
-- Static TLD fallback map for common TLDs (.com, .net, .org, .io, .co.uk, .de, .fr, .app, .dev)
-- Parsed fields: registrar, registration/expiry/update dates, name servers, WHOIS status codes, DNSSEC, registrant org & country
+- Protocol selector: Auto tries RDAP first and falls back to WHOIS; RDAP and WHOIS modes use only the selected protocol
+- Domain RDAP uses the [IANA DNS bootstrap](https://data.iana.org/rdap/dns.json) to choose a registry endpoint; IP and ASN requests use the [rdap.org](https://rdap.org/) redirector
+- WHOIS fallback uses the IANA-to-registry-to-registrar referral chain for domains and ARIN/referring RIRs for IPs and ASNs
+- Parsed fields include registrar, registration/expiry/update dates, name servers, status codes, DNSSEC, registrant organization/country, and network ranges
 - Human-readable status code labels (e.g. "clientTransferProhibited" → "Transfer Locked")
-- Live relay-chain visualiser: animates each server node PENDING → QUERYING → DONE as the chain progresses
-- Optional raw response per hop for power users
+- Live relay-chain visualiser shows the RDAP or WHOIS servers used; raw responses are available for inspection
 
 ### HTTP Probe
-Full HTTP/HTTPS request tester with security header analysis.
+HTTPS request tester with security header analysis. Plain HTTP requests are disabled in this release.
 - Supports GET, POST, PUT, PATCH, DELETE, HEAD, and OPTIONS methods
 - Custom request headers: add/remove key-value pairs dynamically
-- Request body editor (enabled for POST, PUT, PATCH) with monospace text input
-- Follow-redirects toggle with full redirect chain display
+- Request body editor for POST, PUT, and PATCH
+- Follow-redirects toggle with each hop's status and URL; HTTPS-to-HTTP redirects are blocked before contacting the destination
+- Cross-origin redirects that would resend a request body require approval for that redirect
 - Response display across four tabs:
-  - **Overview**: status code (color-coded 2xx/3xx/4xx/5xx), response time, final URL, redirect hops, body size, Content-Type
+  - **Overview**: status code (color-coded 2xx/3xx/4xx/5xx), DNS/connect/TLS/server-wait/transfer phases plus total time to first byte, negotiated HTTP/1.1 or HTTP/2 protocol, final URL, redirect hops, body size, Content-Type
   - **Headers**: collapsible request and response header sections
-  - **Body**: scrollable monospace response body with copy-to-clipboard; truncated at 512 KB with notice
-  - **Security**: per-header pass/warn/fail ratings for HSTS, CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy, Cross-Origin-Opener-Policy, Cross-Origin-Embedder-Policy, and Server header information disclosure
+  - **Body**: scrollable monospace response body with copy-to-clipboard, JSON validity, and optional pretty-print; response data is capped at 512 KB with a truncation notice
+  - **Security**: grades HSTS strength, CSP enforcement and script directives, clickjacking protection, deprecated X-XSS-Protection, MIME sniffing, referrer and permissions policies, cross-origin opener/embedder policies, Server version disclosure, and each Set-Cookie flag set. HTTPS-to-HTTP downgrade evidence appears separately in a blocked-redirect warning.
+- Copy the configured request as a shell-quoted cURL command, including method, custom headers, body, and redirect behavior. Redirect following is omitted when custom headers, a body, or a non-GET/HEAD method could diverge from the app's redirect handling; otherwise exported commands only follow HTTPS redirects to prevent downgrades. The UI explains when following is suppressed.
 
 ### mDNS Service Browser
 LAN service discovery via multicast DNS (RFC 6762 / DNS-SD RFC 6763).
@@ -149,6 +151,14 @@ Wake sleeping or powered-down machines on the local network with a UDP magic pac
 - Advanced options: custom broadcast address (default `255.255.255.255`) and UDP port (default 9)
 - Sends 3 duplicate packets per request for reliability over lossy UDP
 - Success card confirms target MAC, broadcast address, port, and packet count; in-app help explains BIOS/OS requirements
+
+## Networking behavior
+
+LAN-directed sockets use the selected Wi-Fi or Ethernet network when the destination is within that network's subnet. This lets local discovery and device queries reach the LAN when a VPN is active; destinations outside the local subnet continue to use Android's normal route. mDNS joins the selected interface and can use an ephemeral query port when port 5353 is unavailable.
+
+Tool screens show a status banner when internet access or a local Wi-Fi/Ethernet network is unavailable. LAN tools also explain when a VPN is active. On Android 16 (API 36) and newer, Android's Local Network Protections can require `NEARBY_WIFI_DEVICES` access before local-network operations. If access is denied, the tool shows a Grant action; grant access and retry the operation explicitly.
+
+Settings, pinned tools, and recent targets are stored in app-private preferences. Android cloud backup and device transfer exclude this preference file; clear recent targets from Settings when you want to remove them sooner.
 
 ---
 
@@ -244,7 +254,7 @@ apkanalyzer dex packages app/build/outputs/apk/release/app-release-unsigned.apk 
 
 ### Coverage (Kover)
 ```bash
-./gradlew :app:koverVerify        # enforce 100% on pure, non-Compose app logic
+./gradlew :app:koverVerify        # enforce 90% on the pure, non-Compose classes in the app Kover include list
 ./gradlew :app:koverHtmlReport    # scoped :app report
 ./gradlew :core-network:koverHtmlReport :core-domain:koverHtmlReport
 ```
@@ -276,14 +286,14 @@ apkanalyzer dex packages app/build/outputs/apk/release/app-release-unsigned.apk 
 ## CI & Automation
 
 ### Standard CI (`ci.yml`)
-Runs on every push to `main` and every PR targeting `main`:
-1. Sets up JDK 21 (Temurin)
-2. Caches Gradle
-3. Runs `./gradlew test`
-4. Runs `./gradlew :app:assembleDebug`
+Runs on every push to `main` and every PR targeting `main`. The `build-and-test` job runs the repository quality checks, Android Lint, unit tests, Kover verification, and a debug APK build; CodeQL analyzes Java and Kotlin separately.
+
+The `release-smoke` job builds the unsigned, minified release APK and checks that R8 retained the SNMP and native traceroute classes, the arm64 native library, and the OUI and public-suffix resources. It uploads the unsigned APK and R8 `mapping.txt` for seven days. This is a packaging smoke check; SNMP reflective loading still needs the documented release-build functional check.
+
+Firebase Test Lab runs on pushes to `main`. To opt a trusted pull request from a branch in this repository into Test Lab, apply the `run-instrumented` label. Fork pull requests cannot receive the Firebase service-account secret and therefore do not run that job. Newer Test Lab runs cancel older runs for the same Git ref. The job uses the `FIREBASE_SERVICE_ACCOUNT_KEY` Actions secret; the workflow does not print it.
 
 ### Release (`release.yml`)
-Triggered by a `v*.*.*` tag push or manual dispatch. Signs and publishes the release APK and AAB to GitHub Releases.
+Triggered by a new `vYYYY.MM.DD.N` tag (where `N` is 1–99) or manual dispatch. Manual dispatch allocates the next unused daily suffix and reserves the immutable tag before building. The version code is `YYYYMMDD × 100 + N`. When all four release-signing secrets are configured, the workflow signs and publishes the APK and AAB to GitHub Releases. If none are configured, it publishes unsigned artifacts; a partial signing configuration fails before the build.
 
 Required GitHub Actions secrets:
 

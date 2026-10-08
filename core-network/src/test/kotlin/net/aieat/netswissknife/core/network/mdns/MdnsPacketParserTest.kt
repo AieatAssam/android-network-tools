@@ -91,6 +91,24 @@ class MdnsPacketParserTest {
         assertTrue(question!!.name.toString().endsWith("."))
     }
 
+    @Test
+    fun `buildMdnsQuery sets unicast-response bit in question class when requested`() {
+        val bytes = MdnsPacketParser.buildMdnsQuery("_http._tcp.local.", unicastResponse = true)
+        val qclass = ((bytes[bytes.lastIndex - 1].toInt() and 0xFF) shl 8) or
+            (bytes[bytes.lastIndex].toInt() and 0xFF)
+
+        assertEquals(0x8001, qclass)
+    }
+
+    @Test
+    fun `buildMdnsQuery leaves unicast-response bit clear by default`() {
+        val bytes = MdnsPacketParser.buildMdnsQuery("_http._tcp.local.")
+        val qclass = ((bytes[bytes.lastIndex - 1].toInt() and 0xFF) shl 8) or
+            (bytes[bytes.lastIndex].toInt() and 0xFF)
+
+        assertEquals(0x0001, qclass)
+    }
+
     // ── normalizeHostname ─────────────────────────────────────────────────────
 
     @Test
@@ -121,4 +139,3 @@ class MdnsPacketParserTest {
         assertNotNull(msg!!.question)
     }
 }
-

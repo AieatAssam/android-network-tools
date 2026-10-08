@@ -81,12 +81,19 @@ import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
+import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
+import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.core.network.subnet.SubnetInfo
 
 @Composable
 fun SubnetCalculatorScreen(viewModel: SubnetCalculatorViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val announcementPhase = when {
+        uiState.error != null -> ToolAnnouncementPhase.ERROR
+        uiState.result != null -> ToolAnnouncementPhase.FINISHED
+        else -> null
+    }
 
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
@@ -104,12 +111,15 @@ fun SubnetCalculatorScreen(viewModel: SubnetCalculatorViewModel = hiltViewModel(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // ── Hero header ─────────────────────────────────────────────────────
-            ToolHeroHeader(
-                title = stringResource(R.string.subnet_screen_title),
-                subtitle = stringResource(R.string.subnet_screen_subtitle),
-                icon = Icons.Default.Calculate,
-                onHelpClick = { showHelp = true },
-            )
+            Box {
+                ToolStateAnnouncer(stringResource(R.string.help_subnet_title), announcementPhase)
+                ToolHeroHeader(
+                    title = stringResource(R.string.subnet_screen_title),
+                    subtitle = stringResource(R.string.subnet_screen_subtitle),
+                    icon = Icons.Default.Calculate,
+                    onHelpClick = { showHelp = true },
+                )
+            }
 
             // ── Input card ──────────────────────────────────────────────────────
             ElevatedCard(modifier = Modifier.fillMaxWidth()) {

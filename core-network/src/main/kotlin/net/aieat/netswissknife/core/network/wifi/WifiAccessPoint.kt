@@ -80,7 +80,12 @@ object WifiChannelHelper {
             2484 -> 14
             else -> ((frequencyMhz - 2407) / 5).coerceIn(1, 13)
         }
-        WifiBand.BAND_5GHZ  -> ((frequencyMhz - 5000) / 5).coerceIn(36, 177)
+        WifiBand.BAND_5GHZ  -> if (frequencyMhz in 4900 until 5000) {
+            // 4.9 GHz channel numbering uses a separate 4000 MHz base.
+            ((frequencyMhz - 4000) / 5).coerceIn(180, 199)
+        } else {
+            ((frequencyMhz - 5000) / 5).coerceAtMost(177)
+        }
         WifiBand.BAND_6GHZ  -> ((frequencyMhz - 5950) / 5).coerceIn(1, 233)
         WifiBand.BAND_60GHZ -> ((frequencyMhz - 56160) / 2160).coerceIn(1, 6)
         WifiBand.UNKNOWN    -> 0
@@ -98,8 +103,18 @@ object WifiChannelHelper {
 
     /**
      * Returns the set of 2.4 GHz channel numbers that overlap with [channel].
-     * Channels overlap if they are within ±4 of each other.
+     * Channels overlap if they are within ±4 of each other, except channel 14's
+     * wider frequency spacing means only channels 12 and 13 overlap it in addition to itself.
      */
     fun overlapping24GHzChannels(channel: Int): Set<Int> =
-        ((channel - 4)..(channel + 4)).filter { it in 1..14 }.toSet()
+        ((channel - 4)..(channel + 4))
+            .filter { it in 1..14 }
+            .filter { candidate ->
+                when {
+                    channel == 14 -> candidate >= 12
+                    candidate == 14 -> channel >= 12
+                    else -> true
+                }
+            }
+            .toSet()
 }

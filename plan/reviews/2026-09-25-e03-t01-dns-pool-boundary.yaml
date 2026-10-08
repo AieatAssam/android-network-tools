@@ -1,0 +1,28 @@
+review:
+  area: E03-T01 DNS production executor boundary
+  status: source_review_and_full_core_network_passed_device_gates_open
+  date: 2026-09-25
+  checked_commit: e77db611cbdc8beafecf065166c2a4c39c184dd8
+  branch: plan/comprehensive-review-2026-09-22
+
+scope:
+  - "SessionIoClientFactory's production DEFAULT_EXECUTOR and the test use the same createDnsIoExecutor() factory."
+  - "The factory creates a fixed four-worker ThreadPoolExecutor with a 16-entry ArrayBlockingQueue and AbortPolicy."
+  - "The repository-adapter test holds four transport tasks, fills the queue, and confirms a further task is rejected before socket registration."
+  - "Canceling queued work removes the task and makes the slot available to a replacement operation."
+  - "Cancellation closes active DNS sockets, drains workers and queued work, and closes the associated operation scopes."
+
+validation:
+  focused:
+    command: "./gradlew :core-network:test --tests '*DnsRepositoryOperationSessionTest' --no-daemon --no-parallel --max-workers=1"
+    result: "Passed 9 tests, zero failures/errors."
+  full:
+    command: "./gradlew :core-network:test --no-daemon --no-parallel --max-workers=1 --console=plain"
+    result: "Passed 1,311 tests (one skipped), zero failures/errors."
+  source_review:
+    result: "Independent QA and adversarial reviews found no blocker in the production factory wiring, saturation/rejection assertions, queued cancellation recovery, or cleanup. git diff --check passed."
+
+limits:
+  - "No emulator or device was used."
+  - "E03-T01 remains open for other adapter boundaries, phase-wide operation/resource coverage, device behavior, and the <=500 ms cleanup measurement."
+  - "The release brief's API 33, live SNMP, physical-Wi-Fi, TalkBack, and no-ANR checks remain device/lab gates."

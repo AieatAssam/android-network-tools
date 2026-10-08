@@ -30,6 +30,28 @@ class RecentHostsRepository @Inject constructor(
         }
     }
 
+    /**
+     * Sanitizes and compacts one recent-host list in a single DataStore edit.
+     * Entries for other tools are never read or changed by this operation.
+     */
+    suspend fun sanitizeRecents(
+        key: Preferences.Key<String>,
+        sanitizer: (String) -> String?
+    ) {
+        dataStore.edit { prefs ->
+            val existing = prefs[key]?.split(SEPARATOR)?.filter { it.isNotBlank() } ?: emptyList()
+            val sanitized = existing
+                .mapNotNull { sanitizer(it)?.trim()?.takeIf(String::isNotBlank) }
+                .distinct()
+                .take(MAX_RECENTS)
+            if (sanitized.isEmpty()) {
+                prefs.remove(key)
+            } else {
+                prefs[key] = sanitized.joinToString(SEPARATOR)
+            }
+        }
+    }
+
     suspend fun removeRecent(key: Preferences.Key<String>, host: String) {
         dataStore.edit { prefs ->
             val existing = prefs[key]?.split(SEPARATOR)?.filter { it.isNotBlank() } ?: emptyList()

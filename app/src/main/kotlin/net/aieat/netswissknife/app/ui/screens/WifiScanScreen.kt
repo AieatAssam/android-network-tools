@@ -76,8 +76,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material3.Badge
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -88,8 +90,6 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
-import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
@@ -113,13 +113,18 @@ import net.aieat.netswissknife.app.ui.theme.StatusOk
 import net.aieat.netswissknife.app.ui.theme.StatusWarn
 import net.aieat.netswissknife.app.ui.theme.SpectrumPalette
 import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -138,8 +143,29 @@ import androidx.compose.material3.IconButton
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
+import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.core.network.wifi.WifiBand
+import net.aieat.netswissknife.core.network.wifi.WifiSecurity
+
+internal fun wifiSpectrumPlotBounds(
+    widthPx: Float,
+    leftPadPx: Float,
+    isRtl: Boolean,
+): ClosedFloatingPointRange<Float> {
+    val first = if (isRtl) 0f else leftPadPx
+    val last = if (isRtl) widthPx - leftPadPx else widthPx
+    return minOf(first, last)..maxOf(first, last)
+}
+
+internal fun wifiSpectrumLabelLeft(
+    centerXPx: Float,
+    labelWidthPx: Float,
+    plotBounds: ClosedFloatingPointRange<Float>,
+): Float {
+    val maxLeft = (plotBounds.endInclusive - labelWidthPx).coerceAtLeast(plotBounds.start)
+    return (centerXPx - labelWidthPx / 2f).coerceIn(plotBounds.start, maxLeft)
+}
 
 // ── Network colour palette (12 visually distinct colours) ────────────────────
 
@@ -148,6 +174,9 @@ private fun networkColor(colorIndex: Int): Color =
 
 object WifiScreenTestTags {
     const val CONTENT_LIST = "wifi_content_list"
+    const val UNKNOWN_SECURITY_ICON = "wifi_unknown_security_icon"
+    const val UNKNOWN_SECURITY_LABEL = "wifi_unknown_security_label"
+    const val AP_DETAIL_CONTENT = "wifi_ap_detail_content"
     const val NETWORKS_START_INDEX = 7
 }
 
@@ -155,7 +184,8 @@ object WifiScreenTestTags {
 fun requiredWifiPermissions(sdkInt: Int): List<String> = buildList {
     add(Manifest.permission.ACCESS_FINE_LOCATION)
     if (sdkInt >= Build.VERSION_CODES.TIRAMISU) {
-        add(Manifest.permission.NEARBY_WIFI_DEVICES)
+        // Kept as a string so API 26-32 never resolve an API 33 permission field.
+        add("android.permission.NEARBY_WIFI_DEVICES")
     }
 }
 
@@ -174,6 +204,8 @@ fun WifiScanScreen(
     val expandedNetworks by viewModel.expandedNetworks.collectAsStateWithLifecycle()
     val apDisappearedEvent by viewModel.apDisappearedEvent.collectAsStateWithLifecycle()
     val apDisappearedMessage = apDisappearedEvent?.let { stringResource(it.messageResId) }
+    val announcementPhase = wifiAnnouncementPhase(uiState)
+    ToolStateAnnouncer(stringResource(R.string.help_wifi_title), announcementPhase)
 
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(apDisappearedEvent) {
@@ -195,23 +227,31 @@ fun WifiScanScreen(
     LaunchedEffect(Unit) {
         if (uiState is WifiScanUiState.Idle) {
             permissionLauncher.launch(requiredPermissions)
-        } else if (uiState !is WifiScanUiState.NoPermission && uiState !is WifiScanUiState.NotSupported) {
+        } else if (uiState is WifiScanUiState.Success) {
             viewModel.startAutoRefresh()
         }
     }
 
-    DisposableEffect(Unit) { onDispose { viewModel.stopAutoRefresh() } }
+    DisposableEffect(Unit) { onDispose { viewModel.onLifecyclePause() } }
 
     DisposableEffect(lifecycleOwner) {
+        if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+            viewModel.onLifecycleResume()
+        } else {
+            viewModel.onLifecyclePause()
+        }
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_PAUSE -> viewModel.stopAutoRefresh()
+                Lifecycle.Event.ON_PAUSE -> viewModel.onLifecyclePause()
                 Lifecycle.Event.ON_RESUME -> viewModel.onLifecycleResume()
                 else -> Unit
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            viewModel.onLifecyclePause()
+        }
     }
 
     var visible by remember { mutableStateOf(false) }
@@ -253,13 +293,16 @@ fun WifiScanScreen(
                         context.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
                     }
                 )
-                is WifiScanUiState.Scanning     -> WifiScanningScreen()
+                is WifiScanUiState.Scanning     -> WifiScanningScreen(onCancel = { viewModel.cancelScan() })
+                is WifiScanUiState.Cancelled    -> WifiCancelledScreen(onRetry = { viewModel.startScan() })
+                is WifiScanUiState.Paused       -> WifiPausedScreen(onRetry = { viewModel.startScan() })
                 is WifiScanUiState.Success      -> WifiSuccessScreen(
                     state               = state,
                     autoRefresh         = autoRefresh,
                     refreshIntervalMs   = refreshIntervalMs,
                     expandedNetworks    = expandedNetworks,
                     onScan              = { viewModel.startScan() },
+                    onRequestPermission = { permissionLauncher.launch(requiredPermissions) },
                     onRefreshInterval   = { viewModel.setRefreshInterval(it) },
                     onBandFilter        = { viewModel.setBandFilter(it) },
                     onSortOrder         = { viewModel.setSortOrder(it) },
@@ -367,7 +410,7 @@ fun WifiScanScreen(
     ))
 }
 
-@Composable private fun WifiScanningScreen() {
+@Composable private fun WifiScanningScreen(onCancel: () -> Unit) {
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -376,12 +419,35 @@ fun WifiScanScreen(
             Spacer(Modifier.height(8.dp))
             ShimmerBox(Modifier.fillMaxWidth().height(100.dp).clip(RoundedCornerShape(16.dp)))
         }
+        item {
+            Button(onClick = onCancel, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.cancel))
+            }
+        }
         item { ShimmerBox(Modifier.fillMaxWidth().height(48.dp).clip(RoundedCornerShape(8.dp))) }
         item { ShimmerBox(Modifier.fillMaxWidth().height(220.dp).clip(RoundedCornerShape(16.dp))) }
         items(4) {
             ShimmerBox(Modifier.fillMaxWidth().height(72.dp).clip(RoundedCornerShape(16.dp)))
         }
     }
+}
+
+@Composable private fun WifiCancelledScreen(onRetry: () -> Unit) {
+    WifiStatusCard(
+        icon = { Icon(Icons.Default.WifiOff, null, Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+        title = stringResource(R.string.wifi_scan_cancelled_title),
+        body = stringResource(R.string.wifi_scan_cancelled_body),
+        action = { Button(onRetry) { Text(stringResource(R.string.wifi_retry)) } }
+    )
+}
+
+@Composable private fun WifiPausedScreen(onRetry: () -> Unit) {
+    WifiStatusCard(
+        icon = { Icon(Icons.Default.WifiOff, null, Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+        title = stringResource(R.string.wifi_scan_paused_title),
+        body = stringResource(R.string.wifi_scan_paused_body),
+        action = { Button(onRetry) { Text(stringResource(R.string.wifi_retry)) } }
+    )
 }
 
 // ── Success screen ────────────────────────────────────────────────────────────
@@ -392,6 +458,7 @@ fun WifiScanScreen(
     refreshIntervalMs: Long?,
     expandedNetworks: Set<String>,
     onScan: () -> Unit,
+    onRequestPermission: () -> Unit,
     onRefreshInterval: (Long?) -> Unit,
     onBandFilter: (WifiBand?) -> Unit,
     onSortOrder: (ApSortOrder) -> Unit,
@@ -419,7 +486,7 @@ fun WifiScanScreen(
             )
         }
 
-        item { WifiScanFreshnessStatus(state.result) }
+        item { WifiScanFreshnessStatus(state.result, onRequestPermission) }
 
         state.result.connectedNetwork?.let { connectionInfo ->
             item { WifiConnectedNetworkCard(connectionInfo) }
@@ -560,10 +627,15 @@ fun WifiScanScreen(
                 }
                 Spacer(Modifier.height(4.dp))
                 val time = remember(result.scanTimestampMs) {
-                    SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(result.scanTimestampMs))
+                    if (result.scanTimestampMs > 0L) {
+                        SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(result.scanTimestampMs))
+                    } else {
+                        null
+                    }
                 }
                 Text(
-                    "${result.networks.size} SSIDs · ${result.accessPoints.size} APs · $time",
+                    listOfNotNull("${result.networks.size} SSIDs · ${result.accessPoints.size} APs", time)
+                        .joinToString(" · "),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
                 )
@@ -674,11 +746,17 @@ private fun bandChannelLabels(band: WifiBand): List<Pair<Int, Float>> = when (ba
     }
 
     val gridColor      = MaterialTheme.colorScheme.outlineVariant
-    val labelColorArgb = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f).toArgb()
-    val density        = LocalDensity.current
-    val labelPx: Float
-    val ssidPx: Float
-    with(density) { labelPx = 9.sp.toPx(); ssidPx = 10.sp.toPx() }
+    val labelColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
+    val textMeasurer = rememberTextMeasurer()
+    val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+    val strongestAp = aps.maxByOrNull { it.rssi }
+    val spectrumDescription = stringResource(
+        R.string.wifi_spectrum_a11y,
+        aps.size,
+        band.displayName,
+        strongestAp?.displaySsid ?: stringResource(R.string.wifi_unknown_network),
+        strongestAp?.rssi ?: 0,
+    )
 
     val channelLabels = remember(band) { bandChannelLabels(band) }
 
@@ -687,7 +765,12 @@ private fun bandChannelLabels(band: WifiBand): List<Pair<Int, Float>> = when (ba
             Text(stringResource(R.string.wifi_spectrum_title), style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(8.dp))
 
-            Canvas(Modifier.fillMaxWidth().height(220.dp)) {
+            Canvas(
+                Modifier
+                    .fillMaxWidth()
+                    .height(220.dp)
+                    .semantics { contentDescription = spectrumDescription },
+            ) {
                 val leftPad    = 36.dp.toPx()
                 val bottomPad  = 20.dp.toPx()
                 val chartW     = size.width - leftPad
@@ -696,47 +779,50 @@ private fun bandChannelLabels(band: WifiBand): List<Pair<Int, Float>> = when (ba
                 val rssiMin = -100f
                 val rssiMax = -30f
 
-                fun freqToX(f: Float) = leftPad + (f - range.min) / (range.max - range.min) * chartW
+                fun chartX(x: Float) = if (isRtl) size.width - x else x
+                fun freqToX(f: Float) = chartX(leftPad + (f - range.min) / (range.max - range.min) * chartW)
                 fun rssiToY(r: Float) = chartH - ((r - rssiMin) / (rssiMax - rssiMin)) * chartH
 
                 val bottomY = chartH
+                val leftAxisX = chartX(leftPad)
+                val rightAxisX = chartX(size.width)
+                val plotBounds = wifiSpectrumPlotBounds(size.width, leftPad, isRtl)
+                val plotMinX = plotBounds.start
+                val plotMaxX = plotBounds.endInclusive
 
                 // Y-axis gridlines: -90, -70, -50, -30 dBm
-                val gridPaint = android.graphics.Paint().apply {
-                    color       = labelColorArgb
-                    textSize    = labelPx
-                    textAlign   = android.graphics.Paint.Align.RIGHT
-                    isAntiAlias = true
-                }
                 listOf(-90f, -70f, -50f, -30f).forEach { rssi ->
                     val y = rssiToY(rssi)
-                    drawLine(gridColor, Offset(leftPad, y), Offset(size.width, y), strokeWidth = 1f)
-                    drawContext.canvas.nativeCanvas.drawText(
-                        "${rssi.toInt()}", leftPad - 4.dp.toPx(), y + labelPx / 3f, gridPaint
+                    drawLine(gridColor, Offset(leftAxisX, y), Offset(rightAxisX, y), strokeWidth = 1f)
+                    val label = textMeasurer.measure(
+                        text = "${rssi.toInt()}",
+                        style = TextStyle(
+                            color = labelColor,
+                            fontSize = 9.sp,
+                            textAlign = if (isRtl) TextAlign.Start else TextAlign.End,
+                        ),
                     )
+                    val labelX = if (isRtl) leftAxisX + 4.dp.toPx() else leftAxisX - 4.dp.toPx() - label.size.width
+                    drawText(label, topLeft = Offset(labelX, y - label.size.height / 2f))
                 }
 
                 // Baseline
-                drawLine(gridColor, Offset(leftPad, bottomY), Offset(size.width, bottomY), strokeWidth = 1f)
+                drawLine(gridColor, Offset(plotMinX, bottomY), Offset(plotMaxX, bottomY), strokeWidth = 1f)
 
                 // Channel labels on X axis (subtle vertical guides)
-                val chPaint = android.graphics.Paint().apply {
-                    color       = labelColorArgb
-                    textSize    = labelPx
-                    textAlign   = android.graphics.Paint.Align.CENTER
-                    isAntiAlias = true
-                }
                 channelLabels.forEach { (ch, freq) ->
                     val x = freqToX(freq)
-                    if (x >= leftPad && x <= size.width) {
+                    if (x in plotMinX..plotMaxX) {
                         drawLine(
                             gridColor.copy(alpha = 0.35f),
                             Offset(x, 0f), Offset(x, bottomY),
                             strokeWidth = 0.5.dp.toPx()
                         )
-                        drawContext.canvas.nativeCanvas.drawText(
-                            "$ch", x, size.height - 2.dp.toPx(), chPaint
+                        val label = textMeasurer.measure(
+                            text = "$ch",
+                            style = TextStyle(color = labelColor, fontSize = 9.sp, textAlign = TextAlign.Center),
                         )
+                        drawText(label, topLeft = Offset(x - label.size.width / 2f, size.height - 2.dp.toPx() - label.size.height))
                     }
                 }
 
@@ -747,8 +833,10 @@ private fun bandChannelLabels(band: WifiBand): List<Pair<Int, Float>> = when (ba
                     val halfMhz    = ap.channelWidthMhz / 2f
 
                     val xCenter = freqToX(centerFreq)
-                    val xLeft   = freqToX(centerFreq - halfMhz).coerceAtLeast(leftPad)
-                    val xRight  = freqToX(centerFreq + halfMhz).coerceAtMost(size.width)
+                    val xOne = freqToX(centerFreq - halfMhz)
+                    val xTwo = freqToX(centerFreq + halfMhz)
+                    val xLeft = minOf(xOne, xTwo).coerceIn(plotMinX, plotMaxX)
+                    val xRight = maxOf(xOne, xTwo).coerceIn(plotMinX, plotMaxX)
                     val peakY   = rssiToY(ap.rssi.toFloat()).coerceIn(4f, bottomY - 4f)
 
                     val path = Path().apply {
@@ -767,18 +855,18 @@ private fun bandChannelLabels(band: WifiBand): List<Pair<Int, Float>> = when (ba
                     val centerFreq = (ap.centerFrequency0.takeIf { it != 0 } ?: ap.frequency).toFloat()
                     val xCenter    = freqToX(centerFreq)
                     val peakY      = rssiToY(ap.rssi.toFloat()).coerceIn(4f, bottomY - 4f)
-                    val labelY     = (peakY - 4.dp.toPx()).coerceAtLeast(ssidPx + 2f)
-
-                    val ssidPaint = android.graphics.Paint().apply {
-                        this.color      = color.toArgb()
-                        textSize        = ssidPx
-                        textAlign       = android.graphics.Paint.Align.CENTER
-                        isFakeBoldText  = true
-                        isAntiAlias     = true
-                    }
-                    drawContext.canvas.nativeCanvas.drawText(
-                        ap.displaySsid.take(10), xCenter, labelY, ssidPaint
+                    val label = textMeasurer.measure(
+                        text = ap.displaySsid.take(10),
+                        style = TextStyle(
+                            color = color,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center,
+                        ),
                     )
+                    val labelY = (peakY - 4.dp.toPx() - label.size.height).coerceAtLeast(0f)
+                    val labelX = wifiSpectrumLabelLeft(xCenter, label.size.width.toFloat(), plotBounds)
+                    drawText(label, topLeft = Offset(labelX, labelY))
                 }
             }
         }
@@ -831,7 +919,10 @@ private fun WifiSortRow(
 
     ElevatedCard(
         onClick  = onToggleExpanded,
-        modifier = Modifier.fillMaxWidth().semantics { role = Role.Button }
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("wifi_network_card_${network.displaySsid}")
+            .semantics { role = Role.Button }
     ) {
         Column {
             // ── Header row ────────────────────────────────────────────────────
@@ -1012,6 +1103,8 @@ private fun signalLevelColor(level: net.aieat.netswissknife.core.network.wifi.Si
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .testTag(WifiScreenTestTags.AP_DETAIL_CONTENT)
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -1067,15 +1160,7 @@ private fun signalLevelColor(level: net.aieat.netswissknife.core.network.wifi.Si
             HorizontalDivider()
 
             DetailSectionHeader(stringResource(R.string.wifi_detail_security))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    if (ap.security.isEncrypted) Icons.Default.Lock else Icons.Default.LockOpen,
-                    null, Modifier.size(18.dp),
-                    tint = if (ap.security.isEncrypted) MaterialTheme.colorScheme.primary
-                           else MaterialTheme.colorScheme.tertiary
-                )
-                Text(ap.security.displayName, style = MaterialTheme.typography.bodyMedium)
-            }
+            WifiSecurityIndicator(ap.security)
             val tokens = ap.capabilities
                 .removePrefix("[").removeSuffix("]")
                 .split("][")
@@ -1112,20 +1197,65 @@ private fun signalLevelColor(level: net.aieat.netswissknife.core.network.wifi.Si
     }
 }
 
+@Composable
+internal fun WifiSecurityIndicator(security: WifiSecurity) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        val securityIcon = when (security) {
+            WifiSecurity.UNKNOWN -> Icons.AutoMirrored.Filled.HelpOutline
+            WifiSecurity.OPEN -> Icons.Default.LockOpen
+            else -> Icons.Default.Lock
+        }
+        Icon(
+            securityIcon,
+            if (security == WifiSecurity.UNKNOWN) stringResource(R.string.wifi_security_unknown) else null,
+            Modifier.size(18.dp).then(
+                if (security == WifiSecurity.UNKNOWN) Modifier.testTag(WifiScreenTestTags.UNKNOWN_SECURITY_ICON)
+                else Modifier
+            ),
+            tint = when (security) {
+                WifiSecurity.UNKNOWN -> MaterialTheme.colorScheme.onSurfaceVariant
+                WifiSecurity.OPEN -> MaterialTheme.colorScheme.tertiary
+                else -> MaterialTheme.colorScheme.primary
+            }
+        )
+        Text(
+            security.displayName,
+            Modifier.then(
+                if (security == WifiSecurity.UNKNOWN) Modifier.testTag(WifiScreenTestTags.UNKNOWN_SECURITY_LABEL)
+                else Modifier
+            ),
+            style = MaterialTheme.typography.bodyMedium
+        )
+    }
+}
+
 // ── Signal arc gauge ──────────────────────────────────────────────────────────
 
 @Composable private fun SignalArcGauge(quality: Int, level: net.aieat.netswissknife.core.network.wifi.SignalLevel) {
     val fillColor  = signalLevelColor(level)
     val trackColor = MaterialTheme.colorScheme.surfaceVariant
-    val density    = LocalDensity.current
-    val labelPx: Float
-    val bigPx: Float
-    with(density) { labelPx = 11.sp.toPx(); bigPx = 22.sp.toPx() }
-    val labelArgb  = MaterialTheme.colorScheme.onSurface.toArgb()
-    val subArgb    = MaterialTheme.colorScheme.onSurfaceVariant.toArgb()
+    val qualityTextColor = MaterialTheme.colorScheme.onSurface
+    val labelTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val textMeasurer = rememberTextMeasurer()
     val gaugeLabel = stringResource(R.string.wifi_signal_quality)
+    val levelLabel = stringResource(
+        when (level) {
+            net.aieat.netswissknife.core.network.wifi.SignalLevel.EXCELLENT -> R.string.wifi_signal_level_excellent
+            net.aieat.netswissknife.core.network.wifi.SignalLevel.GOOD -> R.string.wifi_signal_level_good
+            net.aieat.netswissknife.core.network.wifi.SignalLevel.FAIR -> R.string.wifi_signal_level_fair
+            net.aieat.netswissknife.core.network.wifi.SignalLevel.WEAK -> R.string.wifi_signal_level_weak
+            net.aieat.netswissknife.core.network.wifi.SignalLevel.POOR -> R.string.wifi_signal_level_poor
+        },
+    )
+    val gaugeDescription = stringResource(R.string.wifi_signal_gauge_a11y, quality, levelLabel)
 
-    Box(Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .height(120.dp)
+            .semantics { contentDescription = gaugeDescription },
+        contentAlignment = Alignment.Center,
+    ) {
         Canvas(Modifier.size(200.dp, 100.dp)) {
             val strokeWidth = 18f
             val radius = size.width / 2f - strokeWidth / 2f
@@ -1139,16 +1269,34 @@ private fun signalLevelColor(level: net.aieat.netswissknife.core.network.wifi.Si
             drawArc(fillColor, 180f, 180f * (quality / 100f), useCenter = false, topLeft = arcTopLeft, size = arcSize,
                 style = Stroke(strokeWidth, cap = androidx.compose.ui.graphics.StrokeCap.Round))
 
-            drawContext.canvas.nativeCanvas.drawText("$quality%", cx, cy - radius / 2.5f,
-                android.graphics.Paint().apply {
-                    color = labelArgb; textSize = bigPx; textAlign = android.graphics.Paint.Align.CENTER
-                    isFakeBoldText = true; isAntiAlias = true
-                })
-            drawContext.canvas.nativeCanvas.drawText(gaugeLabel, cx, cy - radius / 2.5f + labelPx * 1.6f,
-                android.graphics.Paint().apply {
-                    color = subArgb; textSize = labelPx; textAlign = android.graphics.Paint.Align.CENTER
-                    isAntiAlias = true
-                })
+            val qualityText = textMeasurer.measure(
+                text = "$quality%",
+                style = TextStyle(
+                    color = qualityTextColor,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
+                ),
+            )
+            drawText(
+                qualityText,
+                topLeft = Offset(cx - qualityText.size.width / 2f, cy - radius / 2.5f - qualityText.size.height / 2f),
+            )
+            val labelText = textMeasurer.measure(
+                text = gaugeLabel,
+                style = TextStyle(
+                    color = labelTextColor,
+                    fontSize = 11.sp,
+                    textAlign = TextAlign.Center,
+                ),
+            )
+            drawText(
+                labelText,
+                topLeft = Offset(
+                    cx - labelText.size.width / 2f,
+                    cy - radius / 2.5f + qualityText.size.height / 2f,
+                ),
+            )
         }
     }
 }

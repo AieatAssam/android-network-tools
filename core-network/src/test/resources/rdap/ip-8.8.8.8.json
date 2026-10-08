@@ -1,0 +1,18 @@
+{
+  "objectClassName": "ip network",
+  "handle": "NET-8-8-8-0-1",
+  "name": "Google LLC",
+  "startAddress": "8.8.8.0",
+  "endAddress": "8.8.8.255",
+  "ipVersion": "v4",
+  "country": "US",
+  "status": ["active"],
+  "events": [{"eventAction": "registration", "eventDate": "2007-03-13T00:00:00Z"}],
+  "entities": [
+    {
+      "objectClassName": "entity",
+      "roles": ["registrant"],
+      "vcardArray": ["vcard", [["org", {}, "text", "Google LLC"]]]
+    }
+  ]
+}

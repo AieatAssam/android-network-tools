@@ -14,6 +14,46 @@ class PingStatsComputeTest {
     private fun timeoutPacket(seq: Int) =
         PingPacketResult(seq, "host", null, PingStatus.TIMEOUT)
 
+    @Test
+    fun `accumulator matches list computation while ignoring failed RTTs for jitter`() {
+        val packets = listOf(
+            successPacket(1, 10L),
+            timeoutPacket(2),
+            successPacket(3, 30L),
+            PingPacketResult(4, "host", 90L, PingStatus.ERROR),
+            successPacket(5, 20L),
+        )
+        val accumulator = PingStatsAccumulator()
+        packets.forEach(accumulator::add)
+
+        assertEquals(PingStats.compute(packets), accumulator.snapshot())
+        assertEquals(5, accumulator.snapshot().sent)
+        assertEquals(3, accumulator.snapshot().received)
+        assertEquals(15.0, accumulator.snapshot().jitterMs, 0.001)
+    }
+
+    @Test
+    fun `accumulator keeps whole-session loss and RTT statistics beyond a hundred packets`() {
+        val accumulator = PingStatsAccumulator()
+        repeat(150) { index ->
+            val packet = if (index < 50) {
+                timeoutPacket(index + 1)
+            } else {
+                successPacket(index + 1, 25L)
+            }
+            accumulator.add(packet)
+        }
+
+        val stats = accumulator.snapshot()
+        assertEquals(150, stats.sent)
+        assertEquals(100, stats.received)
+        assertEquals(33.333336f, stats.lossPercent, 0.001f)
+        assertEquals(25L, stats.minMs)
+        assertEquals(25L, stats.maxMs)
+        assertEquals(25.0, stats.avgMs, 0.001)
+        assertEquals(0.0, stats.jitterMs, 0.001)
+    }
+
     @Nested
     @DisplayName("empty packet list")
     inner class EmptyList {

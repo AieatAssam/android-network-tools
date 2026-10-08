@@ -7,6 +7,7 @@ import dagger.hilt.components.SingletonComponent
 import net.aieat.netswissknife.core.domain.WakeOnLanUseCase
 import net.aieat.netswissknife.core.network.wol.WakeOnLanRepository
 import net.aieat.netswissknife.core.network.wol.WakeOnLanRepositoryImpl
+import net.aieat.netswissknife.core.network.net.NetworkBinder
 import javax.inject.Singleton
 
 @Module
@@ -15,7 +16,7 @@ object WakeOnLanModule {
 
     @Provides
     @Singleton
-    fun provideWakeOnLanRepository(): WakeOnLanRepository = WakeOnLanRepositoryImpl()
+    fun provideWakeOnLanRepository(binder: NetworkBinder): WakeOnLanRepository = WakeOnLanRepositoryImpl(binder)
 
     @Provides
     @Singleton

@@ -1,7 +1,6 @@
 package net.aieat.netswissknife.app
 
 import android.os.Bundle
-import net.aieat.netswissknife.app.BuildConfig
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -16,28 +15,29 @@ import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffo
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScope
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
-import androidx.core.view.WindowCompat
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.res.stringResource
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.core.view.WindowCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import dagger.hilt.android.AndroidEntryPoint
 import net.aieat.netswissknife.app.ui.components.AdaptiveContentBounds
 import net.aieat.netswissknife.app.ui.navigation.AppNavHost
 import net.aieat.netswissknife.app.ui.navigation.AppNavigationViewModel
 import net.aieat.netswissknife.app.ui.navigation.MoreToolsSheet
 import net.aieat.netswissknife.app.ui.navigation.NavRoutes
 import net.aieat.netswissknife.app.ui.navigation.navigateToTool
+import net.aieat.netswissknife.app.ui.navigation.navigationRouteIdentity
 import net.aieat.netswissknife.app.ui.screens.onboarding.OnboardingSheet
 import net.aieat.netswissknife.app.ui.screens.onboarding.OnboardingViewModel
 import net.aieat.netswissknife.app.ui.screens.settings.SettingsViewModel
 import net.aieat.netswissknife.app.ui.theme.NetSwissKnifeTheme
-import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -58,11 +58,12 @@ class MainActivity : ComponentActivity() {
             val settingsViewModel: SettingsViewModel = hiltViewModel()
             val themeOverride by settingsViewModel.themeOverride.collectAsStateWithLifecycle()
             val dynamicColor by settingsViewModel.dynamicColor.collectAsStateWithLifecycle()
-            val darkTheme = when (themeOverride) {
-                "LIGHT" -> false
-                "DARK"  -> true
-                else    -> isSystemInDarkTheme()
-            }
+            val darkTheme =
+                when (themeOverride) {
+                    "LIGHT" -> false
+                    "DARK" -> true
+                    else -> isSystemInDarkTheme()
+                }
             NetSwissKnifeTheme(darkTheme = darkTheme, dynamicColor = dynamicColor) {
                 val navController = rememberNavController()
                 NetSwissKnifeApp(navController)
@@ -80,20 +81,20 @@ fun NetSwissKnifeApp(navController: NavHostController) {
     val shouldShowOnboarding by onboardingViewModel.shouldShowOnboarding.collectAsStateWithLifecycle()
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = navBackStackEntry?.destination?.route
+    val currentRoute = navigationRouteIdentity(navBackStackEntry?.destination?.route)
     val windowAdaptiveInfo = currentWindowAdaptiveInfoV2()
     NavigationSuiteScaffold(
         layoutType = NavigationSuiteScaffoldDefaults.calculateFromAdaptiveInfo(windowAdaptiveInfo),
         navigationSuiteItems = {
             appNavigationSuiteItems(
-                currentRoute  = currentRoute,
-                pinnedRoutes  = pinnedRoutes,
-                onNavigate    = { route ->
+                currentRoute = currentRoute,
+                pinnedRoutes = pinnedRoutes,
+                onNavigate = { route ->
                     navController.navigateToTool(route)
                 },
-                onMoreClick   = { showMoreSheet = true }
+                onMoreClick = { showMoreSheet = true },
             )
-        }
+        },
     ) {
         AdaptiveContentBounds {
             AppNavHost(navController = navController)
@@ -101,33 +102,50 @@ fun NetSwissKnifeApp(navController: NavHostController) {
     }
 
     if (showMoreSheet) {
-        MoreToolsSheet(
+        AppMoreToolsSheet(
             pinnedRoutes = pinnedRoutes,
-            onNavigate   = { route ->
-                showMoreSheet = false
-                navController.navigateToTool(route)
-            },
-            onTogglePin  = navViewModel::togglePin,
-            maxPinned    = AppNavigationViewModel.MAX_PINNED,
-            onDismiss    = { showMoreSheet = false },
-            onSettingsClick = {
-                showMoreSheet = false
-                navController.navigate(NavRoutes.Settings.route) {
-                    launchSingleTop = true
-                }
-            },
-            onDebugLogsClick = if (BuildConfig.DEBUG) ({
-                showMoreSheet = false
-                navController.navigate(NavRoutes.DebugLogs.route) {
-                    launchSingleTop = true
-                }
-            }) else ({}),
+            onTogglePin = navViewModel::togglePin,
+            navController = navController,
+            onDismiss = { showMoreSheet = false },
         )
     }
 
-    if (shouldShowOnboarding) {
+    if (shouldShowOnboarding == true) {
         OnboardingSheet(onDismiss = { onboardingViewModel.completeOnboarding() })
     }
+}
+
+@Composable
+@Suppress("FunctionNaming", "ktlint:standard:function-naming")
+private fun AppMoreToolsSheet(
+    pinnedRoutes: List<String>,
+    onTogglePin: (String) -> Unit,
+    navController: NavHostController,
+    onDismiss: () -> Unit,
+) {
+    val openDebugLogs: () -> Unit = {
+        onDismiss()
+        navController.navigate(NavRoutes.DebugLogs.route) {
+            launchSingleTop = true
+        }
+    }
+    MoreToolsSheet(
+        pinnedRoutes = pinnedRoutes,
+        onNavigate = { route ->
+            onDismiss()
+            navController.navigateToTool(route)
+        },
+        onTogglePin = onTogglePin,
+        maxPinned = AppNavigationViewModel.MAX_PINNED,
+        onDismiss = onDismiss,
+        onSettingsClick = {
+            onDismiss()
+            navController.navigate(NavRoutes.Settings.route) {
+                launchSingleTop = true
+            }
+        },
+        onDebugLogsClick = openDebugLogs,
+    )
 }
 
 /**
@@ -144,38 +162,40 @@ private fun NavigationSuiteScope.appNavigationSuiteItems(
     currentRoute: String?,
     pinnedRoutes: List<String>,
     onNavigate: (String) -> Unit,
-    onMoreClick: () -> Unit
+    onMoreClick: () -> Unit,
 ) {
-    val pinnedTools = pinnedRoutes.mapNotNull { route ->
-        NavRoutes.allTools.find { it.route == route }
-    }
+    val pinnedTools =
+        pinnedRoutes.mapNotNull { route ->
+            NavRoutes.allTools.find { it.route == route }
+        }
 
     // Home is always first
     item(
         selected = currentRoute == NavRoutes.Home.route,
-        onClick  = { onNavigate(NavRoutes.Home.route) },
-        icon  = { Icon(Icons.Default.Home, contentDescription = null) },
-        label = { Text(stringResource(R.string.nav_home)) }
+        onClick = { onNavigate(NavRoutes.Home.route) },
+        icon = { Icon(Icons.Default.Home, contentDescription = null) },
+        label = { Text(stringResource(R.string.nav_home)) },
     )
 
     // Pinned tools (dynamic, up to MAX_PINNED)
     pinnedTools.forEach { tool ->
         item(
             selected = currentRoute == tool.route,
-            onClick  = { onNavigate(tool.route) },
-            icon  = { Icon(tool.icon, contentDescription = null) },
-            label = { Text(tool.shortLabel) }
+            onClick = { onNavigate(tool.route) },
+            icon = { Icon(tool.icon, contentDescription = null) },
+            label = { Text(stringResource(tool.shortLabelRes)) },
         )
     }
 
     // "More" is always last — highlighted when the current screen is not Home and not a pinned tool
-    val isMoreSelected = currentRoute != null &&
-        currentRoute != NavRoutes.Home.route &&
-        pinnedTools.none { it.route == currentRoute }
+    val isMoreSelected =
+        currentRoute != null &&
+            currentRoute != NavRoutes.Home.route &&
+            pinnedTools.none { it.route == currentRoute }
     item(
         selected = isMoreSelected,
-        onClick  = onMoreClick,
-        icon     = { Icon(Icons.Default.MoreHoriz, contentDescription = null) },
-        label    = { Text(stringResource(R.string.nav_more)) }
+        onClick = onMoreClick,
+        icon = { Icon(Icons.Default.MoreHoriz, contentDescription = null) },
+        label = { Text(stringResource(R.string.nav_more)) },
     )
 }

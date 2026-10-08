@@ -40,6 +40,7 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.ArrowDropUp
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Devices
+import androidx.compose.material.icons.filled.Http
 import androidx.compose.material.icons.filled.NetworkPing
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Router
@@ -96,15 +97,34 @@ import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.theme.AppShapes
 import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
+import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
+import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
+import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
+import net.aieat.netswissknife.app.ui.screens.mdnsAnnouncementPhase
+import net.aieat.netswissknife.app.platform.NetworkErrorKind
 import net.aieat.netswissknife.core.network.mdns.DiscoveredService
+import net.aieat.netswissknife.app.ui.navigation.HostTool
+import net.aieat.netswissknife.app.ui.navigation.NavRoutes
+import net.aieat.netswissknife.app.ui.navigation.ToolDestination
+import net.aieat.netswissknife.app.ui.navigation.ToolHost
+import net.aieat.netswissknife.app.ui.navigation.ToolIntent
+import net.aieat.netswissknife.app.ui.navigation.ToolPort
+import net.aieat.netswissknife.app.ui.navigation.ToolSource
+import net.aieat.netswissknife.core.network.HostValidator
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MdnsDiscoveryScreen(viewModel: MdnsDiscoveryViewModel = hiltViewModel()) {
+fun MdnsDiscoveryScreen(
+    viewModel: MdnsDiscoveryViewModel = hiltViewModel(),
+    onNavigate: (String) -> Unit = {},
+) {
     val requestLocalNetworkPermission = rememberLocalNetworkPermissionRequester()
     LaunchedEffect(Unit) { requestLocalNetworkPermission() }
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val networkStatus by viewModel.networkStatus.collectAsStateWithLifecycle()
+    val announcementPhase = mdnsAnnouncementPhase(uiState)
+    ToolStateAnnouncer(stringResource(R.string.help_mdns_title), announcementPhase)
 
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
@@ -112,7 +132,7 @@ fun MdnsDiscoveryScreen(viewModel: MdnsDiscoveryViewModel = hiltViewModel()) {
 
     PullToRefreshBox(
         isRefreshing = uiState.isScanning,
-        onRefresh = { viewModel.startScan(8_000L) },
+        onRefresh = { viewModel.startScan() },
         modifier = Modifier.fillMaxSize()
     ) {
     AnimatedVisibility(
@@ -127,17 +147,36 @@ fun MdnsDiscoveryScreen(viewModel: MdnsDiscoveryViewModel = hiltViewModel()) {
         ) {
             HeroCard(uiState, onHelpClick = { showHelp = true })
 
+            NetworkStatusBanner(
+                status = networkStatus,
+                scope = NetworkStatusScope.LOCAL_NETWORK,
+                permissionDenied = uiState.networkErrorKind == NetworkErrorKind.LOCAL_NETWORK_PERMISSION_DENIED,
+                onGrantPermission = requestLocalNetworkPermission,
+            )
+
+            if (uiState.truncationReasons.isNotEmpty()) {
+                Text(
+                    text = stringResource(R.string.mdns_partial_results_status),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+
             ControlRow(
                 isScanning = uiState.isScanning,
-                onScan = { viewModel.startScan(8_000L) },
+                isCanceling = uiState.isCanceling,
+                onScan = { viewModel.startScan() },
                 onStop = { viewModel.stopScan() },
                 onReset = { viewModel.reset() },
-                hasPriorResults = uiState.services.isNotEmpty() || uiState.scanComplete
+                hasPriorResults = uiState.services.isNotEmpty() || uiState.scanComplete || uiState.scanCanceled
             )
 
             AnimatedContent(
                 targetState = when {
                     uiState.error != null -> "error"
+                    uiState.services.isEmpty() && uiState.isCanceling -> "canceling_empty"
+                    uiState.services.isEmpty() && uiState.scanCanceled -> "canceled_empty"
                     uiState.services.isEmpty() && !uiState.isScanning && !uiState.scanComplete -> "idle"
                     uiState.services.isEmpty() && uiState.isScanning -> "scanning_empty"
                     uiState.services.isEmpty() && uiState.scanComplete -> "empty_done"
@@ -151,12 +190,33 @@ fun MdnsDiscoveryScreen(viewModel: MdnsDiscoveryViewModel = hiltViewModel()) {
             ) { state ->
                 when (state) {
                     "idle" -> IdleHint()
+                    "canceling_empty" -> CancelingPlaceholder()
+                    "canceled_empty" -> CanceledEmptyHint()
                     "scanning_empty" -> ScanningPlaceholder()
                     "empty_done" -> EmptyResultHint()
                     "error" -> ErrorCard(uiState.error ?: "Unknown error") { viewModel.reset() }
                     else -> ServiceList(
                         servicesByType = uiState.servicesByType,
-                        isScanning = uiState.isScanning
+                        isScanning = uiState.isScanning,
+                        isCanceling = uiState.isCanceling,
+                        scanCanceled = uiState.scanCanceled,
+                        onPingHost = { host ->
+                            ToolHost.parse(host)?.let { validatedHost ->
+                                onNavigate(
+                                    NavRoutes.Ping.createRoute(
+                                        ToolIntent(
+                                            destination = ToolDestination.HostTarget(HostTool.PING, validatedHost),
+                                            source = ToolSource.MDNS,
+                                        ),
+                                    ),
+                                )
+                            }
+                        },
+                        onHttpProbe = { service ->
+                            mdnsHttpIntent(service)?.let { intent ->
+                                onNavigate(NavRoutes.HttpProbe.createRoute(intent))
+                            }
+                        },
                     )
                 }
             }
@@ -295,6 +355,7 @@ private fun StatBadge(value: String, label: String) {
 @Composable
 private fun ControlRow(
     isScanning: Boolean,
+    isCanceling: Boolean,
     onScan: () -> Unit,
     onStop: () -> Unit,
     onReset: () -> Unit,
@@ -307,11 +368,17 @@ private fun ControlRow(
             modifier = Modifier.weight(1f)
         ) { scanning ->
             if (scanning) {
-                ToolStopButton(
-                    text = stringResource(R.string.mdns_stop_button),
-                    onClick = onStop,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                if (isCanceling) {
+                    Button(onClick = {}, enabled = false, modifier = Modifier.fillMaxWidth()) {
+                        Text(stringResource(R.string.mdns_canceling_button))
+                    }
+                } else {
+                    ToolStopButton(
+                        text = stringResource(R.string.mdns_stop_button),
+                        onClick = onStop,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             } else {
                 Button(
                     onClick = hapticAction(onScan),
@@ -399,6 +466,34 @@ private fun ScanningPlaceholder() {
 }
 
 @Composable
+private fun CancelingPlaceholder() {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(top = 32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        CircularProgressIndicator(modifier = Modifier.size(40.dp), strokeCap = StrokeCap.Round)
+        Text(stringResource(R.string.mdns_canceling_hint), style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+@Composable
+private fun CanceledEmptyHint() {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(top = 32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(
+            text = stringResource(R.string.mdns_canceled_title),
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Text(stringResource(R.string.mdns_canceled_empty_body), style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+@Composable
 private fun ErrorCard(message: String, onRetry: () -> Unit) {
     ElevatedCard(
         shape = AppShapes.large,
@@ -425,14 +520,38 @@ private fun ErrorCard(message: String, onRetry: () -> Unit) {
 
 // ── Service list ──────────────────────────────────────────────────────────────
 
+internal fun mdnsHttpIntent(service: DiscoveredService): ToolIntent? {
+    if (!service.serviceType.equals("_http._tcp", ignoreCase = true)) return null
+    val host = ToolHost.parse(service.hostname) ?: return null
+    val port = ToolPort.parse(service.port) ?: return null
+    return ToolIntent(
+        destination = ToolDestination.HostTarget(HostTool.HTTP, host, port),
+        source = ToolSource.MDNS,
+    )
+}
+
 @Composable
 private fun ServiceList(
     servicesByType: Map<String, List<DiscoveredService>>,
-    isScanning: Boolean
+    isScanning: Boolean,
+    isCanceling: Boolean,
+    scanCanceled: Boolean,
+    onPingHost: (String) -> Unit,
+    onHttpProbe: (DiscoveredService) -> Unit,
 ) {
     val expandedTypes = remember { mutableStateMapOf<String, Boolean>() }
 
     LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (scanCanceled) {
+            item {
+                Text(
+                    text = stringResource(R.string.mdns_canceled_partial),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(vertical = 4.dp)
+                )
+            }
+        }
         if (isScanning) {
             item {
                 Row(
@@ -448,7 +567,7 @@ private fun ServiceList(
                         strokeWidth = 2.dp
                     )
                     Text(
-                        stringResource(R.string.mdns_scanning_inline_label),
+                        stringResource(if (isCanceling) R.string.mdns_canceling_hint else R.string.mdns_scanning_inline_label),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
@@ -475,7 +594,7 @@ private fun ServiceList(
                         enter = fadeIn() + expandVertically(),
                         exit = fadeOut() + shrinkVertically()
                     ) {
-                        ServiceItem(service)
+                        ServiceItem(service, onPingHost, onHttpProbe)
                     }
                 }
             }
@@ -547,7 +666,11 @@ private fun ServiceTypeHeader(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun ServiceItem(service: DiscoveredService) {
+private fun ServiceItem(
+    service: DiscoveredService,
+    onPingHost: (String) -> Unit,
+    onHttpProbe: (DiscoveredService) -> Unit,
+) {
     var expanded by remember { mutableStateOf(false) }
 
     OutlinedCard(
@@ -580,25 +703,59 @@ private fun ServiceItem(service: DiscoveredService) {
                 }
             }
 
-            if (service.hostname.isNotEmpty()) {
+            val validHostname = ToolHost.parse(service.hostname)?.takeUnless {
+                HostValidator.isValidIpv4(it.value) || HostValidator.isValidIpv6(it.value)
+            }
+            if (mdnsHttpIntent(service) != null) {
+                val httpProbeDescription = stringResource(
+                    R.string.mdns_http_probe_description,
+                    service.displayName,
+                )
+                FilledTonalButton(
+                    onClick = { onHttpProbe(service) },
+                    modifier = Modifier.semantics { contentDescription = httpProbeDescription },
+                ) {
+                    Icon(Icons.Default.Http, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(stringResource(R.string.mdns_http_probe))
+                }
+            }
+            if (validHostname != null) {
+                val pingHostnameDescription = stringResource(
+                    R.string.mdns_ping_hostname_description,
+                    validHostname.value,
+                )
                 Text(
-                    text = service.hostname,
+                    text = validHostname.value,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                     fontFamily = FontFamily.Monospace,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                FilledTonalButton(
+                    onClick = { onPingHost(validHostname.value) },
+                    modifier = Modifier.semantics { contentDescription = pingHostnameDescription },
+                ) {
+                    Icon(Icons.Default.NetworkPing, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(stringResource(R.string.mdns_ping_hostname))
+                }
             }
 
-            if (service.ipAddresses.isNotEmpty()) {
+            val validAddresses = service.ipAddresses.mapNotNull { address ->
+                ToolHost.parse(address)?.takeIf {
+                    HostValidator.isValidIpv4(it.value) || HostValidator.isValidIpv6(it.value)
+                }
+            }.distinctBy { it.canonical }
+            if (validAddresses.isNotEmpty()) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    service.ipAddresses.forEach { ip ->
+                    validAddresses.forEach { ip ->
                         SuggestionChip(
-                            onClick = {},
+                            onClick = { onPingHost(ip.value) },
                             label = {
                                 Text(
-                                    ip,
+                                    stringResource(R.string.mdns_ping_address, ip.value),
                                     style = MaterialTheme.typography.labelSmall,
                                     fontFamily = FontFamily.Monospace
                                 )

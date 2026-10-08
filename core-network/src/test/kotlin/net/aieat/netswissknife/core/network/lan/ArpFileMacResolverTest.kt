@@ -27,13 +27,33 @@ class ArpFileMacResolverTest {
     }
 
     @Test
-    fun `unsupported when reader is empty or throws`() {
-        assertFalse(ArpFileMacResolver { "" }.supported)
+    fun `empty readable table remains supported while read failure is unsupported`() {
+        assertTrue(ArpFileMacResolver { "" }.supported)
         assertFalse(ArpFileMacResolver { error("permission denied") }.supported)
     }
 
     @Test
     fun `unknown ip has no mac`() = runTest {
         assertNull(ArpFileMacResolver { content }.resolve("192.168.1.99"))
+    }
+
+    @Test
+    fun `snapshot reads a fresh table while cached resolver remains bounded`() = runTest {
+        val expandedContent = content + "\n192.168.1.3      0x1     0x2   11:22:33:44:55:66     *        wlan0"
+        var reads = 0
+        val resolver = ArpFileMacResolver {
+            reads++
+            if (reads == 1) content else expandedContent
+        }
+
+        assertEquals("AA:BB:CC:DD:EE:FF", resolver.resolve("192.168.1.1"))
+        assertEquals(1, reads)
+
+        val snapshot = resolver.snapshot()
+        assertTrue(snapshot.supported)
+        assertEquals("11:22:33:44:55:66", snapshot.resolve("192.168.1.3"))
+        assertEquals(2, reads)
+        assertNull(snapshot.resolve("192.168.1.99"))
+        assertEquals(2, reads)
     }
 }

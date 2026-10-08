@@ -7,10 +7,13 @@ import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeUp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import io.mockk.every
@@ -18,9 +21,12 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.platform.NetworkStatus
+import net.aieat.netswissknife.app.ui.navigation.ToolSource
 import net.aieat.netswissknife.app.ui.theme.NetSwissKnifeTheme
 import net.aieat.netswissknife.core.network.tls.TlsCertificate
 import net.aieat.netswissknife.core.network.tls.TlsInspectorResult
+import net.aieat.netswissknife.core.domain.TlsInspectorErrorKeys
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -96,6 +102,86 @@ class TlsInspectorScreenTest {
     }
 
     @Test
+    fun lanHandoff_showsEditableHostPortAndSourceWithoutInspecting() {
+        val viewModel = fakeViewModel(
+            TlsInspectorUiState(host = "192.0.2.8", port = "8443"),
+            sourceContext = ToolSource.LAN,
+        )
+
+        composeRule.setContent {
+            NetSwissKnifeTheme { TlsInspectorScreen(viewModel = viewModel) }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        composeRule.onNodeWithTag(TlsInspectorScreenTestTags.SOURCE_CONTEXT).assertIsDisplayed()
+        composeRule.onNodeWithText("192.0.2.8").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("8443").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.tls_inspect_button))
+            .performScrollTo()
+            .assertIsEnabled()
+        verify(exactly = 0) { viewModel.inspect() }
+
+        composeRule.onNodeWithTag(TlsInspectorScreenTestTags.CLEAR_PREFILL_ACTION)
+            .performScrollTo()
+            .performClick()
+        composeRule.mainClock.advanceTimeBy(500L)
+        composeRule.onNodeWithTag(TlsInspectorScreenTestTags.SOURCE_CONTEXT).assertDoesNotExist()
+        verify(exactly = 1) { viewModel.clearPrefill() }
+    }
+
+    @Test
+    fun invalidHandoff_showsInlineRecoveryAndKeepsHostEditorAvailable() {
+        val viewModel = fakeViewModel(TlsInspectorUiState())
+        every { viewModel.hasInvalidHandoff } returns MutableStateFlow(true)
+
+        composeRule.setContent {
+            NetSwissKnifeTheme { TlsInspectorScreen(viewModel = viewModel) }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        composeRule.onNodeWithTag(TlsInspectorScreenTestTags.INVALID_HANDOFF).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.tls_host_label))
+            .performScrollTo()
+            .assertIsDisplayed()
+        verify(exactly = 0) { viewModel.inspect() }
+    }
+
+    @Test
+    fun hostWithOuterWhitespace_remainsInspectable() {
+        val viewModel = fakeViewModel(TlsInspectorUiState(host = "  example.com  "))
+        composeRule.setContent {
+            NetSwissKnifeTheme { TlsInspectorScreen(viewModel = viewModel) }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        composeRule.onNodeWithText(context.getString(R.string.tls_inspect_button))
+            .performScrollTo()
+            .assertIsEnabled()
+            .performClick()
+        verify(exactly = 1) { viewModel.inspect() }
+    }
+
+    @Test
+    fun hostWithInternalSpace_showsValidationAndBlocksInspect() {
+        val viewModel = fakeViewModel(TlsInspectorUiState())
+        composeRule.setContent {
+            NetSwissKnifeTheme { TlsInspectorScreen(viewModel = viewModel) }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        composeRule.onNodeWithText(context.getString(R.string.tls_host_label))
+            .performTextInput("bad host")
+        composeRule.mainClock.advanceTimeBy(200L)
+
+        composeRule.onNodeWithText(context.getString(R.string.error_invalid_host))
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.tls_inspect_button))
+            .performScrollTo()
+            .assertIsNotEnabled()
+        verify(exactly = 0) { viewModel.inspect() }
+    }
+
+    @Test
     fun loadingState_showsInspectingIndicator() {
         composeRule.setContent {
             NetSwissKnifeTheme {
@@ -110,6 +196,70 @@ class TlsInspectorScreenTest {
             .onAllNodesWithText(context.getString(R.string.tls_inspecting))
             .onFirst()
             .assertIsDisplayed()
+    }
+
+    @Test
+    fun loadingState_showsCancelAction() {
+        val viewModel = fakeViewModel(
+            TlsInspectorUiState(host = "example.com", isLoading = true),
+        )
+        composeRule.setContent {
+            NetSwissKnifeTheme { TlsInspectorScreen(viewModel = viewModel) }
+        }
+
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        composeRule
+            .onNodeWithText(context.getString(R.string.tls_cancel_inspection))
+            .performScrollTo()
+            .assertIsDisplayed()
+            .performClick()
+
+        verify(exactly = 1) { viewModel.stopInspection() }
+    }
+
+    @Test
+    fun cancelingState_showsStoppingAction() {
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                TlsInspectorScreen(
+                    viewModel = fakeViewModel(
+                        TlsInspectorUiState(
+                            host = "example.com",
+                            isLoading = true,
+                            isCanceling = true,
+                        ),
+                    ),
+                )
+            }
+        }
+
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        composeRule
+            .onNodeWithText(context.getString(R.string.tls_stopping))
+            .performScrollTo()
+            .assertIsDisplayed()
+            .assertIsNotEnabled()
+    }
+
+    @Test
+    fun canceledState_showsMessageAndInspectRetries() {
+        val viewModel = fakeViewModel(
+            TlsInspectorUiState(host = "example.com", isCanceled = true),
+        )
+        composeRule.setContent {
+            NetSwissKnifeTheme { TlsInspectorScreen(viewModel = viewModel) }
+        }
+
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        composeRule
+            .onNodeWithText(context.getString(R.string.tls_inspection_canceled))
+            .assertIsDisplayed()
+        composeRule
+            .onNodeWithText(context.getString(R.string.tls_inspect_button))
+            .performScrollTo()
+            .performClick()
+
+        verify(exactly = 1) { viewModel.inspect() }
     }
 
     @Test
@@ -131,6 +281,44 @@ class TlsInspectorScreenTest {
             .performClick()
 
         verify(exactly = 1) { viewModel.inspect() }
+    }
+
+    @Test
+    fun inspectionFailureAfterProgress_showsRetryAction() {
+        val stateFlow = MutableStateFlow(TlsInspectorUiState(host = "example.com", isLoading = true))
+        val viewModel = fakeViewModel(TlsInspectorUiState(host = "example.com", isLoading = true), stateFlow)
+        composeRule.setContent {
+            NetSwissKnifeTheme { TlsInspectorScreen(viewModel = viewModel) }
+        }
+        composeRule.mainClock.advanceTimeBy(500L)
+        composeRule.onAllNodesWithText(context.getString(R.string.tls_inspecting))
+            .onFirst()
+            .assertIsDisplayed()
+
+        stateFlow.value = stateFlow.value.copy(isLoading = false, error = "Connection reset")
+        composeRule.mainClock.advanceTimeBy(500L)
+        composeRule.onNodeWithText("Connection reset").assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.tls_retry)).performClick()
+
+        verify(exactly = 1) { viewModel.inspect() }
+    }
+
+    @Test
+    fun pinValidationError_usesLocalizedDescriptionKey() {
+        val viewModel = fakeViewModel(
+            TlsInspectorUiState(
+                host = "example.com",
+                error = "developer-only pin validation message",
+                errorDescriptionKey = TlsInspectorErrorKeys.PIN_INVALID_DESCRIPTION,
+            ),
+        )
+        composeRule.setContent {
+            NetSwissKnifeTheme { TlsInspectorScreen(viewModel = viewModel) }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        composeRule.onNodeWithText(context.getString(R.string.tls_pin_invalid)).assertIsDisplayed()
+        composeRule.onNodeWithText("developer-only pin validation message").assertDoesNotExist()
     }
 
     @Test
@@ -173,16 +361,117 @@ class TlsInspectorScreenTest {
         composeRule.onNodeWithText("TLSv1.3", substring = true).performScrollTo().assertIsDisplayed()
     }
 
-    private fun fakeViewModel(state: TlsInspectorUiState): TlsInspectorViewModel {
+    @Test
+    fun advancedOptions_areVisibleAndForwardUserSelections() {
+        val viewModel = fakeViewModel(TlsInspectorUiState(host = "example.com"))
+        composeRule.setContent {
+            NetSwissKnifeTheme { TlsInspectorScreen(viewModel = viewModel) }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        composeRule.onNodeWithTag(TlsInspectorScreenTestTags.PROTOCOL_PROBE_TOGGLE)
+            .performScrollTo()
+            .assertIsDisplayed()
+            .performClick()
+        composeRule.onNodeWithTag(TlsInspectorScreenTestTags.EXPECTED_PIN_FIELD)
+            .performScrollTo()
+            .assertIsDisplayed()
+            .performTextInput("AA")
+        verify(exactly = 1) { viewModel.onProbeProtocolsChange(true) }
+        verify(exactly = 1) { viewModel.onExpectedPinChange("AA") }
+    }
+
+    @Test
+    fun successState_displaysProtocolTimingAndCertificateFindings() {
+        val cert = TlsCertificate(
+            subjectCN = "example.com", subjectOrg = null, issuerCN = "Test CA", issuerOrg = null,
+            notBefore = 0L, notAfter = Long.MAX_VALUE / 2, isExpired = true, isSelfSigned = false,
+            sans = listOf("example.com"), serialNumber = "01", signatureAlgorithm = "SHA256withRSA",
+            publicKeyAlgorithm = "RSA", publicKeyBits = 2048, sha256Fingerprint = "AA:BB:CC",
+            pemEncoded = "-----BEGIN CERTIFICATE-----\\nTEST\\n-----END CERTIFICATE-----",
+        )
+        val result = TlsInspectorResult(
+            host = "example.com", port = 443, tlsVersion = "TLSv1.3", cipherSuite = "TLS_AES_128_GCM_SHA256",
+            chain = listOf(cert), isChainTrusted = false, handshakeTimeMs = 123,
+            hostnameMatches = false,
+            chainIssues = listOf(
+                net.aieat.netswissknife.core.network.tls.ChainIssue.EXPIRED,
+                net.aieat.netswissknife.core.network.tls.ChainIssue.HOSTNAME_MISMATCH,
+            ),
+            connectTimeMs = 42,
+            alpn = "h2",
+            protocolSupport = mapOf("TLSv1.2" to true, "TLSv1.0" to false),
+            protocolProbeUnknown = setOf("TLSv1.1"),
+            protocolProbeNotTestable = setOf("TLSv1"),
+            pinMatch = false,
+        )
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                TlsInspectorScreen(viewModel = fakeViewModel(TlsInspectorUiState(host = "example.com", result = result)))
+            }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        listOf(
+            context.getString(R.string.tls_connect_time),
+            context.getString(R.string.tls_hostname_match),
+            context.getString(R.string.tls_alpn),
+            context.getString(R.string.tls_pin_match),
+            context.getString(R.string.tls_findings),
+            "EXPIRED",
+            context.getString(R.string.tls_issue_expired),
+            context.getString(R.string.tls_issue_hostname_mismatch),
+            context.getString(R.string.tls_share_pem),
+            context.getString(R.string.tls_probe_unknown),
+            context.getString(R.string.tls_probe_not_testable),
+            "TLSv1.2",
+            "TLSv1.0",
+        ).forEach { label ->
+            var visible = false
+            repeat(8) {
+                if (!visible) {
+                    try {
+                        composeRule.onAllNodesWithText(label, substring = true).onFirst().assertIsDisplayed()
+                        visible = true
+                    } catch (_: AssertionError) {
+                        val content = composeRule.onNodeWithTag("tls_content_list")
+                        val height = content.fetchSemanticsNode().boundsInRoot.height
+                        content.performTouchInput {
+                            swipeUp(startY = height * 0.75f, endY = height * 0.55f)
+                        }
+                    }
+                }
+            }
+            if (!visible) composeRule.onAllNodesWithText(label, substring = true).onFirst().assertIsDisplayed()
+        }
+    }
+
+    private fun fakeViewModel(
+        state: TlsInspectorUiState,
+        stateFlow: MutableStateFlow<TlsInspectorUiState> = MutableStateFlow(state),
+        sourceContext: ToolSource? = null,
+    ): TlsInspectorViewModel {
         val viewModel = mockk<TlsInspectorViewModel>(relaxed = true)
-        val stateFlow = MutableStateFlow(state)
+        val sourceContextFlow = MutableStateFlow(sourceContext)
         every { viewModel.uiState } returns stateFlow
         every { viewModel.recentHosts } returns MutableStateFlow(emptyList())
+        every { viewModel.hasInvalidHandoff } returns MutableStateFlow(false)
+        every { viewModel.sourceContextState } returns sourceContextFlow
+        every { viewModel.networkStatus } returns MutableStateFlow(
+            NetworkStatus(hasInternet = true, hasLocalNetwork = true)
+        )
+        every { viewModel.clearPrefill() } answers { sourceContextFlow.value = null }
         // onHostChange is otherwise a no-op on a relaxed mock, so typing into the host
         // field would never be reflected back through uiState.host — feed it back into
         // the captured flow so the Inspect button's enabled-state can react to input.
         every { viewModel.onHostChange(any()) } answers {
             stateFlow.value = stateFlow.value.copy(host = firstArg())
+        }
+        every { viewModel.onProbeProtocolsChange(any()) } answers {
+            stateFlow.value = stateFlow.value.copy(probeProtocols = firstArg())
+        }
+        every { viewModel.onExpectedPinChange(any()) } answers {
+            stateFlow.value = stateFlow.value.copy(expectedPinSha256 = firstArg())
         }
         return viewModel
     }

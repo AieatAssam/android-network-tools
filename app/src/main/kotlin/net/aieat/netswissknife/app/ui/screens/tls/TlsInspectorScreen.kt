@@ -42,10 +42,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.SuggestionChipDefaults
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -61,6 +63,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.background
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.pluralStringResource
@@ -75,6 +78,10 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
+import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
+import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
+import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
+import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
 import net.aieat.netswissknife.app.ui.components.ToolErrorCard
 import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.ui.theme.AppMotion
@@ -85,6 +92,9 @@ import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
 import net.aieat.netswissknife.app.ui.theme.StatusBlue
 import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.app.ui.theme.StatusGood
+import net.aieat.netswissknife.app.ui.navigation.ToolSource
+import net.aieat.netswissknife.core.domain.TlsInspectorErrorKeys
+import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.tls.TlsCertificate
 import net.aieat.netswissknife.core.network.tls.TlsInspectorResult
 import java.time.Instant
@@ -94,10 +104,29 @@ import java.util.concurrent.TimeUnit
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
+object TlsInspectorScreenTestTags {
+    const val SOURCE_CONTEXT = "tls_source_context"
+    const val INVALID_HANDOFF = "tls_invalid_handoff"
+    const val CLEAR_PREFILL_ACTION = "tls_clear_prefill_action"
+    const val PROTOCOL_PROBE_TOGGLE = "tls_protocol_probe_toggle"
+    const val EXPECTED_PIN_FIELD = "tls_expected_pin_field"
+}
+
 @Composable
 fun TlsInspectorScreen(viewModel: TlsInspectorViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val networkStatus by viewModel.networkStatus.collectAsStateWithLifecycle()
     val recentHosts by viewModel.recentHosts.collectAsStateWithLifecycle()
+    val hasInvalidHandoff by viewModel.hasInvalidHandoff.collectAsStateWithLifecycle()
+    val sourceContext by viewModel.sourceContextState.collectAsStateWithLifecycle()
+    val announcementPhase = when {
+        uiState.isLoading -> ToolAnnouncementPhase.RUNNING
+        uiState.isCanceled -> ToolAnnouncementPhase.CANCELED
+        uiState.error != null -> ToolAnnouncementPhase.ERROR
+        uiState.result != null -> ToolAnnouncementPhase.FINISHED
+        else -> null
+    }
+    ToolStateAnnouncer(stringResource(R.string.help_tls_title), announcementPhase)
 
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
@@ -116,25 +145,66 @@ fun TlsInspectorScreen(viewModel: TlsInspectorViewModel = hiltViewModel()) {
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .alpha(alpha),
+                .alpha(alpha)
+                .testTag("tls_content_list"),
             verticalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(
                 horizontal = 16.dp, vertical = 16.dp
             )
         ) {
             // Header
-            item { TlsHeaderCard(onHelpClick = { showHelp = true }) }
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    TlsHeaderCard(onHelpClick = { showHelp = true })
+                    NetworkStatusBanner(networkStatus, scope = NetworkStatusScope.INTERNET)
+                    if (sourceContext == ToolSource.LAN) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = stringResource(R.string.tls_source_lan),
+                                color = MaterialTheme.colorScheme.secondary,
+                                style = MaterialTheme.typography.labelLarge,
+                                modifier = Modifier.testTag(TlsInspectorScreenTestTags.SOURCE_CONTEXT),
+                            )
+                            TextButton(
+                                onClick = viewModel::clearPrefill,
+                                enabled = !uiState.isLoading,
+                                modifier = Modifier.testTag(TlsInspectorScreenTestTags.CLEAR_PREFILL_ACTION),
+                            ) {
+                                Text(stringResource(R.string.clear))
+                            }
+                        }
+                    }
+                    if (hasInvalidHandoff) {
+                        Text(
+                            text = stringResource(R.string.tls_invalid_handoff),
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.testTag(TlsInspectorScreenTestTags.INVALID_HANDOFF),
+                        )
+                    }
+                }
+            }
 
             // Input section
             item {
                 TlsInputSection(
                     host      = uiState.host,
                     port      = uiState.port,
+                    probeProtocols = uiState.probeProtocols,
+                    expectedPinSha256 = uiState.expectedPinSha256,
                     isLoading = uiState.isLoading,
+                    isCanceling = uiState.isCanceling,
                     recentHosts = recentHosts,
                     onHostChange = viewModel::onHostChange,
                     onPortChange = viewModel::onPortChange,
+                    onProbeProtocolsChange = viewModel::onProbeProtocolsChange,
+                    onExpectedPinChange = viewModel::onExpectedPinChange,
                     onInspect    = viewModel::inspect,
+                    onCancel     = viewModel::stopInspection,
                     onRemoveRecentHost = viewModel::removeRecentHost,
                     onClearRecentHosts = viewModel::clearRecentHosts
                 )
@@ -144,7 +214,11 @@ fun TlsInspectorScreen(viewModel: TlsInspectorViewModel = hiltViewModel()) {
             item {
                 val displayState = when {
                     uiState.isLoading          -> DisplayState.Loading
-                    uiState.error != null      -> DisplayState.Error(uiState.error!!)
+                    uiState.isCanceled         -> DisplayState.Canceled
+                    uiState.error != null      -> DisplayState.Error(
+                        uiState.error!!,
+                        uiState.errorDescriptionKey,
+                    )
                     uiState.result != null     -> DisplayState.Success(uiState.result!!)
                     else                       -> DisplayState.Idle
                 }
@@ -159,7 +233,8 @@ fun TlsInspectorScreen(viewModel: TlsInspectorViewModel = hiltViewModel()) {
                     when (state) {
                         is DisplayState.Idle    -> TlsIdlePlaceholder()
                         is DisplayState.Loading -> TlsLoadingContent()
-                        is DisplayState.Error   -> TlsErrorContent(state.message) { viewModel.inspect() }
+                        is DisplayState.Canceled -> TlsCanceledContent()
+                        is DisplayState.Error   -> TlsErrorContent(state.message, state.descriptionKey) { viewModel.inspect() }
                         is DisplayState.Success -> TlsSuccessContent(state.result)
                     }
                 }
@@ -195,7 +270,8 @@ fun TlsInspectorScreen(viewModel: TlsInspectorViewModel = hiltViewModel()) {
 private sealed class DisplayState {
     object Idle : DisplayState()
     object Loading : DisplayState()
-    data class Error(val message: String) : DisplayState()
+    object Canceled : DisplayState()
+    data class Error(val message: String, val descriptionKey: String?) : DisplayState()
     data class Success(val result: TlsInspectorResult) : DisplayState()
 }
 
@@ -217,15 +293,26 @@ private fun TlsHeaderCard(onHelpClick: () -> Unit) {
 private fun TlsInputSection(
     host: String,
     port: String,
+    probeProtocols: Boolean,
+    expectedPinSha256: String,
     isLoading: Boolean,
+    isCanceling: Boolean,
     recentHosts: List<String>,
     onHostChange: (String) -> Unit,
     onPortChange: (String) -> Unit,
+    onProbeProtocolsChange: (Boolean) -> Unit,
+    onExpectedPinChange: (String) -> Unit,
     onInspect: () -> Unit,
+    onCancel: () -> Unit,
     onRemoveRecentHost: (String) -> Unit,
     onClearRecentHosts: () -> Unit
 ) {
     val focusManager = LocalFocusManager.current
+    val protocolToggleLabel = stringResource(R.string.tls_probe_protocols_label)
+    val normalizedHost = HostValidator.normalize(host)
+    val isHostInvalid = host.isNotBlank() && normalizedHost == null
+    val parsedPort = port.toIntOrNull()
+    val isPortValid = parsedPort != null && parsedPort in 1..65_535
 
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -249,6 +336,11 @@ private fun TlsInputSection(
                         }
                     }
                 },
+                isError       = isHostInvalid,
+                supportingText = if (isHostInvalid) {
+                    { Text(stringResource(R.string.error_invalid_host)) }
+                } else null,
+                enabled       = !isLoading,
                 singleLine    = true,
                 modifier      = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(
@@ -261,7 +353,8 @@ private fun TlsInputSection(
                 recentHosts = recentHosts,
                 onHostSelected = onHostChange,
                 onRemoveHost = onRemoveRecentHost,
-                onClearAll = onClearRecentHosts
+                onClearAll = onClearRecentHosts,
+                selectionEnabled = !isLoading
             )
 
             // Port field
@@ -269,6 +362,11 @@ private fun TlsInputSection(
                 value         = port,
                 onValueChange = onPortChange,
                 label         = { Text(stringResource(R.string.tls_port_label)) },
+                isError       = !isPortValid,
+                supportingText = if (!isPortValid) {
+                    { Text(stringResource(R.string.error_invalid_port)) }
+                } else null,
+                enabled       = !isLoading,
                 singleLine    = true,
                 modifier      = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(
@@ -278,32 +376,86 @@ private fun TlsInputSection(
                 keyboardActions = KeyboardActions(
                     onDone = {
                         focusManager.clearFocus()
-                        if (host.isNotBlank()) onInspect()
+                        if (!isLoading && normalizedHost != null && isPortValid) onInspect()
                     }
                 )
             )
 
-            // Inspect button
-            Button(
-                onClick   = hapticAction {
-                    focusManager.clearFocus()
-                    onInspect()
-                },
-                enabled   = host.isNotBlank() && !isLoading,
-                modifier  = Modifier.fillMaxWidth()
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                if (isLoading) {
-                    CircularProgressIndicator(
-                        modifier  = Modifier.size(18.dp),
-                        color     = MaterialTheme.colorScheme.onPrimary,
-                        strokeWidth = 2.dp
+                Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                    Text(stringResource(R.string.tls_probe_protocols_label), style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        stringResource(R.string.tls_probe_protocols_help),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.tls_inspecting))
-                } else {
-                    Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.tls_inspect_button))
+                }
+                Switch(
+                    checked = probeProtocols,
+                    onCheckedChange = onProbeProtocolsChange,
+                    enabled = !isLoading,
+                    modifier = Modifier
+                        .semantics { contentDescription = protocolToggleLabel }
+                        .testTag(TlsInspectorScreenTestTags.PROTOCOL_PROBE_TOGGLE),
+                )
+            }
+
+            OutlinedTextField(
+                value = expectedPinSha256,
+                onValueChange = onExpectedPinChange,
+                label = { Text(stringResource(R.string.tls_expected_pin_label)) },
+                placeholder = { Text(stringResource(R.string.tls_expected_pin_placeholder)) },
+                supportingText = { Text(stringResource(R.string.tls_expected_pin_help)) },
+                enabled = !isLoading,
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth().testTag(TlsInspectorScreenTestTags.EXPECTED_PIN_FIELD),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii, imeAction = ImeAction.Done),
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Button(
+                    onClick   = hapticAction {
+                        focusManager.clearFocus()
+                        onInspect()
+                    },
+                    enabled   = normalizedHost != null && isPortValid && !isLoading,
+                    modifier  = Modifier.weight(1f)
+                ) {
+                    if (isLoading) {
+                        CircularProgressIndicator(
+                            modifier  = Modifier.size(18.dp),
+                            color     = MaterialTheme.colorScheme.onPrimary,
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.tls_inspecting))
+                    } else {
+                        Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.tls_inspect_button))
+                    }
+                }
+                if (isLoading) {
+                    OutlinedButton(
+                        onClick = onCancel,
+                        enabled = !isCanceling,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(
+                            stringResource(
+                                if (isCanceling) R.string.tls_stopping
+                                else R.string.tls_cancel_inspection,
+                            ),
+                        )
+                    }
                 }
             }
         }
@@ -341,6 +493,20 @@ private fun TlsIdlePlaceholder() {
     }
 }
 
+@Composable
+private fun TlsCanceledContent() {
+    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = stringResource(R.string.tls_inspection_canceled),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
 // ── Loading ───────────────────────────────────────────────────────────────────
 
 @Composable
@@ -370,10 +536,14 @@ private fun TlsLoadingContent() {
 // ── Error ─────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun TlsErrorContent(message: String, onRetry: () -> Unit) {
+private fun TlsErrorContent(message: String, descriptionKey: String?, onRetry: () -> Unit) {
+    val visibleMessage = when (descriptionKey) {
+        TlsInspectorErrorKeys.PIN_INVALID_DESCRIPTION -> stringResource(R.string.tls_pin_invalid)
+        else -> message
+    }
     ToolErrorCard(
         title = stringResource(R.string.tls_error_title),
-        message = message,
+        message = visibleMessage,
     ) {
         TextButton(onClick = onRetry) {
             Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -389,10 +559,12 @@ private fun TlsErrorContent(message: String, onRetry: () -> Unit) {
 private fun TlsSuccessContent(result: TlsInspectorResult) {
     val context = LocalContext.current
     val shareSubject = stringResource(R.string.share_subject_tls, result.host, result.port)
+    val pemShareSubject = stringResource(R.string.tls_share_pem_subject, result.host, result.port)
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = {
                 context.shareText(
@@ -404,6 +576,16 @@ private fun TlsSuccessContent(result: TlsInspectorResult) {
                     imageVector = Icons.Default.Share,
                     contentDescription = stringResource(R.string.action_share)
                 )
+            }
+            if (result.chain.any { it.pemEncoded.isNotBlank() }) {
+                TextButton(onClick = {
+                    context.shareText(
+                        text = buildTlsPemShareText(result),
+                        subject = pemShareSubject,
+                    )
+                }) {
+                    Text(stringResource(R.string.tls_share_pem))
+                }
             }
         }
         ConnectionCard(result)
@@ -492,6 +674,68 @@ private fun ConnectionCard(result: TlsInspectorResult) {
                     label = stringResource(R.string.tls_handshake_time),
                     value = stringResource(R.string.tls_ms_format, result.handshakeTimeMs)
                 )
+                LabeledValue(
+                    label = stringResource(R.string.tls_connect_time),
+                    value = stringResource(R.string.tls_ms_format, result.connectTimeMs)
+                )
+                result.hostnameMatches?.let { matches ->
+                    LabeledValue(
+                        label = stringResource(R.string.tls_hostname_match),
+                        value = stringResource(if (matches) R.string.tls_match else R.string.tls_no_match),
+                    )
+                }
+                result.alpn?.takeIf { it.isNotBlank() }?.let { alpn ->
+                    LabeledValue(stringResource(R.string.tls_alpn), alpn)
+                }
+                result.pinMatch?.let { matches ->
+                    LabeledValue(
+                        label = stringResource(R.string.tls_pin_match),
+                        value = stringResource(if (matches) R.string.tls_match else R.string.tls_no_match),
+                    )
+                }
+                result.protocolSupport?.toSortedMap()?.forEach { (protocol, supported) ->
+                    LabeledValue(
+                        label = protocol,
+                        value = stringResource(if (supported) R.string.tls_supported else R.string.tls_not_supported),
+                    )
+                }
+                result.protocolProbeUnknown.sorted().forEach { protocol ->
+                    LabeledValue(protocol, stringResource(R.string.tls_probe_unknown))
+                }
+                result.protocolProbeNotTestable.sorted().forEach { protocol ->
+                    LabeledValue(protocol, stringResource(R.string.tls_probe_not_testable))
+                }
+                if (result.chainIssues.isNotEmpty()) {
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                    Text(
+                        stringResource(R.string.tls_findings),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    result.chainIssues.forEach { issue ->
+                        Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Icon(Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
+                            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                Surface(
+                                    shape = MaterialTheme.shapes.small,
+                                    color = MaterialTheme.colorScheme.errorContainer,
+                                ) {
+                                    Text(
+                                        issue.name,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onErrorContainer,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    )
+                                }
+                                Text(
+                                    stringResource(issue.stringRes()),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -587,6 +831,19 @@ private fun ExpiryBadge(cert: TlsCertificate) {
     val expiryDate = formatDate(cert.notAfter)
 
     when {
+        cert.notYetValid -> {
+            Surface(
+                shape = MaterialTheme.shapes.small,
+                color = MaterialTheme.colorScheme.errorContainer
+            ) {
+                Text(
+                    text = stringResource(R.string.tls_not_yet_valid),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                )
+            }
+        }
         cert.isExpired -> {
             Surface(
                 shape = MaterialTheme.shapes.small,
@@ -647,6 +904,16 @@ private fun CertificateDetails(cert: TlsCertificate) {
         // Validity
         LabeledValue(stringResource(R.string.tls_valid_from), formatDate(cert.notBefore))
         LabeledValue(stringResource(R.string.tls_valid_to),   formatDate(cert.notAfter))
+        if (cert.isCa) {
+            Text(
+                stringResource(R.string.tls_ca_certificate),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (cert.keyUsage.isNotEmpty()) {
+            LabeledValue(stringResource(R.string.tls_key_usage), cert.keyUsage.joinToString(", "))
+        }
 
         if (cert.isSelfSigned) {
             Surface(
@@ -744,10 +1011,21 @@ private fun formatDate(epochMs: Long): String =
         .toLocalDate()
         .format(dateFormatter)
 
-private fun buildTlsShareText(result: TlsInspectorResult): String = buildString {
+internal fun buildTlsShareText(result: TlsInspectorResult): String = buildString {
     appendLine("TLS – ${result.host}:${result.port}")
     appendLine("Protocol: ${result.tlsVersion}")
     appendLine("Cipher: ${result.cipherSuite}")
+    appendLine("Trusted: ${result.isChainTrusted}")
+    appendLine("Connect: ${result.connectTimeMs} ms; handshake: ${result.handshakeTimeMs} ms")
+    result.alpn?.let { appendLine("ALPN: $it") }
+    result.hostnameMatches?.let { appendLine("Hostname match: $it") }
+    result.pinMatch?.let { appendLine("Expected pin match: $it") }
+    result.protocolSupport?.toSortedMap()?.forEach { (protocol, supported) ->
+        appendLine("$protocol: ${if (supported) "supported" else "not supported"}")
+    }
+    result.protocolProbeUnknown.sorted().forEach { appendLine("$it: could not determine") }
+    result.protocolProbeNotTestable.sorted().forEach { appendLine("$it: not testable on this device") }
+    if (result.chainIssues.isNotEmpty()) appendLine("Findings: ${result.chainIssues.joinToString { it.name }}")
     appendLine()
     result.chain.forEachIndexed { index, cert ->
         val label = when {
@@ -764,4 +1042,20 @@ private fun buildTlsShareText(result: TlsInspectorResult): String = buildString 
         appendLine("  SHA-256: ${cert.sha256Fingerprint}")
         appendLine()
     }
+}
+
+internal fun buildTlsPemShareText(result: TlsInspectorResult): String = result.chain
+    .mapNotNull { it.pemEncoded.takeIf(String::isNotBlank)?.trim() }
+    .joinToString(separator = "\n", postfix = "\n")
+
+private fun net.aieat.netswissknife.core.network.tls.ChainIssue.stringRes(): Int = when (this) {
+    net.aieat.netswissknife.core.network.tls.ChainIssue.EXPIRED -> R.string.tls_issue_expired
+    net.aieat.netswissknife.core.network.tls.ChainIssue.NOT_YET_VALID -> R.string.tls_issue_not_yet_valid
+    net.aieat.netswissknife.core.network.tls.ChainIssue.EXPIRES_SOON -> R.string.tls_issue_expires_soon
+    net.aieat.netswissknife.core.network.tls.ChainIssue.SELF_SIGNED -> R.string.tls_issue_self_signed
+    net.aieat.netswissknife.core.network.tls.ChainIssue.UNTRUSTED -> R.string.tls_issue_untrusted
+    net.aieat.netswissknife.core.network.tls.ChainIssue.HOSTNAME_MISMATCH -> R.string.tls_issue_hostname_mismatch
+    net.aieat.netswissknife.core.network.tls.ChainIssue.WEAK_SIGNATURE -> R.string.tls_issue_weak_signature
+    net.aieat.netswissknife.core.network.tls.ChainIssue.WEAK_KEY -> R.string.tls_issue_weak_key
+    net.aieat.netswissknife.core.network.tls.ChainIssue.INCOMPLETE_CHAIN -> R.string.tls_issue_incomplete_chain
 }

@@ -7,13 +7,29 @@ import androidx.lifecycle.viewModelScope
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
 import net.aieat.netswissknife.app.platform.LinkInfoProvider
+import net.aieat.netswissknife.app.platform.NetworkErrorKind
+import net.aieat.netswissknife.app.platform.NetworkStatus
+import net.aieat.netswissknife.app.platform.NetworkStatusProvider
+import net.aieat.netswissknife.app.platform.NoOpNetworkStatusProvider
+import net.aieat.netswissknife.app.platform.toNetworkErrorKind
 import net.aieat.netswissknife.app.util.AppLogger
 import net.aieat.netswissknife.core.domain.LanScanFlowResult
 import net.aieat.netswissknife.core.domain.LanScanParams
 import net.aieat.netswissknife.core.domain.LanScanUseCase
 import net.aieat.netswissknife.core.network.lan.LanHost
+import net.aieat.netswissknife.core.network.lan.LanScanDiagnostic
 import net.aieat.netswissknife.core.network.lan.LanScanSummary
+import net.aieat.netswissknife.core.network.lan.LanScanOperationBudget
+import net.aieat.netswissknife.core.network.SystemMonotonicClock
+import net.aieat.netswissknife.core.network.elapsedMillisSince
+import net.aieat.netswissknife.app.ui.navigation.ToolMacAddress
 import net.aieat.netswissknife.core.network.lan.SubnetUtils
+import net.aieat.netswissknife.core.network.lan.LocalSubnet
+import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationBudget
+import net.aieat.netswissknife.core.network.operation.OperationRequirement
+import net.aieat.netswissknife.core.network.operation.OperationSession
+import net.aieat.netswissknife.core.network.operation.OperationDeadlineExceededException
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
@@ -28,9 +44,39 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.coroutineContext
 import javax.inject.Inject
 
 private const val TAG = "LanScanViewModel"
+
+/** Broadest prefix the scanner accepts; validation rejects anything wider. */
+private const val MIN_SCANNABLE_PREFIX = 16
+
+/** Prefer a reported conventional cleartext HTTP port; otherwise keep the editable form on port 80. */
+internal fun preferredHttpProbePort(openPorts: Collection<Int>): Int =
+    listOf(80, 8080, 8000, 8888).firstOrNull(openPorts::contains) ?: 80
+
+/** Compatibility facade for the budget shared with the repository's no-session path. */
+internal object LanScanTimeBudget {
+    const val HARD_CEILING_MILLIS = LanScanOperationBudget.HARD_CEILING_MILLIS
+
+    fun estimate(
+        targetCount: Int,
+        timeoutMs: Int,
+        concurrency: Int,
+        enableNameProbes: Boolean = true,
+    ) = LanScanOperationBudget.estimate(targetCount, timeoutMs, concurrency, enableNameProbes)
+}
+
+private fun Throwable.hasDeadlineFailure(): Boolean {
+    val seen = mutableSetOf<Throwable>()
+    var current: Throwable? = this
+    while (current != null && seen.add(current)) {
+        if (current is OperationDeadlineExceededException) return true
+        current = current.cause
+    }
+    return false
+}
 
 /** All possible UI states for the LAN scanner screen. */
 sealed interface LanScanUiState {
@@ -40,19 +86,42 @@ sealed interface LanScanUiState {
         val hosts: List<LanHost>,
         val scannedCount: Int,
         val totalCount: Int,
+        val uncertainCount: Int = 0,
+        val uncertainDiagnostics: List<LanScanDiagnostic> = emptyList(),
         val progress: Float = if (totalCount > 0) scannedCount.toFloat() / totalCount else 0f,
+    ) : LanScanUiState
+
+    data class Canceling(val summary: LanScanSummary) : LanScanUiState
+
+    data class Canceled(
+        val summary: LanScanSummary,
+        val expandedHostIp: String? = null,
+        val showDiagnostics: Boolean = false,
     ) : LanScanUiState
 
     data class Finished(
         val summary: LanScanSummary,
         val expandedHostIp: String? = null,
+        val showDiagnostics: Boolean = false,
+        val partial: Boolean = false,
+        val timeLimitReached: Boolean = false,
     ) : LanScanUiState
 
-    data class Error(val message: String) : LanScanUiState
+    data class Error(
+        val message: String,
+        val networkErrorKind: NetworkErrorKind = NetworkErrorKind.GENERAL,
+        val isBudgetLimit: Boolean = false,
+        /** A smaller range around this device that fits the scan limit, offered after a budget error. */
+        val suggestedSubnet: String? = null,
+    ) : LanScanUiState
 }
 
 sealed interface LanNavEvent {
     data class NavigateToPorts(val host: String) : LanNavEvent
+    data class NavigateToPing(val host: String) : LanNavEvent
+    data class NavigateToHttp(val host: String, val port: Int) : LanNavEvent
+    data class NavigateToTls(val host: String, val port: Int) : LanNavEvent
+    data class NavigateToWakeOnLan(val mac: ToolMacAddress) : LanNavEvent
 }
 
 @HiltViewModel
@@ -61,7 +130,10 @@ class LanScanViewModel @Inject constructor(
     private val dataStore: DataStore<Preferences>,
     private val recentHostsRepository: RecentHostsRepository,
     private val linkInfoProvider: LinkInfoProvider? = null,
+    networkStatusProvider: NetworkStatusProvider = NoOpNetworkStatusProvider,
 ) : ViewModel() {
+
+    val networkStatus: StateFlow<NetworkStatus> = networkStatusProvider.status
 
     private val _uiState = MutableStateFlow<LanScanUiState>(LanScanUiState.Idle)
     val uiState: StateFlow<LanScanUiState> = _uiState.asStateFlow()
@@ -83,31 +155,88 @@ class LanScanViewModel @Inject constructor(
     private val _gatewayIp = MutableStateFlow<String?>(null)
     val gatewayIp: StateFlow<String?> = _gatewayIp.asStateFlow()
 
+    private val _subnetNarrowedFrom = MutableStateFlow<String?>(null)
+
+    /** The detected network when it was too large to scan and the default was narrowed. */
+    val subnetNarrowedFrom: StateFlow<String?> = _subnetNarrowedFrom.asStateFlow()
+
+    /** This device's IPv4 address from the last detection, used to pick a local /24. */
+    private var localIp: String? = null
+    private var settingsLoad: Job? = null
+
     private val navigationEventsChannel = Channel<LanNavEvent>(Channel.BUFFERED)
     val navigationEvents = navigationEventsChannel.receiveAsFlow()
 
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
-    val recentSubnets: StateFlow<List<String>> = recentHostsRepository
-        .getRecents(AppPreferenceKeys.RECENT_LAN_SUBNETS)
-        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    val recentSubnets: StateFlow<List<String>>
 
     private var scanJob: Job? = null
-    private var scanStartMs: Long = 0L
+    private var scanOperationSession: OperationSession? = null
+    private var pendingCancellation: PendingCancellation? = null
+    private var scanStartNanos: Long = 0L
+
+    private data class PendingCancellation(
+        val session: OperationSession,
+        val summary: LanScanSummary,
+        val reason: CancellationReason,
+    )
+
+    internal var operationSessionFactory: (LanScanParams) -> OperationSession = { params ->
+        val estimateMillis = if (SubnetUtils.isValidCidr(params.subnet) &&
+            params.timeoutMs in 100..10_000 && params.concurrency in 1..500
+        ) {
+            LanScanTimeBudget.estimate(
+                targetCount = SubnetUtils.parseSubnet(params.subnet).size,
+                timeoutMs = params.timeoutMs,
+                concurrency = params.concurrency,
+                enableNameProbes = params.enableNameProbes,
+            ).timeoutMillis
+        } else {
+            // Invalid requests still need to reach the use case's ordinary validation path.
+            OperationBudget.DEFAULT_INTERACTIVE_TIMEOUT_MILLIS
+        }
+        OperationSession(
+            OperationBudget.start(
+                requirement = OperationRequirement.LOCAL_NETWORK,
+                timeoutMillis = estimateMillis,
+                maxConcurrentProbes = params.concurrency.coerceIn(1, 500),
+            )
+        )
+    }
 
     init {
-        viewModelScope.launch {
-            val prefs = dataStore.data.first()
-            _timeoutMs.value = prefs[AppPreferenceKeys.DEFAULT_TIMEOUT_MS] ?: 1_000
-            _concurrency.value = prefs[AppPreferenceKeys.DEFAULT_CONCURRENCY] ?: 50
-        }
+        // ViewModelStore closes registered resources before cancelling viewModelScope.
+        // Register first so the active operation records a typed lifecycle reason before
+        // scope cancellation unwinds its collector.
+        addCloseable("lan-scan-operation", AutoCloseable {
+            cancelScan(CancellationReason.LIFECYCLE_PAUSE)
+        })
+        recentSubnets = recentHostsRepository
+            .getRecents(AppPreferenceKeys.RECENT_LAN_SUBNETS)
+            .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+        settingsLoad =
+            viewModelScope.launch {
+                val prefs = dataStore.data.first()
+                _timeoutMs.value = prefs[AppPreferenceKeys.DEFAULT_TIMEOUT_MS] ?: 1_000
+                _concurrency.value = prefs[AppPreferenceKeys.DEFAULT_CONCURRENCY] ?: 50
+            }
         refreshSubnet()
     }
 
     // ── User actions ──────────────────────────────────────────────────────────
 
-    fun onSubnetChange(value: String) { _subnet.value = value }
+    fun onSubnetChange(value: String) {
+        _subnet.value = value
+        _subnetNarrowedFrom.value = null
+    }
+
+    /** Replaces the subnet with [subnet], typically a suggested slice, and starts scanning it. */
+    fun scanSubnet(subnet: String) {
+        onSubnetChange(subnet)
+        startScan()
+    }
 
     fun onTimeoutChange(value: Int) { _timeoutMs.value = value }
 
@@ -127,12 +256,15 @@ class LanScanViewModel @Inject constructor(
                     AppLogger.d(TAG, "refreshSubnet: starting subnet detection")
                     val linkInfo = linkInfoProvider?.getLinkInfo()
                     _gatewayIp.value = linkInfo?.gatewayIp
+                    localIp = linkInfo?.localIp ?: LocalSubnet.deviceAddress()
                     (linkInfo?.cidr ?: SubnetUtils.getCurrentSubnet()).also { result ->
                         AppLogger.i(TAG, "refreshSubnet: detected subnet = $result")
                     }
                 }
+                // The size check depends on the saved timeout and concurrency.
+                settingsLoad?.join()
                 if (_subnet.value.isBlank()) {
-                    _subnet.value = detected ?: "192.168.1.0/24"
+                    applyDetectedSubnet(detected ?: "192.168.1.0/24")
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.IO) {
@@ -145,6 +277,43 @@ class LanScanViewModel @Inject constructor(
                 _isSubnetLoading.value = false
             }
         }
+    }
+
+    /**
+     * Uses [detected] as the default subnet, or this device's /24 inside it when the whole
+     * network could not be scanned within the time limit at the current settings.
+     */
+    private fun applyDetectedSubnet(detected: String) {
+        val slice =
+            LocalSubnet
+                .hostSlice(detected, localIp)
+                ?.takeIf { it != detected && exceedsScanCeiling(detected) }
+        _subnet.value = slice ?: detected
+        _subnetNarrowedFrom.value = detected.takeIf { slice != null }
+    }
+
+    /**
+     * True when [cidr] would exceed the hard scan ceiling at the current settings. Prefixes
+     * broader than /16 fail ordinary validation, so they count as oversized here.
+     */
+    private fun exceedsScanCeiling(cidr: String): Boolean {
+        if (!SubnetUtils.isValidCidr(cidr)) {
+            val prefix = cidr.substringAfter('/', "").trim().toIntOrNull()
+            return prefix != null && prefix < MIN_SCANNABLE_PREFIX && LocalSubnet.hostSlice(cidr, null) != null
+        }
+        val params =
+            LanScanParams(
+                subnet = cidr,
+                timeoutMs = _timeoutMs.value.coerceIn(100, 10_000),
+                concurrency = _concurrency.value.coerceIn(1, 500),
+            )
+        return LanScanTimeBudget
+            .estimate(
+                targetCount = SubnetUtils.parseSubnet(params.subnet).size,
+                timeoutMs = params.timeoutMs,
+                concurrency = params.concurrency,
+                enableNameProbes = params.enableNameProbes,
+            ).exceedsHardCeiling
     }
 
     fun removeRecentSubnet(subnet: String) {
@@ -160,9 +329,15 @@ class LanScanViewModel @Inject constructor(
     }
 
     fun startScan() {
-        scanJob?.cancel()
+        // Do not overlap a new scan with an operation that is still releasing resources.
+        if (scanJob?.isCompleted == false) return
+        // Search and filter apply to one completed result set. The screen's local filter
+        // resets when Finished content leaves composition; clear the ViewModel query too
+        // so a new scan cannot return with only half of the old filter still applied.
+        _searchQuery.value = ""
         val liveHosts = mutableListOf<LanHost>()
-        scanStartMs = System.currentTimeMillis()
+        val uncertainDiagnostics = mutableListOf<LanScanDiagnostic>()
+        scanStartNanos = SystemMonotonicClock.nowNanos()
 
         val params = LanScanParams(
             subnet = _subnet.value,
@@ -171,19 +346,41 @@ class LanScanViewModel @Inject constructor(
             gatewayIp = _gatewayIp.value,
         )
 
+        // Preserve the normal validator's field-specific errors for malformed values. Only
+        // well-formed ranges get the early size warning, including prefixes broader than /16.
+        if (params.timeoutMs in 100..10_000 && params.concurrency in 1..500 &&
+            exceedsScanCeiling(params.subnet)
+        ) {
+            _uiState.value =
+                LanScanUiState.Error(
+                    LanScanOperationBudget.OVER_CEILING_MESSAGE,
+                    isBudgetLimit = true,
+                    suggestedSubnet =
+                        LocalSubnet
+                            .hostSlice(params.subnet, localIp)
+                            ?.takeIf { it != params.subnet && !exceedsScanCeiling(it) },
+                )
+            return
+        }
+
         _uiState.value = LanScanUiState.Scanning(
             hosts = emptyList(),
             scannedCount = 0,
             totalCount = 0,
         )
 
+        val operationSession = operationSessionFactory(params)
+        scanOperationSession = operationSession
         scanJob = viewModelScope.launch {
             withContext(Dispatchers.IO) {
                 AppLogger.i(TAG, "startScan: subnet=${params.subnet} timeoutMs=${params.timeoutMs} concurrency=${params.concurrency}")
             }
             var savedToRecents = false
             try {
-                lanScanUseCase(params).collect { result ->
+                lanScanUseCase(params, operationSession).collect { result ->
+                    // A cancelled scan may finish late in a non-cooperative dependency. Only
+                    // the currently owned operation is allowed to publish state or recents.
+                    if (scanOperationSession !== operationSession) return@collect
                     when (result) {
                         is LanScanFlowResult.ValidationError -> {
                             AppLogger.w(TAG, "startScan: validation error – ${result.message}")
@@ -203,15 +400,20 @@ class LanScanViewModel @Inject constructor(
                                 hosts = liveHosts.toList(),
                                 scannedCount = result.scannedCount,
                                 totalCount = result.totalCount,
+                                uncertainCount = result.uncertainCount,
+                                uncertainDiagnostics = uncertainDiagnostics.toList(),
                             )
                         }
 
                         is LanScanFlowResult.ScanProgress -> {
+                            result.diagnostic?.let(uncertainDiagnostics::add)
                             val current = _uiState.value
                             if (current is LanScanUiState.Scanning) {
                                 _uiState.value = current.copy(
                                     scannedCount = result.scannedCount,
                                     totalCount = result.totalCount,
+                                    uncertainCount = result.uncertainCount,
+                                    uncertainDiagnostics = uncertainDiagnostics.toList(),
                                 )
                             }
                         }
@@ -223,45 +425,158 @@ class LanScanViewModel @Inject constructor(
                     }
                 }
             } catch (e: CancellationException) {
-                throw e
+                if (operationSession.cancellationReason != CancellationReason.DEADLINE_EXCEEDED) throw e
+                if (scanOperationSession !== operationSession) return@launch
+                _uiState.value = partialDeadlineResult(liveHosts, uncertainDiagnostics)
             } catch (e: Exception) {
+                if (scanOperationSession !== operationSession) return@launch
+                if (e.hasDeadlineFailure() || operationSession.cancellationReason == CancellationReason.DEADLINE_EXCEEDED) {
+                    _uiState.value = partialDeadlineResult(liveHosts, uncertainDiagnostics)
+                    return@launch
+                }
                 AppLogger.e(TAG, "startScan: unexpected exception during scan", e)
-                _uiState.value = LanScanUiState.Error("Scan failed: ${e.message ?: "Unknown error"}")
+                _uiState.value = LanScanUiState.Error(
+                    "Scan failed: ${e.message ?: "Unknown error"}",
+                    e.toNetworkErrorKind(),
+                )
+            } finally {
+                if (scanOperationSession === operationSession) scanOperationSession = null
+                if (scanJob === coroutineContext[Job]) scanJob = null
+                pendingCancellation?.takeIf { it.session === operationSession }?.let { pending ->
+                    pendingCancellation = null
+                    _uiState.value = when (
+                        pending.session.cancellationReason ?: pending.reason
+                    ) {
+                        CancellationReason.USER_STOP -> LanScanUiState.Canceled(pending.summary)
+                        CancellationReason.DEADLINE_EXCEEDED -> LanScanUiState.Finished(
+                            pending.summary,
+                            partial = true,
+                            timeLimitReached = true,
+                        )
+                        else -> LanScanUiState.Finished(pending.summary, partial = true)
+                    }
+                }
             }
         }
     }
 
+    private fun partialDeadlineResult(
+        hosts: List<LanHost>,
+        diagnostics: List<LanScanDiagnostic>,
+    ): LanScanUiState.Finished {
+        val current = _uiState.value as? LanScanUiState.Scanning
+        val partialHosts = current?.hosts ?: hosts.toList()
+        val summary = LanScanSummary(
+            subnet = _subnet.value,
+            totalScanned = current?.scannedCount ?: 0,
+            aliveHosts = partialHosts.size,
+            scanDurationMs = SystemMonotonicClock.elapsedMillisSince(scanStartNanos),
+            hosts = partialHosts,
+            uncertainHosts = current?.uncertainDiagnostics ?: diagnostics.toList(),
+            uncertainCount = current?.uncertainCount ?: diagnostics.size,
+        )
+        return LanScanUiState.Finished(summary, partial = true, timeLimitReached = true)
+    }
+
     fun onStopScan() {
         AppLogger.i(TAG, "onStopScan: cancelling scan job")
-        scanJob?.cancel()
-        val current = _uiState.value
-        if (current is LanScanUiState.Scanning) {
-            val partial = LanScanSummary(
-                subnet = _subnet.value,
-                totalScanned = current.totalCount,
-                aliveHosts = current.hosts.size,
-                scanDurationMs = System.currentTimeMillis() - scanStartMs,
-                hosts = current.hosts,
-            )
-            _uiState.value = LanScanUiState.Finished(partial)
+        cancelWithPartial(CancellationReason.USER_STOP)
+    }
+
+    /** Pauses active probing when the LAN tool leaves the foreground. */
+    fun onLifecyclePause() {
+        cancelWithPartial(CancellationReason.LIFECYCLE_PAUSE)
+    }
+
+    private fun cancelWithPartial(reason: CancellationReason) {
+        val current = _uiState.value as? LanScanUiState.Scanning ?: return
+        val session = scanOperationSession
+        val job = scanJob
+        val partial = LanScanSummary(
+            subnet = _subnet.value,
+            totalScanned = current.scannedCount,
+            aliveHosts = current.hosts.size,
+            scanDurationMs = SystemMonotonicClock.elapsedMillisSince(scanStartNanos),
+            hosts = current.hosts,
+            uncertainHosts = current.uncertainDiagnostics,
+            uncertainCount = current.uncertainCount,
+        )
+        if (session == null || job == null || job.isCompleted) {
+            _uiState.value = if (reason == CancellationReason.USER_STOP) {
+                LanScanUiState.Canceled(partial)
+            } else {
+                LanScanUiState.Finished(partial, partial = true)
+            }
+            return
         }
+
+        pendingCancellation = PendingCancellation(
+            session = session,
+            summary = partial,
+            reason = session.cancellationReason ?: reason,
+        )
+        scanOperationSession = null
+        _uiState.value = LanScanUiState.Canceling(partial)
+        session.cancel(reason)
+        job.cancel()
     }
 
     fun onClear() {
         AppLogger.d(TAG, "onClear")
+        pendingCancellation = null
+        cancelScan(CancellationReason.USER_STOP)
         scanJob?.cancel()
         _searchQuery.value = ""
         _uiState.value = LanScanUiState.Idle
     }
 
     fun onToggleHostExpanded(ip: String) {
-        val current = _uiState.value as? LanScanUiState.Finished ?: return
-        _uiState.value = current.copy(
-            expandedHostIp = if (current.expandedHostIp == ip) null else ip
-        )
+        _uiState.value = when (val current = _uiState.value) {
+            is LanScanUiState.Finished -> current.copy(expandedHostIp = if (current.expandedHostIp == ip) null else ip)
+            is LanScanUiState.Canceled -> current.copy(expandedHostIp = if (current.expandedHostIp == ip) null else ip)
+            else -> return
+        }
+    }
+
+    fun onToggleDiagnostics() {
+        _uiState.value = when (val current = _uiState.value) {
+            is LanScanUiState.Finished -> current.copy(showDiagnostics = !current.showDiagnostics)
+            is LanScanUiState.Canceled -> current.copy(showDiagnostics = !current.showDiagnostics)
+            else -> return
+        }
     }
 
     fun onScanPorts(host: String) {
         navigationEventsChannel.trySend(LanNavEvent.NavigateToPorts(host))
+    }
+
+    fun onPingHost(host: String) {
+        navigationEventsChannel.trySend(LanNavEvent.NavigateToPing(host))
+    }
+
+    fun onProbeHttp(host: String, port: Int) {
+        navigationEventsChannel.trySend(LanNavEvent.NavigateToHttp(host, port))
+    }
+
+    fun onInspectTls(host: String, port: Int) {
+        navigationEventsChannel.trySend(LanNavEvent.NavigateToTls(host, port))
+    }
+
+    fun onWakeDevice(macAddress: String) {
+        ToolMacAddress.parse(macAddress)?.let { mac ->
+            navigationEventsChannel.trySend(LanNavEvent.NavigateToWakeOnLan(mac))
+        }
+    }
+
+    private fun cancelScan(reason: CancellationReason) {
+        scanOperationSession?.let { session ->
+            scanOperationSession = null
+            session.cancel(reason)
+        }
+    }
+
+    override fun onCleared() {
+        pendingCancellation = null
+        cancelScan(CancellationReason.LIFECYCLE_PAUSE)
     }
 }

@@ -67,6 +67,7 @@ import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RangeSlider
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -82,6 +83,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import android.content.ClipData
@@ -104,12 +106,20 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.compose.runtime.DisposableEffect
 import kotlinx.coroutines.launch
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
+import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
+import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.components.ToolErrorCard
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
 import net.aieat.netswissknife.app.ui.components.ToolStopButton
+import net.aieat.netswissknife.app.ui.i18n.asString
+import net.aieat.netswissknife.app.ui.i18n.uiText
 import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
@@ -117,31 +127,65 @@ import net.aieat.netswissknife.app.ui.components.RecentHostsRow
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
 import net.aieat.netswissknife.app.ui.screens.portscan.PortScanUiState
 import net.aieat.netswissknife.app.ui.screens.portscan.PortScanViewModel
+import net.aieat.netswissknife.app.ui.navigation.ToolSource
 import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.core.domain.PortScanPreset
+import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.portscan.PortScanResult
 import net.aieat.netswissknife.core.network.portscan.PortScanSummary
 import net.aieat.netswissknife.core.network.portscan.PortStatus
+import net.aieat.netswissknife.core.network.portscan.TlsSubjectSanitizer
 
 object PortsScreenTestTags {
+    const val HOST_FIELD = "ports_host_field"
     const val PRESET_FIELD = "ports_preset_field"
     const val SCAN_BUTTON = "ports_scan_button"
+    const val CONCURRENCY_SLIDER = "ports_concurrency_slider"
+    const val SOURCE_CONTEXT = "ports_source_context"
+    const val INVALID_HANDOFF = "ports_invalid_handoff"
+    const val AGGRESSIVE_PROBES_SWITCH = "ports_aggressive_probes_switch"
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
-    val requestLocalNetworkPermission = rememberLocalNetworkPermissionRequester()
-    LaunchedEffect(Unit) { requestLocalNetworkPermission() }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_PAUSE) viewModel.onLifecyclePause()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            viewModel.onLifecyclePause()
+        }
+    }
+    val requestLocalNetworkPermission = rememberLocalNetworkPermissionRequester(viewModel::startScan)
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val announcementPhase = when (val state = uiState) {
+        PortScanUiState.Idle -> null
+        is PortScanUiState.Scanning -> ToolAnnouncementPhase.RUNNING
+        is PortScanUiState.Error -> ToolAnnouncementPhase.ERROR
+        is PortScanUiState.Finished -> {
+            when {
+                state.completion == PortScanUiState.Completion.COMPLETE -> ToolAnnouncementPhase.FINISHED
+                state.completion == PortScanUiState.Completion.USER_STOPPED && state.summary.totalPorts == 0 ->
+                    ToolAnnouncementPhase.CANCELED
+                else -> ToolAnnouncementPhase.PARTIAL
+            }
+        }
+    }
     val host by viewModel.host.collectAsStateWithLifecycle()
     val selectedPreset by viewModel.selectedPreset.collectAsStateWithLifecycle()
     val startPort by viewModel.startPort.collectAsStateWithLifecycle()
     val endPort by viewModel.endPort.collectAsStateWithLifecycle()
     val timeoutMs by viewModel.timeoutMs.collectAsStateWithLifecycle()
     val concurrency by viewModel.concurrency.collectAsStateWithLifecycle()
+    val aggressiveProbes by viewModel.aggressiveProbes.collectAsStateWithLifecycle()
     val recentHosts by viewModel.recentHosts.collectAsStateWithLifecycle()
+    val sourceContext by viewModel.sourceContextState.collectAsStateWithLifecycle()
+    val hasInvalidHandoff by viewModel.hasInvalidHandoff.collectAsStateWithLifecycle()
 
     var screenVisible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { screenVisible = true }
@@ -165,12 +209,37 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
     ) {
             // ── Header ──────────────────────────────────────────────────────────
             item {
-                ToolHeroHeader(
-                    title = stringResource(R.string.ports_screen_title),
-                    subtitle = stringResource(R.string.ports_screen_subtitle),
-                    icon = Icons.Default.Search,
-                    onHelpClick = { showHelp = true }
-                )
+                Box {
+                    ToolStateAnnouncer(stringResource(R.string.help_portscan_title), announcementPhase)
+                    ToolHeroHeader(
+                        title = stringResource(R.string.ports_screen_title),
+                        subtitle = stringResource(R.string.ports_screen_subtitle),
+                        icon = Icons.Default.Search,
+                        onHelpClick = { showHelp = true }
+                    )
+                }
+            }
+
+            if (hasInvalidHandoff) {
+                item {
+                    Text(
+                        text = stringResource(R.string.ports_invalid_handoff),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.testTag(PortsScreenTestTags.INVALID_HANDOFF),
+                    )
+                }
+            }
+
+            if (sourceContext == ToolSource.LAN) {
+                item {
+                    Text(
+                        text = stringResource(R.string.ports_source_lan),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.testTag(PortsScreenTestTags.SOURCE_CONTEXT),
+                    )
+                }
             }
 
             // ── Input Card ──────────────────────────────────────────────────────
@@ -182,6 +251,7 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
                     endPort = endPort,
                     timeoutMs = timeoutMs,
                     concurrency = concurrency,
+                    aggressiveProbes = aggressiveProbes,
                     isScanning = uiState is PortScanUiState.Scanning,
                     recentHosts = recentHosts,
                     onHostChange = viewModel::onHostChange,
@@ -190,9 +260,10 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
                     onEndPortChange = viewModel::onEndPortChange,
                     onTimeoutChange = viewModel::onTimeoutChange,
                     onConcurrencyChange = viewModel::onConcurrencyChange,
+                    onAggressiveProbesChange = viewModel::onAggressiveProbesChange,
                     onStartScan = {
                         keyboardController?.hide()
-                        viewModel.startScan()
+                        requestLocalNetworkPermission(host)
                     },
                     onStopScan = viewModel::onStopScan,
                     onRemoveRecentHost = viewModel::removeRecentHost,
@@ -214,8 +285,10 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
                         is PortScanUiState.Idle -> PortScanIdleState()
                         is PortScanUiState.Scanning -> PortScanProgressCard(state)
                         is PortScanUiState.Error -> PortScanErrorCard(
-                            message = state.message,
-                            onRetry = viewModel::startScan,
+                            message = if (state.isBudgetLimit) {
+                                stringResource(R.string.ports_scan_budget_exceeded)
+                            } else state.message,
+                            onRetry = { requestLocalNetworkPermission(host) },
                             onClear = viewModel::onClear
                         )
                         is PortScanUiState.Finished -> { /* results shown below */ }
@@ -225,7 +298,18 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
 
             // ── Finished: Summary Card ──────────────────────────────────────────
             if (uiState is PortScanUiState.Finished) {
-                val summary = (uiState as PortScanUiState.Finished).summary
+                val finished = uiState as PortScanUiState.Finished
+                val summary = finished.summary
+                if (finished.completion == PortScanUiState.Completion.DEADLINE) {
+                    item {
+                        Text(
+                            text = stringResource(R.string.ports_scan_deadline_partial),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                }
                 item {
                     val shareSubject = stringResource(R.string.share_subject_ports, summary.host)
                     PortScanSummaryCard(
@@ -362,6 +446,7 @@ private fun PortScanInputCard(
     endPort: String,
     timeoutMs: Int,
     concurrency: Int,
+    aggressiveProbes: Boolean,
     isScanning: Boolean,
     recentHosts: List<String>,
     onHostChange: (String) -> Unit,
@@ -370,11 +455,20 @@ private fun PortScanInputCard(
     onEndPortChange: (String) -> Unit,
     onTimeoutChange: (Int) -> Unit,
     onConcurrencyChange: (Int) -> Unit,
+    onAggressiveProbesChange: (Boolean) -> Unit,
     onStartScan: () -> Unit,
     onStopScan: () -> Unit,
     onRemoveRecentHost: (String) -> Unit,
     onClearRecentHosts: () -> Unit
 ) {
+    val normalizedHost = HostValidator.normalize(host)
+    val isHostInvalid = host.isNotBlank() && normalizedHost == null
+    val probeSwitchA11yLabel = stringResource(R.string.ports_aggressive_probes_a11y_label)
+    val probeSwitchA11yState = stringResource(
+        if (aggressiveProbes) R.string.ports_aggressive_probes_enabled_a11y
+        else R.string.ports_aggressive_probes_disabled_a11y,
+    )
+
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -389,15 +483,26 @@ private fun PortScanInputCard(
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 trailingIcon = {
                     if (host.isNotEmpty()) {
-                        IconButton(onClick = { onHostChange("") }) {
+                        IconButton(
+                            onClick = { onHostChange("") },
+                            enabled = !isScanning,
+                        ) {
                             Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.clear))
                         }
                     }
                 },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = { onStartScan() }),
-                modifier = Modifier.fillMaxWidth()
+                keyboardActions = KeyboardActions(onDone = {
+                    if (!isScanning && normalizedHost != null) onStartScan()
+                }),
+                isError = isHostInvalid,
+                supportingText = if (isHostInvalid) {
+                    { Text(stringResource(R.string.error_invalid_host)) }
+                } else null,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(PortsScreenTestTags.HOST_FIELD)
             )
 
             RecentHostsRow(
@@ -414,7 +519,7 @@ private fun PortScanInputCard(
                 onExpandedChange = { presetExpanded = !presetExpanded }
             ) {
                 OutlinedTextField(
-                    value = selectedPreset.label,
+                    value = selectedPreset.uiText().asString(),
                     onValueChange = {},
                     readOnly = true,
                     label = { Text(stringResource(R.string.ports_preset_label)) },
@@ -430,7 +535,7 @@ private fun PortScanInputCard(
                 ) {
                     PortScanPreset.entries.forEach { preset ->
                         DropdownMenuItem(
-                            text = { Text(preset.label) },
+                            text = { Text(preset.uiText().asString()) },
                             onClick = {
                                 onPresetChange(preset)
                                 presetExpanded = false
@@ -536,9 +641,9 @@ private fun PortScanInputCard(
                 Slider(
                     value = concurrency.toFloat(),
                     onValueChange = { onConcurrencyChange(it.toInt()) },
-                    valueRange = 10f..300f,
-                    steps = 29,
-                    modifier = Modifier.fillMaxWidth()
+                    valueRange = 1f..500f,
+                    steps = 498,
+                    modifier = Modifier.fillMaxWidth().testTag(PortsScreenTestTags.CONCURRENCY_SLIDER)
                 )
                 AnimatedVisibility(visible = concurrency > 100) {
                     Row(
@@ -561,6 +666,35 @@ private fun PortScanInputCard(
                 }
             }
 
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.ports_aggressive_probes_label),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Text(
+                        text = stringResource(R.string.ports_aggressive_probes_description),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(
+                    checked = aggressiveProbes,
+                    onCheckedChange = onAggressiveProbesChange,
+                    enabled = !isScanning,
+                    modifier = Modifier
+                        .testTag(PortsScreenTestTags.AGGRESSIVE_PROBES_SWITCH)
+                        .semantics {
+                            contentDescription = probeSwitchA11yLabel
+                            stateDescription = probeSwitchA11yState
+                        },
+                )
+            }
+
             // Action buttons
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -575,7 +709,7 @@ private fun PortScanInputCard(
                 } else {
                     Button(
                         onClick = hapticAction(onStartScan),
-                        enabled = host.isNotBlank() && customRangeValid,
+                        enabled = normalizedHost != null && customRangeValid,
                         modifier = Modifier
                             .weight(1f)
                             .testTag(PortsScreenTestTags.SCAN_BUTTON)
@@ -972,15 +1106,35 @@ private fun PortResultRow(result: PortScanResult) {
                     )
                 }
 
-                // Banner
-                result.banner?.let { banner ->
+                result.tlsSubject?.let(TlsSubjectSanitizer::sanitize)?.takeIf(String::isNotBlank)?.let { subject ->
                     Text(
-                        text = banner,
+                        text = stringResource(R.string.ports_tls_subject, subject),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+
+                // Banner
+                if (result.banner != null || result.bannerTruncated) {
+                    val banner = result.banner.orEmpty()
+                    val visibleBanner = banner + if (result.bannerTruncated) "…" else ""
+                    val bannerDescription = if (result.bannerTruncated) {
+                        stringResource(R.string.ports_banner_truncated_content_description, banner)
+                    } else {
+                        banner
+                    }
+                    Text(
+                        text = visibleBanner,
                         style = MaterialTheme.typography.labelSmall,
                         fontFamily = FontFamily.Monospace,
                         color = MaterialTheme.colorScheme.secondary,
                         maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.semantics {
+                            contentDescription = bannerDescription
+                        },
                     )
                 }
             }
@@ -999,7 +1153,7 @@ private fun PortResultRow(result: PortScanResult) {
 
 // ── Report builder ────────────────────────────────────────────────────────────
 
-private fun buildScanReport(summary: PortScanSummary): String = buildString {
+internal fun buildScanReport(summary: PortScanSummary): String = buildString {
     appendLine("=== Port Scan Report ===")
     appendLine("Host: ${summary.host}")
     summary.resolvedIp?.let { appendLine("IP: $it") }
@@ -1015,8 +1169,15 @@ private fun buildScanReport(summary: PortScanSummary): String = buildString {
         appendLine("--- Open Ports ---")
         openPorts.forEach { r ->
             val service = r.serviceName ?: "unknown"
-            val banner = r.banner?.let { " | $it" } ?: ""
+            val banner = when {
+                r.banner != null -> " | ${r.banner}${if (r.bannerTruncated) "…" else ""}"
+                r.bannerTruncated -> " | …"
+                else -> ""
+            }
             appendLine("  ${r.port.toString().padEnd(6)} $service${banner}")
+            r.tlsSubject?.let(TlsSubjectSanitizer::sanitize)?.takeIf(String::isNotBlank)?.let {
+                appendLine("         TLS subject CN: $it")
+            }
         }
     } else {
         appendLine("No open ports found.")

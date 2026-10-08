@@ -3,16 +3,35 @@
 #       Android 16 Local Network Protections readiness, mDNS bind fallback
 # =============================================================================
 # Audience: AI coding agent. Self-contained. Read plan/plan.yaml `agent_execution_rules` first.
+expansion_tasks:
+  index: plan/plan.yaml
+  tasks: [E01-T13, E03-T01, E03-T02, E03-T03]
+  rule: "Coordinate with these expansion tasks; do not duplicate existing scope or block independent regression fixes on optional enhancements. See comprehensive_expansion.regression_delivery for fresh follow-up ownership."
+
 phase:
   id: P05
   title: "NetworkBinder abstraction + Wi-Fi/Ethernet binding for all LAN sockets, connectivity status banner, LNP error mapping, mDNS port-bind fallback"
   priority: high
-  status: todo
+  status: in_progress
   estimated_effort: "M (2-4 agent sessions)"
   depends_on: []          # best after P01 (probes) but can run first; P01 must then adopt the binder
   enables: [P11, P12, P13]
   findings: [F012, F013]
   target_modules: [":core-network", ":app"]
+  current_progress:
+    date: "2026-09-25"
+    implemented: "Added P05-T7 source wiring for HTTP Probe and TLS Inspector: TCP sockets bind through an atomic NetworkBinder.bindIfLocal operation only when the selected local subnet contains the destination. AndroidNetworkBinder uses one captured network/subnet snapshot, and an initially local route that disappears before binding now fails closed. App DI supplies AndroidNetworkBinder; JVM construction retains NoOpNetworkBinder defaults."
+    validation: "Fake-binder regressions cover local/public routing, HTTP redirect re-evaluation from local to public, selected-network loss between classification and bind, and SecurityException preservation as LocalNetworkPermissionDeniedException. Targeted HTTP/TLS/GeoIP tests passed (78 cases across the four changed test classes); the full core-network report executed 1,350 tests (1 skipped) with all P05/GeoIP cases passing and one unrelated existing Speed Test overlap test failing under shared-host load. The isolated Port Scan repository class passed. App and domain suites passed, Android-test Kotlin compilation passed, and lintDebug succeeded with zero errors; no emulator/device was used."
+    remaining: "The implementation slice is complete. Physical Wi-Fi/VPN route behavior remains in the phase-level device matrix. TLS uses the process resolver; if the selected network disappears during DNS before any address is classified as local, the current route decision follows the network state observed after resolution."
+
+review_follow_up:
+  reviewed_on: "2026-09-21"
+  status: done
+  findings: [RNET002]
+  reports:
+    - plan/reviews/2026-09-21-app.yaml
+    - plan/reviews/2026-09-21-network.yaml
+  note: "RAPP002, RAPP004, and RNET002 are closed in their source-review entries. The phase remains open for its broader network-binding goals and the API 33/physical-Wi-Fi mDNS interface checks from the release QA brief."
 
 context:
   problem: |
@@ -36,7 +55,7 @@ context:
     - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/wol/WakeOnLanRepositoryImpl.kt", lines: "789-793", note: "DatagramSocket() unbound" }
     - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/topology/Snmp4jClientImpl.kt", lines: "18, 36", note: "DefaultUdpTransportMapping() unbound" }
     - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/lan/LanScanRepositoryImpl.kt", lines: "48-55, 62-72", note: "isReachable / Socket() unbound" }
-    - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/portscan/PortScanRepositoryImpl.kt", lines: "47-70", note: "Socket() unbound" }
+    - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/portscan/PortScanRepositoryImpl.kt", lines: "47-70", note: "Historical baseline: Socket() was created unbound here; current scans use a repository-owned operation-scoped checker" }
     - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/LocalNetworkPermission.kt", note: "requests NEARBY_WIFI_DEVICES on API 36+; no error mapping" }
     - { file: "AndroidManifest.xml", note: "ACCESS_NETWORK_STATE declared; unused for status" }
   desired_behaviour: |
@@ -67,8 +86,8 @@ assumptions:
     statement: "ConnectivityManager.getAllNetworks() + getNetworkCapabilities: a network with TRANSPORT_WIFI and without TRANSPORT_VPN is the LAN network; NET_CAPABILITY_NOT_VPN true."
     verify_with: "Log capabilities on a device with VPN on."
   - id: A3
-    statement: "SNMP4J 3.13.1 DefaultUdpTransportMapping has NO public getSocket() (verified via javap 2026-09-18). It does expose `protected DatagramSocket socket` and `protected synchronized DatagramSocket ensureSocket()`. Binding therefore requires a subclass in core-network: `class BoundUdpTransportMapping(address: UdpAddress, private val bind: (DatagramSocket) -> Unit) : DefaultUdpTransportMapping(address) { override fun ensureSocket(): DatagramSocket = super.ensureSocket().also(bind) }` – the binder lambda calls Network.bindSocket(socket) in :app. Binding a local address alone (UdpAddress(localAddr, 0)) is NOT sufficient under a VPN because Android routes per-UID, not per-source-address."
-    verify_with: "javap -p -cp <snmp4j jar> org.snmp4j.transport.DefaultUdpTransportMapping | grep -E 'socket;|ensureSocket' ; device test with VPN on: SNMP GET to the router succeeds only with the bound subclass."
+    statement: "SNMP4J 3.13.1 exposes no public socket getter, but its protected `socket` field is available to a subclass. A fresh `DefaultUdpTransportMapping` eagerly creates and binds a DatagramSocket in every public constructor; `ensureSocket()` only returns that already-bound socket, so overriding it to call `Network.bindSocket` is too late. A bound subclass must close the eager socket before listen, create `DatagramSocket(null)`, call the binder while it is unbound, then bind it to wildcard port 0 and assign it to the protected field. Binding a local address alone is NOT sufficient under a VPN because Android routes per-UID, not per-source-address."
+    verify_with: "Inspect SNMP4J 3.13.1 constructors and ensureSocket with javap -p -c; a JVM fake-binder test asserts the socket is unbound at bind time and listen succeeds afterward. Validate router SNMP GET with VPN on a physical device."
   - id: A4
     statement: "ContextCompat/ConnectivityManager NetworkCallback with NetworkRequest for INTERNET and VPN detection works from API 26."
     verify_with: "Compile + device log."
@@ -96,7 +115,7 @@ design:
 
       Repositories gain a `binder: NetworkBinder = NoOpNetworkBinder` constructor param:
         LanScanRepositoryImpl (SocketTcpPresenceProbe/UdpExchange/port checker receive it),
-        PortScanRepositoryImpl.defaultChecker(timeout, clock, binder, host),
+        PortScanRepositoryImpl(binder = binder).scan(host, ports, timeout, concurrency, operationSession),
         WakeOnLanRepositoryImpl, Snmp4jClientImpl (via TopologyParams? no – via factory ctor),
         MdnsRepositoryImpl (app) uses binder.localInterface().
       Typed error: `class LocalNetworkPermissionDeniedException(cause: SecurityException)` thrown/mapped by
@@ -141,13 +160,13 @@ design:
 tasks:
   - id: P05-T1
     title: "core: NetworkBinder, NoOp, LocalDestinationPolicy, FakeNetworkBinder"
-    status: todo
+    status: done
     tdd:
       red:
         test_file: core-network/src/test/kotlin/net/aieat/netswissknife/core/network/net/LocalDestinationPolicyTest.kt
         tests:
           - "policy('192.168.1.0/24').isLocal('192.168.1.7') true; ('192.168.2.7') false; ('8.8.8.8') false"
-          - "policy(null).isLocal(any site-local) true (no subnet known: bind for all RFC1918/link-local)"
+          - "policy(null) must not automatically force all RFC1918 traffic onto a guessed LAN; preserve the default route when destination membership cannot be established. Explicit user-selected network override is separate, visible, and tested with VPN/private routes."
           - "IPv6 link-local fe80:: -> true; global v6 -> false"
           - "hostname input (non-IP) -> false (caller must resolve first)"
         run: "./gradlew :core-network:test --tests '*LocalDestinationPolicyTest' --no-daemon"
@@ -157,7 +176,7 @@ tasks:
 
   - id: P05-T2
     title: "core repositories accept and use the binder"
-    status: todo
+    status: done
     depends_on: [P05-T1]
     tdd:
       red:
@@ -165,22 +184,25 @@ tasks:
           - "PortScanRepositoryImplTest: with FakeNetworkBinder(shouldBind=true) each socket created by the default checker is passed to binder.bind before connect (inject a socket factory: `socketFactory: () -> Socket`)"
           - "PortScanRepositoryImplTest: shouldBind=false -> binder.bind never called"
           - "WakeOnLanRepositoryImplTest: DatagramSocket passed to binder.bind before send (inject datagram socket factory)"
-          - "LanScanRepositoryImplTest: TCP presence/port checker sockets bound when policy says local"
-          - "SecurityException from socket factory -> repositories surface LocalNetworkPermissionDeniedException (PortScan: PortScanUpdate.Complete? no – throw so the flow errors; WOL: NetworkResult.Error with cause LocalNetworkPermissionDeniedException)"
+          - "LanScanRepositoryImplTest: default TCP presence and enrichment-port sockets bind before connect"
+          - "UdpExchangeTest: selected LAN unicast and mDNS multicast sockets bind before send; permission denial remains typed"
+          - "Snmp4jClientImplLoopbackTest: selected transport binds an unbound replacement socket and starts its listener"
+          - "Socket-factory/binder SecurityException maps to LocalNetworkPermissionDeniedException (PortScan flow error; WOL NetworkResult.Error cause)"
         run: "./gradlew :core-network:test --no-daemon"
         expect: "RED"
       green:
         steps:
-          - "Add `binder` params + socket factories; resolve host to IP before deciding shouldBind (PortScan already resolves for summary – reuse; LanScan has IPs)."
-          - "Snmp4jClientImpl: when binder.shouldBind(target.ip) use `BoundUdpTransportMapping(UdpAddress(\"0.0.0.0/0\"), binder::bind)` (subclass overriding ensureSocket(), see A3); otherwise plain DefaultUdpTransportMapping(). Unit test: a fake binder records that bind() was called with the transport's socket before listen() completes."
-        run: "./gradlew :core-network:test --no-daemon"
+          - "Add `binder` params and injectable socket factories; resolve destinations before applying local-subnet policy. Keep NoOpNetworkBinder as the JVM default."
+          - "Route TCP, WOL UDP, and LAN discovery UDP creation through BoundSockets so binding happens before connect/send; bind mDNS multicast queries to the selected network for their unicast-response mode."
+          - "For selected SNMP targets, replace SNMP4J's eagerly bound socket with a binder-bound unbound DatagramSocket, then bind an ephemeral local port and assign the socket before listen()."
+        run: "./gradlew :core-network:test :app:testDebugUnitTest --no-daemon --no-parallel"
         expect: "PASS"
-      refactor: ["Single `BoundSockets` helper: `fun NetworkBinder.newTcpSocket(dest: String): Socket`, `newUdpSocket(dest)`."]
-    acceptance_criteria: ["All core repos compile with NoOp default; tests prove bind ordering."]
+      refactor: ["Completed with shared NetworkBinder.newTcpSocket/newUdpSocket helpers; retain SNMP-specific transport setup for its eager-socket lifecycle."]
+    acceptance_criteria: ["All core repositories compile with NoOp defaults; deterministic tests prove bind-before-connect/send/listen and typed permission-denial behavior."]
 
   - id: P05-T3
     title: "app: AndroidNetworkBinder + ConnectivityObserver + DI"
-    status: todo
+    status: done
     depends_on: [P05-T2]
     tdd:
       red:
@@ -195,70 +217,120 @@ tasks:
         expect: "RED"
       green:
         steps:
-          - "NetworkSelection (pure) + AndroidNetworkBinder (maps ConnectivityManager -> snapshots; caches chosen Network + LinkProperties; refreshes via NetworkCallback)."
-          - "ConnectivityObserver: callbackFlow(registerDefaultNetworkCallback + registerNetworkCallback(VPN request)) -> StateFlow(NetworkStatus)."
-          - "NetworkModule @Provides @Singleton both; wire into Lan/PortScan/WakeOnLan/Topology/Mdns modules."
-          - "Add NetworkSelection to app Kover includes."
-        run: "./gradlew :app:testDebugUnitTest :app:assembleDebug --no-daemon"
+          - "Implement pure NetworkSelection over transport/capability snapshots; prefer non-VPN Wi-Fi, then Ethernet, and derive status from local and active-network snapshots."
+          - "AndroidNetworkBinder caches the chosen Network and LinkProperties, refreshes over API-26-compatible Wi-Fi/Ethernet NetworkCallback requests, and delegates socket binding to Network.bindSocket."
+          - "ConnectivityObserver publishes callbackFlow snapshots through StateFlow, watching the default network and VPN transport."
+          - "NetworkModule provides the app binder and observer; pass the binder to LAN, port-scan, WOL, topology, and mDNS repositories."
+          - "Include the pure selection models in app Kover reports; XML shows 100% line coverage for each included class."
+        run: "./gradlew :app:testDebugUnitTest --no-daemon --no-parallel && ./gradlew :app:assembleDebug --no-daemon --no-parallel && ./gradlew :app:koverVerify --no-daemon && ./gradlew :app:lintDebug --no-daemon --no-parallel"
         expect: "PASS"
     acceptance_criteria: ["Selection logic 100% covered; lint clean."]
 
   - id: P05-T4
     title: "mDNS: interface binding + ephemeral-port fallback with QU queries"
-    status: todo
+    status: done
     depends_on: [P05-T3]
     tdd:
       red:
-        test_file: core-network/src/test/kotlin/net/aieat/netswissknife/core/network/mdns/MdnsPacketParserTest.kt
+        test_files:
+          - core-network/src/test/kotlin/net/aieat/netswissknife/core/network/mdns/MdnsPacketParserTest.kt
+          - core-network/src/test/kotlin/net/aieat/netswissknife/core/network/mdns/MdnsDiscoverySessionTest.kt
         tests:
           - "buildMdnsQuery(name, type, unicastResponse=true) sets the top bit of QCLASS (0x8001) – assert on wire bytes"
           - "buildMdnsQuery default keeps QCLASS 0x0001"
-        run: "./gradlew :core-network:test --tests '*MdnsPacketParserTest' --no-daemon"
-        expect: "RED"
+        run: "./gradlew :core-network:test --tests '*MdnsPacketParserTest' --tests '*MdnsDiscoverySessionTest' --no-daemon"
+        expect: "RED (the QU parameter and session API were absent)"
       green:
         steps:
           - "MdnsPacketParser.buildMdnsQuery gains `unicastResponse: Boolean = false`."
           - "MdnsRepositoryImpl: create socket via binder; try bind 5353 (reuseAddress) catch SocketException -> bind(0), useUnicastResponses=true; setNetworkInterface(iface) when non-null; joinGroup(InetSocketAddress(MDNS_GROUP, 5353), iface); send queries with QU when fallback active."
           - "Extract the packet-processing loop state (PartialService bookkeeping) into core-network `MdnsDiscoverySession` (pure) so it becomes unit-testable (also serves F038)."
-        run: "./gradlew :core-network:test :app:assembleDebug --no-daemon"
+        run: "./gradlew :core-network:test :app:testDebugUnitTest --tests '*MdnsRepositoryImpl*' :app:assembleDebug --no-daemon --no-parallel"
         expect: "PASS"
-      refactor: []
-    acceptance_criteria: ["MdnsDiscoverySession has tests for: meta-query PTR -> type registered; instance PTR -> SRV/TXT queries requested; SRV+A -> service emitted once; end-of-scan sweep emits partials with hostname."]
+      refactor:
+        - "MdnsDiscoverySession owns service types, partial records, deduplication, changed snapshots, and the final hostname-bearing sweep; the app repository only adapts dnsjava records and socket effects."
+    acceptance_criteria:
+      - "MdnsDiscoverySession has tests for: meta-query PTR -> type registered; instance PTR -> SRV/TXT queries requested; SRV+A -> service emitted once; end-of-scan sweep emits partials with hostname."
+      - "Socket binding occurs on the selected Android network before local bind, group membership uses its interface, and 5353 SocketException falls back to port 0 with QU set on every query; ENODEV stays an explicit error."
+      - "Injected ENODEV cleanup and dismissible-error coverage pass; API 33 ENODEV reproduction and physical Wi-Fi interface/discovery remain release-device checks recorded in plan/reviews/2026-09-23-release-qa-brief.yaml."
 
   - id: P05-T5
-    title: "UI: NetworkStatusBanner + LNP error mapping on LAN tools"
-    status: todo
+    title: "UI: connectivity banners and typed local-network permission handling"
+    status: in_progress
     depends_on: [P05-T3]
+    files_to_modify:
+      - app/src/main/kotlin/net/aieat/netswissknife/app/platform/NetworkStatusProvider.kt
+      - app/src/main/kotlin/net/aieat/netswissknife/app/platform/ConnectivityObserver.kt
+      - app/src/main/kotlin/net/aieat/netswissknife/app/di/NetworkModule.kt
+      - app/src/main/kotlin/net/aieat/netswissknife/app/ui/components/NetworkStatusBanner.kt
+      - app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/{lan/LanScanScreen,mdns/MdnsDiscoveryScreen,wol/WakeOnLanScreen,topology/TopologyDiscoveryScreen,PingScreen,DnsScreen,httprobe/HttpProbeScreen,tls/TlsInspectorScreen,whois/WhoisScreen,speedtest/SpeedTestScreen}.kt
+      - app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/*/*ViewModel.kt
+      - app/src/main/res/values/strings.xml
+      - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/net/LocalNetworkPermissionDeniedException.kt
+      - core-network/src/main/kotlin/net/aieat/netswissknife/core/network/topology/{TopologyDiscoveryEvents,TopologyDiscoveryRepositoryImpl}.kt
+      - app/src/test/kotlin/net/aieat/netswissknife/app/platform/NetworkStatusProviderTest.kt
+      - app/src/test/kotlin/net/aieat/netswissknife/app/ui/screens/{lan/LanScanViewModelTest,mdns/MdnsDiscoveryViewModelTest,wol/WakeOnLanViewModelTest,topology/TopologyDiscoveryViewModelTest,speedtest/SpeedTestViewModelTest}.kt
+      - app/src/androidTest/kotlin/net/aieat/netswissknife/app/ui/components/NetworkStatusBannerTest.kt
     tdd:
       red:
         tests:
-          - "LanScanViewModelTest: use case throws LocalNetworkPermissionDeniedException -> Error state with kind PermissionDenied (typed enum on the state, string resolved in UI)"
-          - "WakeOnLanViewModelTest / MdnsDiscoveryViewModelTest / TopologyDiscoveryViewModelTest: same mapping"
-          - "Instrumented (LanScanScreenTest): banner text visible when status.hasLocalNetwork=false (fake ConnectivityObserver via Hilt test module or constructor param on the screen)"
-        run: "./gradlew :app:testDebugUnitTest --no-daemon"
-        expect: "RED"
+          - "LAN/mDNS/WOL/Topology ViewModel tests classify direct or wrapped LocalNetworkPermissionDeniedException separately from generic errors; topology events retain causes through failed GETs and walks."
+          - "NetworkStatusBannerTest verifies scope priority, definitive offline versus route-uncertain advisories, healthy hidden state, localized permission text, and Grant callback."
+          - "NetworkStatusProviderTest verifies cause-chain classification; SpeedTestViewModelTest verifies provider state remains live."
+        run: "./gradlew :core-network:test --tests '*LocalNetworkPermissionDeniedExceptionTest' --tests '*TopologyDiscoveryRepositoryTest' :app:testDebugUnitTest --no-daemon --no-parallel"
+        expect: "RED before cause classification and banner wiring; PASS after implementation"
       green:
         steps:
-          - "ViewModels expose `networkStatus` (from observer) and typed error kinds."
+          - "ViewModels expose `networkStatus` (from observer) and typed error kinds; ConnectivityObserver seeds state synchronously from the current network snapshot to avoid a false-offline startup flash."
           - "NetworkStatusBanner composable: ElevatedCard, AnimatedVisibility, icon + text, tokens secondaryContainer/errorContainer; strings network_banner_no_internet, network_banner_no_local, network_banner_vpn_info, network_error_local_permission + action 'Grant'."
-          - "Place banner under ToolHeroHeader on LAN, mDNS, WOL, Topology (local), Ping/DNS/HTTP/TLS/WHOIS/Speed (internet)."
-        run: "./gradlew :app:testDebugUnitTest :app:assembleDebug --no-daemon"
+          - "Place local-network status beneath the header on LAN, mDNS, WOL, and Topology; place internet status on Ping, DNS, HTTP, TLS, WHOIS, and Speed Test."
+          - "Preserve LocalNetworkPermissionDeniedException through topology GET and walk failures; Grant requests permission without auto-retrying. Retry/Scan remains a separate explicit action and Topology Retry uses the current form values."
+        run: "./gradlew :core-network:test --tests '*LocalNetworkPermissionDeniedExceptionTest' --tests '*TopologyDiscoveryRepositoryTest' :app:testDebugUnitTest :app:assembleDebug --no-daemon --no-parallel"
         expect: "PASS"
-    acceptance_criteria: ["Banner respects CLAUDE.md UI rules; no literals."]
+    acceptance_criteria:
+      - "The four local-network screens and six internet-tool screens render banners with the correct scope. Internet-offline and fully empty ANY_NETWORK states are definitive errors; unvalidated Internet, VPN-only local state, and unknown observed transport are advisories that do not gate probes. Healthy state is hidden."
+      - "Permission causes survive wrappers and topology's per-request handling; affected local-tool states expose a localized Grant card, and the user retries explicitly after granting."
+      - "Banner/error copy is resource-backed and follows CLAUDE.md Compose and accessibility rules; focused unit tests and Android-test Kotlin compilation pass, with connected execution still required."
+    validation:
+      - "On source commit 74e2c50, serialized `:app:testDebugUnitTest` passed (574 tests); `:app:compileDebugAndroidTestKotlin`, `:app:lintDebug` (0 errors), and `:app:assembleDebug` passed."
+      - "Banner Compose tests cover Internet offline precedence, unvalidated Internet, VPN-only local route uncertainty, unknown transport, fully empty connectivity, healthy hidden state, and permission action. Instrumentation sources compile; they were not executed."
+      - "Independent QA/adversarial source reviews cleared the route-advisory priority and confirmed banners report status without blocking probes."
+    environment_follow_up: "Latest API 33/API 36 connected execution remains open. The previous API 36 dev36 attempt ANR'd in system_server/PackageManager before instrumentation began; no emulator was started for source commit 74e2c50. Rerun on a responsive release-target device before release."
 
   - id: P05-T6
     title: "Docs"
-    status: todo
+    status: done
     depends_on: [P05-T5]
     steps:
-      - "README: new subsection 'Networking behaviour' (LAN tools bind to Wi-Fi/Ethernet even with a VPN; status banners; Android 16 local network permission)."
-      - "PRIVACY_POLICY.md permissions table: NEARBY_WIFI_DEVICES also used for local network access on Android 16+."
+      - "README: add 'Networking behavior' with subnet-aware Wi-Fi/Ethernet binding, banners, mDNS fallback, and the Android 16 local-network permission flow."
+      - "PRIVACY_POLICY.md permissions table: NEARBY_WIFI_DEVICES also gates local-network access on Android 16+ when Local Network Protections are enabled."
+
+  - id: P05-T7
+    title: "Bind HTTP Probe and TLS Inspector sockets for selected local destinations"
+    status: done
+    depends_on: [P05-T2, P05-T3]
+    steps:
+      - "HTTP Probe uses a per-client socket factory that checks the resolved connect address immediately before connect; only a destination matched by NetworkBinder.shouldBind() is bound."
+      - "TLS Inspector resolves the endpoint on its existing I/O path, binds its SSLSocket before connecting only when the chosen address matches the selected local subnet, and preserves the hostname for SNI/certificate matching."
+      - "App DI passes AndroidNetworkBinder to both repositories; direct/JVM repository constructors keep NoOpNetworkBinder defaults."
+    acceptance_criteria:
+      - "Fake-binder tests for both tools show selected local sockets are passed to bind while unconnected, before their connect attempt."
+      - "Public/default-route tests for both tools show the binder is not called when shouldBind() is false."
+      - "TCP bind SecurityException tests verify HTTP repository errors preserve LocalNetworkPermissionDeniedException in the cause chain and TLS connect exposes that typed exception."
+      - "HTTP redirects make a fresh route decision for each request; no network-wide/default-route behavior changes for public destinations."
+      - "If a destination is classified local but atomic binding finds the selected network gone, HTTP and TLS fail instead of falling back to the default route."
+    validation:
+      - "Focused HTTP/TLS binding and GeoIP cache regression tests passed. The full core-network report covered all new P05-T7 cases; its single failure was the unrelated existing `OkHttpTransferEngineTest` caller-concurrency/loaded-RTT timing case under shared-host load. Isolated `PortScanRepositoryImplTest` passed."
+      - "Full `:core-domain:test` passed (216 tests); full `:app:testDebugUnitTest` passed (594 tests); `:app:compileDebugAndroidTestKotlin` passed; `:app:lintDebug` succeeded with 0 errors, 38 warnings, and 9 hints."
+      - "No emulator/device used for this source slice; physical Wi-Fi/VPN behavior remains in the phase-level device matrix."
 
 qa_validation:
   automated:
     - "./gradlew test --no-daemon; koverVerify x3; lintDebug"
+    - "API 36 NetworkStatusBannerTest connected run is pending after the dev36 emulator's PackageManager/system_server ANRs; test source compiled successfully."
   manual_device:
     - "VPN OFF: LAN scan, mDNS, WOL, topology, LAN port scan behave as before."
+    - "mDNS: API 33 emulator with no usable Wi-Fi interface shows graceful ENODEV failure; physical Wi-Fi confirms the active interface is selected and discovery remains usable."
     - "VPN ON (full tunnel): LAN scan finds hosts; mDNS lists services; WOL packet received by laptop tcpdump on the Wi-Fi segment; banner shows VPN info."
     - "Wi-Fi off, cellular on: LAN tools show 'no local network' banner; ping/DNS work."
     - "Airplane mode: internet tools show 'no internet' banner; no crashes."

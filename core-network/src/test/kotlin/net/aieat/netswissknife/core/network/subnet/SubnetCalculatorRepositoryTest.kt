@@ -1,6 +1,7 @@
 package net.aieat.netswissknife.core.network.subnet
 
 import net.aieat.netswissknife.core.network.NetworkResult
+import net.aieat.netswissknife.core.network.ErrorCode
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -87,6 +88,9 @@ class SubnetCalculatorRepositoryTest {
     fun `calculate returns error for invalid input`() {
         val result = repo.calculate("not-an-ip")
         assertTrue(result is NetworkResult.Error)
+        val error = result as NetworkResult.Error
+        assertEquals(ErrorCode.SUBNET_INVALID, error.info?.code)
+        assertEquals(error.message, error.info?.developerMessage)
     }
 
     @Test

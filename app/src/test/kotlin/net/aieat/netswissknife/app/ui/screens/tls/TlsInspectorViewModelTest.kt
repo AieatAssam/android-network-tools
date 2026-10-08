@@ -2,23 +2,44 @@ package net.aieat.netswissknife.app.ui.screens.tls
 
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.slot
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.awaitCancellation
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.SavedStateHandle
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
+import net.aieat.netswissknife.app.ui.navigation.HostTool
+import net.aieat.netswissknife.app.ui.navigation.ToolDestination
+import net.aieat.netswissknife.app.ui.navigation.ToolHost
+import net.aieat.netswissknife.app.ui.navigation.ToolIntent
+import net.aieat.netswissknife.app.ui.navigation.ToolIntentCodec
+import net.aieat.netswissknife.app.ui.navigation.ToolPort
+import net.aieat.netswissknife.app.ui.navigation.ToolSource
 import net.aieat.netswissknife.core.domain.TlsInspectorUseCase
+import net.aieat.netswissknife.core.domain.TlsInspectorErrorKeys
 import net.aieat.netswissknife.core.network.NetworkResult
+import net.aieat.netswissknife.core.network.operation.OperationRunner
 import net.aieat.netswissknife.core.network.tls.TlsCertificate
+import net.aieat.netswissknife.core.network.tls.TlsInspectorRepository
 import net.aieat.netswissknife.core.network.tls.TlsInspectorResult
+import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationSession
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -26,6 +47,8 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @DisplayName("TlsInspectorViewModel")
@@ -87,13 +110,205 @@ class TlsInspectorViewModelTest {
         assertNull(state.error)
     }
 
+    @Test
+    fun `typed LAN TLS handoff prefills host and port without inspecting`() {
+        val intent = ToolIntent(
+            ToolDestination.HostTarget(
+                HostTool.TLS,
+                requireNotNull(ToolHost.parse("192.0.2.8")),
+                requireNotNull(ToolPort.parse(8443)),
+            ),
+            ToolSource.LAN,
+        )
+        val handoff = TlsInspectorViewModel(
+            useCase,
+            recentHostsRepository,
+            savedStateHandle = SavedStateHandle(
+                mapOf(
+                    "intent" to ToolIntentCodec.encode(intent),
+                    "host" to "192.0.2.8",
+                    "port" to "8443",
+                ),
+            ),
+        )
+
+        assertEquals("192.0.2.8", handoff.uiState.value.host)
+        assertEquals("8443", handoff.uiState.value.port)
+        assertEquals(ToolSource.LAN, handoff.sourceContext)
+        assertFalse(handoff.hasInvalidHandoff.value)
+        assertFalse(handoff.uiState.value.isLoading)
+        assertNull(handoff.uiState.value.result)
+        coVerify(exactly = 0) { useCase(any(), any()) }
+    }
+
+    @Test
+    fun `TLS handoff is consumed once and clear removes host port and source across recreation`() {
+        val intent = ToolIntent(
+            ToolDestination.HostTarget(
+                HostTool.TLS,
+                requireNotNull(ToolHost.parse("192.0.2.8")),
+                requireNotNull(ToolPort.parse(8443)),
+            ),
+            ToolSource.LAN,
+        )
+        val routeArgs = mapOf(
+            "intent" to ToolIntentCodec.encode(intent),
+            "host" to "192.0.2.8",
+            "port" to "8443",
+        )
+        val savedState = SavedStateHandle(routeArgs)
+        val handoff = TlsInspectorViewModel(useCase, recentHostsRepository, savedStateHandle = savedState)
+
+        assertEquals("192.0.2.8", handoff.uiState.value.host)
+        assertEquals("8443", handoff.uiState.value.port)
+        assertEquals(true, savedState.get<Boolean>("tlsHandoffConsumed"))
+        assertEquals("192.0.2.8", savedState.get<String>("editedTlsHost"))
+        assertEquals("8443", savedState.get<String>("editedTlsPort"))
+
+        handoff.clearPrefill()
+
+        assertEquals("", handoff.uiState.value.host)
+        assertEquals("443", handoff.uiState.value.port)
+        assertNull(handoff.sourceContext)
+        assertEquals("", savedState.get<String>("editedTlsHost"))
+        assertEquals("443", savedState.get<String>("editedTlsPort"))
+        assertNull(savedState.get<String>("tlsHandoffSource"))
+
+        val recreated = TlsInspectorViewModel(
+            useCase,
+            recentHostsRepository,
+            savedStateHandle = SavedStateHandle(routeArgs + mapOf(
+                "editedTlsHost" to "",
+                "editedTlsPort" to "443",
+                "tlsHandoffConsumed" to true,
+            )),
+        )
+        assertEquals("", recreated.uiState.value.host)
+        assertEquals("443", recreated.uiState.value.port)
+        assertNull(recreated.sourceContext)
+        assertFalse(recreated.uiState.value.isLoading)
+        coVerify(exactly = 0) { useCase(any(), any()) }
+    }
+
+    @Test
+    fun `clear prefill is ignored while TLS inspection is active`() = runTest {
+        val sessionSlot = slot<OperationSession>()
+        val routeArgs = tlsRouteArgs()
+        val active = TlsInspectorViewModel(
+            useCase,
+            recentHostsRepository,
+            savedStateHandle = SavedStateHandle(routeArgs),
+        )
+        coEvery { useCase(any(), capture(sessionSlot)) } coAnswers { awaitCancellation() }
+
+        active.inspect()
+        assertTrue(active.uiState.value.isLoading)
+        active.clearPrefill()
+
+        assertEquals("192.0.2.8", active.uiState.value.host)
+        assertEquals("8443", active.uiState.value.port)
+        assertEquals(ToolSource.LAN, active.sourceContext)
+        assertTrue(active.uiState.value.isLoading)
+        ViewModelStore().apply { put("tls-active", active) }.clear()
+        assertEquals(CancellationReason.LIFECYCLE_PAUSE, sessionSlot.captured.cancellationReason)
+    }
+
+    @Test
+    fun `invalid typed handoff stays editable and valid host port replacement restores`() {
+        val validTls = ToolIntent(
+            ToolDestination.HostTarget(
+                HostTool.TLS,
+                requireNotNull(ToolHost.parse("192.0.2.8")),
+                requireNotNull(ToolPort.parse(8443)),
+            ),
+            ToolSource.LAN,
+        )
+        val wrongTool = ToolIntent(
+            ToolDestination.HostTarget(
+                HostTool.PING,
+                requireNotNull(ToolHost.parse("192.0.2.8")),
+            ),
+            ToolSource.LAN,
+        )
+        val invalidArguments = listOf(
+            mapOf("intent" to "ti1.invalid", "host" to "192.0.2.8", "port" to "8443"),
+            mapOf("intent" to ToolIntentCodec.encode(validTls), "host" to "192.0.2.9", "port" to "8443"),
+            mapOf("intent" to ToolIntentCodec.encode(validTls), "host" to "192.0.2.8", "port" to "9443"),
+            mapOf("intent" to ToolIntentCodec.encode(wrongTool), "host" to "192.0.2.8", "port" to "8443"),
+            mapOf("intent" to ToolIntentCodec.encode(validTls), "host" to "192.0.2.8"),
+        )
+        invalidArguments.forEach { args ->
+            val invalid = TlsInspectorViewModel(
+                useCase,
+                recentHostsRepository,
+                savedStateHandle = SavedStateHandle(args),
+            )
+            assertTrue(invalid.hasInvalidHandoff.value)
+            assertEquals("", invalid.uiState.value.host)
+            assertNull(invalid.sourceContext)
+        }
+
+        val invalidState = SavedStateHandle(
+            mapOf(
+                "intent" to "ti1.invalid",
+                "host" to "192.0.2.8",
+                "port" to "8443",
+                "tlsHandoffSource" to "lan",
+            ),
+        )
+        val invalid = TlsInspectorViewModel(useCase, recentHostsRepository, savedStateHandle = invalidState)
+        assertNull(invalidState.get<String>("tlsHandoffSource"))
+
+        invalid.onHostChange("192.0.2.9")
+        assertFalse(invalid.hasInvalidHandoff.value)
+        assertEquals(true, invalidState.get<Boolean>("tlsHandoffRecovered"))
+        invalid.onPortChange("9443")
+
+        val recreated = TlsInspectorViewModel(
+            useCase,
+            recentHostsRepository,
+            savedStateHandle = SavedStateHandle(
+                mapOf(
+                    "intent" to "ti1.invalid",
+                    "host" to "192.0.2.8",
+                    "port" to "8443",
+                    "editedTlsHost" to "192.0.2.9",
+                    "editedTlsPort" to "9443",
+                    "tlsHandoffRecovered" to true,
+                ),
+            ),
+        )
+        assertFalse(recreated.hasInvalidHandoff.value)
+        assertEquals("192.0.2.9", recreated.uiState.value.host)
+        assertEquals("9443", recreated.uiState.value.port)
+
+        val staleConsumedSource = TlsInspectorViewModel(
+            useCase,
+            recentHostsRepository,
+            savedStateHandle = SavedStateHandle(
+                mapOf(
+                    "intent" to "ti1.invalid",
+                    "host" to "192.0.2.8",
+                    "port" to "8443",
+                    "tlsHandoffConsumed" to true,
+                    "tlsHandoffSource" to "lan",
+                    "editedTlsHost" to "",
+                    "editedTlsPort" to "443",
+                ),
+            ),
+        )
+        assertNull(staleConsumedSource.sourceContext)
+        assertTrue(staleConsumedSource.hasInvalidHandoff.value)
+        coVerify(exactly = 0) { useCase(any(), any()) }
+    }
+
     @Nested
     @DisplayName("inspect state transitions")
     inner class InspectStateTransitions {
 
         @Test
         fun `success sets result and clears error`() = runTest {
-            coEvery { useCase(any()) } returns NetworkResult.Success(stubResult)
+            coEvery { useCase(any(), any()) } returns NetworkResult.Success(stubResult)
             viewModel.onHostChange("example.com")
             viewModel.inspect()
             val state = viewModel.uiState.value
@@ -104,7 +319,7 @@ class TlsInspectorViewModelTest {
 
         @Test
         fun `error sets error message and clears result`() = runTest {
-            coEvery { useCase(any()) } returns NetworkResult.Error("connection refused")
+            coEvery { useCase(any(), any()) } returns NetworkResult.Error("connection refused")
             viewModel.onHostChange("badhost")
             viewModel.inspect()
             val state = viewModel.uiState.value
@@ -114,7 +329,7 @@ class TlsInspectorViewModelTest {
 
         @Test
         fun `exception sets actionable error and stops loading`() = runTest {
-            coEvery { useCase(any()) } throws IllegalStateException("handshake failed")
+            coEvery { useCase(any(), any()) } throws IllegalStateException("handshake failed")
             viewModel.onHostChange("example.com")
 
             viewModel.inspect()
@@ -127,10 +342,103 @@ class TlsInspectorViewModelTest {
 
         @Test
         fun `isLoading is false after completion`() = runTest {
-            coEvery { useCase(any()) } returns NetworkResult.Success(stubResult)
+            coEvery { useCase(any(), any()) } returns NetworkResult.Success(stubResult)
             viewModel.onHostChange("example.com")
             viewModel.inspect()
             assertTrue(!viewModel.uiState.value.isLoading)
+        }
+
+        @Test
+        fun `user stop remains canceling through cleanup then a fresh inspection succeeds`() = runTest {
+            val operationEntered = CompletableDeferred<Unit>()
+            val cleanupStarted = CompletableDeferred<Unit>()
+            val allowCleanupToFinish = CountDownLatch(1)
+            lateinit var capturedSession: OperationSession
+            lateinit var retrySession: OperationSession
+            var operationCount = 0
+            val repository = object : TlsInspectorRepository {
+                override suspend fun inspect(
+                    host: String,
+                    port: Int,
+                    timeoutMs: Int,
+                ): NetworkResult<TlsInspectorResult> = error("The session-aware path is required")
+
+                override suspend fun inspect(
+                    host: String,
+                    port: Int,
+                    timeoutMs: Int,
+                    operationSession: OperationSession,
+                ): NetworkResult<TlsInspectorResult> = OperationRunner.run(operationSession) {
+                    if (operationCount++ == 0) {
+                        capturedSession = operationSession
+                        operationSession.resources.register(AutoCloseable {
+                            cleanupStarted.complete(Unit)
+                            check(allowCleanupToFinish.await(10, TimeUnit.SECONDS)) {
+                                "test did not release TLS operation cleanup"
+                            }
+                        })
+                        operationEntered.complete(Unit)
+                        awaitCancellation()
+                    } else {
+                        retrySession = operationSession
+                        NetworkResult.Success(stubResult)
+                    }
+                }
+            }
+            val cancelViewModel = TlsInspectorViewModel(
+                TlsInspectorUseCase(repository),
+                recentHostsRepository,
+            )
+            cancelViewModel.onHostChange("example.com")
+            cancelViewModel.inspect()
+
+            try {
+                assertTrue(operationEntered.isCompleted)
+                assertTrue(cancelViewModel.uiState.value.isLoading)
+                assertFalse(cancelViewModel.uiState.value.isCanceling)
+
+                cancelViewModel.stopInspection()
+                assertTrue(cancelViewModel.uiState.value.isLoading)
+                assertTrue(cancelViewModel.uiState.value.isCanceling)
+                assertFalse(cancelViewModel.uiState.value.isCanceled)
+
+                cancelViewModel.stopInspection()
+                withContext(Dispatchers.Default.limitedParallelism(1)) {
+                    withTimeout(5_000) { cleanupStarted.await() }
+                }
+                assertTrue(cancelViewModel.uiState.value.isLoading)
+                assertTrue(cancelViewModel.uiState.value.isCanceling)
+            } finally {
+                allowCleanupToFinish.countDown()
+                cancelViewModel.stopInspection()
+                if (operationEntered.isCompleted) {
+                    withContext(Dispatchers.Default.limitedParallelism(1)) {
+                        withTimeout(5_000) { cancelViewModel.uiState.first { !it.isLoading } }
+                    }
+                }
+            }
+
+            val canceledState = withContext(Dispatchers.Default.limitedParallelism(1)) {
+                withTimeout(5_000) { cancelViewModel.uiState.first { it.isCanceled } }
+            }
+            assertFalse(canceledState.isLoading)
+            assertFalse(canceledState.isCanceling)
+            assertNull(canceledState.result)
+            assertNull(canceledState.error)
+            assertEquals(CancellationReason.USER_STOP, capturedSession.cancellationReason)
+
+            cancelViewModel.inspect()
+            val retriedState = withContext(Dispatchers.Default.limitedParallelism(1)) {
+                withTimeout(5_000) {
+                    cancelViewModel.uiState.first { it.result != null || it.error != null }
+                }
+            }
+
+            assertEquals(stubResult, retriedState.result)
+            assertFalse(retriedState.isLoading)
+            assertFalse(retriedState.isCanceled)
+            assertTrue(capturedSession !== retrySession)
+            assertEquals(2, operationCount)
         }
     }
 
@@ -143,9 +451,211 @@ class TlsInspectorViewModelTest {
 
     @Test
     fun `addRecent is called on inspect`() = runTest {
-        coEvery { useCase(any()) } returns NetworkResult.Success(stubResult)
+        coEvery { useCase(any(), any()) } returns NetworkResult.Success(stubResult)
         viewModel.onHostChange("example.com")
         viewModel.inspect()
         coVerify { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_TLS_HOSTS, "example.com") }
+    }
+
+    @Test
+    fun `inspect normalizes host before calling use case and saving`() = runTest {
+        coEvery { useCase(any(), any()) } returns NetworkResult.Error("test")
+        viewModel.onHostChange("  EXAMPLE.COM.  ")
+
+        viewModel.inspect()
+
+        assertEquals("example.com", viewModel.uiState.value.host)
+        coVerify { useCase(match { it.host == "example.com" }, any()) }
+        coVerify(exactly = 0) { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_TLS_HOSTS, any()) }
+    }
+
+    @Test
+    fun `inspection error does not save a recent host`() = runTest {
+        coEvery { useCase(any(), any()) } returns NetworkResult.Error("connection refused")
+        viewModel.onHostChange("example.com")
+
+        viewModel.inspect()
+
+        coVerify(exactly = 0) { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_TLS_HOSTS, any()) }
+    }
+
+    @Test
+    fun `inspect rejects internal whitespace without saving or probing`() = runTest {
+        viewModel.onHostChange("bad host")
+
+        viewModel.inspect()
+
+        assertEquals("Invalid hostname or IP address", viewModel.uiState.value.error)
+        coVerify(exactly = 0) { useCase(any(), any()) }
+        coVerify(exactly = 0) { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_TLS_HOSTS, any()) }
+    }
+
+    @Test
+    fun `inspect rejects invalid ports without probing or saving recent host`() = runTest {
+        viewModel.onHostChange("example.com")
+        viewModel.onPortChange("not-a-port")
+
+        viewModel.inspect()
+
+        assertEquals("Port must be a number from 1 to 65535", viewModel.uiState.value.error)
+        assertTrue(!viewModel.uiState.value.isLoading)
+        assertNull(viewModel.uiState.value.result)
+        coVerify(exactly = 0) { useCase(any(), any()) }
+        coVerify(exactly = 0) { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_TLS_HOSTS, any()) }
+    }
+
+    @Test
+    fun `inspect rejects ports outside the valid range without probing`() = runTest {
+        viewModel.onHostChange("example.com")
+        viewModel.onPortChange("65536")
+
+        viewModel.inspect()
+
+        assertEquals("Port must be a number from 1 to 65535", viewModel.uiState.value.error)
+        coVerify(exactly = 0) { useCase(any(), any()) }
+        coVerify(exactly = 0) { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_TLS_HOSTS, any()) }
+    }
+
+    @Test
+    fun `inspect rejects port zero without probing or saving recent host`() = runTest {
+        viewModel.onHostChange("example.com")
+        viewModel.onPortChange("0")
+
+        viewModel.inspect()
+
+        assertEquals("Port must be a number from 1 to 65535", viewModel.uiState.value.error)
+        coVerify(exactly = 0) { useCase(any(), any()) }
+        coVerify(exactly = 0) { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_TLS_HOSTS, any()) }
+    }
+
+    @Test
+    fun `inspect forwards a valid custom port unchanged`() = runTest {
+        coEvery { useCase(any(), any()) } returns NetworkResult.Success(stubResult)
+        viewModel.onHostChange("example.com")
+        viewModel.onPortChange("8443")
+
+        viewModel.inspect()
+
+        coVerify { useCase(match { it.host == "example.com" && it.port == 8443 }, any()) }
+        coVerify { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_TLS_HOSTS, "example.com") }
+        assertNull(viewModel.uiState.value.error)
+    }
+
+    @Test
+    fun `inspect forwards advanced protocol probe and normalized optional pin`() = runTest {
+        coEvery { useCase(any(), any()) } returns NetworkResult.Success(stubResult)
+        viewModel.onHostChange("example.com")
+        viewModel.onProbeProtocolsChange(true)
+        viewModel.onExpectedPinChange("  AA:BB:CC  ")
+
+        viewModel.inspect()
+
+        coVerify {
+            useCase(match {
+                it.host == "example.com" && it.probeProtocols && it.expectedPinSha256 == "AA:BB:CC"
+            }, any())
+        }
+    }
+
+    @Test
+    fun `editing after typed pin error clears its description key`() = runTest {
+        coEvery { useCase(any(), any()) } returns NetworkResult.Error(
+            message = "invalid pin",
+            code = TlsInspectorErrorKeys.PIN_INVALID_CODE,
+            descriptionKey = TlsInspectorErrorKeys.PIN_INVALID_DESCRIPTION,
+        )
+        viewModel.onHostChange("example.com")
+        viewModel.onExpectedPinChange("bad")
+
+        viewModel.inspect()
+
+        assertEquals(TlsInspectorErrorKeys.PIN_INVALID_DESCRIPTION, viewModel.uiState.value.errorDescriptionKey)
+        viewModel.onExpectedPinChange("corrected")
+        assertNull(viewModel.uiState.value.errorDescriptionKey)
+        assertNull(viewModel.uiState.value.error)
+    }
+
+    @Test
+    fun `share summary and explicit PEM output are separate`() {
+        val pem = "-----BEGIN CERTIFICATE-----\nQUJD\n-----END CERTIFICATE-----"
+        val result = stubResult.copy(
+            chain = listOf(stubCert.copy(pemEncoded = pem)),
+            hostnameMatches = false,
+            chainIssues = listOf(net.aieat.netswissknife.core.network.tls.ChainIssue.HOSTNAME_MISMATCH),
+            connectTimeMs = 15,
+            alpn = "h2",
+            protocolSupport = mapOf("TLSv1.2" to true),
+            pinMatch = false,
+        )
+
+        val shareText = buildTlsShareText(result)
+
+        assertTrue(shareText.contains("Hostname match: false"))
+        assertTrue(shareText.contains("ALPN: h2"))
+        assertTrue(shareText.contains("TLSv1.2: supported"))
+        assertTrue(shareText.contains("HOSTNAME_MISMATCH"))
+        assertFalse(shareText.contains(pem))
+        assertEquals(pem + "\n", buildTlsPemShareText(result))
+    }
+
+    @Test
+    fun `advanced inspection options survive view model recreation`() {
+        val savedState = SavedStateHandle()
+        val first = TlsInspectorViewModel(useCase, recentHostsRepository, savedStateHandle = savedState)
+        first.onProbeProtocolsChange(true)
+        first.onExpectedPinChange("11".repeat(32))
+
+        val recreated = TlsInspectorViewModel(useCase, recentHostsRepository, savedStateHandle = savedState)
+
+        assertTrue(recreated.uiState.value.probeProtocols)
+        assertEquals("11".repeat(32), recreated.uiState.value.expectedPinSha256)
+    }
+
+    @Test
+    fun `editing host or port clears the previous result`() = runTest {
+        coEvery { useCase(any(), any()) } returns NetworkResult.Success(stubResult)
+        viewModel.onHostChange("example.com")
+        viewModel.inspect()
+        assertNotNull(viewModel.uiState.value.result)
+
+        viewModel.onHostChange("other.example")
+
+        assertNull(viewModel.uiState.value.result)
+        viewModel.inspect()
+        assertNotNull(viewModel.uiState.value.result)
+
+        viewModel.onPortChange("8443")
+
+        assertNull(viewModel.uiState.value.result)
+    }
+
+    @Test
+    fun `clearing view model records lifecycle pause on active session`() = runTest {
+        val sessionSlot = slot<OperationSession>()
+        coEvery { useCase(any(), capture(sessionSlot)) } coAnswers { awaitCancellation() }
+        val store = ViewModelStore()
+        store.put("tls-inspector", viewModel)
+        viewModel.onHostChange("example.com")
+
+        viewModel.inspect()
+        store.clear()
+
+        assertEquals(CancellationReason.LIFECYCLE_PAUSE, sessionSlot.captured.cancellationReason)
+    }
+
+    private fun tlsRouteArgs(): Map<String, String> {
+        val intent = ToolIntent(
+            ToolDestination.HostTarget(
+                HostTool.TLS,
+                requireNotNull(ToolHost.parse("192.0.2.8")),
+                requireNotNull(ToolPort.parse(8443)),
+            ),
+            ToolSource.LAN,
+        )
+        return mapOf(
+            "intent" to ToolIntentCodec.encode(intent),
+            "host" to "192.0.2.8",
+            "port" to "8443",
+        )
     }
 }

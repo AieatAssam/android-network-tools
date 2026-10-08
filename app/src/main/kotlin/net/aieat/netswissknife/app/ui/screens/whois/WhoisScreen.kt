@@ -69,9 +69,13 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -93,13 +97,18 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
+import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
+import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.RecentHostsRow
+import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
+import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
 import net.aieat.netswissknife.app.util.shareText
+import net.aieat.netswissknife.core.network.whois.WhoisProtocol
 import net.aieat.netswissknife.core.network.whois.WhoisQueryType
 import net.aieat.netswissknife.core.network.whois.WhoisResult
 import net.aieat.netswissknife.core.network.whois.WhoisServerRole
@@ -113,8 +122,36 @@ import java.util.concurrent.TimeUnit
 @Composable
 fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val lookupResult = uiState.result
+    val announcementPhase = when {
+        uiState.isLoading -> ToolAnnouncementPhase.RUNNING
+        uiState.error != null -> ToolAnnouncementPhase.ERROR
+        uiState.isCanceled -> if (uiState.hopStates.isEmpty()) {
+            ToolAnnouncementPhase.CANCELED
+        } else {
+            ToolAnnouncementPhase.PARTIAL
+        }
+        lookupResult != null -> {
+            if (lookupResult.hops.any { it.error != null }) ToolAnnouncementPhase.PARTIAL
+            else ToolAnnouncementPhase.FINISHED
+        }
+        else -> null
+    }
+    val networkStatus by viewModel.networkStatus.collectAsStateWithLifecycle()
     val recentHosts by viewModel.recentHosts.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    DisposableEffect(lifecycleOwner, viewModel) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) viewModel.onLifecyclePause()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            viewModel.onLifecyclePause()
+        }
+    }
 
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
@@ -127,6 +164,7 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
         onRefresh = { if (canRefresh) viewModel.lookup() },
         modifier = Modifier.fillMaxSize()
     ) {
+    ToolStateAnnouncer(stringResource(R.string.help_whois_title), announcementPhase)
     AnimatedVisibility(
         visible = visible,
         enter = fadeIn(AppMotion.enter(300)) + slideInVertically(AppMotion.enter(300)) { it / 4 }
@@ -140,6 +178,7 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
         ) {
             // ── Hero header ────────────────────────────────────────────────────
             WhoisHeroHeader(onHelpClick = { showHelp = true })
+            NetworkStatusBanner(networkStatus, scope = NetworkStatusScope.INTERNET)
 
             // ── Input card ─────────────────────────────────────────────────────
             ElevatedCard(modifier = Modifier.fillMaxWidth()) {
@@ -153,7 +192,10 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
                         leadingIcon = { Icon(Icons.AutoMirrored.Filled.ManageSearch, contentDescription = null) },
                         trailingIcon = {
                             if (uiState.query.isNotEmpty()) {
-                                IconButton(onClick = { viewModel.onQueryChange("") }) {
+                                IconButton(
+                                    onClick = { viewModel.onQueryChange("") },
+                                    enabled = !uiState.isLoading,
+                                ) {
                                     Icon(Icons.Default.Close, contentDescription = stringResource(R.string.clear))
                                 }
                             }
@@ -165,7 +207,31 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
                         recentHosts = recentHosts,
                         onHostSelected = viewModel::onQueryChange,
                         onRemoveHost = viewModel::removeRecentHost,
-                        onClearAll = viewModel::clearRecentHosts
+                        onClearAll = viewModel::clearRecentHosts,
+                        selectionEnabled = !uiState.isLoading && !uiState.isCanceling,
+                    )
+                    Text(
+                        text = stringResource(R.string.whois_protocol_label),
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf(
+                            WhoisProtocol.AUTO to R.string.whois_protocol_auto,
+                            WhoisProtocol.RDAP to R.string.whois_protocol_rdap,
+                            WhoisProtocol.WHOIS to R.string.whois_protocol_whois,
+                        ).forEach { (protocol, label) ->
+                            FilterChip(
+                                selected = uiState.protocol == protocol,
+                                onClick = { viewModel.onProtocolChange(protocol) },
+                                enabled = !uiState.isLoading && !uiState.isCanceling,
+                                label = { Text(stringResource(label)) },
+                            )
+                        }
+                    }
+                    Text(
+                        text = stringResource(R.string.whois_protocol_help),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Button(
                         onClick = hapticAction(viewModel::lookup),
@@ -173,6 +239,20 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
                         enabled = !uiState.isLoading && uiState.query.isNotBlank()
                     ) {
                         Text(stringResource(R.string.whois_lookup_button))
+                    }
+                    if (uiState.isLoading) {
+                        TextButton(
+                            onClick = viewModel::stopLookup,
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = !uiState.isCanceling,
+                        ) {
+                            Text(
+                                stringResource(
+                                    if (uiState.isCanceling) R.string.whois_canceling_button
+                                    else R.string.whois_stop_button
+                                )
+                            )
+                        }
                     }
                 }
             }
@@ -187,13 +267,19 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
                         )
                         if (uiState.hopStates.isNotEmpty()) {
                             RelayChainVisualiser(hopStates = uiState.hopStates)
+                        } else if (uiState.isCanceling) {
+                            Text(
+                                text = stringResource(R.string.whois_canceling_status),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         } else {
                             // Show loading indicator when waiting for first hop
                             Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                                 CircularProgressIndicator(modifier = Modifier.size(32.dp))
                             }
                         }
-                        if (uiState.isLoading) {
+                        if (uiState.isLoading && !uiState.isCanceling) {
                             val currentServer = uiState.hopStates
                                 .lastOrNull { it.status == HopStatus.QUERYING || it.status == HopStatus.DONE }
                                 ?.server?.host ?: ""
@@ -211,13 +297,18 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
 
             // ── Main content area (Idle / Error / Success) ─────────────────────
             AnimatedContent(
-                targetState = Triple(uiState.isLoading, uiState.result, uiState.error),
+                targetState = Triple(
+                    uiState.isLoading,
+                    uiState.isCanceled,
+                    Triple(uiState.result, uiState.error, uiState.isLifecyclePaused)
+                ),
                 transitionSpec = {
                     fadeIn(AppMotion.enter(300)) + slideInVertically(AppMotion.enter(300)) { it / 8 } togetherWith
                             fadeOut(AppMotion.exit(200))
                 },
                 label = "whois-content-state"
-            ) { (isLoading, result, error) ->
+            ) { (isLoading, isCanceled, content) ->
+                val (result, error, isLifecyclePaused) = content
                 when {
                     result != null -> {
                         val shareSubject = stringResource(R.string.share_subject_whois, result.query)
@@ -236,6 +327,12 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
                                     context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
                                 } catch (_: Exception) {}
                             }
+                        )
+                    }
+                    isCanceled -> {
+                        CanceledLookupCard(
+                            isLifecyclePaused = isLifecyclePaused,
+                            onRetry = viewModel::lookup,
                         )
                     }
                     error != null -> {
@@ -278,6 +375,33 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
             ),
             onDismiss = { showHelp = false }
         )
+    }
+}
+
+@Composable
+private fun CanceledLookupCard(isLifecyclePaused: Boolean, onRetry: () -> Unit) {
+    OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = stringResource(R.string.whois_canceled_title),
+                style = MaterialTheme.typography.titleMedium
+            )
+            Text(
+                text = stringResource(
+                    if (isLifecyclePaused) R.string.whois_lifecycle_paused_message
+                    else R.string.whois_canceled_message
+                ),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+            Button(onClick = hapticAction(onRetry)) {
+                Text(stringResource(R.string.whois_retry))
+            }
+        }
     }
 }
 
@@ -465,6 +589,7 @@ private fun hopRoleContainerColor(role: WhoisServerRole): Color = when (role) {
     WhoisServerRole.REGISTRY -> MaterialTheme.colorScheme.primaryContainer
     WhoisServerRole.REGISTRAR -> MaterialTheme.colorScheme.secondaryContainer
     WhoisServerRole.RIR -> MaterialTheme.colorScheme.secondaryContainer
+    WhoisServerRole.RDAP -> MaterialTheme.colorScheme.primaryContainer
 }
 
 @Composable
@@ -473,6 +598,7 @@ private fun hopRoleOnContainerColor(role: WhoisServerRole): Color = when (role) 
     WhoisServerRole.REGISTRY -> MaterialTheme.colorScheme.onPrimaryContainer
     WhoisServerRole.REGISTRAR -> MaterialTheme.colorScheme.onSecondaryContainer
     WhoisServerRole.RIR -> MaterialTheme.colorScheme.onSecondaryContainer
+    WhoisServerRole.RDAP -> MaterialTheme.colorScheme.onPrimaryContainer
 }
 
 

@@ -4,12 +4,17 @@ import android.Manifest
 import android.os.Build
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeUp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.rule.GrantPermissionRule
@@ -25,6 +30,7 @@ import net.aieat.netswissknife.app.ui.theme.NetSwissKnifeTheme
 import net.aieat.netswissknife.core.network.wifi.WifiAccessPoint
 import net.aieat.netswissknife.core.network.wifi.WifiConnectionInfo
 import net.aieat.netswissknife.core.network.wifi.WifiScanResult
+import net.aieat.netswissknife.core.network.wifi.WifiScanRefreshStatus
 import net.aieat.netswissknife.core.network.wifi.WifiSecurity
 import net.aieat.netswissknife.core.network.wifi.WifiStandard
 import org.junit.Before
@@ -148,7 +154,47 @@ class WifiScanScreenTest {
     }
 
     @Test
-    fun throttledSuccessState_showsAgeAndThrottleLabel() {
+    fun scanningState_cancelStopsScan() {
+        val viewModel = fakeViewModel(WifiScanUiState.Scanning)
+        composeRule.setContent {
+            NetSwissKnifeTheme { WifiScanScreen(viewModel = viewModel) }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        composeRule.onNodeWithText(context.getString(R.string.cancel))
+            .assertIsDisplayed()
+            .performClick()
+
+        verify(exactly = 1) { viewModel.cancelScan() }
+    }
+
+    @Test
+    fun cancelledState_showsRetryInsteadOfLoadingIndicator() {
+        val viewModel = fakeViewModel(WifiScanUiState.Cancelled)
+        composeRule.setContent {
+            NetSwissKnifeTheme { WifiScanScreen(viewModel = viewModel) }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        composeRule.onNodeWithText(context.getString(R.string.wifi_scan_cancelled_title)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.wifi_scan_cancelled_body)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.wifi_retry)).assertIsDisplayed()
+    }
+
+    @Test
+    fun pausedState_showsPausedCopyRatherThanCancelledCopy() {
+        composeRule.setContent {
+            NetSwissKnifeTheme { WifiScanScreen(viewModel = fakeViewModel(WifiScanUiState.Paused)) }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        composeRule.onNodeWithText(context.getString(R.string.wifi_scan_paused_title)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.wifi_scan_paused_body)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.wifi_scan_cancelled_title)).assertDoesNotExist()
+    }
+
+    @Test
+    fun timedOutSuccessState_showsCachedResultsAndAge() {
         val result = WifiScanResult(
             accessPoints = listOf(fakeAp("HomeNet", "AA:AA:AA:AA:AA:01", -50)),
             channels = emptyList(),
@@ -157,7 +203,7 @@ class WifiScanScreenTest {
             isWifiEnabled = true,
             isFresh = false,
             scanAgeMs = 42_000L,
-            throttled = true
+            refreshStatus = WifiScanRefreshStatus.TIMED_OUT
         )
         composeRule.setContent {
             NetSwissKnifeTheme {
@@ -165,9 +211,27 @@ class WifiScanScreenTest {
             }
         }
         composeRule.mainClock.advanceTimeBy(1_000L)
-        composeRule.onNodeWithText(context.getString(R.string.wifi_scan_throttled)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.wifi_scan_timed_out)).assertIsDisplayed()
         composeRule.onNodeWithText(
             context.resources.getQuantityString(R.plurals.wifi_results_age, 42, 42)
+        ).assertIsDisplayed()
+    }
+
+    @Test
+    fun permissionDeniedCachedState_offersPermissionRequest() {
+        val result = successState(
+            listOf(fakeAp("HomeNet", "AA:AA:AA:AA:AA:01", -50))
+        ).result.copy(refreshStatus = WifiScanRefreshStatus.PERMISSION_DENIED)
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                WifiScanScreen(viewModel = fakeViewModel(WifiScanUiState.Success(result)))
+            }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        composeRule.onNodeWithText(context.getString(R.string.wifi_grant_permission)).assertIsDisplayed()
+        composeRule.onNodeWithText(
+            context.getString(R.string.wifi_scan_permission_denied_cached)
         ).assertIsDisplayed()
     }
 
@@ -230,6 +294,21 @@ class WifiScanScreenTest {
     }
 
     @Test
+    fun unknownSecurity_showsUnknownIndicatorInsteadOfOpenLock() {
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                WifiSecurityIndicator(WifiSecurity.UNKNOWN)
+            }
+        }
+
+        composeRule.onNodeWithTag(WifiScreenTestTags.UNKNOWN_SECURITY_LABEL).assertIsDisplayed()
+        composeRule.onNodeWithTag(WifiScreenTestTags.UNKNOWN_SECURITY_ICON).assertIsDisplayed()
+        composeRule
+            .onNodeWithContentDescription(context.getString(R.string.wifi_security_unknown))
+            .assertIsDisplayed()
+    }
+
+    @Test
     fun sortChip_tapCallsSetSortOrder() {
         val viewModel = fakeViewModel(successState(listOf(fakeAp("HomeNet", "AA:AA:AA:AA:AA:01", -50))))
         composeRule.setContent {
@@ -284,6 +363,91 @@ class WifiScanScreenTest {
             .performScrollToIndex(WifiScreenTestTags.NETWORKS_START_INDEX + 2)
         composeRule.onNodeWithText("Charlie").assertIsDisplayed()
         composeRule.mainClock.autoAdvance = false
+    }
+
+    @Test
+    fun charts_exposeSpectrumAndSignalGaugeValuesToAccessibility() {
+        val ap = fakeAp("HomeNet", "AA:AA:AA:AA:AA:01", -50)
+        val strongestAp = fakeAp("GuestNet", "AA:AA:AA:AA:AA:02", -35)
+        val state = MutableStateFlow<WifiScanUiState>(successState(listOf(ap, strongestAp)))
+        val expandedNetworks = MutableStateFlow(emptySet<String>())
+        val viewModel = fakeViewModel(state.value)
+        every { viewModel.uiState } returns state
+        every { viewModel.expandedNetworks } returns expandedNetworks
+        every { viewModel.toggleNetworkExpanded(any()) } answers {
+            val networkId = firstArg<String>()
+            expandedNetworks.value = if (networkId in expandedNetworks.value) {
+                expandedNetworks.value - networkId
+            } else {
+                expandedNetworks.value + networkId
+            }
+        }
+        every { viewModel.selectAccessPoint(any()) } answers {
+            val current = state.value as WifiScanUiState.Success
+            state.value = current.copy(selectedAp = firstArg())
+        }
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                WifiScanScreen(viewModel = viewModel)
+            }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        val spectrumDescription = context.getString(
+            R.string.wifi_spectrum_a11y,
+            2,
+            ap.band.displayName,
+            strongestAp.displaySsid,
+            strongestAp.rssi,
+        )
+        composeRule.onNodeWithContentDescription(spectrumDescription).performScrollTo().assertIsDisplayed()
+
+        // Expand the grouped network, then open its BSSID details to expose the arc gauge.
+        composeRule.onNodeWithTag(WifiScreenTestTags.CONTENT_LIST)
+            .performScrollToIndex(WifiScreenTestTags.NETWORKS_START_INDEX + 1)
+        composeRule.onNodeWithTag("wifi_network_card_${ap.displaySsid}")
+            .performScrollTo()
+            .performClick()
+        composeRule.mainClock.advanceTimeBy(500L)
+        composeRule.onNodeWithTag(WifiScreenTestTags.CONTENT_LIST)
+            .performTouchInput { swipeUp() }
+        composeRule.onNodeWithText(ap.bssid).assertIsDisplayed().performClick()
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        val levelResource = when (ap.signalLevel) {
+            net.aieat.netswissknife.core.network.wifi.SignalLevel.EXCELLENT -> R.string.wifi_signal_level_excellent
+            net.aieat.netswissknife.core.network.wifi.SignalLevel.GOOD -> R.string.wifi_signal_level_good
+            net.aieat.netswissknife.core.network.wifi.SignalLevel.FAIR -> R.string.wifi_signal_level_fair
+            net.aieat.netswissknife.core.network.wifi.SignalLevel.WEAK -> R.string.wifi_signal_level_weak
+            net.aieat.netswissknife.core.network.wifi.SignalLevel.POOR -> R.string.wifi_signal_level_poor
+        }
+        val levelLabel = context.getString(levelResource)
+        composeRule.onNodeWithTag(WifiScreenTestTags.AP_DETAIL_CONTENT)
+            .performTouchInput { swipeUp() }
+        composeRule.onNodeWithContentDescription(
+            context.getString(R.string.wifi_signal_gauge_a11y, ap.signalQualityPercent, levelLabel)
+        ).assertIsDisplayed()
+    }
+
+    @Test
+    fun spectrumChartExposesItsDescriptionInRtlLayout() {
+        val ap = fakeAp("HomeNet", "AA:AA:AA:AA:AA:01", -50)
+        composeRule.setContent {
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                NetSwissKnifeTheme {
+                    WifiScanScreen(viewModel = fakeViewModel(successState(listOf(ap))))
+                }
+            }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        val description = context.getString(
+            R.string.wifi_spectrum_a11y,
+            1,
+            ap.band.displayName,
+            ap.displaySsid,
+            ap.rssi,
+        )
+        composeRule.onNodeWithContentDescription(description).performScrollTo().assertIsDisplayed()
     }
 
     private fun fakeAp(

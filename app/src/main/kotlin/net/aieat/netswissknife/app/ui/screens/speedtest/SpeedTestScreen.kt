@@ -45,6 +45,8 @@ import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.FilledTonalButton
@@ -90,6 +92,10 @@ import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
+import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
+import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
+import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
+import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.util.formatBytes
 import net.aieat.netswissknife.app.util.shareText
@@ -98,6 +104,7 @@ import net.aieat.netswissknife.core.network.speedtest.SpeedTestPhase
 import net.aieat.netswissknife.core.network.speedtest.SpeedTestResult
 import net.aieat.netswissknife.core.network.speedtest.ThroughputResult
 import net.aieat.netswissknife.core.network.speedtest.ThroughputSample
+import net.aieat.netswissknife.core.network.speedtest.ServerInfo
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -107,6 +114,8 @@ private const val GAUGE_MAX_MBPS = 1_000.0
 @Composable
 fun SpeedTestScreen(viewModel: SpeedTestViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val networkStatus by viewModel.networkStatus.collectAsStateWithLifecycle()
+    val config by viewModel.config.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     var visible by remember { mutableStateOf(false) }
@@ -121,6 +130,13 @@ fun SpeedTestScreen(viewModel: SpeedTestViewModel = hiltViewModel()) {
             is SpeedTestUiState.Error -> DisplayPhase.ERROR
         }
     }
+    val announcementPhase = when (uiState) {
+        is SpeedTestUiState.Idle -> null
+        is SpeedTestUiState.Running -> ToolAnnouncementPhase.RUNNING
+        is SpeedTestUiState.Finished -> ToolAnnouncementPhase.FINISHED
+        is SpeedTestUiState.Error -> ToolAnnouncementPhase.ERROR
+    }
+    ToolStateAnnouncer(stringResource(R.string.help_speedtest_title), announcementPhase)
 
     AnimatedVisibility(
         visible = visible,
@@ -131,7 +147,12 @@ fun SpeedTestScreen(viewModel: SpeedTestViewModel = hiltViewModel()) {
             verticalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp)
         ) {
-            item { SpeedTestHeaderCard(onHelpClick = { showHelp = true }) }
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    SpeedTestHeaderCard(onHelpClick = { showHelp = true })
+                    NetworkStatusBanner(networkStatus, scope = NetworkStatusScope.INTERNET)
+                }
+            }
 
             item {
                 val shareSubject = stringResource(R.string.share_subject_speedtest, "results")
@@ -142,7 +163,12 @@ fun SpeedTestScreen(viewModel: SpeedTestViewModel = hiltViewModel()) {
                 ) { target ->
                     when (target) {
                         DisplayPhase.IDLE ->
-                            SpeedTestIdleContent(onStart = viewModel::startTest)
+                            SpeedTestIdleContent(
+                                config = config,
+                                onStart = viewModel::startTest,
+                                onDownloadStreamsChange = viewModel::setDownloadStreams,
+                                onUploadStreamsChange = viewModel::setUploadStreams
+                            )
                         DisplayPhase.RUNNING ->
                             (uiState as? SpeedTestUiState.Running)?.let {
                                 SpeedTestRunningContent(it, onCancel = viewModel::onCancel)
@@ -286,7 +312,12 @@ private fun SpeedTestHeaderCard(onHelpClick: () -> Unit) {
 // ── Idle state ────────────────────────────────────────────────────────────────
 
 @Composable
-private fun SpeedTestIdleContent(onStart: () -> Unit) {
+private fun SpeedTestIdleContent(
+    config: net.aieat.netswissknife.core.network.speedtest.SpeedTestConfig,
+    onStart: () -> Unit,
+    onDownloadStreamsChange: (Int) -> Unit,
+    onUploadStreamsChange: (Int) -> Unit
+) {
     val infiniteTransition = rememberInfiniteTransition(label = "speedtest_idle_pulse")
     val pulse by infiniteTransition.animateFloat(
         initialValue = 0.94f, targetValue = 1.0f,
@@ -344,11 +375,42 @@ private fun SpeedTestIdleContent(onStart: () -> Unit) {
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                StreamSetting(
+                    text = stringResource(R.string.speedtest_download_streams, config.downloadStreams),
+                    choices = 1..8,
+                    selected = config.downloadStreams,
+                    onSelect = onDownloadStreamsChange
+                )
+                StreamSetting(
+                    text = stringResource(R.string.speedtest_upload_streams, config.uploadStreams),
+                    choices = 1..4,
+                    selected = config.uploadStreams,
+                    onSelect = onUploadStreamsChange
+                )
+            }
             Spacer(Modifier.height(20.dp))
             Button(onClick = hapticAction(onStart), modifier = Modifier.fillMaxWidth()) {
                 Icon(Icons.Default.PlayArrow, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
                 Text(stringResource(R.string.speedtest_start_button))
+            }
+        }
+    }
+}
+
+@Composable
+private fun StreamSetting(text: String, choices: IntRange, selected: Int, onSelect: (Int) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        FilledTonalButton(onClick = { expanded = true }) { Text(text) }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            choices.forEach { value ->
+                DropdownMenuItem(
+                    text = { Text(value.toString()) },
+                    onClick = { expanded = false; onSelect(value) },
+                    leadingIcon = if (value == selected) ({ Icon(Icons.Default.Speed, contentDescription = null) }) else null
+                )
             }
         }
     }
@@ -388,6 +450,23 @@ private fun SpeedTestRunningContent(state: SpeedTestUiState.Running, onCancel: (
                         accentColor = MaterialTheme.colorScheme.tertiary,
                         icon = Icons.Default.ArrowUpward
                     )
+                }
+                if (state.serverInfo != null) {
+                    Spacer(Modifier.height(12.dp))
+                    ServerInfoChip(state.serverInfo)
+                }
+                val loadedStats = when (state.phase) {
+                    SpeedTestPhase.DOWNLOAD -> state.loadedLatencyDown
+                    SpeedTestPhase.UPLOAD -> state.loadedLatencyUp
+                    SpeedTestPhase.LATENCY -> LatencyStats.EMPTY
+                }
+                if (loadedStats.samples.isNotEmpty()) {
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        text = stringResource(if (state.phase == SpeedTestPhase.DOWNLOAD) R.string.speedtest_loaded_latency_download else R.string.speedtest_loaded_latency_upload),
+                        style = MaterialTheme.typography.labelMedium
+                    )
+                    StatGrid(latencyStatGridEntries(loadedStats))
                 }
             }
         }
@@ -696,8 +775,13 @@ private fun SpeedTestResultContent(
             fontWeight = FontWeight.SemiBold
         )
 
+        result.serverInfo?.let { ServerInfoChip(it) }
+
         AnimatedVisibility(visible = visibleCards >= 1, enter = fadeIn(AppMotion.enter(300)) + slideInVertically(AppMotion.enter(300)) { it / 4 }) {
-            LatencyResultCard(result.latency)
+            LatencyResultCard(
+                title = stringResource(R.string.speedtest_idle_latency_header),
+                stats = result.latency
+            )
         }
         AnimatedVisibility(visible = visibleCards >= 2, enter = fadeIn(AppMotion.enter(300)) + slideInVertically(AppMotion.enter(300)) { it / 4 }) {
             ThroughputResultCard(
@@ -713,6 +797,18 @@ private fun SpeedTestResultContent(
                 icon = Icons.Default.ArrowUpward,
                 accentColor = MaterialTheme.colorScheme.tertiary,
                 result = result.upload
+            )
+        }
+        if (result.loadedLatencyDown.samples.isNotEmpty()) {
+            LatencyResultCard(
+                title = stringResource(R.string.speedtest_loaded_latency_download),
+                stats = result.loadedLatencyDown
+            )
+        }
+        if (result.loadedLatencyUp.samples.isNotEmpty()) {
+            LatencyResultCard(
+                title = stringResource(R.string.speedtest_loaded_latency_upload),
+                stats = result.loadedLatencyUp
             )
         }
 
@@ -732,20 +828,46 @@ private fun SpeedTestResultContent(
 }
 
 @Composable
-private fun LatencyResultCard(stats: LatencyStats) {
+private fun LatencyResultCard(
+    title: String,
+    stats: LatencyStats
+) {
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Icon(Icons.Default.NetworkCheck, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                 Text(
-                    text = stringResource(R.string.speedtest_latency_header),
+                    text = title,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold
                 )
             }
             Spacer(Modifier.height(12.dp))
             StatGrid(latencyStatGridEntries(stats))
+            stats.connectRttMs?.let { connectMs ->
+                Spacer(Modifier.height(12.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(stringResource(R.string.speedtest_connect_latency), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("$connectMs ${stringResource(R.string.speedtest_ms_suffix)}", style = MaterialTheme.typography.labelMedium)
+                }
+            }
         }
+    }
+}
+
+@Composable
+private fun ServerInfoChip(info: ServerInfo) {
+    val asn = info.asn ?: stringResource(R.string.speedtest_server_unknown_asn)
+    Surface(
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        shape = RoundedCornerShape(50)
+    ) {
+        Text(
+            text = stringResource(R.string.speedtest_server_info, info.colo ?: stringResource(R.string.speedtest_server_global_edge), asn),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSecondaryContainer
+        )
     }
 }
 
@@ -890,11 +1012,15 @@ private fun CloudflareAttributionCard() {
     }
 }
 
-private fun buildSpeedTestShareText(result: SpeedTestResult): String = buildString {
+internal fun buildSpeedTestShareText(result: SpeedTestResult): String = buildString {
     appendLine("Net Swiss Knife – Speed Test Results")
     appendLine()
-    appendLine("Latency: min ${result.latency.minMs} ms / avg %.1f ms / max ${result.latency.maxMs} ms / jitter %.1f ms"
+    appendLine("Idle latency: min ${result.latency.minMs} ms / avg %.1f ms / max ${result.latency.maxMs} ms / jitter %.1f ms"
         .format(result.latency.avgMs, result.latency.jitterMs))
+    result.latency.connectRttMs?.let { appendLine("Connect RTT: $it ms") }
+    result.serverInfo?.let { appendLine("Server: ${it.colo ?: "Cloudflare"} · ${it.asn ?: "ASN unavailable"}${it.country?.let { country -> " · $country" } ?: ""}") }
+    appendLine("Latency under download load: %.1f ms avg / %d samples".format(result.loadedLatencyDown.avgMs, result.loadedLatencyDown.samples.size))
+    appendLine("Latency under upload load: %.1f ms avg / %d samples".format(result.loadedLatencyUp.avgMs, result.loadedLatencyUp.samples.size))
     appendLine("Download: avg %.1f Mbps / peak %.1f Mbps / %s".format(result.download.avgMbps, result.download.peakMbps, formatBytes(result.download.bytesTransferred)))
     appendLine("Upload: avg %.1f Mbps / peak %.1f Mbps / %s".format(result.upload.avgMbps, result.upload.peakMbps, formatBytes(result.upload.bytesTransferred)))
     appendLine()

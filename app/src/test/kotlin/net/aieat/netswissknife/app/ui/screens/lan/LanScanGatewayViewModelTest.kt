@@ -74,7 +74,7 @@ class LanScanGatewayViewModelTest {
 
     @Test
     fun `start scan forwards gateway`() = runTest {
-        every { useCase(any()) } returns flowOf(
+        every { useCase(any(), any()) } returns flowOf(
             LanScanFlowResult.ScanComplete(
                 LanScanSummary("192.168.1.0/24", 0, 0, 0, emptyList()),
             ),
@@ -86,7 +86,7 @@ class LanScanGatewayViewModelTest {
         withContext(Dispatchers.Default) {
             withTimeout(2_000) { viewModel.uiState.first { it is LanScanUiState.Finished } }
         }
-        io.mockk.verify { useCase(match { it.gatewayIp == "192.168.1.254" }) }
+        io.mockk.verify { useCase(match { it.gatewayIp == "192.168.1.254" }, any()) }
         assertTrue(viewModel.uiState.value is LanScanUiState.Finished)
     }
 
@@ -95,6 +95,15 @@ class LanScanGatewayViewModelTest {
         viewModel.onScanPorts("192.168.1.10")
         assertEquals(
             LanNavEvent.NavigateToPorts("192.168.1.10"),
+            viewModel.navigationEvents.first(),
+        )
+    }
+
+    @Test
+    fun `ping host emits navigation event`() = runTest {
+        viewModel.onPingHost("192.168.1.10")
+        assertEquals(
+            LanNavEvent.NavigateToPing("192.168.1.10"),
             viewModel.navigationEvents.first(),
         )
     }

@@ -7,9 +7,15 @@ import io.mockk.mockk
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.test.runTest
 import net.aieat.netswissknife.core.network.NetworkResult
+import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.whois.WhoisQueryType
+import net.aieat.netswissknife.core.network.whois.WhoisProtocol
+import net.aieat.netswissknife.core.network.whois.WhoisHop
 import net.aieat.netswissknife.core.network.whois.WhoisRepository
 import net.aieat.netswissknife.core.network.whois.WhoisResult
+import net.aieat.netswissknife.core.network.operation.OperationBudget
+import net.aieat.netswissknife.core.network.operation.OperationRequirement
+import net.aieat.netswissknife.core.network.operation.OperationSession
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
@@ -56,6 +62,7 @@ class WhoisLookupUseCaseTest {
     fun `blank query returns Error without calling repository`() = runTest {
         val result = useCase(WhoisParams(query = "  "))
         assertTrue(result is NetworkResult.Error)
+        assertEquals(ErrorCode.WHOIS_INVALID_QUERY, (result as NetworkResult.Error).info?.code)
         coVerify(exactly = 0) { repository.lookup(any(), any()) }
     }
 
@@ -75,5 +82,104 @@ class WhoisLookupUseCaseTest {
         val actual = useCase(WhoisParams(query = "example.com"))
         assertEquals(expected, actual)
         coVerify(exactly = 1) { repository.lookup("example.com", 10_000) }
+    }
+
+    @Test
+    @DisplayName("caller-owned operation session is forwarded to repository")
+    fun `caller-owned operation session is forwarded to repository`() = runTest {
+        val session = OperationSession(OperationBudget.start(requirement = OperationRequirement.INTERNET))
+        val expected = NetworkResult.Success(successResult)
+        coEvery { repository.lookup(any(), any(), any<OperationSession>()) } returns expected
+
+        val actual = useCase(WhoisParams(query = " example.com "), session)
+
+        assertEquals(expected, actual)
+        coVerify(exactly = 1) { repository.lookup("example.com", 10_000, session) }
+    }
+
+    @Test
+    @DisplayName("selected protocol is forwarded with and without the caller-owned session")
+    fun `selected protocol is forwarded with and without the caller-owned session`() = runTest {
+        val expected = NetworkResult.Success(successResult)
+        coEvery { repository.lookup(any(), any(), any<WhoisProtocol>()) } returns expected
+        coEvery { repository.lookup(any(), any(), any<OperationSession>(), any<WhoisProtocol>()) } returns expected
+
+        val withoutSession = useCase(WhoisParams(query = "example.com", protocol = WhoisProtocol.RDAP))
+        val session = OperationSession(OperationBudget.start(requirement = OperationRequirement.INTERNET))
+        val withSession = useCase(WhoisParams(query = "example.com", protocol = WhoisProtocol.WHOIS), session)
+
+        assertEquals(expected, withoutSession)
+        assertEquals(expected, withSession)
+        coVerify(exactly = 1) { repository.lookup("example.com", 10_000, WhoisProtocol.RDAP) }
+        coVerify(exactly = 1) { repository.lookup("example.com", 10_000, session, WhoisProtocol.WHOIS) }
+    }
+
+    @Test
+    @DisplayName("legacy repository reports unsupported forced RDAP instead of silently using WHOIS")
+    fun `legacy repository reports unsupported forced RDAP instead of silently using WHOIS`() = runTest {
+        var legacyCalls = 0
+        val legacyRepository = object : WhoisRepository {
+            override val hopProgress = MutableSharedFlow<WhoisHop>()
+
+            override suspend fun lookup(query: String, timeoutMs: Int): NetworkResult<WhoisResult> {
+                legacyCalls++
+                return NetworkResult.Success(successResult)
+            }
+        }
+        val legacyUseCase = WhoisLookupUseCase(legacyRepository)
+
+        val withoutSession = legacyUseCase(WhoisParams(query = "example.com", protocol = WhoisProtocol.RDAP))
+        val session = OperationSession(OperationBudget.start(requirement = OperationRequirement.INTERNET))
+        val withSession = legacyUseCase(WhoisParams(query = "example.com", protocol = WhoisProtocol.RDAP), session)
+
+        assertTrue(withoutSession is NetworkResult.Error)
+        assertTrue(withSession is NetworkResult.Error)
+        assertEquals(0, legacyCalls)
+
+        val fallbackCompatible = legacyUseCase(WhoisParams(query = "example.com", protocol = WhoisProtocol.AUTO))
+        assertEquals(NetworkResult.Success(successResult), fallbackCompatible)
+        assertEquals(1, legacyCalls)
+    }
+
+    @Test
+    @DisplayName("IDN domain is normalized to lowercase ASCII without a root dot")
+    fun `IDN domain is normalized to lowercase ASCII without a root dot`() = runTest {
+        val expected = NetworkResult.Success(successResult)
+        coEvery { repository.lookup(any(), any()) } returns expected
+
+        val actual = useCase(WhoisParams(query = " BÜCHER.DE. "))
+
+        assertEquals(expected, actual)
+        coVerify(exactly = 1) { repository.lookup("xn--bcher-kva.de", 10_000) }
+    }
+
+    @Test
+    @DisplayName("spaces, control characters, and malformed IPv4 are rejected before repository access")
+    fun `spaces controls and malformed IPv4 are rejected before repository access`() = runTest {
+        listOf(
+            "foo bar",
+            "a\r\nb",
+            "999.1.1.1",
+            "1.2.3",
+            "1.2.3.4.5",
+        ).forEach { input ->
+            val result = useCase(WhoisParams(query = input))
+            assertTrue(result is NetworkResult.Error, "expected '$input' to be rejected")
+        }
+        coVerify(exactly = 0) { repository.lookup(any(), any()) }
+    }
+
+    @Test
+    @DisplayName("valid IPv4, IPv6, and ASN queries remain supported")
+    fun `valid IP and ASN queries remain supported`() = runTest {
+        coEvery { repository.lookup(any(), any()) } returns NetworkResult.Success(successResult)
+
+        useCase(WhoisParams(query = "8.8.8.8"))
+        useCase(WhoisParams(query = "2001:4860:4860::8888"))
+        useCase(WhoisParams(query = "as15169"))
+
+        coVerify(exactly = 1) { repository.lookup("8.8.8.8", 10_000) }
+        coVerify(exactly = 1) { repository.lookup("2001:4860:4860::8888", 10_000) }
+        coVerify(exactly = 1) { repository.lookup("AS15169", 10_000) }
     }
 }

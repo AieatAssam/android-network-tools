@@ -13,6 +13,8 @@ import kotlinx.coroutines.test.runTest
 import net.aieat.netswissknife.core.network.ping.PingPacketResult
 import net.aieat.netswissknife.core.network.ping.PingRepository
 import net.aieat.netswissknife.core.network.ping.PingStatus
+import net.aieat.netswissknife.core.network.ping.PingRequest
+import net.aieat.netswissknife.core.network.ping.PingOperation
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
@@ -72,7 +74,7 @@ class ContinuousPingUseCaseTest {
         @Test
         fun `validation error does not call repository`() = runTest {
             useCase(ContinuousPingParams(host = "")).toList()
-            verify(exactly = 0) { repository.continuousPing(any(), any()) }
+            verify(exactly = 0) { repository.continuousPing(any<String>(), any<Int>()) }
         }
     }
 
@@ -82,40 +84,67 @@ class ContinuousPingUseCaseTest {
 
         @Test
         fun `valid host delegates to repository continuousPing`() = runTest {
-            every { repository.continuousPing(any(), any()) } returns flowOf(samplePacket)
+            every { repository.continuousPing(any<String>(), any<Int>()) } returns flowOf(samplePacket)
             useCase(ContinuousPingParams(host = "8.8.8.8")).toList()
-            verify(exactly = 1) { repository.continuousPing(any(), any()) }
+            verify(exactly = 1) { repository.continuousPing(any<String>(), any<Int>()) }
         }
 
         @Test
         fun `host is trimmed before passing to repository`() = runTest {
-            every { repository.continuousPing(any(), any()) } returns flowOf(samplePacket)
+            every { repository.continuousPing(any<String>(), any<Int>()) } returns flowOf(samplePacket)
             useCase(ContinuousPingParams(host = "  8.8.8.8  ")).toList()
             verify { repository.continuousPing("8.8.8.8", any()) }
         }
 
         @Test
         fun `timeoutMs is forwarded to repository`() = runTest {
-            every { repository.continuousPing(any(), any()) } returns flowOf(samplePacket)
+            every { repository.continuousPing(any<String>(), any<Int>()) } returns flowOf(samplePacket)
             useCase(ContinuousPingParams(host = "8.8.8.8", timeoutMs = 5_000)).toList()
             verify { repository.continuousPing(any(), 5_000) }
         }
 
         @Test
         fun `emitted items are wrapped in Packet`() = runTest {
-            every { repository.continuousPing(any(), any()) } returns flowOf(samplePacket)
+            every { repository.continuousPing(any<String>(), any<Int>()) } returns flowOf(samplePacket)
             val results = useCase(ContinuousPingParams(host = "8.8.8.8")).toList()
             assertTrue(results.all { it is PingFlowResult.Packet })
         }
 
         @Test
         fun `flow cancellation stops collection`() = runTest {
-            every { repository.continuousPing(any(), any()) } returns flow {
+            every { repository.continuousPing(any<String>(), any<Int>()) } returns flow {
                 var i = 1
                 while (true) emit(samplePacket.copy(sequence = i++))
             }
             val results = useCase(ContinuousPingParams(host = "8.8.8.8")).take(3).toList()
             assertEquals(3, results.size)
+        }
+
+        @Test
+        fun `caller operation session is forwarded for continuous request`() = runTest {
+            val session = PingOperation.newSession(continuous = true)
+            every { repository.continuousPing(any<PingRequest>(), session) } returns flowOf(samplePacket)
+
+            useCase(
+                ContinuousPingParams(
+                    host = "8.8.8.8",
+                    timeoutMs = 5_000,
+                    intervalMs = 2_500,
+                    payloadBytes = 512,
+                    ttl = 128,
+                ),
+                session,
+            ).toList()
+
+            verify {
+                repository.continuousPing(
+                    match {
+                        it.host == "8.8.8.8" && it.count == 0 && it.timeoutMs == 5_000 &&
+                            it.intervalMs == 2_500 && it.payloadBytes == 512 && it.ttl == 128
+                    },
+                    session,
+                )
+            }
         }
     }
 }

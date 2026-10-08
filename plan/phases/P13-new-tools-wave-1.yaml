@@ -2,6 +2,11 @@
 # P13 – New tools wave 1: Network Info dashboard · SSDP/UPnP discovery · NTP clock offset
 # =============================================================================
 # Audience: AI coding agent. Self-contained. Read plan/plan.yaml `agent_execution_rules` first.
+expansion_tasks:
+  index: plan/plan.yaml
+  tasks: [E02-T18, E00-T04]
+  rule: "Coordinate with these expansion tasks; do not duplicate existing scope or block independent regression fixes on optional enhancements. See comprehensive_expansion.regression_delivery for fresh follow-up ownership."
+
 phase:
   id: P13
   title: "New tools wave 1 (no new third-party dependencies)"
@@ -22,6 +27,11 @@ new_tool_checklist:   # applies to EVERY tool below (from CLAUDE.md + claude/too
   - "Docs: README Features subsection + Available Tools row 'Implemented'; PRIVACY_POLICY entry if any traffic leaves the LAN; store/play-description.txt tool paragraph (update the '14 tools' count!); claude/tool_instructions.md 'Tools Added So Far' row; help sheet strings help_<tool>_*."
   - "Definition of done per tool: ./gradlew test && :app:assembleDebug && :app:lintDebug 0 errors && koverVerify x3."
 
+expansion_refinements:
+  - task: E00-T04
+    scope: "P13-T1/P13-T2/P13-T3 acceptance and evidence contracts"
+    precedence: "E00-T04 overrides conflicting older protocol, provider, XML-security and timing assumptions below. Apply within each owning tool, not as a separate duplicate implementation."
+
 tools:
   # ---------------------------------------------------------------------------
   - id: P13-NETINFO
@@ -33,10 +43,10 @@ tools:
     why: "Table-stakes for the category and absent: users must type addresses the app could show. Also the natural home for gateway/DNS/public-IP facts other tools reuse (P01 LinkInfoProvider)."
     behaviour: |
       Live dashboard of the active network and all interfaces:
-        Active network card: transport (Wi-Fi/Cellular/Ethernet/VPN), interface name, IPv4 addresses (with prefix), IPv6 addresses (GUA/ULA/link-local labelled), default gateway(s), DNS servers, Private DNS (on/off + hostname), MTU (API 29+), metered/captive-portal/validated flags, estimated bandwidth (NetworkCapabilities link*BandwidthKbps), VPN active.
-        Wi-Fi card (when Wi-Fi): SSID, BSSID, RSSI, link speed tx/rx, frequency/channel, standard (reuse WifiScanRepositoryImpl.buildConnectionInfo via WifiScanUseCase), DHCP server + lease (WifiManager.dhcpInfo, deprecated but functional; guarded).
+        Active network card: transport (Wi-Fi/Cellular/Ethernet/VPN), interface name, IPv4 addresses (with prefix), IPv6 addresses (GUA/ULA/link-local labelled), default gateway(s), DNS servers, Private DNS (on/off + hostname), MTU (use the documented LinkProperties API level; unknown when unavailable), metered/captive-portal/validated flags, estimated bandwidth (NetworkCapabilities link*BandwidthKbps), VPN active.
+        Wi-Fi card (when Wi-Fi): SSID, BSSID, RSSI, link speed tx/rx, frequency/channel, standard (reuse WifiScanRepositoryImpl.buildConnectionInfo via WifiScanUseCase), DHCP server + lease only where actually available (deprecated source capability-checked; unknown/redacted otherwise).
         Interfaces card: every NetworkInterface (name, up, multicast, MTU, addresses, hardware address when exposed – shows 'hidden by Android' on API 30+).
-        Public IP card: hidden by default; button 'Reveal public IP' performs ONE request to https://api.ipify.org?format=json (IPv4) and https://api64.ipify.org?format=json (IPv6) – privacy-explicit; results cached for the session; shows reverse DNS + reserved/CGNAT hint.
+        Public IP card: hidden by default; button 'Reveal public IP' performs ONE request to https://api.ipify.org?format=json (IPv4) and https://api64.ipify.org?format=json (dual stack; classify the returned literal, never presume IPv6) – privacy-explicit; results cached for the session; shows reverse DNS + reserved/CGNAT hint.
         Actions: copy any row; share summary; 'Use in Ping/DNS/LAN' hand-offs where meaningful; auto-refresh on ConnectivityObserver changes.
     core_network:
       models: "NetworkInfoSnapshot(active: ActiveNetworkInfo?, interfaces: List<InterfaceInfo>, publicIp: PublicIpInfo? = null, capturedAt) ; ActiveNetworkInfo(transport, interfaceName, ipv4: List<AddrWithPrefix>, ipv6: List<AddrWithPrefix>, gateways, dnsServers, privateDnsActive, privateDnsHost, mtu?, metered, captive, validated, downKbps?, upKbps?, vpnActive) ; InterfaceInfo(name, isUp, supportsMulticast, mtu, hardwareAddress?, addresses) ; PublicIpInfo(ipv4?, ipv6?, reverseName?)"
@@ -71,7 +81,7 @@ tools:
       unit: ["SsdpMessageBuilderTest (golden string)", "SsdpResponseParserTest (HTTP/1.1 200 OK responses + NOTIFY, folded headers, missing CRLF tolerance)", "UpnpDescriptionParserTest (fixtures: Fritz!Box, Sonos, Samsung TV, minimal)", "IgdSoapTest (request golden + response parse)", "SameSubnetGuardTest", "SsdpRepositoryImplTest (fake transport: two responses same USN -> one device; description fetch failure keeps device; window timing virtual)", "SsdpViewModelTest"]
       instrumented: ["SsdpScreenTest ≥ 4 cases"]
     privacy: "Local-network-only traffic; LOCATION fetches restricted to the local subnet."
-    security_note: "Never follow LOCATION redirects; cap XML size; harden DocumentBuilderFactory against XXE portably: setExpandEntityReferences(false), setXIncludeAware(false), and try each of setFeature('http://apache.org/xml/features/disallow-doctype-decl', true), setFeature('http://xml.org/sax/features/external-general-entities', false), setFeature('http://xml.org/sax/features/external-parameter-entities', false) inside try/catch(ParserConfigurationException) – Android's built-in parser (not Xerces) rejects unknown feature names. Add a unit test feeding a DOCTYPE with an external entity and asserting it is rejected or ignored on the JVM; the on-device behaviour must be checked manually once."
+    security_note: "Apply E00-T04: reject DOCTYPE/external entities and fail closed if a securely configured parser is unavailable; retain SSDP header evidence without XML details. Bound bytes, block redirects, validate and pin resolved destinations to the selected local network, and apply identical safeguards to SOAP control URLs. Verify XXE/entity-expansion fixtures on JVM and Android; never catch unsupported hardening options and proceed insecurely."
 
   # ---------------------------------------------------------------------------
   - id: P13-NTP
@@ -82,10 +92,10 @@ tools:
     more_section: "Utilities"
     why: "Cheap, pure-Kotlin, genuinely useful (TOTP failures, TLS 'not yet valid' errors, log correlation). No dependency."
     behaviour: |
-      SNTP (RFC 4330) query to a chosen server (pool.ntp.org, time.google.com, time.cloudflare.com, time.apple.com, time.windows.com, custom hostname/IP) with N samples (1-10, default 4, 250 ms apart): shows offset (device clock − NTP) as ±ms/s, round-trip delay, stratum, reference id (decoded for stratum 1, IP for others), root delay/dispersion, leap indicator, server time vs device time, per-sample list and median. Verdict card: 'Clock accurate (|offset| < 100 ms)', 'Clock drift' (warn), 'Clock wrong' (error > 5 s) with a hint to enable automatic time. Multi-server compare mode (all presets in parallel, table).
+      SNTP using the RFC 5905 on-wire contract query to a chosen server (pool.ntp.org, time.google.com, time.cloudflare.com, time.apple.com, time.windows.com, custom hostname/IP) with N samples (1-10, default 4, 250 ms apart): shows offset (NTP server clock − device clock; positive means server ahead) as ±ms/s, round-trip delay, stratum, reference id (interpret according to stratum/version/address family, not universally as an IP), root delay/dispersion, leap indicator, server time vs device time, per-sample list and median. Verdict card: 'Clock accurate (|offset| < 100 ms)', 'Clock drift' (warn), 'Clock wrong' (error > 5 s) with a hint to enable automatic time. Multi-server compare mode (all presets in parallel, table).
     core_network:
       models: "NtpSample(offsetMs: Double, delayMs: Double, stratum, referenceId: String, leap: Int, rootDelayMs, rootDispersionMs, serverTimeMs, t1..t4) ; NtpResult(server, samples, medianOffsetMs, minDelayMs, verdict)"
-      pure_logic: "SntpPacket.build(transmitTimestampNs) 48 bytes (LI=0, VN=4, Mode=3) ; SntpPacket.parse(bytes, t4) -> sample using RFC 4330 formulas: offset = ((T2-T1)+(T3-T4))/2, delay = (T4-T1)-(T3-T2) ; NtpTimestamp <-> epoch ms (1900 epoch, fraction 2^32) ; ReferenceIdDecoder ; Verdict thresholds"
+      pure_logic: "SntpPacket.build(transmitTimestampNs) 48 bytes (LI=0, VN=4, Mode=3) ; SntpPacket.parse(bytes, t4) -> sample using RFC 5905 formulas: offset = ((T2-T1)+(T3-T4))/2, delay = (T4-T1)-(T3-T2) ; NtpTimestamp <-> epoch ms (1900 epoch, fraction 2^32) ; ReferenceIdDecoder ; Verdict thresholds"
       repository: "interface NtpRepository { suspend fun query(server, samples, timeoutMs): NetworkResult<NtpResult> } ; impl over UdpExchange (P01) bound via NetworkBinder only if server IP is local (else default network)"
     app: "Module, VM (server preset chips + custom field, samples slider, compare mode), Screen (hero, input card, verdict card with big offset number, samples table, compare table)."
     tests:
@@ -98,7 +108,7 @@ tasks:
     title: "Network Info tool end-to-end"
     status: todo
     steps: ["Follow new_tool_checklist for P13-NETINFO; RED tests first for pure logic; land core+domain PR, then app PR."]
-    acceptance_criteria: ["Dashboard matches `adb shell ip addr`/`ip route`/`getprop net.dns1` on device; public IP hidden until tapped."]
+    acceptance_criteria: ["Dashboard matches captured selected-Network LinkProperties/capabilities; optional shell interface checks are secondary evidence. Public IP is explicit and address-family validated; follow E00-T04."]
   - id: P13-T2
     title: "SSDP/UPnP tool end-to-end"
     status: todo
@@ -108,7 +118,7 @@ tasks:
     title: "NTP tool end-to-end"
     status: todo
     steps: ["Checklist for P13-NTP."]
-    acceptance_criteria: ["Offset within ±50 ms of `adb shell date` vs time.google.com on a synced device; wrong-clock device shows error verdict."]
+    acceptance_criteria: ["Deterministic positive/negative offset, correlation, invalid/unsynchronized reply, and era fixtures pass; controlled-server checks record uncertainty. Follow E00-T04; coarse shell time/public-server latency is not a precision oracle."]
   - id: P13-T4
     title: "Docs + counts"
     status: todo

@@ -1,0 +1,211 @@
+review:
+  area: comprehensive-code-review
+  status: done
+  baseline_commit: "fcf046a"
+  reviewed_on: "2026-09-24"
+  reviewer_model: "claude-opus-5-5"
+  method: "Read-only source review of core-network, core-domain and app repositories/ViewModels, focused on phases marked done (P01-P04) and on E03-T01 operation-session changes. Every finding was cross-checked against plan.yaml, plan/phases, plan/expansion and plan/reviews to avoid duplicates. No application, test or build files were changed."
+  execution_limits: "No Gradle, JVM, instrumented or device run was performed, to avoid contending with the concurrently running implementation agent on this memory-constrained host. All runtime claims are derived from source and are marked with a confidence level. Each finding has a verify_with step that must go RED before a fix lands."
+  concurrency_note: "Another agent was implementing E01-T07 (TLS cancellation) while this review ran. TLS ViewModel/Screen files were not reviewed for defects because they were in flux."
+
+findings:
+  - id: R3-001
+    severity: high
+    kind: bug
+    confidence: suspected_from_source
+    status: todo
+    title: "mDNS discovery emits from a foreign coroutine context and can fail on the first discovered service"
+    related_phase: P12
+    implementation_task: E03-T01
+    introduced_in: "e22aa27 (feat(mdns): scope discovery to operation sessions)"
+    evidence:
+      - { file: app/src/main/kotlin/net/aieat/netswissknife/app/mdns/MdnsRepositoryImpl.kt, line: 165, detail: "discover(timeoutMs, operationSession) is a plain flow {} builder (SafeCollector)." }
+      - { file: app/src/main/kotlin/net/aieat/netswissknife/app/mdns/MdnsRepositoryImpl.kt, line: 169, detail: "runDiscovery runs inside OperationRunner.run(operationSession) and receives this@flow as `collector`." }
+      - { file: core-network/src/main/kotlin/net/aieat/netswissknife/core/network/operation/OperationRunner.kt, line: 106, detail: "The block runs in withContext(operationJob + OperationResourcesContext(session)), which adds a context element and a plain Job(parentJob) that is not a ScopeCoroutine." }
+      - { file: app/src/main/kotlin/net/aieat/netswissknife/app/mdns/MdnsRepositoryImpl.kt, line: 322, detail: "collector.emit(MdnsUpdate.ServiceFound(service)) is called from that nested context; line 328 repeats it for discovery.finish() partial services." }
+      - { file: app/src/test/kotlin/net/aieat/netswissknife/app/mdns/MdnsRepositoryImplIoTest.kt, line: 119, detail: "Repository tests cover send/receive failures, timeouts and cleanup with zero services. No test drives a complete PTR/SRV/TXT/A exchange through the real repository to a ServiceFound emission." }
+    impact: "kotlinx.coroutines SafeCollector.checkContext rejects emissions whose context has extra elements or a Job outside the collector's transitive ScopeCoroutine chain. It throws IllegalStateException ('Flow invariant is violated'). If confirmed, every mDNS scan that resolves a service ends in the ViewModel's error state instead of listing the service, and scans with no services still appear healthy. All other session-scoped repositories (Ping, LAN, Port Scan, Traceroute, Topology, Speed Test) use channelFlow/send and are not affected."
+    verify_with: "RED JVM test in MdnsRepositoryImplIoTest: the fake socket returns a PTR -> SRV -> TXT -> A response for one _http._tcp instance within the scan window. Assert that the collected updates contain exactly one ServiceFound followed by DiscoveryComplete(totalFound = 1), and no exception."
+    recommended_action: "Convert discover(timeoutMs, operationSession) to channelFlow and send() from runDiscovery, matching the other repositories. Alternatively, return discovered services from the runner block and emit them outside it, but that loses streaming. Keep the existing expected-deadline-as-completion mapping and the cleanup-before-terminal-event ordering. Add the ServiceFound regression test plus a partial-service (discovery.finish()) test."
+    validation: "./gradlew :app:testDebugUnitTest --tests '*MdnsRepositoryImpl*' --tests '*MdnsDiscoveryViewModel*' --no-daemon; device check on a LAN with at least one advertised service (e.g. a printer or Chromecast)."
+
+  - id: R3-002
+    severity: high
+    kind: regression
+    confidence: confirmed_from_source
+    status: todo
+    title: "Fixed 120 s operation deadlines are shorter than the inputs the UI allows, and hitting them discards all partial results"
+    related_phase: E03
+    implementation_task: E03-T01
+    cross_links: [E02-T03, E01-T07, E03-T05]
+    evidence:
+      - { file: core-network/src/main/kotlin/net/aieat/netswissknife/core/network/portscan/PortScanRepositoryImpl.kt, line: 58, detail: "operationTimeoutMillis defaults to OperationBudget.DEFAULT_INTERACTIVE_TIMEOUT_MILLIS (120 000) regardless of port count, timeout or concurrency." }
+      - { file: core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/PortScanUseCase.kt, line: 69, detail: "A CUSTOM range may contain 10 000 ports and timeoutMs may be up to 30 000 (UI slider 200..10 000 ms, PortsScreen.kt:579). With the default concurrency of 50 and a 2 000 ms timeout, 10 000 filtered ports need about 400 s." }
+      - { file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/portscan/PortScanViewModel.kt, line: 339, detail: "OperationDeadlineExceededException is a plain Exception, so the scan becomes PortScanUiState.Error('Scan failed: Operation deadline exceeded') and liveResults are dropped." }
+      - { file: core-network/src/main/kotlin/net/aieat/netswissknife/core/network/traceroute/TracerouteOperation.kt, line: 9, detail: "Traceroute uses a fixed 120 s budget. The UI allows 64 hops with a 10 s per-hop timeout (TracerouteScreen.kt:427-438), i.e. up to 640 s when a path stops answering." }
+      - { file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/traceroute/TracerouteViewModel.kt, line: 253, detail: "On DEADLINE_EXCEEDED, the terminal state is Error(...) and the accumulated hops are not shown. Contrast USER_STOP, which yields Canceled(result) with hops." }
+      - { file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanViewModel.kt, line: 143, detail: "The LAN session uses the 120 s default budget. An absent host costs about ICMP timeout + 10 presence ports x 400 ms + NetBIOS + mDNS (roughly 7 s at 1 s timeout; DiscoveryProbes.kt:79-81, 127). A /22 at concurrency 50 or a /24 at concurrency 10 exceeds 120 s; /16 is accepted by validation." }
+      - { file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanViewModel.kt, line: 305, detail: "Deadline surfaces as LanScanUiState.Error('Scan failed: ...'), discarding found hosts, although Finished(summary, partial = true) already exists for lifecycle pauses." }
+      - { file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/topology/TopologyDiscoveryViewModel.kt, line: 212, detail: "Topology deadline resolves to Failure('Topology discovery timed out') and drops nodes/links already discovered, unlike the Stop path that yields Canceled(nodes, links)." }
+      - { file: plan/expansion/E03-performance-reliability-and-quality.yaml, line: 46, detail: "E03 baseline evidence records that Port Scan previously had no operation deadline, so this is a regression introduced with the E03-T01 session migration." }
+    impact: "Large but valid scans and traces always fail after two minutes on filtered or sparse networks, and the user loses everything collected so far. The error text is the raw internal 'Operation deadline exceeded'."
+    verify_with: "RED tests with a virtual clock: (1) PortScanViewModel with a fake use case that emits N results and then throws OperationDeadlineExceededException must end in Finished(partial) with those N results; (2) the same for TracerouteViewModel hops, LanScanViewModel hosts and TopologyDiscoveryViewModel nodes; (3) PortScanRepositoryImpl.newSession/scan must derive a budget that covers ceil(ports / concurrency) x timeoutMs plus a grace period for a request at the UI maximums."
+    recommended_action: "Apply both fixes. (a) Derive each budget from the request, as PingOperation.newSession(request) already does, with a documented hard ceiling. When the ceiling is lower than the request, reject or warn before starting (E02-T03 scan budget). (b) Treat a deadline as partial completion: show retained results with a localized 'stopped after N s time limit' banner, reusing LAN's Finished(partial = true) and Traceroute/Topology Canceled(result) shapes. Never show the raw exception text."
+    validation: "./gradlew :core-network:test --tests '*PortScan*' --tests '*Traceroute*' --tests '*LanScan*' :app:testDebugUnitTest --tests '*PortScanViewModel*' --tests '*TracerouteViewModel*' --tests '*LanScanViewModel*' --tests '*TopologyDiscoveryViewModel*' --no-daemon"
+
+  - id: R3-003
+    severity: medium
+    kind: bug
+    confidence: confirmed_from_source
+    status: todo
+    title: "Continuous-ping summary statistics cover only the last 100 packets"
+    related_phase: P04
+    implementation_task: P04-T4
+    cross_links: [E01-T16, E03-T05]
+    evidence:
+      - { file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/ping/PingViewModel.kt, line: 491, detail: "The producer keeps an ArrayDeque rolling window of ROLLING_WINDOW = 100 packets (line 153)." }
+      - { file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/ping/PingViewModel.kt, line: 556, detail: "finalizeContinuousSession calls buildResult(current.host, current.packets, pingsSent). PingStats.compute(packets) therefore uses only the window, and stats.sent becomes 100." }
+      - { file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/PingScreen.kt, line: 963, detail: "The Finished card shows stats.sent / received / loss / min / avg / max / jitter as the session summary." }
+    impact: "After a 1 000-probe session the summary says '100 sent'. Loss, min, max and average describe only the tail, so an outage early in the session disappears from the summary while the CSV shows it."
+    verify_with: "RED PingViewModelTest: a continuous fake emits 150 packets (the first 50 are timeouts, the rest succeed), then Stop. Assert Finished.result.stats.sent == 150 and lossPercent == 33.3."
+    recommended_action: "Maintain an O(1) running accumulator (sent, received, min, max, sum, previous RTT and jitter sum) alongside the bounded display window, and build the final PingResult stats from it. This keeps memory bounded per E03-T05. Label the packet list 'last 100 of N' (the string ping_showing_recent already exists)."
+    validation: "./gradlew :core-network:test --tests '*PingStats*' :app:testDebugUnitTest --tests '*PingViewModel*' --no-daemon"
+
+  - id: R3-004
+    severity: medium
+    kind: bug
+    confidence: suspected_from_source
+    status: todo
+    title: "Sharing a long continuous-ping log sends the whole CSV as an Intent extra and can crash"
+    related_phase: E01
+    implementation_task: E01-T12
+    cross_links: [R2-008]
+    evidence:
+      - { file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/PingScreen.kt, line: 855, detail: "Share reads the entire session log with logFile.readText() and passes it to context.shareText." }
+      - { file: app/src/main/kotlin/net/aieat/netswissknife/app/util/ShareUtils.kt, line: 6, detail: "shareText puts the text in EXTRA_TEXT with no size bound and no try/catch around startActivity." }
+      - { file: core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/PingSessionLogger.kt, line: 20, detail: "Each probe appends about 35 bytes. The interval may be as low as 100 ms (PingValidation.kt:17), so about 1 MB accumulates in about 50 minutes at 10 probes/s, or in several hours at 1 probe/s." }
+    impact: "Binder transactions are limited to about 1 MB per process, so a large EXTRA_TEXT fails with TransactionTooLargeException (surfaced as RuntimeException from startActivity). The app crashes on Share after long or fast sessions. The risk grows with session length. Not reproduced on a device."
+    verify_with: "Instrumented or manual: run continuous ping at 100 ms for about 60 minutes (or inject a 2 MB log via sessionLogFileFactory) and tap Share. Expect a crash or a silent failure today."
+    recommended_action: "Share the CSV as a file through a FileProvider content URI (ACTION_SEND with EXTRA_STREAM, text/csv, FLAG_GRANT_READ_URI_PERMISSION). Keep EXTRA_TEXT for a short summary only. Add a size guard to shareText (truncate with a note above about 100 KB) for the other tools' text reports. Fold this into the single report/SAF contract that R2-008 asks E01-T12 to own."
+    validation: "Unit-test the size guard; instrumented share-intent test asserting EXTRA_STREAM with a content:// URI for a 2 MB log."
+
+  - id: R3-005
+    severity: medium
+    kind: incomplete_fix
+    confidence: confirmed_from_source
+    status: todo
+    title: "Continuous ping still resolves the hostname on every probe (F008 fixed only for finite pings)"
+    related_phase: P04
+    implementation_task: P04-T2
+    cross_links: [F008]
+    evidence:
+      - { file: core-network/src/main/kotlin/net/aieat/netswissknife/core/network/ping/PingRepositoryImpl.kt, line: 189, detail: "runContinuousSession calls resolver.resolve(request.host) inside the while(true) loop before every probe; runBoundedSession resolves once (line 111)." }
+      - { file: plan/plan.yaml, line: 556, detail: "F008: 'resolves on every probe ... hostname->IP can change mid-session'. The P04 completion note says 'ping now resolves once'." }
+      - { file: core-network/src/main/kotlin/net/aieat/netswissknife/core/network/ping/PingRepositoryImpl.kt, line: 255, detail: "delay(intervalMs) runs after each probe completes, so the effective cadence is interval + RTT/timeout rather than the configured interval." }
+    impact: "Resolution now happens outside the engine's timed region, so RTT is no longer inflated. However, a round-robin or geo-DNS name can switch targets mid-session, mixing RTTs from different IPs into one statistic and CSV without any indication. Every probe also issues a DNS query (one per second by default, up to ten per second). Failed resolutions become per-probe error packets that count as loss."
+    verify_with: "RED PingRepositoryImplTest: a counting fake HostResolver that returns alternating IPs. A continuous session of 5 probes must call resolve exactly once and report a single fromIp."
+    recommended_action: "Resolve once before the loop, like the bounded path, and pass resolvedIp into each probe request. If re-resolution is kept deliberately (for example after network change), make it explicit: re-resolve only after N consecutive failures, and emit a visible 'target changed a.b.c.d -> e.f.g.h' marker in the UI and CSV. Optionally schedule probes on a fixed cadence (start-to-start) and document the choice."
+    validation: "./gradlew :core-network:test --tests '*PingRepository*' --no-daemon"
+
+  - id: R3-006
+    severity: medium
+    kind: bug
+    confidence: confirmed_from_source
+    status: todo
+    title: "Custom DNS server validation is only a visual hint; hostnames and untrimmed input reach dnsjava"
+    related_phase: P04
+    implementation_task: P04-T6
+    cross_links: [E01-T10]
+    evidence:
+      - { file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/DnsScreen.kt, line: 573, detail: "isCustomInvalid shows supporting error text when the address is not an IPv4/IPv6 literal." }
+      - { file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/DnsScreen.kt, line: 416, detail: "The Lookup button's enabled state ignores isCustomInvalid." }
+      - { file: core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/DnsLookupUseCase.kt, line: 45, detail: "The use case rejects only a blank custom address. DnsViewModel.kt:150 passes the raw, untrimmed text." }
+      - { file: core-network/src/main/kotlin/net/aieat/netswissknife/core/network/dns/DnsRepositoryImpl.kt, line: 156, detail: "SimpleResolver(address) resolves a hostname with a blocking system InetAddress lookup. This happens inside the operation but outside any registered cancellable resource, and it uses the very resolver the user is trying to bypass." }
+    impact: "Typing 'dns.google' or ' 1.1.1.1' still runs a lookup. The first silently queries the system resolver to find the custom server (misleading provenance, blocking and uncancellable until the OS timeout). The second fails with an opaque UnknownHostException. The UI says the value is invalid but acts on it anyway."
+    verify_with: "RED DnsLookupUseCaseTest: Custom('dns.google') and Custom('1.1.1.1:5353') return a validation error without calling the repository; Custom(' 1.1.1.1 ') is trimmed. Add a DnsScreenTest asserting that Lookup is disabled while the custom address is invalid."
+    recommended_action: "Validate in the use case: trim, then require HostValidator.isValidIpv4 or isValidIpv6 (strip brackets). Disable Lookup and IME submit when invalid. Optionally support an explicit port syntax later (E02-T05) instead of accepting hostnames."
+    validation: "./gradlew :core-domain:test --tests '*DnsLookupUseCase*' :app:testDebugUnitTest --tests '*DnsViewModel*' --no-daemon"
+
+  - id: R3-007
+    severity: medium
+    kind: bug
+    confidence: confirmed_from_source
+    status: todo
+    title: "Multi-string TXT records are displayed joined with spaces and with presentation escapes"
+    related_phase: P04
+    implementation_task: P04-T5
+    cross_links: [E02-T05]
+    evidence:
+      - { file: core-network/src/main/kotlin/net/aieat/netswissknife/core/network/dns/DnsRepositoryImpl.kt, line: 439, detail: "formatRecordValue strips the outer quotes of rdataToString() and replaces '\" \"' with a single space." }
+      - { source: "dnsjava TXTBase.rrToString", detail: "Each character-string is quoted, with \\\" and \\DDD escapes, and strings are separated by one space." }
+      - { source: "RFC 7208 section 3.3 and RFC 6376 section 3.6.2.2", detail: "SPF and DKIM consumers concatenate the character-strings of one TXT record without inserting spaces." }
+    impact: "DKIM public keys (always split into 255-byte strings) and long SPF records are shown and copied with spurious spaces in the middle of base64 or mechanisms. Copied values fail validation, and the tool misreports what receivers will evaluate. Escaped quotes and non-ASCII bytes show as backslash sequences."
+    verify_with: "RED DnsMessageMapper test: TXTRecord with strings ['v=DKIM1; k=rsa; p=ABC', 'DEF'] maps to value 'v=DKIM1; k=rsa; p=ABCDEF'. A string containing a quote maps without the backslash."
+    recommended_action: "Build the TXT value from (record as TXTRecord).strings joined with '' (optionally also expose the segment list or boundaries for display), decoding bytes as UTF-8 with replacement. Keep rawLine as the dig-style presentation form."
+    validation: "./gradlew :core-network:test --tests '*Dns*' --no-daemon"
+
+  - id: R3-008
+    severity: medium
+    kind: bug
+    confidence: confirmed_from_source
+    status: todo
+    title: "Wi-Fi channel statistics group by channel number across bands, corrupting the 2.4 GHz recommendation"
+    related_phase: P03
+    implementation_task: E02-T06
+    evidence:
+      - { file: app/src/main/kotlin/net/aieat/netswissknife/app/wifi/WifiScanRepositoryImpl.kt, line: 252, detail: "buildChannelInfo groups accessPoints by `it.channel` only and labels each group with aps.first().band." }
+      - { file: core-network/src/main/kotlin/net/aieat/netswissknife/core/network/wifi/WifiAccessPoint.kt, line: 84, detail: "6 GHz channels are 1..233 (1, 5, 9, 13 collide with 2.4 GHz channels; 149-165 collide with 5 GHz)." }
+      - { file: app/src/main/kotlin/net/aieat/netswissknife/app/wifi/WifiScanRepositoryImpl.kt, line: 262, detail: "2.4 GHz interference sums every AP whose channel is within +/-4, with no band filter, so 6 GHz APs on channels 1-13 count as 2.4 GHz interference." }
+      - { file: core-network/src/main/kotlin/net/aieat/netswissknife/core/network/wifi/WifiScanResult.kt, line: 52, detail: "bestChannel24GHz looks up channels with band == BAND_2_4GHZ. A merged group labelled 6 GHz is invisible, so it scores 0 congestion and can be recommended." }
+    impact: "Where Wi-Fi 6E/7 APs are present, the channel list shows mixed-band groups with wrong AP counts, and the 'best 2.4 GHz channel' can recommend the busiest channel."
+    verify_with: "RED repository-mapping test (extract buildChannelInfo into a pure core-network function): 2.4 GHz ch1 with -40 dBm x3, 6 GHz ch1 at -30 dBm, ch6/ch11 empty. Expect two separate channel entries for ch1, and bestChannel24GHz != 1."
+    recommended_action: "Key channel groups and the overlap filter by (band, channel). Move buildChannelInfo into core-network (pure, testable) as a first step of E02-T06's per-band analyzer, without waiting for the rest of that task."
+    validation: "./gradlew :core-network:test --tests '*Wifi*' :app:testDebugUnitTest --tests '*WifiScan*' --no-daemon"
+
+  - id: R3-009
+    severity: low
+    kind: bug
+    confidence: confirmed_from_source
+    status: todo
+    title: "WHOIS sends unvalidated, non-IDNA query text to servers"
+    related_phase: P10
+    implementation_task: P10-T5
+    evidence:
+      - { file: core-domain/src/main/kotlin/net/aieat/netswissknife/core/domain/WhoisLookupUseCase.kt, line: 33, detail: "The only validation is trim() plus a blank check." }
+      - { file: core-network/src/main/kotlin/net/aieat/netswissknife/core/network/whois/WhoisQueryTypeDetector.kt, line: 15, detail: "Anything that is not an ASN, dotted-quad or colon form is treated as DOMAIN, including 'foo bar' and 999.1.1.1-style strings (IPV4_REGEX has no octet bound)." }
+      - { file: core-network/src/main/kotlin/net/aieat/netswissknife/core/network/whois/WhoisBlockingTransport.kt, line: 92, detail: "Writes \"$query\\r\\n\" as UTF-8. Unicode domains are not converted to A-labels, and embedded CR/LF from a paste are not rejected." }
+      - { file: core-network/src/main/kotlin/net/aieat/netswissknife/core/network/whois/WhoisRepositoryImpl.kt, line: 134, detail: "A failed registry hop (hop 2) returns the IANA-only result without a failed-hop record, unlike hop 3, which records error text." }
+    impact: "Lookups for IDN domains (e.g. bücher.de) return 'no match' or garbage from registries that expect punycode. Malformed input is sent over the network instead of being rejected locally. Registry failures are invisible in the hop list."
+    verify_with: "RED WhoisLookupUseCaseTest: 'bücher.de' is sent as 'xn--bcher-kva.de'; 'foo bar', 'a\\r\\nb' and '999.1.1.1' are rejected before any socket opens. Repository test: a hop-2 connect failure is recorded as a failed REGISTRY hop."
+    recommended_action: "Normalize DOMAIN queries with HostValidator.normalize (IDNA, lowercase, root dot) and reject when null. Bound IPv4 octets via HostValidator.isValidIpv4. Reject control characters. Record failed registry hops the same way as registrar hops. Fold this into P10-T5 alongside the public-suffix work."
+    validation: "./gradlew :core-domain:test --tests '*Whois*' :core-network:test --tests '*Whois*' --no-daemon"
+
+  - id: R3-010
+    severity: low
+    kind: bug
+    confidence: confirmed_from_source
+    status: todo
+    title: "DNS recents persist names that failed validation"
+    related_phase: E01
+    implementation_task: E01-T10
+    cross_links: [R2-005]
+    evidence:
+      - { file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/dns/DnsViewModel.kt, line: 182, detail: "addRecentIfInputWasValid runs before the result is inspected and checks only non-blank and <= 253 chars. Names rejected by normalizeDomain (e.g. 'a..b', 'foo bar', IPv6 literal for non-PTR types) are still saved." }
+    impact: "Invalid entries accumulate in the 5-slot recents list and push out useful ones. Other tools save only after normalization or a first result."
+    verify_with: "RED DnsViewModelTest: performLookup with 'foo bar' produces Error and recentHostsRepository.addRecent is never called."
+    recommended_action: "Save the recent only when the repository returned Success, or when a shared DNS name validator (reusing DnsRepositoryImpl.normalizeDomain logic) accepts it, consistent with the other tools."
+    validation: "./gradlew :app:testDebugUnitTest --tests '*DnsViewModel*' --no-daemon"
+
+folded_notes:
+  - target: P08-T6
+    note: "Contrast/dark-mode scope should include the fixed hex status palette in app/src/main/kotlin/net/aieat/netswissknife/app/ui/theme/StatusColors.kt (StatusGood/Warn/Bad/Blue/*Deep, Accent*, SpectrumPalette). It has no dark variants, is used by 5 screens, and bypasses CLAUDE.md UI rule 10 (colors via MaterialTheme.colorScheme). Add light/dark semantic status tokens (e.g. an extended color scheme via CompositionLocal) and include them in ContrastTest."
+  - target: P11-T1
+    note: "Acceptance for the new transfer engine should state how upload bytes are counted. The current SpeedTestRepositoryImpl.runManagedUpload (line 338-344) counts bytes when out.write() returns, i.e. into the socket send buffer and not when acknowledged. Short phases therefore overstate upload throughput. Measure from server-reported bytes/Server-Timing, or exclude a warm-up window, and add a test where writes complete instantly but the response is delayed."
+
+checked_and_not_reported:
+  - "TLS hostname verification absent: already P10-T1/T2."
+  - "Speed test latency includes TCP/TLS handshake; single-stream throughput: already P11-T1."
+  - "GeoIP in-memory cache is unbounded (GeoIpRepositoryImpl.kt:55): within E03-T04 cache policy scope."
+  - "Settings default timeout range (500-10 000 ms slider) versus LAN validation (100-10 000 ms): consistent; no defect."
+  - "HTTP probe redirect, header, body-limit and charset handling: no new defects beyond R2-001/R2-002/R2-012."
+  - "Subnet calculator: only the tracked RNET010 (/31) gap."

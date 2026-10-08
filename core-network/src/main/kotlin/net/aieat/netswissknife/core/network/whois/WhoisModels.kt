@@ -1,8 +1,10 @@
 package net.aieat.netswissknife.core.network.whois
 
+import net.aieat.netswissknife.core.network.operation.OperationId
+
 enum class WhoisQueryType { DOMAIN, IPV4, IPV6, ASN }
 
-enum class WhoisServerRole { IANA, REGISTRY, REGISTRAR, RIR }
+enum class WhoisServerRole { IANA, REGISTRY, REGISTRAR, RIR, RDAP }
 
 data class WhoisServer(
     val host: String,
@@ -14,7 +16,9 @@ data class WhoisHop(
     val rawResponse: String,
     val queryTimeMs: Long,
     val referral: String?,
-    val error: String? = null
+    val error: String? = null,
+    /** Identifies the lookup that produced live progress; null for legacy callers. */
+    val operationId: OperationId? = null,
 )
 
 data class WhoisResult(
@@ -39,5 +43,7 @@ data class WhoisResult(
     val orgName: String?,
     val country: String?,
 
-    val totalQueryTimeMs: Long
+    val totalQueryTimeMs: Long,
+    /** RDAP object handle when supplied (for example, an IP-network or ASN registry ID). */
+    val handle: String? = null,
 )

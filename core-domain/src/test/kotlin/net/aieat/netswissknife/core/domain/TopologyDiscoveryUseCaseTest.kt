@@ -4,7 +4,11 @@ import io.mockk.*
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
+import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.topology.*
+import net.aieat.netswissknife.core.network.operation.OperationBudget
+import net.aieat.netswissknife.core.network.operation.OperationRequirement
+import net.aieat.netswissknife.core.network.operation.OperationSession
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -49,14 +53,81 @@ class TopologyDiscoveryUseCaseTest {
     }
 
     @Test
+    fun `caller-owned operation session is forwarded for valid params`() = runTest {
+        val session = OperationSession(
+            OperationBudget.start(requirement = OperationRequirement.LOCAL_NETWORK)
+        )
+        val complete = TopologyDiscoveryEvent.Complete(
+            TopologyGraph(emptyList(), emptyList(), "192.168.1.1", 0L)
+        )
+        every { repository.discover(validParams, session) } returns flowOf(complete)
+
+        val events = useCase(validParams, session).toList()
+
+        verify(exactly = 1) { repository.discover(validParams, session) }
+        assertEquals(listOf(complete), events)
+    }
+
+    @Test
     fun `invalid params emits Error without calling repository`() = runTest {
-        val invalidParams = validParams.copy(targetIp = "")
+        val invalidParams = validParams.copy(targetIp = "", communityString = "")
 
         val events = useCase.invoke(invalidParams).toList()
 
         verify(exactly = 0) { repository.discover(any()) }
         assertEquals(1, events.size)
-        assertTrue(events[0] is TopologyDiscoveryEvent.Error)
+        val error = events[0] as TopologyDiscoveryEvent.Error
+        assertEquals(listOf(ErrorCode.HOST_BLANK, ErrorCode.SNMP_COMMUNITY_BLANK), error.errors.map { it.code })
+        assertEquals(
+            "Target IP or hostname must not be blank; Community string must not be blank for SNMP v1/v2c",
+            error.message,
+        )
+    }
+
+    @Test
+    fun `invalid target ErrorInfo includes the offending host argument`() = runTest {
+        val invalidParams = validParams.copy(targetIp = "not a host!!")
+
+        val event = useCase(invalidParams).toList().single() as TopologyDiscoveryEvent.Error
+
+        assertEquals(ErrorCode.HOST_INVALID, event.errors.single().code)
+        assertEquals(listOf("not a host!!"), event.errors.single().args)
+        verify(exactly = 0) { repository.discover(any()) }
+    }
+
+    @Test
+    fun `invalid target ErrorInfo includes offending host with caller-owned session`() = runTest {
+        val invalidParams = validParams.copy(targetIp = "not a host!!")
+        val session = OperationSession(
+            OperationBudget.start(requirement = OperationRequirement.LOCAL_NETWORK)
+        )
+
+        val event = useCase(invalidParams, session).toList().single() as TopologyDiscoveryEvent.Error
+
+        assertEquals(ErrorCode.HOST_INVALID, event.errors.single().code)
+        assertEquals(listOf("not a host!!"), event.errors.single().args)
+        verify(exactly = 0) { repository.discover(any()) }
+        verify(exactly = 0) { repository.discover(any(), any()) }
+    }
+
+    @Test
+    fun `out of range resource params emit Error without calling repository`() = runTest {
+        val invalidParams = listOf(
+            validParams.copy(maxHops = TopologyParamsValidator.MIN_MAX_HOPS - 1),
+            validParams.copy(maxHops = TopologyParamsValidator.MAX_MAX_HOPS + 1),
+            validParams.copy(timeoutMs = TopologyParamsValidator.MIN_TIMEOUT_MS - 1),
+            validParams.copy(timeoutMs = TopologyParamsValidator.MAX_TIMEOUT_MS + 1),
+            validParams.copy(retries = TopologyParamsValidator.MIN_RETRIES - 1),
+            validParams.copy(retries = TopologyParamsValidator.MAX_RETRIES + 1)
+        )
+
+        for (params in invalidParams) {
+            val events = useCase(params).toList()
+            assertEquals(1, events.size)
+            assertTrue(events.single() is TopologyDiscoveryEvent.Error)
+        }
+
+        verify(exactly = 0) { repository.discover(any()) }
     }
 
     @Test

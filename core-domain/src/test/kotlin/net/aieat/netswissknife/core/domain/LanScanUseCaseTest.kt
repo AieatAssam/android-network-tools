@@ -3,6 +3,7 @@ package net.aieat.netswissknife.core.domain
 import net.aieat.netswissknife.core.network.lan.HostChecker
 import net.aieat.netswissknife.core.network.lan.LanScanRepositoryImpl
 import net.aieat.netswissknife.core.network.lan.PortChecker
+import net.aieat.netswissknife.core.network.ErrorCode
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -57,6 +58,7 @@ class LanScanUseCaseTest {
         fun `invalid CIDR emits ValidationError`() = runTest {
             val results = makeUseCase().invoke(LanScanParams(subnet = "not-a-cidr/24")).toList()
             assertTrue(results.first() is LanScanFlowResult.ValidationError)
+            assertEquals(ErrorCode.SUBNET_INVALID, (results.first() as LanScanFlowResult.ValidationError).info.code)
         }
 
         @Test
@@ -81,7 +83,14 @@ class LanScanUseCaseTest {
         fun `valid slash-16 subnet is accepted`() = runTest {
             // Use .first() to avoid collecting all 65 534 host results from a /16 scan.
             // If validation fails the first emission is ValidationError; otherwise validation passed.
-            val first = makeUseCase().invoke(LanScanParams(subnet = "10.0.0.0/16")).first()
+            val first = makeUseCase().invoke(
+                LanScanParams(
+                    subnet = "10.0.0.0/16",
+                    timeoutMs = 100,
+                    concurrency = 500,
+                    enableNameProbes = false,
+                )
+            ).first()
             assertTrue(first !is LanScanFlowResult.ValidationError)
         }
 
@@ -209,6 +218,25 @@ class LanScanUseCaseTest {
                 portChecker = noPortChecker
             ))
             useCase.invoke(LanScanParams(subnet = "")).toList()
+            assertTrue(!called)
+        }
+
+        @Test
+        fun `over-ceiling scan is rejected before repository work begins`() = runTest {
+            var called = false
+            val useCase = makeUseCase(hostChecker = { _, _ -> called = true; null })
+
+            val result = useCase.invoke(
+                LanScanParams(
+                    subnet = "10.0.0.0/16",
+                    timeoutMs = 10_000,
+                    concurrency = 1,
+                    enableNameProbes = false,
+                ),
+            ).first()
+
+            assertTrue(result is LanScanFlowResult.ValidationError)
+            assertTrue((result as LanScanFlowResult.ValidationError).message.contains("10-minute limit"))
             assertTrue(!called)
         }
     }

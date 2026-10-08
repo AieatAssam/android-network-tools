@@ -50,6 +50,11 @@ fun NavHostController.navigateToTool(route: String) {
     }
 }
 
+/** Push a child tool from the current result screen so Back returns to that result. */
+fun NavHostController.navigateFromToolHandoff(route: String) {
+    navigate(route) { launchSingleTop = true }
+}
+
 /** Return from Settings to the screen that opened it, with a safe Home fallback. */
 fun NavHostController.navigateBackFromSettings() {
     if (!popBackStack()) {
@@ -93,10 +98,35 @@ private fun homeExitTransition(): ExitTransition =
     slideOutVertically(AppMotion.exit()) { -it / 8 } +
     fadeOut(AppMotion.exit())
 
+/** Destination content seam for exercising the production route graph without network work. */
+internal data class AppNavHostContentOverrides(
+    val lan: @Composable (NavHostController) -> Unit,
+    val ports: @Composable (NavBackStackEntry) -> Unit,
+)
+
 // ── Navigation host ───────────────────────────────────────────────────────────
 
 @Composable
 fun AppNavHost(navController: NavHostController, modifier: Modifier = Modifier) {
+    AppNavHostGraph(navController, modifier, contentOverrides = null)
+}
+
+/** Uses the same production graph while replacing LAN and Ports screen content in instrumentation tests. */
+@Composable
+internal fun AppNavHostWithContentOverrides(
+    navController: NavHostController,
+    contentOverrides: AppNavHostContentOverrides,
+    modifier: Modifier = Modifier,
+) {
+    AppNavHostGraph(navController, modifier, contentOverrides)
+}
+
+@Composable
+private fun AppNavHostGraph(
+    navController: NavHostController,
+    modifier: Modifier,
+    contentOverrides: AppNavHostContentOverrides?,
+) {
     NavHost(
         navController    = navController,
         startDestination = NavRoutes.Home.route,
@@ -118,7 +148,21 @@ fun AppNavHost(navController: NavHostController, modifier: Modifier = Modifier) 
             })
         }
 
-        composable(NavRoutes.Ping.route)       { PingScreen() }
+        composable(
+            route = NavRoutes.Ping.route,
+            arguments = listOf(
+                navArgument("host") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+                navArgument("intent") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+            ),
+        ) { PingScreen() }
         composable(NavRoutes.Traceroute.route) { TracerouteScreen() }
         composable(
             route = NavRoutes.Ports.route,
@@ -128,10 +172,23 @@ fun AppNavHost(navController: NavHostController, modifier: Modifier = Modifier) 
                     nullable = true
                     defaultValue = null
                 },
+                navArgument("intent") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
             ),
-        ) { PortsScreen() }
+        ) { entry ->
+            val portsContent = contentOverrides?.ports
+            if (portsContent != null) portsContent(entry) else PortsScreen()
+        }
         composable(NavRoutes.Lan.route)        {
-            LanScreen(onNavigate = { route -> navController.navigateToTool(route) })
+            val lanContent = contentOverrides?.lan
+            if (lanContent != null) {
+                lanContent(navController)
+            } else {
+                LanScreen(onNavigate = { route -> navController.navigateFromToolHandoff(route) })
+            }
         }
         composable(NavRoutes.Dns.route)        { DnsScreen() }
         composable(NavRoutes.WifiScan.route)   { WifiScanScreen() }
@@ -139,13 +196,62 @@ fun AppNavHost(navController: NavHostController, modifier: Modifier = Modifier) 
             composable(NavRoutes.DebugLogs.route) { DebugLogScreen() }
         }
         composable(NavRoutes.TopologyDiscovery.route) { TopologyDiscoveryScreen() }
-        composable(NavRoutes.TlsInspector.route)      { TlsInspectorScreen() }
+        composable(
+            route = NavRoutes.TlsInspector.route,
+            arguments = listOf(
+                navArgument("intent") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+                navArgument("host") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+                navArgument("port") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+            ),
+        ) { TlsInspectorScreen() }
         composable(NavRoutes.WhoisLookup.route)       { WhoisScreen() }
-        composable(NavRoutes.HttpProbe.route)         { HttpProbeScreen() }
+        composable(
+            route = NavRoutes.HttpProbe.route,
+            arguments = listOf(
+                navArgument("intent") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+                navArgument("host") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+            ),
+        ) { HttpProbeScreen() }
         composable(NavRoutes.SubnetCalculator.route)  { SubnetCalculatorScreen() }
-        composable(NavRoutes.MdnsDiscovery.route)     { MdnsDiscoveryScreen() }
+        composable(NavRoutes.MdnsDiscovery.route)     {
+            MdnsDiscoveryScreen(onNavigate = { route -> navController.navigateFromToolHandoff(route) })
+        }
         composable(NavRoutes.SpeedTest.route)         { SpeedTestScreen() }
-        composable(NavRoutes.WakeOnLan.route)         { WakeOnLanScreen() }
+        composable(
+            route = NavRoutes.WakeOnLan.route,
+            arguments = listOf(
+                navArgument("intent") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+                navArgument("mac") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+            ),
+        ) { WakeOnLanScreen() }
         composable(
             route            = NavRoutes.Settings.route,
             enterTransition  = { fadeIn(AppMotion.enter()) },

@@ -1,0 +1,111 @@
+review:
+  area: branch-pr-review
+  status: done
+  source: "PR-style review of plan/comprehensive-review-2026-09-22 against origin/main before opening the merge PR"
+  environment: "JVM unit tests, ktlint/detekt, Kover, lintDebug, and assembleDebug run locally; emulator and device not used"
+  scope_note: "The review prioritised release/CI workflows, the operation runner, the 2026-10-03 fix commit, and the Ping, Traceroute, Topology, and mDNS lifecycle paths. Vendored OkHttp was excluded apart from its documented parser-budget fork. This review does not establish that the whole branch is free of defects."
+
+findings:
+  - id: R5-001
+    severity: medium
+    kind: bug
+    title: "Ping lifecycle cleanup mutates UI state from an IO thread"
+    evidence:
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/ping/PingViewModel.kt", detail: "onLifecycleStop's detached cleanup ran its identity check and the _uiState write on Dispatchers.IO. A run started on the main thread between the check and the write could be replaced by the stale Finished/Idle state. lifecyclePingCleanupState was also a plain var written from both threads." }
+    resolution:
+      status: done
+      summary: "Blocking cancelAndJoin stays on IO. The check and the state write now run under withContext(NonCancellable + Dispatchers.Main.immediate). MutableStateFlow.compareAndSet was rejected because it compares with equals, and a fresh empty Running state can equal the stale one."
+    validation:
+      - "Coverage is indirect. The existing lifecycle cleanup tests pass, but PingViewModelTest uses UnconfinedTestDispatcher as Main, so the Main.immediate hop runs inline and the interleaving is not reproduced."
+    owner: E03-T02
+
+  - id: R5-002
+    severity: medium
+    kind: bug
+    title: "Continuous Ping crashes when its session log file cannot be created"
+    evidence:
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/ping/PingViewModel.kt", detail: "startContinuousPing called sessionLogFileFactory() synchronously from the Start click. check(mkdirs) and File.createTempFile can throw, for example when the cache is full, and the exception was uncaught on the main thread." }
+    resolution:
+      status: done
+      summary: "Factory failures now produce a PingUiState.Error backed by the new ping_continuous_log_unavailable string resource, and the probe is never invoked."
+    validation:
+      - "PingViewModelTest: 22/22 passed, including the new session-log-failure regression."
+      - "Full local gates on the final tree: app 624, core-network 1,371 (1 skipped), core-domain 222 JVM tests with no failures; ktlint, detekt, all three koverVerify tasks, lintDebug (0 errors), assembleDebug, and check_resource_sites.py passed."
+      - "The app ktlint baseline block for PingViewModel.kt was regenerated only to follow the line shift. It has the same rule counts as before, with no new findings baselined."
+    owner: E01-T07
+
+  - id: R5-003
+    severity: medium
+    kind: test
+    title: "LanScanViewModelTest depends on the host's real subnet and fails on GitHub runners"
+    evidence:
+      - { file: "app/src/test/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanViewModelTest.kt", detail: "The fixture builds the ViewModel without a LinkInfoProvider, so refreshSubnet() falls back to SubnetUtils.getCurrentSubnet() on the host. PR #109's first CI runs failed the same 6 tests every time. These tests start a scan without setting a subnet, and the runner's detected subnet exceeded the 10-minute scan ceiling (immediate Error state, then timeouts). A /24 developer host passes." }
+    resolution:
+      status: done
+      summary: "setUp pins 192.168.1.0/24. Detection only fills a blank subnet, so it cannot overwrite the pinned value. Pinning 10.1.0.0/16 locally reproduces exactly the 6 CI failures, and the /24 fixture passes 25/25."
+    owner: E01-T07
+
+  - id: R5-004
+    severity: low
+    kind: test
+    title: "Ping lifecycle cleanup could hop to Main after a test's resetMain()"
+    evidence:
+      - { file: "app/src/test/kotlin/net/aieat/netswissknife/app/ui/screens/ping/PingViewModelTest.kt", detail: "After R5-001, the detached cleanup ends on Main. A test that releases blocked cleanup at teardown could let that hop land in a later test class." }
+    resolution:
+      status: done
+      summary: "PingViewModel exposes the latest cleanup job internally, and tearDown joins it before resetMain(). CI now uploads unit test reports so failures that only happen in CI can be diagnosed."
+    owner: E03-T02
+
+  - id: R5-005
+    severity: medium
+    kind: quality-gate
+    title: "SonarCloud quality gate failed on new reliability (D) and security (D) ratings"
+    evidence:
+      - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/operation/OperationRunner.kt", detail: "kotlin:S1143 x2: cleanup failures were thrown from the finally block of run()." }
+      - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/tls/TlsInspectorRepositoryImpl.kt", detail: "kotlin:S1143: a connection close failure was thrown from finally after a successful handshake." }
+      - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/tls/TlsHandshakeEngine.kt", detail: "kotlin:S4423 on SSLContext.getInstance(\"TLS\"); kotlin:S4830 x2 on the diagnostic trust-all manager." }
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/ping/PingViewModel.kt", detail: "kotlin:S899 x5: File.delete() results ignored for session logs." }
+    resolution:
+      status: done
+      summary: "run() and the TLS handshake now record the failure to surface during cleanup and throw it after the try/finally, with the same precedence as before (an Error close failure wins; other close failures surface only when the operation succeeded, otherwise they are suppressed onto the primary failure). The inspection SSLContext requests TLSv1.3 and falls back to TLSv1.2 on providers without it (Android 8-9), so negotiation and per-socket protocol probing are unchanged. The trust-all manager stays deliberately: it is diagnostic-only and every captured chain is validated against the platform trust store afterwards. It is now documented and marked NOSONAR, because SonarCloud automatic analysis has no token in this repo for marking issues in the UI and the Kotlin analyzer does not reliably honour @Suppress. Session log deletions go through a helper that logs a file it could not remove."
+    validation:
+      - "ktlint, detekt, all JVM tests and all three koverVerify tasks pass locally. The core-network ktlint baseline blocks for the three edited files only lost entries; none were added."
+    owner: E03-T02
+
+  - id: R5-006
+    severity: high
+    kind: security
+    title: "Dependabot alerts: vulnerable build-tool libraries still resolved in some configurations"
+    evidence:
+      - { file: "build.gradle.kts", detail: "The seven default-branch alerts (FreeMarker, Bouncy Castle bcprov/bcpkix, Commons Lang, Apache HttpClient) were already fixed on the root buildscript classpath and :app's androidLintTool. A full resolution of every configuration found :okhttp-bounded's androidLintTool still on bcprov/bcpkix/bcutil 1.80.2, commons-lang3 3.16.0 and httpclient 4.5.6." }
+      - { file: "build.gradle.kts", detail: "GitHub's dependency-graph comparison for PR #109 showed the branch adding logback-core 1.3.16 (GHSA-qqpg-mvqg-649v, GHSA-p47f-322f-whfh, GHSA-jhq6-gfmj-v8fx), bundled by the ktlint 1.8.0 CLI in each module's ktlint configuration. All three fixes are on Logback 1.5.x." }
+    resolution:
+      status: done
+      summary: "The root build applies build-tool constraints to every module: androidLintTool gets Bouncy Castle 1.86 (including bcutil), Commons Lang 3.21.0 and HttpClient 4.5.14, and ktlint gets Logback 1.5.38. This replaces :app's own lint constraints. No app or test runtime configuration changes. The default-branch alerts close once this graph reaches main."
+    owner: E01-T07
+
+  - id: R5-007
+    severity: low
+    kind: maintenance
+    title: "Routine dependency updates"
+    resolution:
+      status: done
+      summary: "Applied the stable updates from the dependencyUpdates report: Kotlin 2.4.21, Compose BOM 2026.09.00, core-ktx 1.19.1, navigation-compose 2.10.2, JUnit 6.1.3, Kover 0.9.11, the versions settings plugin 0.65.0, jose4j 0.9.7, Commons Lang 3.21.0 (now published on Maven Central), and, in the OkHttp fork, androidx.annotation 1.11.0, animal-sniffer 1.28, Conscrypt 2.7.0 and bctls 1.86.2. Gradle 9.7.1 to 9.8.1 with the published wrapper checksum. The CodeQL job's Kotlin downgrade now matches any 2.4.x patch and fails if it stops matching. Not applied: GraalVM svm 25.0.4.1.1 (an unusual version line for a compileOnly GraalVM stub), detekt pre-releases, and ktlint-internal artifacts (sarif4k, kotlin-logging) that belong to the ktlint CLI."
+    owner: E01-T07
+
+  - id: R5-008
+    severity: medium
+    kind: bug
+    title: "LAN scan defaults to networks too large to scan within the 10-minute limit"
+    evidence:
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanViewModel.kt", detail: "refreshSubnet() pre-filled the whole detected network. On corporate or campus Wi-Fi (for example a /16), or on CI runners (R5-003), the first Scan immediately showed the over-limit error with no way forward except editing the CIDR by hand." }
+    resolution:
+      status: done
+      summary: "LinkInfo exposes this device's IPv4 address, and the new core-network LocalSubnet picks the /24 around it. After saved timeout and concurrency load, a detected network that would exceed the ceiling is pre-filled as that /24, with a hint naming the full network. Editing the field clears the hint. Hand-entered over-limit ranges, including prefixes broader than /16 that previously failed generic validation, show the limit error with a one-tap 'Scan <device /24>' action. Networks that fit (for example a /22 at default settings) are kept whole."
+    validation:
+      - "LanScanSubnetSizeViewModelTest (6 tests) and LocalSubnetTest (7 tests) are new."
+    owner: E01-T07
+
+observations:
+  - "ci.yml re-runs the full build-and-test job on every PR label change because of the labeled/unlabeled triggers needed for run-instrumented. Left unchanged; it costs CI minutes but is not a correctness issue."
+  - "release.yml concurrency `queue: max` is valid GitHub Actions syntax, added in the 2026-05-07 changelog."

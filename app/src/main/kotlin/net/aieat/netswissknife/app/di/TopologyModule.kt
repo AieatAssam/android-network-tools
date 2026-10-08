@@ -7,6 +7,7 @@ import dagger.hilt.components.SingletonComponent
 import net.aieat.netswissknife.core.domain.TopologyDiscoveryUseCase
 import net.aieat.netswissknife.core.network.topology.TopologyDiscoveryRepository
 import net.aieat.netswissknife.core.network.topology.TopologyDiscoveryRepositoryImpl
+import net.aieat.netswissknife.core.network.net.NetworkBinder
 import javax.inject.Singleton
 
 @Module
@@ -15,8 +16,8 @@ object TopologyModule {
 
     @Provides
     @Singleton
-    fun provideTopologyDiscoveryRepository(): TopologyDiscoveryRepository =
-        TopologyDiscoveryRepositoryImpl()
+    fun provideTopologyDiscoveryRepository(binder: NetworkBinder): TopologyDiscoveryRepository =
+        TopologyDiscoveryRepositoryImpl(binder = binder)
 
     @Provides
     @Singleton

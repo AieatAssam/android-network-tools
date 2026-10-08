@@ -1,11 +1,13 @@
 package net.aieat.netswissknife.core.domain
 
 import net.aieat.netswissknife.core.network.NetworkResult
+import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.dns.DnsRecord
 import net.aieat.netswissknife.core.network.dns.DnsRecordType
 import net.aieat.netswissknife.core.network.dns.DnsRepository
 import net.aieat.netswissknife.core.network.dns.DnsResult
 import net.aieat.netswissknife.core.network.dns.DnsServer
+import net.aieat.netswissknife.core.network.dns.DnsLookupOperation
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -61,6 +63,7 @@ class DnsLookupUseCaseTest {
         fun `blank domain error message is descriptive`() = runTest {
             val result = useCase(DnsLookupParams(domain = "")) as NetworkResult.Error
             assertTrue(result.message.isNotBlank())
+            assertEquals(ErrorCode.QUERY_BLANK, result.info?.code)
         }
 
         @Test
@@ -68,6 +71,19 @@ class DnsLookupUseCaseTest {
             val longDomain = "a".repeat(254)
             val result = useCase(DnsLookupParams(domain = longDomain))
             assertTrue(result is NetworkResult.Error)
+        }
+
+        @Test
+        fun `caller operation session is passed to repository`() = runTest {
+            val params = DnsLookupParams(domain = "example.com")
+            val session = DnsLookupOperation.newSession()
+            coEvery { repository.lookup("example.com", DnsRecordType.A, DnsServer.System(), session) } returns
+                NetworkResult.Success(successResult)
+
+            val result = useCase(params, session)
+
+            assertTrue(result is NetworkResult.Success)
+            coVerify { repository.lookup("example.com", DnsRecordType.A, DnsServer.System(), session) }
         }
 
         @Test
@@ -94,6 +110,64 @@ class DnsLookupUseCaseTest {
         @Test
         fun `custom server with blank address does not call repository`() = runTest {
             useCase(DnsLookupParams(domain = "example.com", server = DnsServer.Custom("")))
+            coVerify(exactly = 0) { repository.lookup(any(), any(), any()) }
+        }
+
+        @Test
+        fun `custom server hostname is rejected without calling repository`() = runTest {
+            val result = useCase(
+                DnsLookupParams(domain = "example.com", server = DnsServer.Custom("resolver.example"))
+            )
+
+            assertTrue(result is NetworkResult.Error)
+            assertEquals(ErrorCode.CUSTOM_DNS_INVALID, (result as NetworkResult.Error).info?.code)
+            coVerify(exactly = 0) { repository.lookup(any(), any(), any()) }
+        }
+
+        @Test
+        fun `custom server resolver hostname is rejected without system lookup`() = runTest {
+            val result = useCase(
+                DnsLookupParams(domain = "example.com", server = DnsServer.Custom("dns.google"))
+            )
+
+            assertTrue(result is NetworkResult.Error)
+            assertEquals(ErrorCode.CUSTOM_DNS_INVALID, (result as NetworkResult.Error).info?.code)
+            coVerify(exactly = 0) { repository.lookup(any(), any(), any()) }
+        }
+
+        @Test
+        fun `custom server hostname with operation session is rejected before repository dispatch`() = runTest {
+            val session = DnsLookupOperation.newSession()
+            val result = useCase(
+                DnsLookupParams(domain = "example.com", server = DnsServer.Custom("resolver.example")),
+                session
+            )
+
+            assertTrue(result is NetworkResult.Error)
+            assertEquals(ErrorCode.CUSTOM_DNS_INVALID, (result as NetworkResult.Error).info?.code)
+            coVerify(exactly = 0) { repository.lookup(any(), any(), any()) }
+            coVerify(exactly = 0) { repository.lookup(any(), any(), any(), any()) }
+        }
+
+        @Test
+        fun `custom server with port is rejected without calling repository`() = runTest {
+            val result = useCase(
+                DnsLookupParams(domain = "example.com", server = DnsServer.Custom("192.0.2.53:5353"))
+            )
+
+            assertTrue(result is NetworkResult.Error)
+            assertEquals(ErrorCode.CUSTOM_DNS_INVALID, (result as NetworkResult.Error).info?.code)
+            coVerify(exactly = 0) { repository.lookup(any(), any(), any()) }
+        }
+
+        @Test
+        fun `custom server hostname with port is rejected without repository dispatch`() = runTest {
+            val result = useCase(
+                DnsLookupParams(domain = "example.com", server = DnsServer.Custom("dns.google:53"))
+            )
+
+            assertTrue(result is NetworkResult.Error)
+            assertEquals(ErrorCode.CUSTOM_DNS_INVALID, (result as NetworkResult.Error).info?.code)
             coVerify(exactly = 0) { repository.lookup(any(), any(), any()) }
         }
 
@@ -152,6 +226,24 @@ class DnsLookupUseCaseTest {
             coEvery { repository.lookup(any(), any(), any()) } returns NetworkResult.Success(successResult)
             useCase(DnsLookupParams(domain = "example.com", server = DnsServer.Custom("192.168.1.1")))
             coVerify { repository.lookup(any(), any(), DnsServer.Custom("192.168.1.1")) }
+        }
+
+        @Test
+        fun `custom server surrounding whitespace is trimmed before repository lookup`() = runTest {
+            coEvery { repository.lookup(any(), any(), any()) } returns NetworkResult.Success(successResult)
+
+            useCase(DnsLookupParams(domain = "example.com", server = DnsServer.Custom("  2001:db8::53  ")))
+
+            coVerify(exactly = 1) { repository.lookup("example.com", DnsRecordType.A, DnsServer.Custom("2001:db8::53")) }
+        }
+
+        @Test
+        fun `custom IPv4 server surrounding whitespace is trimmed before repository lookup`() = runTest {
+            coEvery { repository.lookup(any(), any(), any()) } returns NetworkResult.Success(successResult)
+
+            useCase(DnsLookupParams(domain = "example.com", server = DnsServer.Custom("  1.1.1.1  ")))
+
+            coVerify(exactly = 1) { repository.lookup("example.com", DnsRecordType.A, DnsServer.Custom("1.1.1.1")) }
         }
     }
 }

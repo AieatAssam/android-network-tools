@@ -4,25 +4,44 @@
 #       dependency bumps, lint warnings, tests for untested classes, Dependabot
 # =============================================================================
 # Audience: AI coding agent. Self-contained. Read plan/plan.yaml `agent_execution_rules` first.
+expansion_tasks:
+  index: plan/plan.yaml
+  tasks: [E00-T03, E03-T07, E03-T08, E03-T09, E03-T10, E03-T12]
+  rule: "Coordinate with these expansion tasks; do not duplicate existing scope or block independent regression fixes on optional enhancements. See comprehensive_expansion.regression_delivery for fresh follow-up ownership."
+
+second_pass_follow_up:
+  status: todo
+  report: plan/reviews/2026-09-22-second-pass.yaml
+  findings: [R2-011]
+  rule: "Apply report recommendations and regression acceptance before closing the listed follow-ups; historical phase completion does not close new findings."
+
 phase:
   id: P09
   title: "Quality gates and test coverage"
   priority: medium
-  status: todo
+  status: in_progress
   estimated_effort: "M (2-4 agent sessions)"
   depends_on: []
   enables: []
   findings: [F014, F020, F021, F022, F034, F035, F038]
   target_modules: [":app", ":core-network", ":core-domain", "CI"]
 
+review_follow_up:
+  reviewed_on: "2026-09-21"
+  status: done
+  findings: [RBUILD001, RBUILD002]
+  reports:
+    - plan/reviews/2026-09-21-build.yaml
+  note: "Both release-workflow follow-ups are closed with focused version-allocation tests and exact defined-class APK fixtures. The workflow itself still needs a live dispatch/release run; fixed release claims are not a substitute for that operational check."
+
 context:
   problem: |
-    - app/build.gradle.kts Kover `includes` lists 4 classes; the 90% gate ignores 216 ViewModel tests
+    - app/build.gradle.kts Kover `includes` lists 5 classes as of 2026-09-21; the 90% gate ignores ViewModel tests
       and every util/platform class -> the gate cannot catch regressions in the code that matters.
     - No ktlint/detekt although .editorconfig already carries ktlint settings; formatting drifts.
     - CI never runs an R8/minified build; release.yml is the first place minification happens.
-    - ci.yml runs the Firebase Test Lab job on every push and PR; the Spark plan allows 10 runs/day
-      (see memory note); busy days silently exhaust quota and turn CI red.
+    - ci.yml now gates Firebase Test Lab to main pushes. Concurrency control is still absent;
+      busy push sequences can consume the quota. Any label-based PR opt-in remains optional work.
     - release.yml passes keystore/key passwords as `-P` CLI args (visible in `ps`, and in Gradle's
       failure output when `--info`/stack traces print the invocation).
     - Lint warnings: UnusedAttribute (enableOnBackInvokedCallback), ModifierParameter x2,
@@ -33,9 +52,9 @@ context:
       extracts it), WifiScanRepositoryImpl mappers (P03), IcmpEnginTracerouteRepositoryImpl mapping.
     - No Dependabot/Renovate; updates only surface via the informational dependencyUpdates task.
   evidence:
-    - { file: "app/build.gradle.kts", lines: "kover { … includes { classes(4 entries) } minBound(90) }" }
+    - { file: "app/build.gradle.kts", lines: "kover { … includes { classes(5 entries) } minBound(90) }" }
     - { file: ".editorconfig", note: "ktlint_* keys present; no plugin" }
-    - { file: ".github/workflows/ci.yml", note: "instrumented-tests job ungated; build-and-test builds debug only" }
+    - { file: ".github/workflows/ci.yml", note: "instrumented-tests gated to main pushes; no concurrency control; build-and-test builds debug only" }
     - { file: ".github/workflows/release.yml", lines: "steps 8-9 -PstorePassword=… -PkeyPassword=…" }
     - { file: "app/build/reports/lint-results-debug.txt", note: "warnings listed in plan.yaml F034" }
 
@@ -148,7 +167,12 @@ tasks:
 
   - id: P09-T3
     title: "ktlint + detekt with baselines; CI steps (non-blocking first)"
-    status: todo
+    status: done
+    current_progress:
+      date: "2026-09-25"
+      implemented: "Added ktlint/detekt plugins, module configs, non-empty module baselines, CI report artifacts, and documented local commands. CI lint steps remain non-blocking during the initial baseline review period."
+      validation: "`ktlintCheck` and `detekt` both passed serially with a 768 MiB Gradle heap after the final source edits. Earlier baseline generation produced findings for the existing codebase; the current touched files pass without adding new findings."
+      remaining: "Keep the CI checks non-blocking through the initial baseline review period, then remove `continue-on-error` in a follow-up after reviewing CI reports."
     steps:
       - "Add plugins/versions; module config; generate baselines; commit."
       - "ci.yml: steps 'Run ktlint' and 'Run detekt' with continue-on-error: true and reports uploaded as artifacts."
@@ -158,7 +182,12 @@ tasks:
 
   - id: P09-T4
     title: "CI: release smoke job + Test Lab gating + concurrency"
-    status: todo
+    status: in_progress
+    current_progress:
+      date: "2026-09-25"
+      implemented: "CI now runs an unsigned release-smoke build with exact SNMP4J class checks, traceroute package/native library checks, OUI/PSL resource checks, and seven-day APK/mapping artifacts. Test Lab is limited to main pushes or opted-in same-repository PRs carrying `run-instrumented`, with label events enabled, fork PRs excluded before Firebase authentication, and same-ref cancellation. README documents the gate and artifacts."
+      validation: "The existing unsigned release APK passed the exact SNMP class helper, native library, and resource-path checks. `git diff --check` passed. QA and adversarial source review cleared event gating, fork exclusion, artifact configuration, and the exact-class check. No workflow run or Gradle build was executed; no YAML parser/actionlint was available."
+      remaining: "Verify unlabeled/labeled PR event behavior, main-push Test Lab, Firebase auth, and uploaded artifact contents on a live workflow run."
     steps:
       - "Add `release-smoke` job per design; upload mapping.txt and the unsigned APK as artifacts (retention 7 days)."
       - "Gate instrumented-tests; add concurrency group; README CI docs."
@@ -166,21 +195,33 @@ tasks:
 
   - id: P09-T5
     title: "release.yml secrets via ORG_GRADLE_PROJECT_ env"
-    status: todo
+    status: in_progress
+    current_progress:
+      date: "2026-09-25"
+      implemented: "Signing values now reach Gradle only through ORG_GRADLE_PROJECT_* environment variables. No configured signing secrets produces unsigned artifacts; all four secrets enables signing; a partial set fails before decoding or building. The release note reports signed or unsigned status."
+      validation: "`git diff --check` and source checks confirmed no signing secret appears in a Gradle -P argument or run command line. Independent QA and adversarial source reviews found no blocker; local keytool accepted the environment-based store-password syntax. No GitHub workflow run or secret access was performed."
+      remaining: "Verify unsigned, fully signed, and partial-secret failure paths through controlled workflow runs, including `apksigner verify --print-certs` for a signed artifact."
     steps: ["Edit steps 8/9; verify on a workflow_dispatch run with create_github_release=false that the APK is signed (`apksigner verify --print-certs`)."]
     acceptance_criteria: ["No password appears in any `run:` command line."]
 
   - id: P09-T6
     title: "Lint warnings + suppressions"
-    status: todo
-    steps: ["Apply design §6; run lintDebug; remaining warnings only GradleDependency/NewerVersionAvailable (handled by T7) and MissingTranslation (P07)."]
+    status: in_progress
+    steps: ["Apply design §6 and keep lintDebug at zero errors. Route PluralsCandidate to P07-T4, GradleDependency/NewerVersionAvailable to T7, and triage remaining warnings before closure."]
+    validation:
+      - "On source commit 74e2c50, serialized `:app:lintDebug` passed with 0 errors and 30 warnings: AutoboxingStateCreation 9, GradleDependency 3, NewerVersionAvailable 3, PluralsCandidate 10, VisibleForTests 5."
+      - "Resolved this pass: EmptySuperCall, InlinedApi, InsecureBaseConfiguration, TrustAllX509TrustManager, and three UnusedResources warnings. Remaining category owners are P07-T4 (plurals), P09-T7 (dependency/version), plus T6 triage for AutoboxingStateCreation and VisibleForTests."
   - id: P09-T7
     title: "Dependency bumps"
     status: todo
     steps: ["Bump per design; ./gradlew test :app:assembleDebug :app:assembleRelease :app:lintDebug; if Kotlin bump breaks KSP/Hilt, pin and note in libs.versions.toml comment."]
   - id: P09-T8
     title: "Dependabot"
-    status: todo
+    status: done
+    current_progress:
+      date: "2026-09-25"
+      implemented: "Added weekly Gradle and GitHub Actions updates. Minor/patch Gradle updates share a weekly group; major updates remain individually reviewable."
+      validation: "The committed-source configuration is present at `.github/dependabot.yml`; YAML parsing and source review are included in final verification."
     steps: ["Add .github/dependabot.yml (gradle weekly grouped; github-actions weekly)."]
   - id: P09-T9
     title: "(Optional) Baseline profile"

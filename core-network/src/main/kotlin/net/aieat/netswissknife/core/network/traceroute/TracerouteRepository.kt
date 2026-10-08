@@ -1,6 +1,7 @@
 package net.aieat.netswissknife.core.network.traceroute
 
 import kotlinx.coroutines.flow.Flow
+import net.aieat.netswissknife.core.network.operation.OperationSession
 
 interface TracerouteRepository {
     /**
@@ -21,4 +22,15 @@ interface TracerouteRepository {
         probeType: TracerouteProbeType = TracerouteProbeType.ICMP,
         packetSize: Int = 56
     ): Flow<HopResult>
+
+    /** Caller-owned operation scope for a complete trace and its optional enrichment. */
+    fun trace(
+        host: String,
+        maxHops: Int,
+        timeoutMs: Int,
+        probesPerHop: Int,
+        probeType: TracerouteProbeType = TracerouteProbeType.ICMP,
+        packetSize: Int = 56,
+        operationSession: OperationSession,
+    ): Flow<HopResult> = trace(host, maxHops, timeoutMs, probesPerHop, probeType, packetSize)
 }

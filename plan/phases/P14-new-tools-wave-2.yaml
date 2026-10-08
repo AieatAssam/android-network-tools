@@ -2,6 +2,11 @@
 # P14 – New tools wave 2: Secure DNS (DoH/DoT/DNSSEC) tester · IPv6 mode for Subnet Calculator · Bufferbloat grade
 # =============================================================================
 # Audience: AI coding agent. Self-contained. Read plan/plan.yaml `agent_execution_rules` first.
+expansion_tasks:
+  index: plan/plan.yaml
+  tasks: [E02-T05, E02-T12, E02-T13, E00-T04]
+  rule: "Coordinate with these expansion tasks; do not duplicate existing scope or block independent regression fixes on optional enhancements. See comprehensive_expansion.regression_delivery for fresh follow-up ownership."
+
 phase:
   id: P14
   title: "New tools wave 2 (extend existing engines)"
@@ -14,6 +19,11 @@ phase:
   target_modules: [":core-network", ":core-domain", ":app"]
 
 new_tool_checklist: "Identical to plan/phases/P13-new-tools-wave-1.yaml `new_tool_checklist` – apply to every tool below."
+
+expansion_refinements:
+  - task: E00-T04
+    scope: "P14-T1 secure DNS and P14-T3 bufferbloat"
+    precedence: "Use E00-T04 for honest security evidence, comparable latency samples, and deterministic acceptance. Public-provider timing and a router-specific grade are not release gates."
 
 tools:
   # ---------------------------------------------------------------------------
@@ -29,8 +39,8 @@ tools:
         - Plain UDP/53 (+ TCP/53 fallback) latency & result
         - DoT (853): TLS handshake (SNI = hostname), latency, TLS version, cert CN, ALPN 'dot'
         - DoH (POST application/dns-message to https://<host>/dns-query; GET variant optional): latency, HTTP protocol, status
-        - DNSSEC: send with EDNS DO bit; report AD flag and presence of RRSIG in answer; test a known-bad name (dnssec-failed.org) -> expect SERVFAIL when validating
-        - Detect device Private DNS setting (LinkProperties.privateDnsServerName) and show 'Your device uses DoT to <host>' with a one-tap test of that server.
+        - DNSSEC: send with EDNS DO bit; report AD flag and RRSIG presence separately from local validation; use controlled valid/bogus fixtures, with public names optional diagnostics
+        - Detect device Private DNS setting (LinkProperties.privateDnsServerName) and show 'Private DNS configured: <host>' (configuration is not traffic observation) with a one-tap test of that server.
       Results table: resolver × transport with latency chips (StatusColors: ok/warn/error), details sheet per cell (raw message, TLS info), 'Fastest' badge, share summary. Runs all in parallel with bounded concurrency (4).
     core_network:
       models: "SecureDnsTransport { UDP, TCP, DOT, DOH } ; SecureDnsProbe(resolver, transport, latencyMs?, rcode?, answers, adFlag, hasRrsig, tls: TlsSummary?, httpProtocol?, error: ErrorInfo?) ; SecureDnsResolver(id, displayKey, ip, hostname, dohUrl?, dotPort=853) ; SecureDnsReport(query, probes, fastest)"
@@ -71,7 +81,7 @@ tools:
     why: "Latency under load is the metric behind 'my internet feels slow on video calls'; P11 already captures loaded-latency samples in the speed engine."
     behaviour: |
       Three phases (idle 8 s → download load 12 s → upload load 12 s) using the P11 speed engine (4/2 streams, Cloudflare backend, attribution) while probing latency every 200 ms via the ICMP engine to the configured probe target (default 1.1.1.1; fallback HTTP keep-alive RTT if ICMP unavailable).
-      Result: idle median, download-loaded median, upload-loaded median, increases (ms), grade per Waveform methodology (A+ <5 ms, A <30, B <60, C <200, D <400, F ≥400 – worst of down/up increase), jitter, packet loss during load, timeline chart (latency vs time with shaded load phases), plain-language explanation and mitigation tips (SQM/fq_codel, router QoS), share summary.
+      Result: idle median, download-loaded median, upload-loaded median, increases (ms), grade using proposed app-policy thresholds (verify attribution/method before citing an external methodology) (A+ <5 ms, A <30, B <60, C <200, D <400, F ≥400 – worst of down/up increase), jitter, packet loss during load, timeline chart (latency vs time with shaded load phases), plain-language explanation and mitigation tips (SQM/fq_codel, router QoS), share summary.
     core_network:
       models: "BufferbloatPhase { IDLE, DOWNLOAD, UPLOAD } ; BufferbloatSample(phase, elapsedMs, rttMs?) ; BufferbloatResult(idle: LatencyStats, down: LatencyStats, up: LatencyStats, downIncreaseMs, upIncreaseMs, grade: BufferbloatGrade, lossPercentUnderLoad, samples) ; events streaming like SpeedTestEvent"
       pure_logic: "BufferbloatGrader.grade(idleMedian, downMedian, upMedian) ; Median/percentile utils ; PhaseScheduler"
@@ -87,7 +97,7 @@ tasks:
     title: "Secure DNS Tester end-to-end"
     status: todo
     steps: ["Checklist; core PR then app PR; DoH via OkHttp (P10 dependency) or dnsjava DohResolver – decide by measuring both in a spike; record decision here."]
-    acceptance_criteria: ["Matrix for 4 presets completes < 10 s on Wi-Fi; dnssec-failed.org shows SERVFAIL on validating resolvers; Private DNS card reflects device setting."]
+    acceptance_criteria: ["Bounded transport tests complete within injected deadlines; valid/bogus fixtures verify distinct DNSSEC evidence fields, TLS identity failures are rejected, and Private DNS is labelled configuration. Follow E00-T04; public-provider timing is exploratory."]
   - id: P14-T2
     title: "IPv6 subnet mode"
     status: todo
@@ -97,7 +107,7 @@ tasks:
     title: "Bufferbloat tool"
     status: todo
     steps: ["Checklist; reuse SpeedTest components; add Settings attribution note."]
-    acceptance_criteria: ["Grade on a known-bloated connection (no SQM) ≤ C and ≥ A on a fq_codel router – record in PR."]
+    acceptance_criteria: ["Synthetic phase distributions prove grade boundaries, sample sufficiency, engine comparability and cancellation. Record optional controlled-router measurements without requiring a particular grade from a router/SQM label; follow E00-T04."]
   - id: P14-T4
     title: "Docs + counts"
     status: todo

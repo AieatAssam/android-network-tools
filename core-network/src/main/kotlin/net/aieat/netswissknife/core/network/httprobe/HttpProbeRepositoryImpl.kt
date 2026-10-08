@@ -1,289 +1,404 @@
 package net.aieat.netswissknife.core.network.httprobe
 
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.withContext
+import net.aieat.netswissknife.core.network.MonotonicClock
+import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.NetworkResult
+import net.aieat.netswissknife.core.network.SystemMonotonicClock
+import net.aieat.netswissknife.core.network.elapsedMillisSince
+import net.aieat.netswissknife.core.network.httprobe.engine.HttpEngine
+import net.aieat.netswissknife.core.network.httprobe.engine.HttpEngineCall
+import net.aieat.netswissknife.core.network.httprobe.engine.HttpEngineRequest
+import net.aieat.netswissknife.core.network.httprobe.engine.HttpTimings
+import net.aieat.netswissknife.core.network.httprobe.engine.OkHttpEngine
+import net.aieat.netswissknife.core.network.httprobe.engine.RedirectHop
+import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationCancellationException
+import net.aieat.netswissknife.core.network.operation.OperationDeadlineExceededException
+import net.aieat.netswissknife.core.network.operation.OperationResourcesContext
+import net.aieat.netswissknife.core.network.operation.OperationRunner
+import net.aieat.netswissknife.core.network.operation.OperationSession
+import net.aieat.netswissknife.core.network.operation.ensureCurrentOperationActive
+import net.aieat.netswissknife.core.network.net.NetworkBinder
 import java.io.ByteArrayOutputStream
 import java.io.IOException
-import java.net.HttpURLConnection
+import okhttp3.ResponseHeaderLimitException
 import java.net.MalformedURLException
 import java.net.URI
 import java.net.URISyntaxException
 import java.net.URL
 import java.nio.charset.Charset
 import java.nio.charset.CodingErrorAction
+import java.util.concurrent.atomic.AtomicBoolean
 
-class HttpProbeRepositoryImpl : HttpProbeRepository {
+class HttpProbeRepositoryImpl internal constructor(
+    private val engine: HttpEngine,
+) : HttpProbeRepository {
+    internal var clock: MonotonicClock = SystemMonotonicClock
+
+    constructor() : this(OkHttpEngine())
+
+    constructor(networkBinder: NetworkBinder) : this(OkHttpEngine(networkBinder = networkBinder))
 
     companion object {
-        private const val MAX_REDIRECTS = 10
         private const val MAX_RESPONSE_BODY_BYTES = 10_485_760L
-        private val BODY_HEADERS = setOf(
-            "content-length",
-            "content-type",
-            "transfer-encoding"
-        )
-        private val REDIRECT_STATUS_CODES = setOf(301, 302, 303, 307, 308)
+        private val BODY_HEADERS = setOf("content-length", "content-type", "transfer-encoding")
         private val CHARSET_PATTERN = Regex("(?i)(?:^|;)\\s*charset\\s*=\\s*(?:\"([^\"]+)\"|([^;\\s]+))")
     }
 
-    override suspend fun probe(request: HttpProbeRequest): NetworkResult<HttpProbeResult> {
-        val trimmedUrl = request.url.trim()
-        if (trimmedUrl.isBlank()) return NetworkResult.Error("URL must not be blank")
-        if (request.timeoutMs !in 500..60_000)
-            return NetworkResult.Error("Timeout must be between 500 ms and 60 000 ms")
-        if (request.maxResponseBodyBytes !in 0..MAX_RESPONSE_BODY_BYTES)
-            return NetworkResult.Error(
-                "Maximum response body size must be between 0 and $MAX_RESPONSE_BODY_BYTES bytes"
-            )
+    override suspend fun probe(request: HttpProbeRequest): NetworkResult<HttpProbeResult> = probeInternal(request, null)
 
-        val parsedUrl = try {
-            URI(trimmedUrl).toURL().also { url ->
-                if (url.protocol !in listOf("http", "https"))
-                    return NetworkResult.Error("Only HTTP and HTTPS URLs are supported (got: ${url.protocol})")
-            }
-        } catch (e: MalformedURLException) {
-            return NetworkResult.Error("Malformed URL: ${e.message}")
-        } catch (e: URISyntaxException) {
-            return NetworkResult.Error("Malformed URL: ${e.message}")
-        } catch (e: IllegalArgumentException) {
-            return NetworkResult.Error("Malformed URL: ${e.message}")
+    override suspend fun probe(
+        request: HttpProbeRequest,
+        operationSession: OperationSession,
+    ): NetworkResult<HttpProbeResult> = probeInternal(request, operationSession)
+
+    private suspend fun probeInternal(
+        request: HttpProbeRequest,
+        callerSession: OperationSession?,
+    ): NetworkResult<HttpProbeResult> {
+        val trimmedUrl = request.url.trim()
+        if (trimmedUrl.isBlank()) return NetworkResult.error(ErrorCode.URL_BLANK, developerMessage = "URL must not be blank")
+        if (request.timeoutMs !in 500..60_000) {
+            return NetworkResult.error(
+                ErrorCode.TIMEOUT_OUT_OF_RANGE,
+                developerMessage = "Timeout must be between 500 ms and 60 000 ms",
+                args = listOf(500, 60_000),
+            )
+        }
+        if (request.maxResponseBodyBytes !in 0..MAX_RESPONSE_BODY_BYTES) {
+            return NetworkResult.error(
+                ErrorCode.RESPONSE_SIZE_OUT_OF_RANGE,
+                developerMessage = "Maximum response body size must be between 0 and $MAX_RESPONSE_BODY_BYTES bytes",
+                args = listOf(0, MAX_RESPONSE_BODY_BYTES),
+            )
         }
 
-        return withContext(Dispatchers.IO) {
+        val parsedUrl =
             try {
-                executeRequest(parsedUrl, request)
+                URI(trimmedUrl).toURL().also { url ->
+                    if (url.protocol !in listOf("http", "https")) {
+                        return NetworkResult.error(ErrorCode.URL_SCHEME_UNSUPPORTED, developerMessage = "Only HTTP and HTTPS URLs are supported")
+                    }
+                }
+            } catch (_: MalformedURLException) {
+                return NetworkResult.error(ErrorCode.URL_INVALID, developerMessage = "Malformed URL")
+            } catch (_: URISyntaxException) {
+                return NetworkResult.error(ErrorCode.URL_INVALID, developerMessage = "Malformed URL")
+            } catch (_: IllegalArgumentException) {
+                return NetworkResult.error(ErrorCode.URL_INVALID, developerMessage = "Malformed URL")
+            }
+
+        return withContext(Dispatchers.IO) {
+            val session = callerSession ?: HttpProbeOperation.newSession(request, clock)
+            try {
+                OperationRunner.run(session) { executeRequest(parsedUrl, request) }
             } catch (e: CancellationException) {
+                if (e is OperationCancellationException && e.reason == CancellationReason.DEADLINE_EXCEEDED) {
+                    return@withContext NetworkResult.error(
+                        ErrorCode.NETWORK_TIMEOUT,
+                        developerMessage = "HTTP request timed out",
+                        cause = e,
+                    )
+                }
                 throw e
+            } catch (e: OperationDeadlineExceededException) {
+                return@withContext NetworkResult.error(
+                    ErrorCode.NETWORK_TIMEOUT,
+                    developerMessage = "HTTP request timed out",
+                    cause = e,
+                )
+            } catch (e: ResponseHeaderLimitException) {
+                NetworkResult.error(
+                    ErrorCode.HTTP_RESPONSE_HEADERS_TOO_LARGE,
+                    developerMessage = "HTTP response headers exceed the supported size limits",
+                    cause = e,
+                )
             } catch (e: IOException) {
-                NetworkResult.Error("Network error: ${e.message}", e)
+                session.cancellationReason?.let { reason ->
+                    if (reason == CancellationReason.DEADLINE_EXCEEDED) {
+                        return@withContext NetworkResult.error(
+                            ErrorCode.NETWORK_TIMEOUT,
+                            developerMessage = "HTTP request timed out",
+                            cause = e,
+                        )
+                    }
+                    throw OperationCancellationException(reason, e)
+                }
+                NetworkResult.error(ErrorCode.NETWORK_REQUEST_FAILED, developerMessage = "Network request failed", cause = e)
             } catch (e: Exception) {
-                NetworkResult.Error("Unexpected error: ${e.message}", e)
+                session.cancellationReason?.let { reason ->
+                    if (reason == CancellationReason.DEADLINE_EXCEEDED) {
+                        return@withContext NetworkResult.error(
+                            ErrorCode.NETWORK_TIMEOUT,
+                            developerMessage = "HTTP request timed out",
+                            cause = e,
+                        )
+                    }
+                    throw OperationCancellationException(reason, e)
+                }
+                NetworkResult.error(ErrorCode.NETWORK_REQUEST_FAILED, developerMessage = "HTTP request failed", cause = e)
             }
         }
     }
 
-    private fun executeRequest(
+    private suspend fun executeRequest(
         startUrl: URL,
-        request: HttpProbeRequest
+        request: HttpProbeRequest,
     ): NetworkResult<HttpProbeResult> {
-        val redirectChain = mutableListOf<String>()
+        val redirectHops = mutableListOf<RedirectHop>()
         var currentUrl = startUrl
         var currentMethod = request.method
         var currentBody = request.body.takeIf { request.method.supportsBody }
         var forwardCustomHeaders = true
-        val startTimeNs = System.nanoTime()
+        val startTimeNs = clock.nowNanos()
+        var timingTotals = HttpTimings()
 
-        repeat(MAX_REDIRECTS + 1) { attempt ->
-            val conn = currentUrl.openConnection() as HttpURLConnection
+        repeat(RedirectPolicy.MAX_REDIRECTS + 1) { attempt ->
+            ensureCurrentOperationActive()
+            val remainingTimeoutMs =
+                currentCoroutineContext()[OperationResourcesContext]
+                    ?.session
+                    ?.budget
+                    ?.remainingTimeoutMillis()
+                    ?.coerceAtMost(request.timeoutMs.toLong())
+                    ?.coerceAtLeast(1L)
+                    ?.toInt() ?: request.timeoutMs
+            val headers =
+                request.headers.filter { (key, _) ->
+                    forwardCustomHeaders && (currentMethod.supportsBody || key.lowercase() !in BODY_HEADERS)
+                }
+            val exchange =
+                engine.newCall(
+                    HttpEngineRequest(
+                        url = currentUrl.toString(),
+                        method = currentMethod.name,
+                        headers = headers,
+                        body = currentBody?.toByteArray(Charsets.UTF_8),
+                        timeoutMs = remainingTimeoutMs,
+                    ),
+                )
+            val lease = HttpCallLease(exchange)
+            val resources = currentCoroutineContext()[OperationResourcesContext]?.resources
+            resources?.register(lease)
             try {
-                conn.instanceFollowRedirects = false
-                conn.requestMethod = currentMethod.name
-                conn.connectTimeout = request.timeoutMs
-                conn.readTimeout = request.timeoutMs
+                ensureCurrentOperationActive()
+                val response = exchange.execute()
+                timingTotals = timingTotals.plus(response.timings)
+                ensureCurrentOperationActive()
 
-                // Credentials must not cross an origin boundary during a redirect.
-                // Entity headers are also invalid once redirect semantics change the
-                // request into a body-less method.
-                request.headers.forEach { (key, value) ->
-                    val normalizedKey = key.lowercase()
-                    if (!forwardCustomHeaders ||
-                        (!currentMethod.supportsBody && normalizedKey in BODY_HEADERS)
-                    ) return@forEach
-                    conn.setRequestProperty(key, value)
-                }
+                val location = header(response.headers, "Location")
+                val redirect =
+                    if (request.followRedirects) {
+                        RedirectPolicy.evaluate(
+                            source = currentUrl,
+                            method = currentMethod,
+                            body = currentBody,
+                            statusCode = response.statusCode,
+                            location = location,
+                            redirectsAlreadyFollowed = redirectHops.size,
+                            maxRedirects = RedirectPolicy.MAX_REDIRECTS,
+                        )
+                    } else {
+                        RedirectPolicy.Decision.NotRedirect
+                    }
+                when (redirect) {
+                    RedirectPolicy.Decision.NotRedirect -> {
+                    }
 
-                // Write body if applicable
-                if (currentMethod.supportsBody && currentBody != null) {
-                    conn.doOutput = true
-                    conn.outputStream.use { it.write(currentBody!!.toByteArray(Charsets.UTF_8)) }
-                }
+                    RedirectPolicy.Decision.MalformedLocation -> {
+                        return NetworkResult.error(ErrorCode.HTTP_REDIRECT_INVALID, developerMessage = "Malformed redirect URL")
+                    }
 
-                conn.connect()
+                    RedirectPolicy.Decision.UnsupportedProtocol -> {
+                        return NetworkResult.error(ErrorCode.URL_SCHEME_UNSUPPORTED, developerMessage = "Redirected to unsupported protocol")
+                    }
 
-                val statusCode = conn.responseCode
-                val statusMessage = conn.responseMessage ?: ""
+                    RedirectPolicy.Decision.TooManyRedirects -> {
+                        return NetworkResult.error(ErrorCode.HTTP_REDIRECT_LIMIT, developerMessage = "Too many redirects (max ${RedirectPolicy.MAX_REDIRECTS})")
+                    }
 
-                // Handle redirects manually
-                if (request.followRedirects && statusCode in REDIRECT_STATUS_CODES) {
-                    val location = conn.getHeaderField("Location")
-                    if (!location.isNullOrBlank()) {
-                        if (attempt >= MAX_REDIRECTS) {
-                            return NetworkResult.Error("Too many redirects (max $MAX_REDIRECTS)")
-                        }
-                        val nextUrl = try {
-                            resolveUrl(currentUrl, location)
-                        } catch (e: Exception) {
-                            return NetworkResult.Error("Malformed redirect URL: ${e.message}", e)
-                        }
-                        if (nextUrl.protocol !in listOf("http", "https")) {
-                            return NetworkResult.Error(
-                                "Redirected to unsupported protocol: ${nextUrl.protocol}"
+                    is RedirectPolicy.Decision.BlockedDowngrade -> {
+                        redirectHops += RedirectHop(currentUrl.toString(), response.statusCode, location.orEmpty())
+                        val blockedRedirect =
+                            HttpProbeBlockedRedirectException(
+                                sourceUrl = currentUrl.toString(),
+                                destinationUrl = redirect.destination.toString(),
+                                statusCode = response.statusCode,
+                                location = location.orEmpty(),
                             )
+                        return NetworkResult.error(
+                            ErrorCode.HTTPS_DOWNGRADE_BLOCKED,
+                            developerMessage = "Refusing insecure HTTPS-to-HTTP redirect",
+                            cause = blockedRedirect,
+                            legacyCode = HttpProbeBlockedRedirectException.CODE,
+                        )
+                    }
+
+                    is RedirectPolicy.Decision.Follow -> {
+                        redirectHops += RedirectHop(currentUrl.toString(), response.statusCode, location.orEmpty())
+                        if (redirect.changesOrigin && redirect.method.supportsBody && redirect.body != null) {
+                            lease.close()
+                            val approval =
+                                request.approveCrossOriginEntityReplay
+                                    ?: return NetworkResult.error(ErrorCode.HTTP_REDIRECT_APPROVAL_REQUIRED, developerMessage = "Cross-origin redirect requires approval before entity replay")
+                            val approved =
+                                approval(
+                                    CrossOriginEntityReplay(redirect.destination.toString(), redirect.method, response.statusCode),
+                                )
+                            if (!approved) return NetworkResult.error(ErrorCode.HTTP_REDIRECT_APPROVAL_REQUIRED, developerMessage = "Cross-origin redirect entity replay was not approved")
                         }
-                        if (currentUrl.protocol.equals("https", ignoreCase = true) &&
-                            nextUrl.protocol.equals("http", ignoreCase = true)
-                        ) {
-                            return NetworkResult.Error(
-                                "Refusing insecure HTTPS-to-HTTP redirect to $nextUrl"
-                            )
-                        }
-                        redirectChain.add(currentUrl.toString())
-                        // Custom headers are user-controlled and may contain credentials
-                        // under arbitrary names. Never forward any of them across origins.
-                        if (!sameOrigin(currentUrl, nextUrl)) forwardCustomHeaders = false
-                        val redirectedRequest = redirectRequest(currentMethod, currentBody, statusCode)
-                        currentMethod = redirectedRequest.first
-                        currentBody = redirectedRequest.second
-                        currentUrl = nextUrl
-                        return@repeat // continue loop
+                        currentMethod = redirect.method
+                        currentBody = redirect.body
+                        if (redirect.changesOrigin) forwardCustomHeaders = false
+                        currentUrl = redirect.destination
+                        return@repeat
                     }
                 }
 
-                // Final response — collect headers and body
-                val responseHeaders = buildMap<String, List<String>> {
-                    conn.headerFields.forEach { (key, values) ->
-                        if (key != null) put(key, values)
+                val bodyRead =
+                    response.body?.use { stream ->
+                        readResponseBody(stream, request.maxResponseBodyBytes, responseCharset(response.headers))
+                    } ?: BodyRead(null, 0L, false)
+                ensureCurrentOperationActive()
+                val finalCallTimings = response.timingSnapshot()
+                val transferTotal =
+                    when {
+                        timingTotals.transferMs == null -> finalCallTimings.transferMs
+                        finalCallTimings.transferMs == null -> timingTotals.transferMs
+                        else -> timingTotals.transferMs + finalCallTimings.transferMs
                     }
-                }
-
+                val elapsed = clock.elapsedMillisSince(startTimeNs)
+                val declaredBodyBytes = declaredContentLength(response.headers)
                 val isHttps = currentUrl.protocol.equals("https", ignoreCase = true)
-                val bodyStream = if (statusCode >= 400) conn.errorStream else conn.inputStream
-                val bodyRead = bodyStream?.use { stream ->
-                    readResponseBody(
-                        stream = stream,
-                        maxBytes = request.maxResponseBodyBytes,
-                        charset = responseCharset(conn)
-                    )
-                } ?: BodyRead(null, 0L, false)
-                val declaredBodyBytes = declaredContentLength(responseHeaders)
-
-                val elapsed = (System.nanoTime() - startTimeNs) / 1_000_000L
-                val securityChecks = HttpSecurityAnalyzer.analyze(responseHeaders, isHttps)
-
                 return NetworkResult.Success(
                     HttpProbeResult(
                         request = request,
-                        statusCode = statusCode,
-                        statusMessage = statusMessage,
+                        statusCode = response.statusCode,
+                        statusMessage = response.statusMessage,
                         responseTimeMs = elapsed,
-                        responseHeaders = responseHeaders,
+                        responseHeaders = response.headers,
                         responseBody = bodyRead.text,
                         responseBodyBytes = bodyRead.bufferedBytes,
                         declaredBodyBytes = declaredBodyBytes,
                         responseBodyTruncated = bodyRead.truncated,
                         finalUrl = currentUrl.toString(),
-                        redirectChain = redirectChain.toList(),
-                        securityChecks = securityChecks
-                    )
+                        redirectChain = redirectHops.map { it.url },
+                        securityChecks = HttpSecurityAnalyzer.analyze(response.headers, isHttps),
+                        timings =
+                            timingTotals.copy(
+                                transferMs = transferTotal,
+                                totalMs = elapsed,
+                            ),
+                        protocol = response.protocol,
+                        redirectHops = redirectHops.toList(),
+                    ),
                 )
+            } catch (failure: Exception) {
+                ensureCurrentOperationActive()
+                throw failure
             } finally {
-                conn.disconnect()
+                if (resources == null || resources.release(lease)) lease.close()
             }
         }
-
-        return NetworkResult.Error("Too many redirects (max $MAX_REDIRECTS)")
+        return NetworkResult.error(ErrorCode.HTTP_REDIRECT_LIMIT, developerMessage = "Too many redirects (max ${RedirectPolicy.MAX_REDIRECTS})")
     }
 
     private fun readResponseBody(
         stream: java.io.InputStream,
         maxBytes: Long,
-        charset: Charset
+        charset: Charset,
     ): BodyRead {
-        if (maxBytes == 0L) {
-            // Read one byte only so callers can distinguish an empty body from a
-            // body omitted because the configured safety bound was reached. The
-            // probe byte is deliberately not counted as buffered content.
-            val hasMore = stream.read() != -1
-            return BodyRead("", 0L, hasMore)
-        }
-
+        if (maxBytes == 0L) return BodyRead("", 0L, stream.read() != -1)
         val output = ByteArrayOutputStream(maxBytes.toInt().coerceAtMost(8192))
         val buffer = ByteArray(8192)
         var bytesRead = 0L
         while (bytesRead < maxBytes) {
-            val requested = minOf(buffer.size.toLong(), maxBytes - bytesRead).toInt()
-            val read = stream.read(buffer, 0, requested)
+            val read = stream.read(buffer, 0, minOf(buffer.size.toLong(), maxBytes - bytesRead).toInt())
             if (read == -1) break
             if (read == 0) continue
             output.write(buffer, 0, read)
             bytesRead += read
         }
-
-        // Probe one additional byte, then stop. This keeps memory and network
-        // consumption bounded while still proving whether the body continues
-        // past the cap. The probe byte is not counted as buffered content: a
-        // bounded read cannot know the real total, so callers must fall back to
-        // Content-Length for that.
         val truncated = bytesRead == maxBytes && stream.read() != -1
-
-        val decoded = charset.newDecoder()
-            .onMalformedInput(CodingErrorAction.REPLACE)
-            .onUnmappableCharacter(CodingErrorAction.REPLACE)
-            .decode(java.nio.ByteBuffer.wrap(output.toByteArray()))
-            .toString()
+        val decoded =
+            charset
+                .newDecoder()
+                .onMalformedInput(CodingErrorAction.REPLACE)
+                .onUnmappableCharacter(CodingErrorAction.REPLACE)
+                .decode(java.nio.ByteBuffer.wrap(output.toByteArray()))
+                .toString()
         return BodyRead(decoded, bytesRead, truncated)
     }
 
     private data class BodyRead(
         val text: String?,
-        /** Bytes actually buffered. Never exceeds the caller's cap. */
         val bufferedBytes: Long,
-        val truncated: Boolean
+        val truncated: Boolean,
     )
 
-    /**
-     * Parses `Content-Length` into the full body size. Absent, malformed, or
-     * multi-valued headers yield null rather than a guess, so the UI can say
-     * "at least N" instead of reporting the buffered prefix as the total.
-     */
-    private fun declaredContentLength(headers: Map<String, List<String>>): Long? = headers.entries
-        .firstOrNull { (key, _) -> key.equals("Content-Length", ignoreCase = true) }
-        ?.value
-        ?.singleOrNull()
-        ?.trim()
-        ?.toLongOrNull()
-        ?.takeIf { it >= 0L }
+    private class HttpCallLease(
+        private val call: HttpEngineCall,
+    ) : AutoCloseable {
+        private val closed = AtomicBoolean(false)
 
-    private fun responseCharset(connection: HttpURLConnection): Charset {
-        val contentType = connection.headerFields.entries
-            .firstOrNull { (key, _) -> key?.equals("Content-Type", ignoreCase = true) == true }
-            ?.value
-            ?.firstOrNull()
-            ?: return Charsets.UTF_8
-        val charsetMatch = CHARSET_PATTERN.find(contentType)
-        val charsetName = charsetMatch?.groupValues?.getOrNull(1)?.ifBlank { null }
-            ?: charsetMatch?.groupValues?.getOrNull(2)?.ifBlank { null }
-            ?: return Charsets.UTF_8
+        override fun close() {
+            if (closed.compareAndSet(false, true)) call.close()
+        }
+    }
+
+    private fun declaredContentLength(headers: Map<String, List<String>>): Long? =
+        headerValues(headers, "Content-Length")
+            ?.singleOrNull()
+            ?.trim()
+            ?.toLongOrNull()
+            ?.takeIf { it >= 0L }
+
+    private fun responseCharset(headers: Map<String, List<String>>): Charset {
+        val contentType = header(headers, "Content-Type") ?: return Charsets.UTF_8
+        val match = CHARSET_PATTERN.find(contentType)
+        val name =
+            match?.groupValues?.getOrNull(1)?.ifBlank { null }
+                ?: match?.groupValues?.getOrNull(2)?.ifBlank { null } ?: return Charsets.UTF_8
         return try {
-            Charset.forName(charsetName)
+            Charset.forName(name)
         } catch (_: Exception) {
             Charsets.UTF_8
         }
     }
 
-    private fun sameOrigin(first: URL, second: URL): Boolean =
-        first.protocol.equals(second.protocol, ignoreCase = true) &&
-            first.host.equals(second.host, ignoreCase = true) &&
-            effectivePort(first) == effectivePort(second)
+    private fun header(
+        headers: Map<String, List<String>>,
+        name: String,
+    ): String? = headerValues(headers, name)?.firstOrNull()
 
-    private fun effectivePort(url: URL): Int = when {
-        url.port != -1 -> url.port
-        url.protocol.equals("https", ignoreCase = true) -> 443
-        else -> 80
-    }
+    private fun headerValues(
+        headers: Map<String, List<String>>,
+        name: String,
+    ): List<String>? = headers.entries.firstOrNull { it.key.equals(name, ignoreCase = true) }?.value
 
-    private fun redirectRequest(
-        method: HttpMethod,
-        body: String?,
-        statusCode: Int
-    ): Pair<HttpMethod, String?> = when (statusCode) {
-        303 -> if (method == HttpMethod.HEAD) HttpMethod.HEAD to null else HttpMethod.GET to null
-        301, 302 -> if (method == HttpMethod.POST) HttpMethod.GET to null else method to body
-        else -> method to body // 307 and 308 preserve method and entity
-    }
+    private fun HttpTimings.plus(other: HttpTimings): HttpTimings =
+        HttpTimings(
+            dnsMs = add(dnsMs, other.dnsMs),
+            connectMs = add(connectMs, other.connectMs),
+            tlsMs = add(tlsMs, other.tlsMs),
+            ttfbMs = add(ttfbMs, other.ttfbMs),
+            // Intermediate redirect bodies are deliberately closed unread. Transfer timing is
+            // therefore taken only from the final response after its bounded read completes.
+            transferMs = transferMs,
+            totalMs = totalMs + other.totalMs,
+        )
 
-    private fun resolveUrl(base: URL, location: String): URL =
-        URI(base.toString()).resolve(location).toURL()
+    private fun add(
+        first: Long?,
+        second: Long?,
+    ): Long? =
+        when {
+            first == null -> second
+            second == null -> first
+            else -> first + second
+        }
 }

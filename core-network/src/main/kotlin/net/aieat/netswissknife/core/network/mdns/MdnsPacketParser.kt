@@ -52,9 +52,14 @@ object MdnsPacketParser {
     /**
      * Builds a raw mDNS PTR query message for [name].
      */
-    fun buildMdnsQuery(name: String, type: Int = Type.PTR): ByteArray {
+    fun buildMdnsQuery(
+        name: String,
+        type: Int = Type.PTR,
+        unicastResponse: Boolean = false,
+    ): ByteArray {
         val queryName = Name.fromString(if (name.endsWith(".")) name else "$name.")
-        val queryRecord = Record.newRecord(queryName, type, DClass.IN)
+        val queryClass = if (unicastResponse) DClass.IN or 0x8000 else DClass.IN
+        val queryRecord = Record.newRecord(queryName, type, queryClass)
         return Message.newQuery(queryRecord).toWire()
     }
 

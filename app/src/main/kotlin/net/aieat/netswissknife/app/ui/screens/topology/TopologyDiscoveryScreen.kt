@@ -7,6 +7,7 @@ import androidx.compose.foundation.gestures.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -20,9 +21,13 @@ import androidx.compose.ui.geometry.*
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.*
 import androidx.compose.ui.input.pointer.*
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -34,9 +39,16 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HeroTitleText
+import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
+import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
+import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
+import net.aieat.netswissknife.app.platform.NetworkErrorKind
 import net.aieat.netswissknife.app.ui.components.RecentHostsRow
+import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
+import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.ui.theme.AppShapes
+import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.topology.*
 import kotlin.math.*
 
@@ -44,7 +56,10 @@ import kotlin.math.*
 fun TopologyDiscoveryScreen(
     viewModel: TopologyDiscoveryViewModel = hiltViewModel()
 ) {
+    val requestLocalNetworkPermission = rememberLocalNetworkPermissionRequester()
+    LaunchedEffect(Unit) { requestLocalNetworkPermission() }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val networkStatus by viewModel.networkStatus.collectAsStateWithLifecycle()
     val recentSeeds by viewModel.recentSeeds.collectAsStateWithLifecycle()
 
     var visible by remember { mutableStateOf(false) }
@@ -57,6 +72,8 @@ fun TopologyDiscoveryScreen(
     ) {
         TopologyScreenContent(
             uiState = uiState,
+            networkStatus = networkStatus,
+            onGrantPermission = requestLocalNetworkPermission,
             recentSeeds = recentSeeds,
             onStartDiscovery = { params -> viewModel.startDiscovery(params) },
             onRemoveRecentSeed = { seed -> viewModel.removeRecentSeed(seed) },
@@ -64,6 +81,7 @@ fun TopologyDiscoveryScreen(
             onSelectNode = { ip -> viewModel.selectNode(ip) },
             onDeselectNode = { viewModel.deselectNode() },
             onReset = { viewModel.reset() },
+            onRetryDiscovery = { params -> viewModel.retryDiscovery(params) },
             onHelpClick = { showHelp = true }
         )
     }
@@ -95,6 +113,8 @@ fun TopologyDiscoveryScreen(
 @Composable
 private fun TopologyScreenContent(
     uiState: TopologyUiState,
+    networkStatus: net.aieat.netswissknife.app.platform.NetworkStatus,
+    onGrantPermission: () -> Unit,
     recentSeeds: List<String>,
     onStartDiscovery: (TopologyParams) -> Unit,
     onRemoveRecentSeed: (String) -> Unit,
@@ -102,6 +122,7 @@ private fun TopologyScreenContent(
     onSelectNode: (String) -> Unit,
     onDeselectNode: () -> Unit,
     onReset: () -> Unit,
+    onRetryDiscovery: (TopologyParams) -> Unit,
     onHelpClick: () -> Unit = {}
 ) {
     var targetIp by remember { mutableStateOf("") }
@@ -113,17 +134,60 @@ private fun TopologyScreenContent(
     var v3PrivProto by remember { mutableStateOf(V3PrivProtocol.NONE) }
     var v3PrivPassword by remember { mutableStateOf("") }
     var maxHops by remember { mutableFloatStateOf(3f) }
+    var queryDiscoveredNeighbors by remember { mutableStateOf(false) }
     var configExpanded by remember { mutableStateOf(true) }
     var showCommunityPassword by remember { mutableStateOf(false) }
     var showAuthPassword by remember { mutableStateOf(false) }
     var showPrivPassword by remember { mutableStateOf(false) }
 
     val isDiscovering = uiState is TopologyUiState.Discovering
+    val isCanceling = uiState is TopologyUiState.Canceling
+    val isInProgress = isDiscovering || isCanceling
+    val normalizedTargetIp = HostValidator.normalize(targetIp)
+    val isTargetIpInvalid = targetIp.isNotBlank() && normalizedTargetIp == null
+    val canStartDiscovery = !isInProgress && normalizedTargetIp != null &&
+        !(v3PrivProto != V3PrivProtocol.NONE && v3AuthProto == V3AuthProtocol.NONE)
+    val maxConfigHeight = LocalConfiguration.current.screenHeightDp.dp * 0.55f
+
+    fun currentTopologyParams() = TopologyParams(
+        targetIp = normalizedTargetIp ?: targetIp,
+        snmpVersion = snmpVersion,
+        communityString = community,
+        v3Username = v3Username.ifBlank { null },
+        v3AuthPassword = v3AuthPassword.ifBlank { null },
+        v3PrivPassword = v3PrivPassword.ifBlank { null },
+        v3AuthProtocol = v3AuthProto,
+        v3PrivProtocol = v3PrivProto,
+        maxHops = maxHops.toInt(),
+        queryDiscoveredNeighbors = queryDiscoveredNeighbors,
+        timeoutMs = 3000,
+        retries = 1,
+    )
 
     val selectedNode = when (uiState) {
         is TopologyUiState.Discovering -> uiState.nodes.find { it.ip == uiState.selectedNodeIp }
+        is TopologyUiState.Canceling -> uiState.nodes.find { it.ip == uiState.selectedNodeIp }
+        is TopologyUiState.Canceled -> uiState.nodes.find { it.ip == uiState.selectedNodeIp }
+        is TopologyUiState.TimeLimit -> uiState.nodes.find { it.ip == uiState.selectedNodeIp }
         is TopologyUiState.Done -> uiState.graph.nodes.find { it.ip == uiState.selectedNodeIp }
         else -> null
+    }
+    val announcementPhase = when (val state = uiState) {
+        is TopologyUiState.Idle -> null
+        is TopologyUiState.Discovering, is TopologyUiState.Canceling -> ToolAnnouncementPhase.RUNNING
+        is TopologyUiState.Canceled -> {
+            if (state.nodes.isNotEmpty() || state.links.isNotEmpty()) ToolAnnouncementPhase.PARTIAL
+            else ToolAnnouncementPhase.CANCELED
+        }
+        is TopologyUiState.TimeLimit -> ToolAnnouncementPhase.PARTIAL
+        is TopologyUiState.Done -> {
+            if (state.graph.truncationReasons.isNotEmpty() || state.graph.hadSnmpErrors) {
+                ToolAnnouncementPhase.PARTIAL
+            } else {
+                ToolAnnouncementPhase.FINISHED
+            }
+        }
+        is TopologyUiState.Failure -> ToolAnnouncementPhase.ERROR
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -146,6 +210,7 @@ private fun TopologyScreenContent(
                     )
                     .padding(20.dp)
             ) {
+                ToolStateAnnouncer(stringResource(R.string.help_topology_title), announcementPhase)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         modifier = Modifier
@@ -184,14 +249,28 @@ private fun TopologyScreenContent(
             }
         }
 
+        NetworkStatusBanner(
+            status = networkStatus,
+            scope = NetworkStatusScope.LOCAL_NETWORK,
+            permissionDenied = (uiState as? TopologyUiState.Failure)?.networkErrorKind == NetworkErrorKind.LOCAL_NETWORK_PERMISSION_DENIED,
+            onGrantPermission = onGrantPermission,
+            modifier = Modifier.padding(horizontal = 16.dp),
+        )
+
         // ── SNMP config card ──────────────────────────────────────────────────
         ElevatedCard(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .heightIn(max = maxConfigHeight),
             shape = AppShapes.large
         ) {
-                Column(modifier = Modifier.padding(16.dp)) {
+                Column(
+                    modifier =
+                        Modifier
+                            .verticalScroll(rememberScrollState())
+                            .padding(16.dp),
+                ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -217,6 +296,10 @@ private fun TopologyScreenContent(
                                 value = targetIp,
                                 onValueChange = { targetIp = it },
                                 label = { Text(stringResource(R.string.topology_target_ip_label)) },
+                                isError = isTargetIpInvalid,
+                                supportingText = if (isTargetIpInvalid) {
+                                    { Text(stringResource(R.string.error_invalid_host)) }
+                                } else null,
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true,
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
@@ -380,37 +463,30 @@ private fun TopologyScreenContent(
                             Slider(
                                 value = maxHops,
                                 onValueChange = { maxHops = it },
-                                valueRange = 1f..10f,
-                                steps = 8,
+                                valueRange = TopologyParamsValidator.MIN_MAX_HOPS.toFloat()..
+                                    TopologyParamsValidator.MAX_MAX_HOPS.toFloat(),
+                                steps = TopologyParamsValidator.MAX_MAX_HOPS -
+                                    TopologyParamsValidator.MIN_MAX_HOPS - 1,
                                 modifier = Modifier.fillMaxWidth()
+                            )
+
+                            Spacer(modifier = Modifier.height(12.dp))
+                            NeighborQueryOption(
+                                checked = queryDiscoveredNeighbors,
+                                onCheckedChange = { queryDiscoveredNeighbors = it },
                             )
 
                             Spacer(modifier = Modifier.height(12.dp))
 
                             Button(
                                 onClick = {
-                                    onStartDiscovery(
-                                        TopologyParams(
-                                            targetIp = targetIp,
-                                            snmpVersion = snmpVersion,
-                                            communityString = community,
-                                            v3Username = v3Username.ifBlank { null },
-                                            v3AuthPassword = v3AuthPassword.ifBlank { null },
-                                            v3PrivPassword = v3PrivPassword.ifBlank { null },
-                                            v3AuthProtocol = v3AuthProto,
-                                            v3PrivProtocol = v3PrivProto,
-                                            maxHops = maxHops.toInt(),
-                                            timeoutMs = 3000,
-                                            retries = 1
-                                        )
-                                    )
+                                    onStartDiscovery(currentTopologyParams())
                                     configExpanded = false
                                 },
                                 modifier = Modifier.fillMaxWidth(),
-                                enabled = !isDiscovering && targetIp.isNotBlank() &&
-                                    !(v3PrivProto != V3PrivProtocol.NONE && v3AuthProto == V3AuthProtocol.NONE)
+                                enabled = canStartDiscovery
                             ) {
-                                if (isDiscovering) {
+                                if (isInProgress) {
                                     CircularProgressIndicator(
                                         modifier = Modifier.size(18.dp),
                                         strokeWidth = 2.dp,
@@ -420,17 +496,32 @@ private fun TopologyScreenContent(
                                 }
                                 Text(stringResource(R.string.topology_discover_button))
                             }
+                        }
+                    }
 
-                            AnimatedVisibility(visible = isDiscovering) {
-                                OutlinedButton(
-                                    onClick = onReset,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(top = 8.dp)
-                                ) {
-                                    Text(stringResource(R.string.topology_cancel_button))
-                                }
+                    // Keep cancellation available after Discover collapses the
+                    // configuration fields for the active scan.
+                    AnimatedVisibility(visible = isInProgress) {
+                        OutlinedButton(
+                            onClick = onReset,
+                            enabled = isDiscovering,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp)
+                        ) {
+                            if (isCanceling) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
+                                )
+                                Spacer(Modifier.width(8.dp))
                             }
+                            Text(
+                                stringResource(
+                                    if (isCanceling) R.string.topology_canceling_button
+                                    else R.string.topology_cancel_button
+                                )
+                            )
                         }
                     }
                 }
@@ -449,27 +540,50 @@ private fun TopologyScreenContent(
                             IdleContent()
                         }
                         is TopologyUiState.Discovering -> {
-                            Box(modifier = Modifier.fillMaxSize()) {
-                                TopologyCanvas(
-                                    nodes = state.nodes,
-                                    links = state.links,
-                                    selectedNodeIp = null,
-                                    onNodeTap = onSelectNode
-                                )
-                                Box(
-                                    modifier = Modifier
-                                        .align(Alignment.TopEnd)
-                                        .padding(12.dp)
-                                ) {
-                                    ScanningBadge(
-                                        message = pluralStringResource(
-                                            R.plurals.topology_scanning_badge,
-                                            state.nodesDone,
-                                            state.nodesDone
-                                        )
-                                    )
-                                }
-                            }
+                            TopologyProgressContent(
+                                nodes = state.nodes,
+                                links = state.links,
+                                nodesDone = state.nodesDone,
+                                progressMessage = state.progressMessage,
+                                selectedNodeIp = state.selectedNodeIp,
+                                onNodeTap = onSelectNode,
+                            )
+                        }
+                        is TopologyUiState.Canceling -> {
+                            TopologyProgressContent(
+                                nodes = state.nodes,
+                                links = state.links,
+                                nodesDone = state.nodesDone,
+                                statusMessage = stringResource(R.string.topology_canceling_status),
+                                selectedNodeIp = state.selectedNodeIp,
+                                onNodeTap = onSelectNode,
+                            )
+                        }
+                        is TopologyUiState.Canceled -> {
+                            TopologyProgressContent(
+                                nodes = state.nodes,
+                                links = state.links,
+                                nodesDone = state.nodesDone,
+                                statusMessage = pluralStringResource(
+                                    R.plurals.topology_canceled_partial_status,
+                                    state.nodesDone,
+                                    state.nodesDone,
+                                ),
+                                selectedNodeIp = state.selectedNodeIp,
+                                onNodeTap = onSelectNode,
+                                onClearPartialResults = onReset,
+                            )
+                        }
+                        is TopologyUiState.TimeLimit -> {
+                            TopologyProgressContent(
+                                nodes = state.nodes,
+                                links = state.links,
+                                nodesDone = state.nodesDone,
+                                statusMessage = stringResource(R.string.topology_time_limit_partial_status),
+                                selectedNodeIp = state.selectedNodeIp,
+                                onNodeTap = onSelectNode,
+                                onClearPartialResults = onReset,
+                            )
                         }
                         is TopologyUiState.Done -> {
                             Box(modifier = Modifier.fillMaxSize()) {
@@ -479,6 +593,28 @@ private fun TopologyScreenContent(
                                     selectedNodeIp = state.selectedNodeIp,
                                     onNodeTap = onSelectNode
                                 )
+                                if (state.graph.truncationReasons.isNotEmpty() || state.graph.hadSnmpErrors) {
+                                    Surface(
+                                        modifier = Modifier
+                                            .align(Alignment.TopStart)
+                                            .padding(12.dp),
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = MaterialTheme.colorScheme.tertiaryContainer,
+                                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(Icons.Default.Info, contentDescription = null, modifier = Modifier.size(18.dp))
+                                            Spacer(Modifier.width(8.dp))
+                                            Text(
+                                                text = stringResource(R.string.topology_partial_results),
+                                                style = MaterialTheme.typography.bodySmall
+                                            )
+                                        }
+                                    }
+                                }
                                 FloatingActionButton(
                                     onClick = { },
                                     modifier = Modifier
@@ -495,8 +631,14 @@ private fun TopologyScreenContent(
                         }
                         is TopologyUiState.Failure -> {
                             ErrorContent(
-                                message = state.message,
-                                onRetry = onReset
+                                message = if (state.isBudgetLimit) {
+                                    stringResource(R.string.topology_budget_exceeded)
+                                } else state.message,
+                                retryEnabled = canStartDiscovery,
+                                onRetry = {
+                                    onRetryDiscovery(currentTopologyParams())
+                                    configExpanded = false
+                                }
                             )
                         }
                     }
@@ -505,10 +647,32 @@ private fun TopologyScreenContent(
         }
 
     if (selectedNode != null) {
+        val queriedNodes =
+            when (uiState) {
+                is TopologyUiState.Done -> uiState.graph.nodes
+                is TopologyUiState.Discovering -> uiState.nodes
+                is TopologyUiState.Canceling -> uiState.nodes
+                is TopologyUiState.Canceled -> uiState.nodes
+                is TopologyUiState.TimeLimit -> uiState.nodes
+                else -> emptyList()
+            }
         NodeDetailSheet(
             node = selectedNode,
+            queriedNodeIps = queriedNodes.mapTo(mutableSetOf()) { it.ip },
             links = when (uiState) {
                 is TopologyUiState.Done -> uiState.graph.links.filter {
+                    it.fromIp == selectedNode.ip || it.toIp == selectedNode.ip
+                }
+                is TopologyUiState.Discovering -> uiState.links.filter {
+                    it.fromIp == selectedNode.ip || it.toIp == selectedNode.ip
+                }
+                is TopologyUiState.Canceling -> uiState.links.filter {
+                    it.fromIp == selectedNode.ip || it.toIp == selectedNode.ip
+                }
+                is TopologyUiState.Canceled -> uiState.links.filter {
+                    it.fromIp == selectedNode.ip || it.toIp == selectedNode.ip
+                }
+                is TopologyUiState.TimeLimit -> uiState.links.filter {
                     it.fromIp == selectedNode.ip || it.toIp == selectedNode.ip
                 }
                 else -> emptyList()
@@ -516,6 +680,102 @@ private fun TopologyScreenContent(
             onDismiss = onDeselectNode,
             onNavigateToNeighbour = onSelectNode
         )
+    }
+}
+
+@Composable
+@Suppress("FunctionNaming", "ktlint:standard:function-naming")
+private fun NeighborQueryOption(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .testTag("topology_query_discovered_neighbors")
+                .toggleable(
+                    value = checked,
+                    role = Role.Checkbox,
+                    onValueChange = onCheckedChange,
+                ),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Checkbox(checked = checked, onCheckedChange = null)
+        Spacer(Modifier.width(8.dp))
+        Column {
+            Text(
+                text = stringResource(R.string.topology_query_neighbors_label),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Text(
+                text = stringResource(R.string.topology_query_neighbors_description),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun TopologyProgressContent(
+    nodes: List<TopologyNode>,
+    links: List<TopologyLink>,
+    nodesDone: Int,
+    progressMessage: String? = null,
+    statusMessage: String? = null,
+    selectedNodeIp: String? = null,
+    onNodeTap: (String) -> Unit,
+    onClearPartialResults: (() -> Unit)? = null,
+) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        TopologyCanvas(
+            nodes = nodes,
+            links = links,
+            selectedNodeIp = selectedNodeIp,
+            onNodeTap = onNodeTap,
+        )
+        if (progressMessage != null) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(12.dp)
+            ) {
+                ScanningBadge(
+                    countMessage = pluralStringResource(
+                        R.plurals.topology_scanning_badge,
+                        nodesDone,
+                        nodesDone,
+                    ),
+                    progressMessage = progressMessage,
+                )
+            }
+        }
+        if (statusMessage != null) {
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(12.dp),
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.tertiaryContainer,
+                contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+            ) {
+                Column(
+                    modifier = Modifier.padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+                ) {
+                    Text(text = statusMessage, style = MaterialTheme.typography.bodySmall)
+                    if (onClearPartialResults != null) {
+                        TextButton(
+                            onClick = onClearPartialResults,
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                            modifier = Modifier.testTag("topology_clear_partial_results"),
+                        ) {
+                            Text(stringResource(R.string.topology_clear_partial_results))
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -636,7 +896,7 @@ private fun IdleContent() {
 }
 
 @Composable
-private fun ErrorContent(message: String, onRetry: () -> Unit) {
+private fun ErrorContent(message: String, retryEnabled: Boolean, onRetry: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -679,6 +939,8 @@ private fun ErrorContent(message: String, onRetry: () -> Unit) {
                 Spacer(modifier = Modifier.height(16.dp))
                 Button(
                     onClick = onRetry,
+                    enabled = retryEnabled,
+                    modifier = Modifier.testTag("topology_error_retry"),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.error
                     )
@@ -691,7 +953,7 @@ private fun ErrorContent(message: String, onRetry: () -> Unit) {
 }
 
 @Composable
-private fun ScanningBadge(message: String) {
+private fun ScanningBadge(countMessage: String, progressMessage: String) {
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
     val alpha by infiniteTransition.animateFloat(
         initialValue = 0.6f,
@@ -715,11 +977,22 @@ private fun ScanningBadge(message: String) {
                 color = MaterialTheme.colorScheme.primary
             )
             Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = message,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
-            )
+            Column(modifier = Modifier.widthIn(max = 240.dp)) {
+                Text(
+                    text = countMessage,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+                if (progressMessage.isNotBlank()) {
+                    Text(
+                        text = progressMessage,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
         }
     }
 }
@@ -738,21 +1011,29 @@ private fun TopologyCanvas(
     var graphOffset by remember { mutableStateOf(Offset.Zero) }
     var graphScale by remember { mutableFloatStateOf(1f) }
 
+    val queriedIps = nodes.map { it.ip }.toSet()
+    val reportedIps =
+        links
+            .flatMap { listOf(it.fromIp, it.toIp) }
+            .distinct()
+            .filterNot { it in queriedIps }
+    val visibleIps = nodes.map { it.ip } + reportedIps
+
     // Positions are assigned once per node and never recomputed for nodes already
     // placed — otherwise every new arrival re-divides the ring by the current total
     // node count and the whole graph visibly rotates/redistributes on each discovery
     // event instead of just the new node appearing.
     val nodePositions = remember { mutableStateMapOf<String, Offset>() }
-    LaunchedEffect(nodes) {
-        if (nodes.isEmpty()) return@LaunchedEffect
+    LaunchedEffect(visibleIps) {
+        if (visibleIps.isEmpty()) return@LaunchedEffect
         if (nodePositions.isEmpty()) {
-            nodePositions[nodes[0].ip] = Offset.Zero
+            nodePositions[visibleIps.first()] = Offset.Zero
         }
-        nodes.drop(1).forEach { node ->
-            if (node.ip !in nodePositions) {
+        visibleIps.drop(1).forEach { ip ->
+            if (ip !in nodePositions) {
                 val slotIndex = nodePositions.size - 1
                 val ringSize = slotIndex + 1
-                nodePositions[node.ip] = ringPosition(slotIndex, ringSize)
+                nodePositions[ip] = ringPosition(slotIndex, ringSize)
             }
         }
     }
@@ -854,10 +1135,32 @@ private fun TopologyCanvas(
                     )
                 }
             }
+
+            for (ip in reportedIps) {
+                val pos = nodePositions[ip] ?: continue
+                val screenPos =
+                    Offset(
+                        (pos.x * graphScale) + canvasCenter.x + graphOffset.x,
+                        (pos.y * graphScale) + canvasCenter.y + graphOffset.y,
+                    )
+                val radius = 14.dp.toPx() * graphScale
+                drawCircle(
+                    color = tertiaryColor.copy(alpha = 0.14f),
+                    radius = radius,
+                    center = screenPos,
+                )
+                drawCircle(
+                    color = tertiaryColor,
+                    radius = radius,
+                    center = screenPos,
+                    style = Stroke(width = 2.dp.toPx()),
+                )
+            }
         }
 
-        if (nodes.isNotEmpty()) {
+        if (visibleIps.isNotEmpty()) {
             BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                val density = LocalDensity.current
                 val canvasCenter = Offset(constraints.maxWidth / 2f, constraints.maxHeight / 2f)
                 for (node in nodes) {
                     val pos = nodePositions[node.ip] ?: continue
@@ -873,10 +1176,31 @@ private fun TopologyCanvas(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier
                             .absoluteOffset(
-                                x = (screenX - 40.dp.value).dp,
-                                y = (screenY + radius + 4.dp.value).dp
+                                x = with(density) { (screenX - 40.dp.toPx()).toDp() },
+                                y = with(density) { (screenY + radius + 4.dp.toPx()).toDp() },
                             )
                             .width(80.dp)
+                    )
+                }
+                for (ip in reportedIps) {
+                    val pos = nodePositions[ip] ?: continue
+                    val screenX = (pos.x * graphScale) + canvasCenter.x + graphOffset.x
+                    val screenY = (pos.y * graphScale) + canvasCenter.y + graphOffset.y
+
+                    Text(
+                        text = stringResource(R.string.topology_reported_neighbor_label, ip),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.tertiary,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center,
+                        modifier =
+                            Modifier
+                                .width(120.dp)
+                                .absoluteOffset(
+                                    x = with(density) { (screenX - 60.dp.toPx()).toDp() },
+                                    y = with(density) { (screenY + 14.dp.toPx() * graphScale + 4.dp.toPx()).toDp() },
+                                ),
                     )
                 }
             }
@@ -921,6 +1245,7 @@ private fun nodeRadius(node: TopologyNode): Float {
 private fun NodeDetailSheet(
     node: TopologyNode,
     links: List<TopologyLink>,
+    queriedNodeIps: Set<String>,
     onDismiss: () -> Unit,
     onNavigateToNeighbour: (String) -> Unit
 ) {
@@ -1049,6 +1374,7 @@ private fun NodeDetailSheet(
                             NeighbourRow(
                                 link = link,
                                 currentNodeIp = node.ip,
+                                queriedNodeIps = queriedNodeIps,
                                 onTap = { ip -> onNavigateToNeighbour(ip) }
                             )
                         }
@@ -1154,22 +1480,36 @@ private fun InterfaceRow(iface: SnmpInterface) {
 }
 
 @Composable
-private fun NeighbourRow(link: TopologyLink, currentNodeIp: String, onTap: (String) -> Unit) {
+@Suppress("FunctionNaming", "ktlint:standard:function-naming")
+private fun NeighbourRow(
+    link: TopologyLink,
+    currentNodeIp: String,
+    queriedNodeIps: Set<String>,
+    onTap: (String) -> Unit,
+) {
     val neighbourIp = if (link.fromIp == currentNodeIp) link.toIp else link.fromIp
     val localPort = if (link.fromIp == currentNodeIp) link.fromPort else link.toPort
     val remotePort = if (link.fromIp == currentNodeIp) link.toPort else link.fromPort
+    val isQueried = neighbourIp in queriedNodeIps
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onTap(neighbourIp) }
+            .testTag("topology_neighbor_row_$neighbourIp")
+            .then(if (isQueried) Modifier.clickable { onTap(neighbourIp) } else Modifier)
             .padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        AssistChip(
-            onClick = {},
-            label = { Text(link.protocol.name, style = MaterialTheme.typography.labelSmall) }
-        )
+        Surface(
+            shape = RoundedCornerShape(8.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant,
+        ) {
+            Text(
+                text = link.protocol.name,
+                style = MaterialTheme.typography.labelSmall,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            )
+        }
         Spacer(modifier = Modifier.width(8.dp))
         Column(modifier = Modifier.weight(1f)) {
             val portInfo = when {
@@ -1190,8 +1530,21 @@ private fun NeighbourRow(link: TopologyLink, currentNodeIp: String, onTap: (Stri
                 style = MaterialTheme.typography.bodySmall,
                 fontWeight = FontWeight.Medium
             )
+            if (!isQueried) {
+                Text(
+                    text = stringResource(R.string.topology_reported_only),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
-        Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (isQueried) {
+            Icon(
+                Icons.Default.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 

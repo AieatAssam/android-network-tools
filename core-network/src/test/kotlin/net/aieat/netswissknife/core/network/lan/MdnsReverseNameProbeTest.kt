@@ -1,12 +1,18 @@
 package net.aieat.netswissknife.core.network.lan
 
+import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
 import org.xbill.DNS.DClass
+import org.xbill.DNS.Flags
 import org.xbill.DNS.Message
 import org.xbill.DNS.Name
 import org.xbill.DNS.PTRRecord
+import org.xbill.DNS.Rcode
+import org.xbill.DNS.Record
 import org.xbill.DNS.Section
+import org.xbill.DNS.Type
 
 class MdnsReverseNameProbeTest {
     @Test
@@ -43,5 +49,89 @@ class MdnsReverseNameProbeTest {
             "myhost.local",
             MdnsReverseNameProbe.parsePtrResponse(message.toWire(), "4.3.2.1.in-addr.arpa."),
         )
+    }
+
+    @Test
+    fun `strict parser accepts matching answer without an echoed question`() {
+        assertEquals(
+            "myhost.local",
+            MdnsReverseNameProbe.parsePtrPresenceResponse(response(question = false), "2.1.168.192.in-addr.arpa."),
+        )
+    }
+
+    @Test
+    fun `presence probe accepts a live matching multicast responder`() = runTest {
+        val probe = MdnsReverseNameProbe(object : UdpExchange, CorrelatedUdpExchange {
+            override fun exchange(ip: String, port: Int, payload: ByteArray, timeoutMs: Int): ByteArray? = null
+            override suspend fun exchangeCorrelated(
+                ip: String,
+                port: Int,
+                payload: ByteArray,
+                timeoutMs: Int,
+                accepts: (CorrelatedUdpReply) -> Boolean,
+            ): CorrelatedUdpReply? = CorrelatedUdpReply(
+                sourceIp = "192.168.1.2",
+                sourcePort = 5353,
+                payload = response(question = true),
+            ).takeIf(accepts)
+        })
+
+        val reply = probe.probePresence("192.168.1.2", 100)
+        assertEquals(DiscoveryMethod.MDNS, reply?.method)
+        assertEquals("myhost.local", reply?.name)
+    }
+
+    @Test
+    fun `strict parser rejects goodbye records with zero ttl`() {
+        assertNull(
+            MdnsReverseNameProbe.parsePtrPresenceResponse(
+                response(question = true, ttlSeconds = 0),
+                "4.3.2.1.in-addr.arpa.",
+            ),
+        )
+    }
+
+    @Test
+    fun `strict parser rejects DNS error responses`() {
+        val message = Message(response(question = true))
+        message.header.setRcode(Rcode.SERVFAIL)
+        assertNull(
+            MdnsReverseNameProbe.parsePtrPresenceResponse(
+                message.toWire(),
+                "2.1.168.192.in-addr.arpa.",
+            ),
+        )
+    }
+
+    @Test
+    fun `presence probe requires scanned endpoint as responder`() = runTest {
+        val probe = MdnsReverseNameProbe(object : UdpExchange, CorrelatedUdpExchange {
+            override fun exchange(ip: String, port: Int, payload: ByteArray, timeoutMs: Int): ByteArray? = null
+            override suspend fun exchangeCorrelated(
+                ip: String,
+                port: Int,
+                payload: ByteArray,
+                timeoutMs: Int,
+                accepts: (CorrelatedUdpReply) -> Boolean,
+            ): CorrelatedUdpReply? = CorrelatedUdpReply(
+                sourceIp = "192.168.1.3",
+                sourcePort = 5353,
+                payload = response(question = true),
+            ).takeIf(accepts)
+        })
+
+        assertNull(probe.probePresence("192.168.1.2", 100))
+    }
+
+    private fun response(question: Boolean, ttlSeconds: Long = 60): ByteArray {
+        val owner = Name.fromString("2.1.168.192.in-addr.arpa.")
+        val message = Message(0)
+        message.header.setFlag(Flags.QR.toInt())
+        if (question) message.addRecord(Record.newRecord(owner, Type.PTR, DClass.IN), Section.QUESTION)
+        message.addRecord(
+            PTRRecord(owner, DClass.IN, ttlSeconds, Name.fromString("myhost.local.")),
+            Section.ANSWER,
+        )
+        return message.toWire()
     }
 }
