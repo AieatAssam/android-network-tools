@@ -914,6 +914,19 @@ class PingViewModelTest {
             }
 
         @Test
+        fun `session log creation failure shows Error instead of crashing`() =
+            runTest {
+                viewModel.sessionLogFileFactory = { throw java.io.IOException("No space left on device") }
+
+                viewModel.startPing()
+
+                val error = viewModel.uiState.value as PingUiState.Error
+                assertEquals(R.string.ping_continuous_log_unavailable, (error.text as UiText.Res).id)
+                assertTrue(error.message.contains("No space left on device"))
+                coVerify(exactly = 0) { continuousPingUseCase(any(), any()) }
+            }
+
+        @Test
         fun `ValidationError clears session file and shows Error state`() =
             runTest {
                 val logFile = java.io.File.createTempFile("ping_validation_test_", ".csv")

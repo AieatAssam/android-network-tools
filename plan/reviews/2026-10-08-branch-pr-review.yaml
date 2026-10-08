@@ -1,0 +1,37 @@
+review:
+  area: branch-pr-review
+  status: done
+  source: "PR-style review of plan/comprehensive-review-2026-09-22 against origin/main before opening the merge PR"
+  environment: "JVM unit tests, ktlint/detekt, Kover, lintDebug, and assembleDebug run locally; emulator and device not used"
+  scope_note: "The review prioritised release/CI workflows, the operation runner, the 2026-10-03 fix commit, and the Ping, Traceroute, Topology, and mDNS lifecycle paths. Vendored OkHttp was excluded apart from its documented parser-budget fork. This review does not establish that the whole branch is free of defects."
+
+findings:
+  - id: R5-001
+    severity: medium
+    kind: bug
+    title: "Ping lifecycle cleanup mutates UI state from an IO thread"
+    evidence:
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/ping/PingViewModel.kt", detail: "onLifecycleStop's detached cleanup ran its identity check and the _uiState write on Dispatchers.IO. A run started on the main thread between the check and the write could be replaced by the stale Finished/Idle state. lifecyclePingCleanupState was also a plain var written from both threads." }
+    resolution:
+      status: done
+      summary: "Blocking cancelAndJoin stays on IO. The check and the state write now run under withContext(NonCancellable + Dispatchers.Main.immediate). MutableStateFlow.compareAndSet was rejected because it compares with equals, and a fresh empty Running state can equal the stale one."
+    owner: E03-T02
+
+  - id: R5-002
+    severity: medium
+    kind: bug
+    title: "Continuous Ping crashes when its session log file cannot be created"
+    evidence:
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/ping/PingViewModel.kt", detail: "startContinuousPing called sessionLogFileFactory() synchronously from the Start click. check(mkdirs) and File.createTempFile can throw, for example when the cache is full, and the exception was uncaught on the main thread." }
+    resolution:
+      status: done
+      summary: "Factory failures now produce a PingUiState.Error backed by the new ping_continuous_log_unavailable string resource, and the probe is never invoked."
+    validation:
+      - "PingViewModelTest: 22/22 passed, including the new session-log-failure regression."
+      - "Full local gates on the final tree: app 624, core-network 1,371 (1 skipped), core-domain 222 JVM tests with no failures; ktlint, detekt, all three koverVerify tasks, lintDebug (0 errors), assembleDebug, and check_resource_sites.py passed."
+      - "The app ktlint baseline block for PingViewModel.kt was regenerated only to follow the line shift. It has the same rule counts as before, with no new findings baselined."
+    owner: E01-T07
+
+observations:
+  - "ci.yml re-runs the full build-and-test job on every PR label change because of the labeled/unlabeled triggers needed for run-instrumented. Left unchanged; it costs CI minutes but is not a correctness issue."
+  - "release.yml concurrency `queue: max` is valid GitHub Actions syntax, added in the 2026-05-07 changelog."

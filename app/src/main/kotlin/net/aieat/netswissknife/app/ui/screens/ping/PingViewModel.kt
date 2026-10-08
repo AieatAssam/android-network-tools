@@ -15,6 +15,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.Channel
@@ -26,6 +27,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
 import net.aieat.netswissknife.app.platform.LinkInfoProvider
@@ -383,18 +386,23 @@ class PingViewModel @Inject constructor(
                     session?.cancel(CancellationReason.LIFECYCLE_PAUSE)
                     job?.cancelAndJoin()
                 } finally {
-                    if (lifecyclePingCleanupState === current) {
-                        lifecyclePingCleanupState = null
-                    }
-                    // Do not let an old cleanup replace a newer run or an explicit
-                    // user action that changed the state while cleanup was pending.
-                    if (_uiState.value === current) {
-                        _uiState.value = if (current.packets.isNotEmpty()) {
-                            PingUiState.Finished(
-                                buildResult(current.host, current.packets, current.totalCount),
-                            )
-                        } else {
-                            PingUiState.Idle
+                    // Blocking cleanup stays on IO, but the identity check and state write
+                    // must run on the main thread with every other ViewModel state mutation;
+                    // otherwise a run started during this check could be overwritten.
+                    withContext(NonCancellable + Dispatchers.Main.immediate) {
+                        if (lifecyclePingCleanupState === current) {
+                            lifecyclePingCleanupState = null
+                        }
+                        // Do not let an old cleanup replace a newer run or an explicit
+                        // user action that changed the state while cleanup was pending.
+                        if (_uiState.value === current) {
+                            _uiState.value = if (current.packets.isNotEmpty()) {
+                                PingUiState.Finished(
+                                    buildResult(current.host, current.packets, current.totalCount),
+                                )
+                            } else {
+                                PingUiState.Idle
+                            }
                         }
                     }
                 }
@@ -531,7 +539,17 @@ class PingViewModel @Inject constructor(
             ttl = _ttl.value
         )
 
-        val logFile = sessionLogFileFactory()
+        // Log creation touches the cache directory and runs on the caller's (UI) thread.
+        // A full or unavailable cache must surface as an error state, not crash the app.
+        val logFile =
+            try {
+                sessionLogFileFactory()
+            } catch (e: Exception) {
+                val developerMessage = "Could not create the continuous Ping session log: ${e.message}"
+                val text = UiText.Res(R.string.ping_continuous_log_unavailable, developerFallback = developerMessage)
+                _uiState.value = PingUiState.Error(text, developerMessage)
+                return
+            }
         val logger = PingSessionLogger(logFile)
         val operationSession = PingOperation.newSession(
             PingRequest(

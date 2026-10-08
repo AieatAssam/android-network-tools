@@ -248,6 +248,8 @@ comprehensive_expansion:
       - {"finding":"R4-011","owner_task":"IR-1","follow_up_status":"done","report":"plan/reviews/2026-09-26-interim-release-audit.yaml"}
       - {"finding":"R4-012","owner_task":"IR-3","follow_up_status":"done","report":"plan/reviews/2026-09-26-interim-release-audit.yaml"}
       - {"finding":"R4-013","owner_task":"IR-1","follow_up_status":"in_progress","report":"plan/reviews/2026-09-26-interim-release-audit.yaml"}
+      - {"finding":"R5-001","owner_task":"E03-T02","follow_up_status":"done","report":"plan/reviews/2026-10-08-branch-pr-review.yaml"}
+      - {"finding":"R5-002","owner_task":"E01-T07","follow_up_status":"done","report":"plan/reviews/2026-10-08-branch-pr-review.yaml"}
       - {"finding":"R4-014","owner_task":"IR-3","follow_up_status":"done","report":"plan/reviews/2026-09-26-interim-release-audit.yaml"}
       - {"finding":"R4-015","owner_task":"IR-1","follow_up_status":"done","report":"plan/reviews/2026-09-26-interim-release-audit.yaml"}
       - {"finding":"R4-016","owner_task":"IR-1","follow_up_status":"done","report":"plan/reviews/2026-09-26-interim-release-audit.yaml"}
@@ -280,6 +282,7 @@ incremental_review:
     - { area: wol-port-validation, file: plan/reviews/2026-09-24-wol-port-validation.yaml }
     - { area: comprehensive-code-review, file: plan/reviews/2026-09-24-comprehensive-code-review.yaml }
     - { area: interim-release-audit, file: plan/reviews/2026-09-26-interim-release-audit.yaml }
+    - { area: branch-pr-review, file: plan/reviews/2026-10-08-branch-pr-review.yaml }
   interim_release_milestones: plan/interim-release-milestones.yaml
   prioritized_findings:
     - { id: RLAN001, severity: high, kind: bug, phase: P01, status: done, title: "A failed TCP connect is promoted to a live host and floods LAN results with false positives" }

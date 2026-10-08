@@ -239,6 +239,7 @@
     <string name="ping_pings_sent">Pings sent: %1$d</string>
     <string name="ping_share_summary">Continuous ping CSV for %1$s: sent %2$d, received %3$d, %4$.1f%% loss.</string>
     <string name="ping_continuous_running_title">Pinging continuously…</string>
+    <string name="ping_continuous_log_unavailable">Continuous ping could not create its session log. Free up storage and try again.</string>
 
     <!-- Ping States -->
     <string name="ping_idle_title">Enter a host to ping</string>
