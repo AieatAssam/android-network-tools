@@ -627,14 +627,14 @@ class PingViewModel @Inject constructor(
                 session.logWriter.closeAndJoin()
                 if (continuousSession === session) {
                     continuousSession = null
-                    session.file.delete()
+                    session.file.deleteSessionLog()
                     _uiState.value = typedError(e.info, e.validationMessage)
                 }
             } catch (e: Exception) {
                 session.logWriter.closeAndJoin()
                 if (continuousSession === session) {
                     continuousSession = null
-                    session.file.delete()
+                    session.file.deleteSessionLog()
                     _uiState.value = PingUiState.Error(e.message ?: "Ping failed")
                 }
             }
@@ -683,7 +683,7 @@ class PingViewModel @Inject constructor(
         val logFile = session.file.takeIf { pingsSent > 0 && logAvailable }
         if (logFile == null) {
             continuousSession = null
-            session.file.delete()
+            session.file.deleteSessionLog()
         }
         _uiState.value = PingUiState.Finished(
             result = result,
@@ -706,7 +706,7 @@ class PingViewModel @Inject constructor(
                 producer?.join()
                 session.logWriter.closeAndJoin()
             } finally {
-                session.file.delete()
+                session.file.deleteSessionLog()
                 retiringSessions.remove(session)
             }
         }
@@ -721,7 +721,7 @@ class PingViewModel @Inject constructor(
             session.operationSession.cancel(CancellationReason.LIFECYCLE_PAUSE)
             session.producerJob?.cancel()
             session.logWriter.cancel()
-            session.file.delete()
+            session.file.deleteSessionLog()
         }
         retiringSessions.clear()
     }
@@ -810,4 +810,12 @@ class PingViewModel @Inject constructor(
 
     private fun observedEngine(): PingEngineKind? =
         runCatching { pingUseCase.lastEngineUsed?.value }.getOrNull()
+}
+
+/** Removes a discarded session log; a file left behind is logged and reclaimed with the cache. */
+private fun File.deleteSessionLog() {
+    if (!delete() && exists()) {
+        net.aieat.netswissknife.app.util.AppLogger
+            .w("PingViewModel", "Could not delete Ping session log $name")
+    }
 }

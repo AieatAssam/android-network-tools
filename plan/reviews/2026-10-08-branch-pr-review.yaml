@@ -56,6 +56,22 @@ findings:
       summary: "PingViewModel exposes the latest cleanup job internally, and tearDown joins it before resetMain(). CI now uploads unit test reports so failures that only happen in CI can be diagnosed."
     owner: E03-T02
 
+  - id: R5-005
+    severity: medium
+    kind: quality-gate
+    title: "SonarCloud quality gate failed on new reliability (D) and security (D) ratings"
+    evidence:
+      - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/operation/OperationRunner.kt", detail: "kotlin:S1143 x2: cleanup failures were thrown from the finally block of run()." }
+      - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/tls/TlsInspectorRepositoryImpl.kt", detail: "kotlin:S1143: a connection close failure was thrown from finally after a successful handshake." }
+      - { file: "core-network/src/main/kotlin/net/aieat/netswissknife/core/network/tls/TlsHandshakeEngine.kt", detail: "kotlin:S4423 on SSLContext.getInstance(\"TLS\"); kotlin:S4830 x2 on the diagnostic trust-all manager." }
+      - { file: "app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/ping/PingViewModel.kt", detail: "kotlin:S899 x5: File.delete() results ignored for session logs." }
+    resolution:
+      status: done
+      summary: "run() and the TLS handshake now record the failure to surface during cleanup and throw it after the try/finally, with the same precedence as before (an Error close failure wins; other close failures surface only when the operation succeeded, otherwise they are suppressed onto the primary failure). The inspection SSLContext requests TLSv1.3 and falls back to TLSv1.2 on providers without it (Android 8-9), so negotiation and per-socket protocol probing are unchanged. The trust-all manager stays deliberately: it is diagnostic-only and every captured chain is validated against the platform trust store afterwards. It is now documented and marked NOSONAR, because SonarCloud automatic analysis has no token in this repo for marking issues in the UI and the Kotlin analyzer does not reliably honour @Suppress. Session log deletions go through a helper that logs a file it could not remove."
+    validation:
+      - "ktlint, detekt, all JVM tests and all three koverVerify tasks pass locally. The core-network ktlint baseline blocks for the three edited files only lost entries; none were added."
+    owner: E03-T02
+
 observations:
   - "ci.yml re-runs the full build-and-test job on every PR label change because of the labeled/unlabeled triggers needed for run-instrumented. Left unchanged; it costs CI minutes but is not a correctness issue."
   - "release.yml concurrency `queue: max` is valid GitHub Actions syntax, added in the 2026-05-07 changelog."

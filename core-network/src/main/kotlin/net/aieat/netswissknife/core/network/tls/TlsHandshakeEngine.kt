@@ -9,6 +9,7 @@ import net.aieat.netswissknife.core.network.operation.OperationSession
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.security.KeyStore
+import java.security.NoSuchAlgorithmException
 import java.security.cert.X509Certificate
 import javax.net.ssl.SSLContext
 import javax.net.ssl.SSLSocket
@@ -57,7 +58,7 @@ internal class SocketTlsHandshakeEngine(
     private val networkBinder: NetworkBinder = NoOpNetworkBinder,
 ) : TlsHandshakeEngine {
     private val context: SSLContext =
-        SSLContext.getInstance("TLS").apply {
+        newInspectionContext().apply {
             init(null, arrayOf(TrustAllManager), null)
         }
 
@@ -211,17 +212,36 @@ internal class SocketTlsHandshakeEngine(
             }
     }
 
+    /**
+     * Accepts every chain so the inspector can report expired, self-signed or mismatched
+     * certificates instead of failing the handshake. This context never carries application
+     * data: TlsInspectorRepositoryImpl validates each captured chain against the platform
+     * trust store and reports the verdict to the user.
+     */
     private object TrustAllManager : X509TrustManager {
-        override fun checkClientTrusted(
+        override fun checkClientTrusted( // NOSONAR: diagnostic-only context, see class KDoc.
             chain: Array<out X509Certificate>?,
             authType: String?,
         ) = Unit
 
-        override fun checkServerTrusted(
+        override fun checkServerTrusted( // NOSONAR: chains are validated after capture, see class KDoc.
             chain: Array<out X509Certificate>?,
             authType: String?,
         ) = Unit
 
         override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
+    }
+
+    private companion object {
+        /**
+         * A TLSv1.3 context still negotiates TLS 1.2 and lets the protocol probe enable older
+         * versions per socket. Providers before Android 10 lack TLS 1.3, so fall back to TLSv1.2.
+         */
+        fun newInspectionContext(): SSLContext =
+            try {
+                SSLContext.getInstance("TLSv1.3")
+            } catch (_: NoSuchAlgorithmException) {
+                SSLContext.getInstance("TLSv1.2")
+            }
     }
 }

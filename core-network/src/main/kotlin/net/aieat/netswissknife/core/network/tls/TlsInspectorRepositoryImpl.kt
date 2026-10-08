@@ -179,44 +179,52 @@ class TlsInspectorRepositoryImpl(
         }
         operationSession.resources.register(connection)
         var failure: Throwable? = null
-        try {
-            ensureCurrentOperationActive()
-            val connectStart = clock.nowNanos()
+        var surfacedCloseFailure: Throwable? = null
+        val handshake =
             try {
-                connection.connect()
-            } catch (connectFailure: Exception) {
                 ensureCurrentOperationActive()
-                throw connectFailure
-            }
-            ensureCurrentOperationActive()
-            val connectTimeMs = clock.elapsedMillisSince(connectStart)
-
-            val handshakeStart = clock.nowNanos()
-            try {
-                connection.handshake()
-            } catch (handshakeFailure: Exception) {
-                ensureCurrentOperationActive()
-                throw handshakeFailure
-            }
-            ensureCurrentOperationActive()
-            val handshakeTimeMs = clock.elapsedMillisSince(handshakeStart)
-            val snapshot = connection.snapshot()
-            ensureCurrentOperationActive()
-            return TimedHandshake(snapshot, connectTimeMs, handshakeTimeMs)
-        } catch (thrown: Throwable) {
-            failure = thrown
-            throw thrown
-        } finally {
-            // A concurrent cancellation owns cleanup once ResourceScope has started closing.
-            if (operationSession.resources.release(connection)) {
+                val connectStart = clock.nowNanos()
                 try {
-                    connection.close()
-                } catch (closeFailure: Throwable) {
-                    if (failure == null) throw closeFailure
-                    if (failure !== closeFailure) failure.addSuppressed(closeFailure)
+                    connection.connect()
+                } catch (connectFailure: Exception) {
+                    ensureCurrentOperationActive()
+                    throw connectFailure
+                }
+                ensureCurrentOperationActive()
+                val connectTimeMs = clock.elapsedMillisSince(connectStart)
+
+                val handshakeStart = clock.nowNanos()
+                try {
+                    connection.handshake()
+                } catch (handshakeFailure: Exception) {
+                    ensureCurrentOperationActive()
+                    throw handshakeFailure
+                }
+                ensureCurrentOperationActive()
+                val handshakeTimeMs = clock.elapsedMillisSince(handshakeStart)
+                val snapshot = connection.snapshot()
+                ensureCurrentOperationActive()
+                TimedHandshake(snapshot, connectTimeMs, handshakeTimeMs)
+            } catch (thrown: Throwable) {
+                failure = thrown
+                throw thrown
+            } finally {
+                // A concurrent cancellation owns cleanup once ResourceScope has started closing.
+                if (operationSession.resources.release(connection)) {
+                    try {
+                        connection.close()
+                    } catch (closeFailure: Throwable) {
+                        if (failure == null) {
+                            surfacedCloseFailure = closeFailure
+                        } else if (failure !== closeFailure) {
+                            failure.addSuppressed(closeFailure)
+                        }
+                    }
                 }
             }
-        }
+        // A close failure after a successful handshake is surfaced here rather than from finally.
+        surfacedCloseFailure?.let { throw it }
+        return handshake
     }
 
     private suspend fun probeProtocols(

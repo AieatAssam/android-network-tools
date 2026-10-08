@@ -104,14 +104,17 @@ object OperationRunner {
             }
 
             var primaryFailure: Throwable? = null
+            var surfacedCleanupFailure: Throwable? = null
+            var result: T? = null
             try {
-                withContext(operationJob + OperationResourcesContext(session)) {
-                    currentCoroutineContext().ensureActive()
-                    session.budget.throwIfExpired()
-                    OperationContext(this, session).block()
-                }.also {
-                    session.budget.throwIfExpired()
-                }
+                result =
+                    withContext(operationJob + OperationResourcesContext(session)) {
+                        currentCoroutineContext().ensureActive()
+                        session.budget.throwIfExpired()
+                        OperationContext(this, session).block()
+                    }.also {
+                        session.budget.throwIfExpired()
+                    }
             } catch (failure: Throwable) {
                 val surfacedFailure = when (failure) {
                     is OperationDeadlineExceededException -> {
@@ -138,7 +141,6 @@ object OperationRunner {
                     }
                 }
                 primaryFailure = surfacedFailure
-                throw surfacedFailure
             } finally {
                 deadlineWatcher.cancel()
                 cancellationCloseHandle.dispose()
@@ -149,18 +151,37 @@ object OperationRunner {
                 if (operationJob.isActive) operationJob.complete()
                 session.finish(operationJob)
 
-                if (observedCloseFailure != null) {
-                    val primary = primaryFailure
-                    if (observedCloseFailure is Error) {
-                        if (primary != null && primary !== observedCloseFailure &&
-                            observedCloseFailure.suppressed.none { it === primary }
-                        ) observedCloseFailure.addSuppressed(primary)
-                        throw observedCloseFailure
-                    }
-                    if (primary == null) throw observedCloseFailure
-                    preserveCleanupFailure(primary, observedCloseFailure)
-                }
+                surfacedCleanupFailure = cleanupFailureToSurface(primaryFailure, observedCloseFailure)
             }
+            // Rethrow after cleanup rather than from finally, so the surfaced failure is explicit.
+            (surfacedCleanupFailure ?: primaryFailure)?.let { throw it }
+            @Suppress("UNCHECKED_CAST")
+            result as T
+        }
+    }
+
+    /**
+     * Picks the failure that must replace or stand in for the operation outcome after cleanup.
+     * An [Error] always wins; any other close failure surfaces only when the operation itself
+     * succeeded, and is otherwise attached to [primary] as a suppressed failure.
+     */
+    private fun cleanupFailureToSurface(
+        primary: Throwable?,
+        closeFailure: Throwable?,
+    ): Throwable? =
+        when {
+            closeFailure == null -> null
+            closeFailure is Error -> closeFailure.also { attachPrimary(it, primary) }
+            primary == null -> closeFailure
+            else -> null.also { preserveCleanupFailure(primary, closeFailure) }
+        }
+
+    private fun attachPrimary(
+        closeFailure: Error,
+        primary: Throwable?,
+    ) {
+        if (primary != null && primary !== closeFailure && closeFailure.suppressed.none { it === primary }) {
+            closeFailure.addSuppressed(primary)
         }
     }
 
