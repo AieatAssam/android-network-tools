@@ -106,6 +106,10 @@ class LanScanViewModelTest {
             every { getRecents(any()) } returns flowOf(emptyList())
         }
         viewModel = LanScanViewModel(lanScanUseCase, dataStore, recentHostsRepository)
+        // Without a LinkInfoProvider the ViewModel falls back to the host's real interfaces.
+        // CI runners sit on large subnets (for example a /16) that exceed the scan ceiling, so
+        // pin a /24. Detection only fills a blank subnet, so it cannot overwrite this value.
+        viewModel.onSubnetChange("192.168.1.0/24")
     }
 
     @AfterEach
