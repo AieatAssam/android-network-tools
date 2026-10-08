@@ -252,6 +252,10 @@ class PingViewModel @Inject constructor(
     private var pingJob: Job? = null
     private var pingOperationSession: OperationSession? = null
     private var lifecyclePingCleanupState: PingUiState.Running? = null
+
+    /** The latest detached lifecycle cleanup, which outlives viewModelScope; tests join it before resetting Main. */
+    internal var lifecycleCleanupJob: Job? = null
+        private set
     private var continuousSession: ContinuousPingSession? = null
     private val retiringSessions = mutableSetOf<ContinuousPingSession>()
 
@@ -381,32 +385,33 @@ class PingViewModel @Inject constructor(
             pingOperationSession = null
             pingJob = null
             lifecyclePingCleanupState = current
-            lifecycleCleanupScope.launch {
-                try {
-                    session?.cancel(CancellationReason.LIFECYCLE_PAUSE)
-                    job?.cancelAndJoin()
-                } finally {
-                    // Blocking cleanup stays on IO, but the identity check and state write
-                    // must run on the main thread with every other ViewModel state mutation;
-                    // otherwise a run started during this check could be overwritten.
-                    withContext(NonCancellable + Dispatchers.Main.immediate) {
-                        if (lifecyclePingCleanupState === current) {
-                            lifecyclePingCleanupState = null
-                        }
-                        // Do not let an old cleanup replace a newer run or an explicit
-                        // user action that changed the state while cleanup was pending.
-                        if (_uiState.value === current) {
-                            _uiState.value = if (current.packets.isNotEmpty()) {
-                                PingUiState.Finished(
-                                    buildResult(current.host, current.packets, current.totalCount),
-                                )
-                            } else {
-                                PingUiState.Idle
+            lifecycleCleanupJob =
+                lifecycleCleanupScope.launch {
+                    try {
+                        session?.cancel(CancellationReason.LIFECYCLE_PAUSE)
+                        job?.cancelAndJoin()
+                    } finally {
+                        // Blocking cleanup stays on IO, but the identity check and state write
+                        // must run on the main thread with every other ViewModel state mutation;
+                        // otherwise a run started during this check could be overwritten.
+                        withContext(NonCancellable + Dispatchers.Main.immediate) {
+                            if (lifecyclePingCleanupState === current) {
+                                lifecyclePingCleanupState = null
+                            }
+                            // Do not let an old cleanup replace a newer run or an explicit
+                            // user action that changed the state while cleanup was pending.
+                            if (_uiState.value === current) {
+                                _uiState.value = if (current.packets.isNotEmpty()) {
+                                    PingUiState.Finished(
+                                        buildResult(current.host, current.packets, current.totalCount),
+                                    )
+                                } else {
+                                    PingUiState.Idle
+                                }
                             }
                         }
                     }
                 }
-            }
         }
     }
 

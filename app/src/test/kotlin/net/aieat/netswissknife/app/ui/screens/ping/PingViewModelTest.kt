@@ -162,6 +162,9 @@ class PingViewModelTest {
             // LanScanViewModelTest.
             viewModel.viewModelScope.coroutineContext.job
                 .cancelAndJoin()
+            // Lifecycle cleanup runs in a process-lifetime scope and finishes with a hop to
+            // Main. Join it as well, or that hop can land after resetMain() in a later test.
+            withTimeout(5_000) { viewModel.lifecycleCleanupJob?.join() }
             Dispatchers.resetMain()
         }
 
