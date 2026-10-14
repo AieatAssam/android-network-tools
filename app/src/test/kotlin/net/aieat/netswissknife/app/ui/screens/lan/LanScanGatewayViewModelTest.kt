@@ -1,17 +1,21 @@
 package net.aieat.netswissknife.app.ui.screens.lan
 
 import androidx.datastore.preferences.core.emptyPreferences
+import androidx.lifecycle.viewModelScope
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.job
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import net.aieat.netswissknife.app.data.RecentHostsRepository
@@ -59,9 +63,11 @@ class LanScanGatewayViewModelTest {
     }
 
     @AfterEach
-    fun tearDown() {
-        Dispatchers.resetMain()
-    }
+    fun tearDown() =
+        runBlocking {
+            viewModel.viewModelScope.coroutineContext.job.cancelAndJoin()
+            Dispatchers.resetMain()
+        }
 
     @Test
     fun `refresh prefers link info and stores gateway`() = runTest {

@@ -401,7 +401,6 @@ fun LanScreen(
                         item(key = "lan_canceled") {
                             LanFinishedContent(
                                 summary = state.summary,
-                                expandedHostIp = state.expandedHostIp,
                                 showDiagnostics = state.showDiagnostics,
                                 searchQuery = searchQuery,
                                 activeFilter = activeFilter,
@@ -409,12 +408,6 @@ fun LanScreen(
                                 sortOrder = hostSortOrder,
                                 onSortOrderChange = viewModel::onHostSortOrderChange,
                                 onSearchQueryChange = viewModel::onSearchQueryChange,
-                                onToggleExpand = viewModel::onToggleHostExpanded,
-                                onScanPorts = viewModel::onScanPorts,
-                                onPingHost = viewModel::onPingHost,
-                                onProbeHttp = viewModel::onProbeHttp,
-                                onInspectTls = viewModel::onInspectTls,
-                                onWakeDevice = viewModel::onWakeDevice,
                                 onClear = viewModel::onClear,
                                 onRescan = viewModel::startScan,
                                 onToggleDiagnostics = viewModel::onToggleDiagnostics,
@@ -429,7 +422,6 @@ fun LanScreen(
                         item(key = "lan_finished") {
                             LanFinishedContent(
                                 summary = state.summary,
-                                expandedHostIp = state.expandedHostIp,
                                 showDiagnostics = state.showDiagnostics,
                                 searchQuery = searchQuery,
                                 activeFilter = activeFilter,
@@ -437,12 +429,6 @@ fun LanScreen(
                                 sortOrder = hostSortOrder,
                                 onSortOrderChange = viewModel::onHostSortOrderChange,
                                 onSearchQueryChange = viewModel::onSearchQueryChange,
-                                onToggleExpand = viewModel::onToggleHostExpanded,
-                                onScanPorts = viewModel::onScanPorts,
-                                onPingHost = viewModel::onPingHost,
-                                onProbeHttp = viewModel::onProbeHttp,
-                                onInspectTls = viewModel::onInspectTls,
-                                onWakeDevice = viewModel::onWakeDevice,
                                 onClear = viewModel::onClear,
                                 onRescan = viewModel::startScan,
                                 onToggleDiagnostics = viewModel::onToggleDiagnostics,
@@ -691,6 +677,7 @@ private fun LanInputCard(
 }
 
 @Composable
+@Suppress("FunctionNaming", "ktlint:standard:function-naming")
 private fun LanScanSettingsSummary(
     subnet: String,
     timeoutMs: Int,
@@ -907,15 +894,31 @@ internal fun sortLanHosts(
     order: LanHostSortOrder,
 ): List<LanHost> =
     when (order) {
-        LanHostSortOrder.IP -> hosts.sortedBy { ipSortKey(it.ip) }
-        LanHostSortOrder.LATENCY -> hosts.sortedWith(compareBy<LanHost> { it.pingTimeMs }.thenBy { ipSortKey(it.ip) })
-        LanHostSortOrder.HOSTNAME -> hosts.sortedWith(compareBy<LanHost> { it.hostname.orEmpty().lowercase() }.thenBy { ipSortKey(it.ip) })
-        LanHostSortOrder.VENDOR -> hosts.sortedWith(compareBy<LanHost> { it.vendor.orEmpty().lowercase() }.thenBy { ipSortKey(it.ip) })
-        LanHostSortOrder.OPEN_PORTS -> hosts.sortedWith(compareByDescending<LanHost> { it.openPorts.size }.thenBy { ipSortKey(it.ip) })
+        LanHostSortOrder.IP -> {
+            hosts.sortedBy { ipSortKey(it.ip) }
+        }
+
+        LanHostSortOrder.LATENCY -> {
+            hosts.sortedWith(compareBy<LanHost> { it.pingTimeMs }.thenBy { ipSortKey(it.ip) })
+        }
+
+        LanHostSortOrder.HOSTNAME -> {
+            hosts.sortedWith(compareBy<LanHost> { it.hostname.orEmpty().lowercase() }.thenBy { ipSortKey(it.ip) })
+        }
+
+        LanHostSortOrder.VENDOR -> {
+            hosts.sortedWith(compareBy<LanHost> { it.vendor.orEmpty().lowercase() }.thenBy { ipSortKey(it.ip) })
+        }
+
+        LanHostSortOrder.OPEN_PORTS -> {
+            hosts.sortedWith(compareByDescending<LanHost> { it.openPorts.size }.thenBy { ipSortKey(it.ip) })
+        }
     }
 
 /** Sort key for ascending numeric IPv4 order (dotted-decimal string sort puts .2 after .10). */
-private fun ipSortKey(ip: String): Long = ip.split('.').fold(0L) { acc, part -> acc * 256L + (part.toLongOrNull() ?: 0L) }
+private fun ipSortKey(ip: String): Long {
+    return ip.split('.').fold(0L) { acc, part -> acc * 256L + (part.toLongOrNull() ?: 0L) }
+}
 
 @Composable
 private fun HostFilterChips(
@@ -941,6 +944,7 @@ private fun HostFilterChips(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
+@Suppress("FunctionNaming", "ktlint:standard:function-naming")
 private fun HostSortChips(
     activeSort: LanHostSortOrder,
     onSortChange: (LanHostSortOrder) -> Unit,
@@ -986,7 +990,6 @@ private fun filterLanHosts(
 @Composable
 private fun LanFinishedContent(
     summary: LanScanSummary,
-    expandedHostIp: String?,
     showDiagnostics: Boolean,
     searchQuery: String,
     activeFilter: HostFilter,
@@ -994,12 +997,6 @@ private fun LanFinishedContent(
     sortOrder: LanHostSortOrder,
     onSortOrderChange: (LanHostSortOrder) -> Unit,
     onSearchQueryChange: (String) -> Unit,
-    onToggleExpand: (String) -> Unit,
-    onScanPorts: (String) -> Unit,
-    onPingHost: (String) -> Unit,
-    onProbeHttp: (String, Int) -> Unit,
-    onInspectTls: (String, Int) -> Unit,
-    onWakeDevice: (String) -> Unit,
     onClear: () -> Unit,
     onRescan: () -> Unit,
     onToggleDiagnostics: () -> Unit,
@@ -1449,6 +1446,7 @@ private fun MoreDevicesNode(count: Int) {
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalFoundationApi::class)
 @Composable
+@Suppress("FunctionNaming", "ktlint:standard:function-naming")
 private fun HostCard(
     host: LanHost,
     expanded: Boolean,
@@ -1464,15 +1462,6 @@ private fun HostCard(
     val copiedMessage = stringResource(R.string.lan_copied)
     val copyActionLabel = stringResource(R.string.lan_copy_host_action)
     var showCopyMenu by remember { mutableStateOf(false) }
-
-    fun copyValue(
-        label: String,
-        value: String,
-    ) {
-        val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as ClipboardManager
-        clipboard.setPrimaryClip(ClipData.newPlainText(label, value))
-        Toast.makeText(context, copiedMessage, Toast.LENGTH_SHORT).show()
-    }
     val containerColor by animateColorAsState(
         targetValue =
             if (expanded) {
@@ -1497,84 +1486,185 @@ private fun HostCard(
                 ),
     ) {
         Box(modifier = Modifier.background(containerColor)) {
-            Column(
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Icon(imageVector = hostIcon(host), contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(host.ip, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.SemiBold)
-                        if (host.isGateway) Text(stringResource(R.string.lan_gateway_label), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                    }
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        Text(
-                            text = stringResource(R.string.lan_ping_status_format, host.pingTimeMs),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                        if (host.openPorts.isNotEmpty()) {
-                            Text(
-                                text = pluralStringResource(R.plurals.lan_open_ports_count, host.openPorts.size, host.openPorts.size),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        Icon(
-                            imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(20.dp),
-                        )
-                    }
-                }
-                val identity = listOfNotNull(host.hostname, host.vendor, host.macAddress).distinct().ifEmpty { listOf(stringResource(R.string.lan_unknown_device)) }.joinToString(" · ")
-                Text(identity, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-
-                // Expanded details
-                AnimatedVisibility(
-                    visible = expanded,
-                    enter = expandVertically(AppMotion.enter(250)) + fadeIn(AppMotion.enter(250)),
-                    exit = shrinkVertically(AppMotion.exit(200)) + fadeOut(AppMotion.exit(200)),
-                ) {
-                    HostDetailPanel(
-                        host = host,
-                        macResolutionSupported = macResolutionSupported,
-                        onScanPorts = onScanPorts,
-                        onPingHost = onPingHost,
-                        onProbeHttp = onProbeHttp,
-                        onInspectTls = onInspectTls,
-                        onWakeDevice = onWakeDevice,
-                    )
-                }
-            }
-            DropdownMenu(expanded = showCopyMenu, onDismissRequest = { showCopyMenu = false }) {
-                DropdownMenuItem(text = { Text(stringResource(R.string.lan_copy_ip)) }, onClick = {
-                    showCopyMenu = false
-                    copyValue("IP", host.ip)
-                })
-                host.macAddress?.let { mac ->
-                    DropdownMenuItem(text = { Text(stringResource(R.string.lan_copy_mac)) }, onClick = {
-                        showCopyMenu = false
-                        copyValue("MAC", mac)
-                    })
-                }
-                host.hostname?.let { hostname ->
-                    DropdownMenuItem(text = { Text(stringResource(R.string.lan_copy_hostname)) }, onClick = {
-                        showCopyMenu = false
-                        copyValue("Hostname", hostname)
-                    })
-                }
-            }
+            HostCardBody(
+                host,
+                expanded,
+                macResolutionSupported,
+                onScanPorts,
+                onPingHost,
+                onProbeHttp,
+                onInspectTls,
+                onWakeDevice,
+            )
+            HostCopyMenu(
+                host = host,
+                expanded = showCopyMenu,
+                copiedMessage = copiedMessage,
+                onDismiss = { showCopyMenu = false },
+            )
         }
     }
+}
+
+@Composable
+@Suppress("FunctionNaming", "ktlint:standard:function-naming")
+private fun HostCardBody(
+    host: LanHost,
+    expanded: Boolean,
+    macResolutionSupported: Boolean,
+    onScanPorts: (String) -> Unit,
+    onPingHost: (String) -> Unit,
+    onProbeHttp: (String, Int) -> Unit,
+    onInspectTls: (String, Int) -> Unit,
+    onWakeDevice: (String) -> Unit,
+) {
+    Column(
+        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        HostCompactHeader(host, expanded)
+        HostIdentityLine(host)
+        AnimatedVisibility(
+            visible = expanded,
+            enter = expandVertically(AppMotion.enter(250)) + fadeIn(AppMotion.enter(250)),
+            exit = shrinkVertically(AppMotion.exit(200)) + fadeOut(AppMotion.exit(200)),
+        ) {
+            HostDetailPanel(
+                host = host,
+                macResolutionSupported = macResolutionSupported,
+                onScanPorts = onScanPorts,
+                onPingHost = onPingHost,
+                onProbeHttp = onProbeHttp,
+                onInspectTls = onInspectTls,
+                onWakeDevice = onWakeDevice,
+            )
+        }
+    }
+}
+
+@Composable
+@Suppress("FunctionNaming", "LongMethod", "ktlint:standard:function-naming")
+private fun HostCompactHeader(
+    host: LanHost,
+    expanded: Boolean,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Row(
+            modifier = Modifier.weight(1f),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Icon(
+                imageVector = hostIcon(host),
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = host.ip,
+                modifier = Modifier.weight(1f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodyMedium,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.SemiBold,
+            )
+            if (host.isGateway) {
+                Text(
+                    stringResource(R.string.lan_gateway_label),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                text = stringResource(R.string.lan_ping_status_format, host.pingTimeMs),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            if (host.openPorts.isNotEmpty()) {
+                Text(
+                    text =
+                        pluralStringResource(
+                            R.plurals.lan_open_ports_count,
+                            host.openPorts.size,
+                            host.openPorts.size,
+                        ),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Icon(
+                imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp),
+            )
+        }
+    }
+}
+
+@Composable
+@Suppress("FunctionNaming", "ktlint:standard:function-naming")
+private fun HostIdentityLine(host: LanHost) {
+    val identity =
+        listOfNotNull(host.hostname, host.vendor, host.macAddress)
+            .distinct()
+            .ifEmpty { listOf(stringResource(R.string.lan_unknown_device)) }
+            .joinToString(" · ")
+    Text(
+        identity,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+    )
+}
+
+@Composable
+@Suppress("FunctionNaming", "ktlint:standard:function-naming")
+private fun HostCopyMenu(
+    host: LanHost,
+    expanded: Boolean,
+    copiedMessage: String,
+    onDismiss: () -> Unit,
+) {
+    val context = LocalContext.current
+    DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
+        HostCopyMenuItem(R.string.lan_copy_ip, "IP", host.ip, copiedMessage, onDismiss, context)
+        host.macAddress?.let { mac ->
+            HostCopyMenuItem(R.string.lan_copy_mac, "MAC", mac, copiedMessage, onDismiss, context)
+        }
+        host.hostname?.let { hostname ->
+            HostCopyMenuItem(R.string.lan_copy_hostname, "Hostname", hostname, copiedMessage, onDismiss, context)
+        }
+    }
+}
+
+@Composable
+@Suppress("FunctionNaming", "ktlint:standard:function-naming")
+private fun HostCopyMenuItem(
+    labelRes: Int,
+    clipLabel: String,
+    value: String,
+    copiedMessage: String,
+    onDismiss: () -> Unit,
+    context: android.content.Context,
+) {
+    DropdownMenuItem(
+        text = { Text(stringResource(labelRes)) },
+        onClick = {
+            onDismiss()
+            val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as ClipboardManager
+            clipboard.setPrimaryClip(ClipData.newPlainText(clipLabel, value))
+            Toast.makeText(context, copiedMessage, Toast.LENGTH_SHORT).show()
+        },
+    )
 }
 
 @Composable
@@ -1697,24 +1787,26 @@ private fun HostDetailPanel(
     }
 }
 
-internal fun isLikelyTlsPort(port: Int): Boolean =
-    port in
-        setOf(
-            443,
-            465,
-            636,
-            853,
-            989,
-            990,
-            992,
-            993,
-            995,
-            5061,
-            5223,
-            8443,
-            8883,
-            9443,
-        )
+internal fun isLikelyTlsPort(port: Int): Boolean = port in likelyTlsPorts
+
+@Suppress("MagicNumber")
+private val likelyTlsPorts =
+    setOf(
+        443,
+        465,
+        636,
+        853,
+        989,
+        990,
+        992,
+        993,
+        995,
+        5061,
+        5223,
+        8443,
+        8883,
+        9443,
+    )
 
 @Composable
 private fun DetailRow(

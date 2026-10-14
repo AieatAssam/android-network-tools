@@ -137,11 +137,17 @@ class LanScanViewModelTest {
                     continueScan.await()
                     emit(LanScanFlowResult.HostFound(secondHost, scannedCount = 2, totalCount = 2))
                     assertEquals(stubHost.ip, (viewModel.uiState.value as LanScanUiState.Scanning).expandedHostIp)
-                    emit(LanScanFlowResult.ScanComplete(stubSummary.copy(hosts = listOf(stubHost, secondHost), aliveHosts = 2)))
+                    emit(
+                        LanScanFlowResult.ScanComplete(
+                            stubSummary.copy(hosts = listOf(stubHost, secondHost), aliveHosts = 2),
+                        ),
+                    )
                 }
             viewModel.startScan()
             withContext(Dispatchers.Default) {
-                withTimeout(2_000) { viewModel.uiState.first { it is LanScanUiState.Scanning && it.hosts.isNotEmpty() } }
+                withTimeout(2_000) {
+                    viewModel.uiState.first { it is LanScanUiState.Scanning && it.hosts.isNotEmpty() }
+                }
             }
             viewModel.onToggleHostExpanded(stubHost.ip)
             continueScan.complete(Unit)
@@ -339,7 +345,14 @@ class LanScanViewModelTest {
             runTest {
                 every { lanScanUseCase(any(), any()) } returns
                     flow {
-                        emit(LanScanFlowResult.HostFound(stubHost, scannedCount = 1, totalCount = 10, uncertainCount = 1))
+                        emit(
+                            LanScanFlowResult.HostFound(
+                                stubHost,
+                                scannedCount = 1,
+                                totalCount = 10,
+                                uncertainCount = 1,
+                            ),
+                        )
                         emit(
                             LanScanFlowResult.ScanProgress(
                                 scannedCount = 2,
@@ -358,7 +371,9 @@ class LanScanViewModelTest {
                 viewModel.onSubnetChange("192.168.1.0/24")
                 viewModel.startScan()
                 withContext(Dispatchers.Default) {
-                    withTimeout(2000) { viewModel.uiState.first { it is LanScanUiState.Scanning && it.scannedCount == 2 } }
+                    withTimeout(2000) {
+                        viewModel.uiState.first { it is LanScanUiState.Scanning && it.scannedCount == 2 }
+                    }
                 }
 
                 viewModel.onStopScan()

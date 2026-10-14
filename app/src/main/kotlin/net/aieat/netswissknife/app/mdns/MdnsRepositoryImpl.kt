@@ -215,7 +215,12 @@ class MdnsRepositoryImpl
         override fun discover(timeoutMs: Long): Flow<MdnsUpdate> =
             flow {
                 val scanWindowMs = MdnsOperation.requireValidScanDuration(timeoutMs)
-                emitAll(discover(scanWindowMs, MdnsOperation.newSession(timeoutMs = scanWindowMs, clock = monotonicClock)))
+                emitAll(
+                    discover(
+                        scanWindowMs,
+                        MdnsOperation.newSession(timeoutMs = scanWindowMs, clock = monotonicClock),
+                    ),
+                )
             }
 
         override fun discover(
@@ -324,13 +329,14 @@ class MdnsRepositoryImpl
             suspend fun sendBoundedQuery(
                 name: String,
                 type: Int,
-            ) {
+            ): Boolean {
                 if (sentQueries >= discoveryLimits.maxQueries) {
                     discovery.markQueryLimitReached()
-                    return
+                    return false
                 }
                 sendQuery(mdnsSocket, multicastAddress, name, type, useUnicastResponse)
                 sentQueries++
+                return true
             }
 
             var lastRequeryMs = 0L
@@ -349,19 +355,15 @@ class MdnsRepositoryImpl
                         .toInt()
 
                 if (nowMs - lastRequeryMs >= REQUERY_INTERVAL_MS) {
-                    if (discovery.serviceTypes.isEmpty()) {
-                        // The service-enumeration packet can be lost on a busy Wi-Fi network.
-                        // Retry it while no service types are known so a single lost packet does
-                        // not turn the entire scan window into a false empty result.
-                        sendBoundedQuery(META_QUERY, Type.PTR)
-                    } else {
-                        for (type in discovery.serviceTypes) {
-                            if (sentQueries >= discoveryLimits.maxQueries) {
-                                discovery.markQueryLimitReached()
-                                break
-                            }
-                            sendBoundedQuery("$type.local.", Type.PTR)
-                        }
+                    // Retry service enumeration while no types are known: multicast loss must
+                    // not turn the whole scan window into a false empty result.
+                    val refreshNames =
+                        discovery.serviceTypes
+                            .takeIf { it.isNotEmpty() }
+                            ?.map { "$it.local." }
+                            ?: listOf(META_QUERY)
+                    for (name in refreshNames) {
+                        if (!sendBoundedQuery(name, Type.PTR)) break
                     }
                     lastRequeryMs = nowMs
                     recordOutcome()

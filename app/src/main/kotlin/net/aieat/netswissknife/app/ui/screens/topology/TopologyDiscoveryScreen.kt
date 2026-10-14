@@ -99,7 +99,10 @@ fun TopologyDiscoveryScreen(viewModel: TopologyDiscoveryViewModel = hiltViewMode
             sections =
                 listOf(
                     net.aieat.netswissknife.app.ui.components
-                        .HelpSection(stringResource(R.string.help_topology_what_heading), stringResource(R.string.help_topology_what_body)),
+                        .HelpSection(
+                            stringResource(R.string.help_topology_what_heading),
+                            stringResource(R.string.help_topology_what_body),
+                        ),
                     net.aieat.netswissknife.app.ui.components.HelpSection(
                         heading = stringResource(R.string.help_topology_params_heading),
                         body = "",
@@ -508,11 +511,12 @@ private fun TopologyScreenContent(
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                        val minimumHops = TopologyParamsValidator.MIN_MAX_HOPS.toFloat()
+                        val maximumHops = TopologyParamsValidator.MAX_MAX_HOPS.toFloat()
                         Slider(
                             value = maxHops,
                             onValueChange = { maxHops = it },
-                            valueRange =
-                                TopologyParamsValidator.MIN_MAX_HOPS.toFloat()..TopologyParamsValidator.MAX_MAX_HOPS.toFloat(),
+                            valueRange = minimumHops..maximumHops,
                             steps =
                                 TopologyParamsValidator.MAX_MAX_HOPS -
                                     TopologyParamsValidator.MIN_MAX_HOPS - 1,
@@ -803,6 +807,7 @@ private fun retainedTopologyGraph(
     }
 
 @Composable
+@Suppress("FunctionNaming", "ktlint:standard:function-naming")
 private fun TopologyResultUtilities(
     graph: TopologyGraph,
     reportStatus: String?,
@@ -870,18 +875,32 @@ internal fun topologyReport(
         if (graph.truncationReasons.isNotEmpty()) appendLine("Truncated: ${graph.truncationReasons.joinToString()}")
         if (graph.hadSnmpErrors) appendLine("Some SNMP tables returned errors.")
         graph.nodes.forEach { node ->
-            appendLine("\n${node.sysName ?: node.ip} (${node.ip})")
-            node.vendor?.let { appendLine("Vendor: $it") }
-            node.model?.let { appendLine("Model: $it") }
-            appendLine("SNMP: ${if (node.snmpReachable) "reachable" else "unavailable"}")
-            node.tableObservations.forEach { (table, observation) ->
-                appendLine("${table.name}: ${observation.completeness}${observation.failures.takeIf { it.isNotEmpty() }?.joinToString(prefix = " (", postfix = ")") ?: ""}")
-            }
-            node.interfaces.forEach { iface -> appendLine("Interface ${iface.name}: ${iface.operStatus}") }
-            node.vlans.forEach { vlan -> appendLine("VLAN ${vlan.id}: ${vlan.name}") }
+            appendTopologyNode(node)
         }
-        graph.links.forEach { link -> appendLine("\n${link.fromIp}:${link.fromPort.orEmpty()} ↔ ${link.toIp}:${link.toPort.orEmpty()} (${link.protocol})") }
+        graph.links.forEach { link ->
+            appendLine(
+                "\n${link.fromIp}:${link.fromPort.orEmpty()} ↔ " +
+                    "${link.toIp}:${link.toPort.orEmpty()} (${link.protocol})",
+            )
+        }
     }
+
+private fun StringBuilder.appendTopologyNode(node: TopologyNode) {
+    appendLine("\n${node.sysName ?: node.ip} (${node.ip})")
+    node.vendor?.let { appendLine("Vendor: $it") }
+    node.model?.let { appendLine("Model: $it") }
+    appendLine("SNMP: ${if (node.snmpReachable) "reachable" else "unavailable"}")
+    node.tableObservations.forEach { (table, observation) ->
+        val failures =
+            observation.failures
+                .takeIf { it.isNotEmpty() }
+                ?.joinToString(prefix = " (", postfix = ")")
+                .orEmpty()
+        appendLine("${table.name}: ${observation.completeness}$failures")
+    }
+    node.interfaces.forEach { iface -> appendLine("Interface ${iface.name}: ${iface.operStatus}") }
+    node.vlans.forEach { vlan -> appendLine("VLAN ${vlan.id}: ${vlan.name}") }
+}
 
 @Composable
 @Suppress("FunctionNaming", "ktlint:standard:function-naming")
@@ -1533,7 +1552,11 @@ private fun NodeDetailSheet(
                         val vendor = node.vendor
                         if (vendor != null) {
                             Spacer(modifier = Modifier.height(4.dp))
-                            Text(vendor, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(
+                                vendor,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         }
                     }
                 }
@@ -1609,7 +1632,12 @@ private fun NodeDetailSheet(
                             node.vlans.forEach { vlan ->
                                 Surface(
                                     shape = RoundedCornerShape(8.dp),
-                                    color = if (vlan.active) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                                    color =
+                                        if (vlan.active) {
+                                            MaterialTheme.colorScheme.secondaryContainer
+                                        } else {
+                                            MaterialTheme.colorScheme.surfaceVariant
+                                        },
                                 ) {
                                     Text(
                                         stringResource(R.string.topology_vlan_label, vlan.id, vlan.name),
@@ -1781,13 +1809,7 @@ private fun NeighbourRow(
         }
         Spacer(modifier = Modifier.width(8.dp))
         Column(modifier = Modifier.weight(1f)) {
-            val portInfo =
-                when {
-                    localPort != null && remotePort != null -> "$localPort -> $remotePort"
-                    localPort != null -> "local: $localPort"
-                    remotePort != null -> "remote: $remotePort"
-                    else -> ""
-                }
+            val portInfo = neighbourPortInfo(localPort, remotePort)
             if (portInfo.isNotBlank()) {
                 Text(
                     text = portInfo,
@@ -1817,6 +1839,17 @@ private fun NeighbourRow(
         }
     }
 }
+
+private fun neighbourPortInfo(
+    localPort: String?,
+    remotePort: String?,
+): String =
+    when {
+        localPort != null && remotePort != null -> "$localPort -> $remotePort"
+        localPort != null -> "local: $localPort"
+        remotePort != null -> "remote: $remotePort"
+        else -> ""
+    }
 
 private fun formatSpeed(bps: Long): String =
     when {

@@ -646,9 +646,10 @@ private fun PortScanInputCard(
                     }
 
                     if (startNum != null && endNum != null && !startInvalid && !endInvalid) {
+                        val lowerBound = startNum.coerceIn(1, 65535)
+                        val upperBound = endNum.coerceIn(lowerBound, 65535)
                         RangeSlider(
-                            value =
-                                startNum.coerceIn(1, 65535).toFloat()..endNum.coerceIn(startNum.coerceIn(1, 65535), 65535).toFloat(),
+                            value = lowerBound.toFloat()..upperBound.toFloat(),
                             onValueChange = { range ->
                                 onStartPortChange(range.start.toInt().toString())
                                 onEndPortChange(range.endInclusive.toInt().toString())

@@ -1943,12 +1943,12 @@
     <file name="src/main/kotlin/net/aieat/netswissknife/app/ui/screens/PortsScreen.kt">
         <error line="152" column="5" source="standard:function-naming" />
         <error line="482" column="13" source="standard:function-naming" />
-        <error line="795" column="13" source="standard:function-naming" />
-        <error line="838" column="13" source="standard:function-naming" />
-        <error line="932" column="13" source="standard:function-naming" />
-        <error line="956" column="13" source="standard:function-naming" />
-        <error line="1054" column="13" source="standard:function-naming" />
-        <error line="1086" column="13" source="standard:function-naming" />
+        <error line="796" column="13" source="standard:function-naming" />
+        <error line="839" column="13" source="standard:function-naming" />
+        <error line="933" column="13" source="standard:function-naming" />
+        <error line="957" column="13" source="standard:function-naming" />
+        <error line="1055" column="13" source="standard:function-naming" />
+        <error line="1087" column="13" source="standard:function-naming" />
     </file>
     <file name="src/main/kotlin/net/aieat/netswissknife/app/ui/screens/ToolAnnouncementPhaseMappers.kt">
         <error line="8" column="86" source="standard:multiline-expression-wrapping" />
@@ -2558,20 +2558,20 @@
         <error line="470" column="25" source="standard:function-naming" />
         <error line="492" column="25" source="standard:function-naming" />
         <error line="501" column="25" source="standard:function-naming" />
-        <error line="526" column="25" source="standard:function-naming" />
-        <error line="689" column="25" source="standard:function-naming" />
-        <error line="782" column="25" source="standard:function-naming" />
-        <error line="805" column="25" source="standard:function-naming" />
-        <error line="861" column="25" source="standard:function-naming" />
-        <error line="1019" column="13" source="standard:function-naming" />
-        <error line="1055" column="25" source="standard:function-naming" />
-        <error line="1213" column="25" source="standard:function-naming" />
-        <error line="1227" column="25" source="standard:function-naming" />
-        <error line="1269" column="13" source="standard:function-naming" />
-        <error line="1395" column="14" source="standard:function-naming" />
-        <error line="1436" column="25" source="standard:function-naming" />
-        <error line="1531" column="25" source="standard:function-naming" />
-        <error line="1535" column="25" source="standard:function-naming" />
+        <error line="534" column="25" source="standard:function-naming" />
+        <error line="699" column="25" source="standard:function-naming" />
+        <error line="792" column="25" source="standard:function-naming" />
+        <error line="815" column="25" source="standard:function-naming" />
+        <error line="871" column="25" source="standard:function-naming" />
+        <error line="1029" column="13" source="standard:function-naming" />
+        <error line="1065" column="25" source="standard:function-naming" />
+        <error line="1223" column="25" source="standard:function-naming" />
+        <error line="1237" column="25" source="standard:function-naming" />
+        <error line="1279" column="13" source="standard:function-naming" />
+        <error line="1405" column="14" source="standard:function-naming" />
+        <error line="1446" column="25" source="standard:function-naming" />
+        <error line="1541" column="25" source="standard:function-naming" />
+        <error line="1545" column="25" source="standard:function-naming" />
     </file>
     <file name="src/main/kotlin/net/aieat/netswissknife/app/ui/screens/debug/DebugLogScreen.kt">
         <error line="3" column="1" source="standard:import-ordering" />
@@ -2979,44 +2979,46 @@
     <file name="src/main/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanScreen.kt">
         <error line="3" column="1" source="standard:import-ordering" />
         <error line="155" column="5" source="standard:function-naming" />
-        <error line="545" column="13" source="standard:function-naming" />
-        <error line="557" column="13" source="standard:function-naming" />
-        <error line="694" column="13" source="standard:function-naming" />
-        <error line="724" column="13" source="standard:function-naming" />
-        <error line="752" column="13" source="standard:function-naming" />
-        <error line="785" column="13" source="standard:function-naming" />
-        <error line="845" column="13" source="standard:function-naming" />
-        <error line="869" column="13" source="standard:function-naming" />
-        <error line="921" column="13" source="standard:function-naming" />
-        <error line="944" column="13" source="standard:function-naming" />
-        <error line="987" column="13" source="standard:function-naming" />
-        <error line="1278" column="13" source="standard:function-naming" />
-        <error line="1310" column="13" source="standard:function-naming" />
-        <error line="1366" column="13" source="standard:function-naming" />
-        <error line="1419" column="13" source="standard:function-naming" />
-        <error line="1452" column="13" source="standard:function-naming" />
-        <error line="1582" column="13" source="standard:function-naming" />
-        <error line="1720" column="13" source="standard:function-naming" />
-        <error line="1751" column="13" source="standard:function-naming" />
+        <error line="531" column="13" source="standard:function-naming" />
+        <error line="543" column="13" source="standard:function-naming" />
+        <error line="711" column="13" source="standard:function-naming" />
+        <error line="739" column="13" source="standard:function-naming" />
+        <error line="772" column="13" source="standard:function-naming" />
+        <error line="832" column="13" source="standard:function-naming" />
+        <error line="856" column="13" source="standard:function-naming" />
+        <error line="919" column="41" source="standard:function-expression-body" />
+        <error line="924" column="13" source="standard:function-naming" />
+        <error line="991" column="13" source="standard:function-naming" />
+        <error line="1275" column="13" source="standard:function-naming" />
+        <error line="1307" column="13" source="standard:function-naming" />
+        <error line="1363" column="13" source="standard:function-naming" />
+        <error line="1416" column="13" source="standard:function-naming" />
+        <error line="1672" column="13" source="standard:function-naming" />
+        <error line="1812" column="13" source="standard:function-naming" />
+        <error line="1843" column="13" source="standard:function-naming" />
+    </file>
+    <file name="src/main/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanViewModel.kt">
+        <error line="61" column="5" source="standard:function-signature" />
+        <error line="61" column="32" source="standard:function-signature" />
     </file>
     <file name="src/main/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanShareText.kt">
         <error line="6" column="67" source="standard:multiline-expression-wrapping" />
         <error line="6" column="67" source="standard:function-signature" />
     </file>
     <file name="src/main/kotlin/net/aieat/netswissknife/app/ui/screens/mdns/MdnsDiscoveryScreen.kt">
-        <error line="125" column="5" source="standard:function-naming" />
-        <error line="285" column="13" source="standard:function-naming" />
-        <error line="370" column="13" source="standard:function-naming" />
-        <error line="399" column="13" source="standard:function-naming" />
-        <error line="448" column="13" source="standard:function-naming" />
-        <error line="480" column="13" source="standard:function-naming" />
-        <error line="515" column="13" source="standard:function-naming" />
-        <error line="527" column="13" source="standard:function-naming" />
-        <error line="543" column="13" source="standard:function-naming" />
-        <error line="607" column="13" source="standard:function-naming" />
-        <error line="719" column="13" source="standard:function-naming" />
-        <error line="782" column="13" source="standard:function-naming" />
-        <error line="924" column="13" source="standard:function-naming" />
+        <error line="126" column="5" source="standard:function-naming" />
+        <error line="290" column="13" source="standard:function-naming" />
+        <error line="375" column="13" source="standard:function-naming" />
+        <error line="404" column="13" source="standard:function-naming" />
+        <error line="453" column="13" source="standard:function-naming" />
+        <error line="485" column="13" source="standard:function-naming" />
+        <error line="520" column="13" source="standard:function-naming" />
+        <error line="532" column="13" source="standard:function-naming" />
+        <error line="548" column="13" source="standard:function-naming" />
+        <error line="612" column="13" source="standard:function-naming" />
+        <error line="757" column="13" source="standard:function-naming" />
+        <error line="820" column="13" source="standard:function-naming" />
+        <error line="962" column="13" source="standard:function-naming" />
     </file>
     <file name="src/main/kotlin/net/aieat/netswissknife/app/ui/screens/mdns/MdnsDiscoveryViewModel.kt">
         <error line="3" column="1" source="standard:import-ordering" />
@@ -3966,18 +3968,17 @@
     </file>
     <file name="src/main/kotlin/net/aieat/netswissknife/app/ui/screens/topology/TopologyDiscoveryScreen.kt">
         <error line="63" column="5" source="standard:function-naming" />
-        <error line="121" column="13" source="standard:function-naming" />
-        <error line="806" column="13" source="standard:function-naming" />
-        <error line="921" column="13" source="standard:function-naming" />
-        <error line="987" column="17" source="standard:function-naming" />
-        <error line="1046" column="13" source="standard:function-naming" />
-        <error line="1106" column="13" source="standard:function-naming" />
-        <error line="1171" column="13" source="standard:function-naming" />
-        <error line="1219" column="13" source="standard:function-naming" />
-        <error line="1477" column="13" source="standard:function-naming" />
-        <error line="1647" column="13" source="standard:function-naming" />
-        <error line="1669" column="13" source="standard:function-naming" />
-        <error line="1699" column="13" source="standard:function-naming" />
+        <error line="124" column="13" source="standard:function-naming" />
+        <error line="940" column="13" source="standard:function-naming" />
+        <error line="1006" column="17" source="standard:function-naming" />
+        <error line="1065" column="13" source="standard:function-naming" />
+        <error line="1125" column="13" source="standard:function-naming" />
+        <error line="1190" column="13" source="standard:function-naming" />
+        <error line="1238" column="13" source="standard:function-naming" />
+        <error line="1496" column="13" source="standard:function-naming" />
+        <error line="1675" column="13" source="standard:function-naming" />
+        <error line="1697" column="13" source="standard:function-naming" />
+        <error line="1727" column="13" source="standard:function-naming" />
     </file>
     <file name="src/main/kotlin/net/aieat/netswissknife/app/ui/screens/topology/TopologyDiscoveryViewModel.kt">
         <error line="3" column="1" source="standard:import-ordering" />
@@ -5327,19 +5328,20 @@
     </file>
     <file name="src/test/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanGatewayViewModelTest.kt">
         <error line="3" column="1" source="standard:import-ordering" />
-        <error line="42" column="20" source="standard:multiline-expression-wrapping" />
-        <error line="43" column="45" source="standard:multiline-expression-wrapping" />
-        <error line="52" column="25" source="standard:multiline-expression-wrapping" />
-        <error line="55" column="23" source="standard:multiline-expression-wrapping" />
-        <error line="67" column="60" source="standard:multiline-expression-wrapping" />
-        <error line="67" column="60" source="standard:function-signature" />
-        <error line="76" column="43" source="standard:multiline-expression-wrapping" />
-        <error line="76" column="43" source="standard:function-signature" />
-        <error line="77" column="49" source="standard:multiline-expression-wrapping" />
-        <error line="94" column="49" source="standard:multiline-expression-wrapping" />
-        <error line="94" column="49" source="standard:function-signature" />
-        <error line="103" column="48" source="standard:multiline-expression-wrapping" />
-        <error line="103" column="48" source="standard:function-signature" />
+        <error line="46" column="20" source="standard:multiline-expression-wrapping" />
+        <error line="47" column="45" source="standard:multiline-expression-wrapping" />
+        <error line="56" column="25" source="standard:multiline-expression-wrapping" />
+        <error line="59" column="23" source="standard:multiline-expression-wrapping" />
+        <error line="68" column="58" source="standard:chain-method-continuation" />
+        <error line="73" column="60" source="standard:multiline-expression-wrapping" />
+        <error line="73" column="60" source="standard:function-signature" />
+        <error line="82" column="43" source="standard:multiline-expression-wrapping" />
+        <error line="82" column="43" source="standard:function-signature" />
+        <error line="83" column="49" source="standard:multiline-expression-wrapping" />
+        <error line="100" column="49" source="standard:multiline-expression-wrapping" />
+        <error line="100" column="49" source="standard:function-signature" />
+        <error line="109" column="48" source="standard:multiline-expression-wrapping" />
+        <error line="109" column="48" source="standard:function-signature" />
     </file>
     <file name="src/test/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanShareTextTest.kt">
         <error line="14" column="23" source="standard:multiline-expression-wrapping" />

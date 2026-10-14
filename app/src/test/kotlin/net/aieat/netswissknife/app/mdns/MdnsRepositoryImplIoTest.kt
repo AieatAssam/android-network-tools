@@ -58,6 +58,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
 @OptIn(ExperimentalCoroutinesApi::class)
+@Suppress("LargeClass") // The scripted socket fixture is shared by the repository's I/O lifecycle cases.
 class MdnsRepositoryImplIoTest {
     @Test
     fun `query send failure fails discovery and never reports an empty successful scan`() =
@@ -91,7 +92,7 @@ class MdnsRepositoryImplIoTest {
 
             assertEquals(3, fixture.socket.sentQueries.size)
             assertEquals(
-                listOf("_services._dns-sd._udp.local.", "_services._dns-sd._udp.local.", "_services._dns-sd._udp.local."),
+                List(3) { "_services._dns-sd._udp.local." },
                 fixture.socket.sentQueries.map {
                     org.xbill.DNS
                         .Message(it)

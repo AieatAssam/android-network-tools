@@ -16,11 +16,26 @@ class LanHostSortTest {
 
     @Test
     fun supportsEveryRequestedSortOrder() {
-        assertEquals(listOf("192.168.1.2", "192.168.1.3", "192.168.1.10"), sortLanHosts(hosts, LanHostSortOrder.IP).map { it.ip })
-        assertEquals(listOf("192.168.1.3", "192.168.1.10", "192.168.1.2"), sortLanHosts(hosts, LanHostSortOrder.LATENCY).map { it.ip })
-        assertEquals(listOf("192.168.1.3", "192.168.1.2", "192.168.1.10"), sortLanHosts(hosts, LanHostSortOrder.HOSTNAME).map { it.ip })
-        assertEquals(listOf("192.168.1.3", "192.168.1.10", "192.168.1.2"), sortLanHosts(hosts, LanHostSortOrder.VENDOR).map { it.ip })
-        assertEquals(listOf("192.168.1.2", "192.168.1.10", "192.168.1.3"), sortLanHosts(hosts, LanHostSortOrder.OPEN_PORTS).map { it.ip })
+        assertEquals(
+            listOf("192.168.1.2", "192.168.1.3", "192.168.1.10"),
+            sortLanHosts(hosts, LanHostSortOrder.IP).map { it.ip },
+        )
+        assertEquals(
+            listOf("192.168.1.3", "192.168.1.10", "192.168.1.2"),
+            sortLanHosts(hosts, LanHostSortOrder.LATENCY).map { it.ip },
+        )
+        assertEquals(
+            listOf("192.168.1.3", "192.168.1.2", "192.168.1.10"),
+            sortLanHosts(hosts, LanHostSortOrder.HOSTNAME).map { it.ip },
+        )
+        assertEquals(
+            listOf("192.168.1.3", "192.168.1.10", "192.168.1.2"),
+            sortLanHosts(hosts, LanHostSortOrder.VENDOR).map { it.ip },
+        )
+        assertEquals(
+            listOf("192.168.1.2", "192.168.1.10", "192.168.1.3"),
+            sortLanHosts(hosts, LanHostSortOrder.OPEN_PORTS).map { it.ip },
+        )
     }
 
     @Test

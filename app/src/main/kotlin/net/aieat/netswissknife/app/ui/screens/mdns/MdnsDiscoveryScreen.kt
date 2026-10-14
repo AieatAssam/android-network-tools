@@ -36,6 +36,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -235,7 +236,11 @@ fun MdnsDiscoveryScreen(
                                         onNavigate(
                                             NavRoutes.Ping.createRoute(
                                                 ToolIntent(
-                                                    destination = ToolDestination.HostTarget(HostTool.PING, validatedHost),
+                                                    destination =
+                                                        ToolDestination.HostTarget(
+                                                            HostTool.PING,
+                                                            validatedHost,
+                                                        ),
                                                     source = ToolSource.MDNS,
                                                 ),
                                             ),
@@ -616,41 +621,18 @@ private fun ServiceList(
     val expandedTypes = remember { mutableStateMapOf<String, Boolean>() }
     var searchQuery by rememberSaveable { mutableStateOf("") }
     val allServices = servicesByType.values.flatten()
-    val filteredByType =
-        servicesByType
-            .mapValues { (_, services) ->
-                services.filter { service ->
-                    searchQuery.isBlank() ||
-                        listOf(service.serviceType, service.instanceName, service.displayName, service.hostname)
-                            .any { it.contains(searchQuery, ignoreCase = true) } ||
-                        service.ipAddresses.any { it.contains(searchQuery, ignoreCase = true) } ||
-                        service.txtRecords.any { (key, value) -> key.contains(searchQuery, true) || value.contains(searchQuery, true) }
-                }
-            }.filterValues { it.isNotEmpty() }
+    val filteredByType = filterMdnsServices(servicesByType, searchQuery)
     val report = buildMdnsShareText(allServices, isScanning, isCanceling, scanCanceled, truncationReasons)
-    val context = LocalContext.current
-    val copiedMessage = stringResource(R.string.lan_copied)
     val shareSubject = stringResource(R.string.mdns_screen_title)
 
     LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         item {
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                label = { Text(stringResource(R.string.mdns_search_label)) },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
+            ServiceSearchToolbar(
+                searchQuery = searchQuery,
+                onSearchChange = { searchQuery = it },
+                report = report,
+                shareSubject = shareSubject,
             )
-            Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
-                TextButton(enabled = report.isNotBlank(), onClick = {
-                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                    clipboard.setPrimaryClip(ClipData.newPlainText("mDNS services", report))
-                    Toast.makeText(context, copiedMessage, Toast.LENGTH_SHORT).show()
-                }) { Text(stringResource(R.string.action_copy)) }
-                TextButton(enabled = report.isNotBlank(), onClick = {
-                    context.shareText(report, shareSubject)
-                }) { Text(stringResource(R.string.action_share)) }
-            }
         }
         if (scanCanceled) {
             item {
@@ -663,55 +645,111 @@ private fun ServiceList(
             }
         }
         if (isScanning) {
-            item {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.padding(vertical = 4.dp),
-                ) {
-                    val scanningCd = stringResource(R.string.a11y_scanning)
-                    CircularProgressIndicator(
-                        modifier =
-                            Modifier
-                                .size(14.dp)
-                                .semantics { contentDescription = scanningCd },
-                        strokeWidth = 2.dp,
-                    )
-                    Text(
-                        stringResource(if (isCanceling) R.string.mdns_canceling_hint else R.string.mdns_scanning_inline_label),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                    )
-                }
-            }
+            item { ServiceScanningStatus(isCanceling) }
         }
-
-        filteredByType.entries.forEach { (serviceType, services) ->
-            val isExpanded = expandedTypes[serviceType] != false
-
-            item(key = serviceType) {
-                ServiceTypeHeader(
-                    serviceType = serviceType,
-                    count = services.size,
-                    isExpanded = isExpanded,
-                    onClick = { expandedTypes[serviceType] = !isExpanded },
-                )
-            }
-
-            if (isExpanded) {
-                items(services, key = { it.instanceName }) { service ->
-                    AnimatedVisibility(
-                        visible = true,
-                        enter = fadeIn() + expandVertically(),
-                        exit = fadeOut() + shrinkVertically(),
-                    ) {
-                        ServiceItem(service, onPingHost, onHttpProbe)
-                    }
-                }
-            }
-        }
-
+        serviceGroups(filteredByType, expandedTypes, onPingHost, onHttpProbe)
         item { Spacer(Modifier.height(16.dp)) }
+    }
+}
+
+private fun filterMdnsServices(
+    servicesByType: Map<String, List<DiscoveredService>>,
+    searchQuery: String,
+): Map<String, List<DiscoveredService>> =
+    servicesByType
+        .mapValues { (_, services) ->
+            services.filter { service ->
+                searchQuery.isBlank() ||
+                    listOf(service.serviceType, service.instanceName, service.displayName, service.hostname)
+                        .any { it.contains(searchQuery, ignoreCase = true) } ||
+                    service.ipAddresses.any { it.contains(searchQuery, ignoreCase = true) } ||
+                    service.txtRecords.any { (key, value) ->
+                        key.contains(searchQuery, true) || value.contains(searchQuery, true)
+                    }
+            }
+        }.filterValues { it.isNotEmpty() }
+
+@Composable
+@Suppress("FunctionNaming", "ktlint:standard:function-naming")
+private fun ServiceSearchToolbar(
+    searchQuery: String,
+    onSearchChange: (String) -> Unit,
+    report: String,
+    shareSubject: String,
+) {
+    val context = LocalContext.current
+    val copiedMessage = stringResource(R.string.lan_copied)
+    OutlinedTextField(
+        value = searchQuery,
+        onValueChange = onSearchChange,
+        label = { Text(stringResource(R.string.mdns_search_label)) },
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth(),
+    )
+    Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
+        TextButton(
+            enabled = report.isNotBlank(),
+            onClick = {
+                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                clipboard.setPrimaryClip(ClipData.newPlainText("mDNS services", report))
+                Toast.makeText(context, copiedMessage, Toast.LENGTH_SHORT).show()
+            },
+        ) { Text(stringResource(R.string.action_copy)) }
+        TextButton(
+            enabled = report.isNotBlank(),
+            onClick = { context.shareText(report, shareSubject) },
+        ) { Text(stringResource(R.string.action_share)) }
+    }
+}
+
+@Composable
+@Suppress("FunctionNaming", "ktlint:standard:function-naming")
+private fun ServiceScanningStatus(isCanceling: Boolean) {
+    val scanningCd = stringResource(R.string.a11y_scanning)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.padding(vertical = 4.dp),
+    ) {
+        CircularProgressIndicator(
+            modifier = Modifier.size(14.dp).semantics { contentDescription = scanningCd },
+            strokeWidth = 2.dp,
+        )
+        Text(
+            stringResource(if (isCanceling) R.string.mdns_canceling_hint else R.string.mdns_scanning_inline_label),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+        )
+    }
+}
+
+private fun LazyListScope.serviceGroups(
+    servicesByType: Map<String, List<DiscoveredService>>,
+    expandedTypes: MutableMap<String, Boolean>,
+    onPingHost: (String) -> Unit,
+    onHttpProbe: (DiscoveredService) -> Unit,
+) {
+    servicesByType.forEach { (serviceType, services) ->
+        val isExpanded = expandedTypes[serviceType] != false
+        item(key = serviceType) {
+            ServiceTypeHeader(
+                serviceType = serviceType,
+                count = services.size,
+                isExpanded = isExpanded,
+                onClick = { expandedTypes[serviceType] = !isExpanded },
+            )
+        }
+        if (isExpanded) {
+            items(services, key = { it.instanceName }) { service ->
+                AnimatedVisibility(
+                    visible = true,
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically(),
+                ) {
+                    ServiceItem(service, onPingHost, onHttpProbe)
+                }
+            }
+        }
     }
 }
 

@@ -4,13 +4,17 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.preferencesOf
+import androidx.lifecycle.viewModelScope
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.job
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -35,6 +39,7 @@ import org.junit.jupiter.api.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class LanScanSubnetSizeViewModelTest {
     private val dispatcher = UnconfinedTestDispatcher()
+    private val viewModels = mutableListOf<LanScanViewModel>()
     private lateinit var useCase: LanScanUseCase
 
     @BeforeEach
@@ -44,9 +49,15 @@ class LanScanSubnetSizeViewModelTest {
     }
 
     @AfterEach
-    fun tearDown() {
-        Dispatchers.resetMain()
-    }
+    fun tearDown() =
+        runBlocking {
+            viewModels.forEach { viewModel ->
+                val viewModelJob = viewModel.viewModelScope.coroutineContext.job
+                viewModelJob.cancelAndJoin()
+            }
+            viewModels.clear()
+            Dispatchers.resetMain()
+        }
 
     private fun viewModel(
         cidr: String,
@@ -74,7 +85,7 @@ class LanScanSubnetSizeViewModelTest {
             mockk<RecentHostsRepository>(relaxed = true) {
                 every { getRecents(any()) } returns flowOf(emptyList())
             }
-        return LanScanViewModel(useCase, dataStore, recents, provider)
+        return LanScanViewModel(useCase, dataStore, recents, provider).also(viewModels::add)
     }
 
     private suspend fun LanScanViewModel.awaitDetectedSubnet(): String =

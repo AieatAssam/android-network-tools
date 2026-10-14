@@ -57,7 +57,9 @@ private const val DEFAULT_LAN_SUBNET = "192.168.1.0/24"
 private const val MIN_SCANNABLE_PREFIX = 16
 
 /** Prefer a reported conventional cleartext HTTP port; otherwise keep the editable form on port 80. */
-internal fun preferredHttpProbePort(openPorts: Collection<Int>): Int = listOf(80, 8080, 8000, 8888).firstOrNull(openPorts::contains) ?: 80
+internal fun preferredHttpProbePort(
+    openPorts: Collection<Int>,
+): Int = listOf(80, 8080, 8000, 8888).firstOrNull(openPorts::contains) ?: 80
 
 /** Compatibility facade for the budget shared with the repository's no-session path. */
 internal object LanScanTimeBudget {
@@ -444,7 +446,10 @@ class LanScanViewModel
                                     // subnets that immediately fail validation.
                                     if (!savedToRecents) {
                                         savedToRecents = true
-                                        recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_LAN_SUBNETS, params.subnet)
+                                        recentHostsRepository.addRecent(
+                                            AppPreferenceKeys.RECENT_LAN_SUBNETS,
+                                            params.subnet,
+                                        )
                                     }
                                     liveHosts.add(result.host)
                                     val expandedHostIp = (_uiState.value as? LanScanUiState.Scanning)?.expandedHostIp
@@ -475,7 +480,12 @@ class LanScanViewModel
 
                                 is LanScanFlowResult.ScanComplete -> {
                                     AppLogger.i(TAG, "startScan: scan complete – scanned=${result.summary.totalScanned} alive=${result.summary.aliveHosts} duration=${result.summary.scanDurationMs}ms")
-                                    _uiState.value = LanScanUiState.Finished(result.summary, expandedHostIp = (_uiState.value as? LanScanUiState.Scanning)?.expandedHostIp)
+                                    _uiState.value =
+                                        LanScanUiState.Finished(
+                                            result.summary,
+                                            expandedHostIp =
+                                                (_uiState.value as? LanScanUiState.Scanning)?.expandedHostIp,
+                                        )
                                 }
                             }
                         }
@@ -505,7 +515,10 @@ class LanScanViewModel
                                     pending.session.cancellationReason ?: pending.reason
                                 ) {
                                     CancellationReason.USER_STOP -> {
-                                        LanScanUiState.Canceled(pending.summary, expandedHostIp = pending.expandedHostIp)
+                                        LanScanUiState.Canceled(
+                                            pending.summary,
+                                            expandedHostIp = pending.expandedHostIp,
+                                        )
                                     }
 
                                     CancellationReason.DEADLINE_EXCEEDED -> {
@@ -518,7 +531,11 @@ class LanScanViewModel
                                     }
 
                                     else -> {
-                                        LanScanUiState.Finished(pending.summary, expandedHostIp = pending.expandedHostIp, partial = true)
+                                        LanScanUiState.Finished(
+                                            pending.summary,
+                                            expandedHostIp = pending.expandedHostIp,
+                                            partial = true,
+                                        )
                                     }
                                 }
                         }
@@ -542,7 +559,12 @@ class LanScanViewModel
                     uncertainHosts = current?.uncertainDiagnostics ?: diagnostics.toList(),
                     uncertainCount = current?.uncertainCount ?: diagnostics.size,
                 )
-            return LanScanUiState.Finished(summary, expandedHostIp = current?.expandedHostIp, partial = true, timeLimitReached = true)
+            return LanScanUiState.Finished(
+                summary,
+                expandedHostIp = current?.expandedHostIp,
+                partial = true,
+                timeLimitReached = true,
+            )
         }
 
         fun onStopScan() {
@@ -604,10 +626,21 @@ class LanScanViewModel
         fun onToggleHostExpanded(ip: String) {
             _uiState.value =
                 when (val current = _uiState.value) {
-                    is LanScanUiState.Scanning -> current.copy(expandedHostIp = if (current.expandedHostIp == ip) null else ip)
-                    is LanScanUiState.Finished -> current.copy(expandedHostIp = if (current.expandedHostIp == ip) null else ip)
-                    is LanScanUiState.Canceled -> current.copy(expandedHostIp = if (current.expandedHostIp == ip) null else ip)
-                    else -> return
+                    is LanScanUiState.Scanning -> {
+                        current.copy(expandedHostIp = if (current.expandedHostIp == ip) null else ip)
+                    }
+
+                    is LanScanUiState.Finished -> {
+                        current.copy(expandedHostIp = if (current.expandedHostIp == ip) null else ip)
+                    }
+
+                    is LanScanUiState.Canceled -> {
+                        current.copy(expandedHostIp = if (current.expandedHostIp == ip) null else ip)
+                    }
+
+                    else -> {
+                        return
+                    }
                 }
         }
 

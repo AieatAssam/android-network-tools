@@ -519,7 +519,15 @@ internal fun buildWifiShareText(result: net.aieat.netswissknife.core.network.wif
         if (!result.isWifiEnabled) appendLine("Wi-Fi is disabled; retained cached results.")
         if (!result.locationEnabled) appendLine("Location Services are disabled; retained cached results.")
         result.accessPoints.sortedBy { it.displaySsid.lowercase() }.forEach { ap ->
-            appendLine("${ap.displaySsid} · ${ap.bssid} · ${ap.rssi} dBm · ${ap.band.displayName} ch ${ap.channel} · ${ap.security}")
+            appendLine(
+                listOf(
+                    ap.displaySsid,
+                    ap.bssid,
+                    "${ap.rssi} dBm",
+                    "${ap.band.displayName} ch ${ap.channel}",
+                    ap.security,
+                ).joinToString(" · "),
+            )
         }
     }
 
@@ -540,7 +548,9 @@ internal fun buildWifiShareText(result: net.aieat.netswissknife.core.network.wif
     val networks =
         state.filteredNetworks.filter { network ->
             searchQuery.isBlank() || network.displaySsid.contains(searchQuery, ignoreCase = true) ||
-                network.accessPoints.any { ap -> ap.bssid.contains(searchQuery, true) || ap.vendor.contains(searchQuery, true) }
+                network.accessPoints.any { ap ->
+                    ap.bssid.contains(searchQuery, true) || ap.vendor.contains(searchQuery, true)
+                }
         }
     val exportText = buildWifiShareText(state.result)
     val context = LocalContext.current
