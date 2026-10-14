@@ -78,6 +78,28 @@ class MdnsRepositoryImplIoTest {
         }
 
     @Test
+    fun `service enumeration query is retried when no service types are received`() =
+        runBlocking {
+            val clock = FakeClock()
+            val fixture =
+                fixture(clock = clock, receive = {
+                    clock.advanceBy(2_000_000_000L)
+                    throw SocketTimeoutException("lost service-enumeration response")
+                })
+
+            val updates = fixture.repository.discover(timeoutMs = 5_000).toList()
+
+            assertEquals(3, fixture.socket.sentQueries.size)
+            assertEquals(
+                listOf("_services._dns-sd._udp.local.", "_services._dns-sd._udp.local.", "_services._dns-sd._udp.local."),
+                fixture.socket.sentQueries.map { org.xbill.DNS.Message(it).getQuestion().name.toString() },
+            )
+            assertEquals(0, (updates.last() as MdnsUpdate.DiscoveryComplete).totalFound)
+            assertTrue(fixture.socket.closed.get())
+            assertTrue(fixture.lock.released.get())
+        }
+
+    @Test
     fun `service type follow up send failure fails discovery`() =
         runBlocking {
             val sendCount = AtomicInteger()

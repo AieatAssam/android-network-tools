@@ -272,11 +272,10 @@ class MdnsRepositoryImpl @Inject constructor(
             sentQueries++
         }
 
+        var lastRequeryMs = 0L
         if (elapsedMillis() < scanWindowMs) {
             sendBoundedQuery(META_QUERY, Type.PTR)
         }
-
-        var lastRequeryMs = 0L
         while (true) {
             ensureOperationActive()
             val nowMs = elapsedMillis()
@@ -287,13 +286,20 @@ class MdnsRepositoryImpl @Inject constructor(
                 .coerceAtLeast(1L)
                 .toInt()
 
-            if (nowMs - lastRequeryMs > REQUERY_INTERVAL_MS && discovery.serviceTypes.isNotEmpty()) {
-                for (type in discovery.serviceTypes) {
-                    if (sentQueries >= discoveryLimits.maxQueries) {
-                        discovery.markQueryLimitReached()
-                        break
+            if (nowMs - lastRequeryMs >= REQUERY_INTERVAL_MS) {
+                if (discovery.serviceTypes.isEmpty()) {
+                    // The service-enumeration packet can be lost on a busy Wi-Fi network.
+                    // Retry it while no service types are known so a single lost packet does
+                    // not turn the entire scan window into a false empty result.
+                    sendBoundedQuery(META_QUERY, Type.PTR)
+                } else {
+                    for (type in discovery.serviceTypes) {
+                        if (sentQueries >= discoveryLimits.maxQueries) {
+                            discovery.markQueryLimitReached()
+                            break
+                        }
+                        sendBoundedQuery("$type.local.", Type.PTR)
                     }
-                    sendBoundedQuery("$type.local.", Type.PTR)
                 }
                 lastRequeryMs = nowMs
                 recordOutcome()
