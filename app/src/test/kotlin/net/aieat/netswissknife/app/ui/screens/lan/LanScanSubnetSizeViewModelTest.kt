@@ -93,13 +93,18 @@ class LanScanSubnetSizeViewModelTest {
             withTimeout(2_000) { subnet.first { it.isNotBlank() } }
         }
 
+    private suspend fun LanScanViewModel.awaitNarrowedFrom(expected: String): String =
+        withContext(Dispatchers.Default) {
+            checkNotNull(withTimeout(2_000) { subnetNarrowedFrom.first { it == expected } })
+        }
+
     @Test
     fun `oversized detected network defaults to the device slash-24`() =
         runTest {
             val vm = viewModel(cidr = "10.1.0.0/16")
 
             assertEquals("10.1.77.0/24", vm.awaitDetectedSubnet())
-            assertEquals("10.1.0.0/16", vm.subnetNarrowedFrom.value)
+            assertEquals("10.1.0.0/16", vm.awaitNarrowedFrom("10.1.0.0/16"))
         }
 
     @Test
