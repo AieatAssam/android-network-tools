@@ -1,5 +1,9 @@
 package net.aieat.netswissknife.app.ui.screens.topology
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
@@ -15,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.*
 import androidx.compose.ui.draw.*
 import androidx.compose.ui.geometry.*
@@ -23,6 +28,7 @@ import androidx.compose.ui.graphics.drawscope.*
 import androidx.compose.ui.input.pointer.*
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringArrayResource
@@ -48,6 +54,7 @@ import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
 import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.ui.theme.AppShapes
+import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.topology.*
 import kotlin.math.*
@@ -139,6 +146,9 @@ private fun TopologyScreenContent(
     var showCommunityPassword by remember { mutableStateOf(false) }
     var showAuthPassword by remember { mutableStateOf(false) }
     var showPrivPassword by remember { mutableStateOf(false) }
+    var fitRequest by remember { mutableIntStateOf(0) }
+    var nodeSearch by rememberSaveable { mutableStateOf("") }
+    val context = LocalContext.current
 
     val isDiscovering = uiState is TopologyUiState.Discovering
     val isCanceling = uiState is TopologyUiState.Canceling
@@ -147,7 +157,7 @@ private fun TopologyScreenContent(
     val isTargetIpInvalid = targetIp.isNotBlank() && normalizedTargetIp == null
     val canStartDiscovery = !isInProgress && normalizedTargetIp != null &&
         !(v3PrivProto != V3PrivProtocol.NONE && v3AuthProto == V3AuthProtocol.NONE)
-    val maxConfigHeight = LocalConfiguration.current.screenHeightDp.dp * 0.55f
+    val maxConfigHeight = LocalConfiguration.current.screenHeightDp.dp * 0.4f
 
     fun currentTopologyParams() = TopologyParams(
         targetIp = normalizedTargetIp ?: targetIp,
@@ -527,13 +537,38 @@ private fun TopologyScreenContent(
                 }
             }
 
-            Box(modifier = Modifier.weight(1f)) {
+            Column(modifier = Modifier.weight(1f)) {
+                val retainedGraph = when (val state = uiState) {
+                    is TopologyUiState.Done -> state.graph
+                    is TopologyUiState.Discovering -> retainedTopologyGraph(state.nodes, state.links)
+                    is TopologyUiState.Canceling -> retainedTopologyGraph(state.nodes, state.links)
+                    is TopologyUiState.Canceled -> retainedTopologyGraph(state.nodes, state.links)
+                    is TopologyUiState.TimeLimit -> retainedTopologyGraph(state.nodes, state.links)
+                    else -> null
+                }
+                retainedGraph?.let { graph ->
+                    val reportStatus = when (uiState) {
+                        is TopologyUiState.Discovering -> "Discovery in progress; partial results."
+                        is TopologyUiState.Canceling -> "Discovery stopping; partial results."
+                        is TopologyUiState.Canceled -> "Discovery canceled; partial results."
+                        is TopologyUiState.TimeLimit -> "Discovery time limit reached; partial results."
+                        else -> null
+                    }
+                    TopologyResultUtilities(
+                        graph = graph,
+                        reportStatus = reportStatus,
+                        nodeSearch = nodeSearch,
+                        onNodeSearchChange = { nodeSearch = it },
+                        onSelectNode = onSelectNode,
+                    )
+                }
                 AnimatedContent(
                     targetState = uiState,
                     transitionSpec = {
                         fadeIn(AppMotion.enter(300)) togetherWith fadeOut(AppMotion.exit(300))
                     },
-                    label = "topology_state"
+                    label = "topology_state",
+                    modifier = Modifier.weight(1f),
                 ) { state ->
                     when (state) {
                         is TopologyUiState.Idle -> {
@@ -591,7 +626,8 @@ private fun TopologyScreenContent(
                                     nodes = state.graph.nodes,
                                     links = state.graph.links,
                                     selectedNodeIp = state.selectedNodeIp,
-                                    onNodeTap = onSelectNode
+                                    onNodeTap = onSelectNode,
+                                    fitRequest = fitRequest,
                                 )
                                 if (state.graph.truncationReasons.isNotEmpty() || state.graph.hadSnmpErrors) {
                                     Surface(
@@ -616,7 +652,7 @@ private fun TopologyScreenContent(
                                     }
                                 }
                                 FloatingActionButton(
-                                    onClick = { },
+                                    onClick = { fitRequest++ },
                                     modifier = Modifier
                                         .align(Alignment.BottomEnd)
                                         .padding(16.dp),
@@ -681,6 +717,81 @@ private fun TopologyScreenContent(
             onNavigateToNeighbour = onSelectNode
         )
     }
+}
+
+private fun retainedTopologyGraph(nodes: List<TopologyNode>, links: List<TopologyLink>): TopologyGraph? =
+    nodes.takeIf { it.isNotEmpty() }?.let {
+        TopologyGraph(nodes = nodes, links = links, seedIp = nodes.first().ip, queriedAt = 0L)
+    }
+
+@Composable
+private fun TopologyResultUtilities(
+    graph: TopologyGraph,
+    reportStatus: String?,
+    nodeSearch: String,
+    onNodeSearchChange: (String) -> Unit,
+    onSelectNode: (String) -> Unit,
+) {
+    val context = LocalContext.current
+    val report = topologyReport(graph, reportStatus)
+    val copiedMessage = stringResource(R.string.lan_copied)
+    val shareSubject = stringResource(R.string.topology_screen_title)
+    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(modifier = Modifier.weight(1f)) {
+            OutlinedTextField(
+                value = nodeSearch,
+                onValueChange = onNodeSearchChange,
+                label = { Text(stringResource(R.string.topology_search_nodes)) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            val matches = graph.nodes.filter { node ->
+                nodeSearch.isNotBlank() && listOfNotNull(node.ip, node.sysName, node.vendor, node.model)
+                    .any { it.contains(nodeSearch, ignoreCase = true) }
+            }
+            DropdownMenu(
+                expanded = matches.isNotEmpty(),
+                onDismissRequest = { onNodeSearchChange("") },
+                properties = androidx.compose.ui.window.PopupProperties(focusable = false),
+            ) {
+                matches.take(8).forEach { node ->
+                    DropdownMenuItem(
+                        text = { Text("${node.sysName ?: node.ip} · ${node.ip}") },
+                        onClick = { onSelectNode(node.ip); onNodeSearchChange("") },
+                    )
+                }
+            }
+        }
+        TextButton(onClick = {
+            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            clipboard.setPrimaryClip(ClipData.newPlainText("Network topology", report))
+            Toast.makeText(context, copiedMessage, Toast.LENGTH_SHORT).show()
+        }) { Text(stringResource(R.string.action_copy)) }
+        TextButton(onClick = { context.shareText(report, shareSubject) }) {
+            Text(stringResource(R.string.action_share))
+        }
+    }
+}
+
+internal fun topologyReport(graph: TopologyGraph, status: String? = null): String = buildString {
+    appendLine("Network topology · ${graph.seedIp}")
+    if (graph.queriedAt > 0) appendLine("Queried: ${java.util.Date(graph.queriedAt)}")
+    status?.let { appendLine(it) }
+    appendLine("Nodes: ${graph.nodes.size} · Links: ${graph.links.size}")
+    if (graph.truncationReasons.isNotEmpty()) appendLine("Truncated: ${graph.truncationReasons.joinToString()}")
+    if (graph.hadSnmpErrors) appendLine("Some SNMP tables returned errors.")
+    graph.nodes.forEach { node ->
+        appendLine("\n${node.sysName ?: node.ip} (${node.ip})")
+        node.vendor?.let { appendLine("Vendor: $it") }
+        node.model?.let { appendLine("Model: $it") }
+        appendLine("SNMP: ${if (node.snmpReachable) "reachable" else "unavailable"}")
+        node.tableObservations.forEach { (table, observation) ->
+            appendLine("${table.name}: ${observation.completeness}${observation.failures.takeIf { it.isNotEmpty() }?.joinToString(prefix = " (", postfix = ")") ?: ""}")
+        }
+        node.interfaces.forEach { iface -> appendLine("Interface ${iface.name}: ${iface.operStatus}") }
+        node.vlans.forEach { vlan -> appendLine("VLAN ${vlan.id}: ${vlan.name}") }
+    }
+    graph.links.forEach { link -> appendLine("\n${link.fromIp}:${link.fromPort.orEmpty()} ↔ ${link.toIp}:${link.toPort.orEmpty()} (${link.protocol})") }
 }
 
 @Composable
@@ -1002,7 +1113,8 @@ private fun TopologyCanvas(
     nodes: List<TopologyNode>,
     links: List<TopologyLink>,
     selectedNodeIp: String?,
-    onNodeTap: (String) -> Unit
+    onNodeTap: (String) -> Unit,
+    fitRequest: Int = 0,
 ) {
     val primaryColor = MaterialTheme.colorScheme.primary
     val tertiaryColor = MaterialTheme.colorScheme.tertiary
@@ -1010,6 +1122,10 @@ private fun TopologyCanvas(
 
     var graphOffset by remember { mutableStateOf(Offset.Zero) }
     var graphScale by remember { mutableFloatStateOf(1f) }
+    LaunchedEffect(fitRequest) {
+        graphOffset = Offset.Zero
+        graphScale = 1f
+    }
 
     val queriedIps = nodes.map { it.ip }.toSet()
     val reportedIps =
@@ -1249,6 +1365,7 @@ private fun NodeDetailSheet(
     onDismiss: () -> Unit,
     onNavigateToNeighbour: (String) -> Unit
 ) {
+    var interfaceFilter by rememberSaveable { mutableStateOf("all") }
     // Skip the partially-expanded intermediate state: this sheet's content is a
     // LazyColumn, so at partial expand its small viewport means sections below the
     // header (e.g. "System") are never composed at all, not just clipped -- a plain
@@ -1298,10 +1415,7 @@ private fun NodeDetailSheet(
                         val vendor = node.vendor
                         if (vendor != null) {
                             Spacer(modifier = Modifier.height(4.dp))
-                            AssistChip(
-                                onClick = {},
-                                label = { Text(vendor, style = MaterialTheme.typography.labelSmall) }
-                            )
+                            Text(vendor, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
@@ -1330,7 +1444,27 @@ private fun NodeDetailSheet(
             if (node.interfaces.isNotEmpty()) {
                 item {
                     SectionCard(title = stringResource(R.string.topology_node_detail_interfaces)) {
-                        node.interfaces.forEach { iface ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            listOf("all", "up", "down").forEach { filter ->
+                                FilterChip(
+                                    selected = interfaceFilter == filter,
+                                    onClick = { interfaceFilter = filter },
+                                    label = { Text(stringResource(when (filter) {
+                                        "up" -> R.string.topology_interfaces_up
+                                        "down" -> R.string.topology_interfaces_down
+                                        else -> R.string.topology_interfaces_all
+                                    })) },
+                                )
+                            }
+                        }
+                        val shownInterfaces = node.interfaces.filter { iface ->
+                            when (interfaceFilter) {
+                                "up" -> iface.operStatus == InterfaceStatus.UP
+                                "down" -> iface.operStatus == InterfaceStatus.DOWN
+                                else -> true
+                            }
+                        }
+                        shownInterfaces.forEach { iface ->
                             InterfaceRow(iface)
                         }
                     }
@@ -1348,16 +1482,14 @@ private fun NodeDetailSheet(
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             node.vlans.forEach { vlan ->
-                                if (vlan.active) {
-                                    FilterChip(
-                                        selected = true,
-                                        onClick = {},
-                                        label = { Text(stringResource(R.string.topology_vlan_label, vlan.id, vlan.name), style = MaterialTheme.typography.labelSmall) }
-                                    )
-                                } else {
-                                    AssistChip(
-                                        onClick = {},
-                                        label = { Text(stringResource(R.string.topology_vlan_label, vlan.id, vlan.name), style = MaterialTheme.typography.labelSmall) }
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = if (vlan.active) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                                ) {
+                                    Text(
+                                        stringResource(R.string.topology_vlan_label, vlan.id, vlan.name),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                                     )
                                 }
                             }
@@ -1467,15 +1599,12 @@ private fun InterfaceRow(iface: SnmpInterface) {
         val statusLabel = when (iface.operStatus) {
             InterfaceStatus.UP -> "UP"
             InterfaceStatus.DOWN -> "DOWN"
-            InterfaceStatus.UNKNOWN -> "?"
+            InterfaceStatus.UNKNOWN -> stringResource(R.string.topology_interface_unknown)
         }
-        AssistChip(
-            onClick = {},
-            label = { Text(statusLabel, style = MaterialTheme.typography.labelSmall) },
-            colors = AssistChipDefaults.assistChipColors(
-                labelColor = statusColor
-            )
-        )
+        Surface(shape = RoundedCornerShape(8.dp), color = statusColor.copy(alpha = 0.12f)) {
+            Text(statusLabel, style = MaterialTheme.typography.labelSmall, color = statusColor,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
+        }
     }
 }
 

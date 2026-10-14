@@ -36,6 +36,15 @@ meta:
   status_vocabulary: [todo, in_progress, blocked, done, dropped]
   severity_vocabulary: [critical, high, medium, low]
 
+current_ux_followup:
+  status: done
+  source: "User-provided Android UX review; the referenced UX-REVIEW.md was not present in this checkout."
+  plan: plan/reviews/2026-10-14-ux-review-followup.md
+  scope: "LAN list/actions, Topology/mDNS/Wi-Fi result utilities, Port Scan counts, state retention, density, and semantics."
+  current_work: "Completed the UX review fixes across LAN, Topology, mDNS, Wi-Fi, and Port Scan; verified the final build and primary result flows on the connected Android 8 tablet."
+  validation: "App JVM unit suite, Android-test Kotlin compilation, lintDebug, assembleDebug, and real Android 8 LAN/mDNS/Wi-Fi/SNMP/Port Scan checks passed. Instrumented Compose tests remain blocked by the existing API 26 MockK StateFlow interception failure before test bodies."
+  tracking: "This follow-up is included in the existing PR #109; no second PR was opened."
+
 second_pass_review:
   status: done
   started_on: "2026-09-22"

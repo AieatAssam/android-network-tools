@@ -1,5 +1,9 @@
 package net.aieat.netswissknife.app.ui.screens.mdns
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
@@ -54,8 +58,10 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -63,6 +69,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -102,6 +109,7 @@ import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
 import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
 import net.aieat.netswissknife.app.ui.screens.mdnsAnnouncementPhase
 import net.aieat.netswissknife.app.platform.NetworkErrorKind
+import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.core.network.mdns.DiscoveredService
 import net.aieat.netswissknife.app.ui.navigation.HostTool
 import net.aieat.netswissknife.app.ui.navigation.NavRoutes
@@ -200,6 +208,7 @@ fun MdnsDiscoveryScreen(
                         isScanning = uiState.isScanning,
                         isCanceling = uiState.isCanceling,
                         scanCanceled = uiState.scanCanceled,
+                        truncationReasons = uiState.truncationReasons,
                         onPingHost = { host ->
                             ToolHost.parse(host)?.let { validatedHost ->
                                 onNavigate(
@@ -530,18 +539,74 @@ internal fun mdnsHttpIntent(service: DiscoveredService): ToolIntent? {
     )
 }
 
+internal fun buildMdnsShareText(
+    services: List<DiscoveredService>,
+    isScanning: Boolean,
+    isCanceling: Boolean,
+    scanCanceled: Boolean,
+    truncationReasons: Set<net.aieat.netswissknife.core.network.mdns.MdnsTruncationReason>,
+): String = buildString {
+    appendLine("mDNS services: ${services.size}")
+    when {
+        isCanceling -> appendLine("Discovery stopping; partial results.")
+        isScanning -> appendLine("Discovery in progress; partial results.")
+        scanCanceled -> appendLine("Discovery canceled; partial results.")
+        else -> appendLine("Discovery window complete.")
+    }
+    if (truncationReasons.isNotEmpty()) appendLine("Truncated: ${truncationReasons.joinToString()}")
+    services.sortedWith(compareBy({ it.serviceType }, { it.instanceName })).forEach { service ->
+        appendLine("${service.displayName} (${service.serviceType}) · ${service.hostname}:${service.port}")
+        if (service.ipAddresses.isNotEmpty()) appendLine("Addresses: ${service.ipAddresses.joinToString()}")
+        service.txtRecords.toSortedMap().forEach { (key, value) -> appendLine("TXT $key=$value") }
+    }
+}
+
 @Composable
 private fun ServiceList(
     servicesByType: Map<String, List<DiscoveredService>>,
     isScanning: Boolean,
     isCanceling: Boolean,
     scanCanceled: Boolean,
+    truncationReasons: Set<net.aieat.netswissknife.core.network.mdns.MdnsTruncationReason>,
     onPingHost: (String) -> Unit,
     onHttpProbe: (DiscoveredService) -> Unit,
 ) {
     val expandedTypes = remember { mutableStateMapOf<String, Boolean>() }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    val allServices = servicesByType.values.flatten()
+    val filteredByType = servicesByType.mapValues { (_, services) ->
+        services.filter { service ->
+            searchQuery.isBlank() || listOf(service.serviceType, service.instanceName, service.displayName, service.hostname)
+                .any { it.contains(searchQuery, ignoreCase = true) } ||
+                service.ipAddresses.any { it.contains(searchQuery, ignoreCase = true) } ||
+                service.txtRecords.any { (key, value) -> key.contains(searchQuery, true) || value.contains(searchQuery, true) }
+        }
+    }.filterValues { it.isNotEmpty() }
+    val report = buildMdnsShareText(allServices, isScanning, isCanceling, scanCanceled, truncationReasons)
+    val context = LocalContext.current
+    val copiedMessage = stringResource(R.string.lan_copied)
+    val shareSubject = stringResource(R.string.mdns_screen_title)
 
     LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        item {
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                label = { Text(stringResource(R.string.mdns_search_label)) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
+                TextButton(enabled = report.isNotBlank(), onClick = {
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    clipboard.setPrimaryClip(ClipData.newPlainText("mDNS services", report))
+                    Toast.makeText(context, copiedMessage, Toast.LENGTH_SHORT).show()
+                }) { Text(stringResource(R.string.action_copy)) }
+                TextButton(enabled = report.isNotBlank(), onClick = {
+                    context.shareText(report, shareSubject)
+                }) { Text(stringResource(R.string.action_share)) }
+            }
+        }
         if (scanCanceled) {
             item {
                 Text(
@@ -575,7 +640,7 @@ private fun ServiceList(
             }
         }
 
-        servicesByType.entries.forEach { (serviceType, services) ->
+        filteredByType.entries.forEach { (serviceType, services) ->
             val isExpanded = expandedTypes[serviceType] != false
 
             item(key = serviceType) {

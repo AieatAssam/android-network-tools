@@ -44,6 +44,8 @@ object AppPreferenceKeys {
 
     /** Wi-Fi auto-refresh interval in milliseconds; -1 means explicitly disabled. */
     val WIFI_REFRESH_INTERVAL_MS = longPreferencesKey("wifi_refresh_interval_ms")
+    /** LAN host result ordering. */
+    val LAN_HOST_SORT_ORDER = stringPreferencesKey("lan_host_sort_order")
 
     // ── Recent hosts (ordered pipe-delimited lists, max 5 entries each) ───────
     val RECENT_PING_HOSTS       = stringPreferencesKey("recent_ping_hosts")

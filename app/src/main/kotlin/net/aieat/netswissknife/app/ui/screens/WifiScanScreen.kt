@@ -1,5 +1,9 @@
 package net.aieat.netswissknife.app.ui.screens
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.widget.Toast
 import android.Manifest
 import android.content.Intent
 import android.os.Build
@@ -60,6 +64,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -70,6 +76,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -145,6 +152,7 @@ import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
 import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.theme.AppMotion
+import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.core.network.wifi.WifiBand
 import net.aieat.netswissknife.core.network.wifi.WifiSecurity
 
@@ -452,6 +460,19 @@ fun WifiScanScreen(
 
 // ── Success screen ────────────────────────────────────────────────────────────
 
+internal fun buildWifiShareText(result: net.aieat.netswissknife.core.network.wifi.WifiScanResult): String = buildString {
+    appendLine("Wi-Fi scan: ${result.accessPoints.size} access points")
+    appendLine("Freshness: ${if (result.isFresh) "fresh" else "cached or stale"}")
+    appendLine("Sample age: ${result.scanAgeMs?.let { "$it ms" } ?: "unknown"}")
+    appendLine("Refresh status: ${result.refreshStatus}")
+    if (result.scanTimestampMs > 0) appendLine("Sample time: ${java.util.Date(result.scanTimestampMs)}")
+    if (!result.isWifiEnabled) appendLine("Wi-Fi is disabled; retained cached results.")
+    if (!result.locationEnabled) appendLine("Location Services are disabled; retained cached results.")
+    result.accessPoints.sortedBy { it.displaySsid.lowercase() }.forEach { ap ->
+        appendLine("${ap.displaySsid} · ${ap.bssid} · ${ap.rssi} dBm · ${ap.band.displayName} ch ${ap.channel} · ${ap.security}")
+    }
+}
+
 @Composable private fun WifiSuccessScreen(
     state: WifiScanUiState.Success,
     autoRefresh: Boolean,
@@ -465,7 +486,15 @@ fun WifiScanScreen(
     onSelectAp: (WifiAccessPoint?) -> Unit,
     onToggleNetworkExpanded: (String) -> Unit,
 ) {
-    val networks = state.filteredNetworks
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    val networks = state.filteredNetworks.filter { network ->
+        searchQuery.isBlank() || network.displaySsid.contains(searchQuery, ignoreCase = true) ||
+            network.accessPoints.any { ap -> ap.bssid.contains(searchQuery, true) || ap.vendor.contains(searchQuery, true) }
+    }
+    val exportText = buildWifiShareText(state.result)
+    val context = LocalContext.current
+    val copiedMessage = stringResource(R.string.lan_copied)
+    val shareSubject = stringResource(R.string.wifi_screen_title)
     var showHelp by remember { mutableStateOf(false) }
 
     LazyColumn(
@@ -487,6 +516,26 @@ fun WifiScanScreen(
         }
 
         item { WifiScanFreshnessStatus(state.result, onRequestPermission) }
+
+        item {
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                label = { Text(stringResource(R.string.wifi_search_label)) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
+                TextButton(enabled = exportText.isNotBlank(), onClick = {
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    clipboard.setPrimaryClip(ClipData.newPlainText("Wi-Fi scan", exportText))
+                    Toast.makeText(context, copiedMessage, Toast.LENGTH_SHORT).show()
+                }) { Text(stringResource(R.string.action_copy)) }
+                TextButton(enabled = exportText.isNotBlank(), onClick = {
+                    context.shareText(exportText, shareSubject)
+                }) { Text(stringResource(R.string.action_share)) }
+            }
+        }
 
         state.result.connectedNetwork?.let { connectionInfo ->
             item { WifiConnectedNetworkCard(connectionInfo) }

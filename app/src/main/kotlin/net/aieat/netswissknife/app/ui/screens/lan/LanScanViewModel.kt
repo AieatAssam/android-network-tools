@@ -2,6 +2,7 @@ package net.aieat.netswissknife.app.ui.screens.lan
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.edit
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
@@ -78,6 +79,8 @@ private fun Throwable.hasDeadlineFailure(): Boolean {
     return false
 }
 
+enum class LanHostSortOrder { IP, LATENCY, HOSTNAME, VENDOR, OPEN_PORTS }
+
 /** All possible UI states for the LAN scanner screen. */
 sealed interface LanScanUiState {
     object Idle : LanScanUiState
@@ -89,6 +92,7 @@ sealed interface LanScanUiState {
         val uncertainCount: Int = 0,
         val uncertainDiagnostics: List<LanScanDiagnostic> = emptyList(),
         val progress: Float = if (totalCount > 0) scannedCount.toFloat() / totalCount else 0f,
+        val expandedHostIp: String? = null,
     ) : LanScanUiState
 
     data class Canceling(val summary: LanScanSummary) : LanScanUiState
@@ -170,6 +174,9 @@ class LanScanViewModel @Inject constructor(
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
+    private val _hostSortOrder = MutableStateFlow(LanHostSortOrder.IP)
+    val hostSortOrder: StateFlow<LanHostSortOrder> = _hostSortOrder.asStateFlow()
+
     val recentSubnets: StateFlow<List<String>>
 
     private var scanJob: Job? = null
@@ -181,6 +188,7 @@ class LanScanViewModel @Inject constructor(
         val session: OperationSession,
         val summary: LanScanSummary,
         val reason: CancellationReason,
+        val expandedHostIp: String?,
     )
 
     internal var operationSessionFactory: (LanScanParams) -> OperationSession = { params ->
@@ -221,6 +229,9 @@ class LanScanViewModel @Inject constructor(
                 val prefs = dataStore.data.first()
                 _timeoutMs.value = prefs[AppPreferenceKeys.DEFAULT_TIMEOUT_MS] ?: 1_000
                 _concurrency.value = prefs[AppPreferenceKeys.DEFAULT_CONCURRENCY] ?: 50
+                _hostSortOrder.value = prefs[AppPreferenceKeys.LAN_HOST_SORT_ORDER]
+                    ?.let { stored -> runCatching { LanHostSortOrder.valueOf(stored) }.getOrNull() }
+                    ?: LanHostSortOrder.IP
             }
         refreshSubnet()
     }
@@ -243,6 +254,11 @@ class LanScanViewModel @Inject constructor(
     fun onConcurrencyChange(value: Int) { _concurrency.value = value }
 
     fun onSearchQueryChange(value: String) { _searchQuery.value = value }
+
+    fun onHostSortOrderChange(value: LanHostSortOrder) {
+        _hostSortOrder.value = value
+        viewModelScope.launch { dataStore.edit { it[AppPreferenceKeys.LAN_HOST_SORT_ORDER] = value.name } }
+    }
 
     /** Detects the current subnet from active network interfaces on an IO thread. */
     fun refreshSubnet() {
@@ -331,9 +347,7 @@ class LanScanViewModel @Inject constructor(
     fun startScan() {
         // Do not overlap a new scan with an operation that is still releasing resources.
         if (scanJob?.isCompleted == false) return
-        // Search and filter apply to one completed result set. The screen's local filter
-        // resets when Finished content leaves composition; clear the ViewModel query too
-        // so a new scan cannot return with only half of the old filter still applied.
+        // Search is scoped to a completed result set; a fresh scan starts unfiltered.
         _searchQuery.value = ""
         val liveHosts = mutableListOf<LanHost>()
         val uncertainDiagnostics = mutableListOf<LanScanDiagnostic>()
@@ -396,12 +410,14 @@ class LanScanViewModel @Inject constructor(
                                 recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_LAN_SUBNETS, params.subnet)
                             }
                             liveHosts.add(result.host)
+                            val expandedHostIp = (_uiState.value as? LanScanUiState.Scanning)?.expandedHostIp
                             _uiState.value = LanScanUiState.Scanning(
                                 hosts = liveHosts.toList(),
                                 scannedCount = result.scannedCount,
                                 totalCount = result.totalCount,
                                 uncertainCount = result.uncertainCount,
                                 uncertainDiagnostics = uncertainDiagnostics.toList(),
+                                expandedHostIp = expandedHostIp,
                             )
                         }
 
@@ -420,7 +436,7 @@ class LanScanViewModel @Inject constructor(
 
                         is LanScanFlowResult.ScanComplete -> {
                             AppLogger.i(TAG, "startScan: scan complete – scanned=${result.summary.totalScanned} alive=${result.summary.aliveHosts} duration=${result.summary.scanDurationMs}ms")
-                            _uiState.value = LanScanUiState.Finished(result.summary)
+                            _uiState.value = LanScanUiState.Finished(result.summary, expandedHostIp = (_uiState.value as? LanScanUiState.Scanning)?.expandedHostIp)
                         }
                     }
                 }
@@ -447,13 +463,14 @@ class LanScanViewModel @Inject constructor(
                     _uiState.value = when (
                         pending.session.cancellationReason ?: pending.reason
                     ) {
-                        CancellationReason.USER_STOP -> LanScanUiState.Canceled(pending.summary)
+                        CancellationReason.USER_STOP -> LanScanUiState.Canceled(pending.summary, expandedHostIp = pending.expandedHostIp)
                         CancellationReason.DEADLINE_EXCEEDED -> LanScanUiState.Finished(
                             pending.summary,
+                            expandedHostIp = pending.expandedHostIp,
                             partial = true,
                             timeLimitReached = true,
                         )
-                        else -> LanScanUiState.Finished(pending.summary, partial = true)
+                        else -> LanScanUiState.Finished(pending.summary, expandedHostIp = pending.expandedHostIp, partial = true)
                     }
                 }
             }
@@ -475,7 +492,7 @@ class LanScanViewModel @Inject constructor(
             uncertainHosts = current?.uncertainDiagnostics ?: diagnostics.toList(),
             uncertainCount = current?.uncertainCount ?: diagnostics.size,
         )
-        return LanScanUiState.Finished(summary, partial = true, timeLimitReached = true)
+        return LanScanUiState.Finished(summary, expandedHostIp = current?.expandedHostIp, partial = true, timeLimitReached = true)
     }
 
     fun onStopScan() {
@@ -503,9 +520,9 @@ class LanScanViewModel @Inject constructor(
         )
         if (session == null || job == null || job.isCompleted) {
             _uiState.value = if (reason == CancellationReason.USER_STOP) {
-                LanScanUiState.Canceled(partial)
+                LanScanUiState.Canceled(partial, expandedHostIp = current.expandedHostIp)
             } else {
-                LanScanUiState.Finished(partial, partial = true)
+                LanScanUiState.Finished(partial, expandedHostIp = current.expandedHostIp, partial = true)
             }
             return
         }
@@ -514,6 +531,7 @@ class LanScanViewModel @Inject constructor(
             session = session,
             summary = partial,
             reason = session.cancellationReason ?: reason,
+            expandedHostIp = current.expandedHostIp,
         )
         scanOperationSession = null
         _uiState.value = LanScanUiState.Canceling(partial)
@@ -532,6 +550,7 @@ class LanScanViewModel @Inject constructor(
 
     fun onToggleHostExpanded(ip: String) {
         _uiState.value = when (val current = _uiState.value) {
+            is LanScanUiState.Scanning -> current.copy(expandedHostIp = if (current.expandedHostIp == ip) null else ip)
             is LanScanUiState.Finished -> current.copy(expandedHostIp = if (current.expandedHostIp == ip) null else ip)
             is LanScanUiState.Canceled -> current.copy(expandedHostIp = if (current.expandedHostIp == ip) null else ip)
             else -> return

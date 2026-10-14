@@ -76,6 +76,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -199,7 +200,7 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
     val clipboard = LocalClipboard.current
     val clipScope = rememberCoroutineScope()
     val context = LocalContext.current
-    var showAll by remember { mutableStateOf(false) }
+    var showAll by rememberSaveable { mutableStateOf(false) }
     var showHelp by remember { mutableStateOf(false) }
 
     LazyColumn(
@@ -360,7 +361,11 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
                             TextButton(onClick = { showAll = !showAll }) {
                                 Text(
                                     if (showAll) stringResource(R.string.ports_show_open)
-                                    else stringResource(R.string.ports_show_all)
+                                    else stringResource(
+                                        R.string.ports_show_all_with_counts,
+                                        summary.closedPorts,
+                                        summary.filteredPorts,
+                                    )
                                 )
                             }
                         }

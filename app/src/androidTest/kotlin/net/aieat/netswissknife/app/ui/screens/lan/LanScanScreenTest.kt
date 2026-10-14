@@ -16,6 +16,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.swipeUp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -132,6 +133,34 @@ class LanScanScreenTest {
     }
 
     @Test
+    fun liveHostCanExpandAndUseActionsAndLongPressCopyBeforeScanFinishes() {
+        val ip = "192.168.1.21"
+        val stateFlow = MutableStateFlow<LanScanUiState>(
+            LanScanUiState.Scanning(
+                hosts = listOf(fakeHost(ip).copy(hostname = "printer.local", macAddress = "AA:BB:CC:DD:EE:FF", vendor = "Example")),
+                scannedCount = 7,
+                totalCount = 254,
+            ),
+        )
+        val viewModel = fakeViewModel(flow = stateFlow)
+        composeRule.setContent { NetSwissKnifeTheme { LanScreen(viewModel = viewModel) } }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        composeRule.onNodeWithTag("lan_host_card_$ip").performScrollTo().performClick()
+        verify(exactly = 1) { viewModel.onToggleHostExpanded(ip) }
+
+        stateFlow.value = (stateFlow.value as LanScanUiState.Scanning).copy(expandedHostIp = ip)
+        composeRule.mainClock.advanceTimeBy(250L)
+        composeRule.onNodeWithTag("lan_action_ping").performScrollTo().performClick()
+        verify(exactly = 1) { viewModel.onPingHost(ip) }
+
+        composeRule.onNodeWithTag("lan_host_card_$ip").performTouchInput { longClick() }
+        composeRule.onNodeWithText(context.getString(R.string.lan_copy_ip)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.lan_copy_mac)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.lan_copy_hostname)).assertIsDisplayed()
+    }
+
+    @Test
     fun detectSubnetIcon_callsRefreshSubnet() {
         val viewModel = fakeViewModel(subnet = "")
         composeRule.setContent {
@@ -164,10 +193,7 @@ class LanScanScreenTest {
             }
         }
 
-        // The host list is a LazyColumn nested inside the screen's own outer LazyColumn;
-        // performScrollTo() only reliably reaches one level of scrollable ancestor, so
-        // assert on the summary (rendered before the nested list, reachable without a
-        // multi-level scroll) rather than an individual host row.
+        // Configuration, summary, filters and hosts now share the same scroll container.
         composeRule.mainClock.advanceTimeBy(1_000L)
         composeRule
             .onAllNodesWithText("192.168.1.0/24", substring = true)
@@ -401,7 +427,6 @@ class LanScanScreenTest {
         }
         composeRule.mainClock.advanceTimeBy(1_000L)
         repeat(2) { composeRule.onNodeWithTag("lan_content").performTouchInput { swipeUp() } }
-        repeat(2) { composeRule.onNodeWithTag("lan_hosts_list").performTouchInput { swipeUp() } }
         composeRule.onNodeWithTag("lan_action_ping")
             .performScrollTo()
             .assertIsDisplayed()
@@ -432,7 +457,6 @@ class LanScanScreenTest {
         }
         composeRule.mainClock.advanceTimeBy(1_000L)
         repeat(2) { composeRule.onNodeWithTag("lan_content").performTouchInput { swipeUp() } }
-        repeat(3) { composeRule.onNodeWithTag("lan_hosts_list").performTouchInput { swipeUp() } }
         composeRule.onNodeWithTag("lan_action_tls_443")
             .performScrollTo()
             .assertIsDisplayed()
@@ -464,7 +488,6 @@ class LanScanScreenTest {
         composeRule.setContent { NetSwissKnifeTheme { LanScreen(viewModel = viewModel) } }
         composeRule.mainClock.advanceTimeBy(1_000L)
         repeat(2) { composeRule.onNodeWithTag("lan_content").performTouchInput { swipeUp() } }
-        repeat(3) { composeRule.onNodeWithTag("lan_hosts_list").performTouchInput { swipeUp() } }
         composeRule.onNodeWithTag("lan_action_http")
             .performScrollTo()
             .assertIsDisplayed()
@@ -484,7 +507,6 @@ class LanScanScreenTest {
         )
         composeRule.mainClock.advanceTimeBy(500L)
         repeat(2) { composeRule.onNodeWithTag("lan_content").performTouchInput { swipeUp() } }
-        repeat(2) { composeRule.onNodeWithTag("lan_hosts_list").performTouchInput { swipeUp() } }
         composeRule.onNodeWithText("Probe HTTP (port 80)").performScrollTo().assertIsDisplayed().performClick()
         verify(exactly = 1) { viewModel.onProbeHttp(fallbackIp, 80) }
 
@@ -501,7 +523,6 @@ class LanScanScreenTest {
         )
         composeRule.mainClock.advanceTimeBy(500L)
         repeat(2) { composeRule.onNodeWithTag("lan_content").performTouchInput { swipeUp() } }
-        repeat(2) { composeRule.onNodeWithTag("lan_hosts_list").performTouchInput { swipeUp() } }
         composeRule.onNodeWithText("Probe HTTP (port 80)").performScrollTo().assertIsDisplayed().performClick()
         verify(exactly = 1) { viewModel.onProbeHttp(unknownIp, 80) }
     }
@@ -673,6 +694,7 @@ class LanScanScreenTest {
         every { viewModel.subnet } returns MutableStateFlow(subnet)
         every { viewModel.timeoutMs } returns MutableStateFlow(500)
         every { viewModel.concurrency } returns MutableStateFlow(32)
+        every { viewModel.hostSortOrder } returns MutableStateFlow(LanHostSortOrder.IP)
         every { viewModel.isSubnetLoading } returns MutableStateFlow(false)
         every { viewModel.searchQuery } returns searchQueryFlow
         every { viewModel.onSearchQueryChange(any()) } answers { searchQueryFlow.value = firstArg() }

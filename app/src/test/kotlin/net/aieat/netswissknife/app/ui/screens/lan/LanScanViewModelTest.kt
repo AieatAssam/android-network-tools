@@ -121,6 +121,30 @@ class LanScanViewModelTest {
         Dispatchers.resetMain()
     }
 
+    @Test
+    fun `expanded live host stays expanded as hosts arrive and scan completes`() = runTest {
+        val continueScan = CompletableDeferred<Unit>()
+        val secondHost = stubHost.copy(ip = "192.168.1.2")
+        every { lanScanUseCase(any(), any()) } returns flow {
+            emit(LanScanFlowResult.HostFound(stubHost, scannedCount = 1, totalCount = 2))
+            continueScan.await()
+            emit(LanScanFlowResult.HostFound(secondHost, scannedCount = 2, totalCount = 2))
+            assertEquals(stubHost.ip, (viewModel.uiState.value as LanScanUiState.Scanning).expandedHostIp)
+            emit(LanScanFlowResult.ScanComplete(stubSummary.copy(hosts = listOf(stubHost, secondHost), aliveHosts = 2)))
+        }
+        viewModel.startScan()
+        withContext(Dispatchers.Default) {
+            withTimeout(2_000) { viewModel.uiState.first { it is LanScanUiState.Scanning && it.hosts.isNotEmpty() } }
+        }
+        viewModel.onToggleHostExpanded(stubHost.ip)
+        continueScan.complete(Unit)
+        val finished = withContext(Dispatchers.Default) {
+            withTimeout(2_000) { viewModel.uiState.first { it is LanScanUiState.Finished } }
+        } as LanScanUiState.Finished
+        assertEquals(stubHost.ip, finished.expandedHostIp)
+        assertEquals(2, finished.summary.hosts.size)
+    }
+
     @Nested
     @DisplayName("initial state")
     inner class InitialState {
@@ -218,6 +242,7 @@ class LanScanViewModelTest {
     fun `deadline returns all discovered hosts as an explicit partial result`() = runTest {
             every { lanScanUseCase(any(), any()) } returns flow {
                 emit(LanScanFlowResult.HostFound(stubHost, scannedCount = 1, totalCount = 254))
+                viewModel.onToggleHostExpanded(stubHost.ip)
                 throw OperationDeadlineExceededException()
             }
             viewModel.onSubnetChange("192.168.1.0/24")
@@ -231,6 +256,7 @@ class LanScanViewModelTest {
 
             assertTrue(state.partial)
             assertTrue(state.timeLimitReached)
+            assertEquals(stubHost.ip, state.expandedHostIp)
             assertEquals(listOf(stubHost), state.summary.hosts)
             assertEquals(1, state.summary.totalScanned)
         }
@@ -328,6 +354,7 @@ class LanScanViewModelTest {
                     viewModel.uiState.first { it is LanScanUiState.Scanning && it.hosts.isNotEmpty() }
                 }
             }
+            viewModel.onToggleHostExpanded(stubHost.ip)
             viewModel.onStopScan()
             withContext(Dispatchers.Default) {
                 withTimeout(2_000) { viewModel.uiState.first { it is LanScanUiState.Canceled } }
@@ -337,6 +364,7 @@ class LanScanViewModelTest {
             val partial = viewModel.uiState.value as LanScanUiState.Canceled
             assertEquals(listOf(stubHost), partial.summary.hosts)
             assertEquals(1, partial.summary.totalScanned)
+            assertEquals(stubHost.ip, partial.expandedHostIp)
         }
 
         @Test
@@ -400,6 +428,7 @@ class LanScanViewModelTest {
                 withTimeout(2_000) { viewModel.uiState.first { it is LanScanUiState.Scanning && it.hosts.isNotEmpty() } }
             }
 
+            viewModel.onToggleHostExpanded(stubHost.ip)
             viewModel.onLifecyclePause()
 
             assertEquals(CancellationReason.LIFECYCLE_PAUSE, sessionSlot.captured.cancellationReason)
@@ -411,6 +440,7 @@ class LanScanViewModelTest {
             assertTrue(viewModel.uiState.value !is LanScanUiState.Canceled)
             val finished = viewModel.uiState.value as LanScanUiState.Finished
             assertTrue(finished.partial)
+            assertEquals(stubHost.ip, finished.expandedHostIp)
             assertEquals(listOf(stubHost), finished.summary.hosts)
         }
 

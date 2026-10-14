@@ -340,6 +340,7 @@
     <string name="ports_section_all">All Results</string>
     <string name="ports_copy_report">Copy report</string>
     <string name="ports_show_all">Show all ports</string>
+    <string name="ports_show_all_with_counts">Show all (%1$d closed, %2$d filtered)</string>
     <string name="ports_show_open">Show open only</string>
     <string name="ports_resolved_ip">Resolved IP: %1$s</string>
     <string name="ports_scan_duration">%1$d ms</string>
@@ -355,6 +356,12 @@
     <string name="lan_detect_subnet">Detect current subnet</string>
     <string name="lan_timeout_label">Timeout: %1$d ms</string>
     <string name="lan_concurrency_label">Concurrency: %1$d</string>
+    <string name="lan_edit_settings">Edit</string>
+    <string name="lan_copy_host_action">Copy host information</string>
+    <string name="lan_copy_ip">Copy IP address</string>
+    <string name="lan_copy_mac">Copy MAC address</string>
+    <string name="lan_copy_hostname">Copy hostname</string>
+    <string name="lan_copied">Copied to clipboard</string>
     <string name="lan_scan_button">Scan Network</string>
     <string name="lan_stop_button">Stop Scan</string>
     <string name="lan_rescan_button">Re-scan</string>
@@ -397,6 +404,11 @@
     <string name="lan_diagnostics_truncated">Showing %1$d of %2$d uncertain probe details.</string>
     <string name="lan_duration_format">%1$d ms</string>
     <string name="lan_ping_format">%1$d ms</string>
+    <string name="lan_ping_status_format">Latency %1$d ms</string>
+    <plurals name="lan_open_ports_count">
+        <item quantity="one">%1$d port</item>
+        <item quantity="other">%1$d ports</item>
+    </plurals>
     <string name="lan_unknown_device">Unknown device</string>
     <string name="lan_gateway_badge">GW</string>
     <string name="lan_gateway_label">Gateway</string>
@@ -435,6 +447,11 @@
     <string name="lan_filter_all">All</string>
     <string name="lan_filter_gateway">Gateway</string>
     <string name="lan_filter_has_ports">Has Ports</string>
+    <string name="lan_sort_ip">IP</string>
+    <string name="lan_sort_latency">Latency</string>
+    <string name="lan_sort_hostname">Hostname</string>
+    <string name="lan_sort_vendor">Vendor</string>
+    <string name="lan_sort_open_ports">Port count</string>
     <string name="lan_hosts_filtered_header">Results (%1$d of %2$d)</string>
     <string name="lan_no_search_results">No devices match your search</string>
     <string name="lan_no_filter_results">No devices match this filter</string>
@@ -469,6 +486,7 @@
 
     <!-- Wi-Fi Scanner Screen -->
     <string name="wifi_screen_title">Wi-Fi Scanner</string>
+    <string name="wifi_search_label">Search SSID, BSSID or vendor</string>
     <string name="wifi_scan_button">Scan</string>
     <string name="wifi_no_permission_title">Location Permission Required</string>
     <string name="wifi_no_permission_body">Android requires Location permission to scan for nearby Wi-Fi networks. Your location is not sent anywhere.</string>
@@ -673,10 +691,15 @@
     </plurals>
     <string name="topology_node_detail_system">System</string>
     <string name="topology_node_detail_interfaces">Interfaces</string>
+    <string name="topology_interfaces_all">All</string>
+    <string name="topology_interfaces_up">Up</string>
+    <string name="topology_interfaces_down">Down</string>
+    <string name="topology_interface_unknown">Unknown</string>
     <string name="topology_node_detail_vlans">VLANs</string>
     <string name="topology_node_detail_neighbours">Neighbours</string>
     <string name="topology_error_retry">Retry</string>
     <string name="topology_fit_button_cd">Fit graph to screen</string>
+    <string name="topology_search_nodes">Search nodes</string>
     <string name="topology_partial_results">Partial results. Some details were omitted because of resource limits or SNMP errors.</string>
     <string name="topology_vlan_label">%1$d: %2$s</string>
 
@@ -1060,6 +1083,7 @@
 
     <!-- Share action -->
     <string name="action_share">Share results</string>
+    <string name="action_copy">Copy</string>
 
     <!-- Share subjects per tool -->
     <string name="share_subject_ping">Ping – %1$s</string>
@@ -1075,6 +1099,7 @@
 
     <!-- mDNS Screen -->
     <string name="mdns_screen_title">mDNS Browser</string>
+    <string name="mdns_search_label">Search services</string>
     <string name="mdns_screen_subtitle">Discover services on your local network via multicast DNS</string>
     <string name="mdns_stat_found">found</string>
     <string name="mdns_stat_elapsed">elapsed</string>
