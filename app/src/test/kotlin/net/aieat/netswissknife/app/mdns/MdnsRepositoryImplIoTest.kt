@@ -92,7 +92,13 @@ class MdnsRepositoryImplIoTest {
             assertEquals(3, fixture.socket.sentQueries.size)
             assertEquals(
                 listOf("_services._dns-sd._udp.local.", "_services._dns-sd._udp.local.", "_services._dns-sd._udp.local."),
-                fixture.socket.sentQueries.map { org.xbill.DNS.Message(it).getQuestion().name.toString() },
+                fixture.socket.sentQueries.map {
+                    org.xbill.DNS
+                        .Message(it)
+                        .getQuestion()
+                        .name
+                        .toString()
+                },
             )
             assertEquals(0, (updates.last() as MdnsUpdate.DiscoveryComplete).totalFound)
             assertTrue(fixture.socket.closed.get())
@@ -279,9 +285,18 @@ class MdnsRepositoryImplIoTest {
                 fixture(clock = clock, receive = { packet ->
                     val response =
                         when (receiveCount.incrementAndGet()) {
-                            1 -> serviceTypeResponse()
-                            2 -> resolvedServiceResponse()
-                            3 -> updatedServiceTxtResponse()
+                            1 -> {
+                                serviceTypeResponse()
+                            }
+
+                            2 -> {
+                                resolvedServiceResponse()
+                            }
+
+                            3 -> {
+                                updatedServiceTxtResponse()
+                            }
+
                             else -> {
                                 clock.advanceBy(20_000_000_000L)
                                 throw SocketTimeoutException("finish after service update")

@@ -13,16 +13,18 @@ import androidx.datastore.preferences.preferencesDataStore
 val Context.appPreferences: DataStore<Preferences> by preferencesDataStore(name = "app_prefs")
 
 object AppPreferenceKeys {
-
     // ── Onboarding ────────────────────────────────────────────────────────────
+
     /** Whether the user has completed/dismissed the first-run onboarding. */
     val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
 
     // ── Navigation ────────────────────────────────────────────────────────────
+
     /** Ordered pipe-delimited list of pinned route strings, e.g. "ping|dns|ports". */
     val PINNED_ROUTES = stringPreferencesKey("pinned_routes")
 
     // ── Settings ──────────────────────────────────────────────────────────────
+
     /** Theme override: "SYSTEM", "LIGHT", or "DARK". */
     val THEME_OVERRIDE = stringPreferencesKey("theme_override")
 
@@ -44,26 +46,36 @@ object AppPreferenceKeys {
 
     /** Wi-Fi auto-refresh interval in milliseconds; -1 means explicitly disabled. */
     val WIFI_REFRESH_INTERVAL_MS = longPreferencesKey("wifi_refresh_interval_ms")
+
     /** LAN host result ordering. */
     val LAN_HOST_SORT_ORDER = stringPreferencesKey("lan_host_sort_order")
 
     // ── Recent hosts (ordered pipe-delimited lists, max 5 entries each) ───────
-    val RECENT_PING_HOSTS       = stringPreferencesKey("recent_ping_hosts")
-    val RECENT_DNS_HOSTS        = stringPreferencesKey("recent_dns_hosts")
-    val RECENT_PORTS_HOSTS      = stringPreferencesKey("recent_ports_hosts")
+    val RECENT_PING_HOSTS = stringPreferencesKey("recent_ping_hosts")
+    val RECENT_DNS_HOSTS = stringPreferencesKey("recent_dns_hosts")
+    val RECENT_PORTS_HOSTS = stringPreferencesKey("recent_ports_hosts")
     val RECENT_TRACEROUTE_HOSTS = stringPreferencesKey("recent_traceroute_hosts")
-    val RECENT_TLS_HOSTS        = stringPreferencesKey("recent_tls_hosts")
-    val RECENT_WHOIS_HOSTS      = stringPreferencesKey("recent_whois_hosts")
-    val RECENT_HTTP_HOSTS       = stringPreferencesKey("recent_http_hosts")
+    val RECENT_TLS_HOSTS = stringPreferencesKey("recent_tls_hosts")
+    val RECENT_WHOIS_HOSTS = stringPreferencesKey("recent_whois_hosts")
+    val RECENT_HTTP_HOSTS = stringPreferencesKey("recent_http_hosts")
+
     /** Stores recent seed IPs for Network Topology. */
-    val RECENT_TOPOLOGY_SEEDS   = stringPreferencesKey("recent_topology_seeds")
+    val RECENT_TOPOLOGY_SEEDS = stringPreferencesKey("recent_topology_seeds")
+
     /** Stores recent subnets for LAN Scanner (CIDR notation). */
-    val RECENT_LAN_SUBNETS      = stringPreferencesKey("recent_lan_subnets")
+    val RECENT_LAN_SUBNETS = stringPreferencesKey("recent_lan_subnets")
 
     /** All recent-host keys — iterate this to clear all at once. */
-    val ALL_RECENT_HOST_KEYS: List<Preferences.Key<String>> = listOf(
-        RECENT_PING_HOSTS, RECENT_DNS_HOSTS, RECENT_PORTS_HOSTS,
-        RECENT_TRACEROUTE_HOSTS, RECENT_TLS_HOSTS, RECENT_WHOIS_HOSTS,
-        RECENT_HTTP_HOSTS, RECENT_TOPOLOGY_SEEDS, RECENT_LAN_SUBNETS
-    )
+    val ALL_RECENT_HOST_KEYS: List<Preferences.Key<String>> =
+        listOf(
+            RECENT_PING_HOSTS,
+            RECENT_DNS_HOSTS,
+            RECENT_PORTS_HOSTS,
+            RECENT_TRACEROUTE_HOSTS,
+            RECENT_TLS_HOSTS,
+            RECENT_WHOIS_HOSTS,
+            RECENT_HTTP_HOSTS,
+            RECENT_TOPOLOGY_SEEDS,
+            RECENT_LAN_SUBNETS,
+        )
 }

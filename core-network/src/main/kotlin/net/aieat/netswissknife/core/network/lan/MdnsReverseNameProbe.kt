@@ -22,7 +22,7 @@ class MdnsReverseNameProbe(
         val owner = reverseName(ip)
         var name: String? = null
         val reply = correlated.exchangeCorrelated(
-            "224.0.0.251",
+            "224.0.0.251", // NOSONAR: RFC 6762's fixed IPv4 mDNS multicast group.
             5353,
             buildPtrQuery(ip),
             timeoutMs.coerceAtMost(300),

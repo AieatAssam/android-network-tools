@@ -7,11 +7,12 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class LanHostSortTest {
-    private val hosts = listOf(
-        LanHost("192.168.1.10", "zeta", "00:00:00:00:00:10", "Beta", listOf(80), 20),
-        LanHost("192.168.1.2", "Alpha", "00:00:00:00:00:02", "Gamma", listOf(22, 443), 80),
-        LanHost("192.168.1.3", null, null, "Alpha", emptyList(), 5),
-    )
+    private val hosts =
+        listOf(
+            LanHost("192.168.1.10", "zeta", "00:00:00:00:00:10", "Beta", listOf(80), 20),
+            LanHost("192.168.1.2", "Alpha", "00:00:00:00:00:02", "Gamma", listOf(22, 443), 80),
+            LanHost("192.168.1.3", null, null, "Alpha", emptyList(), 5),
+        )
 
     @Test
     fun supportsEveryRequestedSortOrder() {

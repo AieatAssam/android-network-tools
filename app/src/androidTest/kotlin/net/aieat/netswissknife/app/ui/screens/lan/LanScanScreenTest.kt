@@ -3,10 +3,11 @@ package net.aieat.netswissknife.app.ui.screens.lan
 import android.Manifest
 import android.os.Build
 import androidx.compose.ui.test.assertCountEquals
-import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -16,7 +17,6 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
-import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.swipeUp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -29,10 +29,10 @@ import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.platform.NetworkStatus
 import net.aieat.netswissknife.app.ui.theme.NetSwissKnifeTheme
 import net.aieat.netswissknife.core.network.lan.LanHost
-import net.aieat.netswissknife.core.network.lan.MacSource
 import net.aieat.netswissknife.core.network.lan.LanScanDiagnostic
 import net.aieat.netswissknife.core.network.lan.LanScanDiagnosticReason
 import net.aieat.netswissknife.core.network.lan.LanScanSummary
+import net.aieat.netswissknife.core.network.lan.MacSource
 import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Rule
@@ -50,11 +50,12 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class LanScanScreenTest {
     @get:Rule
-    val permissionRule: GrantPermissionRule = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
-        GrantPermissionRule.grant(Manifest.permission.NEARBY_WIFI_DEVICES)
-    } else {
-        GrantPermissionRule.grant()
-    }
+    val permissionRule: GrantPermissionRule =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
+            GrantPermissionRule.grant(Manifest.permission.NEARBY_WIFI_DEVICES)
+        } else {
+            GrantPermissionRule.grant()
+        }
 
     @get:Rule
     val composeRule = createComposeRule()
@@ -85,8 +86,12 @@ class LanScanScreenTest {
         // if the underlying screen has its own infinite (e.g. refresh-spin) animation.
         composeRule.mainClock.autoAdvance = true
         composeRule.waitUntil(timeoutMillis = 5_000) {
-            composeRule.onAllNodes(androidx.compose.ui.test.isRoot())
-                .fetchSemanticsNodes().size > 1
+            composeRule
+                .onAllNodes(
+                    androidx.compose.ui.test
+                        .isRoot(),
+                ).fetchSemanticsNodes()
+                .size > 1
         }
         composeRule.mainClock.autoAdvance = false
 
@@ -98,9 +103,10 @@ class LanScanScreenTest {
 
     @Test
     fun scanning_hostsAccumulateAsTheyAreFound() {
-        val stateFlow = MutableStateFlow<LanScanUiState>(
-            LanScanUiState.Scanning(hosts = listOf(fakeHost("192.168.1.1")), scannedCount = 1, totalCount = 254)
-        )
+        val stateFlow =
+            MutableStateFlow<LanScanUiState>(
+                LanScanUiState.Scanning(hosts = listOf(fakeHost("192.168.1.1")), scannedCount = 1, totalCount = 254),
+            )
         composeRule.setContent {
             NetSwissKnifeTheme {
                 LanScreen(viewModel = fakeViewModel(flow = stateFlow))
@@ -114,11 +120,12 @@ class LanScanScreenTest {
             .performScrollTo()
             .assertIsDisplayed()
 
-        stateFlow.value = LanScanUiState.Scanning(
-            hosts = listOf(fakeHost("192.168.1.1"), fakeHost("192.168.1.2")),
-            scannedCount = 2,
-            totalCount = 254
-        )
+        stateFlow.value =
+            LanScanUiState.Scanning(
+                hosts = listOf(fakeHost("192.168.1.1"), fakeHost("192.168.1.2")),
+                scannedCount = 2,
+                totalCount = 254,
+            )
         composeRule.mainClock.advanceTimeBy(500L)
         composeRule
             .onAllNodesWithText("192.168.1.1", substring = true)
@@ -135,13 +142,14 @@ class LanScanScreenTest {
     @Test
     fun liveHostCanExpandAndUseActionsAndLongPressCopyBeforeScanFinishes() {
         val ip = "192.168.1.21"
-        val stateFlow = MutableStateFlow<LanScanUiState>(
-            LanScanUiState.Scanning(
-                hosts = listOf(fakeHost(ip).copy(hostname = "printer.local", macAddress = "AA:BB:CC:DD:EE:FF", vendor = "Example")),
-                scannedCount = 7,
-                totalCount = 254,
-            ),
-        )
+        val stateFlow =
+            MutableStateFlow<LanScanUiState>(
+                LanScanUiState.Scanning(
+                    hosts = listOf(fakeHost(ip).copy(hostname = "printer.local", macAddress = "AA:BB:CC:DD:EE:FF", vendor = "Example")),
+                    scannedCount = 7,
+                    totalCount = 254,
+                ),
+            )
         val viewModel = fakeViewModel(flow = stateFlow)
         composeRule.setContent { NetSwissKnifeTheme { LanScreen(viewModel = viewModel) } }
         composeRule.mainClock.advanceTimeBy(1_000L)
@@ -179,13 +187,14 @@ class LanScanScreenTest {
 
     @Test
     fun finishedState_showsSummaryHostsAndRescanTriggersStartScan() {
-        val summary = LanScanSummary(
-            subnet = "192.168.1.0/24",
-            totalScanned = 254,
-            aliveHosts = 2,
-            scanDurationMs = 5_000,
-            hosts = listOf(fakeHost("192.168.1.1"), fakeHost("192.168.1.50"))
-        )
+        val summary =
+            LanScanSummary(
+                subnet = "192.168.1.0/24",
+                totalScanned = 254,
+                aliveHosts = 2,
+                scanDurationMs = 5_000,
+                hosts = listOf(fakeHost("192.168.1.1"), fakeHost("192.168.1.50")),
+            )
         val viewModel = fakeViewModel(state = LanScanUiState.Finished(summary = summary))
         composeRule.setContent {
             NetSwissKnifeTheme {
@@ -212,18 +221,20 @@ class LanScanScreenTest {
     @Test
     fun filteredEmptyRecovery_distinguishesFilterAndSearchAndRestoresHostsWithoutRescanning() {
         val host = fakeHost("192.168.1.50")
-        val summary = LanScanSummary(
-            subnet = "192.168.1.0/24",
-            totalScanned = 254,
-            aliveHosts = 1,
-            scanDurationMs = 5_000,
-            hosts = listOf(host),
-        )
+        val summary =
+            LanScanSummary(
+                subnet = "192.168.1.0/24",
+                totalScanned = 254,
+                aliveHosts = 1,
+                scanDurationMs = 5_000,
+                hosts = listOf(host),
+            )
         val searchQuery = MutableStateFlow("")
-        val viewModel = fakeViewModel(
-            flow = MutableStateFlow<LanScanUiState>(LanScanUiState.Finished(summary)),
-            searchQueryFlow = searchQuery,
-        )
+        val viewModel =
+            fakeViewModel(
+                flow = MutableStateFlow<LanScanUiState>(LanScanUiState.Finished(summary)),
+                searchQueryFlow = searchQuery,
+            )
         composeRule.setContent {
             NetSwissKnifeTheme { LanScreen(viewModel = viewModel) }
         }
@@ -234,46 +245,58 @@ class LanScanScreenTest {
                 composeRule.onNodeWithTag("lan_content").performTouchInput { swipeUp() }
             }
         }
-        composeRule.onNodeWithText(context.getString(R.string.lan_filter_has_ports))
+        composeRule
+            .onNodeWithText(context.getString(R.string.lan_filter_has_ports))
             .also { swipeContentUp(2) }
             .performClick()
-        composeRule.onNodeWithText(context.getString(R.string.lan_no_filter_results))
+        composeRule
+            .onNodeWithText(context.getString(R.string.lan_no_filter_results))
             .also { swipeContentUp() }
             .assertIsDisplayed()
-        composeRule.onNodeWithText(context.getString(R.string.lan_hosts_filtered_header, 0, 1))
+        composeRule
+            .onNodeWithText(context.getString(R.string.lan_hosts_filtered_header, 0, 1))
             .assertIsDisplayed()
 
-        composeRule.onNodeWithText(context.getString(R.string.lan_search_placeholder))
+        composeRule
+            .onNodeWithText(context.getString(R.string.lan_search_placeholder))
             .also { swipeContentUp() }
             .performTextInput("missing")
         composeRule.mainClock.advanceTimeBy(250L)
-        composeRule.onNodeWithText(context.getString(R.string.lan_no_search_filter_results))
+        composeRule
+            .onNodeWithText(context.getString(R.string.lan_no_search_filter_results))
             .also { swipeContentUp() }
             .assertIsDisplayed()
 
-        composeRule.onNodeWithText(context.getString(R.string.lan_show_all_devices))
+        composeRule
+            .onNodeWithText(context.getString(R.string.lan_show_all_devices))
             .performClick()
         composeRule.mainClock.advanceTimeBy(250L)
-        composeRule.onNodeWithText(context.getString(R.string.lan_hosts_header, 1))
+        composeRule
+            .onNodeWithText(context.getString(R.string.lan_hosts_header, 1))
             .also { swipeContentUp() }
             .assertIsDisplayed()
-        composeRule.onAllNodesWithText(host.ip, substring = true)
+        composeRule
+            .onAllNodesWithText(host.ip, substring = true)
             .onFirst()
             .assertIsDisplayed()
         assertEquals("", searchQuery.value)
         verify(exactly = 0) { viewModel.startScan() }
 
-        composeRule.onNodeWithText(context.getString(R.string.lan_search_placeholder))
+        composeRule
+            .onNodeWithText(context.getString(R.string.lan_search_placeholder))
             .performScrollTo()
             .performTextInput("missing")
         composeRule.mainClock.advanceTimeBy(250L)
-        composeRule.onNodeWithText(context.getString(R.string.lan_no_search_results))
+        composeRule
+            .onNodeWithText(context.getString(R.string.lan_no_search_results))
             .also { swipeContentUp() }
             .assertIsDisplayed()
-        composeRule.onNodeWithText(context.getString(R.string.lan_show_all_devices))
+        composeRule
+            .onNodeWithText(context.getString(R.string.lan_show_all_devices))
             .performClick()
         composeRule.mainClock.advanceTimeBy(250L)
-        composeRule.onAllNodesWithText(host.ip, substring = true)
+        composeRule
+            .onAllNodesWithText(host.ip, substring = true)
             .onFirst()
             .also { swipeContentUp() }
             .assertIsDisplayed()
@@ -282,13 +305,14 @@ class LanScanScreenTest {
 
     @Test
     fun zeroHostScan_keepsTrueEmptyStateWithoutFilterRecoveryAction() {
-        val summary = LanScanSummary(
-            subnet = "192.168.1.0/24",
-            totalScanned = 254,
-            aliveHosts = 0,
-            scanDurationMs = 5_000,
-            hosts = emptyList(),
-        )
+        val summary =
+            LanScanSummary(
+                subnet = "192.168.1.0/24",
+                totalScanned = 254,
+                aliveHosts = 0,
+                scanDurationMs = 5_000,
+                hosts = emptyList(),
+            )
         composeRule.setContent {
             NetSwissKnifeTheme {
                 LanScreen(viewModel = fakeViewModel(state = LanScanUiState.Finished(summary)))
@@ -296,33 +320,37 @@ class LanScanScreenTest {
         }
 
         composeRule.mainClock.advanceTimeBy(1_000L)
-        composeRule.onNodeWithText(context.getString(R.string.lan_empty_title))
+        composeRule
+            .onNodeWithText(context.getString(R.string.lan_empty_title))
             .performScrollTo()
             .assertIsDisplayed()
-        composeRule.onNodeWithText(context.getString(R.string.lan_show_all_devices))
+        composeRule
+            .onNodeWithText(context.getString(R.string.lan_show_all_devices))
             .assertDoesNotExist()
     }
 
     @Test
     fun rescan_resetsSearchAndFilterTogetherForNewResults() {
         val host = fakeHost("192.168.1.50")
-        val summary = LanScanSummary(
-            subnet = "192.168.1.0/24",
-            totalScanned = 254,
-            aliveHosts = 1,
-            scanDurationMs = 5_000,
-            hosts = listOf(host),
-        )
+        val summary =
+            LanScanSummary(
+                subnet = "192.168.1.0/24",
+                totalScanned = 254,
+                aliveHosts = 1,
+                scanDurationMs = 5_000,
+                hosts = listOf(host),
+            )
         val stateFlow = MutableStateFlow<LanScanUiState>(LanScanUiState.Finished(summary))
         val searchQuery = MutableStateFlow("")
         val viewModel = fakeViewModel(flow = stateFlow, searchQueryFlow = searchQuery)
         every { viewModel.startScan() } answers {
             searchQuery.value = ""
-            stateFlow.value = LanScanUiState.Scanning(
-                hosts = emptyList(),
-                scannedCount = 0,
-                totalCount = 254,
-            )
+            stateFlow.value =
+                LanScanUiState.Scanning(
+                    hosts = emptyList(),
+                    scannedCount = 0,
+                    totalCount = 254,
+                )
         }
         composeRule.setContent {
             NetSwissKnifeTheme { LanScreen(viewModel = viewModel) }
@@ -335,18 +363,22 @@ class LanScanScreenTest {
             }
         }
 
-        composeRule.onNodeWithText(context.getString(R.string.lan_filter_has_ports))
+        composeRule
+            .onNodeWithText(context.getString(R.string.lan_filter_has_ports))
             .also { swipeContentUp(2) }
             .performClick()
-        composeRule.onNodeWithText(context.getString(R.string.lan_search_placeholder))
+        composeRule
+            .onNodeWithText(context.getString(R.string.lan_search_placeholder))
             .also { swipeContentUp() }
             .performTextInput("missing")
         composeRule.mainClock.advanceTimeBy(250L)
-        composeRule.onNodeWithText(context.getString(R.string.lan_no_search_filter_results))
+        composeRule
+            .onNodeWithText(context.getString(R.string.lan_no_search_filter_results))
             .also { swipeContentUp() }
             .assertIsDisplayed()
 
-        composeRule.onNodeWithText(context.getString(R.string.lan_rescan_button))
+        composeRule
+            .onNodeWithText(context.getString(R.string.lan_rescan_button))
             .also { swipeContentUp(2) }
             .assertIsDisplayed()
             .performClick()
@@ -355,10 +387,12 @@ class LanScanScreenTest {
         composeRule.mainClock.advanceTimeBy(500L)
 
         assertEquals("", searchQuery.value)
-        composeRule.onNodeWithText(context.getString(R.string.lan_hosts_header, 1))
+        composeRule
+            .onNodeWithText(context.getString(R.string.lan_hosts_header, 1))
             .also { swipeContentUp() }
             .assertIsDisplayed()
-        composeRule.onAllNodesWithText(host.ip, substring = true)
+        composeRule
+            .onAllNodesWithText(host.ip, substring = true)
             .onFirst()
             .also { swipeContentUp() }
             .assertIsDisplayed()
@@ -367,13 +401,14 @@ class LanScanScreenTest {
 
     @Test
     fun cancelingState_disablesActionsThenCanceledStateRetainsResultsAndActions() {
-        val summary = LanScanSummary(
-            subnet = "192.168.1.0/24",
-            totalScanned = 12,
-            aliveHosts = 1,
-            scanDurationMs = 900,
-            hosts = listOf(fakeHost("192.168.1.1")),
-        )
+        val summary =
+            LanScanSummary(
+                subnet = "192.168.1.0/24",
+                totalScanned = 12,
+                aliveHosts = 1,
+                scanDurationMs = 900,
+                hosts = listOf(fakeHost("192.168.1.1")),
+            )
         val stateFlow = MutableStateFlow<LanScanUiState>(LanScanUiState.Canceling(summary))
         val recentSubnet = "10.0.0.0/24"
         val viewModel = fakeViewModel(flow = stateFlow, recentSubnets = listOf(recentSubnet))
@@ -408,18 +443,20 @@ class LanScanScreenTest {
     @Test
     fun expandedHost_offersPingActionForSelectedHost() {
         val ip = "192.168.1.50"
-        val stateFlow = MutableStateFlow<LanScanUiState>(
-            LanScanUiState.Finished(
-                summary = LanScanSummary(
-                    subnet = "192.168.1.0/24",
-                    totalScanned = 254,
-                    aliveHosts = 1,
-                    scanDurationMs = 500,
-                    hosts = listOf(fakeHost(ip)),
+        val stateFlow =
+            MutableStateFlow<LanScanUiState>(
+                LanScanUiState.Finished(
+                    summary =
+                        LanScanSummary(
+                            subnet = "192.168.1.0/24",
+                            totalScanned = 254,
+                            aliveHosts = 1,
+                            scanDurationMs = 500,
+                            hosts = listOf(fakeHost(ip)),
+                        ),
+                    expandedHostIp = ip,
                 ),
-                expandedHostIp = ip,
-            ),
-        )
+            )
         val viewModel = fakeViewModel(flow = stateFlow)
 
         composeRule.setContent {
@@ -427,7 +464,8 @@ class LanScanScreenTest {
         }
         composeRule.mainClock.advanceTimeBy(1_000L)
         repeat(2) { composeRule.onNodeWithTag("lan_content").performTouchInput { swipeUp() } }
-        composeRule.onNodeWithTag("lan_action_ping")
+        composeRule
+            .onNodeWithTag("lan_action_ping")
             .performScrollTo()
             .assertIsDisplayed()
             .performClick()
@@ -438,18 +476,20 @@ class LanScanScreenTest {
     @Test
     fun expandedHost_offersTlsActionForEachKnownOpenPort() {
         val ip = "192.168.1.51"
-        val stateFlow = MutableStateFlow<LanScanUiState>(
-            LanScanUiState.Finished(
-                summary = LanScanSummary(
-                    subnet = "192.168.1.0/24",
-                    totalScanned = 254,
-                    aliveHosts = 1,
-                    scanDurationMs = 500,
-                    hosts = listOf(fakeHost(ip).copy(openPorts = listOf(443, 8000))),
+        val stateFlow =
+            MutableStateFlow<LanScanUiState>(
+                LanScanUiState.Finished(
+                    summary =
+                        LanScanSummary(
+                            subnet = "192.168.1.0/24",
+                            totalScanned = 254,
+                            aliveHosts = 1,
+                            scanDurationMs = 500,
+                            hosts = listOf(fakeHost(ip).copy(openPorts = listOf(443, 8000))),
+                        ),
+                    expandedHostIp = ip,
                 ),
-                expandedHostIp = ip,
-            ),
-        )
+            )
         val viewModel = fakeViewModel(flow = stateFlow)
 
         composeRule.setContent {
@@ -457,7 +497,8 @@ class LanScanScreenTest {
         }
         composeRule.mainClock.advanceTimeBy(1_000L)
         repeat(2) { composeRule.onNodeWithTag("lan_content").performTouchInput { swipeUp() } }
-        composeRule.onNodeWithTag("lan_action_tls_443")
+        composeRule
+            .onNodeWithTag("lan_action_tls_443")
             .performScrollTo()
             .assertIsDisplayed()
             .performClick()
@@ -471,59 +512,72 @@ class LanScanScreenTest {
     @Test
     fun expandedHost_offersEditableHttpProbeUsingKnownPortOrPort80Fallback() {
         val ip = "192.168.1.52"
-        val stateFlow = MutableStateFlow<LanScanUiState>(
-            LanScanUiState.Finished(
-                summary = LanScanSummary(
-                    subnet = "192.168.1.0/24",
-                    totalScanned = 254,
-                    aliveHosts = 1,
-                    scanDurationMs = 500,
-                    hosts = listOf(fakeHost(ip).copy(openPorts = listOf(443, 8080))),
+        val stateFlow =
+            MutableStateFlow<LanScanUiState>(
+                LanScanUiState.Finished(
+                    summary =
+                        LanScanSummary(
+                            subnet = "192.168.1.0/24",
+                            totalScanned = 254,
+                            aliveHosts = 1,
+                            scanDurationMs = 500,
+                            hosts = listOf(fakeHost(ip).copy(openPorts = listOf(443, 8080))),
+                        ),
+                    expandedHostIp = ip,
                 ),
-                expandedHostIp = ip,
-            ),
-        )
+            )
         val viewModel = fakeViewModel(flow = stateFlow)
 
         composeRule.setContent { NetSwissKnifeTheme { LanScreen(viewModel = viewModel) } }
         composeRule.mainClock.advanceTimeBy(1_000L)
         repeat(2) { composeRule.onNodeWithTag("lan_content").performTouchInput { swipeUp() } }
-        composeRule.onNodeWithTag("lan_action_http")
+        composeRule
+            .onNodeWithTag("lan_action_http")
             .performScrollTo()
             .assertIsDisplayed()
             .performClick()
         verify(exactly = 1) { viewModel.onProbeHttp(ip, 8080) }
 
         val fallbackIp = "192.168.1.53"
-        stateFlow.value = LanScanUiState.Finished(
-            LanScanSummary(
-                subnet = "192.168.1.0/24",
-                totalScanned = 254,
-                aliveHosts = 1,
-                scanDurationMs = 500,
-                hosts = listOf(fakeHost(fallbackIp).copy(openPorts = listOf(443, 8443))),
-            ),
-            expandedHostIp = fallbackIp,
-        )
+        stateFlow.value =
+            LanScanUiState.Finished(
+                LanScanSummary(
+                    subnet = "192.168.1.0/24",
+                    totalScanned = 254,
+                    aliveHosts = 1,
+                    scanDurationMs = 500,
+                    hosts = listOf(fakeHost(fallbackIp).copy(openPorts = listOf(443, 8443))),
+                ),
+                expandedHostIp = fallbackIp,
+            )
         composeRule.mainClock.advanceTimeBy(500L)
         repeat(2) { composeRule.onNodeWithTag("lan_content").performTouchInput { swipeUp() } }
-        composeRule.onNodeWithText("Probe HTTP (port 80)").performScrollTo().assertIsDisplayed().performClick()
+        composeRule
+            .onNodeWithText("Probe HTTP (port 80)")
+            .performScrollTo()
+            .assertIsDisplayed()
+            .performClick()
         verify(exactly = 1) { viewModel.onProbeHttp(fallbackIp, 80) }
 
         val unknownIp = "192.168.1.54"
-        stateFlow.value = LanScanUiState.Finished(
-            LanScanSummary(
-                subnet = "192.168.1.0/24",
-                totalScanned = 254,
-                aliveHosts = 1,
-                scanDurationMs = 500L,
-                hosts = listOf(fakeHost(unknownIp)),
-            ),
-            expandedHostIp = unknownIp,
-        )
+        stateFlow.value =
+            LanScanUiState.Finished(
+                LanScanSummary(
+                    subnet = "192.168.1.0/24",
+                    totalScanned = 254,
+                    aliveHosts = 1,
+                    scanDurationMs = 500L,
+                    hosts = listOf(fakeHost(unknownIp)),
+                ),
+                expandedHostIp = unknownIp,
+            )
         composeRule.mainClock.advanceTimeBy(500L)
         repeat(2) { composeRule.onNodeWithTag("lan_content").performTouchInput { swipeUp() } }
-        composeRule.onNodeWithText("Probe HTTP (port 80)").performScrollTo().assertIsDisplayed().performClick()
+        composeRule
+            .onNodeWithText("Probe HTTP (port 80)")
+            .performScrollTo()
+            .assertIsDisplayed()
+            .performClick()
         verify(exactly = 1) { viewModel.onProbeHttp(unknownIp, 80) }
     }
 
@@ -531,72 +585,79 @@ class LanScanScreenTest {
     fun expandedHost_offersWakeActionOnlyForObservedUnicastMac() {
         val ip = "192.168.1.55"
         val observedMac = "02-23-45-67-89-ab"
-        val viewModel = fakeViewModel(
-            flow = MutableStateFlow(
-                LanScanUiState.Finished(
-                    LanScanSummary(
-                        subnet = "192.168.1.0/24",
-                        totalScanned = 254,
-                        aliveHosts = 1,
-                        scanDurationMs = 500L,
-                        hosts = listOf(fakeHost(ip).copy(macAddress = observedMac, macSource = MacSource.ARP)),
+        val viewModel =
+            fakeViewModel(
+                flow =
+                    MutableStateFlow(
+                        LanScanUiState.Finished(
+                            LanScanSummary(
+                                subnet = "192.168.1.0/24",
+                                totalScanned = 254,
+                                aliveHosts = 1,
+                                scanDurationMs = 500L,
+                                hosts = listOf(fakeHost(ip).copy(macAddress = observedMac, macSource = MacSource.ARP)),
+                            ),
+                            expandedHostIp = ip,
+                        ),
                     ),
-                    expandedHostIp = ip,
-                ),
-            ),
-        )
+            )
 
         composeRule.setContent { NetSwissKnifeTheme { LanScreen(viewModel = viewModel) } }
         composeRule.mainClock.advanceTimeBy(1_000L)
         repeat(2) { composeRule.onNodeWithTag("lan_content").performTouchInput { swipeUp() } }
-        composeRule.onNodeWithTag("lan_action_wake_device")
+        composeRule
+            .onNodeWithTag("lan_action_wake_device")
             .assertIsDisplayed()
             .performClick()
         verify(exactly = 1) { viewModel.onWakeDevice("02:23:45:67:89:AB") }
 
         val invalidIp = "192.168.1.56"
         val stateFlow = viewModel.uiState as MutableStateFlow<LanScanUiState>
-        stateFlow.value = LanScanUiState.Finished(
-            LanScanSummary(
-                subnet = "192.168.1.0/24",
-                totalScanned = 254,
-                aliveHosts = 1,
-                scanDurationMs = 500L,
-                hosts = listOf(fakeHost(invalidIp).copy(macAddress = "01:23:45:67:89:AB", macSource = MacSource.ARP)),
-            ),
-            expandedHostIp = invalidIp,
-        )
+        stateFlow.value =
+            LanScanUiState.Finished(
+                LanScanSummary(
+                    subnet = "192.168.1.0/24",
+                    totalScanned = 254,
+                    aliveHosts = 1,
+                    scanDurationMs = 500L,
+                    hosts = listOf(fakeHost(invalidIp).copy(macAddress = "01:23:45:67:89:AB", macSource = MacSource.ARP)),
+                ),
+                expandedHostIp = invalidIp,
+            )
         composeRule.mainClock.advanceTimeBy(500L)
         composeRule.onNodeWithTag("lan_action_wake_device").assertDoesNotExist()
         verify(exactly = 0) { viewModel.onWakeDevice("01:23:45:67:89:AB") }
 
         val unknownIp = "192.168.1.57"
-        stateFlow.value = LanScanUiState.Finished(
-            LanScanSummary(
-                subnet = "192.168.1.0/24",
-                totalScanned = 254,
-                aliveHosts = 1,
-                scanDurationMs = 500L,
-                hosts = listOf(fakeHost(unknownIp)),
-            ),
-            expandedHostIp = unknownIp,
-        )
+        stateFlow.value =
+            LanScanUiState.Finished(
+                LanScanSummary(
+                    subnet = "192.168.1.0/24",
+                    totalScanned = 254,
+                    aliveHosts = 1,
+                    scanDurationMs = 500L,
+                    hosts = listOf(fakeHost(unknownIp)),
+                ),
+                expandedHostIp = unknownIp,
+            )
         composeRule.mainClock.advanceTimeBy(500L)
         composeRule.onNodeWithTag("lan_action_wake_device").assertDoesNotExist()
 
         val unverifiedIp = "192.168.1.58"
-        stateFlow.value = LanScanUiState.Finished(
-            LanScanSummary(
-                subnet = "192.168.1.0/24",
-                totalScanned = 254,
-                aliveHosts = 1,
-                scanDurationMs = 500L,
-                hosts = listOf(
-                    fakeHost(unverifiedIp).copy(macAddress = "02:23:45:67:89:AC", macSource = MacSource.NONE),
+        stateFlow.value =
+            LanScanUiState.Finished(
+                LanScanSummary(
+                    subnet = "192.168.1.0/24",
+                    totalScanned = 254,
+                    aliveHosts = 1,
+                    scanDurationMs = 500L,
+                    hosts =
+                        listOf(
+                            fakeHost(unverifiedIp).copy(macAddress = "02:23:45:67:89:AC", macSource = MacSource.NONE),
+                        ),
                 ),
-            ),
-            expandedHostIp = unverifiedIp,
-        )
+                expandedHostIp = unverifiedIp,
+            )
         composeRule.mainClock.advanceTimeBy(500L)
         composeRule.onNodeWithTag("lan_action_wake_device").assertDoesNotExist()
     }
@@ -604,21 +665,23 @@ class LanScanScreenTest {
     @Test
     fun finishedState_hidesUncertainDiagnosticsUntilOptedIn_withoutChangingConfirmedSummary() {
         val uncertainIp = "192.168.1.77"
-        val summary = LanScanSummary(
-            subnet = "192.168.1.0/24",
-            totalScanned = 2,
-            aliveHosts = 1,
-            scanDurationMs = 500,
-            hosts = listOf(fakeHost("192.168.1.1")),
-            uncertainHosts = listOf(
-                LanScanDiagnostic(
-                    ip = uncertainIp,
-                    reason = LanScanDiagnosticReason.TCP_REFUSED,
-                    port = 80,
-                )
-            ),
-            uncertainCount = 1,
-        )
+        val summary =
+            LanScanSummary(
+                subnet = "192.168.1.0/24",
+                totalScanned = 2,
+                aliveHosts = 1,
+                scanDurationMs = 500,
+                hosts = listOf(fakeHost("192.168.1.1")),
+                uncertainHosts =
+                    listOf(
+                        LanScanDiagnostic(
+                            ip = uncertainIp,
+                            reason = LanScanDiagnosticReason.TCP_REFUSED,
+                            port = 80,
+                        ),
+                    ),
+                uncertainCount = 1,
+            )
         val stateFlow = MutableStateFlow<LanScanUiState>(LanScanUiState.Finished(summary))
         val viewModel = fakeViewModel(flow = stateFlow)
         every { viewModel.onToggleDiagnostics() } answers {
@@ -639,9 +702,10 @@ class LanScanScreenTest {
         composeRule
             .onAllNodesWithText(context.getString(R.string.lan_hosts_header, 1), substring = true)
             .assertCountEquals(1)
-        val numericSummaryBefore = listOf("1", "2").associateWith { text ->
-            composeRule.onAllNodesWithText(text, substring = false).fetchSemanticsNodes().size
-        }
+        val numericSummaryBefore =
+            listOf("1", "2").associateWith { text ->
+                composeRule.onAllNodesWithText(text, substring = false).fetchSemanticsNodes().size
+            }
 
         composeRule.mainClock.autoAdvance = true
         composeRule
@@ -665,22 +729,24 @@ class LanScanScreenTest {
         composeRule
             .onAllNodesWithText(context.getString(R.string.lan_hosts_header, 1), substring = true)
             .assertCountEquals(1)
-        val numericSummaryAfter = listOf("1", "2").associateWith { text ->
-            composeRule.onAllNodesWithText(text, substring = false).fetchSemanticsNodes().size
-        }
+        val numericSummaryAfter =
+            listOf("1", "2").associateWith { text ->
+                composeRule.onAllNodesWithText(text, substring = false).fetchSemanticsNodes().size
+            }
         assertEquals(numericSummaryBefore, numericSummaryAfter)
         verify(exactly = 1) { viewModel.onToggleDiagnostics() }
     }
 
-    private fun fakeHost(ip: String) = LanHost(
-        ip = ip,
-        hostname = null,
-        macAddress = null,
-        vendor = null,
-        openPorts = emptyList(),
-        pingTimeMs = 10L,
-        isGateway = false
-    )
+    private fun fakeHost(ip: String) =
+        LanHost(
+            ip = ip,
+            hostname = null,
+            macAddress = null,
+            vendor = null,
+            openPorts = emptyList(),
+            pingTimeMs = 10L,
+            isGateway = false,
+        )
 
     private fun fakeViewModel(
         state: LanScanUiState? = null,
@@ -699,9 +765,10 @@ class LanScanScreenTest {
         every { viewModel.searchQuery } returns searchQueryFlow
         every { viewModel.onSearchQueryChange(any()) } answers { searchQueryFlow.value = firstArg() }
         every { viewModel.recentSubnets } returns MutableStateFlow(recentSubnets)
-        every { viewModel.networkStatus } returns MutableStateFlow(
-            NetworkStatus(hasInternet = true, hasLocalNetwork = true)
-        )
+        every { viewModel.networkStatus } returns
+            MutableStateFlow(
+                NetworkStatus(hasInternet = true, hasLocalNetwork = true),
+            )
         return viewModel
     }
 }
