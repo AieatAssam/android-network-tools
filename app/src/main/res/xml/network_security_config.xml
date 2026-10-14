@@ -1,11 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <!--
-      Cleartext permitted globally: HTTP Probe intentionally sends cleartext requests
-      to user-supplied URLs. All other tools use TLS or raw sockets that are
-      unaffected by this setting.
-    -->
-    <base-config cleartextTrafficPermitted="true">
+    <base-config cleartextTrafficPermitted="false">
         <trust-anchors>
             <certificates src="system" />
         </trust-anchors>

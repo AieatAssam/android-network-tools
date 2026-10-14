@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.PushPin
@@ -42,6 +41,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -49,19 +50,22 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.platform.testTag
 import kotlinx.coroutines.launch
-import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.ui.components.hapticAction
 
-private data class ToolSection(val labelRes: Int, val routes: List<String>)
-
-private val TOOL_SECTIONS = listOf(
-    ToolSection(R.string.more_section_diagnostics, listOf("ping", "traceroute", "ports", "dns")),
-    ToolSection(R.string.more_section_wifi_lan,    listOf("wifi_scan", "lan", "topology", "mdns")),
-    ToolSection(R.string.more_section_security,    listOf("tls", "whois", "httprobe")),
-    ToolSection(R.string.more_section_utilities,   listOf("subnet", "speedtest", "wol")),
+private data class ToolSection(
+    val labelRes: Int,
+    val routes: List<String>,
 )
+
+private val TOOL_SECTIONS =
+    listOf(
+        ToolSection(R.string.more_section_diagnostics, listOf("ping", "traceroute", "ports", "dns")),
+        ToolSection(R.string.more_section_wifi_lan, listOf("wifi_scan", "lan", "topology", "mdns")),
+        ToolSection(R.string.more_section_security, listOf("tls", "whois", "httprobe")),
+        ToolSection(R.string.more_section_utilities, listOf("subnet", "speedtest", "wol")),
+    )
 
 object MoreToolsSheetTestTags {
     const val TOOL_LIST = "more_tools_list"
@@ -96,11 +100,12 @@ fun MoreToolsSheet(
             containerColor = MaterialTheme.colorScheme.surface,
         ) { scaffoldPadding ->
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .fillMaxHeight()
-                    .padding(scaffoldPadding)
-                    .padding(horizontal = 20.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight()
+                        .padding(scaffoldPadding)
+                        .padding(horizontal = 20.dp),
             ) {
                 // ── Header (non-scrolling) ────────────────────────────────────
                 Text(
@@ -123,10 +128,11 @@ fun MoreToolsSheet(
                 val scrollState = rememberScrollState()
                 Box(modifier = Modifier.weight(1f)) {
                     Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .verticalScroll(scrollState)
-                            .testTag(MoreToolsSheetTestTags.TOOL_LIST),
+                        modifier =
+                            Modifier
+                                .fillMaxSize()
+                                .verticalScroll(scrollState)
+                                .testTag(MoreToolsSheetTestTags.TOOL_LIST),
                     ) {
                         TOOL_SECTIONS.forEach { section ->
                             val sectionTools = NavRoutes.allTools.filter { it.route in section.routes }
@@ -173,18 +179,20 @@ fun MoreToolsSheet(
                     // Fade gradient hints that the list scrolls
                     if (scrollState.canScrollForward) {
                         Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(40.dp)
-                                .align(Alignment.BottomCenter)
-                                .background(
-                                    Brush.verticalGradient(
-                                        colors = listOf(
-                                            MaterialTheme.colorScheme.surface.copy(alpha = 0f),
-                                            MaterialTheme.colorScheme.surface,
-                                        )
-                                    )
-                                )
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .height(40.dp)
+                                    .align(Alignment.BottomCenter)
+                                    .background(
+                                        Brush.verticalGradient(
+                                            colors =
+                                                listOf(
+                                                    MaterialTheme.colorScheme.surface.copy(alpha = 0f),
+                                                    MaterialTheme.colorScheme.surface,
+                                                ),
+                                        ),
+                                    ),
                         )
                     }
                 }
@@ -195,18 +203,20 @@ fun MoreToolsSheet(
                 Spacer(Modifier.height(4.dp))
 
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable(onClick = onSettingsClick)
-                        .semantics(mergeDescendants = true) { role = Role.Button }
-                        .padding(vertical = 10.dp),
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable(onClick = onSettingsClick)
+                            .semantics(mergeDescendants = true) { role = Role.Button }
+                            .padding(vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Box(
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(MaterialTheme.colorScheme.secondaryContainer),
+                        modifier =
+                            Modifier
+                                .size(44.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(MaterialTheme.colorScheme.secondaryContainer),
                         contentAlignment = Alignment.Center,
                     ) {
                         Icon(
@@ -217,9 +227,10 @@ fun MoreToolsSheet(
                         )
                     }
                     Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(horizontal = 14.dp),
+                        modifier =
+                            Modifier
+                                .weight(1f)
+                                .padding(horizontal = 14.dp),
                     ) {
                         Text(
                             text = stringResource(R.string.settings_entry_label),
@@ -240,18 +251,20 @@ fun MoreToolsSheet(
                     Spacer(Modifier.height(4.dp))
 
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable(onClick = onDebugLogsClick)
-                            .semantics(mergeDescendants = true) { role = Role.Button }
-                            .padding(vertical = 10.dp),
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable(onClick = onDebugLogsClick)
+                                .semantics(mergeDescendants = true) { role = Role.Button }
+                                .padding(vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Box(
-                            modifier = Modifier
-                                .size(44.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(MaterialTheme.colorScheme.errorContainer),
+                            modifier =
+                                Modifier
+                                    .size(44.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(MaterialTheme.colorScheme.errorContainer),
                             contentAlignment = Alignment.Center,
                         ) {
                             Icon(
@@ -262,9 +275,10 @@ fun MoreToolsSheet(
                             )
                         }
                         Column(
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(horizontal = 14.dp),
+                            modifier =
+                                Modifier
+                                    .weight(1f)
+                                    .padding(horizontal = 14.dp),
                         ) {
                             Text(
                                 text = stringResource(R.string.debug_log_title),
@@ -293,44 +307,53 @@ private fun ToolSheetRow(
     onNavigate: () -> Unit,
     onTogglePin: () -> Unit,
 ) {
+    val toolLabel = stringResource(tool.labelRes)
     val pinTint by animateColorAsState(
-        targetValue = if (isPinned)
-            MaterialTheme.colorScheme.primary
-        else
-            MaterialTheme.colorScheme.onSurfaceVariant,
+        targetValue =
+            if (isPinned) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
         animationSpec = tween(200),
         label = "pin-tint-${tool.route}",
     )
     val iconBg by animateColorAsState(
-        targetValue = if (isPinned)
-            MaterialTheme.colorScheme.primaryContainer
-        else
-            MaterialTheme.colorScheme.secondaryContainer,
+        targetValue =
+            if (isPinned) {
+                MaterialTheme.colorScheme.primaryContainer
+            } else {
+                MaterialTheme.colorScheme.secondaryContainer
+            },
         animationSpec = tween(200),
         label = "icon-bg-${tool.route}",
     )
     val iconTint by animateColorAsState(
-        targetValue = if (isPinned)
-            MaterialTheme.colorScheme.onPrimaryContainer
-        else
-            MaterialTheme.colorScheme.onSecondaryContainer,
+        targetValue =
+            if (isPinned) {
+                MaterialTheme.colorScheme.onPrimaryContainer
+            } else {
+                MaterialTheme.colorScheme.onSecondaryContainer
+            },
         animationSpec = tween(200),
         label = "icon-tint-${tool.route}",
     )
 
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onNavigate)
-            .semantics(mergeDescendants = true) { role = Role.Button }
-            .padding(vertical = 10.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onNavigate)
+                .semantics(mergeDescendants = true) { role = Role.Button }
+                .padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
-            modifier = Modifier
-                .size(44.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(iconBg),
+            modifier =
+                Modifier
+                    .size(44.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(iconBg),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
@@ -342,17 +365,18 @@ private fun ToolSheetRow(
         }
 
         Column(
-            modifier = Modifier
-                .weight(1f)
-                .padding(horizontal = 14.dp),
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .padding(horizontal = 14.dp),
         ) {
             Text(
-                text = tool.label,
+                text = toolLabel,
                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
-                text = tool.description,
+                text = stringResource(tool.descriptionRes),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -361,10 +385,12 @@ private fun ToolSheetRow(
         IconButton(onClick = hapticAction(onTogglePin)) {
             Icon(
                 imageVector = if (isPinned) Icons.Filled.PushPin else Icons.Outlined.PushPin,
-                contentDescription = if (isPinned)
-                    stringResource(R.string.more_unpin_description, tool.label)
-                else
-                    stringResource(R.string.more_pin_description, tool.label),
+                contentDescription =
+                    if (isPinned) {
+                        stringResource(R.string.more_unpin_description, toolLabel)
+                    } else {
+                        stringResource(R.string.more_pin_description, toolLabel)
+                    },
                 tint = pinTint,
                 modifier = Modifier.size(20.dp),
             )

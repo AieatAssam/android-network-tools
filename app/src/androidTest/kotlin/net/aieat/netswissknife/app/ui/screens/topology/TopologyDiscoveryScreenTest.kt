@@ -1,24 +1,40 @@
 package net.aieat.netswissknife.app.ui.screens.topology
 
+import android.Manifest
+import android.os.Build
+import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsOff
+import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.rule.GrantPermissionRule
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.platform.NetworkStatus
 import net.aieat.netswissknife.app.ui.theme.NetSwissKnifeTheme
+import net.aieat.netswissknife.core.network.topology.LinkProtocol
 import net.aieat.netswissknife.core.network.topology.TopologyGraph
+import net.aieat.netswissknife.core.network.topology.TopologyLink
 import net.aieat.netswissknife.core.network.topology.TopologyNode
+import net.aieat.netswissknife.core.network.topology.TopologyParams
+import net.aieat.netswissknife.core.network.topology.TopologyTruncationReason
+import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -39,6 +55,14 @@ import org.junit.runner.RunWith
  */
 @RunWith(AndroidJUnit4::class)
 class TopologyDiscoveryScreenTest {
+    @get:Rule
+    val permissionRule: GrantPermissionRule =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
+            GrantPermissionRule.grant(Manifest.permission.NEARBY_WIFI_DEVICES)
+        } else {
+            GrantPermissionRule.grant()
+        }
+
     @get:Rule
     val composeRule = createComposeRule()
 
@@ -81,17 +105,20 @@ class TopologyDiscoveryScreenTest {
 
     @Test
     fun discoveringState_nodeLabelsAccumulateAsGraphGrows() {
-        val stateFlow = MutableStateFlow<TopologyUiState>(
-            TopologyUiState.Discovering(
-                nodes = listOf(fakeNode("10.0.0.1", "core-switch")),
-                links = emptyList(),
-                progressMessage = "Discovering...",
-                nodesDone = 1
-            )
-        )
+        val stateFlow = MutableStateFlow<TopologyUiState>(TopologyUiState.Idle)
+        val viewModel = fakeViewModel(flow = stateFlow)
+        every { viewModel.startDiscovery(any()) } answers {
+            stateFlow.value =
+                TopologyUiState.Discovering(
+                    nodes = listOf(fakeNode("10.0.0.1", "core-switch")),
+                    links = emptyList(),
+                    progressMessage = "Querying 10.0.0.1...",
+                    nodesDone = 1,
+                )
+        }
         composeRule.setContent {
             NetSwissKnifeTheme {
-                TopologyDiscoveryScreen(viewModel = fakeViewModel(flow = stateFlow))
+                TopologyDiscoveryScreen(viewModel = viewModel)
             }
         }
         // Node labels are positioned via absolute canvas offsets computed from screen
@@ -99,17 +126,112 @@ class TopologyDiscoveryScreenTest {
         // scanning badge's node count instead, which is fixed at TopEnd and reflects
         // the same accumulating `nodes` list.
         composeRule.mainClock.advanceTimeBy(500L)
+        startDiscoveryWithTarget("10.0.0.1")
+        composeRule.mainClock.advanceTimeBy(600L)
         composeRule.onNodeWithText(scanningBadgeText(1)).assertIsDisplayed()
+        composeRule.onNodeWithText("Querying 10.0.0.1...").assertIsDisplayed()
 
         // A second node arrives; the count must grow (accumulation, not reset).
         stateFlow.value = TopologyUiState.Discovering(
             nodes = listOf(fakeNode("10.0.0.1", "core-switch"), fakeNode("10.0.0.2", "edge-router")),
             links = emptyList(),
-            progressMessage = "Discovering...",
+            progressMessage = "Querying 10.0.0.2...",
             nodesDone = 2
         )
         composeRule.mainClock.advanceTimeBy(500L)
         composeRule.onNodeWithText(scanningBadgeText(2)).assertIsDisplayed()
+        composeRule.onNodeWithText("Querying 10.0.0.2...").assertIsDisplayed()
+    }
+
+    @Test
+    fun discoveringState_cancelInvokesReset() {
+        val stateFlow = MutableStateFlow<TopologyUiState>(TopologyUiState.Idle)
+        val viewModel = fakeViewModel(flow = stateFlow)
+        every { viewModel.startDiscovery(any()) } answers {
+            stateFlow.value = TopologyUiState.Discovering(
+                nodes = emptyList(),
+                links = emptyList(),
+                progressMessage = "Querying 10.0.0.1...",
+                nodesDone = 0
+            )
+        }
+        every { viewModel.reset() } answers { stateFlow.value = TopologyUiState.Idle }
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                TopologyDiscoveryScreen(viewModel = viewModel)
+            }
+        }
+        composeRule.mainClock.advanceTimeBy(500L)
+
+        startDiscoveryWithTarget("10.0.2.2")
+        composeRule.mainClock.advanceTimeBy(500L)
+
+        // Starting a scan collapses the configuration fields; Cancel must remain
+        // reachable outside that collapsible section.
+        composeRule
+            .onNodeWithText(context.getString(R.string.topology_cancel_button))
+            .assertIsDisplayed()
+            .performClick()
+
+        verify(exactly = 1) { viewModel.reset() }
+    }
+
+    @Test
+    fun cancelingAndCanceledStates_keepProgressAndPartialResultsVisible() {
+        val node = fakeNode("10.0.0.1", "core-switch")
+        val stateFlow = MutableStateFlow<TopologyUiState>(TopologyUiState.Idle)
+        val viewModel = fakeViewModel(flow = stateFlow)
+        every { viewModel.startDiscovery(any()) } answers {
+            stateFlow.value =
+                TopologyUiState.Canceling(
+                    nodes = listOf(node),
+                    links = emptyList(),
+                    progressMessage = "Querying neighbors",
+                    nodesDone = 1,
+                    operationId = 7L,
+                )
+        }
+        composeRule.setContent {
+            NetSwissKnifeTheme { TopologyDiscoveryScreen(viewModel = viewModel) }
+        }
+        composeRule.mainClock.advanceTimeBy(500L)
+        startDiscoveryWithTarget(node.ip)
+        composeRule.mainClock.advanceTimeBy(600L)
+
+        composeRule.onNodeWithText(context.getString(R.string.topology_canceling_status)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.topology_canceling_button))
+            .assertIsDisplayed()
+            .assertIsNotEnabled()
+
+        stateFlow.value = TopologyUiState.Canceled(
+            nodes = listOf(node),
+            links = emptyList(),
+            nodesDone = 1,
+        )
+        composeRule.mainClock.advanceTimeBy(500L)
+
+        val partialStatus = context.resources.getQuantityString(R.plurals.topology_canceled_partial_status, 1, 1)
+        composeRule.onNodeWithText(partialStatus).assertIsDisplayed()
+        composeRule.onNodeWithTag("topology_clear_partial_results")
+            .assertIsDisplayed()
+            .performClick()
+        verify(exactly = 1) { viewModel.reset() }
+
+        // The canceled snapshot still supplies a selectable node to the details sheet.
+        stateFlow.value = TopologyUiState.Canceled(
+            nodes = listOf(node),
+            links = emptyList(),
+            nodesDone = 1,
+            selectedNodeIp = node.ip,
+        )
+        composeRule.mainClock.autoAdvance = true
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodes(androidx.compose.ui.test.isRoot())
+                .fetchSemanticsNodes().size > 1
+        }
+        composeRule.mainClock.autoAdvance = false
+        composeRule.onAllNodesWithText("core-switch").onLast().assertIsDisplayed()
+        composeRule.onAllNodesWithText("10.0.0.1").onLast().assertIsDisplayed()
     }
 
     private fun scanningBadgeText(count: Int): String =
@@ -157,6 +279,74 @@ class TopologyDiscoveryScreenTest {
     }
 
     @Test
+    fun targetIpWithOuterWhitespace_startsWithNormalizedSeed() {
+        val viewModel = fakeViewModel(TopologyUiState.Idle)
+        var submitted: TopologyParams? = null
+        every { viewModel.startDiscovery(any()) } answers { submitted = firstArg() }
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                TopologyDiscoveryScreen(viewModel = viewModel)
+            }
+        }
+        composeRule.mainClock.advanceTimeBy(500L)
+
+        startDiscoveryWithTarget(" 192.168.1.1 ")
+
+        assertEquals("192.168.1.1", submitted?.targetIp)
+        assertEquals(false, submitted?.queryDiscoveredNeighbors)
+    }
+
+    @Test
+    fun queryingAdvertisedNeighbors_requiresExplicitOptIn() {
+        val viewModel = fakeViewModel(TopologyUiState.Idle)
+        var submitted: TopologyParams? = null
+        every { viewModel.startDiscovery(any()) } answers { submitted = firstArg() }
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                TopologyDiscoveryScreen(viewModel = viewModel)
+            }
+        }
+        composeRule.mainClock.advanceTimeBy(500L)
+
+        val neighborQueryOption = composeRule.onNodeWithTag("topology_query_discovered_neighbors")
+        composeRule.mainClock.autoAdvance = true
+        neighborQueryOption.performScrollTo().assertIsDisplayed()
+        composeRule.mainClock.autoAdvance = false
+        neighborQueryOption.assertIsOff()
+        neighborQueryOption.performClick()
+        composeRule.mainClock.advanceTimeBy(100L)
+        neighborQueryOption.assertIsOn()
+
+        startDiscoveryWithTarget("192.168.1.1")
+
+        assertEquals(true, submitted?.queryDiscoveredNeighbors)
+    }
+
+    @Test
+    fun targetIpWithInternalSpace_showsValidationAndBlocksDiscovery() {
+        val viewModel = fakeViewModel(TopologyUiState.Idle)
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                TopologyDiscoveryScreen(viewModel = viewModel)
+            }
+        }
+        composeRule.mainClock.advanceTimeBy(500L)
+
+        composeRule
+            .onNodeWithText(context.getString(R.string.topology_target_ip_label))
+            .performTextInput("bad host")
+        composeRule.mainClock.advanceTimeBy(200L)
+        composeRule
+            .onNodeWithText(context.getString(R.string.error_invalid_host))
+            .assertIsDisplayed()
+        composeRule
+            .onNodeWithText(context.getString(R.string.topology_discover_button))
+            .assertIsNotEnabled()
+
+        verify(exactly = 0) { viewModel.startDiscovery(any()) }
+    }
+
+    @Test
     fun doneState_selectedNode_showsDetailSheetWithSystemSection() {
         val node = fakeNode("10.0.0.1", "core-switch")
         val graph = TopologyGraph(nodes = listOf(node), links = emptyList(), seedIp = "10.0.0.1", queriedAt = 0L)
@@ -187,11 +377,112 @@ class TopologyDiscoveryScreenTest {
             .onNodeWithText(context.getString(R.string.topology_node_detail_system), ignoreCase = true)
             .performScrollTo()
             .assertIsDisplayed()
+        composeRule.onAllNodesWithText("core-switch").onLast().assertIsDisplayed()
+        composeRule.onAllNodesWithText("10.0.0.1").onLast().assertIsDisplayed()
+    }
+
+    @Test
+    fun doneState_seedOnlyGraph_showsReportedNeighborWithoutQueryingIt() {
+        val seed = fakeNode("10.0.0.1", "core-switch")
+        val graph =
+            TopologyGraph(
+                nodes = listOf(seed),
+                links =
+                    listOf(
+                        TopologyLink(
+                            fromIp = seed.ip,
+                            fromPort = "Gi1/0/1",
+                            toIp = "10.0.0.2",
+                            toPort = "Gi1/0/2",
+                            protocol = LinkProtocol.LLDP,
+                            neighbourSysName = "edge-switch",
+                        ),
+                    ),
+                seedIp = seed.ip,
+                queriedAt = 0L,
+            )
+        val stateFlow = MutableStateFlow<TopologyUiState>(TopologyUiState.Done(graph, selectedNodeIp = null))
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                TopologyDiscoveryScreen(viewModel = fakeViewModel(flow = stateFlow))
+            }
+        }
+        composeRule.mainClock.advanceTimeBy(500L)
+
+        composeRule
+            .onNodeWithText(
+                context.getString(R.string.topology_reported_neighbor_label, "10.0.0.2"),
+            ).assertIsDisplayed()
+
+        stateFlow.value = TopologyUiState.Done(graph, selectedNodeIp = seed.ip)
+        composeRule.mainClock.autoAdvance = true
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule
+                .onAllNodes(isRoot())
+                .fetchSemanticsNodes()
+                .size > 1
+        }
+        composeRule.mainClock.autoAdvance = false
+        composeRule
+            .onNodeWithText(context.getString(R.string.topology_reported_only))
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule
+            .onNodeWithTag("topology_neighbor_row_10.0.0.2")
+            .assertHasNoClickAction()
+    }
+
+    @Test
+    fun doneState_truncatedGraph_showsPartialResultsNotice() {
+        val graph = TopologyGraph(
+            nodes = listOf(fakeNode("10.0.0.1", "core-switch")),
+            links = emptyList(),
+            seedIp = "10.0.0.1",
+            queriedAt = 0L,
+            truncationReasons = setOf(TopologyTruncationReason.LINK_LIMIT)
+        )
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                TopologyDiscoveryScreen(viewModel = fakeViewModel(TopologyUiState.Done(graph, selectedNodeIp = null)))
+            }
+        }
+        composeRule.mainClock.advanceTimeBy(500L)
+
+        composeRule
+            .onNodeWithText(context.getString(R.string.topology_partial_results))
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun doneState_walkErrors_showPartialResultsNotice() {
+        val graph = TopologyGraph(
+            nodes = listOf(fakeNode("10.0.0.1", "core-switch")),
+            links = emptyList(),
+            seedIp = "10.0.0.1",
+            queriedAt = 0L,
+            hadSnmpErrors = true
+        )
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                TopologyDiscoveryScreen(viewModel = fakeViewModel(TopologyUiState.Done(graph, selectedNodeIp = null)))
+            }
+        }
+        composeRule.mainClock.advanceTimeBy(500L)
+
+        composeRule
+            .onNodeWithText(context.getString(R.string.topology_partial_results))
+            .assertIsDisplayed()
     }
 
     @Test
     fun failureState_showsErrorAndRetryResets() {
-        val viewModel = fakeViewModel(TopologyUiState.Failure("SNMP timeout"))
+        val stateFlow = MutableStateFlow<TopologyUiState>(TopologyUiState.Idle)
+        val viewModel = fakeViewModel(flow = stateFlow)
+        var submitted: TopologyParams? = null
+        every { viewModel.startDiscovery(any()) } answers {
+            stateFlow.value = TopologyUiState.Failure("SNMP timeout")
+        }
+        every { viewModel.retryDiscovery(any()) } answers { submitted = firstArg() }
         composeRule.setContent {
             NetSwissKnifeTheme {
                 TopologyDiscoveryScreen(viewModel = viewModel)
@@ -199,12 +490,32 @@ class TopologyDiscoveryScreenTest {
         }
         composeRule.mainClock.advanceTimeBy(500L)
 
+        startDiscoveryWithTarget("192.168.1.1")
+        composeRule.mainClock.advanceTimeBy(600L)
+
         composeRule.onNodeWithText("SNMP timeout").assertIsDisplayed()
         composeRule
-            .onNodeWithText(context.getString(R.string.topology_error_retry))
+            .onNodeWithTag("topology_error_retry")
+            .assertIsEnabled()
             .performClick()
 
-        verify(exactly = 1) { viewModel.reset() }
+        verify(exactly = 1) { viewModel.retryDiscovery(any()) }
+        assertEquals("192.168.1.1", submitted?.targetIp)
+    }
+
+    private fun startDiscoveryWithTarget(target: String) {
+        composeRule.mainClock.autoAdvance = true
+        composeRule
+            .onNodeWithText(context.getString(R.string.topology_target_ip_label))
+            .performScrollTo()
+            .performTextInput(target)
+        composeRule
+            .onNodeWithText(context.getString(R.string.topology_discover_button))
+            .performScrollTo()
+            .assertIsDisplayed()
+            .assertIsEnabled()
+            .performClick()
+        composeRule.mainClock.autoAdvance = false
     }
 
     private fun fakeNode(ip: String, sysName: String) = TopologyNode(
@@ -229,6 +540,9 @@ class TopologyDiscoveryScreenTest {
         val viewModel = mockk<TopologyDiscoveryViewModel>(relaxed = true)
         every { viewModel.uiState } returns (flow ?: MutableStateFlow(state ?: TopologyUiState.Idle))
         every { viewModel.recentSeeds } returns MutableStateFlow(emptyList())
+        every { viewModel.networkStatus } returns MutableStateFlow(
+            NetworkStatus(hasInternet = true, hasLocalNetwork = true)
+        )
         return viewModel
     }
 }

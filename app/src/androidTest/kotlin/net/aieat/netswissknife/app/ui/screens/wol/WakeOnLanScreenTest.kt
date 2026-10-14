@@ -5,8 +5,11 @@ import android.os.Build
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -15,9 +18,12 @@ import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.rule.GrantPermissionRule
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.platform.NetworkStatus
 import net.aieat.netswissknife.app.ui.theme.NetSwissKnifeTheme
+import net.aieat.netswissknife.app.ui.navigation.ToolSource
 import net.aieat.netswissknife.core.network.wol.WolSendReport
 import org.junit.Before
 import org.junit.Rule
@@ -99,6 +105,46 @@ class WakeOnLanScreenTest {
     }
 
     @Test
+    fun lanHandoff_showsEditableMacAndSourceWithoutSending() {
+        val viewModel = fakeViewModel(
+            macAddress = "02:23:45:67:89:AB",
+            sourceContext = ToolSource.LAN,
+        )
+        composeRule.setContent { NetSwissKnifeTheme { WakeOnLanScreen(viewModel = viewModel) } }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        composeRule.onNodeWithTag(WakeOnLanScreenTestTags.SOURCE_CONTEXT).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.wol_source_lan)).assertIsDisplayed()
+        val macField = composeRule.onNodeWithText("02:23:45:67:89:AB")
+        macField.performScrollTo().assert(hasSetTextAction())
+        composeRule.onNodeWithText(context.getString(R.string.wol_send_button))
+            .performScrollTo()
+            .assertIsEnabled()
+        verify(exactly = 0) { viewModel.send() }
+
+        composeRule.onNodeWithTag(WakeOnLanScreenTestTags.CLEAR_PREFILL_ACTION)
+            .performScrollTo()
+            .performClick()
+        composeRule.mainClock.advanceTimeBy(500L)
+        composeRule.onNodeWithTag(WakeOnLanScreenTestTags.SOURCE_CONTEXT).assertDoesNotExist()
+        verify(exactly = 1) { viewModel.clearPrefill() }
+    }
+
+    @Test
+    fun invalidHandoff_showsRecoveryAndEditableMacWithoutSending() {
+        val viewModel = fakeViewModel(invalidHandoff = true)
+        composeRule.setContent { NetSwissKnifeTheme { WakeOnLanScreen(viewModel = viewModel) } }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        composeRule.onNodeWithTag(WakeOnLanScreenTestTags.INVALID_HANDOFF).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.wol_invalid_handoff)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.wol_mac_label))
+            .performScrollTo()
+            .assertIsDisplayed()
+        verify(exactly = 0) { viewModel.send() }
+    }
+
+    @Test
     fun invalidPort_disablesSendButton() {
         composeRule.setContent {
             NetSwissKnifeTheme {
@@ -121,6 +167,27 @@ class WakeOnLanScreenTest {
         composeRule
             .onNodeWithText(context.getString(R.string.wol_send_button))
             .assertIsNotEnabled()
+    }
+
+    @Test
+    fun zeroPort_showsReservedPortErrorAndDisablesSend() {
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                WakeOnLanScreen(
+                    viewModel = fakeViewModel(
+                        macAddress = "AA:BB:CC:DD:EE:FF",
+                        port = "0"
+                    )
+                )
+            }
+        }
+
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        composeRule.onNodeWithText(context.getString(R.string.wol_advanced_options)).performClick()
+        composeRule.mainClock.advanceTimeBy(500L)
+
+        composeRule.onNodeWithText(context.getString(R.string.wol_port_invalid)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.wol_send_button)).assertIsNotEnabled()
     }
 
     @Test
@@ -180,13 +247,23 @@ class WakeOnLanScreenTest {
         state: WolUiState = WolUiState.Idle,
         macAddress: String = "",
         broadcastAddress: String = "255.255.255.255",
-        port: String = "9"
+        port: String = "9",
+        sourceContext: ToolSource? = null,
+        invalidHandoff: Boolean = false,
     ): WakeOnLanViewModel {
         val viewModel = mockk<WakeOnLanViewModel>(relaxed = true)
         every { viewModel.uiState } returns MutableStateFlow(state)
         every { viewModel.macAddress } returns MutableStateFlow(macAddress)
         every { viewModel.broadcastAddress } returns MutableStateFlow(broadcastAddress)
         every { viewModel.port } returns MutableStateFlow(port)
+        every { viewModel.sourceContext } returns sourceContext
+        val sourceContextFlow = MutableStateFlow(sourceContext)
+        every { viewModel.sourceContextState } returns sourceContextFlow
+        every { viewModel.networkStatus } returns MutableStateFlow(
+            NetworkStatus(hasInternet = true, hasLocalNetwork = true)
+        )
+        every { viewModel.clearPrefill() } answers { sourceContextFlow.value = null }
+        every { viewModel.hasInvalidHandoff } returns MutableStateFlow(invalidHandoff)
         return viewModel
     }
 }

@@ -16,4 +16,8 @@ data class LanScanSummary(
     val scanDurationMs: Long,
     val hosts: List<LanHost>,
     val macResolutionSupported: Boolean = true,
+    /** Probe failures retained for an opt-in diagnostics view; never counted as hosts. */
+    val uncertainHosts: List<LanScanDiagnostic> = emptyList(),
+    /** Total uncertain addresses, including entries omitted from the bounded detail list. */
+    val uncertainCount: Int = uncertainHosts.size,
 )

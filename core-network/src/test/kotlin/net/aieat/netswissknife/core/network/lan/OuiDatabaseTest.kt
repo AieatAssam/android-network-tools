@@ -20,6 +20,19 @@ class OuiDatabaseTest {
     }
 
     @Test
+    fun `accepts separator-free and Cisco dotted MAC notation`() {
+        assertEquals("Raspberry Pi Foundation", OuiDatabase.lookup("B827EB112233"))
+        assertEquals("Raspberry Pi Foundation", OuiDatabase.lookup("B827.EB11.2233"))
+    }
+
+    @Test
+    fun `rejects malformed separators and invalid octets`() {
+        assertNull(OuiDatabase.lookup("B8:27:EB/garbage"))
+        assertNull(OuiDatabase.lookup("B8:27:EB:ZZ:22:33"))
+        assertNull(OuiDatabase.lookup("B8:27:EB:11:22:33:44"))
+    }
+
+    @Test
     fun `returns null for an unknown OUI prefix`() {
         assertNull(OuiDatabase.lookup("00:00:00:11:22:33"))
     }
@@ -35,6 +48,18 @@ class OuiDatabaseTest {
         assertEquals(
             OuiDatabase.lookup("B8:27:EB:AA:AA:AA"),
             OuiDatabase.lookup("B8:27:EB:BB:BB:BB")
+        )
+    }
+
+    @Test
+    fun `longest registry prefix wins across MA-M and MA-S assignments`() {
+        assertEquals(
+            "Shinko Technos co.,ltd.",
+            OuiDatabase.lookup("00:55:DA:0A:BC:DE"),
+        )
+        assertEquals(
+            "Converging Systems Inc.",
+            OuiDatabase.lookup("00:1B:C5:00:0A:BC"),
         )
     }
 

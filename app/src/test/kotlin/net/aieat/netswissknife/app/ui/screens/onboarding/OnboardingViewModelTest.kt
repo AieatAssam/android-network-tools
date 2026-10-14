@@ -17,7 +17,8 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import org.junit.jupiter.api.AfterEach
-import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
@@ -29,7 +30,6 @@ import java.io.File
 @OptIn(ExperimentalCoroutinesApi::class)
 @DisplayName("OnboardingViewModel – first-run onboarding logic")
 class OnboardingViewModelTest {
-
     @TempDir
     lateinit var tempDir: File
 
@@ -42,10 +42,11 @@ class OnboardingViewModelTest {
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
         testScope = TestScope(testDispatcher + Job())
-        dataStore = PreferenceDataStoreFactory.create(
-            scope = testScope,
-            produceFile = { File(tempDir, "onboarding_test_prefs.preferences_pb") }
-        )
+        dataStore =
+            PreferenceDataStoreFactory.create(
+                scope = testScope,
+                produceFile = { File(tempDir, "onboarding_test_prefs.preferences_pb") },
+            )
         viewModel = OnboardingViewModel(dataStore)
     }
 
@@ -58,56 +59,61 @@ class OnboardingViewModelTest {
     @Nested
     @DisplayName("shouldShowOnboarding")
     inner class ShouldShowOnboarding {
+        @Test
+        fun `emits true on first run when no preference is stored`() =
+            testScope.runTest {
+                assertNull(viewModel.shouldShowOnboarding.value)
+                advanceUntilIdle()
+                assertEquals(true, viewModel.shouldShowOnboarding.value)
+            }
 
         @Test
-        fun `emits true on first run when no preference is stored`() = testScope.runTest {
-            advanceUntilIdle()
-            assertTrue(viewModel.shouldShowOnboarding.value)
-        }
-
-        @Test
-        fun `emits false when onboarding was already completed`() = testScope.runTest {
-            dataStore.edit { it[AppPreferenceKeys.ONBOARDING_COMPLETED] = true }
-            val vm = OnboardingViewModel(dataStore)
-            advanceUntilIdle()
-            assertFalse(vm.shouldShowOnboarding.value)
-        }
+        fun `emits false when onboarding was already completed`() =
+            testScope.runTest {
+                dataStore.edit { it[AppPreferenceKeys.ONBOARDING_COMPLETED] = true }
+                val vm = OnboardingViewModel(dataStore)
+                assertNull(vm.shouldShowOnboarding.value)
+                advanceUntilIdle()
+                assertEquals(false, vm.shouldShowOnboarding.value)
+            }
     }
 
     @Nested
     @DisplayName("completeOnboarding")
     inner class CompleteOnboarding {
+        @Test
+        fun `sets shouldShowOnboarding to false`() =
+            testScope.runTest {
+                advanceUntilIdle()
+                assertEquals(true, viewModel.shouldShowOnboarding.value)
+
+                viewModel.completeOnboarding()
+                advanceUntilIdle()
+
+                assertEquals(false, viewModel.shouldShowOnboarding.value)
+            }
 
         @Test
-        fun `sets shouldShowOnboarding to false`() = testScope.runTest {
-            advanceUntilIdle()
-            assertTrue(viewModel.shouldShowOnboarding.value)
+        fun `persists completion to DataStore`() =
+            testScope.runTest {
+                advanceUntilIdle()
+                viewModel.completeOnboarding()
+                advanceUntilIdle()
 
-            viewModel.completeOnboarding()
-            advanceUntilIdle()
-
-            assertFalse(viewModel.shouldShowOnboarding.value)
-        }
-
-        @Test
-        fun `persists completion to DataStore`() = testScope.runTest {
-            advanceUntilIdle()
-            viewModel.completeOnboarding()
-            advanceUntilIdle()
-
-            val stored = dataStore.data.first()[AppPreferenceKeys.ONBOARDING_COMPLETED]
-            assertTrue(stored == true)
-        }
+                val stored = dataStore.data.first()[AppPreferenceKeys.ONBOARDING_COMPLETED]
+                assertTrue(stored == true)
+            }
 
         @Test
-        fun `survives ViewModel recreation`() = testScope.runTest {
-            advanceUntilIdle()
-            viewModel.completeOnboarding()
-            advanceUntilIdle()
+        fun `survives ViewModel recreation`() =
+            testScope.runTest {
+                advanceUntilIdle()
+                viewModel.completeOnboarding()
+                advanceUntilIdle()
 
-            val newVm = OnboardingViewModel(dataStore)
-            advanceUntilIdle()
-            assertFalse(newVm.shouldShowOnboarding.value)
-        }
+                val newVm = OnboardingViewModel(dataStore)
+                advanceUntilIdle()
+                assertEquals(false, newVm.shouldShowOnboarding.value)
+            }
     }
 }

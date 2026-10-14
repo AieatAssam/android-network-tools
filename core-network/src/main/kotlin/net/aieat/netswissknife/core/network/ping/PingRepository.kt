@@ -2,6 +2,7 @@ package net.aieat.netswissknife.core.network.ping
 
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
+import net.aieat.netswissknife.core.network.operation.OperationSession
 
 /**
  * Repository that sends ping probes to a remote host and streams each result
@@ -14,7 +15,14 @@ interface PingRepository {
 
     fun ping(request: PingRequest): Flow<PingPacketResult>
 
+    /** Collects this request as a child of a caller-owned operation session. */
+    fun ping(request: PingRequest, session: OperationSession): Flow<PingPacketResult> = ping(request)
+
     fun continuousPing(request: PingRequest): Flow<PingPacketResult>
+
+    /** Collects this continuous request as a child of a caller-owned session. */
+    fun continuousPing(request: PingRequest, session: OperationSession): Flow<PingPacketResult> =
+        continuousPing(request)
 
     /**
      * Sends [count] reachability probes to [host] and emits a [PingPacketResult]

@@ -30,6 +30,22 @@ class WhoisResponseParserTest {
     }
 
     @Test
+    fun `registrar URL accepts only safe web links`() {
+        assertEquals(
+            "https://registrar.example/path",
+            WhoisResponseParser.parseRegistrarUrl("Registrar URL: https://registrar.example/path"),
+        )
+        listOf("javascript:alert(1)", "intent://launch", "file:///etc/passwd", "https://user@host.example/")
+            .forEach { unsafe ->
+                assertEquals(
+                    null,
+                    WhoisResponseParser.parseRegistrarUrl("Registrar URL: $unsafe"),
+                    unsafe,
+                )
+            }
+    }
+
+    @Test
     @DisplayName("parseExpiryDate parses ISO-8601 date to epoch ms")
     fun `parseExpiryDate parses ISO-8601 date to epoch ms`() {
         val response = "Registry Expiry Date: 2025-08-13T04:00:00Z"

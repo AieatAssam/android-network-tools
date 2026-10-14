@@ -1,22 +1,1153 @@
 package net.aieat.netswissknife.core.network.portscan
 
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.async
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.flow.buffer
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
+import net.aieat.netswissknife.core.network.net.FakeNetworkBinder
+import net.aieat.netswissknife.core.network.net.LocalNetworkPermissionDeniedException
+import net.aieat.netswissknife.core.network.testkit.ScriptedSocket
+import net.aieat.netswissknife.core.network.testkit.FakeClock
+import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationCancellationException
+import net.aieat.netswissknife.core.network.operation.OperationBudget
+import net.aieat.netswissknife.core.network.operation.OperationDeadlineExceededException
+import net.aieat.netswissknife.core.network.operation.OperationSession
+import net.aieat.netswissknife.core.network.operation.OperationRunner
+import net.aieat.netswissknife.core.network.tls.TlsHandshakeConnection
+import net.aieat.netswissknife.core.network.tls.TlsHandshakeEngine
+import net.aieat.netswissknife.core.network.tls.TlsHandshakeSnapshot
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
+import java.util.Collections
+import java.net.InetAddress
+import java.net.Socket
+import java.net.SocketAddress
+import java.net.SocketTimeoutException
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+import java.io.InputStream
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
+import java.security.cert.X509Certificate
+import javax.security.auth.x500.X500Principal
+import net.aieat.netswissknife.core.network.tls.TlsCertificateParser
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @DisplayName("PortScanRepositoryImpl")
 class PortScanRepositoryImplTest {
+
+    @Test
+    fun `SMTP waits for the complete multiline 220 greeting before EHLO`() = runTest {
+        val greeting = "220-first line\r\n220-second line\r\n220 ready\r\n".toByteArray()
+        val input = CountingInputStream(greeting + "250 hello\r\n".toByteArray())
+        val capturedRequest = ByteArrayOutputStream()
+        val socket = responseSocket(input, capturedRequest) {
+            assertEquals(greeting.size, input.bytesRead, "EHLO must wait for the final 220 line")
+        }
+        val repo = PortScanRepositoryImpl(
+            hostResolver = { InetAddress.getLoopbackAddress() },
+            socketFactory = { socket },
+        )
+        val session = repo.newSession(portCount = 1, timeoutMs = 1_000, concurrency = 1)
+
+        val result = repo.scan(
+            "mail.example", listOf(25), 1_000, 1, true, session,
+        ).filterIsInstance<PortScanUpdate.PortResult>().toList().single().result
+
+        assertEquals("EHLO netswissknife\r\n", capturedRequest.toString(Charsets.US_ASCII))
+        assertTrue(result.banner.orEmpty().contains("220-first line 220-second line 220 ready"))
+        assertTrue(result.banner.orEmpty().contains("250 hello"))
+        assertEquals(ProbeKind.SMTP, result.probeKind)
+    }
+
+    @Test
+    fun `partial SMTP greeting at EOF does not trigger EHLO`() = runTest {
+        val capturedRequest = ByteArrayOutputStream()
+        val socket = responseSocket(
+            CountingInputStream("220-incomplete continuation\r\n".toByteArray()),
+            capturedRequest,
+        )
+        val repo = PortScanRepositoryImpl(
+            hostResolver = { InetAddress.getLoopbackAddress() },
+            socketFactory = { socket },
+        )
+        val session = repo.newSession(portCount = 1, timeoutMs = 1_000, concurrency = 1)
+
+        repo.scan("mail.example", listOf(25), 1_000, 1, true, session).toList()
+
+        assertEquals(0, capturedRequest.size())
+    }
+
+    @Test
+    fun `partial SMTP greeting at timeout does not trigger EHLO`() = runTest {
+        val capturedRequest = ByteArrayOutputStream()
+        val socket = responseSocket(
+            TimeoutAfterBytesInputStream("220-incomplete continuation\r\n".toByteArray()),
+            capturedRequest,
+        )
+        val repo = PortScanRepositoryImpl(
+            hostResolver = { InetAddress.getLoopbackAddress() },
+            socketFactory = { socket },
+        )
+        val session = repo.newSession(portCount = 1, timeoutMs = 1_000, concurrency = 1)
+
+        repo.scan("mail.example", listOf(25), 1_000, 1, true, session).toList()
+
+        assertEquals(0, capturedRequest.size())
+    }
+
+    @Test
+    fun `passive HTTP SMTP and TLS results produce no writes or TLS peek`() = runTest {
+        val outputs = mutableListOf<ByteArrayOutputStream>()
+        var tlsPeekInvoked = false
+        val repo = PortScanRepositoryImpl(
+            hostResolver = { InetAddress.getLoopbackAddress() },
+            socketFactory = {
+                ByteArrayOutputStream().also { output ->
+                    outputs += output
+                }.let { output ->
+                    responseSocket(CountingInputStream("service banner\r\n".toByteArray()), output)
+                }
+            },
+            tlsSubjectProbe = TlsSubjectProbe { _, _, _, _, _ -> tlsPeekInvoked = true; null },
+        )
+        val session = repo.newSession(portCount = 3, timeoutMs = 1_000, concurrency = 1)
+
+        repo.scan("host.example", listOf(80, 25, 443), 1_000, 1, false, session).toList()
+
+        assertEquals(listOf(0, 0, 0), outputs.map(ByteArrayOutputStream::size))
+        assertTrue(!tlsPeekInvoked)
+    }
+
+    @Test
+    fun `SMTP greeting and response share the 1024 raw byte cap`() = runTest {
+        val firstLine = "220-" + "a".repeat(1_000) + "\r\n"
+        val finalLine = "220 ready\r\n"
+        val greeting = (firstLine + finalLine).toByteArray()
+        assertTrue(greeting.size < BannerReader.MAX_BYTES)
+        val input = CountingInputStream(greeting + ("250 " + "b".repeat(100) + "\r\n").toByteArray())
+        val capturedRequest = ByteArrayOutputStream()
+        val socket = responseSocket(input, capturedRequest)
+        val repo = PortScanRepositoryImpl(
+            hostResolver = { InetAddress.getLoopbackAddress() },
+            socketFactory = { socket },
+        )
+        val session = repo.newSession(portCount = 1, timeoutMs = 1_000, concurrency = 1)
+
+        val result = repo.scan("mail.example", listOf(25), 1_000, 1, true, session)
+            .filterIsInstance<PortScanUpdate.PortResult>().toList().single().result
+
+        assertTrue(result.bannerTruncated)
+        assertEquals(BannerReader.MAX_BYTES, input.bytesRead)
+    }
+
+    @Test
+    fun `combined SMTP text is sanitized to the display cap and reports truncation`() = runTest {
+        val input = CountingInputStream(
+            ("220 " + "a".repeat(150) + "\r\n" + "250 " + "b".repeat(100) + "\r\n").toByteArray(),
+        )
+        val socket = responseSocket(input, ByteArrayOutputStream())
+        val repo = PortScanRepositoryImpl(
+            hostResolver = { InetAddress.getLoopbackAddress() },
+            socketFactory = { socket },
+        )
+        val session = repo.newSession(portCount = 1, timeoutMs = 1_000, concurrency = 1)
+
+        val result = repo.scan("mail.example", listOf(25), 1_000, 1, true, session)
+            .filterIsInstance<PortScanUpdate.PortResult>().toList().single().result
+
+        assertEquals(200, result.banner?.length)
+        assertTrue(result.bannerTruncated)
+    }
+
+    @Test
+    fun `TLS subject probe connects to resolved IP through binder but retains hostname identity`() {
+        val connectAddress = InetAddress.getByName("192.0.2.20")
+        val transportSocket = object : Socket() {
+            var remote: SocketAddress? = null
+            override fun isBound(): Boolean = true
+            override fun connect(endpoint: SocketAddress?, timeout: Int) { remote = endpoint }
+        }
+        val binder = FakeNetworkBinder(shouldBindResult = true)
+        var tlsPeerHost: String? = null
+        var wrappedSocket: Socket? = null
+        val engine = object : TlsHandshakeEngine {
+            override fun enabledProtocols(): Set<String> = setOf("TLSv1.2")
+            override fun openConnection(host: String, port: Int, timeoutMs: Int, protocol: String?) =
+                error("TLS probe must wrap the bound transport")
+            override fun openConnectionOverSocket(
+                host: String,
+                port: Int,
+                timeoutMs: Int,
+                transportSocket: Socket,
+            ): TlsHandshakeConnection {
+                tlsPeerHost = host
+                wrappedSocket = transportSocket
+                return object : TlsHandshakeConnection {
+                    override fun connect() = Unit
+                    override fun handshake() = Unit
+                    override fun snapshot() = TlsHandshakeSnapshot("TLSv1.3", "cipher", emptyList<X509Certificate>())
+                    override fun close() = Unit
+                }
+            }
+        }
+        val session = OperationSession(OperationBudget.start())
+        val probe = P10TlsSubjectProbe(binder, { transportSocket }, engine)
+
+        probe.inspect(connectAddress, "service.example", 443, 1_000, session)
+
+        assertEquals("service.example", tlsPeerHost)
+        assertEquals(connectAddress, (transportSocket.remote as java.net.InetSocketAddress).address)
+        assertEquals(1, binder.boundTcpSockets.size)
+        assertTrue(binder.boundTcpSockets.single() === transportSocket)
+        assertTrue(wrappedSocket === transportSocket)
+    }
+
+    @Test
+    fun `open web port sends one HTTP greeting and captures response`() = runTest {
+        val capturedRequest = ByteArrayOutputStream()
+        val socket = object : Socket() {
+            override fun connect(endpoint: java.net.SocketAddress?, timeout: Int) = Unit
+            override fun setSoTimeout(timeout: Int) = Unit
+            override fun getInputStream() = ByteArrayInputStream("HTTP/1.0 200 OK\r\n".toByteArray())
+            override fun getOutputStream() = capturedRequest
+        }
+        val repo = PortScanRepositoryImpl(
+            hostResolver = { InetAddress.getLoopbackAddress() },
+            socketFactory = { socket },
+        )
+        val session = repo.newSession(portCount = 1, timeoutMs = 1_000, concurrency = 1)
+
+        val result = repo.scan(
+            host = "example.test",
+            ports = listOf(80),
+            timeoutMs = 1_000,
+            concurrency = 1,
+            aggressiveProbes = true,
+            operationSession = session,
+        ).filterIsInstance<PortScanUpdate.PortResult>().toList().single().result
+
+        val request = capturedRequest.toString(Charsets.US_ASCII)
+        assertTrue(request.startsWith("HEAD / HTTP/1.0\r\nHost: example.test\r\n"))
+        assertTrue(result.banner.orEmpty().startsWith("HTTP/1.0 200 OK"))
+        assertEquals(ProbeKind.HTTP, result.probeKind)
+    }
+
+    @Test
+    fun `aggressive open TLS port gets bounded subject peek and result metadata`() = runTest {
+        var requestedTimeout = 0
+        val repo = PortScanRepositoryImpl(
+            checker = { _, _ -> PortConnectResult(PortStatus.OPEN, 4L, null) },
+            hostResolver = { InetAddress.getLoopbackAddress() },
+            tlsSubjectProbe = TlsSubjectProbe { address, peerHost, port, timeout, _ ->
+                assertEquals(InetAddress.getLoopbackAddress(), address)
+                assertEquals("target", peerHost)
+                assertEquals(443, port)
+                requestedTimeout = timeout
+                "example"
+            },
+        )
+        val session = repo.newSession(portCount = 1, timeoutMs = 1_000, concurrency = 1)
+
+        val result = repo.scan(
+            host = "target",
+            ports = listOf(443),
+            timeoutMs = 1_000,
+            concurrency = 1,
+            aggressiveProbes = true,
+            operationSession = session,
+        ).filterIsInstance<PortScanUpdate.PortResult>().toList().single().result
+
+        assertEquals("example", result.tlsSubject)
+        assertEquals(ProbeKind.TLS_PEEK, result.probeKind)
+        assertTrue(requestedTimeout in 2..1_000)
+    }
+
+    @Test
+    fun `TLS subject is sanitized before entering scan results`() = runTest {
+        val hostileCn = TlsCertificateParser.parseCN(X500Principal("CN=server\\0AInjected\\09row").name)
+        val repo = PortScanRepositoryImpl(
+            checker = { _, _ -> PortConnectResult(PortStatus.OPEN, 4L, null, tlsSubject = hostileCn) },
+            hostResolver = { InetAddress.getLoopbackAddress() },
+        )
+        val session = repo.newSession(portCount = 1, timeoutMs = 1_000, concurrency = 1)
+
+        val result = repo.scan("target", listOf(80), 1_000, 1, session)
+            .filterIsInstance<PortScanUpdate.PortResult>().toList().single().result
+
+        assertEquals("server Injected row", result.tlsSubject)
+        assertTrue(result.tlsSubject.orEmpty().none { Character.isISOControl(it) })
+    }
+
+    @Test
+    fun `passive scan does not invoke TLS peek`() = runTest {
+        var invoked = false
+        val repo = PortScanRepositoryImpl(
+            checker = { _, _ -> PortConnectResult(PortStatus.OPEN, 4L, null) },
+            hostResolver = { InetAddress.getLoopbackAddress() },
+            tlsSubjectProbe = TlsSubjectProbe { _, _, _, _, _ -> invoked = true; "unexpected" },
+        )
+        val session = repo.newSession(portCount = 1, timeoutMs = 1_000, concurrency = 1)
+
+        val result = repo.scan(
+            host = "target",
+            ports = listOf(443),
+            timeoutMs = 1_000,
+            concurrency = 1,
+            aggressiveProbes = false,
+            operationSession = session,
+        ).filterIsInstance<PortScanUpdate.PortResult>().toList().single().result
+
+        assertTrue(!invoked)
+        assertEquals(ProbeKind.PASSIVE, result.probeKind)
+        assertEquals(null, result.tlsSubject)
+    }
+
+    @Test
+    fun `direct no-session scan derives its deadline from the requested work`() = runTest {
+        val clock = FakeClock()
+        val repo = PortScanRepositoryImpl(
+            checker = { _, _ ->
+                clock.advanceBy(1_000_000_000L)
+                PortConnectResult(PortStatus.CLOSED, 1L, null)
+            },
+            clock = clock,
+            hostResolver = { InetAddress.getLoopbackAddress() },
+        )
+
+        val updates = withContext(Dispatchers.Default) {
+            withTimeout(5_000) {
+                repo.scan("target", (1..100).toList(), timeoutMs = 1_000, concurrency = 1).toList()
+            }
+        }
+
+        assertEquals(100, updates.filterIsInstance<PortScanUpdate.PortResult>().size)
+        assertEquals(PortScanUpdate.Complete::class, updates.last()::class)
+        assertTrue(clock.nowNanos() >= 100_000_000_000L)
+    }
+
+    @Test
+    fun `request-sized repository session exceeds the legacy 120-second default when required`() {
+        val clock = FakeClock()
+        val repo = PortScanRepositoryImpl()
+        val session = repo.newSession(portCount = 200, timeoutMs = 1_000, concurrency = 1, clock = clock)
+
+        assertEquals(210_000L, session.budget.remainingTimeoutMillis())
+    }
+
+    @Test
+    fun `direct repository call rejects work above its hard ceiling before resolving the host`() = runTest {
+        var resolved = false
+        val repo = PortScanRepositoryImpl(
+            hostResolver = { resolved = true; InetAddress.getLoopbackAddress() },
+        )
+
+        val failure = runCatching {
+            repo.scan("target", (1..10_000).toList(), timeoutMs = 30_000, concurrency = 1).toList()
+        }.exceptionOrNull()
+
+        assertTrue(failure is IllegalArgumentException)
+        assertTrue((failure as? IllegalArgumentException)?.message.orEmpty().contains("15-minute operation limit"))
+        assertTrue(!resolved)
+    }
+
+    @Test
+    fun `direct repository call rejects nonpositive timeout before resolving the host`() = runTest {
+        var resolved = false
+        var probed = false
+        val repo = PortScanRepositoryImpl(
+            checker = { _, _ ->
+                probed = true
+                PortConnectResult(PortStatus.OPEN, 1L, null)
+            },
+            hostResolver = { resolved = true; InetAddress.getLoopbackAddress() },
+        )
+
+        val failure = runCatching {
+            repo.scan("target", listOf(80), timeoutMs = 0, concurrency = 1).toList()
+        }.exceptionOrNull()
+
+        assertTrue(failure is IllegalArgumentException)
+        assertTrue(failure?.message.orEmpty().contains("timeout must be positive"))
+        assertTrue(!resolved)
+        assertTrue(!probed)
+    }
+
+    @Test
+    fun `deadline returns while a non-interruptible hostname resolver remains blocked`() = runTest {
+        val executor = PortScanBlockingResolver.createWorkerExecutor()
+        val resolverEntered = CountDownLatch(1)
+        val releaseResolver = CountDownLatch(1)
+        val resolverStillRunning = java.util.concurrent.atomic.AtomicBoolean(false)
+        val checkerCalls = AtomicInteger()
+        val repo = PortScanRepositoryImpl(
+            checker = { _, _ ->
+                checkerCalls.incrementAndGet()
+                PortConnectResult(PortStatus.OPEN, 1L, null)
+            },
+            hostResolver = {
+                resolverStillRunning.set(true)
+                resolverEntered.countDown()
+                var released = false
+                while (!released) {
+                    try {
+                        releaseResolver.await()
+                        released = true
+                    } catch (_: InterruptedException) {
+                        // Model platform DNS implementations that do not stop on interruption.
+                    }
+                }
+                resolverStillRunning.set(false)
+                InetAddress.getLoopbackAddress()
+            },
+            resolverExecutor = executor,
+        )
+        val session = OperationSession(
+            OperationBudget.start(timeoutMillis = 60_000, maxConcurrentProbes = 1),
+        )
+
+        try {
+            val scan = async(Dispatchers.IO) {
+                runCatching {
+                    repo.scan("slow.example", listOf(80), 1_000, 1, session).toList()
+                }.exceptionOrNull()
+            }
+            assertTrue(
+                withContext(Dispatchers.IO) { resolverEntered.await(2, TimeUnit.SECONDS) },
+                "host resolution should begin on a worker",
+            )
+            session.cancel(CancellationReason.DEADLINE_EXCEEDED)
+
+            val failure = withContext(Dispatchers.IO) {
+                withTimeout(2_000) { scan.await() }
+            }
+
+            assertTrue(failure is OperationDeadlineExceededException)
+            assertEquals(CancellationReason.DEADLINE_EXCEEDED, session.cancellationReason)
+            assertTrue(resolverStillRunning.get(), "the resolver itself is allowed to outlive cancellation")
+            assertEquals(0, checkerCalls.get(), "no port probes may start before host resolution returns")
+            assertEquals(PortScanBlockingResolver.WORKER_COUNT, executor.corePoolSize)
+            assertEquals(PortScanBlockingResolver.QUEUE_CAPACITY, executor.queue.remainingCapacity())
+        } finally {
+            releaseResolver.countDown()
+            executor.shutdownNow()
+            withContext(Dispatchers.IO) { executor.awaitTermination(2, TimeUnit.SECONDS) }
+        }
+    }
+
+    @Test
+    fun `OperationRunner deadline unwinds resolver wait using virtual time`() = runTest {
+        val clock = FakeClock()
+        val executor = PortScanBlockingResolver.createWorkerExecutor()
+        val resolverEntered = CountDownLatch(1)
+        val releaseResolver = CountDownLatch(1)
+        val resolverStillRunning = java.util.concurrent.atomic.AtomicBoolean(false)
+        val session = OperationSession(OperationBudget.start(timeoutMillis = 100, clock = clock))
+        val operation = backgroundScope.async {
+            runCatching {
+                OperationRunner.run(session) {
+                    PortScanBlockingResolver.resolve(
+                        session = session,
+                        executor = executor,
+                    ) {
+                        resolverStillRunning.set(true)
+                        resolverEntered.countDown()
+                        var released = false
+                        while (!released) {
+                            try {
+                                releaseResolver.await()
+                                released = true
+                            } catch (_: InterruptedException) {
+                                // Platform resolver may keep running after the caller is cancelled.
+                            }
+                        }
+                        InetAddress.getLoopbackAddress()
+                    }
+                }
+            }.exceptionOrNull()
+        }
+
+        try {
+            runCurrent()
+            assertTrue(
+                resolverEntered.await(5, TimeUnit.SECONDS),
+                "resolver worker should enter the blocking call",
+            )
+            clock.advanceBy(100_000_000L)
+            advanceTimeBy(100)
+            runCurrent()
+
+            val failure = withContext(Dispatchers.IO) {
+                withTimeout(2_000) { operation.await() }
+            }
+
+            assertTrue(failure is OperationDeadlineExceededException)
+            assertEquals(CancellationReason.DEADLINE_EXCEEDED, session.cancellationReason)
+            assertTrue(resolverStillRunning.get(), "deadline return must not wait for a stuck resolver")
+        } finally {
+            releaseResolver.countDown()
+            executor.shutdownNow()
+            withContext(Dispatchers.IO) { executor.awaitTermination(2, TimeUnit.SECONDS) }
+        }
+    }
+
+    @Test
+    fun `USER_STOP remains typed while a non-interruptible resolver is waiting`() = runTest {
+        val executor = PortScanBlockingResolver.createWorkerExecutor()
+        val resolverEntered = CountDownLatch(1)
+        val releaseResolver = CountDownLatch(1)
+        val repo = PortScanRepositoryImpl(
+            hostResolver = {
+                resolverEntered.countDown()
+                var released = false
+                while (!released) {
+                    try {
+                        releaseResolver.await()
+                        released = true
+                    } catch (_: InterruptedException) {
+                        // Model a platform resolver that ignores worker interruption.
+                    }
+                }
+                InetAddress.getLoopbackAddress()
+            },
+            resolverExecutor = executor,
+        )
+        val session = OperationSession(OperationBudget.start(timeoutMillis = 60_000))
+
+        try {
+            val scan = async(Dispatchers.IO) {
+                runCatching { repo.scan("slow.example", listOf(80), 1_000, 1, session).toList() }
+                    .exceptionOrNull()
+            }
+            assertTrue(
+                withContext(Dispatchers.IO) { resolverEntered.await(2, TimeUnit.SECONDS) },
+                "host resolution should begin on a worker",
+            )
+            session.cancel(CancellationReason.USER_STOP)
+            val failure = withContext(Dispatchers.IO) {
+                withTimeout(2_000) { scan.await() }
+            }
+
+            assertTrue(failure is OperationCancellationException)
+            assertEquals(CancellationReason.USER_STOP, session.cancellationReason)
+        } finally {
+            releaseResolver.countDown()
+            executor.shutdownNow()
+            withContext(Dispatchers.IO) { executor.awaitTermination(2, TimeUnit.SECONDS) }
+        }
+    }
+
+    @Test
+    fun `resolution phase cap expires within session budget and reports host resolution timeout`() =
+        runTest {
+            val executor = PortScanBlockingResolver.createWorkerExecutor()
+            val resolverEntered = CountDownLatch(1)
+            val releaseResolver = CountDownLatch(1)
+            val session = OperationSession(OperationBudget.start(timeoutMillis = 60_000))
+            val operation =
+                async(Dispatchers.IO) {
+                    runCatching {
+                        PortScanBlockingResolver.resolve(
+                            session = session,
+                            executor = executor,
+                            resolutionTimeoutMillis = 100,
+                        ) {
+                            resolverEntered.countDown()
+                            var released = false
+                            while (!released) {
+                                try {
+                                    releaseResolver.await()
+                                    released = true
+                                } catch (_: InterruptedException) {
+                                    // The test keeps the worker occupied until cleanup releases it.
+                                }
+                            }
+                            InetAddress.getLoopbackAddress()
+                        }
+                    }.exceptionOrNull()
+                }
+
+            try {
+                assertTrue(
+                    withContext(Dispatchers.IO) {
+                        resolverEntered.await(2, TimeUnit.SECONDS)
+                    },
+                )
+                val failure =
+                    withContext(Dispatchers.IO) {
+                        withTimeout(2_000) { operation.await() }
+                    }
+                assertTrue(failure is PortScanHostResolutionTimeoutException)
+                assertEquals(null, session.cancellationReason, "a phase timeout must not become a session cancellation")
+                assertTrue(session.budget.remainingTimeoutMillis() > 0L)
+            } finally {
+                releaseResolver.countDown()
+                executor.shutdownNow()
+                withContext(Dispatchers.IO) { executor.awaitTermination(2, TimeUnit.SECONDS) }
+            }
+        }
+
+    @Test
+    fun `resolver worker and queue saturation fails fast and remains bounded`() = runTest {
+        val executor = PortScanBlockingResolver.createWorkerExecutor()
+        val resolverEntered = CountDownLatch(PortScanBlockingResolver.WORKER_COUNT)
+        val releaseResolvers = CountDownLatch(1)
+        val startedSessions = List(
+            PortScanBlockingResolver.WORKER_COUNT + PortScanBlockingResolver.QUEUE_CAPACITY,
+        ) { OperationSession(OperationBudget.start(timeoutMillis = 60_000)) }
+        val sessions = startedSessions + OperationSession(OperationBudget.start(timeoutMillis = 60_000))
+        val calls = startedSessions.map { session ->
+            backgroundScope.async(Dispatchers.IO) {
+                runCatching {
+                    PortScanBlockingResolver.resolve(session, executor) {
+                        resolverEntered.countDown()
+                        var released = false
+                        while (!released) {
+                            try {
+                                releaseResolvers.await()
+                                released = true
+                            } catch (_: InterruptedException) {
+                                // Occupy the fixed worker until the test releases it.
+                            }
+                        }
+                        InetAddress.getLoopbackAddress()
+                    }
+                }.exceptionOrNull()
+            }
+        }
+
+        try {
+            assertTrue(
+                withContext(Dispatchers.IO) { resolverEntered.await(2, TimeUnit.SECONDS) },
+                "both bounded resolver workers should be occupied",
+            )
+            withContext(Dispatchers.IO) {
+                withTimeout(2_000) {
+                    while (executor.queue.size < PortScanBlockingResolver.QUEUE_CAPACITY) {
+                        kotlinx.coroutines.yield()
+                    }
+                }
+            }
+            val overflow = withContext(Dispatchers.IO) {
+                runCatching {
+                    PortScanBlockingResolver.resolve(sessions.last(), executor) {
+                        InetAddress.getLoopbackAddress()
+                    }
+                }.exceptionOrNull()
+            }
+
+            assertTrue(overflow is java.util.concurrent.RejectedExecutionException)
+            assertEquals(PortScanBlockingResolver.WORKER_COUNT, executor.corePoolSize)
+            assertTrue(executor.largestPoolSize <= PortScanBlockingResolver.WORKER_COUNT)
+            assertEquals(PortScanBlockingResolver.QUEUE_CAPACITY, executor.queue.size)
+        } finally {
+            sessions.forEach { it.cancel(CancellationReason.USER_STOP) }
+            releaseResolvers.countDown()
+            executor.shutdownNow()
+            withContext(Dispatchers.IO) { executor.awaitTermination(2, TimeUnit.SECONDS) }
+            calls.forEach { it.cancelAndJoin() }
+        }
+    }
+
+    @Test
+    fun `repository default socket checker binds selected local sockets before connect`() = runTest {
+        val binder = FakeNetworkBinder(shouldBindResult = true)
+        var boundBeforeConnect = false
+        var socketClosed = false
+        val socket = object : Socket() {
+            override fun connect(endpoint: SocketAddress?, timeout: Int) {
+                boundBeforeConnect = binder.boundTcpSockets.singleOrNull() === this
+            }
+
+            override fun getInputStream() = ByteArrayInputStream(ByteArray(0))
+
+            override fun close() {
+                socketClosed = true
+            }
+        }
+        val repo = PortScanRepositoryImpl(
+            hostResolver = { InetAddress.getByAddress(byteArrayOf(192.toByte(), 168.toByte(), 1, 7)) },
+            binder = binder,
+            socketFactory = { socket }
+        )
+        val updates = repo.scan("target", listOf(80), timeoutMs = 100, concurrency = 1).toList()
+
+        assertEquals(PortStatus.OPEN, updates.filterIsInstance<PortScanUpdate.PortResult>().single().result.status)
+        assertTrue(boundBeforeConnect, "the selected socket must be bound before connect")
+        assertEquals(listOf(socket), binder.boundTcpSockets)
+        assertTrue(socketClosed, "repository scope must release a completed probe socket")
+    }
+
+    @Test
+    fun `repository default socket checker skips binding when destination stays on default route`() = runTest {
+        val binder = FakeNetworkBinder(shouldBindResult = false)
+        var connected = false
+        val socket = object : Socket() {
+            override fun connect(endpoint: SocketAddress?, timeout: Int) {
+                connected = true
+            }
+
+            override fun getInputStream() = ByteArrayInputStream(ByteArray(0))
+        }
+        val repo = PortScanRepositoryImpl(
+            hostResolver = { InetAddress.getByAddress(byteArrayOf(192.toByte(), 168.toByte(), 1, 7)) },
+            binder = binder,
+            socketFactory = { socket },
+        )
+
+        val updates = repo.scan("target", listOf(80), timeoutMs = 100, concurrency = 1).toList()
+
+        assertEquals(PortStatus.OPEN, updates.filterIsInstance<PortScanUpdate.PortResult>().single().result.status)
+        assertTrue(connected, "the repository must continue probing over the default route")
+        assertTrue(binder.boundTcpSockets.isEmpty(), "shouldBind=false must skip NetworkBinder.bind")
+    }
+
+    @Test
+    fun `default socket checker caps banner read by remaining per-port timeout`() = runTest {
+        data class Case(val timeoutMs: Int, val connectElapsedMs: Int, val expectedBannerTimeoutMs: Int)
+        val cases = listOf(
+            Case(timeoutMs = 100, connectElapsedMs = 40, expectedBannerTimeoutMs = 60),
+            Case(timeoutMs = 300, connectElapsedMs = 100, expectedBannerTimeoutMs = 200),
+            Case(timeoutMs = 2_000, connectElapsedMs = 50, expectedBannerTimeoutMs = 300),
+        )
+
+        cases.forEach { case ->
+            val clock = FakeClock()
+            var configuredBannerTimeoutMs: Int? = null
+            var streamRequested = false
+            val socket = object : Socket() {
+                private var timeout = 0
+
+                override fun connect(endpoint: SocketAddress?, timeout: Int) {
+                    clock.advanceBy(case.connectElapsedMs * 1_000_000L)
+                }
+
+                override fun setSoTimeout(timeout: Int) {
+                    this.timeout = timeout
+                    configuredBannerTimeoutMs = timeout
+                }
+
+                override fun getSoTimeout(): Int = timeout
+
+                override fun getInputStream(): InputStream {
+                    streamRequested = true
+                    return object : InputStream() {
+                        override fun read(): Int {
+                            clock.advanceBy(timeout * 1_000_000L)
+                            throw SocketTimeoutException("scripted banner timeout")
+                        }
+                    }
+                }
+            }
+            val repo = PortScanRepositoryImpl(
+                clock = clock,
+                hostResolver = { InetAddress.getLoopbackAddress() },
+                socketFactory = { socket },
+            )
+
+            val updates = repo.scan("localhost", listOf(22), case.timeoutMs, concurrency = 1).toList()
+
+            assertEquals(case.expectedBannerTimeoutMs, configuredBannerTimeoutMs)
+            assertTrue(streamRequested)
+            assertTrue(clock.nowNanos() <= case.timeoutMs * 1_000_000L)
+            assertEquals(PortStatus.OPEN, updates.filterIsInstance<PortScanUpdate.PortResult>().single().result.status)
+        }
+    }
+
+    @Test
+    fun `default socket checker reduces timeout for each partial banner read`() = runTest {
+        val clock = FakeClock()
+        val configuredTimeouts = mutableListOf<Int>()
+        val socket = object : Socket() {
+            private var timeout = 0
+
+            override fun connect(endpoint: SocketAddress?, timeout: Int) = Unit
+
+            override fun setSoTimeout(timeout: Int) {
+                this.timeout = timeout
+                configuredTimeouts += timeout
+            }
+
+            override fun getSoTimeout(): Int = timeout
+
+            override fun getInputStream(): InputStream = object : InputStream() {
+                private var readCount = 0
+
+                override fun read(): Int = error("read(byte[], ...) should be used")
+
+                override fun read(bytes: ByteArray, offset: Int, length: Int): Int {
+                    if (readCount++ == 0) {
+                        clock.advanceBy(100_000_000L)
+                        bytes[offset] = 'S'.code.toByte()
+                        return 1
+                    }
+                    clock.advanceBy(timeout * 1_000_000L)
+                    throw SocketTimeoutException("remaining banner budget elapsed")
+                }
+            }
+        }
+        val repo = PortScanRepositoryImpl(
+            clock = clock,
+            hostResolver = { InetAddress.getLoopbackAddress() },
+            socketFactory = { socket },
+        )
+
+        val result = repo.scan("localhost", listOf(22), timeoutMs = 250, concurrency = 1)
+            .filterIsInstance<PortScanUpdate.PortResult>()
+            .toList()
+            .single()
+            .result
+
+        assertEquals(listOf(250, 150), configuredTimeouts)
+        assertEquals("S", result.banner)
+        assertTrue(clock.nowNanos() <= 250_000_000L)
+    }
+
+    @Test
+    fun `default socket checker skips banner read when connect exhausts per-port timeout`() = runTest {
+        val timeoutMs = 100
+        val clock = FakeClock()
+        var streamRequested = false
+        val socket = object : Socket() {
+            override fun connect(endpoint: SocketAddress?, timeout: Int) {
+                clock.advanceBy(timeoutMs * 1_000_000L)
+            }
+
+            override fun getInputStream(): InputStream {
+                streamRequested = true
+                return ByteArrayInputStream(ByteArray(0))
+            }
+        }
+        val repo = PortScanRepositoryImpl(
+            clock = clock,
+            hostResolver = { InetAddress.getLoopbackAddress() },
+            socketFactory = { socket },
+        )
+
+        val updates = repo.scan("localhost", listOf(22), timeoutMs, concurrency = 1).toList()
+
+        assertTrue(!streamRequested, "banner input must not be opened after the timeout budget is exhausted")
+        assertEquals(PortStatus.OPEN, updates.filterIsInstance<PortScanUpdate.PortResult>().single().result.status)
+        assertTrue(clock.nowNanos() <= timeoutMs * 1_000_000L)
+    }
+
+    @Test
+    fun `default socket checker marks byte capped banner as truncated`() = runTest {
+        val socket = object : Socket() {
+            override fun connect(endpoint: SocketAddress?, timeout: Int) = Unit
+
+            override fun getInputStream(): InputStream =
+                ByteArrayInputStream(ByteArray(BannerReader.MAX_BYTES) { 'A'.code.toByte() })
+        }
+        val repo = PortScanRepositoryImpl(
+            hostResolver = { InetAddress.getLoopbackAddress() },
+            socketFactory = { socket },
+        )
+
+        val result = repo.scan("localhost", listOf(22), timeoutMs = 1000, concurrency = 1)
+            .filterIsInstance<PortScanUpdate.PortResult>()
+            .toList()
+            .single()
+            .result
+
+        assertTrue(result.bannerTruncated)
+        assertEquals("A".repeat(200), result.banner)
+    }
+
+    @Test
+    fun `repository default socket checker surfaces local permission denial`() = runTest {
+        val repo = PortScanRepositoryImpl(
+            hostResolver = { InetAddress.getLoopbackAddress() },
+            binder = FakeNetworkBinder(shouldBindResult = true),
+            socketFactory = { throw SecurityException("permission denied") }
+        )
+
+        val error = runCatching {
+            repo.scan("localhost", listOf(80), timeoutMs = 100, concurrency = 1).toList()
+        }.exceptionOrNull()
+        val permissionError = error as? LocalNetworkPermissionDeniedException
+        assertNotNull(permissionError)
+        assertEquals("permission denied", permissionError?.cause?.message)
+    }
+
+    @Test
+    fun `cancelling a banner read closes its socket and emits no late result`() = runTest {
+        val socket = ScriptedSocket()
+        val updates = java.util.concurrent.CopyOnWriteArrayList<PortScanUpdate>()
+        val repo = PortScanRepositoryImpl(
+            hostResolver = { InetAddress.getLoopbackAddress() },
+            socketFactory = { socket },
+        )
+
+        val collector = backgroundScope.launch(Dispatchers.IO) {
+            repo.scan("localhost", listOf(22), timeoutMs = 1_000, concurrency = 1)
+                .onEach(updates::add)
+                .toList()
+        }
+
+        assertTrue(
+            withContext(Dispatchers.IO) { socket.awaitBlockingRead(5, TimeUnit.SECONDS) },
+            "default checker did not block in banner read"
+        )
+        withContext(Dispatchers.Default) {
+            withTimeout(2_000) { collector.cancelAndJoin() }
+        }
+
+        assertTrue(socket.isClosed, "cancelling the scan must close its active socket")
+        assertTrue(updates.any { it is PortScanUpdate.Started })
+        assertTrue(updates.none { it is PortScanUpdate.PortResult || it is PortScanUpdate.Complete })
+    }
+
+    @Test
+    fun `cancelling a blocking connect closes its socket and emits no late result`() = runTest {
+        val socket = ScriptedSocket(blockConnectUntilClosed = true)
+        val updates = java.util.concurrent.CopyOnWriteArrayList<PortScanUpdate>()
+        val repo = PortScanRepositoryImpl(
+            hostResolver = { InetAddress.getLoopbackAddress() },
+            socketFactory = { socket },
+        )
+
+        val collector = backgroundScope.launch(Dispatchers.IO) {
+            repo.scan("localhost", listOf(22), timeoutMs = 1_000, concurrency = 1)
+                .onEach(updates::add)
+                .toList()
+        }
+
+        assertTrue(
+            withContext(Dispatchers.IO) { socket.connectStarted.await(5, TimeUnit.SECONDS) },
+            "default checker did not reach connect"
+        )
+        withContext(Dispatchers.Default) {
+            withTimeout(2_000) { collector.cancelAndJoin() }
+        }
+
+        assertTrue(socket.isClosed, "cancelling the scan must close a connecting socket")
+        assertTrue(updates.any { it is PortScanUpdate.Started })
+        assertTrue(updates.none { it is PortScanUpdate.PortResult || it is PortScanUpdate.Complete })
+    }
+
+    @Test
+    fun `caller USER_STOP session closes active socket and emits no late result`() = runTest {
+        val socket = ScriptedSocket(blockConnectUntilClosed = true)
+        val updates = java.util.concurrent.CopyOnWriteArrayList<PortScanUpdate>()
+        val started = CountDownLatch(1)
+        val repo = PortScanRepositoryImpl(
+            hostResolver = { InetAddress.getLoopbackAddress() },
+            socketFactory = { socket },
+        )
+        val session = repo.newSession(concurrency = 1)
+        val collector = backgroundScope.launch(Dispatchers.IO) {
+            repo.scan("localhost", listOf(22), timeoutMs = 1_000, concurrency = 1, operationSession = session)
+                .onEach { update ->
+                    updates.add(update)
+                    if (update is PortScanUpdate.Started) started.countDown()
+                }
+                .toList()
+        }
+
+        assertTrue(
+            withContext(Dispatchers.IO) { started.await(5, TimeUnit.SECONDS) },
+            "scan should publish Started before probing"
+        )
+        assertTrue(
+            withContext(Dispatchers.IO) { socket.connectStarted.await(5, TimeUnit.SECONDS) },
+            "default checker did not reach connect"
+        )
+        session.cancel(CancellationReason.USER_STOP)
+        withContext(Dispatchers.Default) {
+            withTimeout(2_000) { collector.cancelAndJoin() }
+        }
+
+        assertEquals(CancellationReason.USER_STOP, session.cancellationReason)
+        assertTrue(socket.isClosed, "caller cancellation must close the active socket")
+        assertTrue(updates.any { it is PortScanUpdate.Started })
+        assertTrue(updates.none { it is PortScanUpdate.PortResult || it is PortScanUpdate.Complete })
+    }
+
+    @Test
+    fun `caller LIFECYCLE_PAUSE session closes active socket and emits no late result`() = runTest {
+        val socket = ScriptedSocket(blockConnectUntilClosed = true)
+        val updates = java.util.concurrent.CopyOnWriteArrayList<PortScanUpdate>()
+        val started = CountDownLatch(1)
+        val repo = PortScanRepositoryImpl(
+            hostResolver = { InetAddress.getLoopbackAddress() },
+            socketFactory = { socket },
+        )
+        val session = repo.newSession(concurrency = 1)
+        val collector = backgroundScope.launch(Dispatchers.IO) {
+            repo.scan("localhost", listOf(22), timeoutMs = 1_000, concurrency = 1, operationSession = session)
+                .onEach { update ->
+                    updates.add(update)
+                    if (update is PortScanUpdate.Started) started.countDown()
+                }
+                .toList()
+        }
+
+        assertTrue(
+            withContext(Dispatchers.IO) { started.await(5, TimeUnit.SECONDS) },
+            "scan should publish Started before probing"
+        )
+        assertTrue(
+            withContext(Dispatchers.IO) { socket.connectStarted.await(5, TimeUnit.SECONDS) },
+            "default checker did not reach connect"
+        )
+        session.cancel(CancellationReason.LIFECYCLE_PAUSE)
+        withContext(Dispatchers.Default) {
+            withTimeout(2_000) { collector.cancelAndJoin() }
+        }
+
+        assertEquals(CancellationReason.LIFECYCLE_PAUSE, session.cancellationReason)
+        assertTrue(socket.isClosed, "lifecycle cancellation must close the active socket")
+        assertTrue(updates.any { it is PortScanUpdate.Started })
+        assertTrue(updates.none { it is PortScanUpdate.PortResult || it is PortScanUpdate.Complete })
+    }
+
+    @Test
+    fun `caller session bounds worker concurrency below request`() = runTest {
+        val active = AtomicInteger()
+        val maximumActive = AtomicInteger()
+        val firstStarted = CountDownLatch(1)
+        val secondStarted = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val repo = PortScanRepositoryImpl(
+            checker = { _, _ ->
+                val current = active.incrementAndGet()
+                maximumActive.updateAndGet { maxOf(it, current) }
+                if (current == 1) firstStarted.countDown()
+                if (current == 2) secondStarted.countDown()
+                try {
+                    release.await(3, TimeUnit.SECONDS)
+                } finally {
+                    active.decrementAndGet()
+                }
+                PortConnectResult(PortStatus.CLOSED, 1L, null)
+            },
+            hostResolver = { InetAddress.getLoopbackAddress() },
+        )
+        val session = OperationSession(OperationBudget.start(maxConcurrentProbes = 1))
+        val scan = backgroundScope.launch(Dispatchers.IO) {
+            repo.scan(
+                host = "localhost",
+                ports = listOf(22, 23, 80, 443),
+                timeoutMs = 1_000,
+                concurrency = 4,
+                operationSession = session,
+            ).toList()
+        }
+
+        assertTrue(withContext(Dispatchers.IO) { firstStarted.await(2, TimeUnit.SECONDS) })
+        assertTrue(
+            !withContext(Dispatchers.IO) { secondStarted.await(300, TimeUnit.MILLISECONDS) },
+            "the scan must not start a second probe above its caller's budget",
+        )
+        release.countDown()
+        withContext(Dispatchers.Default) { withTimeout(3_000) { scan.join() } }
+
+        assertEquals(1, maximumActive.get())
+    }
+
+    @Test
+    fun `slow collector backpressures completed results and scan resumes without loss`() = runTest {
+        val concurrency = 2
+        val ports = (1..20).toList()
+        val checkerStarts = AtomicInteger()
+        val saturationReached = CountDownLatch(2 * concurrency + 1)
+        val collectorAtStarted = CompletableDeferred<Unit>()
+        val resumeCollector = CompletableDeferred<Unit>()
+        val updates = Collections.synchronizedList(mutableListOf<PortScanUpdate>())
+        val repo = PortScanRepositoryImpl(
+            checker = { _, port ->
+                if (checkerStarts.incrementAndGet() <= 2 * concurrency + 1) {
+                    saturationReached.countDown()
+                }
+                PortConnectResult(PortStatus.CLOSED, responseTimeMs = 1L, banner = null)
+            },
+            hostResolver = { InetAddress.getLoopbackAddress() },
+        )
+        val session = OperationSession(OperationBudget.start(maxConcurrentProbes = concurrency))
+        val scan = backgroundScope.launch(Dispatchers.IO) {
+            repo.scan(
+                host = "localhost",
+                ports = ports,
+                timeoutMs = 5_000,
+                concurrency = concurrency,
+                operationSession = session,
+            ).buffer(0).collect { update ->
+                updates += update
+                if (update is PortScanUpdate.Started) {
+                    collectorAtStarted.complete(Unit)
+                    resumeCollector.await()
+                }
+            }
+        }
+
+        try {
+            withContext(Dispatchers.Default) {
+                withTimeout(3_000) { collectorAtStarted.await() }
+            }
+            assertTrue(
+                withContext(Dispatchers.IO) { saturationReached.await(2, TimeUnit.SECONDS) },
+                "the bounded result path should fill while the downstream collector is blocked",
+            )
+
+            // channelFlow, flowOn, and buffer(0) fuse into a rendezvous at the
+            // downstream boundary. One result is held in the blocked emission,
+            // the completed channel holds `concurrency`, and at most `concurrency`
+            // workers can each hold one completed result while blocked sending.
+            val finiteCheckerBound = 2 * concurrency + 1
+            assertEquals(finiteCheckerBound, checkerStarts.get())
+            assertTrue(checkerStarts.get() < ports.size, "unstarted work must remain queued")
+
+            resumeCollector.complete(Unit)
+            withContext(Dispatchers.Default) { withTimeout(3_000) { scan.join() } }
+        } finally {
+            resumeCollector.complete(Unit)
+            withContext(Dispatchers.Default) { withTimeout(3_000) { scan.cancelAndJoin() } }
+        }
+
+        val completedResults = updates.filterIsInstance<PortScanUpdate.PortResult>()
+        assertEquals(ports.size, completedResults.size)
+        assertEquals(ports.sorted(), completedResults.map { it.result.port }.sorted())
+        assertEquals(ports.size, completedResults.map { it.result.port }.toSet().size)
+        assertEquals(1, updates.count { it is PortScanUpdate.Started })
+        assertEquals(1, updates.count { it is PortScanUpdate.Complete })
+        assertEquals(ports.size, checkerStarts.get())
+    }
+
+    @Test
+    fun `checker cancellation while scan remains active fails the operation`() = runTest {
+        val repo = PortScanRepositoryImpl(
+            checker = { _, _ -> throw kotlinx.coroutines.CancellationException("checker stopped") },
+            hostResolver = { InetAddress.getLoopbackAddress() },
+        )
+
+        val error = assertThrows(IllegalStateException::class.java) {
+            kotlinx.coroutines.runBlocking {
+                repo.scan("localhost", listOf(22, 23), timeoutMs = 1_000, concurrency = 1).toList()
+            }
+        }
+
+        assertTrue(error.message!!.contains("Port checker cancelled"))
+    }
 
     // ── Helper checkers ────────────────────────────────────────────────────────
 
@@ -36,6 +1167,11 @@ class PortScanRepositoryImplTest {
         PortConnectResult(status = PortStatus.OPEN, responseTimeMs = 10L, banner = banner)
     }
 
+    private fun testRepository(checker: PortConnectChecker) = PortScanRepositoryImpl(
+        checker = checker,
+        hostResolver = { java.net.InetAddress.getByAddress(byteArrayOf(192.toByte(), 0, 2, 10)) }
+    )
+
     // ── Emission count ─────────────────────────────────────────────────────────
 
     @Nested
@@ -43,29 +1179,35 @@ class PortScanRepositoryImplTest {
     inner class EmissionCount {
 
         @Test
-        fun `emits one PortResult per port plus one Complete`() = runTest {
-            val repo = PortScanRepositoryImpl(checker = openChecker())
+        fun `emits Started one PortResult per port and one Complete`() = runTest {
+            val repo = testRepository(checker = openChecker())
             val ports = listOf(80, 443, 8080)
             val updates = repo.scan("example.com", ports, timeoutMs = 1000, concurrency = 10).toList()
             val portResults = updates.filterIsInstance<PortScanUpdate.PortResult>()
+            val started = updates.filterIsInstance<PortScanUpdate.Started>()
             val completes = updates.filterIsInstance<PortScanUpdate.Complete>()
+            assertEquals(1, started.size)
+            assertEquals("192.0.2.10", started.single().resolvedIp)
+            assertEquals(ports.size, started.single().totalCount)
+            assertTrue(updates.first() is PortScanUpdate.Started)
             assertEquals(3, portResults.size)
             assertEquals(1, completes.size)
         }
 
         @Test
         fun `complete is the last event`() = runTest {
-            val repo = PortScanRepositoryImpl(checker = openChecker())
+            val repo = testRepository(checker = openChecker())
             val updates = repo.scan("host", listOf(22, 80), timeoutMs = 1000, concurrency = 10).toList()
             assertTrue(updates.last() is PortScanUpdate.Complete)
         }
 
         @Test
-        fun `scanning empty port list emits only Complete`() = runTest {
-            val repo = PortScanRepositoryImpl(checker = openChecker())
+        fun `scanning empty port list emits Started and Complete`() = runTest {
+            val repo = testRepository(checker = openChecker())
             val updates = repo.scan("host", emptyList(), timeoutMs = 1000, concurrency = 10).toList()
-            assertEquals(1, updates.size)
-            assertTrue(updates.first() is PortScanUpdate.Complete)
+            assertEquals(2, updates.size)
+            assertTrue(updates.first() is PortScanUpdate.Started)
+            assertTrue(updates.last() is PortScanUpdate.Complete)
         }
     }
 
@@ -77,25 +1219,25 @@ class PortScanRepositoryImplTest {
 
         @Test
         fun `open checker produces OPEN status`() = runTest {
-            val repo = PortScanRepositoryImpl(checker = openChecker())
+            val repo = testRepository(checker = openChecker())
             val updates = repo.scan("host", listOf(80), timeoutMs = 1000, concurrency = 10).toList()
-            val result = (updates.first() as PortScanUpdate.PortResult).result
+            val result = updates.filterIsInstance<PortScanUpdate.PortResult>().first().result
             assertEquals(PortStatus.OPEN, result.status)
         }
 
         @Test
         fun `closed checker produces CLOSED status`() = runTest {
-            val repo = PortScanRepositoryImpl(checker = closedChecker())
+            val repo = testRepository(checker = closedChecker())
             val updates = repo.scan("host", listOf(80), timeoutMs = 1000, concurrency = 10).toList()
-            val result = (updates.first() as PortScanUpdate.PortResult).result
+            val result = updates.filterIsInstance<PortScanUpdate.PortResult>().first().result
             assertEquals(PortStatus.CLOSED, result.status)
         }
 
         @Test
         fun `filtered checker produces FILTERED status`() = runTest {
-            val repo = PortScanRepositoryImpl(checker = filteredChecker())
+            val repo = testRepository(checker = filteredChecker())
             val updates = repo.scan("host", listOf(80), timeoutMs = 1000, concurrency = 10).toList()
-            val result = (updates.first() as PortScanUpdate.PortResult).result
+            val result = updates.filterIsInstance<PortScanUpdate.PortResult>().first().result
             assertEquals(PortStatus.FILTERED, result.status)
         }
     }
@@ -108,33 +1250,33 @@ class PortScanRepositoryImplTest {
 
         @Test
         fun `port 80 resolves to HTTP`() = runTest {
-            val repo = PortScanRepositoryImpl(checker = openChecker())
+            val repo = testRepository(checker = openChecker())
             val updates = repo.scan("host", listOf(80), timeoutMs = 1000, concurrency = 10).toList()
-            val result = (updates.first() as PortScanUpdate.PortResult).result
+            val result = updates.filterIsInstance<PortScanUpdate.PortResult>().first().result
             assertEquals("HTTP", result.serviceName)
         }
 
         @Test
         fun `port 443 resolves to HTTPS`() = runTest {
-            val repo = PortScanRepositoryImpl(checker = openChecker())
+            val repo = testRepository(checker = openChecker())
             val updates = repo.scan("host", listOf(443), timeoutMs = 1000, concurrency = 10).toList()
-            val result = (updates.first() as PortScanUpdate.PortResult).result
+            val result = updates.filterIsInstance<PortScanUpdate.PortResult>().first().result
             assertEquals("HTTPS", result.serviceName)
         }
 
         @Test
         fun `port 22 resolves to SSH`() = runTest {
-            val repo = PortScanRepositoryImpl(checker = openChecker())
+            val repo = testRepository(checker = openChecker())
             val updates = repo.scan("host", listOf(22), timeoutMs = 1000, concurrency = 10).toList()
-            val result = (updates.first() as PortScanUpdate.PortResult).result
+            val result = updates.filterIsInstance<PortScanUpdate.PortResult>().first().result
             assertEquals("SSH", result.serviceName)
         }
 
         @Test
         fun `unknown port has non-null service name fallback`() = runTest {
-            val repo = PortScanRepositoryImpl(checker = openChecker())
+            val repo = testRepository(checker = openChecker())
             val updates = repo.scan("host", listOf(12345), timeoutMs = 1000, concurrency = 10).toList()
-            val result = (updates.first() as PortScanUpdate.PortResult).result
+            val result = updates.filterIsInstance<PortScanUpdate.PortResult>().first().result
             assertNotNull(result.serviceName)
         }
     }
@@ -147,17 +1289,33 @@ class PortScanRepositoryImplTest {
 
         @Test
         fun `banner from checker is propagated to result`() = runTest {
-            val repo = PortScanRepositoryImpl(checker = bannerChecker("SSH-2.0-OpenSSH_9.0"))
+            val repo = testRepository(checker = bannerChecker("SSH-2.0-OpenSSH_9.0"))
             val updates = repo.scan("host", listOf(22), timeoutMs = 1000, concurrency = 10).toList()
-            val result = (updates.first() as PortScanUpdate.PortResult).result
+            val result = updates.filterIsInstance<PortScanUpdate.PortResult>().first().result
             assertEquals("SSH-2.0-OpenSSH_9.0", result.banner)
         }
 
         @Test
-        fun `null banner is preserved`() = runTest {
-            val repo = PortScanRepositoryImpl(checker = openChecker())
+        fun `banner truncation flag from checker is propagated to result`() = runTest {
+            val repo = testRepository(checker = { _, _ ->
+                PortConnectResult(
+                    status = PortStatus.OPEN,
+                    responseTimeMs = 10L,
+                    banner = "HTTP/1.0 200 OK",
+                    bannerTruncated = true,
+                )
+            })
+
             val updates = repo.scan("host", listOf(80), timeoutMs = 1000, concurrency = 10).toList()
-            val result = (updates.first() as PortScanUpdate.PortResult).result
+            val result = updates.filterIsInstance<PortScanUpdate.PortResult>().first().result
+            assertTrue(result.bannerTruncated)
+        }
+
+        @Test
+        fun `null banner is preserved`() = runTest {
+            val repo = testRepository(checker = openChecker())
+            val updates = repo.scan("host", listOf(80), timeoutMs = 1000, concurrency = 10).toList()
+            val result = updates.filterIsInstance<PortScanUpdate.PortResult>().first().result
             assertTrue(result.banner == null)
         }
     }
@@ -184,7 +1342,7 @@ class PortScanRepositoryImplTest {
                 }
                 PortConnectResult(PortStatus.OPEN, 1L, null)
             }
-            val repo = PortScanRepositoryImpl(checker = checker)
+            val repo = testRepository(checker = checker)
 
             val results = repo.scan("host", listOf(80, 443), 1000, concurrency = 2)
                 .filterIsInstance<PortScanUpdate.PortResult>()
@@ -197,7 +1355,7 @@ class PortScanRepositoryImplTest {
 
         @Test
         fun `scannedCount increments per emission`() = runTest {
-            val repo = PortScanRepositoryImpl(checker = openChecker())
+            val repo = testRepository(checker = openChecker())
             val ports = listOf(80, 443, 8080)
             val portResults = repo.scan("host", ports, timeoutMs = 1000, concurrency = 10)
                 .filterIsInstance<PortScanUpdate.PortResult>()
@@ -208,7 +1366,7 @@ class PortScanRepositoryImplTest {
 
         @Test
         fun `totalCount matches port list size`() = runTest {
-            val repo = PortScanRepositoryImpl(checker = openChecker())
+            val repo = testRepository(checker = openChecker())
             val ports = listOf(80, 443, 8080)
             val portResults = repo.scan("host", ports, timeoutMs = 1000, concurrency = 10)
                 .filterIsInstance<PortScanUpdate.PortResult>()
@@ -218,6 +1376,82 @@ class PortScanRepositoryImplTest {
     }
 
     // ── Summary ────────────────────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("resolved endpoint")
+    inner class ResolvedEndpoint {
+
+        @Test
+        fun `resolves hostname once and probes the same IPv4 address in the summary`() = runTest {
+            val resolveCount = AtomicInteger()
+            val selectedAddress = java.net.InetAddress.getByAddress(byteArrayOf(192.toByte(), 0, 2, 44))
+            val probeAddresses = Collections.synchronizedList(mutableListOf<java.net.InetAddress>())
+            val checker: PortConnectChecker = { address, _ ->
+                probeAddresses.add(address)
+                PortConnectResult(PortStatus.OPEN, 1L, null)
+            }
+            val repo = PortScanRepositoryImpl(
+                checker = checker,
+                hostResolver = {
+                    if (resolveCount.incrementAndGet() == 1) selectedAddress
+                    else java.net.InetAddress.getByAddress(byteArrayOf(192.toByte(), 0, 2, 45))
+                }
+            )
+
+            val updates = repo.scan("router.example", listOf(80, 443, 8080), 1000, concurrency = 3).toList()
+            val summary = updates.filterIsInstance<PortScanUpdate.Complete>().single().summary
+
+            assertEquals(1, resolveCount.get())
+            assertEquals(3, probeAddresses.size)
+            assertTrue(probeAddresses.all { it === selectedAddress })
+            assertEquals("router.example", summary.host)
+            assertEquals(selectedAddress.hostAddress, summary.resolvedIp)
+        }
+
+        @Test
+        fun `passes a selected IPv6 address unchanged to every probe`() = runTest {
+            val selectedAddress = java.net.InetAddress.getByName("2001:db8::42")
+            val probeAddresses = Collections.synchronizedList(mutableListOf<java.net.InetAddress>())
+            val repo = PortScanRepositoryImpl(
+                checker = { address, _ ->
+                    probeAddresses.add(address)
+                    PortConnectResult(PortStatus.OPEN, 1L, null)
+                },
+                hostResolver = { selectedAddress }
+            )
+
+            val summary = repo.scan("v6.example", listOf(22, 443), 1000, concurrency = 2)
+                .filterIsInstance<PortScanUpdate.Complete>()
+                .toList()
+                .single()
+                .summary
+
+            assertEquals(2, probeAddresses.size)
+            assertTrue(probeAddresses.all { it === selectedAddress })
+            assertEquals(selectedAddress.hostAddress, summary.resolvedIp)
+        }
+
+        @Test
+        fun `resolution failure stops before invoking any port checker`() = runTest {
+            val probeCount = AtomicInteger()
+            val repo = PortScanRepositoryImpl(
+                checker = { _, _ ->
+                    probeCount.incrementAndGet()
+                    PortConnectResult(PortStatus.OPEN, 1L, null)
+                },
+                hostResolver = { throw java.net.UnknownHostException("no DNS answer") }
+            )
+
+            val error = assertThrows(PortScanHostResolutionException::class.java) {
+                kotlinx.coroutines.runBlocking {
+                    repo.scan("missing.example", listOf(80), 1000, concurrency = 1).toList()
+                }
+            }
+
+            assertTrue(error.message!!.contains("missing.example"))
+            assertEquals(0, probeCount.get())
+        }
+    }
 
     @Nested
     @DisplayName("scan summary")
@@ -231,7 +1465,7 @@ class PortScanRepositoryImplTest {
                 if (port % 2 == 0) PortConnectResult(PortStatus.OPEN, 5L, null)
                 else PortConnectResult(PortStatus.CLOSED, 1L, null)
             }
-            val repo = PortScanRepositoryImpl(checker = alternating)
+            val repo = testRepository(checker = alternating)
             val ports = listOf(80, 443, 8080, 8443)
             val complete = repo.scan("host", ports, timeoutMs = 1000, concurrency = 10)
                 .filterIsInstance<PortScanUpdate.Complete>()
@@ -243,7 +1477,7 @@ class PortScanRepositoryImplTest {
 
         @Test
         fun `summary host matches input host`() = runTest {
-            val repo = PortScanRepositoryImpl(checker = openChecker())
+            val repo = testRepository(checker = openChecker())
             val complete = repo.scan("example.com", listOf(80), timeoutMs = 1000, concurrency = 10)
                 .filterIsInstance<PortScanUpdate.Complete>()
                 .toList()
@@ -253,7 +1487,7 @@ class PortScanRepositoryImplTest {
 
         @Test
         fun `summary scannedPorts matches input ports`() = runTest {
-            val repo = PortScanRepositoryImpl(checker = openChecker())
+            val repo = testRepository(checker = openChecker())
             val ports = listOf(22, 80, 443)
             val complete = repo.scan("host", ports, timeoutMs = 1000, concurrency = 10)
                 .filterIsInstance<PortScanUpdate.Complete>()
@@ -264,7 +1498,7 @@ class PortScanRepositoryImplTest {
 
         @Test
         fun `summary results count matches port list size`() = runTest {
-            val repo = PortScanRepositoryImpl(checker = openChecker())
+            val repo = testRepository(checker = openChecker())
             val ports = listOf(22, 80, 443)
             val complete = repo.scan("host", ports, timeoutMs = 1000, concurrency = 10)
                 .filterIsInstance<PortScanUpdate.Complete>()
@@ -303,6 +1537,45 @@ class PortScanRepositoryImplTest {
         @Test
         fun `getServiceName for unknown port returns non-null fallback`() {
             assertTrue(WellKnownPorts.getServiceName(12345).isNotBlank())
+        }
+    }
+
+    private fun responseSocket(
+        input: InputStream,
+        output: ByteArrayOutputStream,
+        onWrite: () -> Unit = {},
+    ): Socket = object : Socket() {
+        override fun connect(endpoint: SocketAddress?, timeout: Int) = Unit
+        override fun setSoTimeout(timeout: Int) = Unit
+        override fun getInputStream(): InputStream = input
+        override fun getOutputStream(): java.io.OutputStream = object : java.io.OutputStream() {
+            override fun write(value: Int) {
+                onWrite()
+                output.write(value)
+            }
+
+            override fun write(bytes: ByteArray, offset: Int, length: Int) {
+                onWrite()
+                output.write(bytes, offset, length)
+            }
+        }
+    }
+
+    private class CountingInputStream(bytes: ByteArray) : InputStream() {
+        private val source = ByteArrayInputStream(bytes)
+        var bytesRead: Int = 0
+            private set
+
+        override fun read(): Int = source.read().also { if (it >= 0) bytesRead++ }
+
+        override fun read(buffer: ByteArray, offset: Int, length: Int): Int =
+            source.read(buffer, offset, length).also { if (it > 0) bytesRead += it }
+    }
+
+    private class TimeoutAfterBytesInputStream(bytes: ByteArray) : InputStream() {
+        private val source = ByteArrayInputStream(bytes)
+        override fun read(): Int = source.read().let { value ->
+            if (value >= 0) value else throw SocketTimeoutException("test timeout")
         }
     }
 }

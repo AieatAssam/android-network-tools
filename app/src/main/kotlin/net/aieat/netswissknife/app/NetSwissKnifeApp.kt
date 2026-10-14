@@ -2,6 +2,7 @@ package net.aieat.netswissknife.app
 
 import android.app.Application
 import net.aieat.netswissknife.app.crash.CrashHandler
+import net.aieat.netswissknife.app.crash.CrashReportBuilder
 import net.aieat.netswissknife.app.util.AppLogger
 import dagger.hilt.android.HiltAndroidApp
 
@@ -22,8 +23,10 @@ class NetSwissKnifeApp : Application() {
                 defaultHandler = defaultHandler,
                 onBeforeHandle = { thread, throwable ->
                     try {
-                        AppLogger.e("CRASH", "Uncaught exception on thread '${thread.name}'", throwable)
-                    } catch (_: Exception) {
+                        val safeThread = CrashReportBuilder.safeMetadata(thread.name ?: "unknown")
+                        val safeClass = CrashReportBuilder.safeMetadata(throwable.javaClass.name)
+                        AppLogger.e("CRASH", "Uncaught $safeClass on thread '$safeThread'")
+                    } catch (_: Throwable) {
                         // Never block crash reporting
                     }
                 },

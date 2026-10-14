@@ -1,0 +1,88 @@
+meta:
+  reviewed_on: "2026-09-27"
+  source_branch: "plan/comprehensive-review-2026-09-22"
+  source_commit: "f0fade5de340cae6c19d3645bfe3797c142fc013"
+  purpose: "Turn current review findings into explicit interim-release checkpoints. No version is allocated or published by this plan."
+  release_policy: "Do not tag a public interim release until IR-3 acceptance is complete. A named checkpoint is evidence-based work, not a release authorization."
+  emulator_policy: "Check for an already-running emulator before device work. Reuse it if present; if this task starts one, use it through completion and shut it down afterward."
+
+open_release_blockers: []
+
+milestones:
+  - id: IR-1
+    name: "Trust and signed-build candidate"
+    status: in_progress
+    purpose: "Close the confirmed high-risk trust boundaries and lock down release workflow inputs before preparing signed artifacts."
+    required_findings: [R4-001, R4-002, R4-003, R4-004, R4-010, R4-011, R4-013, R4-015, R4-016, R4-017]
+    acceptance:
+      - "WHOIS referrals fail closed unless the resolved destination is a strict public-global literal; registrar links accept only safe HTTP(S) URLs without user info."
+      - "TLS DNS identity never falls back to CN when any SAN is present."
+      - "FileProvider exposes only cache/ping_logs, and Ping creates logs in that directory."
+      - "Every third-party action in CI and release is pinned to a reviewed 40-character commit SHA; Dependabot remains enabled."
+      - "Release/OUI/versioning/SNMP-retention Python tests run as required CI checks; the decoded signing key is removed before artifact/release actions."
+      - "Android base cleartext is denied; plain HTTP Probe URLs fail validation with a localized HTTPS-only explanation, and exported cURL commands remain HTTPS-only."
+      - "Changed core-network and app JVM tests, Android-test Kotlin compilation, lint, and debug assembly pass."
+    release_gate: "Required before any signed release candidate is assembled."
+
+  - id: IR-2
+    name: "Operation and discovery reliability candidate"
+    status: done
+    purpose: "Close cancellation/cleanup correctness gaps and preserve truthful partial results across network operations."
+    required_findings: [R4-005, R4-006, R4-007, R4-008, R4-009]
+    recheck_findings: [R2-014, R2-015, R3-001, R3-002]
+    acceptance:
+      - "Operation cleanup has a documented bound and cannot hold the caller forever or create unbounded cleanup work; cross-thread re-entry cannot deadlock."
+      - "Stopping an operation cancels only its owned job and leaves sibling work under a shared caller alive."
+      - "OperationRunner documents its channelFlow/send emission contract and tests supported emission plus direct-flow invariant failure."
+      - "Canceling SNMP walk stops in-flight/retransmitting requests while preserving unrelated requests owned by the client."
+      - "Topology failures remain typed/incomplete and cannot turn into misleading removals; mDNS producer budgets and partial-result counts remain covered."
+    release_gate: "Required before the first public interim release; deterministic JVM regressions must pass. Broader report/export/SAF unification is scheduled for IR-4."
+
+  - id: IR-3
+    name: "Interim release QA and publish"
+    status: todo
+    purpose: "Validate the signed candidate against the current product QA brief and publish only after automated and device evidence is recorded."
+    required_checks: [R4-004, R4-012, R4-014, ISS-06, ISS-17, ISS-21, ISS-22]
+    recheck_checks: [ISS-05, ISS-20, "SNMP responsive/no-ANR", "R2-014 topology removal guard", "R2-015 mDNS budgets"]
+    acceptance:
+      - "ktlint and detekt fail on new diagnostics without requiring the existing backlog to be deleted wholesale; Kover labels its selected measured scope truthfully and expands incrementally."
+      - "API 33 smoke covers Welcome Skip, Traceroute no-route progress/error/retry, Topology cancel/progress/node labels/details, mDNS ENODEV dismissal, and responsiveness."
+      - "TalkBack activates Home/More tool cards by their visible labels; confirm the current merged-semantics fix."
+      - "Use error-UX checks for emulator public ICMP/DNS flakiness; do not require public Cloudflare success on the AVD."
+      - "Exercise SNMP against the 10.0.2.2 host agent when the named test environment is available; verify v2c/v3 as relevant, cancellation, labels, and no ANR."
+      - "Record API 33 and physical-wlan0 mDNS outcomes; ENODEV remains a graceful, dismissible error on unsupported emulator networking."
+      - "Run the release workflow's version, signing, R8 SNMP-retention, APK/AAB, tag-identity, and artifact checks on the candidate commit."
+      - "Confirm the packaged candidate retains the cleartext-denied base policy and HTTPS-only HTTP Probe behavior."
+    release_gate: "All required automated gates and recorded device checks pass; no emulator is started if another is already running."
+
+  - id: IR-4
+    name: "First post-interim maintenance release"
+    status: todo
+    purpose: "Ship a bounded maintenance candidate after IR-3, closing the shared report/export/SAF contract and responding to issues found in API 33, TalkBack, SNMP, and physical-Wi-Fi validation."
+    checkpoints:
+      - "Close R2-008 with one shared privacy, file-scope, and failure contract for report sharing and SAF export."
+      - "Keep the cleartext-denied, HTTPS-only policy; reconsider plain HTTP only with a separately scoped transport and fresh security review."
+      - "Keep P07 translation, P08 visual/device, P02.5 dependency propagation, E03 adapter coverage, and E02 tool-depth work on separate release tracks."
+      - "Create later releases only with a bounded task set, regression evidence, and release-note entry; do not carry unresolved high-severity findings silently."
+    release_gate: "Required automated and platform-specific regressions for the selected maintenance slice pass; newly discovered high-severity issues are closed or explicitly block publication."
+
+  - id: IR-5
+    name: "Network Info feature interim"
+    status: todo
+    purpose: "Ship P13 Network Info as the first added tool after its localization, accessibility, and platform foundations are ready."
+    checkpoints:
+      - "Complete the bounded P07 tool-label/error localization migration and resource validation for existing tools."
+      - "Complete P08 card semantics, chart descriptions, large-font/narrow-screen/RTL behavior, and required TalkBack checks for existing tools."
+      - "Complete required P05 API 33 and selected-network device checks, including the physical Wi-Fi/VPN observations still applicable to added tools."
+      - "Complete P13 Network Info's E02 dependencies with unit, Compose, and supported-device evidence."
+    release_gate: "Network Info is independently usable and localized, the existing tool foundations pass, and release notes name the supported network details and platform limits."
+
+  - id: IR-6
+    name: "Additional network tools interim"
+    status: todo
+    purpose: "Ship P14-P15 in bounded slices after Network Info and their shared foundations are established."
+    checkpoints:
+      - "Complete each P14-P15 slice only after its dependencies, privacy review, localization, and accessibility checks are done."
+      - "Provide focused unit, Compose, and supported-device evidence for each included tool."
+      - "Keep R2-008 shared report/export/SAF contracts and any new security findings closed before adding report or data-export surfaces."
+    release_gate: "The candidate's new feature list is bounded, all required automated and device checks pass, and no high-severity trust or lifecycle finding remains open."

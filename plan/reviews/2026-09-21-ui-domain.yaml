@@ -1,0 +1,225 @@
+review:
+  area: ui-domain
+  status: done
+  baseline_commit: "5e183721e64ce8a8946f1a0b50f52b83544e8898"
+  reviewer_model: "gpt-5.6-luna"
+  reviewer_reasoning_effort: xhigh
+
+findings:
+  - id: RUI001
+    severity: medium
+    kind: bug
+    title: "mDNS user cancellation is surfaced as a discovery error"
+    evidence:
+      - file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/mdns/MdnsDiscoveryViewModel.kt
+        line: 78
+        detail: "The scan collector catches every Exception, including coroutine CancellationException, then writes error = e.message (or Discovery failed) after marking the scan stopped. stopScan() and reset() cancel scanJob at lines 85-94, so a normal user stop can race with this handler and leave an error banner."
+      - file: app/src/test/kotlin/net/aieat/netswissknife/app/ui/screens/mdns/MdnsDiscoveryViewModelTest.kt
+        line: 150
+        detail: "The stop test calls stopScan() without a runTest/advanceUntilIdle, so it only asserts the immediate isScanning flag and does not exercise the cancelled collector's later state update."
+    impact: "Stopping or resetting an in-flight scan can show a misleading failure instead of preserving partial results/clean idle state, and cancellation exceptions are handled as application failures."
+    recommended_action: "Catch CancellationException separately and rethrow it before the generic error handler; add a coroutine test that starts a suspending flow, calls stopScan(), drains the scheduler, and asserts error remains null."
+    validation: "CancellationException is rethrown before generic failures; ViewModel/repository cancellation regressions passed in the combined core-network/core-domain/app unit run (app: 328 tests). Independent QA and adversarial reviews found no closure blocker."
+    related_phase: P08
+    status: done
+
+  - id: RUI002
+    severity: medium
+    kind: bug
+    title: "Stopping a port scan loses resolved IP and reports zero duration"
+    evidence:
+      - file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/portscan/PortScanViewModel.kt
+        line: 120
+        detail: "onStopScan() constructs a PortScanSummary from live results but hard-codes resolvedIp = null and scanDurationMs = 0L, even though the repository's completed summary provides both fields."
+      - file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/PortsScreen.kt
+        line: 804
+        detail: "The finished UI renders summary.scanDurationMs, so every user-stopped scan claims a 0 ms duration; report generation also omits the resolved IP when it is null."
+      - file: core-network/src/main/kotlin/net/aieat/netswissknife/core/network/portscan/PortScanRepositoryImpl.kt
+        line: 92
+        detail: "Normal completion resolves the host once and records a monotonic elapsed duration in PortScanSummary, showing the missing values are available from the scan contract but not retained by the ViewModel."
+    impact: "A partial result shown after pressing Stop is materially misleading and its copied/shared report omits useful identity and timing data."
+    recommended_action: "Capture scan start time and resolved address (or retain the latest repository summary/progress metadata) in the ViewModel; compute elapsed duration on stop and preserve the resolved IP when available. Add stopped-scan assertions for both fields."
+    validation: "PortScanViewModelTest verifies stopped summaries retain the resolved IP, monotonic duration through Stop, and partial results; a separate deterministic test stops after target resolution before the first port result and verifies the IP remains. Repository and use-case tests verify Started metadata is emitted/forwarded before port results. Combined core-network/core-domain/app unit tests passed; independent QA and adversarial reviews found no blocker."
+    related_phase: P11
+    status: done
+
+  - id: RUI003
+    severity: medium
+    kind: bug
+    title: "Ping count settings and the Ping slider disagree on the supported range"
+    evidence:
+      - file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/settings/SettingsViewModel.kt
+        line: 68
+        detail: "The persisted default ping count is explicitly accepted and stored in the range 1..100."
+      - file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/ping/PingViewModel.kt
+        line: 104
+        detail: "PingViewModel loads that preference without reducing it to the UI's smaller range, and onCountChange also accepts 1..100."
+      - file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/PingScreen.kt
+        line: 428
+        detail: "PingInputCard renders the count Slider with value = count but valueRange = 1f..50f. A persisted/default count of 51..100 cannot be represented faithfully by this control; Compose may clamp the thumb while the surrounding count value remains in the larger range."
+      - file: app/src/test/kotlin/net/aieat/netswissknife/app/ui/screens/settings/SettingsViewModelTest.kt
+        line: 110
+        detail: "The existing test explicitly verifies that 500 is coerced to and persisted as 100, but there is no Ping screen test that composes with a persisted count above 50."
+    impact: "Users who choose a default count above 50 can see a thumb/label mismatch and cannot select the stored value through the Ping control, despite the Settings UI advertising 1..100."
+    recommended_action: "Use one shared count range: either make PingScreen's slider 1..100 (and add coverage for 100) or constrain Settings/ViewModel to 1..50. Prefer the former if the domain contract remains 1..100."
+    validation: "PingScreenTest on API 36 asserts the slider range/value at 100; PingViewModelTest verifies the max count and advanced parameters reach PingUseCase. Combined unit tests and targeted PingScreenTest passed; QA and adversarial reviews found no blocker."
+    related_phase: P08
+    status: done
+
+  - id: RUI004
+    severity: medium
+    kind: bug
+    title: "Ping advanced controls can display stale values after recreation"
+    evidence:
+      - file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/PingScreen.kt
+        line: 158
+        detail: "Payload size, TTL, and interval are held in remember-local mutable state initialized to defaults; they are not collected from PingViewModel's payloadBytes, ttl, or intervalMs StateFlows."
+      - file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/PingScreen.kt
+        line: 218
+        detail: "User edits update both local state and ViewModel state, but only local state is rendered. After configuration recreation, the ViewModel survives with the edited value while the screen resets to 56/64/1000."
+      - file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/ping/PingViewModel.kt
+        line: 191
+        detail: "Starting a ping reads the ViewModel's StateFlow values, so the request can use a payload/TTL/interval different from what the form visibly shows."
+    impact: "The Ping form can lie about the parameters of the next probe, causing confusing diagnostics and accidental tests with settings the user did not see."
+    recommended_action: "Collect payloadBytes, ttl, and intervalMs from the ViewModel like the other fields, or move all form state to SavedStateHandle/ViewModel; add a recreation-oriented UI/ViewModel test that changes each advanced field before re-rendering."
+    validation: "PingScreen collects payload/TTL/interval from the ViewModel; PingScreenTest re-enters the composition with the same ViewModel and asserts edited values render, while PingViewModelTest verifies request parameters. API 36 PingScreenTest and combined unit tests passed; QA and adversarial reviews found no blocker."
+    related_phase: P08
+    status: done
+
+  - id: RUI005
+    severity: medium
+    kind: bug
+    title: "Stopping continuous ping can publish a CSV before its writer drains"
+    evidence:
+      - file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/ping/PingViewModel.kt
+        lines: "39-82, 206-223"
+        detail: "ContinuousPingLogWriter now runs independently; onStop cancels and joins the packet producer, then closes and joins the writer before publishing Finished."
+      - file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/ping/PingViewModel.kt
+        lines: "400-420, 428-475"
+        detail: "Natural completion also drains before finalization. Clear, restart, validation/error, and ViewModel teardown invalidate the old session and clean up its file after the writer is stopped or drained."
+      - file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/ping/PingViewModel.kt
+        lines: "428-445"
+        detail: "Finished.sessionLogFile is exposed only after writer completion; empty or unavailable logs are deleted and are not shareable."
+      - file: app/src/test/kotlin/net/aieat/netswissknife/app/ui/screens/ping/PingViewModelTest.kt
+        lines: "339-412, 434-450"
+        detail: "Blocked-writer tests verify Stop and natural completion wait for all queued sequence rows, zero-packet Stop deletes the file, and validation errors delete their file."
+      - file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/PingScreen.kt
+        line: 795
+        detail: "The Share action reads Finished.sessionLogFile directly and shares any non-empty text, so it can observe a truncated CSV after Stop."
+    impact: "A user stopping a continuous ping can receive a partial or header-only export even though the on-screen packet window contains more observations; lost rows make exported diagnostics unreliable."
+    recommended_action: "Give the writer an independently managed job, stop packet production first, close the channel, await writer completion, then expose Finished.sessionLogFile; alternatively make finalization suspend until the logger drains. Add a deterministic test with a blocked writer and queued packets."
+    validation: "Passed ./gradlew :app:testDebugUnitTest --tests '*PingViewModelTest' --no-daemon --no-parallel (37 tests, 0 failures/errors). Blocked-writer tests cover Stop and natural completion with three queued packets and verify CSV sequences 1-3 before Finished; zero-packet and validation-error cleanup are asserted. Independent QA and adversarial reviews found no closure blocker."
+    related_phase: P04
+    status: done
+
+  - id: RUI006
+    severity: medium
+    kind: bug
+    title: "TLS inspection silently substitutes port 443 for invalid port text"
+    evidence:
+      - file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/tls/TlsInspectorScreen.kt
+        line: 268
+        detail: "The port OutlinedTextField accepts arbitrary text through onValueChange and only requests a numeric keyboard; there is no input filter or validation state that rejects nonnumeric text."
+      - file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/tls/TlsInspectorViewModel.kt
+        line: 70
+        detail: "inspect() converts state.port with toIntOrNull() ?: 443, so values such as abc, 443x, or an out-of-range string are sent to the use case as the default HTTPS port rather than reported as invalid input."
+      - file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/tls/TlsInspectorViewModel.kt
+        line: 65
+        detail: "The host is also added to recent history before the request, so a malformed port can appear as a successful-looking recent inspection attempt despite not using the entered port."
+    impact: "Users may believe they tested a custom TLS port while the app actually probed 443, masking service misconfiguration and making failures difficult to reproduce."
+    recommended_action: "Validate the entered port before launching the use case (numeric and 1..65535, or an explicit empty-field default), surface an error, and add the exact entered host/port only after validation. Add ViewModel tests for nonnumeric, zero, 65536, and valid custom ports."
+    validation: "TlsInspectorViewModelTest covers nonnumeric, port 0, 65536, valid 8443 forwarding, and clearing stale results on edits; invalid ports do not invoke the use case or update recents. TlsInspectorScreenTest and the combined core-network/core-domain/app unit run passed on API 36/JVM respectively. QA and adversarial reviews found no blocker."
+    related_phase: P10
+    status: done
+
+  - id: RUI007
+    severity: low
+    kind: bug
+    title: "Stopped traceroute results discard elapsed-time metadata"
+    evidence:
+      - file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/traceroute/TracerouteViewModel.kt
+        line: 157
+        detail: "onStop() snapshots elapsed time from the trace's monotonic start timestamp into the Canceling state."
+      - file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/traceroute/TracerouteViewModel.kt
+        line: 313
+        detail: "After cleanup, the Canceled result passes the captured elapsedMs into TracerouteResult.totalTimeMs. This source fix landed in 08816411."
+      - file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/TracerouteScreen.kt
+        line: 230
+        detail: "Canceled state is rendered through TracerouteFinishedPanel, where the result's totalTimeMs is displayed at line 802."
+    impact: "The original finding was stale against the current branch: elapsed time had already been retained in the canceled partial result, but no deterministic regression proved it."
+    recommended_action: "Verify and preserve elapsed-time metadata through stop, cleanup, and partial-result rendering."
+    resolution: "Source behavior was already fixed in 08816411. This follow-up added an injectable monotonic clock and a deterministic regression that advances 2,350 ms, stops after one hop, waits for cleanup, and checks Canceling.elapsedMs and Canceled.result.totalTimeMs are both 2,350 while the partial hop is retained. The test also waits for a preceding cancellation test's collector cleanup to avoid cross-test dispatcher races."
+    validation: "`./gradlew :app:testDebugUnitTest --tests '*TracerouteViewModelTest' --no-daemon --no-parallel --max-workers=1 --console=plain` passed 23 tests with zero failures/errors. QA and adversarial review found no blocker. No emulator was used; the display path was source-checked, not instrumented."
+    related_phase: P11
+    status: done
+
+  - id: RUI008
+    severity: medium
+    kind: bug
+    title: "DNS IME submission can overlap lookups and attach recents to the wrong edit"
+    evidence:
+      - file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/DnsScreen.kt
+        line: 347
+        detail: "The IME Search action now checks Loading/nonblank input; while a lookup runs, domain editing/clear, recent-host selection, record-type chips, and DNS-server controls are disabled."
+      - file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/dns/DnsViewModel.kt
+        line: 122
+        detail: "performLookup() returns while Loading, sets Loading synchronously before starting its lazy job, and tracks a generation so a cleared request cannot publish stale state."
+      - file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/dns/DnsViewModel.kt
+        line: 181
+        detail: "addRecentIfInputWasValid(params) uses the captured request domain and server, so recents cannot be attributed to a later field edit."
+      - file: app/src/test/kotlin/net/aieat/netswissknife/app/ui/screens/dns/DnsViewModelTest.kt
+        line: 224
+        detail: "Deferred-request tests verify duplicate submits are ignored, captured input supplies recents, and a cleared request completing after a newer request cannot overwrite its result."
+    impact: "A quick keyboard repeat can leave the screen showing an older DNS answer after a newer query, while recent history can contain an unqueried edit; users may trust the displayed answer as belonging to the visible domain."
+    recommended_action: "Enforce single-flight by entering Loading synchronously and ignoring duplicate submits; invalidate/cancel the active generation on clear, gate IME and query controls while loading, and persist recents from captured request parameters."
+    validation: "With a deferred A lookup, edit the ViewModel input and submit again; assert one use-case call, result A, recent A, and no recent for the edit. Then clear a deferred A, start and complete B, release A late, and assert B remains visible and A is not added to recents. Compose tests verify idle IME Search submits, while Loading disables the query controls and blocks another lookup."
+    related_phase: P04
+    status: done
+
+  - id: RUI009
+    severity: medium
+    kind: bug
+    title: "Port scanner cannot represent the configured concurrency maximum"
+    evidence:
+      - file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/settings/SettingsViewModel.kt
+        line: 78
+        detail: "The persisted default concurrency is explicitly allowed in the range 1..500, so 500 is a valid stored preference."
+      - file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/settings/SettingsScreen.kt
+        line: 274
+        detail: "The Settings slider declares valueRange = 10f..500f, making the upper value 500 directly selectable and persistable."
+      - file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/portscan/PortScanViewModel.kt
+        line: 82
+        detail: "PortScanViewModel loads DEFAULT_CONCURRENCY directly from DataStore without reducing it to the Port screen's smaller UI range."
+      - file: app/src/main/kotlin/net/aieat/netswissknife/app/ui/screens/PortsScreen.kt
+        line: 536
+        detail: "PortScanInputCard renders the concurrency Slider with value = concurrency but valueRange = 10f..300f. A persisted value of 500 therefore cannot be represented by the control; Compose can clamp the thumb while the label still reports 500."
+      - file: app/src/test/kotlin/net/aieat/netswissknife/app/ui/screens/settings/SettingsViewModelTest.kt
+        line: 130
+        detail: "The existing settings test verifies that an out-of-range value is coerced to 500, but there is no Port screen regression test with that persisted value."
+    impact: "After selecting the supported default concurrency of 500 in Settings, the Port Scanner opens with a misleading thumb position and cannot select values 301..500 through its slider, despite the displayed label and scan request retaining 500."
+    recommended_action: "Share the concurrency range between Settings, PortScanViewModel, and PortsScreen (or deliberately constrain the stored setting to 300); add a render/request test for the upper boundary."
+    validation: "PortsScreenTest and SettingsScreenTest on API 36 assert the slider semantics support 1..500 in unit steps and represent 500. PortScanViewModelTest verifies 500 reaches scan params and clamps corrupt stored/callback values; SettingsViewModelTest verifies stale stored values display clamped. Combined core-network/core-domain/app unit tests passed; QA and adversarial reviews found no blocker."
+    related_phase: P08
+    status: done
+
+coverage:
+  reviewed:
+    - "core-domain validation, parameter contracts, normalization, flow mapping, and PingSessionLogger"
+    - "all app UI ViewModels: DNS, HTTP, LAN, mDNS, Ping, ports, speed test, subnet, TLS, topology, traceroute, WHOIS, Wi-Fi, WOL, settings, onboarding, and navigation"
+    - "all corresponding Compose screens plus shared UI components, navigation routes/host, settings controls, and debug/onboarding surfaces"
+    - "app resources in res/values, res/xml, and launcher assets, including strings/plurals/arrays used by reviewed screens"
+    - "matching app JVM tests for ViewModels/navigation and relevant core-network contract tests where UI/domain behavior depends on them"
+  included:
+    - core-domain/src/main/kotlin
+    - app/src/main/kotlin/net/aieat/netswissknife/app/ui
+    - app/src/main/kotlin/net/aieat/netswissknife/app/platform
+    - app/src/main/kotlin/net/aieat/netswissknife/app/data
+    - app/src/main/kotlin/net/aieat/netswissknife/app/wifi
+    - app/src/main/res
+    - app/src/test
+    - app/src/androidTest
+  limitations:
+    - No Gradle invocation run; findings are source/test-evidence based.
+    - No physical-device or emulator interaction; runtime-only OEM/device behavior remains unverified.
+    - No Compose UI or instrumented test execution in this sub-review; recommendations identify the missing regressions.
+    - core-network implementation was inspected only where needed to validate domain/UI contracts; platform/data/DI review is owned by another agent.

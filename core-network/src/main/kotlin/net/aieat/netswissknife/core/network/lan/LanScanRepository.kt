@@ -1,11 +1,20 @@
 package net.aieat.netswissknife.core.network.lan
 
 import kotlinx.coroutines.flow.Flow
+import net.aieat.netswissknife.core.network.operation.OperationSession
 
 /** Contract for discovering live hosts on a local network segment. */
 interface LanScanRepository {
 
     fun scan(request: LanScanRequest): Flow<LanScanUpdate>
+
+    /**
+     * Runs this scan within a caller-owned operation and its cancellation/resource scope.
+     * The compatibility default delegates to [scan] and cannot enforce the session; production
+     * repositories that own resources must override this overload.
+     */
+    fun scan(request: LanScanRequest, operationSession: OperationSession): Flow<LanScanUpdate> =
+        scan(request)
 
     /**
      * Scans [subnet] (CIDR notation) for live hosts.

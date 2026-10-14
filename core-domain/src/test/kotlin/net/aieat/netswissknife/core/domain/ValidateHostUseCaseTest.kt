@@ -1,6 +1,7 @@
 package net.aieat.netswissknife.core.domain
 
 import net.aieat.netswissknife.core.network.NetworkResult
+import net.aieat.netswissknife.core.network.ErrorCode
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -33,6 +34,9 @@ class ValidateHostUseCaseTest {
     fun `invalid host returns Error with descriptive message`() = runTest {
         val result = useCase("not a host!!")
         assertTrue(result is NetworkResult.Error)
-        assertTrue((result as NetworkResult.Error).message.contains("not a host!!"))
+        val error = result as NetworkResult.Error
+        assertTrue(error.message.contains("not a host!!"))
+        assertEquals(ErrorCode.HOST_INVALID, error.info?.code)
+        assertEquals(listOf("not a host!!"), error.info?.args)
     }
 }

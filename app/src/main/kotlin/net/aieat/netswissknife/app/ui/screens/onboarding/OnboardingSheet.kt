@@ -54,6 +54,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -82,13 +86,14 @@ fun OnboardingSheet(onDismiss: () -> Unit) {
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         AnimatedVisibility(
             visible = contentVisible,
-            enter = fadeIn(AppMotion.enter(300)) + slideInVertically(AppMotion.enter(300)) { it / 4 }
+            enter = fadeIn(AppMotion.enter(300)) + slideInVertically(AppMotion.enter(300)) { it / 4 },
         ) {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp)
-                    .padding(bottom = 32.dp)
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp)
+                        .padding(bottom = 32.dp),
             ) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     TextButton(onClick = onDismiss) {
@@ -98,15 +103,17 @@ fun OnboardingSheet(onDismiss: () -> Unit) {
 
                 HorizontalPager(
                     state = pagerState,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 360.dp)
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 360.dp),
                 ) { page ->
                     Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .verticalScroll(rememberScrollState()),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .verticalScroll(rememberScrollState()),
+                        horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         when (page) {
                             0 -> WelcomePage()
@@ -130,12 +137,12 @@ fun OnboardingSheet(onDismiss: () -> Unit) {
 private fun NavigationRow(
     pagerState: PagerState,
     scope: CoroutineScope,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         if (pagerState.currentPage > 0) {
             TextButton(onClick = {
@@ -163,21 +170,30 @@ private fun NavigationRow(
 
 @Composable
 private fun PageIndicator(pagerState: PagerState) {
+    val pagePosition = stringResource(R.string.onboarding_page_position, pagerState.currentPage + 1, PAGE_COUNT)
     Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.Center
+        modifier =
+            Modifier.fillMaxWidth().semantics {
+                contentDescription = pagePosition
+                liveRegion = LiveRegionMode.Polite
+            },
+        horizontalArrangement = Arrangement.Center,
     ) {
         repeat(PAGE_COUNT) { index ->
             val selected = index == pagerState.currentPage
             Box(
-                modifier = Modifier
-                    .padding(4.dp)
-                    .size(if (selected) 10.dp else 8.dp)
-                    .clip(CircleShape)
-                    .background(
-                        if (selected) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.surfaceVariant
-                    )
+                modifier =
+                    Modifier
+                        .padding(4.dp)
+                        .size(if (selected) 10.dp else 8.dp)
+                        .clip(CircleShape)
+                        .background(
+                            if (selected) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.surfaceVariant
+                            },
+                        ),
             )
         }
     }
@@ -189,21 +205,22 @@ private fun PageIndicator(pagerState: PagerState) {
 private fun WelcomePage() {
     Spacer(Modifier.height(8.dp))
     Box(
-        modifier = Modifier
-            .size(72.dp)
-            .clip(CircleShape)
-            .background(
-                Brush.radialGradient(
-                    listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.tertiary)
-                )
-            ),
-        contentAlignment = Alignment.Center
+        modifier =
+            Modifier
+                .size(72.dp)
+                .clip(CircleShape)
+                .background(
+                    Brush.radialGradient(
+                        listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.tertiary),
+                    ),
+                ),
+        contentAlignment = Alignment.Center,
     ) {
         Icon(
             imageVector = Icons.Default.Hub,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onPrimary,
-            modifier = Modifier.size(40.dp)
+            modifier = Modifier.size(40.dp),
         )
     }
     Spacer(Modifier.height(16.dp))
@@ -211,37 +228,42 @@ private fun WelcomePage() {
         text = stringResource(R.string.onboarding_page1_title),
         style = MaterialTheme.typography.headlineSmall,
         fontWeight = FontWeight.Bold,
-        textAlign = TextAlign.Center
+        textAlign = TextAlign.Center,
     )
     Spacer(Modifier.height(8.dp))
     Text(
         text = stringResource(R.string.onboarding_page1_body),
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        textAlign = TextAlign.Center
+        textAlign = TextAlign.Center,
     )
     Spacer(Modifier.height(8.dp))
 }
 
 // ── Page 2: Use cases ────────────────────────────────────────────────────────────
 
-private data class UseCase(val icon: ImageVector, val question: String, val answer: String)
+private data class UseCase(
+    val icon: ImageVector,
+    val question: String,
+    val answer: String,
+)
 
 @Composable
 private fun UseCasesPage() {
-    val useCases = listOf(
-        UseCase(Icons.Default.NetworkCheck, stringResource(R.string.onboarding_usecase_diagnostics_q), stringResource(R.string.onboarding_usecase_diagnostics_a)),
-        UseCase(Icons.Default.Wifi, stringResource(R.string.onboarding_usecase_wifi_q), stringResource(R.string.onboarding_usecase_wifi_a)),
-        UseCase(Icons.Default.Lock, stringResource(R.string.onboarding_usecase_security_q), stringResource(R.string.onboarding_usecase_security_a)),
-        UseCase(Icons.Default.Speed, stringResource(R.string.onboarding_usecase_speed_q), stringResource(R.string.onboarding_usecase_speed_a)),
-        UseCase(Icons.Default.Language, stringResource(R.string.onboarding_usecase_dns_q), stringResource(R.string.onboarding_usecase_dns_a)),
-    )
+    val useCases =
+        listOf(
+            UseCase(Icons.Default.NetworkCheck, stringResource(R.string.onboarding_usecase_diagnostics_q), stringResource(R.string.onboarding_usecase_diagnostics_a)),
+            UseCase(Icons.Default.Wifi, stringResource(R.string.onboarding_usecase_wifi_q), stringResource(R.string.onboarding_usecase_wifi_a)),
+            UseCase(Icons.Default.Lock, stringResource(R.string.onboarding_usecase_security_q), stringResource(R.string.onboarding_usecase_security_a)),
+            UseCase(Icons.Default.Speed, stringResource(R.string.onboarding_usecase_speed_q), stringResource(R.string.onboarding_usecase_speed_a)),
+            UseCase(Icons.Default.Language, stringResource(R.string.onboarding_usecase_dns_q), stringResource(R.string.onboarding_usecase_dns_a)),
+        )
 
     Text(
         text = stringResource(R.string.onboarding_page2_title),
         style = MaterialTheme.typography.titleLarge,
         fontWeight = FontWeight.Bold,
-        textAlign = TextAlign.Center
+        textAlign = TextAlign.Center,
     )
     Spacer(Modifier.height(16.dp))
     Column(modifier = Modifier.fillMaxWidth()) {
@@ -257,17 +279,18 @@ private fun UseCaseRow(useCase: UseCase) {
     ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
         Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(MaterialTheme.colorScheme.primaryContainer),
-                contentAlignment = Alignment.Center
+                modifier =
+                    Modifier
+                        .size(36.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(MaterialTheme.colorScheme.primaryContainer),
+                contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     imageVector = useCase.icon,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(20.dp),
                 )
             }
             Spacer(Modifier.width(14.dp))
@@ -275,12 +298,12 @@ private fun UseCaseRow(useCase: UseCase) {
                 Text(
                     text = useCase.question,
                     style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.SemiBold,
                 )
                 Text(
                     text = useCase.answer,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
@@ -293,17 +316,18 @@ private fun UseCaseRow(useCase: UseCase) {
 private fun OrganizationPage() {
     Spacer(Modifier.height(8.dp))
     Box(
-        modifier = Modifier
-            .size(64.dp)
-            .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.secondaryContainer),
-        contentAlignment = Alignment.Center
+        modifier =
+            Modifier
+                .size(64.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.secondaryContainer),
+        contentAlignment = Alignment.Center,
     ) {
         Icon(
             imageVector = Icons.Default.TouchApp,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSecondaryContainer,
-            modifier = Modifier.size(32.dp)
+            modifier = Modifier.size(32.dp),
         )
     }
     Spacer(Modifier.height(16.dp))
@@ -311,14 +335,14 @@ private fun OrganizationPage() {
         text = stringResource(R.string.onboarding_page3_title),
         style = MaterialTheme.typography.titleLarge,
         fontWeight = FontWeight.Bold,
-        textAlign = TextAlign.Center
+        textAlign = TextAlign.Center,
     )
     Spacer(Modifier.height(8.dp))
     Text(
         text = stringResource(R.string.onboarding_page3_body),
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        textAlign = TextAlign.Center
+        textAlign = TextAlign.Center,
     )
     Spacer(Modifier.height(8.dp))
 }
@@ -329,17 +353,18 @@ private fun OrganizationPage() {
 private fun PermissionsPage() {
     Spacer(Modifier.height(8.dp))
     Box(
-        modifier = Modifier
-            .size(64.dp)
-            .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.tertiaryContainer),
-        contentAlignment = Alignment.Center
+        modifier =
+            Modifier
+                .size(64.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.tertiaryContainer),
+        contentAlignment = Alignment.Center,
     ) {
         Icon(
             imageVector = Icons.Default.PrivacyTip,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onTertiaryContainer,
-            modifier = Modifier.size(32.dp)
+            modifier = Modifier.size(32.dp),
         )
     }
     Spacer(Modifier.height(16.dp))
@@ -347,7 +372,7 @@ private fun PermissionsPage() {
         text = stringResource(R.string.onboarding_page4_title),
         style = MaterialTheme.typography.titleLarge,
         fontWeight = FontWeight.Bold,
-        textAlign = TextAlign.Center
+        textAlign = TextAlign.Center,
     )
     Spacer(Modifier.height(12.dp))
     OutlinedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
@@ -355,13 +380,13 @@ private fun PermissionsPage() {
             Text(
                 text = stringResource(R.string.onboarding_page4_permission1),
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(10.dp))
             Text(
                 text = stringResource(R.string.onboarding_page4_permission2),
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
@@ -371,7 +396,7 @@ private fun PermissionsPage() {
         style = MaterialTheme.typography.bodySmall,
         fontWeight = FontWeight.Medium,
         color = MaterialTheme.colorScheme.primary,
-        textAlign = TextAlign.Center
+        textAlign = TextAlign.Center,
     )
     Spacer(Modifier.height(8.dp))
 }
