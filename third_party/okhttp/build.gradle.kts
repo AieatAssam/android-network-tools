@@ -71,7 +71,7 @@ kotlin {
                 compileOnly("org.bouncycastle:bcutil-jdk18on:1.86")
                 compileOnly("org.bouncycastle:bctls-jdk18on:1.86.2")
                 compileOnly("org.openjsse:openjsse:1.1.14")
-                compileOnly("org.graalvm.nativeimage:svm:25.0.4")
+                compileOnly("org.graalvm.nativeimage:svm:25.0.4.1.1")
             }
         }
     }
