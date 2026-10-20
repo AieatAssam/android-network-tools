@@ -4,6 +4,9 @@ import java.security.MessageDigest
 import java.security.interfaces.ECKey
 import java.security.interfaces.RSAKey
 import java.security.cert.X509Certificate
+import java.net.InetAddress
+import java.io.ByteArrayOutputStream
+import java.nio.charset.StandardCharsets.UTF_8
 
 object TlsCertificateParser {
 
@@ -36,7 +39,7 @@ object TlsCertificateParser {
             if (eqIndex < 0) continue
             val attrKey = trimmed.substring(0, eqIndex).trim()
             if (attrKey.equals(key, ignoreCase = true)) {
-                var value = trimmed.substring(eqIndex + 1).trim()
+                var value = unescapeDnValue(trimmed.substring(eqIndex + 1).trim())
                 // Strip surrounding quotes if present
                 if (value.startsWith('"') && value.endsWith('"') && value.length >= 2) {
                     value = value.substring(1, value.length - 1)
@@ -47,13 +50,53 @@ object TlsCertificateParser {
         return null
     }
 
+    private fun unescapeDnValue(value: String): String {
+        val output = StringBuilder(value.length)
+        var index = 0
+        while (index < value.length) {
+            if (value[index] != '\\') {
+                output.append(value[index++])
+                continue
+            }
+
+            if (index + 2 < value.length && value[index + 1].digitToIntOrNull(16) != null &&
+                value[index + 2].digitToIntOrNull(16) != null
+            ) {
+                val escapedBytes = ByteArrayOutputStream()
+                while (index + 2 < value.length && value[index] == '\\') {
+                    val high = value[index + 1].digitToIntOrNull(16) ?: break
+                    val low = value[index + 2].digitToIntOrNull(16) ?: break
+                    escapedBytes.write((high shl 4) or low)
+                    index += 3
+                }
+                output.append(String(escapedBytes.toByteArray(), UTF_8))
+            } else if (index + 1 < value.length) {
+                output.append(value[index + 1])
+                index += 2
+            } else {
+                output.append('\\')
+                index++
+            }
+        }
+        return output.toString()
+    }
+
     /** Splits a DN string on commas, respecting quoted values. */
     private fun splitDn(dn: String): List<String> {
         val parts = mutableListOf<String>()
         val current = StringBuilder()
         var inQuotes = false
+        var escaped = false
         for (ch in dn) {
             when {
+                escaped -> {
+                    current.append(ch)
+                    escaped = false
+                }
+                ch == '\\' -> {
+                    current.append(ch)
+                    escaped = true
+                }
                 ch == '"' -> {
                     inQuotes = !inQuotes
                     current.append(ch)
@@ -70,22 +113,26 @@ object TlsCertificateParser {
     }
 
     /** Parses a full [X509Certificate] into a [TlsCertificate]. */
-    fun parse(cert: X509Certificate): TlsCertificate {
+    fun parse(cert: X509Certificate, nowMillis: Long = System.currentTimeMillis()): TlsCertificate {
         val subjectDn = cert.subjectX500Principal.name
         val issuerDn  = cert.issuerX500Principal.name
 
         val notBefore = cert.notBefore.time
         val notAfter  = cert.notAfter.time
 
-        val sans = cert.subjectAlternativeNames?.mapNotNull { san ->
-            val type  = san[0] as? Int    ?: return@mapNotNull null
-            val value = san[1]?.toString() ?: return@mapNotNull null
-            when (type) {
-                2    -> "DNS:$value"
-                7    -> "IP:$value"
-                else -> null
+        val sans = try {
+            cert.subjectAlternativeNames.orEmpty().mapNotNull { san ->
+                val type = san.getOrNull(0) as? Int ?: return@mapNotNull null
+                val rawValue = san.getOrNull(1) ?: return@mapNotNull null
+                when (type) {
+                    2 -> (rawValue as? String)?.let { "DNS:$it" }
+                    7 -> parseIpSanValue(rawValue)?.let { "IP:$it" }
+                    else -> null
+                }
             }
-        } ?: emptyList()
+        } catch (_: Exception) {
+            emptyList()
+        }
 
         val publicKeyBits = when (val key = cert.publicKey) {
             is RSAKey -> key.modulus.bitLength()
@@ -100,14 +147,51 @@ object TlsCertificateParser {
             issuerOrg           = parseOrg(issuerDn),
             notBefore           = notBefore,
             notAfter            = notAfter,
-            isExpired           = isExpired(notAfter),
+            isExpired           = notAfter <= nowMillis,
             isSelfSigned        = isSelfSigned(subjectDn, issuerDn),
             sans                = sans,
             serialNumber        = cert.serialNumber.toString(16).uppercase(),
             signatureAlgorithm  = cert.sigAlgName,
             publicKeyAlgorithm  = cert.publicKey.algorithm,
             publicKeyBits       = publicKeyBits,
-            sha256Fingerprint   = sha256Fingerprint(cert.encoded)
+            sha256Fingerprint   = sha256Fingerprint(cert.encoded),
+            notYetValid         = notBefore > nowMillis,
+            daysUntilExpiry     = if (notAfter <= nowMillis) 0 else (notAfter - nowMillis) / MILLIS_PER_DAY,
+            isCa                = cert.basicConstraints >= 0,
+            keyUsage            = keyUsageNames(cert.keyUsage),
+            pemEncoded          = PemEncoder.encode(cert),
         )
     }
+
+    private fun keyUsageNames(usage: BooleanArray?): List<String> {
+        if (usage == null) return emptyList()
+        val names = listOf(
+            "Digital signature",
+            "Non-repudiation",
+            "Key encipherment",
+            "Data encipherment",
+            "Key agreement",
+            "Certificate signing",
+            "CRL signing",
+            "Encipher only",
+            "Decipher only",
+        )
+        return names.filterIndexed { index, _ -> usage.getOrNull(index) == true }
+    }
+
+    private fun parseIpSanValue(value: Any): String? {
+        return when (value) {
+            is String -> value
+            is ByteArray -> {
+                if (value.size == IPV4_BYTES || value.size == IPV6_BYTES) {
+                    InetAddress.getByAddress(value).hostAddress
+                } else null
+            }
+            else -> null
+        }
+    }
+
+    private const val IPV4_BYTES = 4
+    private const val IPV6_BYTES = 16
+    private const val MILLIS_PER_DAY = 24L * 60 * 60 * 1_000
 }

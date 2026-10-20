@@ -10,6 +10,13 @@ package net.aieat.netswissknife.core.network.portscan
 internal object BannerSanitizer {
     private const val MAX_LEN = 200
 
-    fun sanitize(raw: String): String =
-        raw.trim().take(MAX_LEN).filter { it.code in 0x20..0x7E }
+    data class Result(val text: String, val truncated: Boolean)
+
+    fun sanitize(raw: String): String = sanitizeWithTruncation(raw).text
+
+    fun sanitizeWithTruncation(raw: String): Result {
+        val trimmed = raw.trim()
+        val printable = trimmed.take(MAX_LEN).filter { it.code in 0x20..0x7E }
+        return Result(text = printable, truncated = trimmed.length > MAX_LEN)
+    }
 }

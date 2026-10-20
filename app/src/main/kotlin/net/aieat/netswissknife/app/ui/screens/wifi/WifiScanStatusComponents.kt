@@ -35,6 +35,7 @@ import androidx.compose.ui.res.stringResource
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.core.network.wifi.WifiConnectionInfo
 import net.aieat.netswissknife.core.network.wifi.WifiScanResult
+import net.aieat.netswissknife.core.network.wifi.WifiScanRefreshStatus
 
 @Composable
 fun WifiLocationDisabledScreen(onOpenSettings: () -> Unit) {
@@ -71,7 +72,10 @@ fun WifiLocationDisabledScreen(onOpenSettings: () -> Unit) {
 }
 
 @Composable
-fun WifiScanFreshnessStatus(result: WifiScanResult) {
+fun WifiScanFreshnessStatus(
+    result: WifiScanResult,
+    onRequestPermission: (() -> Unit)? = null
+) {
     val ageSeconds = result.scanAgeMs?.let { (it / 1_000L).coerceAtLeast(0L).coerceAtMost(Int.MAX_VALUE.toLong()).toInt() }
     val ageLabel = if (ageSeconds == null) {
         stringResource(R.string.wifi_results_age_unknown)
@@ -79,26 +83,44 @@ fun WifiScanFreshnessStatus(result: WifiScanResult) {
         pluralStringResource(R.plurals.wifi_results_age, ageSeconds, ageSeconds)
     }
 
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        AssistChip(
-            onClick = {},
-            label = {
+    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            AssistChip(
+                onClick = {},
+                label = {
+                    Text(
+                        when (result.refreshStatus) {
+                            WifiScanRefreshStatus.NOT_REQUESTED,
+                            WifiScanRefreshStatus.UPDATED -> ageLabel
+                            WifiScanRefreshStatus.NOT_UPDATED -> stringResource(R.string.wifi_scan_not_updated)
+                            WifiScanRefreshStatus.TIMED_OUT -> stringResource(R.string.wifi_scan_timed_out)
+                            WifiScanRefreshStatus.REJECTED -> stringResource(R.string.wifi_scan_rejected)
+                            WifiScanRefreshStatus.FAILED -> stringResource(R.string.wifi_scan_failed_cached)
+                            WifiScanRefreshStatus.PERMISSION_DENIED -> stringResource(R.string.wifi_scan_permission_denied_cached)
+                        }
+                    )
+                }
+            )
+            if (result.refreshStatus !in setOf(
+                    WifiScanRefreshStatus.NOT_REQUESTED,
+                    WifiScanRefreshStatus.UPDATED
+                )
+            ) {
                 Text(
-                    if (result.throttled) stringResource(R.string.wifi_scan_throttled)
-                    else ageLabel
+                    ageLabel,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-        )
-        if (result.throttled) {
-            Text(
-                ageLabel,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+        }
+        if (result.refreshStatus == WifiScanRefreshStatus.PERMISSION_DENIED && onRequestPermission != null) {
+            Button(onClick = onRequestPermission) {
+                Text(stringResource(R.string.wifi_grant_permission))
+            }
         }
     }
 }

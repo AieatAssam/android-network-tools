@@ -1,6 +1,25 @@
 plugins {
     alias(libs.plugins.kotlin.jvm)
-    alias(libs.plugins.kover)
+    alias(libs.plugins.ktlint)
+    alias(libs.plugins.detekt)
+}
+
+apply(plugin = "org.jetbrains.kotlinx.kover")
+
+configure<org.jlleitschuh.gradle.ktlint.KtlintExtension> {
+    version.set(libs.versions.ktlint.get())
+    android.set(true)
+    baseline.set(rootProject.file("config/ktlint/core-network-baseline.xml"))
+}
+
+detekt {
+    toolVersion = libs.versions.detekt.get()
+    config.setFrom(rootProject.file("config/detekt/detekt.yml"))
+    buildUponDefaultConfig = true
+    baseline = rootProject.file("config/detekt/core-network-baseline.xml")
+    failOnSeverity = dev.detekt.gradle.extensions.FailOnSeverity.Warning
+    parallel = false
+    basePath.set(projectDir)
 }
 
 java {
@@ -16,12 +35,20 @@ dependencies {
     implementation(libs.coroutines.core)
     implementation(libs.dnsjava)
     implementation(libs.snmp4j)
+    implementation(project(":okhttp-bounded"))
+    implementation(libs.kotlinx.serialization.json)
 
     testImplementation(libs.junit5.api)
     testImplementation(libs.junit5.params)
     testRuntimeOnly(libs.junit5.engine)
     testRuntimeOnly(libs.junit5.launcher)
     testImplementation(libs.mockk)
+    testImplementation(libs.mockwebserver3) {
+        exclude(group = "com.squareup.okhttp3", module = "okhttp")
+    }
+    testImplementation(libs.okhttpTls) {
+        exclude(group = "com.squareup.okhttp3", module = "okhttp")
+    }
     testImplementation(libs.coroutines.test)
 }
 
@@ -32,7 +59,7 @@ tasks.withType<Test> {
 // Protocol parsers and repository orchestration are JVM-testable. Enforce a
 // module-level floor so coverage reports are actionable rather than merely
 // informational; Android framework adapters remain outside this module.
-kover {
+extensions.configure<kotlinx.kover.gradle.plugin.dsl.KoverProjectExtension> {
     reports {
         verify {
             rule("Network logic minimum coverage") {

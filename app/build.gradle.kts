@@ -3,7 +3,26 @@ plugins {
     alias(libs.plugins.compose.compiler)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
-    alias(libs.plugins.kover)
+    alias(libs.plugins.ktlint)
+    alias(libs.plugins.detekt)
+}
+
+apply(plugin = "org.jetbrains.kotlinx.kover")
+
+configure<org.jlleitschuh.gradle.ktlint.KtlintExtension> {
+    version.set(libs.versions.ktlint.get())
+    android.set(true)
+    baseline.set(rootProject.file("config/ktlint/app-baseline.xml"))
+}
+
+detekt {
+    toolVersion = libs.versions.detekt.get()
+    config.setFrom(rootProject.file("config/detekt/detekt.yml"))
+    buildUponDefaultConfig = true
+    baseline = rootProject.file("config/detekt/app-baseline.xml")
+    failOnSeverity = dev.detekt.gradle.extensions.FailOnSeverity.Warning
+    parallel = false
+    basePath.set(projectDir)
 }
 
 // ── CI-supplied properties ────────────────────────────────────────────────────
@@ -193,14 +212,14 @@ tasks.withType<Test> {
 
 // ── Coverage ──────────────────────────────────────────────────────────────────
 // Newly added, non-Compose logic must stay fully covered. The :app report is
-// deliberately scoped to that logic: the module's other ~17 Compose screens
+// deliberately scoped to selected logic: the module's other ~17 Compose screens
 // cannot be exercised by plain JVM unit tests, so measuring them here would
 // only dilute the gate. Coverage for the pure-Kotlin modules is reported
 // unfiltered by :core-network and :core-domain.
 //
 //   ./gradlew :app:koverVerify        -- enforce the gate
 //   ./gradlew :app:koverHtmlReport    -- browse the scoped report
-kover {
+extensions.configure<kotlinx.kover.gradle.plugin.dsl.KoverProjectExtension> {
     reports {
         filters {
             includes {
@@ -209,7 +228,12 @@ kover {
                     "net.aieat.netswissknife.app.ui.screens.whois.ConnectorSegment",
                     "net.aieat.netswissknife.app.data.AppPreferenceKeys",
                     "net.aieat.netswissknife.app.data.RecentHostsRepository",
-                    "net.aieat.netswissknife.app.platform.LinkInfoMapper"
+                    "net.aieat.netswissknife.app.platform.LinkInfoMapper",
+                    "net.aieat.netswissknife.app.platform.NetworkSelection",
+                    "net.aieat.netswissknife.app.platform.CapabilitySnapshot",
+                    "net.aieat.netswissknife.app.platform.NetworkSnapshot",
+                    "net.aieat.netswissknife.app.platform.NetworkStatus",
+                    "net.aieat.netswissknife.app.platform.Transport",
                 )
             }
             excludes {
@@ -218,7 +242,7 @@ kover {
             }
         }
         verify {
-            rule("Pure app logic is well covered") {
+            rule("Selected pure app logic is well covered") {
                 minBound(90)
             }
         }

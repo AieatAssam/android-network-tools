@@ -2,16 +2,36 @@
 # P11 – Diagnostics depth: Speed Test, Traceroute, Port Scanner
 # =============================================================================
 # Audience: AI coding agent. Self-contained. Read plan/plan.yaml `agent_execution_rules` first.
+expansion_tasks:
+  index: plan/plan.yaml
+  tasks: [E02-T02, E02-T03, E02-T13, E03-T04]
+  rule: "Coordinate with these expansion tasks; do not duplicate existing scope or block independent regression fixes on optional enhancements. See comprehensive_expansion.regression_delivery for fresh follow-up ownership."
+
+second_pass_follow_up:
+  status: done
+  report: plan/reviews/2026-09-22-second-pass.yaml
+  findings: [R2-013]
+  rule: "Apply report recommendations and regression acceptance before closing the listed follow-ups; historical phase completion does not close new findings."
+
 phase:
   id: P11
   title: "Speed Test (keep-alive/TCP latency, server-timing correction, multi-stream, loaded latency capture, server metadata) · Traceroute (per-probe RTT stats, async rDNS/GeoIP enrichment events, provider chain + reserved ranges + IPv6, country flags) · Port Scanner (banner truncation flag, protocol-aware probes, TLS subject)"
   priority: medium
-  status: todo
+  status: in_progress
   estimated_effort: "L (4-6 agent sessions; three PR series)"
   depends_on: [P04, P05]     # ping engine/ICMP + binder; OkHttp from P10 is reused if available (else add here)
   enables: [P14]
   findings: [F026, F027]
   target_modules: [":core-network", ":core-domain", ":app"]
+
+review_follow_up:
+  reviewed_on: "2026-09-21"
+  status: done
+  findings: [RNET007, RNET008, RUI002, RUI007]
+  reports:
+    - plan/reviews/2026-09-21-network.yaml
+    - plan/reviews/2026-09-21-ui-domain.yaml
+  note: "RNET007, RNET008, RUI002, and RUI007 are closed with regression coverage. See report evidence, resolution, and validation."
 
 context:
   problem: |
@@ -27,7 +47,8 @@ context:
         probesPerHop up to 5; no min/avg/max per hop.
       - Reverse DNS runs inline in map{} per hop (blocking up to seconds); GeoIP lookups run
         sequentially in TracerouteUseCase -> hops appear slowly.
-      - GeoIpRepositoryImpl: single unauthenticated ipinfo.io provider, regex JSON parsing, private
+      - GeoIpRepositoryImpl: single unauthenticated ipinfo.io provider, regex extraction for
+        most JSON fields (RNET007's root bogon check is now escape-aware), private
         range check misses CGNAT 100.64/10, 192.0.0/24, 192.0.2/24, 198.18/15, 198.51.100/24,
         203.0.113/24, 224/4; IPv6 hops never geolocated; COUNTRY_NAMES map hand-maintained (50).
     Port Scanner
@@ -88,7 +109,7 @@ design:
     TracerouteFlowResult += HopEnriched(hopNumber, hostname?, geo?) ; ViewModel merges by hopNumber.
     Repository (app) emits hops immediately (no rDNS inline); TracerouteUseCase runs enrichment in a channelFlow with Semaphore(4): rDNS via HostResolver.reverse(ip, timeoutMs=1500) (core interface; default InetAddress) and GeoIp lookups concurrently; emits HopEnriched as they finish.
     GeoIp: GeoIpProvider interface { name; suspend fun lookup(ip): HopGeoLocation? } ; providers [IpinfoProvider, IpwhoIsProvider, IpapiCoProvider] with kotlinx-serialization models; GeoIpRepositoryImpl(providers, cache LRU 512, breaker: after 3 consecutive failures skip provider for 60 s) ; ReservedRanges (pure): IPv4 list per RFC 6890 + IPv6 (::1, fe80::/10, fc00::/7, ::ffff:0:0/96 mapped -> check v4, 2001:db8::/32) ; countryName via Locale.Builder().setRegion(code).build().getDisplayCountry(Locale.ENGLISH) (the Locale(String,String) constructor is deprecated on JDK 19+; the builder works on JVM and Android; drop the hand map) ; flagEmoji(code) pure (regional indicator symbols).
-    UI: hop row shows min/avg/max (labelSmall) when probesPerHop > 1, per-probe dots (success/timeout), shimmer placeholder for hostname/geo until enriched; flag emoji before country; 'Geo path' summary card listing countries in order.
+    UI: hop row shows min/avg/max (labelSmall) when probesPerHop > 1, per-probe success/no-reply dots with localized values and accessible numbered outcomes, shimmer placeholder for hostname/geo until enriched; flag emoji before country; 'Geo path' summary card listing countries in order.
   portscan: |
     PortConnectResult += bannerTruncated: Boolean, tlsSubject: String?, probeKind: ProbeKind (PASSIVE/HTTP/SMTP/…)
     ServiceProbes (pure registry): port -> greeting bytes (80/8080/8000: 'HEAD / HTTP/1.0\r\nHost: <host>\r\n\r\n'; 25/587: read then 'EHLO netswissknife'; 21/22/110/143: passive read; 443/8443/993/995/465/636: TLS peek) ; buffer 1024, read until timeout 300 ms or buffer full; truncated = read == 1024.
@@ -105,7 +126,13 @@ design:
 tasks:
   - id: P11-T1
     title: "Speed test engine + config + loaded latency + server info"
-    status: todo
+    status: in_progress
+    current_progress:
+      date: "2026-09-25"
+      implemented: "A pooled OkHttp TransferEngine now measures corrected keep-alive HTTP RTT, TCP connect RTT, parallel download/upload streams, phase-loaded latency, and bounded Cloudflare server metadata. Stream counts persist and are configurable, and the screen/share summary exposes server and loaded-latency results. Server-Timing parsing preserves repeated headers and handles quoted commas; metadata and upload-response reads are capped. Cancellation joins the sampler before final statistics."
+      fixed_in: "93522c7"
+      validation: "The serialized core-network/core-domain/app JVM suites passed 1,270 (one skipped)/216/549 tests with zero failures or errors. Android-test Kotlin compilation, lintDebug, assembleDebug, assembleRelease, and all three Kover verification gates passed. The unsigned-release smoke check verified retained SNMP/icmpenguin classes, native library, OUI data, and the public-suffix list. No emulator or live Cloudflare link test was used."
+      remaining: "P11-T1 remains in_progress until Wi-Fi/cellular link accuracy, cancellation and offline/error behavior are accepted on a physical device; the >300 Mbps throughput and idle-latency comparisons are not claimed."
     tdd:
       red:
         tests:
@@ -122,31 +149,43 @@ tasks:
 
   - id: P11-T2
     title: "Traceroute: per-probe RTTs, async enrichment, provider chain, reserved ranges, IPv6, flags"
-    status: todo
+    status: in_progress
+    current_progress:
+      date: "2026-09-25"
+      implemented: "The E03-T01 traceroute slice emits raw hops immediately, performs reverse-DNS and GeoIP enrichment asynchronously under the caller session with bounded concurrency and lookup timeouts, and merges enrichment by hop number without changing row order. Per-probe RTTs retain nullable ordered slots, show localized success/no-reply markers with accessible numbered descriptions, and display success-only min/average/max. A deadline during enrichment preserves the raw partial hop. GeoIP uses strict numeric IPv4/IPv6 parsing and filters non-global ranges before transport, including mapped IPv4 and NAT64 embedded destinations; public IPv4 and IPv6 literals pass through. Successful GeoIP results now use a synchronized 512-entry access-order LRU cache; cache hits refresh recency and the eldest location is evicted at capacity. Provider lookup falls back across ipinfo, ipwho, and ipapi, validates returned identity/coordinates/ASN data, and uses per-provider breakers with a single half-open probe. Stopped partial results retain measured elapsed time through cleanup. Traceroute hop labels and the country path now show flags from validated ISO alpha-2 codes, with provider-name fallback for unknown codes."
+      fixed_in: "076a5d8"
+      validation: "Serialized focused gates passed: core GeoIpRepositoryImplTest, ReservedRangesTest, CountryFlagsTest, and provider-fallback/breaker cases are covered by the full 1,299-test core-network suite; app TracerouteViewModelTest is covered by the 574-test app suite. The new capacity/LRU regression passed with GeoIpRepositoryImplTest (31 tests, zero failures/errors), proving a cache hit refreshes recency and the least-recently-used entry is fetched again after eviction. Android-test Kotlin compilation passed with the per-hop flag assertion; instrumentation did not run. Independent QA and adversarial reviews cleared address parsing/classification, mapped/NAT64 behavior, no-DNS fail-closed handling, canceled-result timing, and country-code/flag formatting. No emulator, live network trace, host snmpd, or physical Wi-Fi device was used."
+      remaining: "P11-T2 remains in_progress for the manual 1.1.1.1 three-probe validation. Public IPv6 lookup eligibility, reserved-range classification, provider fallback/breakers, bounded cache behavior, and country-flag rendering are implemented; provider-backed live IPv6 enrichment remains unverified."
     tdd:
       red:
         tests:
-          - "TracerouteHopMapperTest (app, pure mirror): probes [1500us, timeout, 2500us] -> probes [1, null, 2], min 1 avg 1.5 max 2"
+          - "TracerouteHopMapperTest (app, pure mirror): probes [1500us, no reply, 2500us] -> probes [1, null, 2], min 1 avg 1.5 max 2"
           - "TracerouteUseCaseTest: hops emitted before enrichment; HopEnriched arrives with hostname and geo; enrichment failure never drops a hop; parallelism bounded (fake resolver counts concurrent calls <= 4)"
-          - "ReservedRangesTest: 100.64.0.1 reserved; 192.0.2.5 reserved; 8.8.8.8 public; fe80::1 reserved; 2001:4860:4860::8888 public; ::ffff:10.0.0.1 reserved"
+          - "ReservedRangesTest: IPv4 special-use boundaries and exceptions; IPv6 ULA/link-local/docs/dummy/transition/future-use ranges; globally reachable IPv6 exceptions; mapped and NAT64-embedded IPv4 targets; malformed literals rejected"
           - "GeoIpRepositoryImplTest: provider 1 fails -> provider 2 used; 3 consecutive failures open the breaker for 60 s (virtual clock); cache hit avoids network"
           - "Provider parsers: fixtures for each provider -> HopGeoLocation; CountryFlags('GB') == '🇬🇧'; countryName('DE') == 'Germany'"
           - "TracerouteViewModelTest: HopEnriched merges into Running/Finished hop lists without reordering"
-          - "TracerouteScreenTest: min/avg/max text visible when probesPerHop=3; flag emoji present"
+          - "TracerouteScreenTest: per-probe success/no-reply markers and accessible numbered outcomes, min/avg/max visible when probesPerHop=3; flag emoji present"
         expect: "RED"
       green: { steps: ["Implement; IPv6 per A3."], expect: "PASS" }
     acceptance_criteria: ["Trace to 1.1.1.1 with 3 probes: all rows show stats; hostnames/geo fill in within ~2 s after each hop instead of gating it."]
 
   - id: P11-T3
     title: "Port scanner: banner v2 + service probes + TLS peek"
-    status: todo
+    status: in_progress
+    current_progress:
+      date: "2026-09-25"
+      implemented: "The scanner reads up to 1,024 bytes across partial reads, recomputes each read timeout from the remaining per-port budget, retains partial banners on EOF/timeout/read failure, and discloses byte/display truncation accessibly in the UI and report. Optional aggressive probing is limited to open ports: HTTP sends HEAD, SMTP completes the greeting and EHLO exchange within the byte/time budget, and known TLS ports inspect the certificate subject using the selected network, original host identity, and operation-session cleanup. TLS subjects are sanitized before persistence and again at display/report boundaries. Passive mode performs no protocol writes or TLS peek."
+      fixed_in: "93522c7"
+      validation: "The serialized core-network/core-domain/app JVM suites passed 1,270 (one skipped)/216/549 tests with zero failures or errors, including BannerReader, HTTP/SMTP/TLS probe, TLS-subject sanitizer and repository cases. Android-test Kotlin compilation, lintDebug, both APK assemblies, all Kover gates, and the unsigned-release smoke check passed. No emulator, host snmpd, or live HTTP/SMTP/TLS server was used."
+      remaining: "P11-T3 remains in_progress for live HTTP/SMTP/TLS server acceptance and device UI checks. FTP/SSH/POP/IMAP active greeting probes from the broader phase goal are not implemented by this slice; those ports remain passive."
     tdd:
       red:
         tests:
           - "ServiceProbesTest: greeting for 80 contains 'HEAD / HTTP/1.0' and Host header; 25 has passive-then-EHLO; 443 -> TLS_PEEK kind"
-          - "BannerReadTest: 1024 bytes read -> truncated=true; 100 bytes -> false; sanitizer applied"
+          - "BannerReaderTest: 1,024-byte cap and sanitizer truncation are disclosed; shorter EOF/timeout reads remain untruncated and partial reads are accumulated"
           - "PortScanRepositoryImplTest: aggressiveProbes=false -> passive only; OPEN 443 with fake handshake engine -> tlsSubject 'CN=example'"
-          - "PortsScreenTest: truncated banner shows '…' indicator; TLS subject row"
+          - "PortsScreenTest: truncated banner shows accessible '…' indicator; TLS subject row"
         expect: "RED"
       green: { steps: ["Implement; keep BannerSanitizer."], expect: "PASS" }
     acceptance_criteria: ["Scanning a web server shows 'HTTP/1.0 200 OK …' banner; 443 shows subject."]

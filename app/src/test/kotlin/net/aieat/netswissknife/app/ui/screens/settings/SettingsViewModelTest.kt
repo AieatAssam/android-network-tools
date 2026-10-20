@@ -137,6 +137,14 @@ class SettingsViewModelTest {
         }
 
         @Test
+        fun `defaultConcurrency clamps stale stored values for display`() = runTest {
+            val seeded = mutablePreferencesOf(AppPreferenceKeys.DEFAULT_CONCURRENCY to 501)
+            prefsFlow.value = seeded
+
+            assertEquals(500, viewModel.defaultConcurrency.value)
+        }
+
+        @Test
         fun `setWifiRefreshInterval writes values and Off sentinel`() = runTest {
             viewModel.setWifiRefreshInterval(60_000L)
             assertEquals(60_000L, prefsFlow.value[AppPreferenceKeys.WIFI_REFRESH_INTERVAL_MS])

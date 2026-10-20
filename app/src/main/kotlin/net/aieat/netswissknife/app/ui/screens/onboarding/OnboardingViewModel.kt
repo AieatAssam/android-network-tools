@@ -15,17 +15,21 @@ import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import javax.inject.Inject
 
 @HiltViewModel
-class OnboardingViewModel @Inject constructor(
-    private val dataStore: DataStore<Preferences>
-) : ViewModel() {
+class OnboardingViewModel
+    @Inject
+    constructor(
+        private val dataStore: DataStore<Preferences>,
+    ) : ViewModel() {
+        // Wait for the stored choice before showing the modal sheet. An optimistic
+        // true value briefly opens it for returning users on every process start.
+        val shouldShowOnboarding: StateFlow<Boolean?> =
+            dataStore.data
+                .map<Preferences, Boolean?> { prefs -> prefs[AppPreferenceKeys.ONBOARDING_COMPLETED] != true }
+                .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
-    val shouldShowOnboarding: StateFlow<Boolean> = dataStore.data
-        .map { prefs -> prefs[AppPreferenceKeys.ONBOARDING_COMPLETED] != true }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
-
-    fun completeOnboarding() {
-        viewModelScope.launch {
-            dataStore.edit { it[AppPreferenceKeys.ONBOARDING_COMPLETED] = true }
+        fun completeOnboarding() {
+            viewModelScope.launch {
+                dataStore.edit { it[AppPreferenceKeys.ONBOARDING_COMPLETED] = true }
+            }
         }
     }
-}

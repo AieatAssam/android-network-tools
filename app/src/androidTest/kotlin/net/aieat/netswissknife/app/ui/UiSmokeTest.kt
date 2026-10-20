@@ -17,6 +17,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.platform.NetworkStatus
 import net.aieat.netswissknife.app.ui.navigation.AppNavHost
 import net.aieat.netswissknife.app.ui.screens.DnsScreen
 import net.aieat.netswissknife.app.ui.screens.DnsScreenTestTags
@@ -153,6 +154,9 @@ class UiSmokeTest {
         every { viewModel.selectedServer } returns MutableStateFlow(DnsServer.System())
         every { viewModel.customServerAddress } returns MutableStateFlow("")
         every { viewModel.recentHosts } returns MutableStateFlow(emptyList())
+        every { viewModel.networkStatus } returns MutableStateFlow(
+            NetworkStatus(hasInternet = true, hasLocalNetwork = true)
+        )
         return viewModel
     }
 }

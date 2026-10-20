@@ -1,10 +1,16 @@
 package net.aieat.netswissknife.core.domain
 
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
+import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.HostValidator
+import net.aieat.netswissknife.core.network.operation.OperationBudget
+import net.aieat.netswissknife.core.network.operation.OperationRequirement
+import net.aieat.netswissknife.core.network.operation.OperationSession
+import net.aieat.netswissknife.core.network.portscan.PortScanOperationBudget
 import net.aieat.netswissknife.core.network.portscan.PortScanRepository
 import net.aieat.netswissknife.core.network.portscan.PortScanUpdate
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
 
 /**
  * Use case that validates [PortScanParams] and delegates to [PortScanRepository].
@@ -16,81 +22,166 @@ import kotlinx.coroutines.flow.flow
  * - timeoutMs must be in 100–30 000
  * - concurrency must be in 1–500
  */
-class PortScanUseCase(private val repository: PortScanRepository) {
-
-    operator fun invoke(params: PortScanParams): Flow<PortScanFlowResult> = flow {
-        val host = HostValidator.normalize(params.host) ?: params.host.trim()
-
-        // Validate host
-        if (host.isBlank()) {
-            emit(PortScanFlowResult.ValidationError("Host must not be blank"))
-            return@flow
-        }
-        if (!HostValidator.isValidHostname(host)) {
-            emit(PortScanFlowResult.ValidationError("Invalid hostname or IP address: \"$host\""))
-            return@flow
-        }
-
-        // Validate timeout
-        if (params.timeoutMs < 100 || params.timeoutMs > 30_000) {
-            emit(PortScanFlowResult.ValidationError("Timeout must be between 100 ms and 30 000 ms"))
-            return@flow
-        }
-
-        // Validate concurrency
-        if (params.concurrency < 1 || params.concurrency > 500) {
-            emit(PortScanFlowResult.ValidationError("Concurrency must be between 1 and 500"))
-            return@flow
-        }
-
-        // Resolve ports to scan
-        val portsToScan: List<Int> = if (params.preset == PortScanPreset.CUSTOM) {
-            if (params.startPort < 1 || params.startPort > 65_535) {
-                emit(PortScanFlowResult.ValidationError("Start port must be between 1 and 65 535"))
-                return@flow
-            }
-            if (params.endPort < 1 || params.endPort > 65_535) {
-                emit(PortScanFlowResult.ValidationError("End port must be between 1 and 65 535"))
-                return@flow
-            }
-            if (params.startPort > params.endPort) {
-                emit(PortScanFlowResult.ValidationError("Start port must be ≤ end port"))
-                return@flow
-            }
-            val rangeSize = params.endPort - params.startPort + 1
-            if (rangeSize > 10_000) {
-                emit(PortScanFlowResult.ValidationError("Custom range must not exceed 10 000 ports (got $rangeSize)"))
-                return@flow
-            }
-            (params.startPort..params.endPort).toList()
-        } else {
-            params.preset.ports
-        }
-
-        if (portsToScan.isEmpty()) {
-            emit(PortScanFlowResult.ValidationError("No ports to scan in the selected preset"))
-            return@flow
-        }
-
-        // Delegate to repository and map updates
-        repository.scan(
-            host = host,
-            ports = portsToScan,
-            timeoutMs = params.timeoutMs,
-            concurrency = params.concurrency
-        ).collect { update ->
-            when (update) {
-                is PortScanUpdate.PortResult -> emit(
-                    PortScanFlowResult.PortScanned(
-                        result = update.result,
-                        scannedCount = update.scannedCount,
-                        totalCount = update.totalCount
-                    )
-                )
-                is PortScanUpdate.Complete -> emit(
-                    PortScanFlowResult.ScanComplete(update.summary)
-                )
-            }
-        }
+class PortScanUseCase(
+    private val repository: PortScanRepository,
+) {
+    /** Creates one monotonic session sized for this scan's work and effective concurrency. */
+    fun newSession(params: PortScanParams): OperationSession {
+        val concurrency = params.concurrency.coerceIn(1, PortScanOperationBudget.MAX_CONCURRENCY)
+        return OperationSession(
+            OperationBudget.start(
+                requirement = OperationRequirement.ANY_NETWORK,
+                timeoutMillis = PortScanDeadlineBudget.sessionTimeoutMillis(params),
+                maxConcurrentProbes = concurrency,
+            ),
+        )
     }
+
+    operator fun invoke(params: PortScanParams): Flow<PortScanFlowResult> =
+        flow {
+            emitAll(execute(params, newSession(params)))
+        }
+
+    operator fun invoke(
+        params: PortScanParams,
+        operationSession: OperationSession,
+    ): Flow<PortScanFlowResult> = execute(params, operationSession)
+
+    private fun execute(
+        params: PortScanParams,
+        operationSession: OperationSession?,
+    ): Flow<PortScanFlowResult> =
+        flow {
+            val host = HostValidator.normalize(params.host) ?: params.host.trim()
+
+            // Validate host
+            if (host.isBlank()) {
+                emit(
+                    PortScanFlowResult.ValidationError(
+                        validationError(ErrorCode.HOST_BLANK, "Host must not be blank"),
+                    ),
+                )
+                return@flow
+            }
+            if (!HostValidator.isValidHostname(host)) {
+                emit(PortScanFlowResult.ValidationError(validationError(ErrorCode.HOST_INVALID, "Invalid hostname or IP address: \"$host\"", host)))
+                return@flow
+            }
+
+            // Validate timeout
+            if (params.timeoutMs < 100 || params.timeoutMs > 30_000) {
+                emit(PortScanFlowResult.ValidationError(validationError(ErrorCode.TIMEOUT_OUT_OF_RANGE, "Timeout must be between 100 ms and 30 000 ms", 100, 30_000)))
+                return@flow
+            }
+
+            // Validate concurrency
+            if (params.concurrency < 1 || params.concurrency > 500) {
+                emit(PortScanFlowResult.ValidationError(validationError(ErrorCode.CONCURRENCY_OUT_OF_RANGE, "Concurrency must be between 1 and 500", 1, 500)))
+                return@flow
+            }
+
+            // Resolve ports to scan
+            val portsToScan: List<Int> =
+                if (params.preset == PortScanPreset.CUSTOM) {
+                    if (params.startPort < 1 || params.startPort > 65_535) {
+                        emit(PortScanFlowResult.ValidationError(validationError(ErrorCode.PORT_OUT_OF_RANGE, "Start port must be between 1 and 65 535", params.startPort, 1, 65_535)))
+                        return@flow
+                    }
+                    if (params.endPort < 1 || params.endPort > 65_535) {
+                        emit(PortScanFlowResult.ValidationError(validationError(ErrorCode.PORT_OUT_OF_RANGE, "End port must be between 1 and 65 535", params.endPort, 1, 65_535)))
+                        return@flow
+                    }
+                    if (params.startPort > params.endPort) {
+                        emit(PortScanFlowResult.ValidationError(validationError(ErrorCode.PORT_RANGE_INVERTED, "Start port must be ≤ end port", params.startPort, params.endPort)))
+                        return@flow
+                    }
+                    val rangeSize = params.endPort - params.startPort + 1
+                    if (rangeSize > 10_000) {
+                        emit(PortScanFlowResult.ValidationError(validationError(ErrorCode.PORT_RANGE_TOO_LARGE, "Custom range must not exceed 10 000 ports (got $rangeSize)", 10_000, rangeSize)))
+                        return@flow
+                    }
+                    (params.startPort..params.endPort).toList()
+                } else {
+                    params.preset.ports
+                }
+
+            if (portsToScan.isEmpty()) {
+                emit(
+                    PortScanFlowResult.ValidationError(
+                        validationError(
+                            ErrorCode.PORT_SELECTION_EMPTY,
+                            "No ports to scan in the selected preset",
+                        ),
+                    ),
+                )
+                return@flow
+            }
+
+            val estimate =
+                PortScanDeadlineBudget.estimate(
+                    portCount = portsToScan.size,
+                    timeoutMs = params.timeoutMs,
+                    requestedConcurrency = params.concurrency,
+                    sessionConcurrency = operationSession?.budget?.maxConcurrentProbes ?: params.concurrency,
+                )
+            if (estimate.exceedsHardCeiling) {
+                emit(
+                    PortScanFlowResult.ValidationError(
+                        validationError(
+                            ErrorCode.OPERATION_DEADLINE_EXCEEDED,
+                            "This scan may exceed the 15-minute operation limit; increase concurrency or reduce the port range or timeout.",
+                        ),
+                    ),
+                )
+                return@flow
+            }
+
+            // Delegate to repository and map updates
+            val updates =
+                if (operationSession == null) {
+                    repository.scan(
+                        host = host,
+                        ports = portsToScan,
+                        timeoutMs = params.timeoutMs,
+                        concurrency = params.concurrency,
+                    )
+                } else {
+                    repository.scan(
+                        host = host,
+                        ports = portsToScan,
+                        timeoutMs = params.timeoutMs,
+                        concurrency = params.concurrency,
+                        aggressiveProbes = params.aggressiveProbes,
+                        operationSession = operationSession,
+                    )
+                }
+            updates.collect { update ->
+                when (update) {
+                    is PortScanUpdate.Started -> {
+                        emit(
+                            PortScanFlowResult.Started(
+                                resolvedIp = update.resolvedIp,
+                                totalCount = update.totalCount,
+                            ),
+                        )
+                    }
+
+                    is PortScanUpdate.PortResult -> {
+                        emit(
+                            PortScanFlowResult.PortScanned(
+                                result = update.result,
+                                scannedCount = update.scannedCount,
+                                totalCount = update.totalCount,
+                            ),
+                        )
+                    }
+
+                    is PortScanUpdate.Complete -> {
+                        emit(
+                            PortScanFlowResult.ScanComplete(update.summary),
+                        )
+                    }
+                }
+            }
+        }
 }

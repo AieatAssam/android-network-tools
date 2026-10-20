@@ -1,20 +1,438 @@
 package net.aieat.netswissknife.core.network.lan
 
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.flow.buffer
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
+import net.aieat.netswissknife.core.network.net.FakeNetworkBinder
+import net.aieat.netswissknife.core.network.testkit.ScriptedSocket
+import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationBudget
+import net.aieat.netswissknife.core.network.operation.OperationRequirement
+import net.aieat.netswissknife.core.network.operation.OperationSession
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
+import java.net.Socket
+import java.net.SocketAddress
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 @DisplayName("LanScanRepositoryImpl")
 class LanScanRepositoryImplTest {
+
+    @Test
+    fun `direct repository request above the hard ceiling is rejected before probing`() = runTest {
+        val icmpCalls = AtomicInteger()
+        val repo = LanScanRepositoryImpl(
+            arpTableReader = emptyArpReader,
+            icmpProbe = IcmpProbe { _, _ -> icmpCalls.incrementAndGet(); null },
+            tcpProbe = TcpPresenceProbe { _, _, _ -> TcpPresence.None },
+            nameProbes = emptyList(),
+        )
+        val request = LanScanRequest(
+            subnet = "192.168.1.0/30",
+            timeoutMs = 10_000,
+            concurrency = 1,
+            presencePorts = List(10_000) { 80 },
+            enableNameProbes = false,
+        )
+
+        val failure = runCatching { repo.scan(request).toList() }.exceptionOrNull()
+
+        assertTrue(failure is IllegalArgumentException)
+        assertTrue((failure as? IllegalArgumentException)?.message.orEmpty().contains("10-minute limit"))
+        assertEquals(0, icmpCalls.get())
+    }
+
+    @Test
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun `scan worker count never exceeds the caller session budget`() = runTest {
+        val sessionLimit = 2
+        val requestConcurrency = 6
+        val activeProbes = AtomicInteger()
+        val maximumActiveProbes = AtomicInteger()
+        val startedProbes = AtomicInteger()
+        val limitReached = CompletableDeferred<Unit>()
+        val releaseProbes = CompletableDeferred<Unit>()
+        val session = OperationSession(
+            OperationBudget.start(
+                requirement = OperationRequirement.LOCAL_NETWORK,
+                maxConcurrentProbes = sessionLimit,
+            ),
+        )
+        val repo = LanScanRepositoryImpl(
+            arpTableReader = emptyArpReader,
+            icmpProbe = IcmpProbe { _, _ ->
+                val active = activeProbes.incrementAndGet()
+                maximumActiveProbes.updateAndGet { previous -> maxOf(previous, active) }
+                if (startedProbes.incrementAndGet() == sessionLimit) limitReached.complete(Unit)
+                try {
+                    releaseProbes.await()
+                    null
+                } finally {
+                    activeProbes.decrementAndGet()
+                }
+            },
+            tcpProbe = TcpPresenceProbe { _, _, _ -> TcpPresence.None },
+            nameProbes = emptyList(),
+            macResolver = object : MacResolver {
+                override val supported = false
+                override suspend fun resolve(ip: String): String? = null
+            },
+            operationDispatcher = Dispatchers.Default,
+        )
+
+        val scan = async(Dispatchers.Default) {
+            repo.scan(
+                LanScanRequest(
+                    subnet = "192.168.1.0/29",
+                    timeoutMs = 500,
+                    concurrency = requestConcurrency,
+                    enableNameProbes = false,
+                ),
+                session,
+            ).toList()
+        }
+
+        try {
+            withContext(Dispatchers.Default) {
+                withTimeout(5_000) { limitReached.await() }
+            }
+            assertEquals(sessionLimit, activeProbes.get())
+            assertEquals(sessionLimit, maximumActiveProbes.get())
+        } finally {
+            releaseProbes.complete(Unit)
+        }
+        val updates = withContext(Dispatchers.Default) {
+            withTimeout(5_000) { scan.await() }
+        }
+        val summary = updates.filterIsInstance<LanScanUpdate.ScanComplete>().single().summary
+
+        assertEquals(6, summary.totalScanned)
+        assertEquals(6, startedProbes.get())
+        assertEquals(sessionLimit, maximumActiveProbes.get())
+    }
+
+    @Test
+    fun `slow collector backpressures completed hosts and scan resumes without loss`() =
+        runTest {
+            val concurrency = 2
+            val finiteProbeBound = 2 * concurrency + 2
+            val request =
+                LanScanRequest(
+                    subnet = "192.168.1.0/27",
+                    timeoutMs = 100,
+                    concurrency = 6,
+                    presencePorts = emptyList(),
+                    enableNameProbes = false,
+                )
+            val targetIps = SubnetUtils.parseSubnet(request.subnet)
+            val targetCount = targetIps.size
+            val icmpStarts = AtomicInteger()
+            val resultPathFilled = CountDownLatch(finiteProbeBound)
+            val firstProgress = CompletableDeferred<Unit>()
+            val resumeCollector = CompletableDeferred<Unit>()
+            val releaseLastProbe = CompletableDeferred<Unit>()
+            val probedIps = CopyOnWriteArrayList<String>()
+            val updates = CopyOnWriteArrayList<LanScanUpdate>()
+            val session =
+                OperationSession(
+                    OperationBudget.start(
+                        requirement = OperationRequirement.LOCAL_NETWORK,
+                        maxConcurrentProbes = concurrency,
+                    ),
+                )
+            val repo =
+                LanScanRepositoryImpl(
+                    arpTableReader = emptyArpReader,
+                    icmpProbe =
+                        IcmpProbe { ip, _ ->
+                            probedIps += ip
+                            val starts = icmpStarts.incrementAndGet()
+                            if (starts <= finiteProbeBound) {
+                                resultPathFilled.countDown()
+                            }
+                            if (starts == finiteProbeBound) releaseLastProbe.await()
+                            null
+                        },
+                    tcpProbe = TcpPresenceProbe { _, _, _ -> TcpPresence.None },
+                    nameProbes = emptyList(),
+                    operationDispatcher = Dispatchers.Default,
+                )
+            val scan =
+                backgroundScope.launch(Dispatchers.Default) {
+                    repo.scan(request, session).buffer(0).collect { update ->
+                        updates += update
+                        if (update is LanScanUpdate.ScanProgress) {
+                            firstProgress.complete(Unit)
+                            resumeCollector.await()
+                        }
+                    }
+                }
+
+            try {
+                withContext(Dispatchers.Default) {
+                    withTimeout(3_000) { firstProgress.await() }
+                }
+                assertTrue(
+                    withContext(Dispatchers.Default) {
+                        resultPathFilled.await(3, TimeUnit.SECONDS)
+                    },
+                    "the bounded completed-host path should fill while progress collection is blocked",
+                )
+
+                // The collector has received the first progress event and is blocked
+                // inside its handler. The merger can hold a second host at its blocked
+                // progress send, `completed` can hold `concurrency` hosts, and the
+                // workers can each have started one more probe: 2 * concurrency + 2.
+                assertEquals(finiteProbeBound, icmpStarts.get())
+                assertEquals(1, updates.count { it is LanScanUpdate.ScanProgress })
+
+                resumeCollector.complete(Unit)
+                releaseLastProbe.complete(Unit)
+                withContext(Dispatchers.Default) { withTimeout(5_000) { scan.join() } }
+            } finally {
+                resumeCollector.complete(Unit)
+                releaseLastProbe.complete(Unit)
+                withContext(Dispatchers.Default) { withTimeout(5_000) { scan.cancelAndJoin() } }
+            }
+
+            val progress = updates.filterIsInstance<LanScanUpdate.ScanProgress>()
+            val complete = updates.filterIsInstance<LanScanUpdate.ScanComplete>()
+            assertEquals(targetCount, progress.size)
+            assertEquals((1..targetCount).toList(), progress.map { it.scannedCount }.sorted())
+            assertTrue(progress.all { it.totalCount == targetCount })
+            assertEquals(1, complete.size)
+            assertEquals(targetCount, complete.single().summary.totalScanned)
+            assertEquals(targetCount, icmpStarts.get())
+            assertEquals(targetIps.sorted(), probedIps.sorted())
+        }
+
+    @Test
+    fun `cancelling a blocked TCP presence connect closes its socket before scan ends`() = runTest {
+        val socket = ScriptedSocket(blockConnectUntilClosed = true)
+        val updates = java.util.concurrent.CopyOnWriteArrayList<LanScanUpdate>()
+        val repo = LanScanRepositoryImpl(
+            hostChecker = null,
+            icmpProbe = IcmpProbe { _, _ -> null },
+            tcpProbe = null,
+            nameProbes = emptyList(),
+            macResolver = object : MacResolver {
+                override val supported = false
+                override suspend fun resolve(ip: String): String? = null
+            },
+            socketFactory = { socket },
+        )
+        val collector = backgroundScope.launch(Dispatchers.IO) {
+            repo.scan(
+                LanScanRequest(
+                    subnet = "192.168.1.0/30",
+                    timeoutMs = 500,
+                    concurrency = 1,
+                    presencePorts = listOf(80),
+                    enableNameProbes = false,
+                )
+            ).onEach(updates::add).toList()
+        }
+
+        assertTrue(
+            withContext(Dispatchers.IO) { socket.connectStarted.await(5, TimeUnit.SECONDS) },
+            "LAN TCP presence did not reach connect"
+        )
+        withContext(Dispatchers.Default) {
+            withTimeout(2_000) { collector.cancelAndJoin() }
+        }
+
+        assertTrue(socket.isClosed, "cancelling LAN scan must close its active TCP socket")
+        assertTrue(updates.none { it is LanScanUpdate.ScanComplete })
+    }
+
+    @Test
+    fun `cancelling a blocked TCP enrichment connect closes its socket before scan ends`() = runTest {
+        val socket = ScriptedSocket(blockConnectUntilClosed = true)
+        val updates = java.util.concurrent.CopyOnWriteArrayList<LanScanUpdate>()
+        val repo = LanScanRepositoryImpl(
+            icmpProbe = IcmpProbe { _, _ -> 1L },
+            nameProbes = emptyList(),
+            macResolver = object : MacResolver {
+                override val supported = false
+                override suspend fun resolve(ip: String): String? = null
+            },
+            socketFactory = { socket },
+        )
+        val collector = backgroundScope.launch(Dispatchers.IO) {
+            repo.scan(
+                LanScanRequest(
+                    subnet = "192.168.1.0/30",
+                    timeoutMs = 500,
+                    concurrency = 1,
+                    enableNameProbes = false,
+                )
+            ).onEach(updates::add).toList()
+        }
+
+        assertTrue(
+            withContext(Dispatchers.IO) { socket.connectStarted.await(5, TimeUnit.SECONDS) },
+            "LAN enrichment did not reach connect"
+        )
+        withContext(Dispatchers.Default) {
+            withTimeout(2_000) { collector.cancelAndJoin() }
+        }
+
+        assertTrue(socket.isClosed, "cancelling LAN scan must close its active enrichment socket")
+        assertTrue(updates.none { it is LanScanUpdate.ScanComplete })
+    }
+
+    @Test
+    fun `probe cancellation closes a sibling blocked TCP connect`() = runTest {
+        val socket = ScriptedSocket(blockConnectUntilClosed = true)
+        val updates = java.util.concurrent.CopyOnWriteArrayList<LanScanUpdate>()
+        val repo = LanScanRepositoryImpl(
+            icmpProbe = IcmpProbe { ip, _ ->
+                if (ip == "192.168.1.1") {
+                    check(socket.connectStarted.await(5, TimeUnit.SECONDS)) {
+                        "sibling TCP probe did not start"
+                    }
+                    throw CancellationException("probe cancelled")
+                }
+                null
+            },
+            nameProbes = emptyList(),
+            macResolver = object : MacResolver {
+                override val supported = false
+                override suspend fun resolve(ip: String): String? = null
+            },
+            socketFactory = { socket },
+        )
+        val collector = backgroundScope.launch(Dispatchers.IO) {
+            repo.scan(
+                LanScanRequest(
+                    subnet = "192.168.1.0/30",
+                    timeoutMs = 500,
+                    concurrency = 2,
+                    presencePorts = listOf(80),
+                    enableNameProbes = false,
+                )
+            ).onEach(updates::add).toList()
+        }
+
+        assertTrue(
+            withContext(Dispatchers.IO) { socket.connectStarted.await(5, TimeUnit.SECONDS) },
+            "sibling LAN TCP probe did not enter connect"
+        )
+        withContext(Dispatchers.Default) {
+            withTimeout(2_000) { collector.join() }
+        }
+
+        assertTrue(collector.isCancelled, "a probe-local cancellation must terminate the scan")
+        assertTrue(socket.isClosed, "a probe-local cancellation must close its sibling socket")
+        assertTrue(updates.none { it is LanScanUpdate.ScanComplete })
+    }
+
+    @Test
+    fun `caller session stop closes owned resources and prevents ScanComplete`() = runTest {
+        val socket = ScriptedSocket(blockConnectUntilClosed = true)
+        val callerResourceClosed = java.util.concurrent.CountDownLatch(1)
+        val session = OperationSession(
+            OperationBudget.start(
+                requirement = OperationRequirement.LOCAL_NETWORK,
+                maxConcurrentProbes = 1,
+            ),
+        )
+        session.resources.register(AutoCloseable { callerResourceClosed.countDown() })
+        val updates = java.util.concurrent.CopyOnWriteArrayList<LanScanUpdate>()
+        val repo = LanScanRepositoryImpl(
+            icmpProbe = IcmpProbe { _, _ -> null },
+            nameProbes = emptyList(),
+            macResolver = object : MacResolver {
+                override val supported = false
+                override suspend fun resolve(ip: String): String? = null
+            },
+            socketFactory = { socket },
+        )
+        val collector = backgroundScope.launch(Dispatchers.IO) {
+            repo.scan(
+                LanScanRequest(
+                    subnet = "192.168.1.0/30",
+                    timeoutMs = 500,
+                    concurrency = 1,
+                    enableNameProbes = false,
+                ),
+                session,
+            ).onEach(updates::add).toList()
+        }
+
+        assertTrue(
+            withContext(Dispatchers.IO) { socket.connectStarted.await(5, TimeUnit.SECONDS) },
+            "LAN TCP probe did not enter connect",
+        )
+        session.cancel(CancellationReason.USER_STOP)
+        withContext(Dispatchers.Default) {
+            withTimeout(2_000) { collector.join() }
+        }
+
+        assertEquals(CancellationReason.USER_STOP, session.cancellationReason)
+        assertTrue(socket.isClosed, "caller cancellation must close the active probe socket")
+        assertTrue(callerResourceClosed.await(2, TimeUnit.SECONDS), "caller resources must be closed")
+        assertTrue(updates.none { it is LanScanUpdate.ScanComplete })
+    }
+
+    @Test
+    fun `default TCP presence and enrichment probes bind local sockets before connect`() = runTest {
+        val binder = FakeNetworkBinder(shouldBindResult = true)
+        val connectedAfterBind = mutableListOf<Boolean>()
+        val repo = LanScanRepositoryImpl(
+            hostChecker = null,
+            arpTableReader = emptyArpReader,
+            portChecker = null,
+            icmpProbe = IcmpProbe { _, _ -> null },
+            macResolver = object : MacResolver {
+                override val supported = false
+                override suspend fun resolve(ip: String): String? = null
+            },
+            binder = binder,
+            socketFactory = {
+                object : Socket() {
+                    override fun connect(endpoint: SocketAddress?, timeout: Int) {
+                        connectedAfterBind += binder.boundTcpSockets.lastOrNull() === this
+                    }
+                }
+            }
+        )
+
+        val complete = repo.scan(
+            LanScanRequest(
+                subnet = subnet24,
+                timeoutMs = 100,
+                concurrency = 1,
+                presencePorts = listOf(80),
+                enableNameProbes = false
+            )
+        ).filterIsInstance<LanScanUpdate.ScanComplete>().first()
+
+        assertEquals(2, complete.summary.aliveHosts)
+        assertTrue(connectedAfterBind.isNotEmpty())
+        assertTrue(connectedAfterBind.all { it })
+        assertEquals(connectedAfterBind.size, binder.boundTcpSockets.size)
+        assertTrue(binder.tcpSocketBoundStatesAtBind.all { !it })
+    }
 
     /** Only 192.168.1.1 is "alive". */
     private val aliveIp = "192.168.1.1"
@@ -184,6 +602,180 @@ class LanScanRepositoryImplTest {
                 .first()
                 .host
             assertTrue(host.vendor == null)
+        }
+
+        @Test
+        fun `final ARP snapshot enriches staggered hosts with bounded reads`() = runTest {
+            val initialTable = """
+                IP address       HW type Flags HW address            Mask     Device
+                192.168.1.1      0x1     0x2   aa:bb:cc:dd:ee:01     *        wlan0
+            """.trimIndent()
+            val completedTable = initialTable + """
+
+                192.168.1.2      0x1     0x2   aa:bb:cc:dd:ee:02     *        wlan0
+            """.trimIndent()
+            val firstProbeRead = CountDownLatch(1)
+            var arpReads = 0
+            val repo = LanScanRepositoryImpl(
+                hostChecker = { ip, _ ->
+                    if (ip == "192.168.1.2") {
+                        assertTrue(firstProbeRead.await(10, TimeUnit.SECONDS))
+                    }
+                    5L
+                },
+                arpTableReader = {
+                    arpReads++
+                    if (arpReads == 1) {
+                        firstProbeRead.countDown()
+                        initialTable
+                    } else {
+                        completedTable
+                    }
+                },
+                portChecker = noOpenPortsChecker,
+            )
+
+            val summary = repo.scan(subnet24, 1000, concurrency = 2)
+                .filterIsInstance<LanScanUpdate.ScanComplete>()
+                .first()
+                .summary
+
+            assertEquals(
+                mapOf(
+                    "192.168.1.1" to "AA:BB:CC:DD:EE:01",
+                    "192.168.1.2" to "AA:BB:CC:DD:EE:02",
+                ),
+                summary.hosts.associate { it.ip to it.macAddress },
+            )
+            assertTrue(summary.macResolutionSupported)
+            assertEquals(2, arpReads)
+        }
+
+        @Test
+        fun `fresh snapshot replaces a MAC retained from an earlier scan`() = runTest {
+            fun table(mac: String) = """
+                IP address       HW type Flags HW address            Mask     Device
+                192.168.1.1      0x1     0x2   $mac     *        wlan0
+            """.trimIndent()
+            val snapshots = listOf(
+                table("B8:27:EB:12:34:56"), // resolver's long-lived worker cache
+                table("B8:27:EB:12:34:56"), // first scan's final snapshot
+                table("3C:5A:B4:12:34:56"), // second scan observes a changed mapping
+            )
+            var reads = 0
+            val repo = makeRepo(
+                hostChecker = allAliveChecker,
+                arpReader = { snapshots[reads++] },
+            )
+            val request = LanScanRequest(subnet24)
+
+            suspend fun scanOnce() = repo.scan(request)
+                .filterIsInstance<LanScanUpdate.ScanComplete>()
+                .first()
+                .summary
+
+            assertEquals("B8:27:EB:12:34:56", scanOnce().hosts.first().macAddress)
+            val second = scanOnce()
+
+            assertEquals("3C:5A:B4:12:34:56", second.hosts.first().macAddress)
+            assertEquals(3, reads)
+            assertTrue(second.macResolutionSupported)
+        }
+
+        @Test
+        fun `failed fresh read retains worker MAC and source support`() = runTest {
+            val initialTable = """
+                IP address       HW type Flags HW address            Mask     Device
+                192.168.1.1      0x1     0x2   B8:27:EB:12:34:56     *        wlan0
+            """.trimIndent()
+            var reads = 0
+            val repo = makeRepo(
+                hostChecker = singleAliveChecker,
+                arpReader = {
+                    if (reads++ == 0) initialTable else error("/proc/net/arp unavailable")
+                },
+            )
+
+            val summary = repo.scan(subnet24, 1000, concurrency = 2)
+                .filterIsInstance<LanScanUpdate.ScanComplete>()
+                .first()
+                .summary
+
+            assertEquals("B8:27:EB:12:34:56", summary.hosts.single().macAddress)
+            assertTrue(summary.macResolutionSupported)
+            assertEquals(2, reads)
+        }
+
+        @Test
+        fun `final lookup failure retains worker MAC and completes scan`() = runTest {
+            var calls = 0
+            val resolver = object : MacResolver {
+                override val supported = true
+                override suspend fun resolve(ip: String): String? {
+                    calls++
+                    return if (calls == 1) "AA:BB:CC:DD:EE:FF" else error("lookup failed")
+                }
+            }
+            val repo = LanScanRepositoryImpl(
+                hostChecker = singleAliveChecker,
+                macResolver = resolver,
+                portChecker = noOpenPortsChecker,
+            )
+
+            val summary = repo.scan(subnet24, 1000, concurrency = 2)
+                .filterIsInstance<LanScanUpdate.ScanComplete>()
+                .first()
+                .summary
+
+            assertEquals("AA:BB:CC:DD:EE:FF", summary.hosts.single().macAddress)
+            assertTrue(summary.macResolutionSupported)
+        }
+
+        @Test
+        fun `null final snapshot lookup retains worker MAC and source`() = runTest {
+            val resolver = object : MacResolver {
+                override val supported = true
+                override suspend fun resolve(ip: String): String? = "AA:BB:CC:DD:EE:FF"
+                override fun snapshot(): MacResolver = object : MacResolver {
+                    override val supported = true
+                    override suspend fun resolve(ip: String): String? = null
+                }
+            }
+            val repo = LanScanRepositoryImpl(
+                hostChecker = singleAliveChecker,
+                macResolver = resolver,
+                portChecker = noOpenPortsChecker,
+            )
+
+            val host = repo.scan(subnet24, 1000, concurrency = 2)
+                .filterIsInstance<LanScanUpdate.ScanComplete>()
+                .first()
+                .summary.hosts.single()
+
+            assertEquals("AA:BB:CC:DD:EE:FF", host.macAddress)
+            assertEquals(MacSource.ARP, host.macSource)
+        }
+
+        @Test
+        fun `snapshot creation failure retains worker MAC and completes scan`() = runTest {
+            val resolver = object : MacResolver {
+                override val supported = true
+                override suspend fun resolve(ip: String): String? = "AA:BB:CC:DD:EE:FF"
+                override fun snapshot(): MacResolver = error("snapshot failed")
+            }
+            val repo = LanScanRepositoryImpl(
+                hostChecker = singleAliveChecker,
+                macResolver = resolver,
+                portChecker = noOpenPortsChecker,
+            )
+
+            val summary = repo.scan(subnet24, 1000, concurrency = 2)
+                .filterIsInstance<LanScanUpdate.ScanComplete>()
+                .first()
+                .summary
+
+            assertEquals("AA:BB:CC:DD:EE:FF", summary.hosts.single().macAddress)
+            assertTrue(summary.macResolutionSupported)
         }
     }
 

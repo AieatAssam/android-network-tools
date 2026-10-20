@@ -1,0 +1,38 @@
+review:
+  area: E03-T01 SpeedTest concurrency
+  status: source_review_and_full_jvm_suites_passed_device_gates_open
+  date: 2026-09-25
+  checked_commit: 75d451a87aad959491b7f387f2357f2e8583786b
+  branch: plan/comprehensive-review-2026-09-22
+
+scope:
+  - "SpeedTestOperation derives the default session concurrency from normalized download/upload stream counts plus one loaded-latency request."
+  - "SpeedTestViewModel waits for persisted settings, preserves stream-setting overrides made before initialization, and snapshots one normalized config for both session capacity and execution."
+  - "The repository passes its OperationSession to session-aware transfer-engine methods; OkHttp acquires a shared permit around each full transfer request, including body consumption."
+  - "Loaded RTT requests use the same OperationSession limiter, so throughput and loaded latency share one caller-declared cap."
+  - "Legacy TransferEngine implementations retain the existing methods and receive an explicit bounded stream count through the default session-aware adapter."
+  - "Configured stream IDs remain represented under a smaller caller cap; work queues at request permits rather than dropping configured streams in the OkHttp implementation."
+
+validation:
+  focused:
+    command: "./gradlew :core-network:test --tests 'net.aieat.netswissknife.core.network.speedtest.SpeedTestModelsTest' --tests 'net.aieat.netswissknife.core.network.speedtest.OkHttpTransferEngineTest' --tests 'net.aieat.netswissknife.core.network.speedtest.SpeedTestRepositoryImplTest' --tests 'net.aieat.netswissknife.core.network.speedtest.SpeedTestEngineRepositoryTest' --no-daemon --no-parallel"
+    result: "Passed 36 SpeedTest core tests, zero failures/errors/skips."
+  app_focused:
+    command: "./gradlew :app:testDebugUnitTest --tests 'net.aieat.netswissknife.app.ui.screens.speedtest.SpeedTestViewModelTest' --no-daemon --no-parallel"
+    result: "Passed all 14 SpeedTestViewModel tests, zero failures/errors/skips, including persisted 8/4 stream settings loaded on an immediate first start and a matching nine-request budget."
+  full:
+    commands:
+      - "./gradlew :core-network:test --no-daemon --no-parallel"
+      - "./gradlew :app:testDebugUnitTest --no-daemon --no-parallel"
+    result: "Core-network passed 1,310 tests (one skipped); app passed 575 tests; zero failures/errors."
+  integration:
+    - "MockWebServer plus OkHttp EventListener counts full call lifetimes and verifies a caller limit of three is never exceeded while all four configured download stream IDs and both upload IDs are observed."
+    - "Throttled transfer responses verify loaded RTT callStart occurs while transfer calls remain active; peak active calls equals the three-permit session cap."
+
+reviewers:
+  qa: "Found and prompted correction of a startup mismatch between the session config and persisted run config, then confirmed the cold-start snapshot and full-call overlap instrumentation. Final re-review found no remaining blocker."
+  adversarial: "Found and prompted correction of the same persisted-config/session-cap mismatch. Final re-review confirmed the same config snapshot drives both, and loaded RTT overlaps active transfer calls under the shared cap. No remaining semantic or lifecycle defect found."
+
+limits:
+  - "No emulator or device test was run."
+  - "E03-T01 phase-wide adapter coverage, device no-ANR behavior, and the <=500 ms cleanup measurement remain open."

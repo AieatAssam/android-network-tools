@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -17,6 +16,7 @@ import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -33,7 +33,9 @@ fun RecentHostsRow(
     onHostSelected: (String) -> Unit,
     onRemoveHost: (String) -> Unit,
     onClearAll: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    selectionEnabled: Boolean = true,
+    actionsEnabled: Boolean = true,
 ) {
     AnimatedVisibility(
         visible = recentHosts.isNotEmpty(),
@@ -59,6 +61,7 @@ fun RecentHostsRow(
                 items(recentHosts, key = { it }) { host ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         SuggestionChip(
+                            enabled = selectionEnabled,
                             onClick = { onHostSelected(host) },
                             label = {
                                 Text(
@@ -71,7 +74,8 @@ fun RecentHostsRow(
                         )
                         IconButton(
                             onClick = { onRemoveHost(host) },
-                            modifier = Modifier.size(32.dp).wrapContentSize(Alignment.Center)
+                            enabled = actionsEnabled,
+                            modifier = Modifier.minimumInteractiveComponentSize()
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Close,
@@ -85,7 +89,8 @@ fun RecentHostsRow(
             }
             IconButton(
                 onClick = onClearAll,
-                modifier = Modifier.size(40.dp)
+                enabled = actionsEnabled,
+                modifier = Modifier.minimumInteractiveComponentSize()
             ) {
                 Icon(
                     imageVector = Icons.Default.DeleteSweep,

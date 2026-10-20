@@ -74,7 +74,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -100,7 +99,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.stringArrayResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -116,10 +118,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
+import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
+import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
+import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
+import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
 import net.aieat.netswissknife.app.ui.components.ToolErrorCard
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
 import net.aieat.netswissknife.app.ui.components.ToolStopButton
@@ -129,16 +133,25 @@ import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.RecentHostsRow
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
 import net.aieat.netswissknife.app.ui.theme.AppMotion
+import net.aieat.netswissknife.app.ui.i18n.asString
 import net.aieat.netswissknife.app.ui.screens.ping.PingUiState
 import net.aieat.netswissknife.app.ui.screens.ping.PingViewModel
+import net.aieat.netswissknife.app.ui.screens.ping.pingChartSuccessSegments
+import net.aieat.netswissknife.app.ui.screens.ping.PingCsvSerializer
 import net.aieat.netswissknife.app.util.shareText
+import net.aieat.netswissknife.app.util.shareCsvFile
+import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.ping.PingPacketResult
-import net.aieat.netswissknife.core.network.ping.PingResult
 import net.aieat.netswissknife.core.network.ping.PingStats
 import net.aieat.netswissknife.core.network.ping.PingStatus
 
 object PingScreenTestTags {
     const val CONTENT_LIST = "ping_content_list"
+    const val COUNT_SLIDER = "ping_count_slider"
+    const val HOST_FIELD = "ping_host_field"
+    const val SOURCE_CONTEXT = "ping_source_context"
+    const val CLEAR_PREFILL_ACTION = "ping_clear_prefill_action"
+    const val INVALID_HANDOFF = "ping_invalid_handoff"
 
     /** Index of the idle/running/finished/error results panel within [CONTENT_LIST]. */
     const val RESULTS_PANEL_INDEX = 2
@@ -148,18 +161,32 @@ object PingScreenTestTags {
 fun PingScreen(
     viewModel: PingViewModel = hiltViewModel()
 ) {
-    val requestLocalNetworkPermission = rememberLocalNetworkPermissionRequester()
-    LaunchedEffect(Unit) { requestLocalNetworkPermission() }
+    val requestLocalNetworkPermission = rememberLocalNetworkPermissionRequester(viewModel::startPing)
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val announcementPhase = when (uiState) {
+        is PingUiState.Idle -> null
+        is PingUiState.Running -> ToolAnnouncementPhase.RUNNING
+        // Packet loss is a measured result, not an incomplete operation.
+        is PingUiState.Finished -> ToolAnnouncementPhase.FINISHED
+        is PingUiState.Error -> ToolAnnouncementPhase.ERROR
+    }
+    val networkStatus by viewModel.networkStatus.collectAsStateWithLifecycle()
     val host by viewModel.host.collectAsStateWithLifecycle()
     val count by viewModel.count.collectAsStateWithLifecycle()
     val timeoutMs by viewModel.timeoutMs.collectAsStateWithLifecycle()
-    var payloadBytes by remember { mutableIntStateOf(56) }
-    var ttl by remember { mutableIntStateOf(64) }
-    var intervalMs by remember { mutableIntStateOf(1_000) }
+    val payloadBytes by viewModel.payloadBytes.collectAsStateWithLifecycle()
+    val ttl by viewModel.ttl.collectAsStateWithLifecycle()
+    val intervalMs by viewModel.intervalMs.collectAsStateWithLifecycle()
     val continuousMode by viewModel.continuousMode.collectAsStateWithLifecycle()
     val recentHosts by viewModel.recentHosts.collectAsStateWithLifecycle()
+    val hasInvalidHandoff by viewModel.hasInvalidHandoff.collectAsStateWithLifecycle()
+    val sourceContext by viewModel.sourceContextState.collectAsStateWithLifecycle()
+    val sourceLabel = when (sourceContext) {
+        net.aieat.netswissknife.app.ui.navigation.ToolSource.LAN -> R.string.ping_source_lan
+        net.aieat.netswissknife.app.ui.navigation.ToolSource.MDNS -> R.string.ping_source_mdns
+        else -> null
+    }
 
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -197,7 +224,48 @@ fun PingScreen(
         ) {
             // ── Hero header ─────────────────────────────────────────────────
             item {
-                PingHeroHeader(onHelpClick = { showHelp = true })
+                Box {
+                    ToolStateAnnouncer(stringResource(R.string.help_ping_title), announcementPhase)
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        PingHeroHeader(onHelpClick = { showHelp = true })
+                        NetworkStatusBanner(networkStatus, scope = NetworkStatusScope.INTERNET)
+                    }
+                }
+            }
+
+            if (hasInvalidHandoff) {
+                item {
+                    Text(
+                        text = stringResource(R.string.ping_invalid_handoff),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.testTag(PingScreenTestTags.INVALID_HANDOFF),
+                    )
+                }
+            }
+
+            if (sourceLabel != null) {
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = stringResource(sourceLabel),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.secondary,
+                            modifier = Modifier.testTag(PingScreenTestTags.SOURCE_CONTEXT),
+                        )
+                        TextButton(
+                            onClick = viewModel::clearPrefill,
+                            enabled = uiState !is PingUiState.Running,
+                            modifier = Modifier.testTag(PingScreenTestTags.CLEAR_PREFILL_ACTION),
+                        ) {
+                            Text(stringResource(R.string.clear))
+                        }
+                    }
+                }
             }
 
             // ── Input card ──────────────────────────────────────────────────
@@ -215,11 +283,11 @@ fun PingScreen(
                     onHostChange = viewModel::onHostChange,
                     onCountChange = viewModel::onCountChange,
                     onTimeoutChange = viewModel::onTimeoutChange,
-                    onPayloadSizeChange = { payloadBytes = it; viewModel.onPayloadSizeChange(it) },
-                    onTtlChange = { ttl = it; viewModel.onTtlChange(it) },
-                    onIntervalChange = { intervalMs = it; viewModel.onIntervalChange(it) },
+                    onPayloadSizeChange = viewModel::onPayloadSizeChange,
+                    onTtlChange = viewModel::onTtlChange,
+                    onIntervalChange = viewModel::onIntervalChange,
                     onToggleContinuous = viewModel::onToggleContinuous,
-                    onStart = viewModel::startPing,
+                    onStart = { requestLocalNetworkPermission(host) },
                     onStop = viewModel::onStop,
                     onRemoveRecentHost = viewModel::removeRecentHost,
                     onClearRecentHosts = viewModel::clearRecentHosts
@@ -246,8 +314,8 @@ fun PingScreen(
                             onClear = viewModel::onClearResults
                         )
                         is PingUiState.Error -> PingErrorPanel(
-                            message = state.message,
-                            onRetry = viewModel::onRetry,
+                            message = state.text.asString(),
+                            onRetry = { requestLocalNetworkPermission(host) },
                             onClear = viewModel::onClearResults
                         )
                     }
@@ -347,7 +415,9 @@ private fun PingInputCard(
     onClearRecentHosts: () -> Unit
 ) {
     val keyboardController = LocalSoftwareKeyboardController.current
-    val isHostInvalid = host.isNotBlank() && host.contains(' ')
+    val normalizedHost = HostValidator.normalize(host)
+    val isHostInvalid = host.isNotBlank() && normalizedHost == null
+    val canStart = normalizedHost != null
 
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -381,9 +451,9 @@ private fun PingInputCard(
                 ),
                 keyboardActions = KeyboardActions(onGo = {
                     keyboardController?.hide()
-                    if (!isRunning) onStart()
+                    if (!isRunning && canStart) onStart()
                 }),
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().testTag(PingScreenTestTags.HOST_FIELD),
                 enabled = !isRunning
             )
 
@@ -428,10 +498,11 @@ private fun PingInputCard(
                 PingSliderRow(
                     label = "${stringResource(R.string.ping_count_label)}: $count",
                     value = count.toFloat(),
-                    valueRange = 1f..50f,
-                    steps = 48,
+                    valueRange = 1f..100f,
+                    steps = 98,
                     onValueChange = { onCountChange(it.toInt()) },
-                    enabled = !isRunning
+                    enabled = !isRunning,
+                    sliderTestTag = PingScreenTestTags.COUNT_SLIDER
                 )
             }
 
@@ -466,7 +537,7 @@ private fun PingInputCard(
                         onStart()
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    enabled = host.isNotBlank() && !isHostInvalid
+                    enabled = canStart && !isRunning
                 ) {
                     Icon(Icons.Default.Speed, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
@@ -537,7 +608,8 @@ private fun PingSliderRow(
     valueRange: ClosedFloatingPointRange<Float>,
     steps: Int,
     onValueChange: (Float) -> Unit,
-    enabled: Boolean
+    enabled: Boolean,
+    sliderTestTag: String? = null
 ) {
     Column {
         Text(
@@ -551,7 +623,9 @@ private fun PingSliderRow(
             valueRange = valueRange,
             steps = steps,
             enabled = enabled,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(if (sliderTestTag == null) Modifier else Modifier.testTag(sliderTestTag))
         )
     }
 }
@@ -661,7 +735,7 @@ private fun PingRunningPanel(state: PingUiState.Running) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 if (state.packets.isNotEmpty()) {
-                    val liveStats = PingStats.compute(state.packets)
+                    val liveStats = state.stats ?: PingStats.compute(state.packets)
                     HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -732,6 +806,13 @@ private fun PingFinishedPanel(
     val result = state.result
     val context = LocalContext.current
     val shareSubject = stringResource(R.string.share_subject_ping, result.host)
+    val shareSummary = stringResource(
+        R.string.ping_share_summary,
+        result.host,
+        result.stats.sent,
+        result.stats.received,
+        result.stats.lossPercent,
+    )
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         // Stats card
@@ -756,10 +837,21 @@ private fun PingFinishedPanel(
                         fontWeight = FontWeight.SemiBold
                     )
                     IconButton(onClick = {
-                        coroutineScope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("", buildCsvOutput(result)))) }
+                        coroutineScope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("", PingCsvSerializer.serialize(result)))) }
                     }) {
                         Icon(Icons.Default.ContentCopy, contentDescription = stringResource(R.string.ping_copy_csv))
                     }
+                }
+                if (result.packets.size < result.stats.sent) {
+                    Text(
+                        text = stringResource(
+                            R.string.ping_showing_recent,
+                            result.packets.size,
+                            result.stats.sent,
+                        ),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
                 Spacer(modifier = Modifier.height(4.dp))
                 result.packets.forEach { packet ->
@@ -795,21 +887,10 @@ private fun PingFinishedPanel(
                 onClick = {
                     val logFile = state.sessionLogFile
                     if (logFile != null) {
-                        // Continuous session: read full log from file on IO then share
-                        coroutineScope.launch(Dispatchers.IO) {
-                            val text = runCatching { logFile.readText() }.getOrElse { "" }
-                            if (text.isNotEmpty()) {
-                                withContext(Dispatchers.Main) {
-                                    context.shareText(
-                                        text = text,
-                                        subject = shareSubject
-                                    )
-                                }
-                            }
-                        }
+                        context.shareCsvFile(logFile, shareSubject, shareSummary)
                     } else {
                         context.shareText(
-                            text = buildCsvOutput(result),
+                            text = PingCsvSerializer.serialize(result),
                             subject = shareSubject
                         )
                     }
@@ -999,8 +1080,32 @@ private fun LiveStatLabel(label: String, value: String, color: Color = MaterialT
 
 @Composable
 private fun RttChartCard(packets: List<PingPacketResult>) {
-    val successPackets = packets.filter { it.rtTimeMs != null }
-    if (successPackets.isEmpty()) return
+    val successfulPackets = packets.filter { it.status == PingStatus.SUCCESS && it.rtTimeMs != null }
+    val successfulRtts = successfulPackets.mapNotNull { it.rtTimeMs }
+    if (successfulRtts.isEmpty()) return
+
+    val minRtt = successfulRtts.minOrNull() ?: return
+    val measuredMaxRtt = successfulRtts.maxOrNull() ?: return
+    val maxRtt = measuredMaxRtt.coerceAtLeast(1L)
+    val averageRtt = successfulRtts.average()
+    val failedMarkerCount = packets.count { it.status != PingStatus.SUCCESS || it.rtTimeMs == null }
+    val chartDescription = stringResource(
+        R.string.ping_chart_a11y,
+        successfulRtts.size,
+        0,
+        maxRtt,
+        stringResource(R.string.ping_rtt_min),
+        minRtt,
+        stringResource(R.string.ping_rtt_avg),
+        averageRtt,
+        stringResource(R.string.ping_rtt_max),
+        measuredMaxRtt,
+        pluralStringResource(
+            R.plurals.ping_chart_failed_markers,
+            failedMarkerCount,
+            failedMarkerCount,
+        ),
+    )
 
     val primaryColor = MaterialTheme.colorScheme.primary
     val successColor = MaterialTheme.colorScheme.tertiary
@@ -1025,8 +1130,8 @@ private fun RttChartCard(packets: List<PingPacketResult>) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(120.dp)
+                    .semantics { contentDescription = chartDescription }
             ) {
-                val maxRtt = successPackets.mapNotNull { it.rtTimeMs }.maxOrNull() ?: 1L
                 val chartWidth = size.width
                 val chartHeight = size.height
 
@@ -1049,48 +1154,50 @@ private fun RttChartCard(packets: List<PingPacketResult>) {
                     )
                 }
 
-                // Build path of RTT values
-                val points = mutableListOf<Offset>()
-                packets.forEachIndexed { index, packet ->
-                    val x = leftPad + (chartWidth - leftPad - edgePad) * index / (packets.size - 1).coerceAtLeast(1)
-                    val rtt = packet.rtTimeMs
-                    if (rtt != null) {
-                        val y = chartHeight - edgePad - (rtt.toFloat() / maxRtt) * (chartHeight - 2 * edgePad)
-                        points.add(Offset(x, y))
+                // Keep each contiguous success run separate so a line never bridges lost packets.
+                val chartSegments = pingChartSuccessSegments(packets)
+                chartSegments.forEach { segment ->
+                    val points = segment.map { sample ->
+                        val x = leftPad + (chartWidth - leftPad - edgePad) * sample.packetIndex /
+                            (packets.size - 1).coerceAtLeast(1)
+                        val y = chartHeight - edgePad - (sample.rttMs.toFloat() / maxRtt) *
+                            (chartHeight - 2 * edgePad)
+                        Offset(x, y)
                     }
-                }
 
-                if (points.size >= 2) {
-                    val fillPath = Path().apply {
-                        moveTo(points.first().x, chartHeight - edgePad)
-                        points.forEach { lineTo(it.x, it.y) }
-                        lineTo(points.last().x, chartHeight - edgePad)
-                        close()
-                    }
-                    drawPath(
-                        path = fillPath,
-                        brush = Brush.verticalGradient(
-                            colors = listOf(primaryColor.copy(alpha = 0.3f), Color.Transparent),
-                            startY = 0f, endY = chartHeight
+                    if (points.size >= 2) {
+                        val fillPath = Path().apply {
+                            moveTo(points.first().x, chartHeight - edgePad)
+                            points.forEach { lineTo(it.x, it.y) }
+                            lineTo(points.last().x, chartHeight - edgePad)
+                            close()
+                        }
+                        drawPath(
+                            path = fillPath,
+                            brush = Brush.verticalGradient(
+                                colors = listOf(primaryColor.copy(alpha = 0.3f), Color.Transparent),
+                                startY = 0f, endY = chartHeight
+                            )
                         )
-                    )
-                    val linePath = Path().apply {
-                        moveTo(points.first().x, points.first().y)
-                        points.drop(1).forEach { lineTo(it.x, it.y) }
+                        val linePath = Path().apply {
+                            moveTo(points.first().x, points.first().y)
+                            points.drop(1).forEach { lineTo(it.x, it.y) }
+                        }
+                        drawPath(
+                            path = linePath,
+                            color = primaryColor,
+                            style = Stroke(width = 2.5f, cap = StrokeCap.Round)
+                        )
                     }
-                    drawPath(
-                        path = linePath,
-                        color = primaryColor,
-                        style = Stroke(width = 2.5f, cap = StrokeCap.Round)
-                    )
                 }
 
                 // Dots per packet
                 packets.forEachIndexed { index, packet ->
                     val x = leftPad + (chartWidth - leftPad - edgePad) * index / (packets.size - 1).coerceAtLeast(1)
                     val rtt = packet.rtTimeMs
-                    val dotColor = if (rtt != null) successColor else errorColor
-                    val y = if (rtt != null)
+                    val isSuccessfulResponse = packet.status == PingStatus.SUCCESS && rtt != null
+                    val dotColor = if (isSuccessfulResponse) successColor else errorColor
+                    val y = if (packet.status == PingStatus.SUCCESS && rtt != null)
                         chartHeight - edgePad - (rtt.toFloat() / maxRtt) * (chartHeight - 2 * edgePad)
                     else
                         chartHeight - edgePad
@@ -1281,29 +1388,4 @@ private fun RawOutputCard(
             }
         }
     }
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-private fun csvField(value: String): String =
-    if (value.any { it == ',' || it == '"' || it == '\n' || it == '\r' }) {
-        "\"${value.replace("\"", "\"\"")}\""
-    } else {
-        value
-    }
-
-private fun buildCsvOutput(result: PingResult): String = buildString {
-    appendLine("sequence,host,status,rtt_ms,error,ttl,bytes")
-    result.packets.forEach { p ->
-        appendLine(
-            "${p.sequence},${csvField(p.host)},${p.status},${p.rtTimeMs ?: ""}," +
-                csvField(p.errorMessage ?: "") + ",${p.replyTtl ?: ""},${p.bytes ?: ""}"
-        )
-    }
-    appendLine()
-    appendLine("# Stats")
-    appendLine("sent,received,loss_percent,min_ms,avg_ms,max_ms,jitter_ms")
-    appendLine("${result.stats.sent},${result.stats.received},${"%.1f".format(result.stats.lossPercent)}," +
-            "${result.stats.minMs},${"%.3f".format(result.stats.avgMs)},${result.stats.maxMs}," +
-            "${"%.3f".format(result.stats.jitterMs)}")
 }

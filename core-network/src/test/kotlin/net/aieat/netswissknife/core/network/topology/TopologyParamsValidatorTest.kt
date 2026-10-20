@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
 import org.junit.jupiter.params.provider.ValueSource
+import net.aieat.netswissknife.core.network.ErrorCode
 
 @DisplayName("TopologyParamsValidator")
 class TopologyParamsValidatorTest {
@@ -17,6 +18,22 @@ class TopologyParamsValidatorTest {
     private val blankIpError = "Target IP or hostname must not be blank"
     private val communityError = "Community string must not be blank for SNMP v1/v2c"
     private val usernameError = "Username must not be blank for SNMP v3"
+
+    @Test
+    fun `rejects topology budgets beyond the documented ceiling`() {
+        val result = TopologyParamsValidator.validate(
+            TopologyParams(
+                targetIp = "192.168.1.1",
+                maxHops = TopologyParamsValidator.MAX_MAX_HOPS,
+                timeoutMs = TopologyParamsValidator.MAX_TIMEOUT_MS,
+                retries = TopologyParamsValidator.MAX_RETRIES,
+            )
+        )
+
+        assertFalse(result.isValid)
+        assertTrue(result.messages.contains(TopologyOperationBudget.OVER_CEILING_MESSAGE))
+        assertEquals(ErrorCode.OPERATION_DEADLINE_EXCEEDED, result.errors.single().code)
+    }
 
     private fun validate(
         targetIp: String = "192.168.1.1",
@@ -57,7 +74,8 @@ class TopologyParamsValidatorTest {
         fun rejectsBlank(ip: String) {
             val result = validate(targetIp = ip)
             assertFalse(result.isValid)
-            assertEquals(listOf(blankIpError), result.errors)
+            assertEquals(listOf(blankIpError), result.messages)
+            assertEquals(ErrorCode.HOST_BLANK, result.errors.single().code)
         }
 
         @ParameterizedTest
@@ -75,7 +93,9 @@ class TopologyParamsValidatorTest {
         fun rejectsMalformed(ip: String) {
             val result = validate(targetIp = ip)
             assertFalse(result.isValid, "expected $ip to be rejected")
-            assertEquals(listOf(invalidIpError), result.errors)
+            assertEquals(listOf(invalidIpError), result.messages)
+            assertEquals(ErrorCode.HOST_INVALID, result.errors.single().code)
+            assertEquals(listOf(ip), result.errors.single().args)
         }
 
         @ParameterizedTest
@@ -84,7 +104,7 @@ class TopologyParamsValidatorTest {
         fun rejectsOutOfRangeOctets(ip: String) {
             val result = validate(targetIp = ip)
             assertFalse(result.isValid, "expected $ip to be rejected")
-            assertEquals(listOf(invalidIpError), result.errors)
+            assertEquals(listOf(invalidIpError), result.messages)
         }
 
         @ParameterizedTest
@@ -109,7 +129,7 @@ class TopologyParamsValidatorTest {
         fun rejectsMalformedHostnames(host: String) {
             val result = validate(targetIp = host)
             assertFalse(result.isValid, "expected $host to be rejected")
-            assertEquals(listOf(invalidIpError), result.errors)
+            assertEquals(listOf(invalidIpError), result.messages)
         }
     }
 
@@ -123,7 +143,7 @@ class TopologyParamsValidatorTest {
         fun requiresCommunity(version: SnmpVersion) {
             val result = validate(version = version, community = " ")
             assertFalse(result.isValid)
-            assertEquals(listOf(communityError), result.errors)
+            assertEquals(listOf(communityError), result.messages)
         }
 
         @ParameterizedTest
@@ -144,7 +164,7 @@ class TopologyParamsValidatorTest {
         fun v3RequiresUsernameNotNull() {
             val result = validate(version = SnmpVersion.V3, username = null)
             assertFalse(result.isValid)
-            assertEquals(listOf(usernameError), result.errors)
+            assertEquals(listOf(usernameError), result.messages)
         }
 
         @Test
@@ -152,7 +172,7 @@ class TopologyParamsValidatorTest {
         fun v3RequiresUsernameNotBlank() {
             val result = validate(version = SnmpVersion.V3, username = "  ")
             assertFalse(result.isValid)
-            assertEquals(listOf(usernameError), result.errors)
+            assertEquals(listOf(usernameError), result.messages)
         }
     }
 
@@ -165,14 +185,15 @@ class TopologyParamsValidatorTest {
         fun reportsAllErrors() {
             val result = validate(targetIp = "", version = SnmpVersion.V2C, community = "")
             assertFalse(result.isValid)
-            assertEquals(listOf(blankIpError, communityError), result.errors)
+            assertEquals(listOf(blankIpError, communityError), result.messages)
+            assertEquals(listOf(ErrorCode.HOST_BLANK, ErrorCode.SNMP_COMMUNITY_BLANK), result.errors.map { it.code })
         }
 
         @Test
         @DisplayName("combines a malformed IP with a missing v3 username")
         fun malformedIpAndMissingUsername() {
             val result = validate(targetIp = "bad host", version = SnmpVersion.V3, username = "")
-            assertEquals(listOf(invalidIpError, usernameError), result.errors)
+            assertEquals(listOf(invalidIpError, usernameError), result.messages)
         }
     }
 

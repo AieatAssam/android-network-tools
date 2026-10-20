@@ -62,6 +62,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
@@ -92,6 +93,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -104,6 +106,10 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
+import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
+import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
+import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
+import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
 import net.aieat.netswissknife.app.ui.components.ToolErrorCard
 import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.R
@@ -120,6 +126,9 @@ import net.aieat.netswissknife.core.network.dns.DnsRecord
 import net.aieat.netswissknife.core.network.dns.DnsRecordType
 import net.aieat.netswissknife.core.network.dns.DnsResult
 import net.aieat.netswissknife.core.network.dns.DnsServer
+import net.aieat.netswissknife.app.ui.i18n.asString
+import net.aieat.netswissknife.app.ui.i18n.uiDescription
+import net.aieat.netswissknife.app.ui.i18n.uiLabel
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
@@ -130,8 +139,10 @@ import net.aieat.netswissknife.core.network.dns.DnsServer
  */
 object DnsScreenTestTags {
     const val CONTENT_LIST = "dns_content_list"
+    const val DOMAIN_INPUT = "dns_domain_input"
     const val RECORD_TYPE_CHIPS = "dns_record_type_chips"
     const val RECORD_TYPE_SCROLL_HINT = "dns_record_type_scroll_hint"
+    const val CANCEL_LOOKUP = "dns_cancel_lookup"
 
     /** Index of the idle/loading/error/success panel within [CONTENT_LIST]. */
     const val STATE_PANEL_INDEX = 2
@@ -141,6 +152,22 @@ object DnsScreenTestTags {
 @Composable
 fun DnsScreen(viewModel: DnsViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val announcementPhase = when (uiState) {
+        DnsUiState.Idle -> null
+        DnsUiState.Loading, DnsUiState.Canceling -> ToolAnnouncementPhase.RUNNING
+        DnsUiState.Canceled -> ToolAnnouncementPhase.CANCELED
+        is DnsUiState.Error -> ToolAnnouncementPhase.ERROR
+        is DnsUiState.Success -> ToolAnnouncementPhase.FINISHED
+    }
+    val announcementDetail = when (val state = uiState) {
+        is DnsUiState.Success -> pluralStringResource(
+            R.plurals.a11y_dns_record_count,
+            state.result.records.size,
+            state.result.records.size,
+        )
+        else -> null
+    }
+    val networkStatus by viewModel.networkStatus.collectAsStateWithLifecycle()
     val domain by viewModel.domain.collectAsStateWithLifecycle()
     val recordType by viewModel.recordType.collectAsStateWithLifecycle()
     val selectedServer by viewModel.selectedServer.collectAsStateWithLifecycle()
@@ -172,7 +199,19 @@ fun DnsScreen(viewModel: DnsViewModel = hiltViewModel()) {
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-            item { DnsHeroHeader(onHelpClick = { showHelp = true }) }
+            item {
+                Box {
+                    ToolStateAnnouncer(
+                        stringResource(R.string.help_dns_title),
+                        announcementPhase,
+                        detail = announcementDetail,
+                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        DnsHeroHeader(onHelpClick = { showHelp = true })
+                        NetworkStatusBanner(networkStatus, scope = NetworkStatusScope.INTERNET)
+                    }
+                }
+            }
 
             item {
                 DnsInputCard(
@@ -181,12 +220,14 @@ fun DnsScreen(viewModel: DnsViewModel = hiltViewModel()) {
                     selectedServer = selectedServer,
                     customServerAddress = customServerAddress,
                     isLoading = uiState is DnsUiState.Loading,
+                    isCanceling = uiState is DnsUiState.Canceling,
                     recentHosts = recentHosts,
                     onDomainChange = viewModel::onDomainChange,
                     onRecordTypeChange = viewModel::onRecordTypeChange,
                     onServerChange = viewModel::onServerChange,
                     onCustomServerAddressChange = viewModel::onCustomServerAddressChange,
                     onLookup = viewModel::performLookup,
+                    onCancelLookup = viewModel::onStopLookup,
                     onRemoveRecentHost = viewModel::removeRecentHost,
                     onClearRecentHosts = viewModel::clearRecentHosts
                 )
@@ -208,6 +249,13 @@ fun DnsScreen(viewModel: DnsViewModel = hiltViewModel()) {
                         )
                         is DnsUiState.Loading -> DnsLoadingPanel(
                             modifier = Modifier.padding(vertical = 8.dp)
+                        )
+                        is DnsUiState.Canceling -> DnsCancelingPanel(
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        )
+                        is DnsUiState.Canceled -> DnsCanceledPanel(
+                            modifier = Modifier.padding(vertical = 8.dp),
+                            onClear = viewModel::onClearResults
                         )
                         is DnsUiState.Error -> DnsErrorPanel(
                             message = state.message,
@@ -300,16 +348,23 @@ private fun DnsInputCard(
     selectedServer: DnsServer,
     customServerAddress: String,
     isLoading: Boolean,
+    isCanceling: Boolean,
     recentHosts: List<String>,
     onDomainChange: (String) -> Unit,
     onRecordTypeChange: (DnsRecordType) -> Unit,
     onServerChange: (DnsServer) -> Unit,
     onCustomServerAddressChange: (String) -> Unit,
     onLookup: () -> Unit,
+    onCancelLookup: () -> Unit,
     onRemoveRecentHost: (String) -> Unit,
     onClearRecentHosts: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val isBusy = isLoading || isCanceling
+    val isCustomServerValid = selectedServer !is DnsServer.Custom || customServerAddress.trim().let {
+        HostValidator.isValidIpv4(it) || HostValidator.isValidIpv6(it)
+    }
+    val canLookup = domain.isNotBlank() && isCustomServerValid
     ElevatedCard(
         modifier = modifier.fillMaxWidth(),
         shape = AppShapes.large
@@ -332,7 +387,7 @@ private fun DnsInputCard(
                     )
                 },
                 trailingIcon = {
-                    if (domain.isNotEmpty()) {
+                    if (domain.isNotEmpty() && !isBusy) {
                         IconButton(onClick = { onDomainChange("") }) {
                             Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.clear))
                         }
@@ -344,9 +399,12 @@ private fun DnsInputCard(
                     imeAction = ImeAction.Search
                 ),
                 keyboardActions = KeyboardActions(
-                    onSearch = { onLookup() }
+                    onSearch = {
+                        if (!isBusy && canLookup) onLookup()
+                    }
                 ),
-                modifier = Modifier.fillMaxWidth(),
+                enabled = !isBusy,
+                modifier = Modifier.fillMaxWidth().testTag(DnsScreenTestTags.DOMAIN_INPUT),
                 shape = AppShapes.medium
             )
 
@@ -354,7 +412,8 @@ private fun DnsInputCard(
                 recentHosts = recentHosts,
                 onHostSelected = onDomainChange,
                 onRemoveHost = onRemoveRecentHost,
-                onClearAll = onClearRecentHosts
+                onClearAll = onClearRecentHosts,
+                selectionEnabled = !isBusy
             )
 
             // Record type selector
@@ -366,7 +425,8 @@ private fun DnsInputCard(
                 )
                 RecordTypeChips(
                     selected = recordType,
-                    onSelect = onRecordTypeChange
+                    onSelect = onRecordTypeChange,
+                    enabled = !isBusy
                 )
                 // Description of selected record type
                 RecordTypeDescription(recordType = recordType)
@@ -378,31 +438,28 @@ private fun DnsInputCard(
                     selectedServer = selectedServer,
                     customServerAddress = customServerAddress,
                     onServerChange = onServerChange,
-                    onCustomAddressChange = onCustomServerAddressChange
+                    onCustomAddressChange = onCustomServerAddressChange,
+                    enabled = !isBusy
                 )
             }
 
             // Lookup button
             Button(
-                onClick = hapticAction(onLookup),
-                enabled = !isLoading && domain.isNotBlank(),
+                onClick = hapticAction(if (isLoading) onCancelLookup else onLookup),
+                enabled = isLoading || (!isCanceling && canLookup),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(52.dp),
+                    .height(52.dp)
+                    .testTag(DnsScreenTestTags.CANCEL_LOOKUP),
                 shape = AppShapes.medium,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.primary
                 )
             ) {
                 if (isLoading) {
-                    val loadingCd = stringResource(R.string.a11y_loading)
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp).semantics { contentDescription = loadingCd },
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        strokeWidth = 2.dp
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.dns_looking_up))
+                    Text(stringResource(R.string.cancel))
+                } else if (isCanceling) {
+                    Text(stringResource(R.string.dns_canceling))
                 } else {
                     Icon(
                         imageVector = Icons.Default.Search,
@@ -426,7 +483,8 @@ private fun DnsInputCard(
 @Composable
 private fun RecordTypeChips(
     selected: DnsRecordType,
-    onSelect: (DnsRecordType) -> Unit
+    onSelect: (DnsRecordType) -> Unit,
+    enabled: Boolean
 ) {
     val scrollState = rememberScrollState()
 
@@ -445,6 +503,7 @@ private fun RecordTypeChips(
                 val isSelected = type == selected
                 FilterChip(
                     selected = isSelected,
+                    enabled = enabled,
                     onClick = { onSelect(type) },
                     label = {
                         Text(
@@ -533,24 +592,25 @@ private fun DnsServerSelector(
     selectedServer: DnsServer,
     customServerAddress: String,
     onServerChange: (DnsServer) -> Unit,
-    onCustomAddressChange: (String) -> Unit
+    onCustomAddressChange: (String) -> Unit,
+    enabled: Boolean
 ) {
     var expanded by remember { mutableStateOf(false) }
     val keyboardController = LocalSoftwareKeyboardController.current
 
     // Text shown in the field: preset display name, or the typed custom address.
     val fieldValue = if (selectedServer is DnsServer.Custom) customServerAddress
-                     else selectedServer.displayName
+                     else selectedServer.uiLabel().asString()
 
     // Custom server addresses must be literal IPs (IPv4 or IPv6).
+    val trimmedCustomAddress = customServerAddress.trim()
     val isCustomInvalid = selectedServer is DnsServer.Custom &&
-        customServerAddress.isNotBlank() &&
-        !HostValidator.isValidIpv4(customServerAddress) &&
-        !HostValidator.isValidIpv6(customServerAddress)
+        !HostValidator.isValidIpv4(trimmedCustomAddress) &&
+        !HostValidator.isValidIpv6(trimmedCustomAddress)
 
     ExposedDropdownMenuBox(
         expanded = expanded,
-        onExpandedChange = { expanded = it }
+        onExpandedChange = { if (enabled) expanded = it }
     ) {
         OutlinedTextField(
             value = fieldValue,
@@ -571,6 +631,7 @@ private fun DnsServerSelector(
                 ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
             },
             isError = isCustomInvalid,
+            enabled = enabled,
             supportingText = if (isCustomInvalid) {
                 { Text(stringResource(R.string.dns_custom_server_invalid)) }
             } else null,
@@ -578,7 +639,7 @@ private fun DnsServerSelector(
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
             modifier = Modifier
                 .fillMaxWidth()
-                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable, enabled = true),
+                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable, enabled = enabled),
             shape = AppShapes.medium,
             colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors()
         )
@@ -596,19 +657,20 @@ private fun DnsServerSelector(
                     text = {
                         Column {
                             Text(
-                                text = server.displayName,
+                                text = server.uiLabel().asString(),
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
                                 color = if (isSelected) MaterialTheme.colorScheme.primary
                                         else MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = server.description,
+                                text = server.uiDescription().asString(),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     },
+                    enabled = enabled,
                     onClick = {
                         onServerChange(server)
                         expanded = false
@@ -629,6 +691,7 @@ private fun DnsServerSelector(
                                 else MaterialTheme.colorScheme.onSurface
                     )
                 },
+                enabled = enabled,
                 onClick = {
                     onCustomAddressChange("")
                     expanded = false
@@ -710,15 +773,48 @@ private fun DnsLoadingPanel(modifier: Modifier = Modifier) {
     }
 }
 
+@Composable
+private fun DnsCancelingPanel(modifier: Modifier = Modifier) {
+    ElevatedCard(modifier = modifier.fillMaxWidth(), shape = AppShapes.large) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            CircularProgressIndicator(modifier = Modifier.size(32.dp), strokeWidth = 3.dp)
+            Text(stringResource(R.string.dns_canceling), style = MaterialTheme.typography.titleMedium)
+        }
+    }
+}
+
+@Composable
+private fun DnsCanceledPanel(onClear: () -> Unit, modifier: Modifier = Modifier) {
+    ElevatedCard(modifier = modifier.fillMaxWidth(), shape = AppShapes.large) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(stringResource(R.string.dns_canceled), style = MaterialTheme.typography.titleMedium)
+            Text(
+                text = stringResource(R.string.dns_canceled_subtitle),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            TextButton(onClick = onClear) { Text(stringResource(R.string.clear)) }
+        }
+    }
+}
+
 // ── Error panel ───────────────────────────────────────────────────────────────
 
 @Composable
 private fun DnsErrorPanel(
     message: String,
     onRetry: () -> Unit,
+    modifier: Modifier = Modifier,
     canFallbackToCloudflare: Boolean = false,
     onUseCloudflare: () -> Unit = {},
-    modifier: Modifier = Modifier
 ) {
     ToolErrorCard(
         modifier = modifier,
@@ -813,6 +909,7 @@ private fun DnsResultSummaryCard(
 ) {
     val context = LocalContext.current
     val shareSubject = stringResource(R.string.share_subject_dns, result.recordType.name, result.domain)
+    val shareServerLine = stringResource(R.string.dns_share_server, result.server.uiLabel().asString())
     ElevatedCard(
         shape = AppShapes.large,
         modifier = Modifier.fillMaxWidth()
@@ -849,7 +946,7 @@ private fun DnsResultSummaryCard(
                     ) {
                         RecordTypeBadge(type = result.recordType)
                         Text(
-                            text = "via ${result.server.displayName}",
+                            text = stringResource(R.string.dns_result_server, result.server.uiLabel().asString()),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -888,7 +985,7 @@ private fun DnsResultSummaryCard(
                 Row {
                     IconButton(onClick = {
                         context.shareText(
-                            text = buildDnsShareText(result),
+                            text = buildDnsShareText(result, shareServerLine),
                             subject = shareSubject
                         )
                     }) {
@@ -1055,7 +1152,7 @@ private fun DnsRecordCard(record: DnsRecord, index: Int) {
                         onClick = {
                             scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("", record.value))) }
                         },
-                        modifier = Modifier.size(36.dp)
+                        modifier = Modifier.minimumInteractiveComponentSize()
                     ) {
                         Icon(
                             imageVector = Icons.Default.ContentCopy,
@@ -1266,6 +1363,14 @@ private fun PlainValueDisplay(value: String) {
 
 @Composable
 private fun DnsNoRecordsCard(result: DnsResult) {
+    val (title, subtitle) = when (result.rcode) {
+        "NOERROR" -> R.string.dns_no_records_title to
+            stringResource(R.string.dns_no_records_subtitle, result.recordType.displayName, result.domain)
+        "NXDOMAIN" -> R.string.dns_nxdomain_title to
+            stringResource(R.string.dns_nxdomain_subtitle, result.domain)
+        else -> R.string.dns_rcode_error_title to
+            stringResource(R.string.dns_rcode_error_subtitle, result.rcode, result.domain)
+    }
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
         shape = AppShapes.large
@@ -1284,12 +1389,12 @@ private fun DnsNoRecordsCard(result: DnsResult) {
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
-                text = stringResource(R.string.dns_no_records_title),
+                text = stringResource(title),
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurface
             )
             Text(
-                text = stringResource(R.string.dns_no_records_subtitle, result.recordType.displayName, result.domain),
+                text = subtitle,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -1380,9 +1485,9 @@ private fun DnsRawToggleCard(
     }
 }
 
-private fun buildDnsShareText(result: DnsResult): String = buildString {
+private fun buildDnsShareText(result: DnsResult, serverLine: String): String = buildString {
     appendLine("DNS ${result.recordType.name} – ${result.domain}")
-    appendLine("Server: ${result.server.displayName}")
+    appendLine(serverLine)
     appendLine("Query time: ${result.queryTimeMs}ms")
     appendLine()
     if (result.records.isEmpty()) {

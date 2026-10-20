@@ -7,6 +7,7 @@ import dagger.hilt.components.SingletonComponent
 import net.aieat.netswissknife.core.domain.SpeedTestUseCase
 import net.aieat.netswissknife.core.network.speedtest.SpeedTestRepository
 import net.aieat.netswissknife.core.network.speedtest.SpeedTestRepositoryImpl
+import net.aieat.netswissknife.core.network.speedtest.OkHttpTransferEngine
 import javax.inject.Singleton
 
 @Module
@@ -15,7 +16,7 @@ object SpeedTestModule {
 
     @Provides
     @Singleton
-    fun provideSpeedTestRepository(): SpeedTestRepository = SpeedTestRepositoryImpl()
+    fun provideSpeedTestRepository(): SpeedTestRepository = SpeedTestRepositoryImpl(OkHttpTransferEngine())
 
     @Provides
     @Singleton

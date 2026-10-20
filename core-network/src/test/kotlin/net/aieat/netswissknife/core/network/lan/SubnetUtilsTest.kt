@@ -118,6 +118,116 @@ class SubnetUtilsTest {
         assertFalse(SubnetUtils.contains("192.168.1.0/24", "192.168.2.1"))
     }
 
+    @Test
+    fun `interface CIDR detection preserves valid platform prefixes`() {
+        assertEquals("0.0.0.0/0", SubnetUtils.cidrOf("10.12.34.56", 0))
+        assertEquals("10.0.0.0/8", SubnetUtils.cidrOf("10.12.34.56", 8))
+        assertEquals("10.12.0.0/16", SubnetUtils.cidrOf("10.12.34.56", 16))
+        assertEquals("192.0.2.4/30", SubnetUtils.cidrOf("192.0.2.5", 30))
+        assertEquals("192.0.2.4/31", SubnetUtils.cidrOf("192.0.2.5", 31))
+        assertEquals("192.0.2.5/32", SubnetUtils.cidrOf("192.0.2.5", 32))
+    }
+
+    @Test
+    fun `interface CIDR detection rejects out of range prefixes and invalid addresses`() {
+        assertEquals(null, SubnetUtils.cidrOf("192.0.2.5", -1))
+        assertEquals(null, SubnetUtils.cidrOf("192.0.2.5", 33))
+        assertEquals(null, SubnetUtils.cidrOf("192.0.2.x", 24))
+    }
+
+    @Test
+    fun `getCurrentSubnet uses interface candidate prefix and skips excluded interfaces`() {
+        val detected = SubnetUtils.getCurrentSubnet {
+            sequenceOf(
+                SubnetUtils.InterfaceAddressCandidate(
+                    address = "10.1.2.3",
+                    prefixLength = 24,
+                    interfaceName = "tun0",
+                    interfaceIsLoopback = false,
+                    interfaceIsUp = true,
+                    interfaceIsVirtual = false,
+                    addressIsLoopback = false,
+                ),
+                SubnetUtils.InterfaceAddressCandidate(
+                    address = "10.12.34.56",
+                    prefixLength = 8,
+                    interfaceName = "wlan0",
+                    interfaceIsLoopback = false,
+                    interfaceIsUp = true,
+                    interfaceIsVirtual = false,
+                    addressIsLoopback = false,
+                ),
+            )
+        }
+
+        assertEquals("10.0.0.0/8", detected)
+    }
+
+    @Test
+    fun `getCurrentSubnet forwards zero prefix without clamping`() {
+        val detected = SubnetUtils.getCurrentSubnet {
+            sequenceOf(
+                SubnetUtils.InterfaceAddressCandidate(
+                    address = "10.12.34.56",
+                    prefixLength = 0,
+                    interfaceName = "eth0",
+                    interfaceIsLoopback = false,
+                    interfaceIsUp = true,
+                    interfaceIsVirtual = false,
+                    addressIsLoopback = false,
+                ),
+            )
+        }
+
+        assertEquals("0.0.0.0/0", detected)
+    }
+
+    @Test
+    fun `getCurrentSubnet stops after first usable candidate without evaluating sequence tail`() {
+        val candidates = sequence {
+            yield(
+                SubnetUtils.InterfaceAddressCandidate(
+                    address = "10.12.34.56",
+                    prefixLength = 8,
+                    interfaceName = "wlan0",
+                    interfaceIsLoopback = false,
+                    interfaceIsUp = true,
+                    interfaceIsVirtual = false,
+                    addressIsLoopback = false,
+                ),
+            )
+            error("sequence tail should not be evaluated after finding a usable subnet")
+        }
+
+        assertEquals("10.0.0.0/8", SubnetUtils.getCurrentSubnet { candidates })
+    }
+
+    @Test
+    fun `getCurrentSubnet skips invalid interface metadata and returns the next usable candidate`() {
+        val candidates = sequenceOf(
+            SubnetUtils.InterfaceAddressCandidate(
+                address = "10.12.34.56",
+                prefixLength = 33,
+                interfaceName = "eth0",
+                interfaceIsLoopback = false,
+                interfaceIsUp = true,
+                interfaceIsVirtual = false,
+                addressIsLoopback = false,
+            ),
+            SubnetUtils.InterfaceAddressCandidate(
+                address = "192.0.2.5",
+                prefixLength = 30,
+                interfaceName = "wlan0",
+                interfaceIsLoopback = false,
+                interfaceIsUp = true,
+                interfaceIsVirtual = false,
+                addressIsLoopback = false,
+            ),
+        )
+
+        assertEquals("192.0.2.4/30", SubnetUtils.getCurrentSubnet { candidates })
+    }
+
     @Nested
     @DisplayName("parseIpToLong")
     inner class ParseIpToLong {

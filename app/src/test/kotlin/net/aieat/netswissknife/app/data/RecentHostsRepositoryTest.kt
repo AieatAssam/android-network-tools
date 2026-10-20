@@ -3,6 +3,7 @@ package net.aieat.netswissknife.app.data
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.edit
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
@@ -11,6 +12,7 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import net.aieat.netswissknife.app.ui.screens.httprobe.safeHttpRecentOrigin
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -186,6 +188,37 @@ class RecentHostsRepositoryTest {
             val dnsRecents = repository.getRecents(AppPreferenceKeys.RECENT_DNS_HOSTS).first()
             assertTrue(pingRecents.isEmpty())
             assertEquals(listOf("dns-host"), dnsRecents)
+        }
+    }
+
+    @Nested
+    @DisplayName("sanitizeRecents")
+    inner class SanitizeRecents {
+
+        @Test
+        fun `sanitizes legacy URLs atomically and preserves unrelated recents`() = testScope.runTest {
+            dataStore.edit { prefs ->
+                prefs[AppPreferenceKeys.RECENT_HTTP_HOSTS] =
+                    "https://alice:secret@example.com/private?token=first|broken URL|" +
+                        "https://example.com/another?token=second|http://other.example/path?password=secret"
+                prefs[AppPreferenceKeys.RECENT_DNS_HOSTS] = "dns.example"
+            }
+
+            repository.sanitizeRecents(AppPreferenceKeys.RECENT_HTTP_HOSTS, ::safeHttpRecentOrigin)
+
+            assertEquals(
+                listOf("https://example.com"),
+                repository.getRecents(AppPreferenceKeys.RECENT_HTTP_HOSTS).first()
+            )
+            val stored = dataStore.data.first()
+            assertEquals("https://example.com", stored[AppPreferenceKeys.RECENT_HTTP_HOSTS])
+            assertEquals("dns.example", stored[AppPreferenceKeys.RECENT_DNS_HOSTS])
+
+            repository.sanitizeRecents(AppPreferenceKeys.RECENT_HTTP_HOSTS, ::safeHttpRecentOrigin)
+            assertEquals("https://example.com", dataStore.data.first()[AppPreferenceKeys.RECENT_HTTP_HOSTS])
+
+            repository.removeRecent(AppPreferenceKeys.RECENT_HTTP_HOSTS, "https://example.com")
+            assertTrue(repository.getRecents(AppPreferenceKeys.RECENT_HTTP_HOSTS).first().isEmpty())
         }
     }
 }

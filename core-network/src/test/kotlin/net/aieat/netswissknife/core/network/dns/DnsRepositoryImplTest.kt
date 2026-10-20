@@ -1,6 +1,8 @@
 package net.aieat.netswissknife.core.network.dns
 
 import kotlinx.coroutines.test.runTest
+import net.aieat.netswissknife.core.network.ErrorCode
+import net.aieat.netswissknife.core.network.NetworkResult
 import org.xbill.DNS.EDNSOption
 import org.xbill.DNS.Message
 import org.xbill.DNS.Resolver
@@ -10,7 +12,9 @@ import java.time.Duration
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionStage
 import java.util.concurrent.Executor
+import java.util.concurrent.atomic.AtomicReference
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
@@ -19,6 +23,70 @@ import org.junit.jupiter.params.provider.CsvSource
 
 @DisplayName("DnsRepositoryImpl.normalizeDomain")
 class DnsRepositoryImplTest {
+
+    @Test
+    fun `empty system DNS list returns typed resolver error`() = runTest {
+        val result = DnsRepositoryImpl().lookup(
+            domain = "example.com",
+            recordType = DnsRecordType.A,
+            server = DnsServer.System(emptyList()),
+        ) as NetworkResult.Error
+
+        assertEquals(ErrorCode.DNS_NO_SYSTEM_RESOLVER, result.info?.code)
+        assertTrue(result.message.contains("No system DNS server"))
+    }
+
+    @Test
+    fun `invalid custom DNS hostname and host port are rejected before resolver construction or IO`() = runTest {
+        var resolverFactoryCalls = 0
+        var resolverCalls = 0
+        var ioFactoryCalls = 0
+        val repository = DnsRepositoryImpl(
+            resolverFactory = DnsRepositoryImpl.ResolverFactory {
+                resolverFactoryCalls++
+                ReportingResolver(onQuery = { resolverCalls++ })
+            }
+        ).also {
+            it.ioClientFactoryFactory = {
+                ioFactoryCalls++
+                throw AssertionError("Invalid custom address must be rejected before transport setup")
+            }
+        }
+
+        listOf("resolver.example", "192.0.2.53:5353").forEach { address ->
+            val result = repository.lookup(
+                domain = "example.com",
+                recordType = DnsRecordType.A,
+                server = DnsServer.Custom(address)
+            )
+            assertTrue(result is NetworkResult.Error, address)
+        }
+
+        assertEquals(0, resolverFactoryCalls)
+        assertEquals(0, ioFactoryCalls)
+        assertEquals(0, resolverCalls)
+    }
+
+    @Test
+    fun `custom DNS literal is trimmed for resolver construction and result`() = runTest {
+        val resolverServer = AtomicReference<DnsServer?>()
+        val repository = DnsRepositoryImpl(
+            resolverFactory = DnsRepositoryImpl.ResolverFactory { server ->
+                resolverServer.set(server)
+                ReportingResolver()
+            }
+        )
+
+        val result = repository.lookup(
+            domain = "example.com",
+            recordType = DnsRecordType.A,
+            server = DnsServer.Custom("  192.0.2.53  ")
+        ) as NetworkResult.Success
+
+        assertEquals(DnsServer.Custom("192.0.2.53"), resolverServer.get())
+        assertEquals(DnsServer.Custom("192.0.2.53"), result.data.server)
+        assertEquals("192.0.2.53:53", result.data.serverUsed)
+    }
 
     @Test
     fun `system DNS result reports the resolver that actually answered`() = runTest {
@@ -62,7 +130,8 @@ class DnsRepositoryImplTest {
 
     private class ReportingResolver(
         override val lastServerAddress: String? = null,
-        private val failure: IOException? = null
+        private val failure: IOException? = null,
+        private val onQuery: (Message) -> Unit = {}
     ) : Resolver, DnsResolverMetadata {
         override fun setPort(port: Int) = Unit
         override fun setTCP(flag: Boolean) = Unit
@@ -75,7 +144,11 @@ class DnsRepositoryImplTest {
         ) = Unit
         override fun setTSIGKey(key: TSIG?) = Unit
         override fun setTimeout(timeout: Duration) = Unit
-        override fun send(query: Message): Message = failure?.let { throw it } ?: query
+        override fun send(query: Message): Message {
+            failure?.let { throw it }
+            onQuery(query)
+            return query
+        }
         override fun sendAsync(query: Message): CompletionStage<Message> =
             failure?.let { CompletableFuture.failedFuture<Message>(it) }
                 ?: CompletableFuture.completedFuture(query)
@@ -234,6 +307,74 @@ class DnsRepositoryImplTest {
             assertEquals(
                 "example.com.",
                 DnsRepositoryImpl.normalizeDomain("example.com.", DnsRecordType.A)
+            )
+        }
+
+        @ParameterizedTest(name = "{0} query encodes an internationalized hostname")
+        @CsvSource("A", "AAAA")
+        fun `Unicode hostname is IDNA encoded before the resolver call`(typeName: String) = runTest {
+            val recordType = DnsRecordType.valueOf(typeName)
+            val question = AtomicReference<Pair<String, Int>?>(null)
+            val resolver = ReportingResolver(onQuery = { query ->
+                query.question?.let { question.set(it.name.toString() to it.type) }
+            })
+            val repository = DnsRepositoryImpl(
+                resolverFactory = DnsRepositoryImpl.ResolverFactory { resolver }
+            )
+
+            val result = repository.lookup("bücher.de", recordType, DnsServer.Google)
+
+            assertEquals(true, result is NetworkResult.Success)
+            assertEquals("xn--bcher-kva.de." to recordType.dnsTypeInt, question.get())
+        }
+
+        @Test
+        fun `SRV query preserves service labels and encodes its Unicode suffix`() = runTest {
+            val question = AtomicReference<Pair<String, Int>?>(null)
+            val resolver = ReportingResolver(onQuery = { query ->
+                query.question?.let { question.set(it.name.toString() to it.type) }
+            })
+            val repository = DnsRepositoryImpl(
+                resolverFactory = DnsRepositoryImpl.ResolverFactory { resolver }
+            )
+
+            val result = repository.lookup("_http._tcp.bücher.de", DnsRecordType.SRV, DnsServer.Google)
+
+            assertEquals(true, result is NetworkResult.Success)
+            assertEquals("_http._tcp.xn--bcher-kva.de." to DnsRecordType.SRV.dnsTypeInt, question.get())
+        }
+
+        @Test
+        fun `malformed IDNA names return validation errors without creating a resolver`() = runTest {
+            var resolverFactoryCalls = 0
+            val repository = DnsRepositoryImpl(
+                resolverFactory = DnsRepositoryImpl.ResolverFactory {
+                    resolverFactoryCalls++
+                    ReportingResolver()
+                }
+            )
+
+            val malformedNames = listOf(
+                "bücher..de",
+                "bad\u0000label.de",
+                "ü".repeat(64) + ".de",
+                "example.com..",
+                "xn--",
+                "xn--invalid-punycode.de"
+            )
+            malformedNames.forEach { domain ->
+                val result = repository.lookup(domain, DnsRecordType.A, DnsServer.Google)
+                assertEquals(true, result is NetworkResult.Error, domain)
+                assertEquals(true, (result as NetworkResult.Error).message.startsWith("Invalid DNS domain name"))
+            }
+            assertEquals(0, resolverFactoryCalls)
+        }
+
+        @Test
+        fun `IDNA dot separators normalize before splitting labels`() {
+            assertEquals(
+                "xn--bcher-kva.de.",
+                DnsRepositoryImpl.normalizeDomain("bücher。de", DnsRecordType.A)
             )
         }
 

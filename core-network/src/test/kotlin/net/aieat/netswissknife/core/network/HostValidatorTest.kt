@@ -1,8 +1,8 @@
 package net.aieat.netswissknife.core.network
 
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
-import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
@@ -19,11 +19,9 @@ import org.junit.jupiter.params.provider.ValueSource
  */
 @DisplayName("HostValidator")
 class HostValidatorTest {
-
     @Nested
     @DisplayName("normalize")
     inner class Normalize {
-
         @Test
         fun `converts unicode hostname to IDN ascii`() {
             assertEquals("xn--bcher-kva.de", HostValidator.normalize("bücher.de"))
@@ -46,12 +44,30 @@ class HostValidatorTest {
             assertEquals("192.168.1.1", HostValidator.normalize("192.168.1.1"))
             assertEquals("[fe80::1%wlan0]", HostValidator.normalize("[fe80::1%wlan0]"))
         }
+
+        @Test
+        fun `canonicalizes leading zero IPv4 octets as decimal`() {
+            assertEquals("8.8.8.8", HostValidator.normalize("008.008.008.008"))
+            assertEquals("10.0.0.1", HostValidator.normalize("010.000.000.001"))
+            assertFalse(HostValidator.isValidIpv4("008.008.008.008"))
+        }
+
+        @Test
+        fun `rejects a DNS name longer than the wire limit`() {
+            val tooLong = ("a".repeat(63) + ".").repeat(3) + "a".repeat(62)
+            assertNull(HostValidator.normalize(tooLong))
+        }
+
+        @Test
+        fun `preserves IPv4 root dot normalization and rejects trailing dot IPv6`() {
+            assertNull(HostValidator.normalize("2001:db8::1."))
+            assertEquals("192.168.1.1", HostValidator.normalize("192.168.1.1."))
+        }
     }
 
     @Nested
     @DisplayName("isValidIpv4")
     inner class IsValidIpv4 {
-
         @ParameterizedTest(name = "{0} is a valid IPv4 address")
         @ValueSource(strings = ["192.168.1.1", "10.0.0.1", "0.0.0.0", "255.255.255.255", "8.8.8.8"])
         fun `valid IPv4 addresses are accepted`(address: String) {
@@ -68,7 +84,6 @@ class HostValidatorTest {
     @Nested
     @DisplayName("isValidHostname")
     inner class IsValidHostname {
-
         @ParameterizedTest(name = "{0} is a valid host")
         @ValueSource(strings = ["google.com", "example.org", "192.168.1.1", "localhost", "sub.domain.example.com"])
         fun `valid hostnames are accepted`(host: String) {
@@ -102,7 +117,6 @@ class HostValidatorTest {
     @Nested
     @DisplayName("isValidIpv6")
     inner class IsValidIpv6 {
-
         @ParameterizedTest(name = "{0} is a valid IPv6 address")
         @ValueSource(strings = ["::1", "fe80::1", "2001:db8::1", "::"])
         fun `valid IPv6 addresses are accepted`(address: String) {
@@ -130,8 +144,8 @@ class HostValidatorTest {
                 "1::",
                 "::8",
                 "fe80::",
-                "0:0:0:0:0:0:0:1"
-            ]
+                "0:0:0:0:0:0:0:1",
+            ],
         )
         fun `full and compressed forms are accepted`(address: String) {
             assertTrue(HostValidator.isValidIpv6(address))
@@ -143,8 +157,8 @@ class HostValidatorTest {
                 "::ffff:192.168.0.1",
                 "::192.168.0.1",
                 "64:ff9b::192.0.2.33",
-                "0:0:0:0:0:ffff:192.168.0.1"
-            ]
+                "0:0:0:0:0:ffff:192.168.0.1",
+            ],
         )
         fun `IPv4-mapped forms are accepted`(address: String) {
             assertTrue(HostValidator.isValidIpv6(address))
@@ -180,7 +194,15 @@ class HostValidatorTest {
         }
 
         @ParameterizedTest(name = "{0} has a malformed zone id")
-        @ValueSource(strings = ["fe80::1%", "%eth0"])
+        @ValueSource(
+            strings = [
+                "fe80::1%",
+                "%eth0",
+                "fe80::1%bad zone",
+                "fe80::1%eth0%1",
+                "fe80::1%eth0:2",
+            ],
+        )
         fun `malformed zone ids are rejected`(address: String) {
             assertFalse(HostValidator.isValidIpv6(address))
         }
@@ -191,8 +213,8 @@ class HostValidatorTest {
                 "1:2:3:4:5:6:7",
                 "1:2:3:4:5:6:7:8:9",
                 "1:2:3:4:5:6:7::8",
-                "1:2:3:4:5:6:7:8::"
-            ]
+                "1:2:3:4:5:6:7:8::",
+            ],
         )
         fun `wrong group counts are rejected`(address: String) {
             assertFalse(HostValidator.isValidIpv6(address))

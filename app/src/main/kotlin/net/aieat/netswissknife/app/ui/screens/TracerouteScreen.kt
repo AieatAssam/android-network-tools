@@ -73,6 +73,7 @@ import androidx.compose.material3.Switch
 
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -87,11 +88,19 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
+import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
+import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
+import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
+import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
 import net.aieat.netswissknife.app.ui.components.ToolErrorCard
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
 import net.aieat.netswissknife.app.ui.components.ToolStopButton
@@ -115,6 +124,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
@@ -124,6 +136,8 @@ import net.aieat.netswissknife.app.ui.screens.traceroute.TracerouteUiState
 import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.app.ui.screens.traceroute.TracerouteViewModel
 import net.aieat.netswissknife.app.ui.screens.traceroute.TracerouteViewMode
+import net.aieat.netswissknife.core.network.HostValidator
+import net.aieat.netswissknife.core.network.traceroute.CountryFlags
 import net.aieat.netswissknife.core.network.traceroute.HopGeoLocation
 import net.aieat.netswissknife.core.network.traceroute.HopResult
 import net.aieat.netswissknife.core.network.traceroute.HopStatus
@@ -139,10 +153,27 @@ import kotlin.math.sqrt
 
 @Composable
 fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
-    val requestLocalNetworkPermission = rememberLocalNetworkPermissionRequester()
-    LaunchedEffect(Unit) { requestLocalNetworkPermission() }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val requestLocalNetworkPermission = rememberLocalNetworkPermissionRequester(viewModel::startTrace)
 
     val uiState      by viewModel.uiState.collectAsStateWithLifecycle()
+    val announcementPhase = when (val state = uiState) {
+        TracerouteUiState.Idle -> null
+        is TracerouteUiState.Running, is TracerouteUiState.Canceling -> ToolAnnouncementPhase.RUNNING
+        is TracerouteUiState.Canceled -> {
+            if (state.result.hops.isNotEmpty()) ToolAnnouncementPhase.PARTIAL
+            else ToolAnnouncementPhase.CANCELED
+        }
+        is TracerouteUiState.Finished -> {
+            if (state.timeLimitReached || !state.result.reachedDestination) {
+                ToolAnnouncementPhase.PARTIAL
+            } else {
+                ToolAnnouncementPhase.FINISHED
+            }
+        }
+        is TracerouteUiState.Error -> ToolAnnouncementPhase.ERROR
+    }
+    val networkStatus by viewModel.networkStatus.collectAsStateWithLifecycle()
     val host         by viewModel.host.collectAsStateWithLifecycle()
     val maxHops      by viewModel.maxHops.collectAsStateWithLifecycle()
     val timeoutMs    by viewModel.timeoutMs.collectAsStateWithLifecycle()
@@ -150,6 +181,14 @@ fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
     val probeType    by viewModel.probeType.collectAsStateWithLifecycle()
     val packetSize   by viewModel.packetSize.collectAsStateWithLifecycle()
     val recentHosts  by viewModel.recentHosts.collectAsStateWithLifecycle()
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) viewModel.onLifecycleStop()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     // animateFloatAsState instead of AnimatedVisibility: both AnimatedVisibility and the
     // inner AnimatedContent use SubcomposeLayout.  Two simultaneously-animating nested
@@ -165,11 +204,19 @@ fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
     var showHelp by remember { mutableStateOf(false) }
 
     LazyColumn(
-        modifier          = Modifier.fillMaxSize().alpha(screenAlpha),
+        modifier          = Modifier.fillMaxSize().alpha(screenAlpha).testTag("traceroute_content_list"),
         contentPadding    = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-            item { TracerouteHeroHeader(onHelpClick = { showHelp = true }) }
+            item {
+                Box {
+                    ToolStateAnnouncer(stringResource(R.string.help_traceroute_title), announcementPhase)
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        TracerouteHeroHeader(onHelpClick = { showHelp = true })
+                        NetworkStatusBanner(networkStatus, scope = NetworkStatusScope.ANY_NETWORK)
+                    }
+                }
+            }
 
             item {
                 TracerouteInputCard(
@@ -180,6 +227,7 @@ fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
                     probeType           = probeType,
                     packetSize          = packetSize,
                     isRunning           = uiState is TracerouteUiState.Running,
+                    isCanceling         = uiState is TracerouteUiState.Canceling,
                     recentHosts         = recentHosts,
                     onHostChange        = viewModel::onHostChange,
                     onMaxHopsChange     = viewModel::onMaxHopsChange,
@@ -188,7 +236,7 @@ fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
                     onProbeTypeChange   = viewModel::onProbeTypeChange,
                     onPacketSizeChange  = viewModel::onPacketSizeChange,
                     onToggleMtuDiscovery = viewModel::onToggleMtuDiscovery,
-                    onStart             = viewModel::startTrace,
+                    onStart             = { requestLocalNetworkPermission(host) },
                     onStop              = viewModel::onStop,
                     onRemoveRecentHost  = viewModel::removeRecentHost,
                     onClearRecentHosts  = viewModel::clearRecentHosts
@@ -208,16 +256,30 @@ fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
                     when (state) {
                         is TracerouteUiState.Idle     -> TracerouteIdlePrompt()
                         is TracerouteUiState.Running  -> TracerouteRunningPanel(state)
+                        is TracerouteUiState.Canceling -> TracerouteRunningPanel(
+                            host = state.host,
+                            hops = state.hops,
+                            canceling = true,
+                        )
+                        is TracerouteUiState.Canceled -> TracerouteFinishedPanel(
+                            result = state.result,
+                            viewMode = state.viewMode,
+                            canceled = true,
+                            onToggleMode = viewModel::onToggleViewMode,
+                            onClear = viewModel::onClear,
+                        )
                         is TracerouteUiState.Finished -> {
                             TracerouteFinishedPanel(
-                                state        = state,
+                                result       = state.result,
+                                viewMode     = state.viewMode,
+                                timeLimitReached = state.timeLimitReached,
                                 onToggleMode = viewModel::onToggleViewMode,
-                                onClear      = viewModel::onClear
+                                onClear      = viewModel::onClear,
                             )
                         }
                         is TracerouteUiState.Error    -> TracerouteErrorPanel(
                             state   = state,
-                            onRetry = viewModel::onRetry,
+                            onRetry = { requestLocalNetworkPermission(host) },
                             onClear = viewModel::onClear
                         )
                     }
@@ -303,6 +365,7 @@ private fun TracerouteInputCard(
     probeType: TracerouteProbeType,
     packetSize: Int,
     isRunning: Boolean,
+    isCanceling: Boolean,
     recentHosts: List<String>,
     onHostChange: (String) -> Unit,
     onMaxHopsChange: (Int) -> Unit,
@@ -318,7 +381,10 @@ private fun TracerouteInputCard(
 ) {
     val keyboard = LocalSoftwareKeyboardController.current
     val mtuDiscovery = packetSize == 0
-    val isHostInvalid = host.isNotBlank() && host.contains(' ')
+    val normalizedHost = HostValidator.normalize(host)
+    val isHostInvalid = host.isNotBlank() && normalizedHost == null
+    val isBusy = isRunning || isCanceling
+    val canStart = normalizedHost != null
 
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -339,7 +405,10 @@ private fun TracerouteInputCard(
                 leadingIcon   = { Icon(Icons.Default.Router, null) },
                 trailingIcon  = {
                     if (host.isNotEmpty()) {
-                        IconButton(onClick = { onHostChange("") }) {
+                        IconButton(
+                            onClick = { onHostChange("") },
+                            enabled = !isBusy,
+                        ) {
                             Icon(Icons.Default.Clear, stringResource(R.string.clear))
                         }
                     }
@@ -349,21 +418,23 @@ private fun TracerouteInputCard(
                     { Text(stringResource(R.string.error_invalid_host)) }
                 } else null,
                 singleLine    = true,
-                enabled       = !isRunning,
+                enabled       = !isBusy,
                 modifier      = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
                 keyboardActions = KeyboardActions(onGo = {
                     keyboard?.hide()
-                    if (!isRunning) onStart()
+                    if (!isBusy && canStart) onStart()
                 })
             )
 
-            RecentHostsRow(
-                recentHosts = recentHosts,
-                onHostSelected = onHostChange,
-                onRemoveHost = onRemoveRecentHost,
-                onClearAll = onClearRecentHosts
-            )
+            if (!isBusy) {
+                RecentHostsRow(
+                    recentHosts = recentHosts,
+                    onHostSelected = onHostChange,
+                    onRemoveHost = onRemoveRecentHost,
+                    onClearAll = onClearRecentHosts
+                )
+            }
 
             // Probe protocol selector (ICMP / UDP)
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -374,15 +445,15 @@ private fun TracerouteInputCard(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(
                         selected = probeType == TracerouteProbeType.ICMP,
-                        onClick  = { if (!isRunning) onProbeTypeChange(TracerouteProbeType.ICMP) },
+                        onClick  = { if (!isBusy) onProbeTypeChange(TracerouteProbeType.ICMP) },
                         label    = { Text(stringResource(R.string.traceroute_probe_icmp)) },
-                        enabled  = !isRunning
+                        enabled  = !isBusy
                     )
                     FilterChip(
                         selected = probeType == TracerouteProbeType.UDP,
-                        onClick  = { if (!isRunning) onProbeTypeChange(TracerouteProbeType.UDP) },
+                        onClick  = { if (!isBusy) onProbeTypeChange(TracerouteProbeType.UDP) },
                         label    = { Text(stringResource(R.string.traceroute_probe_udp)) },
-                        enabled  = !isRunning
+                        enabled  = !isBusy
                     )
                 }
             }
@@ -394,7 +465,7 @@ private fun TracerouteInputCard(
                 valueRange = 5f..64f,
                 steps    = 11,
                 display  = "$maxHops",
-                enabled  = !isRunning,
+                enabled  = !isBusy,
                 onValueChangeFinished = { onMaxHopsChange(it.toInt()) }
             )
 
@@ -405,7 +476,7 @@ private fun TracerouteInputCard(
                 valueRange = 500f..10_000f,
                 steps    = 0,
                 display  = "${timeoutMs / 1_000.0}s",
-                enabled  = !isRunning,
+                enabled  = !isBusy,
                 onValueChangeFinished = { onTimeoutChange(it.toInt()) }
             )
 
@@ -416,7 +487,7 @@ private fun TracerouteInputCard(
                 valueRange = 1f..5f,
                 steps    = 3,
                 display  = "$probesPerHop",
-                enabled  = !isRunning,
+                enabled  = !isBusy,
                 onValueChangeFinished = { onProbesPerHopChange(it.toInt()) }
             )
 
@@ -432,8 +503,8 @@ private fun TracerouteInputCard(
                 )
                 Switch(
                     checked         = mtuDiscovery,
-                    onCheckedChange = { if (!isRunning) onToggleMtuDiscovery(it) },
-                    enabled         = !isRunning
+                    onCheckedChange = { if (!isBusy) onToggleMtuDiscovery(it) },
+                    enabled         = !isBusy
                 )
             }
 
@@ -444,22 +515,37 @@ private fun TracerouteInputCard(
                     valueRange = 28f..1472f,
                     steps    = 0,
                     display  = "$packetSize B",
-                    enabled  = !isRunning,
+                    enabled  = !isBusy,
                     onValueChangeFinished = { onPacketSizeChange(it.toInt()) }
                 )
             }
 
             // Action button
-            if (isRunning) {
-                ToolStopButton(
-                    text = stringResource(R.string.traceroute_stop_button),
-                    onClick = onStop,
-                    modifier = Modifier.fillMaxWidth()
-                )
+            if (isBusy) {
+                if (isCanceling) {
+                    Button(
+                        onClick = {},
+                        enabled = false,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.traceroute_canceling_button))
+                    }
+                } else {
+                    ToolStopButton(
+                        text = stringResource(R.string.traceroute_stop_button),
+                        onClick = onStop,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             } else {
                 Button(
                     onClick  = hapticAction { keyboard?.hide(); onStart() },
-                    enabled  = host.isNotBlank() && !isHostInvalid,
+                    enabled  = canStart && !isBusy,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Icon(Icons.Default.Public, null)
@@ -543,7 +629,11 @@ private fun TracerouteIdlePrompt() {
 // ── Running panel ─────────────────────────────────────────────────────────────
 
 @Composable
-private fun TracerouteRunningPanel(state: TracerouteUiState.Running) {
+private fun TracerouteRunningPanel(state: TracerouteUiState.Running) =
+    TracerouteRunningPanel(host = state.host, hops = state.hops)
+
+@Composable
+private fun TracerouteRunningPanel(host: String, hops: List<HopResult>, canceling: Boolean = false) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         // Status header
         ElevatedCard(modifier = Modifier.fillMaxWidth()) {
@@ -556,11 +646,13 @@ private fun TracerouteRunningPanel(state: TracerouteUiState.Running) {
                 Spacer(Modifier.width(12.dp))
                 Column {
                     Text(
-                        text  = stringResource(R.string.traceroute_running_title, state.host),
+                        text  = if (canceling) stringResource(R.string.traceroute_canceling_title)
+                            else stringResource(R.string.traceroute_running_title, host),
                         style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold)
                     )
                     Text(
-                        text  = pluralStringResource(R.plurals.traceroute_running_subtitle, state.hops.size, state.hops.size),
+                        text  = if (canceling) stringResource(R.string.traceroute_canceling_subtitle)
+                            else pluralStringResource(R.plurals.traceroute_running_subtitle, hops.size, hops.size),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -580,7 +672,7 @@ private fun TracerouteRunningPanel(state: TracerouteUiState.Running) {
         // a disposed State<Boolean>, causing IllegalStateException.  animateFloatAsState
         // is a plain value animation with no SubcomposeLayout of its own, so it is safe
         // to interrupt mid-animation when the outer AnimatedContent exits.
-        state.hops.sortedBy { it.hopNumber }.forEachIndexed { index, hop ->
+        hops.sortedBy { it.hopNumber }.forEachIndexed { index, hop ->
             key(hop.hopNumber) {
                 var shown by remember { mutableStateOf(false) }
                 LaunchedEffect(Unit) { shown = true }
@@ -601,12 +693,36 @@ private fun TracerouteRunningPanel(state: TracerouteUiState.Running) {
 
 @Composable
 private fun TracerouteFinishedPanel(
-    state: TracerouteUiState.Finished,
+    result: TracerouteResult,
+    viewMode: TracerouteViewMode,
+    canceled: Boolean = false,
+    timeLimitReached: Boolean = false,
     onToggleMode: () -> Unit,
     onClear: () -> Unit
 ) {
-    val result = state.result
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+
+        if (canceled) {
+            Text(
+                text = pluralStringResource(
+                    R.plurals.traceroute_canceled_partial_status,
+                    result.hops.size,
+                    result.hops.size,
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.secondary,
+                modifier = Modifier.testTag("traceroute_canceled_partial_status"),
+            )
+        }
+
+        if (timeLimitReached) {
+            Text(
+                text = stringResource(R.string.traceroute_time_limit_reached),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.secondary,
+                modifier = Modifier.testTag("traceroute_time_limit_reached"),
+            )
+        }
 
         // Summary stats card
         TraceStatsSummary(result = result, onClear = onClear)
@@ -619,7 +735,7 @@ private fun TracerouteFinishedPanel(
         // nested inside the outer AnimatedContent (also SubcomposeLayout) during the
         // Running→Finished transition – same root cause as the Crossfade issue above.
         // Replaced with a plain Row of clickable surfaces; no SubcomposeLayout involved.
-        val tabIndex = if (state.viewMode == TracerouteViewMode.Visual) 0 else 1
+        val tabIndex = if (viewMode == TracerouteViewMode.Visual) 0 else 1
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -668,7 +784,7 @@ private fun TracerouteFinishedPanel(
         // the two SubcomposeLayout instances fight over the slot table and the outgoing
         // subcomposition reads a disposed State<T>, causing IllegalStateException.
         // Plain when-branch with no animation is safe and avoids the nesting entirely.
-        when (state.viewMode) {
+        when (viewMode) {
             TracerouteViewMode.Visual -> HopDetailList(result.hops)
             TracerouteViewMode.Raw    -> RawOutputCard(result.rawOutput)
         }
@@ -773,7 +889,11 @@ private fun TraceJourneyStats(result: TracerouteResult) {
             )
         }
     }
-    val countries = remember(geoHops) { geoHops.map { it.geoLocation!!.country }.distinct() }
+    val countries = remember(geoHops) {
+        geoHops.mapNotNull { it.geoLocation }
+            .distinctBy { CountryFlags.countryName(it.countryCode) ?: it.country }
+            .map { CountryFlags.label(it.countryCode, it.country) }
+    }
     val isps      = remember(geoHops) { geoHops.mapNotNull { it.geoLocation!!.isp }.distinct() }
 
     // ── RTT stats ────────────────────────────────────────────────────────────
@@ -977,8 +1097,8 @@ private fun JourneyStatBox(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     label: String,
     value: String,
+    modifier: Modifier = Modifier,
     subValue: String? = null,
-    modifier: Modifier = Modifier
 ) {
     OutlinedCard(modifier = modifier) {
         Column(
@@ -1156,6 +1276,72 @@ private fun HopCard(hop: HopResult, index: Int) {
                             }
                         }
                     }
+                    if (hop.probeRttsMs.size > 1) {
+                        val probeRttFormat = stringResource(R.string.traceroute_probe_rtt_value)
+                        val probeNoReply = stringResource(R.string.traceroute_probe_no_reply)
+                        val probeLabel = stringResource(R.string.traceroute_hop_probe_rtts)
+                        val listSeparator = stringResource(R.string.traceroute_list_separator)
+                        val probeSuccessColor = MaterialTheme.colorScheme.primary
+                        val probeTimeoutColor = MaterialTheme.colorScheme.outline
+                        val probeDescriptions = mutableListOf<String>()
+                        for ((index, rtt) in hop.probeRttsMs.withIndex()) {
+                            probeDescriptions += if (rtt == null) {
+                                stringResource(R.string.traceroute_probe_no_reply_description, index + 1)
+                            } else {
+                                stringResource(R.string.traceroute_probe_success_description, index + 1, rtt)
+                            }
+                        }
+                        val probesText = buildAnnotatedString {
+                            append(probeLabel)
+                            hop.probeRttsMs.forEach { rtt ->
+                                append(listSeparator)
+                                withStyle(
+                                    SpanStyle(
+                                        color = if (rtt == null) {
+                                            probeTimeoutColor
+                                        } else {
+                                            probeSuccessColor
+                                        },
+                                    ),
+                                ) {
+                                    append(if (rtt == null) "○" else "●")
+                                }
+                                append(" ")
+                                append(
+                                    rtt?.let {
+                                        java.lang.String.format(java.util.Locale.getDefault(), probeRttFormat, it)
+                                    } ?: probeNoReply,
+                                )
+                            }
+                        }
+                        Text(
+                            text = probesText,
+                            modifier = Modifier.semantics {
+                                contentDescription = probeDescriptions.joinToString(", ")
+                            },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        val min = hop.rttMinMs
+                        val avg = hop.rttAvgMs
+                        val max = hop.rttMaxMs
+                        if (min != null && avg != null && max != null) {
+                            Text(
+                                text = stringResource(
+                                    R.string.traceroute_hop_rtt_stats,
+                                    min,
+                                    avg,
+                                    max,
+                                ),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
                 }
 
                 Spacer(Modifier.width(8.dp))
@@ -1217,7 +1403,7 @@ private fun HopCard(hop: HopResult, index: Int) {
                     hop.geoLocation?.let { geo ->
                         val location = buildString {
                             if (geo.city.isNotBlank()) append("${geo.city}, ")
-                            append(geo.country)
+                            append(CountryFlags.label(geo.countryCode, geo.country))
                         }
                         HopDetailRow(stringResource(R.string.traceroute_hop_detail_location), location)
                         geo.isp?.let { HopDetailRow(stringResource(R.string.traceroute_hop_detail_isp), it) }
@@ -1266,7 +1452,7 @@ private fun GeoLocationChip(geo: HopGeoLocation) {
         Spacer(Modifier.width(3.dp))
         val location = buildString {
             if (geo.city.isNotBlank()) append("${geo.city}, ")
-            append(geo.country)
+            append(CountryFlags.label(geo.countryCode, geo.country))
         }
         Text(
             text  = location,
@@ -1341,10 +1527,10 @@ private fun TracerouteErrorPanel(
         title = stringResource(R.string.traceroute_error_title),
         message = state.message,
     ) {
-        FilledTonalButton(onClick = onClear) {
+        FilledTonalButton(onClick = onClear, modifier = Modifier.testTag("traceroute_error_clear")) {
             Text(stringResource(R.string.traceroute_clear_button))
         }
-        Button(onClick = onRetry) {
+        Button(onClick = onRetry, modifier = Modifier.testTag("traceroute_error_retry")) {
             Icon(Icons.Default.Refresh, null)
             Spacer(Modifier.width(4.dp))
             Text(stringResource(R.string.traceroute_retry_button))

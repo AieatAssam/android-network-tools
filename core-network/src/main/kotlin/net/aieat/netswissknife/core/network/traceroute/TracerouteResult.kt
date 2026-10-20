@@ -5,19 +5,11 @@ data class TracerouteResult(
     val resolvedIp: String?,
     val hops: List<HopResult>,
     val rawOutput: String,
-    val totalTimeMs: Long
+    val totalTimeMs: Long,
 ) {
-    /**
-     * True when the highest-numbered hop received a successful response, which is the
-     * standard traceroute definition of "reached the destination".
-     *
-     * The previous implementation compared hopNumber to hops.size (count), which fails
-     * when hops arrive out of order or when the list is sparse (e.g. timeouts skipped).
-     * Comparing by IP against resolvedIp is also unreliable because resolvedIp is itself
-     * derived from the last successful hop, making the predicate a tautology.
-     */
+    /** True only when the native traceroute engine identified a response from the destination. */
     val reachedDestination: Boolean
-        get() = hops.maxByOrNull { it.hopNumber }?.status == HopStatus.SUCCESS
+        get() = hops.any { it.destinationReached }
 
     val geoLocatedHops: List<HopResult>
         get() = hops.filter { it.geoLocation != null }

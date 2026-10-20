@@ -31,10 +31,13 @@ class WifiChannelHelperTest {
     }
 
     @Nested
-    @DisplayName("frequencyToChannel – 5 GHz")
+    @DisplayName("frequencyToChannel – 4.9 and 5 GHz")
     inner class Channel5GHz {
         @ParameterizedTest(name = "{0} MHz → channel {1}")
         @CsvSource(
+            "4910, 182",
+            "4980, 196",
+            "5170, 34",
             "5180, 36",
             "5200, 40",
             "5220, 44",
@@ -112,6 +115,15 @@ class WifiChannelHelperTest {
             val result = WifiChannelHelper.overlapping24GHzChannels(13)
             assertTrue(result.none { it > 14 })
         }
+
+        @Test
+        fun `channel 14 overlap boundary follows its frequency spacing`() {
+            assertTrue(14 !in WifiChannelHelper.overlapping24GHzChannels(10))
+            assertTrue(14 !in WifiChannelHelper.overlapping24GHzChannels(11))
+            assertTrue(14 in WifiChannelHelper.overlapping24GHzChannels(12))
+            assertTrue(14 in WifiChannelHelper.overlapping24GHzChannels(13))
+            assertEquals(setOf(12, 13, 14), WifiChannelHelper.overlapping24GHzChannels(14))
+        }
     }
 
     @Nested
@@ -143,12 +155,12 @@ class WifiChannelHelperTest {
     inner class SecurityParsing {
         @Test
         fun `SAE only is WPA3`() {
-            assertEquals(WifiSecurity.WPA3, WifiSecurity.fromCapabilities("[SAE][ESS]"))
+            assertEquals(WifiSecurity.WPA3, WifiSecurity.fromCapabilities("[RSN-SAE-CCMP][ESS]"))
         }
 
         @Test
         fun `PSK and SAE is WPA2_WPA3`() {
-            assertEquals(WifiSecurity.WPA2_WPA3, WifiSecurity.fromCapabilities("[WPA2-PSK-CCMP][SAE][ESS]"))
+            assertEquals(WifiSecurity.WPA2_WPA3, WifiSecurity.fromCapabilities("[WPA2-PSK+SAE-CCMP][ESS]"))
         }
 
         @Test

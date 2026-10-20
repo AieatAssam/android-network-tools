@@ -1,6 +1,7 @@
 package net.aieat.netswissknife.core.network.wol
 
 import net.aieat.netswissknife.core.network.NetworkResult
+import net.aieat.netswissknife.core.network.operation.OperationSession
 
 interface WakeOnLanRepository {
 
@@ -18,4 +19,13 @@ interface WakeOnLanRepository {
         port: Int = 9,
         repeatCount: Int = 3,
     ): NetworkResult<WolSendReport>
+
+    /** Caller-owned bounded operation variant; legacy repository implementations remain valid. */
+    suspend fun sendMagicPacket(
+        macAddress: String,
+        broadcastAddress: String = "255.255.255.255",
+        port: Int = 9,
+        repeatCount: Int = 3,
+        operationSession: OperationSession,
+    ): NetworkResult<WolSendReport> = sendMagicPacket(macAddress, broadcastAddress, port, repeatCount)
 }
