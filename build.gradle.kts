@@ -54,8 +54,8 @@ val buildToolSecurityPins = mapOf(
     ),
     // ktlint 1.8.0 bundles Logback 1.3.16; the published fixes are on 1.5.x.
     "ktlint" to listOf(
-        "ch.qos.logback:logback-classic:1.5.38",
-        "ch.qos.logback:logback-core:1.5.38",
+        "ch.qos.logback:logback-classic:1.6.5",
+        "ch.qos.logback:logback-core:1.6.5",
     ),
 )
 
