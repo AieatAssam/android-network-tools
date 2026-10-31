@@ -1,5 +1,7 @@
 package net.aieat.netswissknife.app.ui.screens.traceroute
 
+import android.annotation.SuppressLint
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -24,6 +26,7 @@ import net.aieat.netswissknife.app.platform.NetworkStatusProvider
 import net.aieat.netswissknife.app.platform.NoOpNetworkStatusProvider
 import net.aieat.netswissknife.app.platform.OperationAvailability
 import net.aieat.netswissknife.app.platform.denialMessage
+import net.aieat.netswissknife.app.util.enumFromSavedName
 import net.aieat.netswissknife.core.domain.TracerouteFlowResult
 import net.aieat.netswissknife.core.domain.TracerouteParams
 import net.aieat.netswissknife.core.domain.TracerouteUseCase
@@ -78,34 +81,49 @@ class TracerouteViewModel
         private val recentHostsRepository: RecentHostsRepository,
         private val networkStatusProvider: NetworkStatusProvider = NoOpNetworkStatusProvider,
         private val linkInfoProvider: LinkInfoProvider = LinkInfoProvider({ true }, { true }),
+        // Hilt supplies the owner-backed handle at runtime; this empty default supports direct unit tests.
+        @param:SuppressLint("VisibleForTests")
+        private val savedStateHandle: SavedStateHandle = SavedStateHandle(),
     ) : ViewModel() {
         companion object {
             // Resource cleanup may block while cancellation closes native or socket handles.
             // Keep it off the UI and independent of the ViewModel's clearing scope.
             private val cancellationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+            // SavedStateHandle keys for the form; they survive process death and rotation.
+            private const val HOST_KEY = "traceHost"
+            private const val MAX_HOPS_KEY = "traceMaxHops"
+            private const val TIMEOUT_KEY = "traceTimeoutMs"
+            private const val PROBES_KEY = "traceProbesPerHop"
+            private const val PROBE_TYPE_KEY = "traceProbeType"
+            private const val PACKET_SIZE_KEY = "tracePacketSize"
         }
 
         private val _uiState = MutableStateFlow<TracerouteUiState>(TracerouteUiState.Idle)
         val uiState: StateFlow<TracerouteUiState> = _uiState.asStateFlow()
         val networkStatus: StateFlow<NetworkStatus> = networkStatusProvider.status
 
-        private val _host = MutableStateFlow("")
+        private val _host = MutableStateFlow(savedStateHandle.get<String>(HOST_KEY).orEmpty())
         val host: StateFlow<String> = _host.asStateFlow()
 
-        private val _maxHops = MutableStateFlow(30)
+        private val _maxHops = MutableStateFlow(savedStateHandle.get<Int>(MAX_HOPS_KEY) ?: 30)
         val maxHops: StateFlow<Int> = _maxHops.asStateFlow()
 
-        private val _timeoutMs = MutableStateFlow(3_000)
+        private val _timeoutMs = MutableStateFlow(savedStateHandle.get<Int>(TIMEOUT_KEY) ?: 3_000)
         val timeoutMs: StateFlow<Int> = _timeoutMs.asStateFlow()
 
-        private val _probesPerHop = MutableStateFlow(1)
+        private val _probesPerHop = MutableStateFlow(savedStateHandle.get<Int>(PROBES_KEY) ?: 1)
         val probesPerHop: StateFlow<Int> = _probesPerHop.asStateFlow()
 
-        private val _probeType = MutableStateFlow(TracerouteProbeType.ICMP)
+        private val _probeType =
+            MutableStateFlow(
+                enumFromSavedName(savedStateHandle.get<String>(PROBE_TYPE_KEY), TracerouteProbeType.entries)
+                    ?: TracerouteProbeType.ICMP,
+            )
         val probeType: StateFlow<TracerouteProbeType> = _probeType.asStateFlow()
 
         /** 0 = MTU discovery; positive value = fixed packet size in bytes. */
-        private val _packetSize = MutableStateFlow(56)
+        private val _packetSize = MutableStateFlow(savedStateHandle.get<Int>(PACKET_SIZE_KEY) ?: 56)
         val packetSize: StateFlow<Int> = _packetSize.asStateFlow()
 
         val recentHosts: StateFlow<List<String>> =
@@ -134,6 +152,7 @@ class TracerouteViewModel
 
         fun onHostChange(value: String) {
             _host.value = value
+            savedStateHandle[HOST_KEY] = value
             // A failure message describes the previous host; drop it when the host changes.
             if (_uiState.value is TracerouteUiState.Error) {
                 _uiState.value = TracerouteUiState.Idle
@@ -142,18 +161,22 @@ class TracerouteViewModel
 
         fun onMaxHopsChange(value: Int) {
             _maxHops.value = value.coerceIn(1, 64)
+            savedStateHandle[MAX_HOPS_KEY] = _maxHops.value
         }
 
         fun onTimeoutChange(value: Int) {
             _timeoutMs.value = value.coerceIn(500, 30_000)
+            savedStateHandle[TIMEOUT_KEY] = _timeoutMs.value
         }
 
         fun onProbesPerHopChange(value: Int) {
             _probesPerHop.value = value.coerceIn(1, 5)
+            savedStateHandle[PROBES_KEY] = _probesPerHop.value
         }
 
         fun onProbeTypeChange(value: TracerouteProbeType) {
             _probeType.value = value
+            savedStateHandle[PROBE_TYPE_KEY] = value.name
         }
 
         /**
@@ -162,10 +185,12 @@ class TracerouteViewModel
          */
         fun onPacketSizeChange(value: Int) {
             _packetSize.value = value.coerceIn(0, 1472)
+            savedStateHandle[PACKET_SIZE_KEY] = _packetSize.value
         }
 
         fun onToggleMtuDiscovery(enabled: Boolean) {
             _packetSize.value = if (enabled) 0 else 56
+            savedStateHandle[PACKET_SIZE_KEY] = _packetSize.value
         }
 
         fun onToggleViewMode() {

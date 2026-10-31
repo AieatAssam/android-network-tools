@@ -206,12 +206,12 @@ fun WakeOnLanScreen(viewModel: WakeOnLanViewModel = hiltViewModel()) {
                 conflict = saveConflict,
                 canSave = macProblem == null && macAddress.isNotBlank() && !isSending,
                 isSending = isSending,
-                onNameChange = viewModel::onDeviceNameChange,
-                onSave = viewModel::saveDevice,
-                onCancelEdit = viewModel::cancelEdit,
-                onUse = viewModel::useDevice,
-                onEdit = viewModel::startEditDevice,
-                onDelete = { viewModel.deleteDevice(it.mac) },
+                onNameChange = viewModel.savedDeviceEditor::onDeviceNameChange,
+                onSave = viewModel.savedDeviceEditor::saveDevice,
+                onCancelEdit = viewModel.savedDeviceEditor::cancelEdit,
+                onUse = viewModel.savedDeviceEditor::useDevice,
+                onEdit = viewModel.savedDeviceEditor::startEditDevice,
+                onDelete = { viewModel.savedDeviceEditor.deleteDevice(it.mac) },
             )
         }
     }
@@ -241,6 +241,7 @@ fun WakeOnLanScreen(viewModel: WakeOnLanViewModel = hiltViewModel()) {
 }
 
 @Composable
+@Suppress("FunctionNaming", "ktlint:standard:function-naming")
 private fun WolSourceRow(
     isSending: Boolean,
     onClear: () -> Unit,
@@ -259,9 +260,10 @@ private fun WolSourceRow(
         TextButton(
             onClick = onClear,
             enabled = !isSending,
-            modifier = Modifier
-                .heightIn(min = MinTouchTarget)
-                .testTag(WakeOnLanScreenTestTags.CLEAR_PREFILL_ACTION),
+            modifier =
+                Modifier
+                    .heightIn(min = MinTouchTarget)
+                    .testTag(WakeOnLanScreenTestTags.CLEAR_PREFILL_ACTION),
         ) {
             Text(stringResource(R.string.clear))
         }
@@ -269,15 +271,16 @@ private fun WolSourceRow(
 }
 
 @StringRes
-private fun WolMacProblem.messageRes(): Int = when (this) {
-    WolMacProblem.BLANK -> R.string.err_mac_blank
-    WolMacProblem.LENGTH -> R.string.wol_mac_problem_length
-    WolMacProblem.CHARACTERS -> R.string.wol_mac_problem_characters
-    WolMacProblem.SEPARATORS -> R.string.wol_mac_problem_separators
-    WolMacProblem.MULTICAST -> R.string.wol_mac_problem_multicast
-    WolMacProblem.BROADCAST -> R.string.wol_mac_problem_broadcast
-    WolMacProblem.ZERO -> R.string.wol_mac_problem_zero
-}
+private fun WolMacProblem.messageRes(): Int =
+    when (this) {
+        WolMacProblem.BLANK -> R.string.err_mac_blank
+        WolMacProblem.LENGTH -> R.string.wol_mac_problem_length
+        WolMacProblem.CHARACTERS -> R.string.wol_mac_problem_characters
+        WolMacProblem.SEPARATORS -> R.string.wol_mac_problem_separators
+        WolMacProblem.MULTICAST -> R.string.wol_mac_problem_multicast
+        WolMacProblem.BROADCAST -> R.string.wol_mac_problem_broadcast
+        WolMacProblem.ZERO -> R.string.wol_mac_problem_zero
+    }
 
 // ── Input card ────────────────────────────────────────────────────────────────
 
@@ -316,11 +319,12 @@ private fun WolInputCard(
                 placeholder = { Text(stringResource(R.string.wol_mac_placeholder), fontFamily = FontFamily.Monospace) },
                 leadingIcon = { Icon(Icons.Default.Memory, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
                 isError = macError != null,
-                supportingText = if (macError != null) {
-                    { Text(stringResource(macError.messageRes())) }
-                } else {
-                    null
-                },
+                supportingText =
+                    if (macError != null) {
+                        { Text(stringResource(macError.messageRes())) }
+                    } else {
+                        null
+                    },
                 singleLine = true,
                 enabled = !isSending,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii, imeAction = ImeAction.Done),
@@ -341,9 +345,10 @@ private fun WolInputCard(
                     Spacer(Modifier.width(4.dp))
                     Icon(
                         imageVector = if (showAdvanced) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                        contentDescription = stringResource(
-                            if (showAdvanced) R.string.action_collapse else R.string.action_expand
-                        ),
+                        contentDescription =
+                            stringResource(
+                                if (showAdvanced) R.string.action_collapse else R.string.action_expand,
+                            ),
                         modifier = Modifier.size(18.dp)
                     )
                 }
@@ -351,11 +356,12 @@ private fun WolInputCard(
 
             AnimatedVisibility(visible = showAdvanced) {
                 Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.s + AppSpacing.xs)) {
-                    val broadcastError = when (broadcastProblem) {
-                        null -> null
-                        WolBroadcastProblem.BLANK -> R.string.err_broadcast_blank
-                        WolBroadcastProblem.NOT_IPV4 -> R.string.wol_broadcast_invalid
-                    }
+                    val broadcastError =
+                        when (broadcastProblem) {
+                            null -> null
+                            WolBroadcastProblem.BLANK -> R.string.err_broadcast_blank
+                            WolBroadcastProblem.NOT_IPV4 -> R.string.wol_broadcast_invalid
+                        }
                     ToolTextField(
                         value = broadcastAddress,
                         onValueChange = onBroadcastChange,
@@ -407,14 +413,16 @@ private fun WolInputCard(
             }
 
             Button(
-                onClick = hapticAction {
-                    focusManager.clearFocus()
-                    onSend()
-                },
+                onClick =
+                    hapticAction {
+                        focusManager.clearFocus()
+                        onSend()
+                    },
                 enabled = canSend,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = MinTouchTarget),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = MinTouchTarget),
             ) {
                 Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
@@ -425,6 +433,7 @@ private fun WolInputCard(
 }
 
 @Composable
+@Suppress("FunctionNaming", "ktlint:standard:function-naming")
 private fun WolStateCard(
     uiState: WolUiState,
     onCancel: () -> Unit,
@@ -440,16 +449,24 @@ private fun WolStateCard(
         label = "wol-state",
     ) { state ->
         when (state) {
-            is WolUiState.Idle -> Spacer(Modifier.height(0.dp))
+            is WolUiState.Idle -> {
+                Spacer(Modifier.height(0.dp))
+            }
 
-            is WolUiState.Sending -> WolSendingCard(onCancel = onCancel)
+            is WolUiState.Sending -> {
+                WolSendingCard(onCancel = onCancel)
+            }
 
-            is WolUiState.Success -> WolSuccessCard(state.report, onSendAgain = onSendAgain)
+            is WolUiState.Success -> {
+                WolSuccessCard(state.report, onSendAgain = onSendAgain)
+            }
 
-            is WolUiState.Error -> WolErrorCard(
-                message = ErrorTextMapper.map(state.info, state.message).asString(),
-                onRetry = onRetry,
-            )
+            is WolUiState.Error -> {
+                WolErrorCard(
+                    message = ErrorTextMapper.map(state.info, state.message).asString(),
+                    onRetry = onRetry,
+                )
+            }
         }
     }
 }
@@ -457,6 +474,7 @@ private fun WolStateCard(
 // ── Saved devices ─────────────────────────────────────────────────────────────
 
 @Composable
+@Suppress("FunctionNaming", "ktlint:standard:function-naming")
 private fun WolSavedDevicesCard(
     devices: List<WolSavedDevice>,
     deviceName: String,
@@ -513,6 +531,7 @@ private fun WolSavedDevicesCard(
 }
 
 @Composable
+@Suppress("FunctionNaming", "ktlint:standard:function-naming")
 private fun WolSavedDeviceForm(
     deviceName: String,
     editingMac: String?,
@@ -571,6 +590,7 @@ private fun WolSavedDeviceForm(
 }
 
 @Composable
+@Suppress("FunctionNaming", "ktlint:standard:function-naming")
 private fun WolSavedDeviceRow(
     device: WolSavedDevice,
     isSending: Boolean,

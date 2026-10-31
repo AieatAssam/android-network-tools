@@ -1,24 +1,11 @@
 package net.aieat.netswissknife.app.ui.screens.dns
 
+import android.annotation.SuppressLint
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import net.aieat.netswissknife.app.data.AppPreferenceKeys
-import net.aieat.netswissknife.app.data.RecentHostsRepository
-import net.aieat.netswissknife.app.util.SystemDnsAddressProvider
-import net.aieat.netswissknife.app.platform.NetworkStatus
-import net.aieat.netswissknife.app.platform.NetworkStatusProvider
-import net.aieat.netswissknife.app.platform.NoOpNetworkStatusProvider
-import net.aieat.netswissknife.core.domain.DnsLookupParams
-import net.aieat.netswissknife.core.domain.DnsLookupUseCase
-import net.aieat.netswissknife.core.network.NetworkResult
-import net.aieat.netswissknife.core.network.dns.DnsNameValidator
-import net.aieat.netswissknife.core.network.dns.DnsRecordType
-import net.aieat.netswissknife.core.network.dns.DnsResult
-import net.aieat.netswissknife.core.network.dns.DnsServer
-import net.aieat.netswissknife.core.network.dns.DnsLookupOperation
-import net.aieat.netswissknife.core.network.operation.CancellationReason
-import net.aieat.netswissknife.core.network.operation.OperationSession
 import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
@@ -28,7 +15,23 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import javax.inject.Inject
+import net.aieat.netswissknife.app.data.AppPreferenceKeys
+import net.aieat.netswissknife.app.data.RecentHostsRepository
+import net.aieat.netswissknife.app.platform.NetworkStatus
+import net.aieat.netswissknife.app.platform.NetworkStatusProvider
+import net.aieat.netswissknife.app.platform.NoOpNetworkStatusProvider
+import net.aieat.netswissknife.app.util.SystemDnsAddressProvider
+import net.aieat.netswissknife.app.util.enumFromSavedName
+import net.aieat.netswissknife.core.domain.DnsLookupParams
+import net.aieat.netswissknife.core.domain.DnsLookupUseCase
+import net.aieat.netswissknife.core.network.NetworkResult
+import net.aieat.netswissknife.core.network.dns.DnsLookupOperation
+import net.aieat.netswissknife.core.network.dns.DnsNameValidator
+import net.aieat.netswissknife.core.network.dns.DnsRecordType
+import net.aieat.netswissknife.core.network.dns.DnsResult
+import net.aieat.netswissknife.core.network.dns.DnsServer
+import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationSession
 
 /** All possible states for the DNS lookup UI. */
 sealed interface DnsUiState {
@@ -43,12 +46,46 @@ sealed interface DnsUiState {
     ) : DnsUiState
 }
 
+/** SavedStateHandle keys for the DNS form; they survive process death and rotation. */
+private const val DNS_DOMAIN_KEY = "dnsDomain"
+private const val DNS_RECORD_TYPE_KEY = "dnsRecordType"
+private const val DNS_SERVER_KEY = "dnsServer"
+private const val DNS_CUSTOM_SERVER_KEY = "dnsCustomServer"
+
+/** Stable key for a resolver choice. The System resolver's addresses come from the device, not the form. */
+private fun DnsServer.formKey(): String =
+    when (this) {
+        is DnsServer.System -> "system"
+        DnsServer.Google -> "google"
+        DnsServer.Cloudflare -> "cloudflare"
+        DnsServer.OpenDns -> "opendns"
+        DnsServer.Quad9 -> "quad9"
+        is DnsServer.Custom -> "custom"
+    }
+
+private fun dnsServerFromFormKey(
+    key: String?,
+    customAddress: String,
+): DnsServer? =
+    when (key) {
+        "system" -> DnsServer.System()
+        "google" -> DnsServer.Google
+        "cloudflare" -> DnsServer.Cloudflare
+        "opendns" -> DnsServer.OpenDns
+        "quad9" -> DnsServer.Quad9
+        "custom" -> DnsServer.Custom(customAddress)
+        else -> null
+    }
+
 @HiltViewModel
 class DnsViewModel @Inject constructor(
     private val dnsLookupUseCase: DnsLookupUseCase,
     private val systemDnsAddressProvider: SystemDnsAddressProvider,
     private val recentHostsRepository: RecentHostsRepository,
     private val networkStatusProvider: NetworkStatusProvider = NoOpNetworkStatusProvider,
+    // Hilt supplies the owner-backed handle at runtime; this empty default supports direct unit tests.
+    @param:SuppressLint("VisibleForTests")
+    private val savedStateHandle: SavedStateHandle = SavedStateHandle(),
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<DnsUiState>(DnsUiState.Idle)
@@ -67,17 +104,26 @@ class DnsViewModel @Inject constructor(
 
     // ── Form field state ─────────────────────────────────────────────────────
 
-    private val _domain = MutableStateFlow("")
+    private val _domain = MutableStateFlow(savedStateHandle.get<String>(DNS_DOMAIN_KEY).orEmpty())
     val domain: StateFlow<String> = _domain.asStateFlow()
 
-    private val _recordType = MutableStateFlow(DnsRecordType.A)
+    private val _recordType =
+        MutableStateFlow(
+            enumFromSavedName(savedStateHandle.get<String>(DNS_RECORD_TYPE_KEY), DnsRecordType.entries)
+                ?: DnsRecordType.A,
+        )
     val recordType: StateFlow<DnsRecordType> = _recordType.asStateFlow()
 
-    private val _selectedServer = MutableStateFlow<DnsServer>(DnsServer.System())
-    val selectedServer: StateFlow<DnsServer> = _selectedServer.asStateFlow()
-
-    private val _customServerAddress = MutableStateFlow("")
+    // The custom address is declared first: a saved "custom" choice reads it.
+    private val _customServerAddress = MutableStateFlow(savedStateHandle.get<String>(DNS_CUSTOM_SERVER_KEY).orEmpty())
     val customServerAddress: StateFlow<String> = _customServerAddress.asStateFlow()
+
+    private val _selectedServer =
+        MutableStateFlow<DnsServer>(
+            dnsServerFromFormKey(savedStateHandle.get<String>(DNS_SERVER_KEY), _customServerAddress.value)
+                ?: DnsServer.System(),
+        )
+    val selectedServer: StateFlow<DnsServer> = _selectedServer.asStateFlow()
 
     val recentHosts: StateFlow<List<String>> = recentHostsRepository
         .getRecents(AppPreferenceKeys.RECENT_DNS_HOSTS)
@@ -87,22 +133,27 @@ class DnsViewModel @Inject constructor(
 
     fun onDomainChange(value: String) {
         _domain.value = value
+        savedStateHandle[DNS_DOMAIN_KEY] = value
         clearStaleResult()
     }
 
     fun onRecordTypeChange(type: DnsRecordType) {
         _recordType.value = type
+        savedStateHandle[DNS_RECORD_TYPE_KEY] = type.name
         clearStaleResult()
     }
 
     fun onServerChange(server: DnsServer) {
         _selectedServer.value = server
+        savedStateHandle[DNS_SERVER_KEY] = server.formKey()
         clearStaleResult()
     }
 
     fun onCustomServerAddressChange(address: String) {
         _customServerAddress.value = address
         _selectedServer.value = DnsServer.Custom(address)
+        savedStateHandle[DNS_CUSTOM_SERVER_KEY] = address
+        savedStateHandle[DNS_SERVER_KEY] = _selectedServer.value.formKey()
         clearStaleResult()
     }
 
@@ -143,6 +194,7 @@ class DnsViewModel @Inject constructor(
             _uiState.value is DnsUiState.Canceling
         ) return
         _selectedServer.value = DnsServer.Cloudflare
+        savedStateHandle[DNS_SERVER_KEY] = DnsServer.Cloudflare.formKey()
         performLookup()
     }
 

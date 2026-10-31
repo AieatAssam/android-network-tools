@@ -1,8 +1,11 @@
 package net.aieat.netswissknife.app.ui.screens.whois
 
+import android.annotation.SuppressLint
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
@@ -18,23 +21,23 @@ import net.aieat.netswissknife.app.data.RecentHostsRepository
 import net.aieat.netswissknife.app.platform.NetworkStatus
 import net.aieat.netswissknife.app.platform.NetworkStatusProvider
 import net.aieat.netswissknife.app.platform.NoOpNetworkStatusProvider
+import net.aieat.netswissknife.app.util.enumFromSavedName
 import net.aieat.netswissknife.core.domain.WhoisLookupUseCase
 import net.aieat.netswissknife.core.domain.WhoisParams
 import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.HostProblem
 import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.NetworkResult
+import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationSession
 import net.aieat.netswissknife.core.network.whois.WhoisHop
+import net.aieat.netswissknife.core.network.whois.WhoisOperation
 import net.aieat.netswissknife.core.network.whois.WhoisProtocol
 import net.aieat.netswissknife.core.network.whois.WhoisQueryTypeDetector
 import net.aieat.netswissknife.core.network.whois.WhoisResult
 import net.aieat.netswissknife.core.network.whois.WhoisServer
 import net.aieat.netswissknife.core.network.whois.WhoisServerRole
 import net.aieat.netswissknife.core.network.whois.answeringProtocol
-import net.aieat.netswissknife.core.network.operation.CancellationReason
-import net.aieat.netswissknife.core.network.operation.OperationSession
-import net.aieat.netswissknife.core.network.whois.WhoisOperation
-import javax.inject.Inject
 
 enum class HopStatus { PENDING, QUERYING, DONE, FAILED, SKIPPED }
 
@@ -60,14 +63,29 @@ data class WhoisUiState(
     val showRawResponse: Boolean = false
 )
 
+/** SavedStateHandle keys for the WHOIS form; they survive process death and rotation. */
+private const val WHOIS_QUERY_KEY = "whoisQuery"
+private const val WHOIS_PROTOCOL_KEY = "whoisProtocol"
+
 @HiltViewModel
 class WhoisViewModel @Inject constructor(
     private val whoisLookupUseCase: WhoisLookupUseCase,
     private val recentHostsRepository: RecentHostsRepository,
     private val networkStatusProvider: NetworkStatusProvider = NoOpNetworkStatusProvider,
+    // Hilt supplies the owner-backed handle at runtime; this empty default supports direct unit tests.
+    @param:SuppressLint("VisibleForTests")
+    private val savedStateHandle: SavedStateHandle = SavedStateHandle(),
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(WhoisUiState())
+    private val _uiState =
+        MutableStateFlow(
+            WhoisUiState(
+                query = savedStateHandle.get<String>(WHOIS_QUERY_KEY).orEmpty(),
+                protocol =
+                    enumFromSavedName(savedStateHandle.get<String>(WHOIS_PROTOCOL_KEY), WhoisProtocol.entries)
+                        ?: WhoisProtocol.AUTO,
+            ),
+        )
     val uiState: StateFlow<WhoisUiState> = _uiState.asStateFlow()
     val networkStatus: StateFlow<NetworkStatus> = networkStatusProvider.status
 
@@ -83,6 +101,7 @@ class WhoisViewModel @Inject constructor(
     private var operationSession: OperationSession? = null
 
     fun onQueryChange(value: String) {
+        savedStateHandle[WHOIS_QUERY_KEY] = value
         _uiState.update { state ->
             val effectiveQueryChanged = lookupIdentity(value) != lookupIdentity(state.query)
             if (state.isCanceled && effectiveQueryChanged) {
@@ -106,6 +125,7 @@ class WhoisViewModel @Inject constructor(
     fun onProtocolChange(protocol: WhoisProtocol) {
         if (_uiState.value.isLoading || _uiState.value.isCanceling) return
         if (_uiState.value.protocol == protocol) return
+        savedStateHandle[WHOIS_PROTOCOL_KEY] = protocol.name
         _uiState.update {
             it.copy(
                 protocol = protocol,

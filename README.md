@@ -38,6 +38,7 @@ Network path analysis with per-hop geolocation enrichment.
 - Journey Intelligence labels GeoIP locations as approximate. When a hop's location cannot be reached within the measured RTT at about 200 km per ms (light in fibre), the distance, route, and "Speed vs light" figures are hidden and the card says why
 - Backgrounding the app stops a running trace and keeps the hops found so far; a screen rotation does not stop it
 - Editing the host field clears a previous "Trace failed" message
+- The host and settings survive rotation and process death; leaving the tool with Back clears them
 
 ### Port Scanner
 TCP port reachability scanning with service identification.
@@ -48,6 +49,7 @@ TCP port reachability scanning with service identification.
 - Banner grabbing for open ports
 - Invalid hosts show the specific reason (for example, a space, an out-of-range IPv4 octet or an invalid character) instead of one generic message. Editing the host clears the previous result
 - A scan stopped with Stop Scan, or stopped when the app leaves the foreground, is labelled as stopped early with the number of ports scanned so far. A screen rotation does not stop a running scan
+- Leaving the tool and coming back keeps the host, port range, preset, timeout, concurrency and the last finished result, but a result is shown again only for the host it scanned. After a process death the form returns and the result does not
 
 ### LAN Scanner
 Local network device discovery across IPv4 subnets.
@@ -61,6 +63,7 @@ Local network device discovery across IPv4 subnets.
 - Search results by IP, hostname, or vendor; filter by gateway or hosts with open ports
 - Expanded hosts include a direct **Scan ports** hand-off; the OUI registry contains 50,000+ prefixes and can be refreshed with `python3 tools/oui/update_oui.py`
 - Back closes an expanded host first and keeps the results; a rotation keeps the scan running; there is no pull-to-refresh, so a swipe never discards results (use **Re-scan**)
+- Leaving the tool and coming back shows the last result, subnet, timeout and concurrency again (kept while the app stays open). After a process death the subnet, timeout and concurrency return but the result does not, since results are not saved to disk
 - Uncertain probe rows name the reason and port (for example "TCP probe timed out, port 80") rather than raw exception text
 
 ### DNS Lookup
@@ -71,6 +74,7 @@ Full DNS record resolution with multiple resolver options and protocol-level res
 - Returns each record's actual RR type and section, RCODE, AA/AD/TC/RD/RA flags, query time, server actually used, and raw DNS response
 - The domain field is checked as you type: names with spaces, empty labels or invalid characters show a plain-language message and Look up stays disabled. Names with leading underscores (SRV, TXT owner labels) are accepted
 - Editing the name, record type or server clears a finished result or error so an old answer is not shown for a new query
+- The name, record type and resolver survive rotation and process death; leaving the tool with Back clears them
 - The Additional section starts collapsed, since it usually holds EDNS OPT pseudo-records (labelled `OPT`); an MX record of `0 .` is annotated as a null MX
 - System DNS is never silently replaced with Cloudflare; when Android reports no resolver, the UI explains the failure and offers an explicit Cloudflare fallback. Private DNS status is shown when available.
 - IDN hostnames and trailing-dot FQDNs are normalized consistently across network tools.
@@ -125,6 +129,7 @@ Domain, IP, and ASN registration lookup using RDAP with WHOIS fallback.
 - Live relay-chain visualiser shows the RDAP or WHOIS servers used; completed hops share one success colour
 - Invalid input names the specific problem (e.g. "An IPv4 address needs four numbers from 0 to 255" for 999.1.1.1)
 - The raw RDAP/WHOIS response section expands from its whole header row; the lookup keeps running across screen rotation
+- The query and protocol survive rotation and process death; leaving the tool with Back clears them
 
 ### HTTP Probe
 HTTPS request tester with security header analysis. Plain HTTP requests are disabled in this release.
@@ -174,6 +179,7 @@ IPv4 subnet calculator with binary breakdown, notation conversion, an "is this a
 - **Copy** and **Share** buttons put a plain-text summary of the calculated subnet on the clipboard or into the share sheet
 - Quick example chips for common subnets (`/8`, `/12`, `/16`, `/24`, `/30`, `/0`)
 - Network alignment warning when the entered IP is not on a network boundary, showing the corrected network address
+- Entered fields survive rotation and process death; a result is recalculated when you calculate again. Leaving the tool with Back clears the fields
 
 ### Speed Test
 Internet connection speed test measuring latency, download, and upload throughput.
@@ -194,6 +200,7 @@ Wake sleeping or powered-down machines on the local network with a UDP magic pac
 - Real-time validation with a specific inline message for each problem: wrong length, invalid characters, mixed separators, multicast, broadcast or all-zero address
 - Advanced options: broadcast address (default `255.255.255.255`; any dotted-decimal IPv4 address such as a subnet-directed `192.168.1.255` is accepted; host names and IPv6 are rejected inline) and UDP port (default 9, valid 1-65535). The panel opens automatically when one of these fields is invalid
 - Sends 3 duplicate packets per request for reliability over lossy UDP
+- The MAC, broadcast address and port survive rotation and process death; leaving the tool with Back clears them. The saved-device name field is not kept
 - Success card reports the send and states that Wake-on-LAN is fire-and-forget: no delivery confirmation is returned. It confirms target MAC, broadcast address, port and packet count
 - Errors are specific: no local Wi-Fi or Ethernet network, a local-network permission denial, an invalid broadcast address, or a general send failure. Each has a Retry action
 - Saved devices (stored on this device only): save the current MAC under an optional name, use a saved device to fill the form, edit a saved device's name or MAC, and delete it. A MAC is stored once, whichever notation it was entered in; an edit that would make two entries share a MAC is refused

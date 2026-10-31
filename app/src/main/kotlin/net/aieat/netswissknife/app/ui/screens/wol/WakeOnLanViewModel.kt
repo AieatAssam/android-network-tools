@@ -96,10 +96,10 @@ class WakeOnLanViewModel @Inject constructor(
     )
     val macAddress: StateFlow<String> = _macAddress.asStateFlow()
 
-    private val _broadcastAddress = MutableStateFlow(DEFAULT_BROADCAST)
+    private val _broadcastAddress = MutableStateFlow(savedStateHandle.get<String>(BROADCAST_KEY) ?: DEFAULT_BROADCAST)
     val broadcastAddress: StateFlow<String> = _broadcastAddress.asStateFlow()
 
-    private val _port = MutableStateFlow(DEFAULT_PORT.toString())
+    private val _port = MutableStateFlow(savedStateHandle.get<String>(PORT_KEY) ?: DEFAULT_PORT.toString())
     val port: StateFlow<String> = _port.asStateFlow()
 
     /** Inline problem for the MAC field; BLANK means "nothing entered yet" and is not an error to show. */
@@ -119,20 +119,20 @@ class WakeOnLanViewModel @Inject constructor(
             .stateIn(viewModelScope, SharingStarted.Eagerly, isPortOutOfRange(_port.value))
 
     // ── Saved devices ────────────────────────────────────────────────────────
+    // The list and its add, edit, use and delete actions live in WolSavedDeviceEditor. The screen
+    // calls those actions through savedDeviceEditor; the flows are re-exposed here for collection.
 
-    val savedDevices: StateFlow<List<WolSavedDevice>> =
-        savedDeviceStore.devices.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
-
-    private val _deviceName = MutableStateFlow("")
-    val deviceName: StateFlow<String> = _deviceName.asStateFlow()
-
-    /** Canonical MAC of the saved device being edited, or null when saving a new one. */
-    private val _editingMac = MutableStateFlow<String?>(null)
-    val editingMac: StateFlow<String?> = _editingMac.asStateFlow()
-
-    /** Set when an edit would make two saved devices share a MAC; nothing is changed. */
-    private val _saveConflict = MutableStateFlow(false)
-    val saveConflict: StateFlow<Boolean> = _saveConflict.asStateFlow()
+    val savedDeviceEditor: WolSavedDeviceEditor =
+        WolSavedDeviceEditor(
+            store = savedDeviceStore,
+            scope = viewModelScope,
+            currentMac = { _macAddress.value },
+            fillMac = { mac -> onMacAddressChange(mac) },
+        )
+    val savedDevices: StateFlow<List<WolSavedDevice>> = savedDeviceEditor.savedDevices
+    val deviceName: StateFlow<String> = savedDeviceEditor.deviceName
+    val editingMac: StateFlow<String?> = savedDeviceEditor.editingMac
+    val saveConflict: StateFlow<Boolean> = savedDeviceEditor.saveConflict
 
     private var operationSession: OperationSession? = null
     private var sendGeneration = 0L
@@ -163,7 +163,7 @@ class WakeOnLanViewModel @Inject constructor(
     fun onMacAddressChange(value: String) {
         _macAddress.value = value
         savedStateHandle[EDITED_MAC_KEY] = value
-        _saveConflict.value = false
+        savedDeviceEditor.clearSaveConflict()
         if (_hasInvalidHandoff.value && ToolMacAddress.parse(value) != null) {
             savedStateHandle[HANDOFF_RECOVERED_KEY] = true
             _hasInvalidHandoff.value = false
@@ -182,71 +182,14 @@ class WakeOnLanViewModel @Inject constructor(
 
     fun onBroadcastAddressChange(value: String) {
         _broadcastAddress.value = value
+        savedStateHandle[BROADCAST_KEY] = value
     }
 
     fun onPortChange(value: String) {
         if (value.isEmpty() || (value.length <= 5 && value.all(Char::isDigit))) {
             _port.value = value
+            savedStateHandle[PORT_KEY] = value
         }
-    }
-
-    fun onDeviceNameChange(value: String) {
-        _deviceName.value = value.take(WolSavedDevices.MAX_NAME_LENGTH)
-    }
-
-    /** Saves the current MAC under the entered name, or updates the saved device being edited. */
-    fun saveDevice() {
-        val canonical = WolMagicPacket.canonicalMacOrNull(_macAddress.value) ?: return
-        val name = _deviceName.value
-        val original = _editingMac.value
-        if (original != null) {
-            val outcome = WolSavedDevices.edit(savedDevices.value, original, canonical, name)
-            if (outcome is WolSaveOutcome.Duplicate) {
-                _saveConflict.value = true
-                return
-            }
-            viewModelScope.launch {
-                savedDeviceStore.update { list ->
-                    when (val result = WolSavedDevices.edit(list, original, canonical, name)) {
-                        is WolSaveOutcome.Saved -> result.devices
-                        WolSaveOutcome.Duplicate -> list
-                    }
-                }
-            }
-            _editingMac.value = null
-        } else {
-            viewModelScope.launch {
-                savedDeviceStore.update { list -> WolSavedDevices.upsert(list, canonical, name) }
-            }
-        }
-        _saveConflict.value = false
-        _deviceName.value = ""
-    }
-
-    fun deleteDevice(mac: String) {
-        viewModelScope.launch {
-            savedDeviceStore.update { list -> WolSavedDevices.remove(list, mac) }
-        }
-        if (_editingMac.value == mac) cancelEdit()
-    }
-
-    /** Fills the MAC and name from a saved device. Does not send. */
-    fun useDevice(device: WolSavedDevice) {
-        _editingMac.value = null
-        _deviceName.value = device.name
-        onMacAddressChange(device.mac)
-    }
-
-    fun startEditDevice(device: WolSavedDevice) {
-        _editingMac.value = device.mac
-        _deviceName.value = device.name
-        onMacAddressChange(device.mac)
-    }
-
-    fun cancelEdit() {
-        _editingMac.value = null
-        _deviceName.value = ""
-        _saveConflict.value = false
     }
 
     fun send() {
@@ -316,5 +259,9 @@ class WakeOnLanViewModel @Inject constructor(
         private const val HANDOFF_CONSUMED_KEY = "wolHandoffConsumed"
         private const val HANDOFF_SOURCE_KEY = "wolHandoffSource"
         private const val HANDOFF_RECOVERED_KEY = "wolHandoffRecovered"
+
+        // Advanced-options values; they survive rotation and process death, not leaving the tool.
+        private const val BROADCAST_KEY = "wolBroadcastAddress"
+        private const val PORT_KEY = "wolPort"
     }
 }

@@ -1,5 +1,7 @@
 package net.aieat.netswissknife.app.ui.screens.subnet
 
+import android.annotation.SuppressLint
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -7,6 +9,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import net.aieat.netswissknife.app.util.enumFromSavedName
 import net.aieat.netswissknife.core.domain.SubnetCalculatorUseCase
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.subnet.SubnetInfo
@@ -34,16 +37,53 @@ data class SubnetCalculatorUiState(
     val splitError: NetworkResult.Error? = null,
 )
 
+/** SavedStateHandle keys for the calculator inputs; the derived result is recalculated, not saved. */
+private const val KEY_INPUT = "subnetInput"
+private const val KEY_RANGE_MODE = "subnetRangeMode"
+private const val KEY_MIN_IP = "subnetMinIp"
+private const val KEY_MAX_IP = "subnetMaxIp"
+private const val KEY_CHECK_IP = "subnetCheckIp"
+private const val KEY_SPLIT_MODE = "subnetSplitMode"
+private const val KEY_SPLIT_INPUT = "subnetSplitInput"
+
+/** Keeps the form fields (never the derived result) across process death and rotation. */
+private fun SavedStateHandle.writeInputs(state: SubnetCalculatorUiState) {
+    this[KEY_INPUT] = state.input
+    this[KEY_RANGE_MODE] = state.isRangeMode
+    this[KEY_MIN_IP] = state.minIpInput
+    this[KEY_MAX_IP] = state.maxIpInput
+    this[KEY_CHECK_IP] = state.checkIpInput
+    this[KEY_SPLIT_MODE] = state.splitMode.name
+    this[KEY_SPLIT_INPUT] = state.splitInput
+}
+
 @HiltViewModel
 class SubnetCalculatorViewModel @Inject constructor(
     private val useCase: SubnetCalculatorUseCase,
+    // Hilt supplies the owner-backed handle at runtime; this empty default supports direct unit tests.
+    @param:SuppressLint("VisibleForTests")
+    private val savedStateHandle: SavedStateHandle = SavedStateHandle(),
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(SubnetCalculatorUiState())
+    private val _uiState =
+        MutableStateFlow(
+            SubnetCalculatorUiState(
+                input = savedStateHandle.get<String>(KEY_INPUT).orEmpty(),
+                isRangeMode = savedStateHandle.get<Boolean>(KEY_RANGE_MODE) ?: false,
+                minIpInput = savedStateHandle.get<String>(KEY_MIN_IP).orEmpty(),
+                maxIpInput = savedStateHandle.get<String>(KEY_MAX_IP).orEmpty(),
+                checkIpInput = savedStateHandle.get<String>(KEY_CHECK_IP).orEmpty(),
+                splitMode =
+                    enumFromSavedName(savedStateHandle.get<String>(KEY_SPLIT_MODE), SubnetSplitMode.entries)
+                        ?: SubnetSplitMode.BY_PREFIX,
+                splitInput = savedStateHandle.get<String>(KEY_SPLIT_INPUT).orEmpty(),
+            ),
+        )
     val uiState: StateFlow<SubnetCalculatorUiState> = _uiState.asStateFlow()
 
     fun onInputChange(value: String) {
         _uiState.value = _uiState.value.withoutResult().copy(input = value)
+        savedStateHandle.writeInputs(_uiState.value)
     }
 
     fun calculate() {
@@ -60,6 +100,7 @@ class SubnetCalculatorViewModel @Inject constructor(
 
     fun setExample(example: String) {
         _uiState.value = SubnetCalculatorUiState(input = example)
+        savedStateHandle.writeInputs(_uiState.value)
         calculate()
     }
 
@@ -78,14 +119,17 @@ class SubnetCalculatorViewModel @Inject constructor(
                 val cidrInput = state.minIpInput.takeIf { it.isNotBlank() } ?: state.input
                 state.withoutResult().copy(isRangeMode = false, input = cidrInput)
             }
+        savedStateHandle.writeInputs(_uiState.value)
     }
 
     fun onMinIpChange(value: String) {
         _uiState.value = _uiState.value.withoutResult().copy(minIpInput = value)
+        savedStateHandle.writeInputs(_uiState.value)
     }
 
     fun onMaxIpChange(value: String) {
         _uiState.value = _uiState.value.withoutResult().copy(maxIpInput = value)
+        savedStateHandle.writeInputs(_uiState.value)
     }
 
     fun calculateRange() {
@@ -106,6 +150,7 @@ class SubnetCalculatorViewModel @Inject constructor(
     /** Editing the address re-checks it against the current result; it never clears the result. */
     fun onCheckIpChange(value: String) {
         _uiState.value = _uiState.value.copy(checkIpInput = value, membership = null, membershipError = null)
+        savedStateHandle.writeInputs(_uiState.value)
         val cidr = _uiState.value.result?.cidrNotation ?: return
         val ip = value.trim()
         if (ip.isBlank()) return
@@ -121,10 +166,12 @@ class SubnetCalculatorViewModel @Inject constructor(
 
     fun onSplitModeChange(mode: SubnetSplitMode) {
         _uiState.value = _uiState.value.copy(splitMode = mode, splitInput = "", split = null, splitError = null)
+        savedStateHandle.writeInputs(_uiState.value)
     }
 
     fun onSplitInputChange(value: String) {
         _uiState.value = _uiState.value.copy(splitInput = value, split = null, splitError = null)
+        savedStateHandle.writeInputs(_uiState.value)
     }
 
     fun splitNetwork() {

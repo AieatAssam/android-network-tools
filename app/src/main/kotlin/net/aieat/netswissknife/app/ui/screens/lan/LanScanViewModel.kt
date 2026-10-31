@@ -1,8 +1,10 @@
 package net.aieat.netswissknife.app.ui.screens.lan
 
+import android.annotation.SuppressLint
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -21,6 +23,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
+import net.aieat.netswissknife.app.data.ToolSessionMemory
 import net.aieat.netswissknife.app.platform.LinkInfoProvider
 import net.aieat.netswissknife.app.platform.NetworkErrorKind
 import net.aieat.netswissknife.app.platform.NetworkStatus
@@ -150,6 +153,26 @@ sealed interface LanNavEvent {
     ) : LanNavEvent
 }
 
+/** SavedStateHandle keys for the LAN form inputs; they survive process death and rotation. */
+private const val LAN_SUBNET_KEY = "lanSubnet"
+private const val LAN_TIMEOUT_KEY = "lanTimeoutMs"
+private const val LAN_CONCURRENCY_KEY = "lanConcurrency"
+
+/** [ToolSessionMemory] slot holding the last LAN form inputs and terminal result. */
+private const val LAN_SESSION_KEY = "lanSession"
+
+/**
+ * The LAN form and its last terminal result, kept in [ToolSessionMemory] when the tool is left.
+ * [state] is always Finished, Canceled or Idle; a scan that was still running is kept as the
+ * stopped-early result it became.
+ */
+internal data class LanScanSessionSnapshot(
+    val subnet: String,
+    val timeoutMs: Int,
+    val concurrency: Int,
+    val state: LanScanUiState,
+)
+
 @HiltViewModel
 class LanScanViewModel
     @Inject
@@ -159,21 +182,41 @@ class LanScanViewModel
         private val recentHostsRepository: RecentHostsRepository,
         private val linkInfoProvider: LinkInfoProvider? = null,
         networkStatusProvider: NetworkStatusProvider = NoOpNetworkStatusProvider,
+        // Hilt supplies the owner-backed handle at runtime; this empty default supports direct unit tests.
+        @param:SuppressLint("VisibleForTests")
+        private val savedStateHandle: SavedStateHandle = SavedStateHandle(),
+        private val sessionMemory: ToolSessionMemory = ToolSessionMemory(),
     ) : ViewModel() {
         val networkStatus: StateFlow<NetworkStatus> = networkStatusProvider.status
 
-        private val _uiState = MutableStateFlow<LanScanUiState>(LanScanUiState.Idle)
+        // Restore order matters. Inputs come first: the SavedStateHandle (process death) wins, then
+        // the activity-held snapshot (Back and return). Restored values override both the detected
+        // subnet in refreshSubnet() and the DataStore defaults loaded in settingsLoad.
+        private val restoredSession: LanScanSessionSnapshot? =
+            sessionMemory.get<LanScanSessionSnapshot>(LAN_SESSION_KEY)
+        private val restoredSubnet: String? =
+            savedStateHandle.get<String>(LAN_SUBNET_KEY) ?: restoredSession?.subnet
+        private val restoredTimeoutMs: Int? =
+            savedStateHandle.get<Int>(LAN_TIMEOUT_KEY) ?: restoredSession?.timeoutMs
+        private val restoredConcurrency: Int? =
+            savedStateHandle.get<Int>(LAN_CONCURRENCY_KEY) ?: restoredSession?.concurrency
+
+        // A result is restored only for the subnet it was produced from.
+        private val restoredResult: LanScanUiState? =
+            restoredSession?.takeIf { it.subnet == restoredSubnet }?.state
+
+        private val _uiState = MutableStateFlow<LanScanUiState>(restoredResult ?: LanScanUiState.Idle)
         val uiState: StateFlow<LanScanUiState> = _uiState.asStateFlow()
 
         // ── Form state ────────────────────────────────────────────────────────────
 
-        private val _subnet = MutableStateFlow("")
+        private val _subnet = MutableStateFlow(restoredSubnet.orEmpty())
         val subnet: StateFlow<String> = _subnet.asStateFlow()
 
-        private val _timeoutMs = MutableStateFlow(1_000)
+        private val _timeoutMs = MutableStateFlow(restoredTimeoutMs ?: 1_000)
         val timeoutMs: StateFlow<Int> = _timeoutMs.asStateFlow()
 
-        private val _concurrency = MutableStateFlow(50)
+        private val _concurrency = MutableStateFlow(restoredConcurrency ?: 50)
         val concurrency: StateFlow<Int> = _concurrency.asStateFlow()
 
         private val _isSubnetLoading = MutableStateFlow(false)
@@ -256,8 +299,13 @@ class LanScanViewModel
             settingsLoad =
                 viewModelScope.launch {
                     val prefs = dataStore.data.first()
-                    _timeoutMs.value = prefs[AppPreferenceKeys.DEFAULT_TIMEOUT_MS] ?: 1_000
-                    _concurrency.value = prefs[AppPreferenceKeys.DEFAULT_CONCURRENCY] ?: 50
+                    // A restored input keeps its value; the DataStore default applies only to a fresh form.
+                    if (restoredTimeoutMs == null) {
+                        _timeoutMs.value = prefs[AppPreferenceKeys.DEFAULT_TIMEOUT_MS] ?: 1_000
+                    }
+                    if (restoredConcurrency == null) {
+                        _concurrency.value = prefs[AppPreferenceKeys.DEFAULT_CONCURRENCY] ?: 50
+                    }
                     _hostSortOrder.value = prefs[AppPreferenceKeys.LAN_HOST_SORT_ORDER]
                         ?.let { stored -> runCatching { LanHostSortOrder.valueOf(stored) }.getOrNull() }
                         ?: LanHostSortOrder.IP
@@ -268,8 +316,13 @@ class LanScanViewModel
         // ── User actions ──────────────────────────────────────────────────────────
 
         fun onSubnetChange(value: String) {
-            _subnet.value = value
+            setSubnet(value)
             _subnetNarrowedFrom.value = null
+        }
+
+        private fun setSubnet(value: String) {
+            _subnet.value = value
+            savedStateHandle[LAN_SUBNET_KEY] = value
         }
 
         /** Replaces the subnet with [subnet], typically a suggested slice, and starts scanning it. */
@@ -280,10 +333,12 @@ class LanScanViewModel
 
         fun onTimeoutChange(value: Int) {
             _timeoutMs.value = value
+            savedStateHandle[LAN_TIMEOUT_KEY] = value
         }
 
         fun onConcurrencyChange(value: Int) {
             _concurrency.value = value
+            savedStateHandle[LAN_CONCURRENCY_KEY] = value
         }
 
         fun onSearchQueryChange(value: String) {
@@ -323,7 +378,7 @@ class LanScanViewModel
                         AppLogger.e(TAG, "refreshSubnet: failed to detect subnet", e)
                     }
                     if (_subnet.value.isBlank()) {
-                        _subnet.value = DEFAULT_LAN_SUBNET
+                        setSubnet(DEFAULT_LAN_SUBNET)
                     }
                 } finally {
                     _isSubnetLoading.value = false
@@ -340,7 +395,7 @@ class LanScanViewModel
                 LocalSubnet
                     .hostSlice(detected, localIp)
                     ?.takeIf { it != detected && exceedsScanCeiling(detected) }
-            _subnet.value = slice ?: detected
+            setSubnet(slice ?: detected)
             _subnetNarrowedFrom.value = detected.takeIf { slice != null }
         }
 
@@ -599,20 +654,23 @@ class LanScanViewModel
             return true
         }
 
+        /** The hosts found so far, as a summary of a scan that is being stopped early. */
+        private fun partialSummaryOf(current: LanScanUiState.Scanning): LanScanSummary =
+            LanScanSummary(
+                subnet = _subnet.value,
+                totalScanned = current.scannedCount,
+                aliveHosts = current.hosts.size,
+                scanDurationMs = SystemMonotonicClock.elapsedMillisSince(scanStartNanos),
+                hosts = current.hosts,
+                uncertainHosts = current.uncertainDiagnostics,
+                uncertainCount = current.uncertainCount,
+            )
+
         private fun cancelWithPartial(reason: CancellationReason) {
             val current = _uiState.value as? LanScanUiState.Scanning ?: return
             val session = scanOperationSession
             val job = scanJob
-            val partial =
-                LanScanSummary(
-                    subnet = _subnet.value,
-                    totalScanned = current.scannedCount,
-                    aliveHosts = current.hosts.size,
-                    scanDurationMs = SystemMonotonicClock.elapsedMillisSince(scanStartNanos),
-                    hosts = current.hosts,
-                    uncertainHosts = current.uncertainDiagnostics,
-                    uncertainCount = current.uncertainCount,
-                )
+            val partial = partialSummaryOf(current)
             if (session == null || job == null || job.isCompleted) {
                 _uiState.value =
                     if (reason == CancellationReason.USER_STOP) {
@@ -710,8 +768,68 @@ class LanScanViewModel
             }
         }
 
+        /**
+         * The state to keep when the tool is left. It matches the terminal state the scan reaches on
+         * its own: a pause or a deadline finishes as a partial result, and only a user Stop stays
+         * Canceled. A scan the pause is already stopping takes its reason from [pendingCancellation].
+         */
+        private fun stateToKeepOnLeave(): LanScanUiState {
+            val pending = pendingCancellation
+            return when (val current = _uiState.value) {
+                is LanScanUiState.Finished, is LanScanUiState.Canceled -> {
+                    current
+                }
+
+                is LanScanUiState.Canceling -> {
+                    val reason = pending?.let { it.session.cancellationReason ?: it.reason }
+                    val expanded = pending?.expandedHostIp
+                    when (reason) {
+                        CancellationReason.USER_STOP -> {
+                            LanScanUiState.Canceled(current.summary, expandedHostIp = expanded)
+                        }
+
+                        CancellationReason.DEADLINE_EXCEEDED -> {
+                            LanScanUiState.Finished(
+                                current.summary,
+                                expandedHostIp = expanded,
+                                partial = true,
+                                timeLimitReached = true,
+                            )
+                        }
+
+                        else -> {
+                            LanScanUiState.Finished(current.summary, expandedHostIp = expanded, partial = true)
+                        }
+                    }
+                }
+
+                is LanScanUiState.Scanning -> {
+                    LanScanUiState.Finished(
+                        partialSummaryOf(current),
+                        expandedHostIp = current.expandedHostIp,
+                        partial = true,
+                    )
+                }
+
+                else -> {
+                    LanScanUiState.Idle
+                }
+            }
+        }
+
         override fun onCleared() {
+            // Read the kept state first: clearing pendingCancellation drops the reason a pause recorded.
+            val stateToKeep = stateToKeepOnLeave()
             pendingCancellation = null
             cancelScan(CancellationReason.LIFECYCLE_PAUSE)
+            sessionMemory.put(
+                LAN_SESSION_KEY,
+                LanScanSessionSnapshot(
+                    subnet = _subnet.value,
+                    timeoutMs = _timeoutMs.value,
+                    concurrency = _concurrency.value,
+                    state = stateToKeep,
+                ),
+            )
         }
     }

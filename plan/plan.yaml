@@ -137,7 +137,7 @@ work_packages:
     result:
       fixed: [PORTS-01, PORTS-02, PORTS-03, PORTS-04, PORTS-06, PORTS-07, PORTS-12]
       deferred:
-        - "PD-01 / PORTS-08: results not Parcelable; owned by WP15"
+        - "PD-01 / PORTS-08: results not Parcelable. Leave-and-return and form inputs were addressed by WP15 (see its result); result restore after process death is deferred there."
         - "PORTS-11: copy snackbar needs Scaffold/SnackbarHost (UNVERIFIED)"
         - "PORTS-05: edge fade, belongs with A:PING-07 shared chip work"
         - "PORTS-09: IME Done set; label cannot read 'Scan' with ImeAction.Done"
@@ -168,7 +168,7 @@ work_packages:
         - "TOPO-04 (community pre-filled): default community 'public' is intentional and the field is masked (PasswordVisualTransformation). no_change_needed."
       deferred:
         - "LAN-06 (+N chip over nav bar): content inset is central in MainActivity (WP01, navigation bars on rail, IME otherwise). Likely fixed by WP01; device check at WP18."
-        - "LAN-01 / PORTS-08: leaving the LAN tool still discards results (ViewModel is scoped to the nav entry). Owned by WP15 (SavedStateHandle/persistence)."
+        - "LAN-01 / PORTS-08: leaving the LAN tool discarded results (ViewModel is scoped to the nav entry). Addressed by WP15 via ToolSessionMemory; see the WP15 result."
         - "Topology positive path and cancel need an SNMP device; not testable on this LAN."
       device_checks_for_wp18: ["Topology Discover button visible with config card open and scrolled; Enter starts discovery", "LAN rotation mid-scan keeps running", "LAN Back with expanded row keeps results", "LAN-04: check the 7 ARP-only IPs against probe results"]
       note: "LanScanViewModelTest new cases were written before the implementation, but no separate RED run was made. The first gate run failed on baseline line shifts and two real style errors (blank line, import order) plus one long line; all fixed before the green run."
@@ -375,9 +375,36 @@ work_packages:
     notes: "Under-tested. Write unit tests for MAC formats (colon, dash, Cisco dotted, bare), broadcast address validation, saved devices; fix whatever fails. Never send a packet to a real host in tests."
   - id: WP15
     title: Settings, process-death state, docs consistency
-    status: todo
+    status: done
     findings: [A:SHELL-01, A:SHELL-04, A:SHELL-06, A:SHELL-07, B:PD-01, D:MDNS-06, D:TLS-06]
     notes: "Persist last results/inputs via SavedStateHandle where cheap; sync README with reality (no configurable controls that do not exist)."
+    result:
+      status: done
+      commit: "recorded by git log: fix(app) WP15 commit on plan/ux-remediation-2026-10-31 (this block is part of it)"
+      gates: "./gradlew test (app 746, core-network 1536 with 1 pre-existing skip, core-domain 240: 0 failures), ktlintCheck detekt, :app:assembleDebug, :app:compileDebugAndroidTestKotlin, :core-network:koverVerify :core-domain:koverVerify :app:koverVerify all BUILD SUCCESSFUL, run one at a time in the foreground. Device re-test deferred to WP18."
+      mechanism: >
+        Inputs use SavedStateHandle (survive rotation and process death). Results are not Parcelable and are never written to the Bundle or disk. For LAN Scanner and Port Scanner the last terminal result and form are also kept in ToolSessionMemory, an @ActivityRetainedScoped in-memory holder, so Back and return restore them (a scan still running when the tool is left, or stopped by a pause, is kept as a partial result, matching the WP06 pause convention; only a user Stop stays Canceled). The holder is written in onCleared and read in the ViewModel constructor, and the subnet or host must match for a result to be shown. No secrets are stored (SNMP community and v3 passwords stay in plain remember, as the Topology code documents).
+      fixed:
+        - "B:PD-01 and B:PORTS-08 (inputs): Port Scanner saves preset, start/end port, timeout, concurrency and aggressive probes in SavedStateHandle. LAN Scanner saves subnet, timeout and concurrency. The slider values are now saved, so the concurrency 40 that reset to 50 in PD-01 is kept. The DataStore defaults loaded at start no longer overwrite a restored value (LAN and Port settingsLoad guarded)."
+        - "B:PORTS-08 and B:LAN-01/PORTS-08 (leave and return): LAN Scanner and Port Scanner keep their last terminal result after Back and return. The Port result is shown again only for the same host, and the LAN result only for the same subnet."
+        - "Other tools (form inputs in SavedStateHandle, cheap and consistent): DNS (name, record type, resolver, custom server), Traceroute (host, max hops, timeout, probes, probe type, packet size), WHOIS (query, protocol), Subnet (input, range, check address, split mode and input) and Wake-on-LAN (broadcast address and port, in addition to the MAC already kept)."
+        - "A:SHELL-07 (Settings entry): Settings exists in the More sheet footer (MoreToolsSheet onSettingsClick) with clear recents, attributions and about. The finding said no entry was located; that was wrong. no_change_needed for existence."
+        - "D:MDNS-06: already fixed. Help says Clear and README states the fixed 8-second window (commit 7a27878). no_change_needed in this WP."
+        - "D:TLS-06: already fixed. README states the fixed 10-second timeout (commit 4a60c63). no_change_needed in this WP."
+        - "README Features updated for each tool whose behaviour changed: LAN Scanner, Port Scanner, DNS, Traceroute, WHOIS, Subnet, Wake-on-LAN (state kept after leaving and rotation or process death, and what is not kept). Available Tools table checked against NavRoutes route strings; all 14 match."
+        - "Lint debt from WP14: WoL composables are marked with the project's existing @Suppress(FunctionNaming) pattern and the six hand-added detekt baseline entries removed (detekt baseline restored to its pre-WP14 content). WakeOnLanViewModel split: saved-device state and actions moved to WolSavedDeviceEditor (VM now 9 functions). Multiline-expression wrapping, function-signature (messageRes) and the NetworkStatus constructor in the test fixed in code. ktlint baselines regenerated with ktlintGenerateBaseline (ktlintFormat not used). Per (file, rule) counts for app, core-network and core-domain are at or below the ff4d441 baseline; totals app 5285 to 5256, core-network 6054 to 6051, core-domain 868 to 864."
+      not_reproduced:
+        - "A:SHELL-01 (Home hint over nav bar and cards): fixed by WP01 (7912dbc). On the rail layout MainActivity pads content by navigationBars, and the grid keeps 60 dp bottom padding for the hint. no_change_needed here; not device-verified (WP18)."
+        - "A:SHELL-04 (rail highlights More for Traceroute): by design. Every tool not pinned to the rail highlights More, and pinning gives a direct rail entry. no_change_needed."
+        - "A:SHELL-06 (Back from tool to Home, Back from Home exits): the finding itself verified this works. no_change_needed."
+        - "A:SHELL-07 process-death check: the app was resumed, not cold-started, so the test was unverified. The restore behaviour is now covered by unit tests (LanScanSessionRestoreTest, PortScanSessionRestoreTest, FormInputRestoreTest) instead of a device run."
+        - "Process-death and Settings checks for Ping, TLS, HTTP Probe, Wi-Fi, mDNS, Topology and Speed Test: Ping host (SavedStateHandle key editedHost, written on each edit), TLS host and port (editedTlsHost and editedTlsPort, written on each edit, plus probe-protocol and expected-pin flags), HTTP Probe URL (editedHttpUrl), and the Wi-Fi and mDNS search fields (rememberSaveable) were already saved (no change). Ping's probe count and advanced sliders are not saved (see deferred). HTTP Probe deliberately keeps headers and body out of saved state (they can hold Authorization values). Topology keeps non-secret fields in rememberSaveable and the community string and v3 passwords in plain remember. Speed Test has no form inputs."
+      deferred:
+        - "Process-death restore of results (all tools): results are not Parcelable, and saving them needs a serializer for the core-network models. LAN and Port keep results only while the app stays open; after process death they keep the form, not the result. The Port 're-run last scan' suggestion (PORTS-08) is not built."
+        - "Back-navigation memory for DNS, Traceroute, WHOIS, Subnet and Wake-on-LAN: their inputs are restored after rotation and process death but not after Back, because the ViewModel and its SavedStateHandle are destroyed with the navigation entry. Carrying them in ToolSessionMemory is possible; it was left out to keep the change focused."
+        - "Ping advanced controls (count, timeout, payload, TTL, interval) reset to Settings defaults on return. Only the host is kept."
+        - "Wake-on-LAN saved-device name field is not restored (it is an edit form, not a send input)."
+        - "Device verification of leave-and-return, rotation and process death (am kill-all) for LAN, Port and the form tools: WP18."
   - id: WP16
     title: NEW TOOL – Network Info (local interfaces, gateway, DNS servers, public IP)
     status: todo

@@ -484,11 +484,11 @@ class WakeOnLanViewModelTest {
             val vm = WakeOnLanViewModel(useCase, savedDeviceStore = store)
 
             vm.onMacAddressChange("aabb.ccdd.eeff")
-            vm.onDeviceNameChange("Office PC")
-            vm.saveDevice()
+            vm.savedDeviceEditor.onDeviceNameChange("Office PC")
+            vm.savedDeviceEditor.saveDevice()
             vm.onMacAddressChange("AA-BB-CC-DD-EE-FF")
-            vm.onDeviceNameChange("Renamed PC")
-            vm.saveDevice()
+            vm.savedDeviceEditor.onDeviceNameChange("Renamed PC")
+            vm.savedDeviceEditor.saveDevice()
 
             assertEquals(listOf(WolSavedDevice("AA:BB:CC:DD:EE:FF", "Renamed PC")), store.current.value)
             assertEquals(listOf(WolSavedDevice("AA:BB:CC:DD:EE:FF", "Renamed PC")), vm.savedDevices.value)
@@ -501,7 +501,7 @@ class WakeOnLanViewModelTest {
             val store = InMemoryWolSavedDeviceStore()
             val vm = WakeOnLanViewModel(useCase, savedDeviceStore = store)
             vm.onMacAddressChange("AA:BB:CC")
-            vm.saveDevice()
+            vm.savedDeviceEditor.saveDevice()
             assertTrue(store.current.value.isEmpty())
         }
     }
@@ -514,9 +514,9 @@ class WakeOnLanViewModelTest {
             val store = InMemoryWolSavedDeviceStore(listOf(a, b))
             val vm = WakeOnLanViewModel(useCase, savedDeviceStore = store)
 
-            vm.startEditDevice(a)
+            vm.savedDeviceEditor.startEditDevice(a)
             vm.onMacAddressChange("AA:BB:CC:DD:EE:02")
-            vm.saveDevice()
+            vm.savedDeviceEditor.saveDevice()
 
             assertTrue(vm.saveConflict.value)
             assertEquals(listOf(a, b), store.current.value)
@@ -531,10 +531,10 @@ class WakeOnLanViewModelTest {
             val store = InMemoryWolSavedDeviceStore(listOf(a, b))
             val vm = WakeOnLanViewModel(useCase, savedDeviceStore = store)
 
-            vm.startEditDevice(a)
-            vm.onDeviceNameChange("Renamed")
+            vm.savedDeviceEditor.startEditDevice(a)
+            vm.savedDeviceEditor.onDeviceNameChange("Renamed")
             vm.onMacAddressChange("AA:BB:CC:DD:EE:09")
-            vm.saveDevice()
+            vm.savedDeviceEditor.saveDevice()
 
             assertEquals(
                 listOf(WolSavedDevice("AA:BB:CC:DD:EE:09", "Renamed"), b),
@@ -553,8 +553,8 @@ class WakeOnLanViewModelTest {
             val store = InMemoryWolSavedDeviceStore(listOf(a, b))
             val vm = WakeOnLanViewModel(useCase, savedDeviceStore = store)
 
-            vm.startEditDevice(a)
-            vm.deleteDevice(a.mac)
+            vm.savedDeviceEditor.startEditDevice(a)
+            vm.savedDeviceEditor.deleteDevice(a.mac)
 
             assertEquals(listOf(b), store.current.value)
             assertNull(vm.editingMac.value)
@@ -567,7 +567,7 @@ class WakeOnLanViewModelTest {
             val a = WolSavedDevice("AA:BB:CC:DD:EE:01", "Office")
             val vm = WakeOnLanViewModel(useCase, savedDeviceStore = InMemoryWolSavedDeviceStore(listOf(a)))
 
-            vm.useDevice(a)
+            vm.savedDeviceEditor.useDevice(a)
 
             assertEquals("AA:BB:CC:DD:EE:01", vm.macAddress.value)
             assertEquals("Office", vm.deviceName.value)
@@ -582,8 +582,8 @@ class WakeOnLanViewModelTest {
             val store = InMemoryWolSavedDeviceStore()
             WakeOnLanViewModel(useCase, savedDeviceStore = store).apply {
                 onMacAddressChange("AA:BB:CC:DD:EE:01")
-                onDeviceNameChange("Kept")
-                saveDevice()
+                savedDeviceEditor.onDeviceNameChange("Kept")
+                savedDeviceEditor.saveDevice()
             }
 
             val recreated = WakeOnLanViewModel(useCase, savedDeviceStore = store)
@@ -597,11 +597,12 @@ class WakeOnLanViewModelTest {
     }
 
     private companion object {
-        val OFFLINE = NetworkStatus(
-            hasInternet = false,
-            hasValidatedInternet = false,
-            hasLocalNetwork = false,
-            transport = Transport.OTHER,
-        )
+        val OFFLINE =
+            NetworkStatus(
+                hasInternet = false,
+                hasValidatedInternet = false,
+                hasLocalNetwork = false,
+                transport = Transport.OTHER,
+            )
     }
 }
