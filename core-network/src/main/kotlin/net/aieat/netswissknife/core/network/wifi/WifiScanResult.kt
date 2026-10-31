@@ -23,7 +23,7 @@ data class WifiScanResult(
     /** Outcome of the latest request to refresh Android's scan cache. */
     val refreshStatus: WifiScanRefreshStatus = WifiScanRefreshStatus.NOT_REQUESTED,
     /** Whether Location Services were enabled when this result was read. */
-    val locationEnabled: Boolean = true
+    val locationEnabled: Boolean = true,
 ) {
     /** Access points grouped into logical networks by (SSID, security). Computed once at construction. */
     val networks: List<WifiNetwork> = WifiNetworkGrouper.group(accessPoints)
@@ -48,12 +48,17 @@ data class WifiScanResult(
     val busiestChannel: WifiChannelInfo? get() =
         channels.maxByOrNull { it.congestionScore }
 
-    /** Recommended clear channel for 2.4 GHz (one of 1, 6, 11). */
+    /**
+     * Recommended clear channel for 2.4 GHz (one of 1, 6, 11), or null when no 2.4 GHz
+     * access point was scanned. Every candidate is scored from the raw access points,
+     * including overlap from neighbouring channels, so a channel without its own AP is
+     * not recommended merely because it has no entry in [channels].
+     */
     val bestChannel24GHz: Int? get() {
+        if (accessPoints.none { it.band == WifiBand.BAND_2_4GHZ }) return null
         val standard24 = listOf(1, 6, 11)
         return standard24.minByOrNull { ch ->
-            channels.find { it.channel == ch && it.band == WifiBand.BAND_2_4GHZ }
-                ?.congestionScore ?: 0f
+            WifiChannelAnalyzer.rawInterference24GHz(ch, accessPoints)
         }
     }
 }

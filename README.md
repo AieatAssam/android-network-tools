@@ -78,12 +78,14 @@ Full DNS record resolution with multiple resolver options and protocol-level res
 ### Wi-Fi Scanner
 Wi-Fi environment analysis with SSID grouping and spectrum visualisation.
 - Access points grouped by SSID + security; mesh/dual-band routers appear as one entry with a per-BSSID drill-down
-- **Spectrum Analyser** — frequency-domain triangle chart per AP (X = MHz, Y = RSSI −100 to −30 dBm) with SSID labels and channel gridlines; each network gets a stable accent colour derived from its SSID hash
+- **Spectrum Analyser** — frequency-domain triangle chart per AP (X = MHz, Y = RSSI −100 to −30 dBm) with channel gridlines and one SSID label per network at its strongest peak. Labels are ellipsised to a fixed width and stacked upward when they would collide; a label with no free position is left off, and the network list below is the legend. Each network gets a stable accent colour derived from its SSID hash
 - Band tab-row switches between detected 2.4 / 5 / 6 GHz bands; spectrum and network list update per band
-- Best-channel callout recommends the least-congested channel (1, 6, or 11) when 2.4 GHz is active
-- Expandable network cards show each BSSID with channel, width, RSSI, and vendor; tap any BSSID for full detail sheet
-- Detail sheet: signal arc gauge, band/channel/width/standard/speed, security capability tokens, live connection stats (IP, TX/RX speed) when connected
+- Best-channel callout recommends the least-congested of channels 1, 6, and 11 when 2.4 GHz is active. Each candidate is scored from every 2.4 GHz AP whose channel overlaps it (±4 channels), including channels with no AP of their own, so a channel is not recommended just because nothing is on it. The callout is hidden when no 2.4 GHz AP was scanned
+- Search (SSID, BSSID or vendor) narrows both the network list and the spectrum; a search with no match shows a message
+- Expandable network cards show each BSSID with channel, width, RSSI, and vendor; tap any BSSID for full detail sheet. Reorders from a refresh animate, and expanding a network pins the order until every card is collapsed
+- Detail sheet: signal arc gauge, band/channel/width/standard, security capability tokens, live connection stats (IP, TX/RX speed) when connected. "Standard max (theoretical)" is a PHY ceiling, not this link's rate: Wi-Fi 4 shows 289 Mbps at 20 MHz and 600 Mbps at 40 MHz (4 streams); other standards show their ceiling, which needs the widest channel and the most streams. Scan results do not report spatial streams, so a per-link rate is not shown
 - Each refresh requests a platform scan; auto-refresh is configurable (Off / 15 / 30 / 60 seconds, default 30 seconds). Android throttles foreground scans to four per two minutes, so the screen shows result age and when a request was throttled; Location Services must be enabled.
+- Rotating the device does not cancel a scan in progress; leaving the screen or backgrounding the app does.
 
 ### TLS Inspector
 SSL/TLS certificate analysis for any TCP host, without sending an HTTP request.

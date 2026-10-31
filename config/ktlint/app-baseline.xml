@@ -2432,31 +2432,31 @@
         <error line="1518" column="24" source="standard:trailing-comma-on-declaration-site" />
     </file>
     <file name="src/main/kotlin/net/aieat/netswissknife/app/ui/screens/WifiScanScreen.kt">
-        <error line="204" column="5" source="standard:function-naming" />
-        <error line="367" column="25" source="standard:function-naming" />
-        <error line="379" column="25" source="standard:function-naming" />
-        <error line="409" column="25" source="standard:function-naming" />
-        <error line="418" column="25" source="standard:function-naming" />
-        <error line="426" column="25" source="standard:function-naming" />
-        <error line="435" column="25" source="standard:function-naming" />
-        <error line="449" column="25" source="standard:function-naming" />
-        <error line="470" column="25" source="standard:function-naming" />
-        <error line="492" column="25" source="standard:function-naming" />
-        <error line="501" column="25" source="standard:function-naming" />
-        <error line="534" column="25" source="standard:function-naming" />
-        <error line="699" column="25" source="standard:function-naming" />
-        <error line="792" column="25" source="standard:function-naming" />
-        <error line="815" column="25" source="standard:function-naming" />
-        <error line="871" column="25" source="standard:function-naming" />
-        <error line="1029" column="13" source="standard:function-naming" />
-        <error line="1065" column="25" source="standard:function-naming" />
-        <error line="1223" column="25" source="standard:function-naming" />
-        <error line="1237" column="25" source="standard:function-naming" />
-        <error line="1279" column="13" source="standard:function-naming" />
-        <error line="1405" column="14" source="standard:function-naming" />
-        <error line="1446" column="25" source="standard:function-naming" />
-        <error line="1541" column="25" source="standard:function-naming" />
-        <error line="1545" column="25" source="standard:function-naming" />
+        <error line="213" column="5" source="standard:function-naming" />
+        <error line="391" column="25" source="standard:function-naming" />
+        <error line="403" column="25" source="standard:function-naming" />
+        <error line="441" column="25" source="standard:function-naming" />
+        <error line="450" column="25" source="standard:function-naming" />
+        <error line="458" column="25" source="standard:function-naming" />
+        <error line="467" column="25" source="standard:function-naming" />
+        <error line="481" column="25" source="standard:function-naming" />
+        <error line="502" column="25" source="standard:function-naming" />
+        <error line="524" column="25" source="standard:function-naming" />
+        <error line="533" column="25" source="standard:function-naming" />
+        <error line="566" column="25" source="standard:function-naming" />
+        <error line="744" column="25" source="standard:function-naming" />
+        <error line="837" column="25" source="standard:function-naming" />
+        <error line="860" column="25" source="standard:function-naming" />
+        <error line="922" column="25" source="standard:function-naming" />
+        <error line="1100" column="13" source="standard:function-naming" />
+        <error line="1136" column="25" source="standard:function-naming" />
+        <error line="1294" column="25" source="standard:function-naming" />
+        <error line="1308" column="25" source="standard:function-naming" />
+        <error line="1350" column="13" source="standard:function-naming" />
+        <error line="1476" column="14" source="standard:function-naming" />
+        <error line="1517" column="25" source="standard:function-naming" />
+        <error line="1622" column="25" source="standard:function-naming" />
+        <error line="1626" column="25" source="standard:function-naming" />
     </file>
     <file name="src/main/kotlin/net/aieat/netswissknife/app/ui/screens/debug/DebugLogScreen.kt">
         <error line="3" column="1" source="standard:import-ordering" />
@@ -4469,11 +4469,11 @@
         <error line="358" column="17" source="standard:when-entry-bracing" />
         <error line="377" column="34" source="standard:multiline-expression-wrapping" />
         <error line="387" column="26" source="standard:multiline-expression-wrapping" />
-        <error line="456" column="38" source="standard:trailing-comma-on-declaration-site" />
-        <error line="458" column="21" source="standard:multiline-expression-wrapping" />
-        <error line="466" column="93" source="standard:trailing-comma-on-call-site" />
-        <error line="476" column="47" source="standard:multiline-expression-wrapping" />
-        <error line="481" column="52" source="standard:trailing-comma-on-call-site" />
+        <error line="462" column="38" source="standard:trailing-comma-on-declaration-site" />
+        <error line="464" column="21" source="standard:multiline-expression-wrapping" />
+        <error line="472" column="93" source="standard:trailing-comma-on-call-site" />
+        <error line="482" column="47" source="standard:multiline-expression-wrapping" />
+        <error line="487" column="52" source="standard:trailing-comma-on-call-site" />
     </file>
     <file name="src/main/kotlin/net/aieat/netswissknife/app/ui/screens/wol/WakeOnLanScreen.kt">
         <error line="3" column="1" source="standard:import-ordering" />

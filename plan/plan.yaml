@@ -174,9 +174,31 @@ work_packages:
       note: "LanScanViewModelTest new cases were written before the implementation, but no separate RED run was made. The first gate run failed on baseline line shifts and two real style errors (blank line, import order) plus one long line; all fixed before the green run."
   - id: WP07
     title: Wi-Fi Scanner
-    status: todo
+    status: done
     findings: [B:WIFI-01, B:WIFI-02, B:WIFI-03, B:WIFI-04, B:WIFI-06, B:WIFI-07]
     notes: "bestChannel24GHz must only recommend channels with sane scoring (missing channels must not score 0 = best); spectrum label overlap; max-speed label must account for channel width."
+    result:
+      status: done
+      commit: "the WP07 commit on plan/ux-remediation-2026-10-31 (fix(wifi): ...); sha not recorded here to keep a single commit"
+      gates: "Foreground runs green: test, ktlintCheck, detekt, :app:assembleDebug, :app:compileDebugAndroidTestKotlin, core-network/core-domain/app koverVerify. RED: core-network best-channel and PHY-ceiling tests were run red (compile failure) before the code. App label, search and ViewModel tests were written before the code but not run red separately. app ktlint baseline regenerated for line shifts; per-rule counts identical to HEAD. core-network ktlint baseline lost 16 entries for three files that are now clean; no rule count increased. Instrumented tests compiled only; device re-test deferred to WP18."
+      fixed:
+        - "WIFI-06: bestChannel24GHz scores 1, 6 and 11 from raw access points with the +/-4 overlap rule, so a channel without its own AP is no longer recommended by default (missing entries used to score 0). Ties are broken on raw linear interference, not the clamped score, so saturated channels still rank. Returns null when no 2.4 GHz AP was scanned. Not device-verified."
+        - "WIFI-07: Max Speed row is now 'Standard max (theoretical)'. Wi-Fi 4 shows 289 Mbps at 20 MHz and 600 Mbps at 40 MHz; other standards show 'Up to X (theoretical ceiling)'. Scan results carry no stream count, so no per-link rate is claimed."
+        - "WIFI-01: SSID labels are one per network (strongest AP), ellipsised to 96dp, placed by a pure helper (placeSpectrumLabels) that stacks colliding labels upward for up to three tiers and drops the rest; the list is the legend."
+        - "WIFI-02: search (SSID, BSSID or vendor) now also filters the spectrum (same BSSID set as the list), shows a 'No networks match' message, and uses ToolTextField with a leading icon and clear button."
+        - "WIFI-03: the status and permission gates show the Wi-Fi Scanner title above the card. Not device-verified."
+        - "WIFI-04: reorders from a silent refresh animate (Modifier.animateItem). Keying by SSID and security and the freeze while a network is expanded or selected were already present."
+        - "Lifecycle (same class as PORTS-04/LAN): ON_PAUSE and onDispose cancelled a scan on rotation, leaving the Paused retry screen. onLifecyclePause(configurationChange) now keeps the scan running and only pauses refresh scheduling; all three call sites pass Activity.isChangingConfigurations. Covered by a ViewModel test."
+      not_reproduced:
+        - "WIFI-05 (connected network detail): the report itself marks it verified. The sheet it opened was another network, which is correct. no_change_needed."
+      no_change_needed:
+        - "WIFI-04 keying and freeze: WifiNetwork.id is SSID plus security and the order is pinned while inspecting (WifiScanViewModel.updateFreezeState). Only the animation was missing."
+      deferred:
+        - "WIFI-04: holding reorder while a card is touched (isScrollInProgress or pointer-down) is not implemented; animated reorder is the mitigation."
+        - "WIFI-07 (non-Wi-Fi-4 standards): a per-width PHY rate needs stream and MCS tables per standard, and scan results do not report streams. Current wording is an honest ceiling."
+        - "WIFI-06: channel 1 and 11 flip on a close call across refreshes. Hysteresis was not added; the raw-interference comparison removes the clamp tie, not the noise."
+      device_checks_for_wp18: ["2.4 GHz with 5+ SSIDs: labels readable, no overlap", "search ZZZnomatch: message shown, spectrum empties", "rotate during first scan: scan keeps running", "Wi-Fi 4 20 MHz AP detail shows 289 Mbps at 20 MHz", "permission gate shows title above card"]
+      note: "Process: ktlintFormat rewrote about 360 unrelated files (imports, trailing commas, androidTest sources). All were reverted to HEAD with git checkout; the tree was clean before the WP began, so nothing was lost. The VM import order was restored by hand."
   - id: WP08
     title: TLS Inspector
     status: todo

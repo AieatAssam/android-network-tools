@@ -3,7 +3,7 @@ package net.aieat.netswissknife.core.network.wifi
 enum class WifiStandard(
     val displayName: String,
     val generationLabel: String,
-    val protocolName: String
+    val protocolName: String,
 ) {
     LEGACY("Legacy", "Wi-Fi", "802.11 a/b/g"),
     WIFI_4("Wi-Fi 4", "Wi-Fi 4", "802.11n"),
@@ -11,16 +11,49 @@ enum class WifiStandard(
     WIFI_6("Wi-Fi 6", "Wi-Fi 6", "802.11ax"),
     WIFI_6E("Wi-Fi 6E", "Wi-Fi 6E", "802.11ax 6 GHz"),
     WIFI_7("Wi-Fi 7", "Wi-Fi 7", "802.11be"),
-    UNKNOWN("Unknown", "Unknown", "Unknown");
+    UNKNOWN("Unknown", "Unknown", "Unknown"),
+    ;
 
     /** Maximum theoretical throughput label for UI display. */
-    val maxSpeedLabel: String get() = when (this) {
-        LEGACY -> "54 Mbps"
-        WIFI_4 -> "600 Mbps"
-        WIFI_5 -> "3.5 Gbps"
-        WIFI_6 -> "9.6 Gbps"
-        WIFI_6E -> "9.6 Gbps"
-        WIFI_7 -> "46 Gbps"
-        UNKNOWN -> "N/A"
-    }
+    val maxSpeedLabel: String get() =
+        when (this) {
+            LEGACY -> "54 Mbps"
+            WIFI_4 -> "600 Mbps"
+            WIFI_5 -> "3.5 Gbps"
+            WIFI_6 -> "9.6 Gbps"
+            WIFI_6E -> "9.6 Gbps"
+            WIFI_7 -> "46 Gbps"
+            UNKNOWN -> "N/A"
+        }
+
+    /**
+     * Theoretical PHY ceiling for a link on a [channelWidthMhz] channel. Scan results do not
+     * report spatial streams, so only figures that follow from the channel width are used:
+     * Wi-Fi 4 is 289 Mbps at 20 MHz (4 streams, short GI) and 600 Mbps at 40 MHz (4 streams).
+     * Other standards only have a ceiling that needs the widest channel and the most streams,
+     * so [PhyRateCeiling.widthMhz] is null and the label must be presented as a ceiling.
+     */
+    fun phyRateCeiling(channelWidthMhz: Int): PhyRateCeiling =
+        when (this) {
+            WIFI_4 -> {
+                if (channelWidthMhz <= NARROW_WIDTH_MHZ) {
+                    PhyRateCeiling("289 Mbps", NARROW_WIDTH_MHZ)
+                } else {
+                    PhyRateCeiling("600 Mbps", WIDE_WIDTH_MHZ)
+                }
+            }
+
+            else -> {
+                PhyRateCeiling(maxSpeedLabel, widthMhz = null)
+            }
+        }
 }
+
+private const val NARROW_WIDTH_MHZ = 20
+private const val WIDE_WIDTH_MHZ = 40
+
+/** A theoretical PHY rate ceiling; [widthMhz] is set only when the figure is tied to one channel width. */
+data class PhyRateCeiling(
+    val label: String,
+    val widthMhz: Int?,
+)

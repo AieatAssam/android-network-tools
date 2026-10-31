@@ -407,10 +407,16 @@ class WifiScanViewModel @Inject constructor(
         autoRefreshJob = null
     }
 
-    /** Pauses background refresh while the Wi-Fi screen is not foreground-visible. */
-    fun onLifecyclePause() {
+    /**
+     * Pauses background refresh while the Wi-Fi screen is not foreground-visible.
+     *
+     * With [configurationChange] (rotation), an in-flight scan keeps running: the screen is
+     * recreated and resumes with it. Only refresh scheduling is paused until ON_RESUME.
+     */
+    fun onLifecyclePause(configurationChange: Boolean = false) {
         lifecycleResumed = false
         stopAutoRefresh()
+        if (configurationChange) return
         if (scanOperationSession != null) {
             val previousSuccess = (_uiState.value as? WifiScanUiState.Success) ?: lastSuccessfulState
             cancelActiveScan(CancellationReason.LIFECYCLE_PAUSE)

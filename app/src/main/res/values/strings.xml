@@ -497,6 +497,7 @@
     <!-- Wi-Fi Scanner Screen -->
     <string name="wifi_screen_title">Wi-Fi Scanner</string>
     <string name="wifi_search_label">Search SSID, BSSID or vendor</string>
+    <string name="wifi_search_no_match">No networks match \"%1$s\". Clear the search to see every network.</string>
     <string name="wifi_scan_button">Scan</string>
     <string name="wifi_no_permission_title">Location Permission Required</string>
     <string name="wifi_no_permission_body">Android requires Location permission to scan for nearby Wi-Fi networks. Your location is not sent anywhere.</string>
@@ -538,7 +539,9 @@
     <string name="wifi_detail_channel">Channel</string>
     <string name="wifi_detail_width">Width</string>
     <string name="wifi_detail_standard">Standard</string>
-    <string name="wifi_detail_max_speed">Max Speed</string>
+    <string name="wifi_detail_max_speed">Standard max (theoretical)</string>
+    <string name="wifi_max_rate_at_width">Up to %1$s at %2$d MHz</string>
+    <string name="wifi_max_rate_ceiling">Up to %1$s (theoretical ceiling)</string>
     <string name="wifi_detail_vendor">Vendor</string>
     <string name="wifi_detail_security">Security</string>
     <string name="wifi_security_unknown">Security type unknown</string>
