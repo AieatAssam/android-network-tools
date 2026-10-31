@@ -1,5 +1,7 @@
 package net.aieat.netswissknife.app.ui.screens
 
+import android.app.Activity
+import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -137,22 +139,21 @@ import net.aieat.netswissknife.app.ui.screens.traceroute.TracerouteViewModel
 import net.aieat.netswissknife.app.ui.screens.traceroute.TracerouteViewMode
 import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.traceroute.CountryFlags
+import net.aieat.netswissknife.core.network.HostProblem
+import net.aieat.netswissknife.core.network.traceroute.GeoPlausibility
 import net.aieat.netswissknife.core.network.traceroute.HopGeoLocation
 import net.aieat.netswissknife.core.network.traceroute.HopResult
 import net.aieat.netswissknife.core.network.traceroute.HopStatus
 import net.aieat.netswissknife.core.network.traceroute.TracerouteProbeType
 import net.aieat.netswissknife.core.network.traceroute.TracerouteResult
-import kotlin.math.atan2
-import kotlin.math.cos
 import kotlin.math.roundToInt
-import kotlin.math.sin
-import kotlin.math.sqrt
 
 // ── Screen entry point ────────────────────────────────────────────────────────
 
 @Composable
 fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
     val lifecycleOwner = LocalLifecycleOwner.current
+    val context = LocalContext.current
     val requestLocalNetworkPermission = rememberLocalNetworkPermissionRequester(viewModel::startTrace)
 
     val uiState      by viewModel.uiState.collectAsStateWithLifecycle()
@@ -183,7 +184,11 @@ fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_STOP) viewModel.onLifecycleStop()
+            if (event == Lifecycle.Event.ON_STOP) {
+                // Rotation also reaches ON_STOP; the trace must survive a configuration change.
+                val changingConfigurations = (context as? Activity)?.isChangingConfigurations == true
+                viewModel.onLifecycleStop(configurationChange = changingConfigurations)
+            }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
@@ -381,7 +386,9 @@ private fun TracerouteInputCard(
     val keyboard = LocalSoftwareKeyboardController.current
     val mtuDiscovery = packetSize == 0
     val normalizedHost = HostValidator.normalize(host)
-    val isHostInvalid = host.isNotBlank() && normalizedHost == null
+    // Blank input is not an error yet; a non-blank host gets a specific reason when it is invalid.
+    val hostProblem = if (host.isNotBlank()) HostValidator.problemOf(host) else null
+    val isHostInvalid = hostProblem != null
     val isBusy = isRunning || isCanceling
     val canStart = normalizedHost != null
 
@@ -403,8 +410,8 @@ private fun TracerouteInputCard(
                 placeholder   = { Text(stringResource(R.string.traceroute_host_placeholder)) },
                 leadingIcon   = { Icon(Icons.Default.Router, null) },
                 isError = isHostInvalid,
-                supportingText = if (isHostInvalid) {
-                    { Text(stringResource(R.string.error_invalid_host)) }
+                supportingText = if (hostProblem != null) {
+                    { Text(stringResource(hostProblem.messageRes())) }
                 } else null,
                 singleLine    = true,
                 enabled       = !isBusy,
@@ -860,6 +867,20 @@ private fun StatChip(label: String, value: String) {
     }
 }
 
+@StringRes
+private fun HostProblem.messageRes(): Int =
+    when (this) {
+        HostProblem.BLANK -> R.string.error_host_blank
+        HostProblem.CONTAINS_WHITESPACE -> R.string.error_invalid_host
+        HostProblem.IPV4_INVALID -> R.string.error_host_ipv4_invalid
+        HostProblem.IPV6_INVALID -> R.string.error_host_ipv6_invalid
+        HostProblem.EMPTY_LABEL -> R.string.error_host_empty_label
+        HostProblem.INVALID_LABEL -> R.string.error_host_invalid_label
+        HostProblem.INVALID_CHARACTERS -> R.string.error_host_invalid_characters
+        HostProblem.TOO_LONG -> R.string.error_host_too_long
+        HostProblem.INVALID -> R.string.error_host_invalid
+    }
+
 // ── Journey statistics card ────────────────────────────────────────────────────
 
 @Composable
@@ -869,13 +890,12 @@ private fun TraceJourneyStats(result: TracerouteResult) {
     val rtts = successHops.mapNotNull { it.rtTimeMs }
 
     // ── Geo stats ────────────────────────────────────────────────────────────
-    val totalDistanceKm: Double = remember(geoHops) {
-        if (geoHops.size < 2) 0.0
+    // GeoIP positions contradicted by the measured RTTs make distance, route and speed meaningless.
+    val geoConflict = remember(result.hops) { GeoPlausibility.implausibleHops(result.hops).isNotEmpty() }
+    val totalDistanceKm: Double = remember(geoHops, geoConflict) {
+        if (geoConflict || geoHops.size < 2) 0.0
         else geoHops.zipWithNext().sumOf { (a, b) ->
-            haversineKm(
-                a.geoLocation!!.lat, a.geoLocation!!.lon,
-                b.geoLocation!!.lat, b.geoLocation!!.lon
-            )
+            GeoPlausibility.distanceKm(a.geoLocation!!, b.geoLocation!!)
         }
     }
     val countries = remember(geoHops) {
@@ -991,11 +1011,23 @@ private fun TraceJourneyStats(result: TracerouteResult) {
                     }
                 }
 
-                if (countries.size > 1) {
+                if (countries.size > 1 && !geoConflict) {
                     Text(
                         stringResource(R.string.traceroute_stats_country_path, countries.joinToString(" → ")),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Text(
+                    stringResource(R.string.traceroute_stats_geo_approximate),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (geoConflict) {
+                    Text(
+                        stringResource(R.string.traceroute_stats_geo_conflict),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error,
                     )
                 }
             } else {
@@ -1129,19 +1161,6 @@ private fun JourneyStatBox(
             )
         }
     }
-}
-
-/** Haversine great-circle distance between two (lat, lon) pairs, in kilometres. */
-private fun haversineKm(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
-    val R    = 6371.0
-    val phi1 = Math.toRadians(lat1)
-    val phi2 = Math.toRadians(lat2)
-    val dPhi = Math.toRadians(lat2 - lat1)
-    val dLam = Math.toRadians(lon2 - lon1)
-    val sinDPhi = sin(dPhi / 2)
-    val sinDLam = sin(dLam / 2)
-    val a = sinDPhi * sinDPhi + cos(phi1) * cos(phi2) * sinDLam * sinDLam
-    return R * 2.0 * atan2(sqrt(a), sqrt(1.0 - a))
 }
 
 private fun formatDistance(km: Double): String = when {

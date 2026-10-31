@@ -33,6 +33,11 @@ Network path analysis with per-hop geolocation enrichment.
 - Dual protocol support: ICMP and UDP
 - Automatic MTU discovery or custom packet size (28–1,472 bytes)
 - Hops show IP address, per-probe RTTs, and min/average/max when multiple probes are requested; reverse DNS and geolocation fill in asynchronously when available
+- Hop Details and Raw Output list hops in hop-number order; a timed-out hop is shown as `* * *` in both
+- Host validation names the problem (spaces, IPv4 value out of range, empty or invalid hostname label, IPv6, length)
+- Journey Intelligence labels GeoIP locations as approximate. When a hop's location cannot be reached within the measured RTT at about 200 km per ms (light in fibre), the distance, route, and "Speed vs light" figures are hidden and the card says why
+- Backgrounding the app stops a running trace and keeps the hops found so far; a screen rotation does not stop it
+- Editing the host field clears a previous "Trace failed" message
 
 ### Port Scanner
 TCP port reachability scanning with service identification.

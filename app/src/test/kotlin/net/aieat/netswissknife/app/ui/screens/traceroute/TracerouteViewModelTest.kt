@@ -790,4 +790,75 @@ class TracerouteViewModelTest {
             val state = viewModel.uiState.value as TracerouteUiState.Finished
             assertNotNull(state.result.rawOutput)
         }
+
+    @Test
+    fun `hops are ordered by hop number when probes complete out of order`() =
+        runTest {
+            val hop2 = HopResult(2, "10.0.0.2", null, 5L, HopStatus.SUCCESS)
+            every { tracerouteUseCase(any(), any()) } returns
+                flowOf(TracerouteFlowResult.Hop(hop2), TracerouteFlowResult.Hop(stubHop))
+            viewModel.onHostChange("example.com")
+
+            viewModel.startTrace()
+
+            val finished = viewModel.uiState.value as TracerouteUiState.Finished
+            assertEquals(listOf(1, 2), finished.result.hops.map { it.hopNumber })
+            val rawLines = finished.result.rawOutput.lines()
+            val hopLines = rawLines.drop(1).filter { it.isNotBlank() }
+            assertEquals(listOf("1", "2"), hopLines.map { it.trim().substringBefore(' ') })
+        }
+
+    @Test
+    fun `timed out hop is written with three asterisks in raw output`() =
+        runTest {
+            val timeout = HopResult(4, null, null, null, HopStatus.TIMEOUT)
+            every { tracerouteUseCase(any(), any()) } returns
+                flowOf(TracerouteFlowResult.Hop(stubHop), TracerouteFlowResult.Hop(timeout))
+            viewModel.onHostChange("example.com")
+
+            viewModel.startTrace()
+
+            val finished = viewModel.uiState.value as TracerouteUiState.Finished
+            val rawLines = finished.result.rawOutput.lines()
+            assertTrue(rawLines.any { it.trim() == "4  * * *" }, finished.result.rawOutput)
+        }
+
+    @Test
+    fun `editing the host clears a failed trace message`() =
+        runTest {
+            every { tracerouteUseCase(any(), any()) } returns
+                flow { emit(TracerouteFlowResult.ValidationError("Invalid host or IP address")) }
+            viewModel.onHostChange("example.com")
+            viewModel.startTrace()
+            assertTrue(viewModel.uiState.value is TracerouteUiState.Error)
+
+            viewModel.onHostChange("example.org")
+
+            assertEquals(TracerouteUiState.Idle, viewModel.uiState.value)
+        }
+
+    @Test
+    fun `configuration change keeps a trace running`() =
+        runTest {
+            var session: OperationSession? = null
+            viewModel.operationSessionFactory = { params ->
+                TracerouteOperation
+                    .newSession(params.maxHops, params.timeoutMs, params.probesPerHop)
+                    .also { session = it }
+            }
+            every { tracerouteUseCase(any(), any()) } returns
+                flow {
+                    emit(TracerouteFlowResult.Hop(stubHop))
+                    awaitCancellation()
+                }
+            viewModel.onHostChange("example.com")
+            viewModel.startTrace()
+
+            viewModel.onLifecycleStop(configurationChange = true)
+
+            assertTrue(viewModel.uiState.value is TracerouteUiState.Running)
+            assertEquals(null, session?.cancellationReason)
+            viewModel.onStop()
+            viewModel.uiState.first { it is TracerouteUiState.Canceled }
+        }
 }

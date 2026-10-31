@@ -82,9 +82,28 @@ work_packages:
         - "Device verification of rotation (PING-01), IME (PING-03) and the reset and stale states is required at WP18. isChangingConfigurations behaviour on Android 8 was reasoned from framework behaviour, not measured."
   - id: WP03
     title: Traceroute
-    status: todo
+    status: done
     findings: [A:TR-01, A:TR-02, A:TR-03, A:TR-04, A:TR-05, A:TR-06, A:TR-08]
     notes: "Hop ordering in raw output; spaces-validation message; geo accuracy caveat (low-RTT vs distance sanity check / label as approximate)."
+    result:
+      status: done
+      commit: "the WP03 commit on plan/ux-remediation-2026-10-31 (fix(traceroute): ...); sha not recorded here to keep a single commit"
+      gates: "./gradlew ktlintCheck detekt test :app:assembleDebug :app:compileDebugAndroidTestKotlin :core-network:koverVerify :core-domain:koverVerify :app:koverVerify all green in one run. ktlint baselines regenerated (app, core-network): line-shift only, verified by per-file/per-rule count diff against HEAD, 0 entries added. detekt baseline not regenerated. Device re-test deferred to WP18."
+      fixed:
+        - "A:TR-01: new HostValidator.problemOf returns a HostProblem (blank, whitespace, IPv4 out of range, IPv6, empty label, invalid label, invalid characters, too long). Traceroute host field shows the matching string instead of the generic 'cannot contain spaces'. Tests: HostValidatorProblemTest. Other tools still use error_invalid_host (later WPs)."
+        - "A:TR-02: raw output and the result hop list are sorted by hop number; timed-out hops render as '* * *' in raw output, matching Hop Details. Tests: TracerouteViewModelTest hop ordering and timeout glyph."
+        - "A:TR-03: new GeoPlausibility.implausibleHops compares each geolocated hop with the last plausible hop using the 200 km/ms fibre bound and 10 ms slack. When a hop contradicts its RTT, the distance, route and Speed vs light figures are hidden and the card says so. All GeoIP output is labelled approximate. 'Pkt Speed' renamed 'Speed vs light' and the sun emoji removed. Tests: GeoPlausibilityTest. Anycast is not detected by name; the RTT bound is the check."
+        - "A:TR-05: an Error state is cleared when the host text changes. Test: editing the host clears a failed trace message."
+        - "TR-07 (not in this WP's list, verified in source): the screen called onLifecycleStop on every ON_STOP, so rotation cancelled a running trace, the same bug as PING-01. Mirrors the WP02 fix: configurationChange flag, ignored by the ViewModel. Test: configuration change keeps a trace running. Not device-verified."
+        - "androidTest TracerouteScreenTest: country-path fixture changed to a physically plausible RTT (90 ms for London from Ashburn). The old 20 ms fixture would now hide the route card. Not run on device here."
+        - "README Traceroute section updated (hop order, validation messages, approximate geo and conflict behaviour, backgrounding vs rotation, error clear)."
+      not_reproduced:
+        - "A:TR-04: progressive display already exists. Hops stream into the Running state per hop (channelFlow in the repository, Running panel lists them). The finding was UNVERIFIED because the trace was fast. Device check at WP18."
+        - "A:TR-06: the host field is a ToolTextField with a clear button (WP01). no_change_needed."
+      deferred:
+        - "A:TR-08: export, copy, reverse-DNS toggle and trace history are product features, not bugs. Needs a decision before work."
+        - "Other tools still show the generic error_invalid_host text (Ping, TLS, Topology, Ports). HostValidator.problemOf is available for them in a later WP."
+        - "Anycast detection by name or ASN is not implemented. The RTT plausibility check covers the reported case."
   - id: WP04
     title: DNS Lookup
     status: todo

@@ -612,14 +612,16 @@
     <string name="traceroute_stats_distance">Distance</string>
     <string name="traceroute_stats_countries">Countries</string>
     <string name="traceroute_stats_isps">ISPs</string>
-    <string name="traceroute_stats_packet_speed">Pkt Speed</string>
-    <string name="traceroute_stats_packet_speed_value">~%1$d%% of ☀</string>
+    <string name="traceroute_stats_packet_speed">Speed vs light</string>
+    <string name="traceroute_stats_packet_speed_value">~%1$d%% of light speed in fibre</string>
     <string name="traceroute_stats_avg_rtt">Avg RTT</string>
     <string name="traceroute_stats_min_rtt">Fastest</string>
     <string name="traceroute_stats_max_rtt">Slowest</string>
     <string name="traceroute_stats_timeout_rate">Timeouts</string>
     <string name="traceroute_stats_hop_label">hop %1$d</string>
     <string name="traceroute_stats_country_path">Route: %1$s</string>
+    <string name="traceroute_stats_geo_approximate">Locations come from GeoIP data and are approximate. Anycast and cloud addresses can be placed in the wrong country.</string>
+    <string name="traceroute_stats_geo_conflict">Some hop locations conflict with the measured round-trip times, so distance, route and speed are hidden.</string>
     <string name="traceroute_stats_no_geo">No public IPs resolved - geographic stats unavailable</string>
     <string name="traceroute_stats_light_speed_note">Estimate based on speed of light in fibre ≈ 200 km/ms</string>
     <string name="traceroute_tab_hops">Hop Details</string>
@@ -1516,6 +1518,14 @@
 
     <!-- Input validation -->
     <string name="error_invalid_host">Hostname or IP cannot contain spaces</string>
+    <string name="error_host_blank">Enter a hostname or IP address</string>
+    <string name="error_host_ipv4_invalid">An IPv4 address needs four numbers from 0 to 255</string>
+    <string name="error_host_ipv6_invalid">That IPv6 address is not valid</string>
+    <string name="error_host_empty_label">A hostname cannot have an empty part between two dots</string>
+    <string name="error_host_invalid_label">Each part of a hostname must be 1 to 63 characters and cannot start or end with a hyphen</string>
+    <string name="error_host_invalid_characters">Hostnames can only contain letters, digits, hyphens and dots</string>
+    <string name="error_host_too_long">A hostname can be at most 253 characters long</string>
+    <string name="error_host_invalid">Enter a valid hostname or IP address</string>
     <string name="error_invalid_url">Enter a valid URL (e.g. https://example.com)</string>
 
     <!-- Wake-on-LAN -->

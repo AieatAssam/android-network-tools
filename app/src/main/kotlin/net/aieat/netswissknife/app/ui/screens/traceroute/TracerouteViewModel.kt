@@ -134,6 +134,10 @@ class TracerouteViewModel
 
         fun onHostChange(value: String) {
             _host.value = value
+            // A failure message describes the previous host; drop it when the host changes.
+            if (_uiState.value is TracerouteUiState.Error) {
+                _uiState.value = TracerouteUiState.Idle
+            }
         }
 
         fun onMaxHopsChange(value: Int) {
@@ -196,8 +200,12 @@ class TracerouteViewModel
             cancelRunningTrace(CancellationReason.USER_STOP)
         }
 
-        /** Cancel an in-flight trace when its screen leaves the foreground. */
-        fun onLifecycleStop() {
+        /**
+         * Cancel an in-flight trace when its screen leaves the foreground. A configuration
+         * change (rotation) also stops the screen but must not end the trace.
+         */
+        fun onLifecycleStop(configurationChange: Boolean = false) {
+            if (configurationChange) return
             cancelRunningTrace(CancellationReason.LIFECYCLE_PAUSE)
         }
 
@@ -467,14 +475,16 @@ class TracerouteViewModel
             host: String,
             hops: List<HopResult>,
             totalMs: Long = 0L,
-        ): TracerouteResult =
-            TracerouteResult(
+        ): TracerouteResult {
+            val ordered = hops.sortedBy { it.hopNumber }
+            return TracerouteResult(
                 host = host,
-                resolvedIp = hops.firstNotNullOfOrNull { it.resolvedDestinationIp },
-                hops = hops,
-                rawOutput = buildRawOutput(host, hops),
+                resolvedIp = ordered.firstNotNullOfOrNull { it.resolvedDestinationIp },
+                hops = ordered,
+                rawOutput = buildRawOutput(host, ordered),
                 totalTimeMs = totalMs,
             )
+        }
 
         private fun buildRawOutput(
             host: String,
@@ -490,11 +500,15 @@ class TracerouteViewModel
                 appendLine("traceroute to $host, ${_maxHops.value} hops max, $probeLabel, $sizeLabel")
                 hops.forEach { hop ->
                     val num = "${hop.hopNumber}".padStart(3)
-                    val ip = hop.ip ?: "*"
+                    // Same representation as the Hop Details row for a timed-out hop.
+                    if (hop.ip == null) {
+                        appendLine("$num  * * *")
+                        return@forEach
+                    }
                     val host2 = if (hop.hostname != null) " (${hop.hostname})" else ""
                     val rtt = if (hop.rtTimeMs != null) " ${hop.rtTimeMs} ms" else " *"
                     val geo = hop.geoLocation?.let { gl -> " [${gl.city.ifBlank { gl.country }}]" } ?: ""
-                    appendLine("$num  $ip$host2$rtt$geo")
+                    appendLine("$num  ${hop.ip}$host2$rtt$geo")
                 }
             }
 
