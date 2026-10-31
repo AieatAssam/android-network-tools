@@ -2748,114 +2748,114 @@
         <error line="42" column="21" source="standard:multiline-expression-wrapping" />
     </file>
     <file name="src/test/kotlin/net/aieat/netswissknife/core/network/dns/DnsMessageMapperTest.kt">
-        <error line="17" column="1" source="standard:no-empty-first-line-in-class-body" />
-        <error line="23" column="54" source="standard:argument-list-wrapping" />
-        <error line="23" column="66" source="standard:argument-list-wrapping" />
-        <error line="23" column="77" source="standard:argument-list-wrapping" />
-        <error line="24" column="38" source="standard:argument-list-wrapping" />
-        <error line="24" column="47" source="standard:trailing-comma-on-call-site" />
-        <error line="25" column="15" source="standard:wrapping" />
-        <error line="25" column="16" source="standard:argument-list-wrapping" />
-        <error line="25" column="30" source="standard:trailing-comma-on-call-site" />
-        <error line="29" column="55" source="standard:argument-list-wrapping" />
-        <error line="29" column="63" source="standard:argument-list-wrapping" />
-        <error line="29" column="74" source="standard:argument-list-wrapping" />
-        <error line="30" column="34" source="standard:argument-list-wrapping" />
-        <error line="30" column="43" source="standard:trailing-comma-on-call-site" />
-        <error line="31" column="15" source="standard:wrapping" />
-        <error line="31" column="16" source="standard:argument-list-wrapping" />
-        <error line="31" column="30" source="standard:trailing-comma-on-call-site" />
-        <error line="49" column="50" source="standard:argument-list-wrapping" />
-        <error line="49" column="60" source="standard:argument-list-wrapping" />
-        <error line="49" column="71" source="standard:argument-list-wrapping" />
-        <error line="50" column="82" source="standard:argument-list-wrapping" />
-        <error line="50" column="91" source="standard:trailing-comma-on-call-site" />
-        <error line="51" column="15" source="standard:wrapping" />
-        <error line="51" column="16" source="standard:argument-list-wrapping" />
-        <error line="51" column="33" source="standard:trailing-comma-on-call-site" />
-        <error line="67" column="50" source="standard:argument-list-wrapping" />
-        <error line="67" column="54" source="standard:argument-list-wrapping" />
-        <error line="67" column="65" source="standard:argument-list-wrapping" />
-        <error line="68" column="24" source="standard:argument-list-wrapping" />
-        <error line="68" column="33" source="standard:trailing-comma-on-call-site" />
-        <error line="69" column="15" source="standard:wrapping" />
-        <error line="69" column="16" source="standard:argument-list-wrapping" />
-        <error line="69" column="30" source="standard:trailing-comma-on-call-site" />
-        <error line="82" column="19" source="standard:multiline-expression-wrapping" />
-        <error line="83" column="46" source="standard:argument-list-wrapping" />
-        <error line="83" column="57" source="standard:argument-list-wrapping" />
-        <error line="97" column="19" source="standard:multiline-expression-wrapping" />
-        <error line="98" column="46" source="standard:argument-list-wrapping" />
-        <error line="98" column="57" source="standard:argument-list-wrapping" />
-        <error line="114" column="20" source="standard:multiline-expression-wrapping" />
-        <error line="115" column="19" source="standard:argument-list-wrapping" />
-        <error line="115" column="25" source="standard:argument-list-wrapping" />
-        <error line="115" column="40" source="standard:argument-list-wrapping" />
-        <error line="116" column="16" source="standard:argument-list-wrapping" />
+        <error line="18" column="1" source="standard:no-empty-first-line-in-class-body" />
+        <error line="24" column="54" source="standard:argument-list-wrapping" />
+        <error line="24" column="66" source="standard:argument-list-wrapping" />
+        <error line="24" column="77" source="standard:argument-list-wrapping" />
+        <error line="25" column="38" source="standard:argument-list-wrapping" />
+        <error line="25" column="47" source="standard:trailing-comma-on-call-site" />
+        <error line="26" column="15" source="standard:wrapping" />
+        <error line="26" column="16" source="standard:argument-list-wrapping" />
+        <error line="26" column="30" source="standard:trailing-comma-on-call-site" />
+        <error line="30" column="55" source="standard:argument-list-wrapping" />
+        <error line="30" column="63" source="standard:argument-list-wrapping" />
+        <error line="30" column="74" source="standard:argument-list-wrapping" />
+        <error line="31" column="34" source="standard:argument-list-wrapping" />
+        <error line="31" column="43" source="standard:trailing-comma-on-call-site" />
+        <error line="32" column="15" source="standard:wrapping" />
+        <error line="32" column="16" source="standard:argument-list-wrapping" />
+        <error line="32" column="30" source="standard:trailing-comma-on-call-site" />
+        <error line="50" column="50" source="standard:argument-list-wrapping" />
+        <error line="50" column="60" source="standard:argument-list-wrapping" />
+        <error line="50" column="71" source="standard:argument-list-wrapping" />
+        <error line="51" column="82" source="standard:argument-list-wrapping" />
+        <error line="51" column="91" source="standard:trailing-comma-on-call-site" />
+        <error line="52" column="15" source="standard:wrapping" />
+        <error line="52" column="16" source="standard:argument-list-wrapping" />
+        <error line="52" column="33" source="standard:trailing-comma-on-call-site" />
+        <error line="68" column="50" source="standard:argument-list-wrapping" />
+        <error line="68" column="54" source="standard:argument-list-wrapping" />
+        <error line="68" column="65" source="standard:argument-list-wrapping" />
+        <error line="69" column="24" source="standard:argument-list-wrapping" />
+        <error line="69" column="33" source="standard:trailing-comma-on-call-site" />
+        <error line="70" column="15" source="standard:wrapping" />
+        <error line="70" column="16" source="standard:argument-list-wrapping" />
+        <error line="70" column="30" source="standard:trailing-comma-on-call-site" />
+        <error line="83" column="19" source="standard:multiline-expression-wrapping" />
+        <error line="84" column="46" source="standard:argument-list-wrapping" />
+        <error line="84" column="57" source="standard:argument-list-wrapping" />
+        <error line="98" column="19" source="standard:multiline-expression-wrapping" />
+        <error line="99" column="46" source="standard:argument-list-wrapping" />
+        <error line="99" column="57" source="standard:argument-list-wrapping" />
+        <error line="115" column="20" source="standard:multiline-expression-wrapping" />
         <error line="116" column="19" source="standard:argument-list-wrapping" />
-        <error line="116" column="22" source="standard:argument-list-wrapping" />
         <error line="116" column="25" source="standard:argument-list-wrapping" />
-        <error line="116" column="28" source="standard:argument-list-wrapping" />
-        <error line="116" column="31" source="standard:argument-list-wrapping" />
-        <error line="116" column="34" source="standard:argument-list-wrapping" />
+        <error line="116" column="40" source="standard:argument-list-wrapping" />
         <error line="117" column="16" source="standard:argument-list-wrapping" />
-        <error line="117" column="35" source="standard:argument-list-wrapping" />
-        <error line="117" column="54" source="standard:argument-list-wrapping" />
-        <error line="117" column="73" source="standard:argument-list-wrapping" />
-        <error line="118" column="32" source="standard:argument-list-wrapping" />
-        <error line="118" column="51" source="standard:argument-list-wrapping" />
-        <error line="119" column="16" source="standard:argument-list-wrapping" />
-        <error line="119" column="35" source="standard:argument-list-wrapping" />
-        <error line="119" column="54" source="standard:argument-list-wrapping" />
-        <error line="119" column="73" source="standard:argument-list-wrapping" />
+        <error line="117" column="19" source="standard:argument-list-wrapping" />
+        <error line="117" column="22" source="standard:argument-list-wrapping" />
+        <error line="117" column="25" source="standard:argument-list-wrapping" />
+        <error line="117" column="28" source="standard:argument-list-wrapping" />
+        <error line="117" column="31" source="standard:argument-list-wrapping" />
+        <error line="117" column="34" source="standard:argument-list-wrapping" />
+        <error line="118" column="16" source="standard:argument-list-wrapping" />
+        <error line="118" column="35" source="standard:argument-list-wrapping" />
+        <error line="118" column="54" source="standard:argument-list-wrapping" />
+        <error line="118" column="73" source="standard:argument-list-wrapping" />
+        <error line="119" column="32" source="standard:argument-list-wrapping" />
+        <error line="119" column="51" source="standard:argument-list-wrapping" />
         <error line="120" column="16" source="standard:argument-list-wrapping" />
         <error line="120" column="35" source="standard:argument-list-wrapping" />
-        <error line="120" column="38" source="standard:argument-list-wrapping" />
+        <error line="120" column="54" source="standard:argument-list-wrapping" />
+        <error line="120" column="73" source="standard:argument-list-wrapping" />
         <error line="121" column="16" source="standard:argument-list-wrapping" />
-        <error line="121" column="19" source="standard:argument-list-wrapping" />
-        <error line="121" column="22" source="standard:argument-list-wrapping" />
+        <error line="121" column="35" source="standard:argument-list-wrapping" />
+        <error line="121" column="38" source="standard:argument-list-wrapping" />
         <error line="122" column="16" source="standard:argument-list-wrapping" />
+        <error line="122" column="19" source="standard:argument-list-wrapping" />
+        <error line="122" column="22" source="standard:argument-list-wrapping" />
         <error line="123" column="16" source="standard:argument-list-wrapping" />
-        <error line="123" column="31" source="standard:argument-list-wrapping" />
-        <error line="137" column="20" source="standard:multiline-expression-wrapping" />
-        <error line="138" column="19" source="standard:argument-list-wrapping" />
-        <error line="138" column="25" source="standard:argument-list-wrapping" />
-        <error line="138" column="40" source="standard:argument-list-wrapping" />
-        <error line="139" column="16" source="standard:argument-list-wrapping" />
+        <error line="124" column="16" source="standard:argument-list-wrapping" />
+        <error line="124" column="31" source="standard:argument-list-wrapping" />
+        <error line="138" column="20" source="standard:multiline-expression-wrapping" />
         <error line="139" column="19" source="standard:argument-list-wrapping" />
-        <error line="139" column="22" source="standard:argument-list-wrapping" />
         <error line="139" column="25" source="standard:argument-list-wrapping" />
-        <error line="139" column="28" source="standard:argument-list-wrapping" />
-        <error line="139" column="31" source="standard:argument-list-wrapping" />
-        <error line="139" column="34" source="standard:argument-list-wrapping" />
+        <error line="139" column="40" source="standard:argument-list-wrapping" />
         <error line="140" column="16" source="standard:argument-list-wrapping" />
-        <error line="140" column="35" source="standard:argument-list-wrapping" />
-        <error line="140" column="54" source="standard:argument-list-wrapping" />
-        <error line="140" column="73" source="standard:argument-list-wrapping" />
-        <error line="141" column="32" source="standard:argument-list-wrapping" />
-        <error line="141" column="51" source="standard:argument-list-wrapping" />
-        <error line="142" column="16" source="standard:argument-list-wrapping" />
-        <error line="142" column="35" source="standard:argument-list-wrapping" />
-        <error line="142" column="54" source="standard:argument-list-wrapping" />
-        <error line="142" column="73" source="standard:argument-list-wrapping" />
+        <error line="140" column="19" source="standard:argument-list-wrapping" />
+        <error line="140" column="22" source="standard:argument-list-wrapping" />
+        <error line="140" column="25" source="standard:argument-list-wrapping" />
+        <error line="140" column="28" source="standard:argument-list-wrapping" />
+        <error line="140" column="31" source="standard:argument-list-wrapping" />
+        <error line="140" column="34" source="standard:argument-list-wrapping" />
+        <error line="141" column="16" source="standard:argument-list-wrapping" />
+        <error line="141" column="35" source="standard:argument-list-wrapping" />
+        <error line="141" column="54" source="standard:argument-list-wrapping" />
+        <error line="141" column="73" source="standard:argument-list-wrapping" />
+        <error line="142" column="32" source="standard:argument-list-wrapping" />
+        <error line="142" column="51" source="standard:argument-list-wrapping" />
         <error line="143" column="16" source="standard:argument-list-wrapping" />
         <error line="143" column="35" source="standard:argument-list-wrapping" />
-        <error line="143" column="38" source="standard:argument-list-wrapping" />
+        <error line="143" column="54" source="standard:argument-list-wrapping" />
+        <error line="143" column="73" source="standard:argument-list-wrapping" />
         <error line="144" column="16" source="standard:argument-list-wrapping" />
-        <error line="144" column="19" source="standard:argument-list-wrapping" />
-        <error line="144" column="22" source="standard:argument-list-wrapping" />
+        <error line="144" column="35" source="standard:argument-list-wrapping" />
+        <error line="144" column="38" source="standard:argument-list-wrapping" />
         <error line="145" column="16" source="standard:argument-list-wrapping" />
+        <error line="145" column="19" source="standard:argument-list-wrapping" />
+        <error line="145" column="22" source="standard:argument-list-wrapping" />
         <error line="146" column="16" source="standard:argument-list-wrapping" />
-        <error line="146" column="31" source="standard:argument-list-wrapping" />
-        <error line="146" column="34" source="standard:argument-list-wrapping" />
-        <error line="154" column="23" source="standard:function-signature" />
-        <error line="154" column="37" source="standard:function-signature" />
-        <error line="154" column="46" source="standard:function-signature" />
-        <error line="154" column="57" source="standard:function-signature" />
-        <error line="157" column="21" source="standard:function-signature" />
-        <error line="157" column="40" source="standard:function-signature" />
-        <error line="157" column="68" source="standard:function-signature" />
-        <error line="164" column="29" source="standard:trailing-comma-on-call-site" />
+        <error line="147" column="16" source="standard:argument-list-wrapping" />
+        <error line="147" column="31" source="standard:argument-list-wrapping" />
+        <error line="147" column="34" source="standard:argument-list-wrapping" />
+        <error line="166" column="23" source="standard:function-signature" />
+        <error line="166" column="37" source="standard:function-signature" />
+        <error line="166" column="46" source="standard:function-signature" />
+        <error line="166" column="57" source="standard:function-signature" />
+        <error line="169" column="21" source="standard:function-signature" />
+        <error line="169" column="40" source="standard:function-signature" />
+        <error line="169" column="68" source="standard:function-signature" />
+        <error line="176" column="29" source="standard:trailing-comma-on-call-site" />
     </file>
     <file name="src/test/kotlin/net/aieat/netswissknife/core/network/dns/DnsRecordTest.kt">
         <error line="9" column="1" source="standard:no-empty-first-line-in-class-body" />

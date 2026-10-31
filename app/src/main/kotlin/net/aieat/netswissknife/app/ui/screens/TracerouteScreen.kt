@@ -1,7 +1,6 @@
 package net.aieat.netswissknife.app.ui.screens
 
 import android.app.Activity
-import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -139,6 +138,7 @@ import net.aieat.netswissknife.app.ui.screens.traceroute.TracerouteViewModel
 import net.aieat.netswissknife.app.ui.screens.traceroute.TracerouteViewMode
 import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.traceroute.CountryFlags
+import net.aieat.netswissknife.app.ui.components.messageRes
 import net.aieat.netswissknife.core.network.HostProblem
 import net.aieat.netswissknife.core.network.traceroute.GeoPlausibility
 import net.aieat.netswissknife.core.network.traceroute.HopGeoLocation
@@ -866,20 +866,6 @@ private fun StatChip(label: String, value: String) {
         )
     }
 }
-
-@StringRes
-private fun HostProblem.messageRes(): Int =
-    when (this) {
-        HostProblem.BLANK -> R.string.error_host_blank
-        HostProblem.CONTAINS_WHITESPACE -> R.string.error_invalid_host
-        HostProblem.IPV4_INVALID -> R.string.error_host_ipv4_invalid
-        HostProblem.IPV6_INVALID -> R.string.error_host_ipv6_invalid
-        HostProblem.EMPTY_LABEL -> R.string.error_host_empty_label
-        HostProblem.INVALID_LABEL -> R.string.error_host_invalid_label
-        HostProblem.INVALID_CHARACTERS -> R.string.error_host_invalid_characters
-        HostProblem.TOO_LONG -> R.string.error_host_too_long
-        HostProblem.INVALID -> R.string.error_host_invalid
-    }
 
 // ── Journey statistics card ────────────────────────────────────────────────────
 

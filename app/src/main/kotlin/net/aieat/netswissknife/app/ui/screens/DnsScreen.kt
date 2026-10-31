@@ -85,6 +85,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.vector.ImageVector
 import android.content.ClipData
+import androidx.annotation.StringRes
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.testTag
@@ -121,6 +122,10 @@ import net.aieat.netswissknife.app.ui.theme.AppShapes
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
 import net.aieat.netswissknife.app.ui.screens.dns.DnsUiState
 import net.aieat.netswissknife.app.ui.screens.dns.DnsViewModel
+import net.aieat.netswissknife.app.ui.screens.dns.dnsRecordIconLabel
+import net.aieat.netswissknife.app.ui.components.messageRes
+import net.aieat.netswissknife.core.network.HostProblem
+import net.aieat.netswissknife.core.network.dns.DnsNameValidator
 import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.dns.DnsRecord
@@ -367,7 +372,10 @@ private fun DnsInputCard(
     val isCustomServerValid = selectedServer !is DnsServer.Custom || customServerAddress.trim().let {
         HostValidator.isValidIpv4(it) || HostValidator.isValidIpv6(it)
     }
-    val canLookup = domain.isNotBlank() && isCustomServerValid
+    val domainProblem = domainProblemOf(domain, recordType)
+    val domainProblemText = domainProblem?.let { stringResource(dnsNameProblemRes(it, domain)) }
+    val domainSupporting: (@Composable () -> Unit)? = domainProblemText?.let { message -> { Text(message) } }
+    val canLookup = domain.isNotBlank() && domainProblem == null && isCustomServerValid
     ElevatedCard(
         modifier = modifier.fillMaxWidth(),
         shape = AppShapes.large
@@ -401,6 +409,8 @@ private fun DnsInputCard(
                     }
                 ),
                 enabled = !isBusy,
+                isError = domainProblem != null,
+                supportingText = domainSupporting,
                 modifier = Modifier.fillMaxWidth().testTag(DnsScreenTestTags.DOMAIN_INPUT),
                 shape = AppShapes.medium,
                 showClear = domain.isNotEmpty() && !isBusy,
@@ -474,6 +484,35 @@ private fun DnsInputCard(
         }
     }
 }
+
+/** First char code outside 7-bit ASCII; IDN input containing these needs punycode. */
+private const val NON_ASCII_CHAR_CODE = 128
+
+/** Pre-submit check for the domain field; null when the lookup may proceed. */
+private fun domainProblemOf(
+    domain: String,
+    recordType: DnsRecordType,
+): HostProblem? = if (domain.isBlank()) null else DnsNameValidator.problemOf(domain, recordType)
+
+/** DNS wording for a rejected query name; IDNA failures get their own explanation. */
+@StringRes
+private fun dnsNameProblemRes(
+    problem: HostProblem,
+    input: String,
+): Int =
+    when (problem) {
+        HostProblem.CONTAINS_WHITESPACE -> R.string.dns_name_whitespace
+        HostProblem.INVALID -> dnsInvalidNameRes(input)
+        else -> problem.messageRes()
+    }
+
+@StringRes
+private fun dnsInvalidNameRes(input: String): Int =
+    when {
+        HostValidator.isValidIpv6(input.trim()) -> R.string.dns_name_ipv6_needs_ptr
+        input.any { it.code >= NON_ASCII_CHAR_CODE } -> R.string.dns_name_idn
+        else -> R.string.dns_name_invalid
+    }
 
 // ── Record type chips ─────────────────────────────────────────────────────────
 
@@ -878,7 +917,8 @@ private fun DnsResultPanel(
         if (result.additional.isNotEmpty()) {
             DnsSectionCard(
                 title = stringResource(R.string.dns_additional_section),
-                records = result.additional
+                records = result.additional,
+                initiallyExpanded = false,
             )
         }
 
@@ -953,7 +993,7 @@ private fun DnsResultSummaryCard(
                         text = stringResource(R.string.dns_rcode, result.rcode),
                         style = MaterialTheme.typography.labelMedium,
                         color = when (result.rcode) {
-                            "NOERROR" -> MaterialTheme.colorScheme.tertiary
+                            "NOERROR" -> MaterialTheme.colorScheme.onPrimaryContainer
                             "NXDOMAIN" -> MaterialTheme.colorScheme.primary
                             else -> MaterialTheme.colorScheme.error
                         }
@@ -1026,8 +1066,12 @@ private fun DnsResultSummaryCard(
 }
 
 @Composable
-private fun DnsSectionCard(title: String, records: List<DnsRecord>) {
-    var expanded by remember { mutableStateOf(true) }
+private fun DnsSectionCard(
+    title: String,
+    records: List<DnsRecord>,
+    initiallyExpanded: Boolean = true,
+) {
+    var expanded by remember { mutableStateOf(initiallyExpanded) }
     OutlinedCard(modifier = Modifier.fillMaxWidth(), shape = AppShapes.large) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(
@@ -1128,7 +1172,7 @@ private fun DnsRecordCard(record: DnsRecord, index: Int) {
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    RecordTypeIcon(type = record.type ?: DnsRecordType.TXT)
+                    RecordTypeIcon(type = record.type, label = dnsRecordIconLabel(record))
                     Column {
                         Text(
                             text = record.rrTypeName,
@@ -1171,8 +1215,12 @@ private fun DnsRecordCard(record: DnsRecord, index: Int) {
 }
 
 @Composable
-private fun RecordTypeIcon(type: DnsRecordType) {
+private fun RecordTypeIcon(
+    type: DnsRecordType?,
+    label: String,
+) {
     val (bgColor, iconTint) = when (type) {
+        null -> MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant
         DnsRecordType.A     -> MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer
         DnsRecordType.AAAA  -> MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer
         DnsRecordType.MX    -> MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
@@ -1193,7 +1241,7 @@ private fun RecordTypeIcon(type: DnsRecordType) {
         contentAlignment = Alignment.Center
     ) {
         Text(
-            text = type.displayName.take(3),
+            text = label,
             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold),
             color = iconTint
         )
@@ -1263,6 +1311,14 @@ private fun RecordValueDisplay(record: DnsRecord) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 LabeledValue(label = stringResource(R.string.dns_mx_priority), value = priority)
                 LabeledValue(label = stringResource(R.string.dns_mx_host), value = host)
+                // RFC 7505 null MX: a single root host means the domain refuses mail.
+                if (host == ".") {
+                    Text(
+                        text = stringResource(R.string.dns_null_mx_note),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
 

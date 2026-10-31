@@ -11,6 +11,7 @@ import net.aieat.netswissknife.app.platform.NoOpNetworkStatusProvider
 import net.aieat.netswissknife.core.domain.DnsLookupParams
 import net.aieat.netswissknife.core.domain.DnsLookupUseCase
 import net.aieat.netswissknife.core.network.NetworkResult
+import net.aieat.netswissknife.core.network.dns.DnsNameValidator
 import net.aieat.netswissknife.core.network.dns.DnsRecordType
 import net.aieat.netswissknife.core.network.dns.DnsResult
 import net.aieat.netswissknife.core.network.dns.DnsServer
@@ -86,19 +87,35 @@ class DnsViewModel @Inject constructor(
 
     fun onDomainChange(value: String) {
         _domain.value = value
+        clearStaleResult()
     }
 
     fun onRecordTypeChange(type: DnsRecordType) {
         _recordType.value = type
+        clearStaleResult()
     }
 
     fun onServerChange(server: DnsServer) {
         _selectedServer.value = server
+        clearStaleResult()
     }
 
     fun onCustomServerAddressChange(address: String) {
         _customServerAddress.value = address
         _selectedServer.value = DnsServer.Custom(address)
+        clearStaleResult()
+    }
+
+    /**
+     * A finished result or error describes the previous query and server. Once the
+     * user edits the query or changes the server, it no longer applies, so it is
+     * dropped. Loading and canceling states belong to a running request and are kept.
+     */
+    private fun clearStaleResult() {
+        val current = _uiState.value
+        if (current is DnsUiState.Success || current is DnsUiState.Error) {
+            _uiState.value = DnsUiState.Idle
+        }
     }
 
     fun onToggleRawView() {
@@ -145,6 +162,8 @@ class DnsViewModel @Inject constructor(
         if (lookupJob != null || _uiState.value is DnsUiState.Loading ||
             _uiState.value is DnsUiState.Canceling
         ) return
+        // Invalid names are reported inline by the screen; they never reach the resolver.
+        if (DnsNameValidator.problemOf(_domain.value, _recordType.value) != null) return
 
         val server = when (val s = _selectedServer.value) {
             is DnsServer.Custom -> DnsServer.Custom(_customServerAddress.value)

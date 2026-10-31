@@ -271,6 +271,40 @@ class DnsViewModelTest {
         }
 
         @Test
+        fun `invalid name is rejected before the use case runs`() {
+            runTest {
+                coEvery { useCase(any(), any()) } returns NetworkResult.Success(stubResult)
+                viewModel.onDomainChange("bad host!!")
+                viewModel.performLookup()
+                assertTrue(viewModel.uiState.value is DnsUiState.Idle)
+                coVerify(exactly = 0) { useCase(any(), any()) }
+            }
+        }
+
+        @Test
+        fun `changing the domain clears a failed lookup`() {
+            runTest {
+                coEvery { useCase(any(), any()) } returns NetworkResult.Error("nxdomain")
+                viewModel.onDomainChange("nonexistent.invalid")
+                viewModel.performLookup()
+                assertTrue(viewModel.uiState.value is DnsUiState.Error)
+                viewModel.onDomainChange("example.org")
+                assertTrue(viewModel.uiState.value is DnsUiState.Idle)
+            }
+        }
+
+        @Test
+        fun `changing the server clears a failed lookup`() {
+            runTest {
+                coEvery { useCase(any(), any()) } returns NetworkResult.Error("nxdomain")
+                viewModel.onDomainChange("nonexistent.invalid")
+                viewModel.performLookup()
+                viewModel.onServerChange(DnsServer.Cloudflare)
+                assertTrue(viewModel.uiState.value is DnsUiState.Idle)
+            }
+        }
+
+        @Test
         fun `addRecent is called on performLookup`() = runTest {
             coEvery { useCase(any(), any()) } returns NetworkResult.Success(stubResult)
             viewModel.onDomainChange("example.com")
@@ -285,7 +319,7 @@ class DnsViewModelTest {
         fun `DNS error results are not saved to recents`() = runTest {
             coEvery { useCase(any(), any()) } returns NetworkResult.Error("Invalid domain")
 
-            listOf("foo bar", "a..b", "2001:db8::1").forEach { query ->
+            listOf("nxdomain.example", "missing.example").forEach { query ->
                 viewModel.onDomainChange(query)
                 viewModel.performLookup()
                 assertTrue(viewModel.uiState.value is DnsUiState.Error, "Expected error for $query")

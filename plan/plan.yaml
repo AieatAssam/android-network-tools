@@ -106,9 +106,29 @@ work_packages:
         - "Anycast detection by name or ASN is not implemented. The RTT plausibility check covers the reported case."
   - id: WP04
     title: DNS Lookup
-    status: todo
+    status: done
     findings: [A:DNS-01, A:DNS-02, A:DNS-03, A:DNS-04, A:DNS-06, A:DNS-07, A:DNS-08]
     notes: "OPT pseudo-record shown as TXT; pre-submit validation with friendly IDN error; clear stale error card."
+    result:
+      status: done
+      commit: "the WP04 commit on plan/ux-remediation-2026-10-31 (fix(dns): ...); sha not recorded here to keep a single commit"
+      gates: "./gradlew test ktlintCheck detekt :core-network:koverVerify :core-domain:koverVerify :app:koverVerify all green (one run). :app:assembleDebug and :app:compileDebugAndroidTestKotlin green. ktlint baselines regenerated (app, core-network): app delta vs HEAD is -4 (pre-existing entries removed by reformatting DnsScreen signatures), core-network delta 0; per-file/per-rule diff confirmed no entry absorbed for new code. detekt baseline not regenerated. Device re-test deferred to WP18."
+      fixed:
+        - "A:DNS-01 (root cause in source): the record icon fell back to TXT when the record type was null, so EDNS OPT drew a 'TXT' badge. Icon now shows the server's rrTypeName (dnsRecordIconLabel) with neutral colours for unknown types. Additional section starts collapsed. Tests: DnsRecordIconLabelTest, DnsMessageMapperTest OPT case. The mapper test passed on its first run because the mapper already labelled OPT correctly; it is a regression guard, the icon helper is the fix."
+        - "A:DNS-02: new core-network DnsNameValidator.problemOf applies the resolver's own normalizeDomain rules and maps failures to HostProblem (HostValidator.problemOf as the reason). Input shows an inline supporting message, isError, and Look up is disabled while invalid. performLookup refuses invalid names. Messages: 'Domain names cannot contain spaces', a plain IDN message for non-ASCII input, 'IPv6 addresses can only be looked up with the PTR record type', and the generic invalid message. Underscore owner labels (SRV/TXT) remain valid. Tests: DnsNameValidatorTest (9), DnsViewModelTest 'invalid name is rejected before the use case runs'."
+        - "A:DNS-03: domain, record type and server changes clear a finished result or error (Idle). Loading and canceling states are kept. Tests: 'changing the domain clears a failed lookup', 'changing the server clears a failed lookup'. Deliberate choice: a finished success is also cleared on edit, not only errors, since the stored result describes the previous query."
+        - "A:DNS-04: NOERROR uses onPrimaryContainer instead of tertiary (the finding says tertiary renders in the error-like hue). Colour not visually verified."
+        - "A:DNS-07: an MX record whose host is '.' shows 'Null MX: this domain does not accept mail'."
+        - "Shared: HostProblem.messageRes moved from TracerouteScreen to ui/components/HostProblemMessages.kt, used by Traceroute and DNS. No behaviour change for Traceroute."
+        - "README DNS section updated (inline validation, underscore names accepted, cleared results on edit, Additional collapsed, null MX note)."
+      no_change_needed:
+        - "Rotation / ON_STOP (checked as requested): DnsScreen has no ON_STOP or lifecycle observer. DnsViewModel's lifecycle closeable runs only in onCleared, which a configuration change does not trigger. No change."
+        - "A:DNS-05: DnsScreen has no FocusRequester, requestFocus or autofocus. Not reproducible in source; WP01 already dismisses the keyboard on search. Re-test on device at WP18."
+      deferred:
+        - "A:DNS-06: record-type chip clipping under the chevron overlay and scroll cue. Layout polish; a FlowRow or wrapped layout for tablet is not done."
+        - "A:DNS-08: resolver comparison, PTR entry point, query-all, export of raw response. Product features; need a decision."
+        - "A:DNS-09 is UNVERIFIED in the findings and not in this WP's list; not exercised."
+        - "A:DNS-02 wording on tablet and the Use Cloudflare path after the new validation: verify on device at WP18."
   - id: WP05
     title: Port Scanner
     status: todo

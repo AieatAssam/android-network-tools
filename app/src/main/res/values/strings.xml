@@ -213,6 +213,11 @@
     <string name="dns_private_notice">Private DNS is active%1$s. Plain DNS queries may be handled differently by the device.</string>
     <string name="dns_authority_section">Authority</string>
     <string name="dns_additional_section">Additional</string>
+    <string name="dns_name_whitespace">Domain names cannot contain spaces</string>
+    <string name="dns_name_idn">This name has characters that cannot be converted to a DNS name. Check for unusual punctuation or symbols.</string>
+    <string name="dns_name_ipv6_needs_ptr">IPv6 addresses can only be looked up with the PTR record type</string>
+    <string name="dns_name_invalid">Enter a valid domain name, IPv4 address or IPv6 address</string>
+    <string name="dns_null_mx_note">Null MX: this domain does not accept mail</string>
 
     <!-- Ping Screen -->
     <string name="ping_screen_title">Ping</string>
