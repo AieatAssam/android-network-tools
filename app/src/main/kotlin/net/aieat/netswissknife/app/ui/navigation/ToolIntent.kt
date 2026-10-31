@@ -1,7 +1,7 @@
 package net.aieat.netswissknife.app.ui.navigation
 
 import net.aieat.netswissknife.core.network.HostValidator
-import java.util.Locale
+import net.aieat.netswissknife.core.network.wol.WolMagicPacket
 
 /** A validated host literal or IDN hostname carried between tool screens. */
 data class ToolHost(val value: String) {
@@ -42,30 +42,17 @@ value class ToolPort private constructor(val value: Int) {
     }
 }
 
-/** A unicast Wake-on-LAN target in canonical uppercase colon notation. */
+/**
+ * A unicast Wake-on-LAN target in canonical uppercase colon notation. Parsing accepts every
+ * notation that [WolMagicPacket] accepts; the constructor only accepts the canonical form.
+ */
 data class ToolMacAddress(val value: String) {
     init {
-        require(
-            pattern.matches(value) && ':' in value && '-' !in value &&
-                value == value.uppercase(Locale.ROOT) && isWolUnicast(value),
-        )
+        require(WolMagicPacket.canonicalMacOrNull(value) == value) { "Not a canonical unicast MAC: $value" }
     }
 
     companion object {
-        private val pattern = Regex("^(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$")
-
-        fun parse(value: String): ToolMacAddress? {
-            if (!pattern.matches(value)) return null
-            if (':' in value && '-' in value) return null
-            val normalized = value.replace('-', ':').uppercase(Locale.ROOT)
-            if (!isWolUnicast(normalized)) return null
-            return ToolMacAddress(normalized)
-        }
-
-        private fun isWolUnicast(value: String): Boolean {
-            val firstOctet = value.substringBefore(':').toIntOrNull(16) ?: return false
-            return (firstOctet and 0x01) == 0 && value != "00:00:00:00:00:00"
-        }
+        fun parse(value: String): ToolMacAddress? = WolMagicPacket.canonicalMacOrNull(value)?.let(::ToolMacAddress)
     }
 }
 

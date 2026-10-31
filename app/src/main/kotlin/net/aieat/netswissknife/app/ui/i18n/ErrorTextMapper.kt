@@ -91,6 +91,8 @@ object ErrorTextMapper {
         ErrorCode.TLS_HANDSHAKE_FAILED -> R.string.err_tls_handshake_failed
         ErrorCode.TLS_PIN_INVALID -> R.string.err_tls_pin_invalid
         ErrorCode.MAC_INVALID -> R.string.err_mac_invalid
+        ErrorCode.BROADCAST_INVALID -> R.string.err_broadcast_invalid
+        ErrorCode.WOL_NO_NETWORK -> R.string.err_wol_no_network
         ErrorCode.LOCAL_NETWORK_PERMISSION_DENIED -> R.string.err_local_network_permission_denied
         ErrorCode.WOL_SEND_FAILED -> R.string.err_wol_send_failed
         ErrorCode.SUBNET_BLANK -> R.string.err_subnet_blank

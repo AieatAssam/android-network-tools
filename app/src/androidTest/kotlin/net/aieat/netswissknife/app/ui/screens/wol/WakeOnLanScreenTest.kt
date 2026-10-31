@@ -1,5 +1,6 @@
 package net.aieat.netswissknife.app.ui.screens.wol
 
+import net.aieat.netswissknife.core.network.wol.WolMagicPacket
 import android.Manifest
 import android.os.Build
 import androidx.compose.ui.test.assertIsDisplayed
@@ -97,7 +98,7 @@ class WakeOnLanScreenTest {
 
         composeRule.mainClock.advanceTimeBy(1_000L)
         composeRule
-            .onNodeWithText(context.getString(R.string.wol_mac_invalid))
+            .onNodeWithText(context.getString(R.string.wol_mac_problem_characters))
             .assertIsDisplayed()
         composeRule
             .onNodeWithText(context.getString(R.string.wol_send_button))
@@ -264,6 +265,13 @@ class WakeOnLanScreenTest {
         )
         every { viewModel.clearPrefill() } answers { sourceContextFlow.value = null }
         every { viewModel.hasInvalidHandoff } returns MutableStateFlow(invalidHandoff)
+        every { viewModel.macProblem } returns MutableStateFlow(WolMagicPacket.macProblem(macAddress))
+        every { viewModel.broadcastProblem } returns MutableStateFlow(WolMagicPacket.broadcastProblem(broadcastAddress))
+        every { viewModel.portInvalid } returns MutableStateFlow(port.toIntOrNull() !in 1..65_535)
+        every { viewModel.savedDevices } returns MutableStateFlow(emptyList())
+        every { viewModel.deviceName } returns MutableStateFlow("")
+        every { viewModel.editingMac } returns MutableStateFlow(null)
+        every { viewModel.saveConflict } returns MutableStateFlow(false)
         return viewModel
     }
 }

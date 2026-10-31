@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <baseline version="1.0">
     <file name="src/main/kotlin/net/aieat/netswissknife/core/network/ErrorInfo.kt">
-        <error line="94" column="54" source="standard:multiline-expression-wrapping" />
-        <error line="94" column="54" source="standard:function-signature" />
-        <error line="96" column="13" source="standard:when-entry-bracing" />
-        <error line="97" column="1" source="standard:blank-line-between-when-conditions" />
-        <error line="97" column="17" source="standard:when-entry-bracing" />
+        <error line="96" column="54" source="standard:multiline-expression-wrapping" />
+        <error line="96" column="54" source="standard:function-signature" />
+        <error line="98" column="13" source="standard:when-entry-bracing" />
+        <error line="99" column="1" source="standard:blank-line-between-when-conditions" />
+        <error line="99" column="17" source="standard:when-entry-bracing" />
     </file>
     <file name="src/main/kotlin/net/aieat/netswissknife/core/network/MonotonicClock.kt">
         <error line="20" column="64" source="standard:function-signature" />
@@ -2683,10 +2683,7 @@
         <error line="7" column="1" source="standard:no-empty-first-line-in-class-body" />
     </file>
     <file name="src/main/kotlin/net/aieat/netswissknife/core/network/wol/WolMagicPacket.kt">
-        <error line="10" column="1" source="standard:no-empty-first-line-in-class-body" />
-        <error line="14" column="30" source="standard:no-multi-spaces" />
-        <error line="15" column="26" source="standard:no-multi-spaces" />
-        <error line="29" column="44" source="standard:function-signature" />
+        <error line="46" column="1" source="standard:no-empty-first-line-in-class-body" />
     </file>
     <file name="src/test/kotlin/net/aieat/netswissknife/core/network/ErrorInfoTest.kt">
         <error line="29" column="21" source="standard:multiline-expression-wrapping" />
@@ -6463,9 +6460,9 @@
         <error line="96" column="70" source="standard:trailing-comma-on-call-site" />
     </file>
     <file name="src/test/kotlin/net/aieat/netswissknife/core/network/wol/WolMagicPacketTest.kt">
-        <error line="13" column="1" source="standard:no-empty-first-line-in-class-body" />
-        <error line="23" column="10" source="standard:trailing-comma-on-call-site" />
-        <error line="41" column="10" source="standard:trailing-comma-on-call-site" />
-        <error line="57" column="18" source="standard:trailing-comma-on-call-site" />
+        <error line="14" column="1" source="standard:no-empty-first-line-in-class-body" />
+        <error line="24" column="10" source="standard:trailing-comma-on-call-site" />
+        <error line="42" column="10" source="standard:trailing-comma-on-call-site" />
+        <error line="58" column="18" source="standard:trailing-comma-on-call-site" />
     </file>
 </baseline>

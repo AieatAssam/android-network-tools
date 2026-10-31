@@ -17,7 +17,9 @@ import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
 import java.net.InetSocketAddress
+import java.net.NoRouteToHostException
 import java.net.SocketAddress
+import java.net.SocketException
 import java.util.concurrent.atomic.AtomicBoolean
 
 class WakeOnLanRepositoryImpl(
@@ -51,9 +53,11 @@ class WakeOnLanRepositoryImpl(
                     withContext(Dispatchers.IO) {
                         ensureOperationActive()
                         val payload = WolMagicPacket.build(macAddress)
-                        // WOL destinations are IPv4 broadcast literals. Parsing octets directly avoids
+                        // WOL destinations are IPv4 literals. Parsing octets directly avoids
                         // invoking the system resolver, which can block past operation cancellation.
-                        val address = parseIpv4Address(broadcastAddress)
+                        val octets =
+                            WolMagicPacket.parseIpv4(broadcastAddress) ?: throw InvalidBroadcastAddressException()
+                        val address = InetAddress.getByAddress(octets)
                         ensureOperationActive()
                         val socket = socketFactory()
                         // Own the socket before network binding, local bind, or any send can block.
@@ -86,27 +90,55 @@ class WakeOnLanRepositoryImpl(
             }
         } catch (e: OperationDeadlineExceededException) {
             timeoutResult(e)
-        } catch (e: IllegalArgumentException) {
-            NetworkResult.error(ErrorCode.MAC_INVALID, developerMessage = e.message ?: "Invalid MAC address", cause = e)
-        } catch (e: LocalNetworkPermissionDeniedException) {
-            NetworkResult.error(
-                ErrorCode.LOCAL_NETWORK_PERMISSION_DENIED,
-                developerMessage = "Local network permission denied",
-                cause = e,
-            )
-        } catch (e: SecurityException) {
-            NetworkResult.error(
-                ErrorCode.LOCAL_NETWORK_PERMISSION_DENIED,
-                developerMessage = "Local network permission denied",
-                cause = LocalNetworkPermissionDeniedException(e),
-            )
         } catch (e: Exception) {
-            NetworkResult.error(
-                ErrorCode.WOL_SEND_FAILED,
-                developerMessage = "Failed to send magic packet: ${e.message}",
-                cause = e,
-            )
+            failureResult(e)
         }
+
+    private fun failureResult(e: Exception): NetworkResult<WolSendReport> =
+        when {
+            e is InvalidBroadcastAddressException -> {
+                NetworkResult.error(ErrorCode.BROADCAST_INVALID, developerMessage = BROADCAST_MESSAGE, cause = e)
+            }
+
+            e is IllegalArgumentException -> {
+                NetworkResult.error(
+                    ErrorCode.MAC_INVALID,
+                    developerMessage = e.message ?: "Invalid MAC address",
+                    cause = e,
+                )
+            }
+
+            e is LocalNetworkPermissionDeniedException -> {
+                permissionDenied(e)
+            }
+
+            e is SecurityException -> {
+                permissionDenied(LocalNetworkPermissionDeniedException(e))
+            }
+
+            e.isLocalNetworkUnavailable() -> {
+                NetworkResult.error(
+                    ErrorCode.WOL_NO_NETWORK,
+                    developerMessage = "No local network is available for the magic packet",
+                    cause = e,
+                )
+            }
+
+            else -> {
+                NetworkResult.error(
+                    ErrorCode.WOL_SEND_FAILED,
+                    developerMessage = "Failed to send magic packet: ${e.message}",
+                    cause = e,
+                )
+            }
+        }
+
+    private fun permissionDenied(cause: Throwable): NetworkResult<WolSendReport> =
+        NetworkResult.error(
+            ErrorCode.LOCAL_NETWORK_PERMISSION_DENIED,
+            developerMessage = "Local network permission denied",
+            cause = cause,
+        )
 
     private fun timeoutResult(cause: Throwable): NetworkResult<WolSendReport> =
         NetworkResult.error(
@@ -125,15 +157,15 @@ class WakeOnLanRepositoryImpl(
         }
     }
 
-    private fun parseIpv4Address(value: String): InetAddress {
-        val octets = value.split('.', limit = 5)
-        require(
-            octets.size == 4 &&
-                octets.all { octet ->
-                    octet.isNotEmpty() && octet.all { it in '0'..'9' } &&
-                        octet.toIntOrNull()?.let { it in 0..255 } == true
-                },
-        ) { "Broadcast address must be an IPv4 address" }
-        return InetAddress.getByAddress(ByteArray(4) { index -> octets[index].toInt().toByte() })
+    /** The chosen local network disappeared, or the OS has no route to send from (Wi-Fi/Ethernet off). */
+    private fun Exception.isLocalNetworkUnavailable(): Boolean =
+        this is LocalNetworkBindingUnavailableException ||
+            this is NoRouteToHostException ||
+            (this is SocketException && message?.contains("unreachable", ignoreCase = true) == true)
+
+    private class InvalidBroadcastAddressException : IllegalArgumentException(BROADCAST_MESSAGE)
+
+    private companion object {
+        const val BROADCAST_MESSAGE = "Broadcast address must be an IPv4 address"
     }
 }

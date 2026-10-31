@@ -59,6 +59,9 @@ object AppPreferenceKeys {
     val RECENT_WHOIS_HOSTS = stringPreferencesKey("recent_whois_hosts")
     val RECENT_HTTP_HOSTS = stringPreferencesKey("recent_http_hosts")
 
+    /** Saved Wake-on-LAN devices, one `MAC<TAB>name` line each. Not a recents list, so recents clearing keeps them. */
+    val WOL_SAVED_DEVICES = stringPreferencesKey("wol_saved_devices")
+
     /** Stores recent seed IPs for Network Topology. */
     val RECENT_TOPOLOGY_SEEDS = stringPreferencesKey("recent_topology_seeds")
 

@@ -346,7 +346,31 @@ work_packages:
     notes: "Upload stall must give a result (partial bytes over the window), not a raw timeout. Keep partial latency/download on failure with a friendly reason and Run again. Cancel shows 'Test canceled'. One primary Start action."
   - id: WP14
     title: Wake-on-LAN
-    status: todo
+    status: done
+    result:
+      status: done
+      commit: "recorded by git log: fix(wol) commit on plan/ux-remediation-2026-10-31"
+      gates: "./gradlew test (2509 test cases, 0 failures; 120 WoL), ktlintCheck, detekt, :app:assembleDebug, :app:compileDebugAndroidTestKotlin, :core-network:koverVerify :core-domain:koverVerify :app:koverVerify all green. Device not run (WP18)."
+      fixed:
+        - "D:WOL-01 root cause: three validators disagreed. The screen and the handoff gate used ToolMacAddress.parse (colon/hyphen only, no trim), so AABB.CCDD.EEFF, bare and padded MACs showed the error and disabled Send. WolMagicPacket.isValidMac accepted them, but had no unicast check, so the domain would send to 01:/FF: targets. Now one validator in core-network (WolMagicPacket.macProblem) returns a specific WolMacProblem (BLANK, LENGTH, CHARACTERS, SEPARATORS, MULTICAST, BROADCAST, ZERO). ToolMacAddress.parse, the use case, the ViewModel and the screen all delegate to it. Dotted, bare and padded MACs are accepted in the UI."
+        - "Mixed separators (AA:BB-CC:DD:EE:FF) were accepted by the repository regex. A back-reference now requires one separator style."
+        - "Broadcast address: a bad value (host name, IPv6, out of range, leading zero) was reported as MAC_INVALID ('The MAC address is invalid'). New ErrorCode BROADCAST_INVALID, validated in the use case and inline in the screen. Any dotted-decimal IPv4 is accepted (limited, subnet-directed or unicast)."
+        - "Inline, specific MAC messages replace the single generic message. Broadcast and port fields are ToolTextField (leading icon, clear button). The Advanced panel opens automatically when a hidden field is invalid, so Send never disables silently."
+        - "No network: LocalNetworkBindingUnavailableException, NoRouteToHostException and 'Network is unreachable' now map to WOL_NO_NETWORK (was WOL_SEND_FAILED with a raw developer message). Send is not hard-blocked offline; the real failure is reported. The error card renders the typed ErrorInfo through ErrorTextMapper."
+        - "Success note states the send is fire-and-forget with no delivery confirmation."
+        - "48dp minimum height on Send, Retry, Send again, Cancel, Use, Advanced options and the clear-prefill action."
+        - "Saved devices (were absent; D-local GAP 10). Added: save the current MAC with an optional name, use, edit (name and MAC), delete. Stored in DataStore under WOL_SAVED_DEVICES, separate from recents clearing. Canonical-MAC dedupe, an edit that would create a duplicate is refused inline, names single-line and capped at 40. Pure logic in WolSavedDevices; store behind WolSavedDeviceStore."
+        - "Tests: WolMagicPacketTest (notations, mixed separators, multicast/broadcast/zero, whitespace, macProblem reasons, parseIpv4), WakeOnLanRepositoryImplTest (fake CapturingSocket: 102-byte payload, repeatCount sends to address and port, BROADCAST_INVALID, WOL_NO_NETWORK; no real packets), WakeOnLanUseCaseTest, WakeOnLanViewModelTest (validation state, offline send, error info, saved-device add/dedupe/edit/conflict/delete/use/restore), WolSavedDevicesTest (encode/decode, dedupe, rename, remove)."
+        - "Existing repository test fixtures used multicast 01:02:03:04:05:06 MACs, which the unicast rule now rejects. Changed to 02:02:03:04:05:06 (fixture correction, not a relaxed rule)."
+        - "README Wake-on-LAN section rewritten to match behaviour (notations, unicast rule, broadcast rules, errors, saved devices, fire-and-forget)."
+        - "androidTest WakeOnLanScreenTest: invalid-MAC expectation now uses wol_mac_problem_characters; fake ViewModel stubs the new flows."
+      not_reproduced:
+        - "ON_STOP/ON_PAUSE cancels on rotation: WoL screen has no lifecycle observer. The ViewModel cancels only in onCleared (LIFECYCLE_PAUSE), which runs on real destruction, not on rotation. no_change_needed."
+        - "D:WOL-01 'inconsistent reads' for AABB.CCDD.EEFF: explained by the split validators above (fixed), not a rendering flake."
+      deferred:
+        - "Packet send to a real LAN host, saved-device flow and rotation during Sending: device re-test in WP18 (no packets sent in tests by design)."
+        - "Lint baselines: ktlint baselines regenerated for app, core-network and core-domain. Per-rule increases are limited to the new WoL screen composables and wrapped modifier chains: standard:function-naming +5 (new PascalCase @Composable functions, the file's existing convention), multiline-expression-wrapping +4, function-signature +1 in WakeOnLanScreen, multiline-expression-wrapping +1 in WakeOnLanViewModelTest. Detekt baseline: 6 entries added by hand (5 FunctionNaming for the new composables, 1 TooManyFunctions for WakeOnLanViewModel). detektBaseline was not regenerated because it dropped unrelated entries."
+        - "Saved devices are a new feature rather than a fix. A reviewer should confirm the scope (no cross-tool saved targets; that is GAP 10 and stays deferred)."
     findings: [D:WOL-01]
     notes: "Under-tested. Write unit tests for MAC formats (colon, dash, Cisco dotted, bare), broadcast address validation, saved devices; fix whatever fails. Never send a packet to a real host in tests."
   - id: WP15

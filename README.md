@@ -189,11 +189,15 @@ Internet connection speed test measuring latency, download, and upload throughpu
 
 ### Wake-on-LAN
 Wake sleeping or powered-down machines on the local network with a UDP magic packet.
-- Accepts all common MAC notations: `AA:BB:CC:DD:EE:FF`, `AA-BB-CC-DD-EE-FF`, `AABB.CCDD.EEFF`, and bare `AABBCCDDEEFF`
-- Real-time MAC validation with inline error feedback
-- Advanced options: custom broadcast address (default `255.255.255.255`) and UDP port (default 9)
+- Accepts `AA:BB:CC:DD:EE:FF`, `AA-BB-CC-DD-EE-FF`, `AABB.CCDD.EEFF` and `AABBCCDDEEFF` (surrounding spaces are ignored). One notation per address: mixed separators such as `AA:BB-CC:DD:EE:FF` are rejected
+- Targets must be unicast. Multicast, broadcast (`FF:FF:FF:FF:FF:FF`) and all-zero MACs are rejected
+- Real-time validation with a specific inline message for each problem: wrong length, invalid characters, mixed separators, multicast, broadcast or all-zero address
+- Advanced options: broadcast address (default `255.255.255.255`; any dotted-decimal IPv4 address such as a subnet-directed `192.168.1.255` is accepted; host names and IPv6 are rejected inline) and UDP port (default 9, valid 1-65535). The panel opens automatically when one of these fields is invalid
 - Sends 3 duplicate packets per request for reliability over lossy UDP
-- Success card confirms target MAC, broadcast address, port, and packet count; in-app help explains BIOS/OS requirements
+- Success card reports the send and states that Wake-on-LAN is fire-and-forget: no delivery confirmation is returned. It confirms target MAC, broadcast address, port and packet count
+- Errors are specific: no local Wi-Fi or Ethernet network, a local-network permission denial, an invalid broadcast address, or a general send failure. Each has a Retry action
+- Saved devices (stored on this device only): save the current MAC under an optional name, use a saved device to fill the form, edit a saved device's name or MAC, and delete it. A MAC is stored once, whichever notation it was entered in; an edit that would make two entries share a MAC is refused
+- In-app help explains BIOS/OS requirements
 
 ## Networking behavior
 

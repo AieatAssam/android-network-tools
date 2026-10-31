@@ -585,27 +585,27 @@
     </file>
     <file name="src/androidTest/kotlin/net/aieat/netswissknife/app/ui/screens/wol/WakeOnLanScreenTest.kt">
         <error line="3" column="1" source="standard:import-ordering" />
-        <error line="44" column="47" source="standard:multiline-expression-wrapping" />
-        <error line="79" column="24" source="standard:chain-method-continuation" />
-        <error line="79" column="60" source="standard:chain-method-continuation" />
-        <error line="80" column="39" source="standard:chain-method-continuation" />
-        <error line="109" column="25" source="standard:multiline-expression-wrapping" />
-        <error line="120" column="20" source="standard:chain-method-continuation" />
-        <error line="125" column="20" source="standard:chain-method-continuation" />
-        <error line="141" column="20" source="standard:chain-method-continuation" />
-        <error line="152" column="33" source="standard:multiline-expression-wrapping" />
-        <error line="154" column="39" source="standard:trailing-comma-on-call-site" />
-        <error line="155" column="22" source="standard:trailing-comma-on-call-site" />
-        <error line="177" column="33" source="standard:multiline-expression-wrapping" />
-        <error line="179" column="35" source="standard:trailing-comma-on-call-site" />
-        <error line="180" column="22" source="standard:trailing-comma-on-call-site" />
-        <error line="198" column="33" source="standard:multiline-expression-wrapping" />
-        <error line="201" column="35" source="standard:trailing-comma-on-call-site" />
-        <error line="202" column="22" source="standard:trailing-comma-on-call-site" />
-        <error line="215" column="22" source="standard:multiline-expression-wrapping" />
-        <error line="219" column="28" source="standard:trailing-comma-on-call-site" />
-        <error line="262" column="51" source="standard:multiline-expression-wrapping" />
-        <error line="263" column="70" source="standard:trailing-comma-on-call-site" />
+        <error line="45" column="47" source="standard:multiline-expression-wrapping" />
+        <error line="80" column="24" source="standard:chain-method-continuation" />
+        <error line="80" column="60" source="standard:chain-method-continuation" />
+        <error line="81" column="39" source="standard:chain-method-continuation" />
+        <error line="110" column="25" source="standard:multiline-expression-wrapping" />
+        <error line="121" column="20" source="standard:chain-method-continuation" />
+        <error line="126" column="20" source="standard:chain-method-continuation" />
+        <error line="142" column="20" source="standard:chain-method-continuation" />
+        <error line="153" column="33" source="standard:multiline-expression-wrapping" />
+        <error line="155" column="39" source="standard:trailing-comma-on-call-site" />
+        <error line="156" column="22" source="standard:trailing-comma-on-call-site" />
+        <error line="178" column="33" source="standard:multiline-expression-wrapping" />
+        <error line="180" column="35" source="standard:trailing-comma-on-call-site" />
+        <error line="181" column="22" source="standard:trailing-comma-on-call-site" />
+        <error line="199" column="33" source="standard:multiline-expression-wrapping" />
+        <error line="202" column="35" source="standard:trailing-comma-on-call-site" />
+        <error line="203" column="22" source="standard:trailing-comma-on-call-site" />
+        <error line="216" column="22" source="standard:multiline-expression-wrapping" />
+        <error line="220" column="28" source="standard:trailing-comma-on-call-site" />
+        <error line="263" column="51" source="standard:multiline-expression-wrapping" />
+        <error line="264" column="70" source="standard:trailing-comma-on-call-site" />
     </file>
     <file name="src/androidTest/kotlin/net/aieat/netswissknife/app/util/ShareUtilsTest.kt">
         <error line="3" column="1" source="standard:import-ordering" />
@@ -791,11 +791,6 @@
         <error line="30" column="82" source="standard:function-signature" />
         <error line="39" column="28" source="standard:multiline-expression-wrapping" />
         <error line="39" column="28" source="standard:function-signature" />
-    </file>
-    <file name="src/main/kotlin/net/aieat/netswissknife/app/di/WakeOnLanModule.kt">
-        <error line="3" column="1" source="standard:import-ordering" />
-        <error line="16" column="1" source="standard:no-empty-first-line-in-class-body" />
-        <error line="23" column="79" source="standard:function-signature" />
     </file>
     <file name="src/main/kotlin/net/aieat/netswissknife/app/di/WhoisModule.kt">
         <error line="16" column="1" source="standard:no-empty-first-line-in-class-body" />
@@ -1090,15 +1085,15 @@
         <error line="9" column="47" source="standard:function-signature" />
         <error line="28" column="53" source="standard:multiline-expression-wrapping" />
         <error line="28" column="53" source="standard:function-signature" />
-        <error line="113" column="35" source="standard:multiline-expression-wrapping" />
-        <error line="116" column="1" source="standard:blank-line-between-when-conditions" />
-        <error line="116" column="41" source="standard:wrapping" />
-        <error line="116" column="43" source="standard:multiline-expression-wrapping" />
-        <error line="139" column="79" source="standard:multiline-expression-wrapping" />
-        <error line="139" column="79" source="standard:function-signature" />
-        <error line="141" column="1" source="standard:blank-line-between-when-conditions" />
-        <error line="154" column="35" source="standard:trailing-comma-on-declaration-site" />
-        <error line="157" column="39" source="standard:trailing-comma-on-declaration-site" />
+        <error line="115" column="35" source="standard:multiline-expression-wrapping" />
+        <error line="118" column="1" source="standard:blank-line-between-when-conditions" />
+        <error line="118" column="41" source="standard:wrapping" />
+        <error line="118" column="43" source="standard:multiline-expression-wrapping" />
+        <error line="141" column="79" source="standard:multiline-expression-wrapping" />
+        <error line="141" column="79" source="standard:function-signature" />
+        <error line="143" column="1" source="standard:blank-line-between-when-conditions" />
+        <error line="156" column="35" source="standard:trailing-comma-on-declaration-site" />
+        <error line="159" column="39" source="standard:trailing-comma-on-declaration-site" />
     </file>
     <file name="src/main/kotlin/net/aieat/netswissknife/app/ui/i18n/UiText.kt">
         <error line="16" column="22" source="standard:class-signature" />
@@ -1167,25 +1162,25 @@
         <error line="7" column="38" source="standard:class-signature" />
         <error line="39" column="42" source="standard:class-signature" />
         <error line="39" column="56" source="standard:class-signature" />
-        <error line="46" column="27" source="standard:class-signature" />
-        <error line="46" column="44" source="standard:class-signature" />
-        <error line="73" column="23" source="standard:class-signature" />
-        <error line="73" column="40" source="standard:class-signature" />
-        <error line="108" column="23" source="standard:class-signature" />
-        <error line="108" column="43" source="standard:class-signature" />
-        <error line="109" column="17" source="standard:enum-wrapping" />
-        <error line="109" column="31" source="standard:enum-wrapping" />
-        <error line="109" column="45" source="standard:enum-wrapping" />
-        <error line="109" column="71" source="standard:enum-wrapping" />
-        <error line="112" column="21" source="standard:class-signature" />
-        <error line="112" column="41" source="standard:class-signature" />
-        <error line="113" column="19" source="standard:enum-wrapping" />
-        <error line="113" column="35" source="standard:enum-wrapping" />
-        <error line="113" column="49" source="standard:enum-wrapping" />
-        <error line="127" column="26" source="standard:class-signature" />
-        <error line="127" column="49" source="standard:class-signature" />
-        <error line="129" column="23" source="standard:class-signature" />
-        <error line="129" column="45" source="standard:class-signature" />
+        <error line="49" column="27" source="standard:class-signature" />
+        <error line="49" column="44" source="standard:class-signature" />
+        <error line="60" column="23" source="standard:class-signature" />
+        <error line="60" column="40" source="standard:class-signature" />
+        <error line="95" column="23" source="standard:class-signature" />
+        <error line="95" column="43" source="standard:class-signature" />
+        <error line="96" column="17" source="standard:enum-wrapping" />
+        <error line="96" column="31" source="standard:enum-wrapping" />
+        <error line="96" column="45" source="standard:enum-wrapping" />
+        <error line="96" column="71" source="standard:enum-wrapping" />
+        <error line="99" column="21" source="standard:class-signature" />
+        <error line="99" column="41" source="standard:class-signature" />
+        <error line="100" column="19" source="standard:enum-wrapping" />
+        <error line="100" column="35" source="standard:enum-wrapping" />
+        <error line="100" column="49" source="standard:enum-wrapping" />
+        <error line="114" column="26" source="standard:class-signature" />
+        <error line="114" column="49" source="standard:class-signature" />
+        <error line="116" column="23" source="standard:class-signature" />
+        <error line="116" column="45" source="standard:class-signature" />
     </file>
     <file name="src/main/kotlin/net/aieat/netswissknife/app/ui/navigation/ToolIntentCodec.kt">
         <error line="18" column="22" source="standard:multiline-expression-wrapping" />
@@ -4423,87 +4418,89 @@
     </file>
     <file name="src/main/kotlin/net/aieat/netswissknife/app/ui/screens/wol/WakeOnLanScreen.kt">
         <error line="3" column="1" source="standard:import-ordering" />
-        <error line="96" column="5" source="standard:function-naming" />
-        <error line="107" column="29" source="standard:multiline-expression-wrapping" />
-        <error line="121" column="98" source="standard:trailing-comma-on-call-site" />
-        <error line="124" column="24" source="standard:multiline-expression-wrapping" />
-        <error line="129" column="75" source="standard:trailing-comma-on-call-site" />
-        <error line="189" column="36" source="standard:trailing-comma-on-call-site" />
-        <error line="206" column="24" source="standard:multiline-expression-wrapping" />
-        <error line="209" column="70" source="standard:trailing-comma-on-call-site" />
-        <error line="213" column="79" source="standard:trailing-comma-on-call-site" />
-        <error line="217" column="76" source="standard:trailing-comma-on-call-site" />
-        <error line="220" column="45" source="standard:trailing-comma-on-call-site" />
-        <error line="228" column="13" source="standard:function-naming" />
-        <error line="243" column="19" source="standard:multiline-expression-wrapping" />
-        <error line="249" column="85" source="standard:trailing-comma-on-call-site" />
-        <error line="258" column="34" source="standard:multiline-expression-wrapping" />
-        <error line="260" column="19" source="standard:if-else-wrapping" />
-        <error line="260" column="24" source="standard:if-else-bracing" />
-        <error line="260" column="24" source="standard:if-else-wrapping" />
-        <error line="260" column="24" source="standard:multiline-if-else" />
-        <error line="271" column="63" source="standard:trailing-comma-on-call-site" />
-        <error line="278" column="46" source="standard:multiline-expression-wrapping" />
-        <error line="279" column="99" source="standard:trailing-comma-on-call-site" />
-        <error line="281" column="56" source="standard:trailing-comma-on-call-site" />
-        <error line="306" column="109" source="standard:trailing-comma-on-call-site" />
-        <error line="307" column="34" source="standard:trailing-comma-on-call-site" />
-        <error line="321" column="27" source="standard:multiline-expression-wrapping" />
-        <error line="326" column="51" source="standard:trailing-comma-on-call-site" />
-        <error line="339" column="13" source="standard:function-naming" />
-        <error line="343" column="24" source="standard:multiline-expression-wrapping" />
-        <error line="347" column="61" source="standard:trailing-comma-on-call-site" />
-        <error line="350" column="28" source="standard:multiline-expression-wrapping" />
-        <error line="352" column="69" source="standard:trailing-comma-on-call-site" />
-        <error line="358" column="67" source="standard:trailing-comma-on-call-site" />
-        <error line="368" column="13" source="standard:function-naming" />
-        <error line="368" column="28" source="standard:function-signature" />
-        <error line="368" column="51" source="standard:function-signature" />
-        <error line="368" column="74" source="standard:function-signature" />
-        <error line="373" column="25" source="standard:multiline-expression-wrapping" />
-        <error line="375" column="50" source="standard:trailing-comma-on-call-site" />
-        <error line="377" column="35" source="standard:trailing-comma-on-call-site" />
-        <error line="382" column="24" source="standard:multiline-expression-wrapping" />
-        <error line="389" column="26" source="standard:trailing-comma-on-call-site" />
-        <error line="390" column="22" source="standard:trailing-comma-on-call-site" />
-        <error line="392" column="17" source="standard:chain-method-continuation" />
-        <error line="394" column="69" source="standard:trailing-comma-on-call-site" />
-        <error line="397" column="28" source="standard:multiline-expression-wrapping" />
-        <error line="402" column="52" source="standard:trailing-comma-on-call-site" />
-        <error line="408" column="52" source="standard:trailing-comma-on-call-site" />
-        <error line="417" column="24" source="standard:multiline-expression-wrapping" />
-        <error line="422" column="39" source="standard:trailing-comma-on-call-site" />
-        <error line="425" column="67" source="standard:trailing-comma-on-call-site" />
-        <error line="433" column="67" source="standard:trailing-comma-on-call-site" />
-        <error line="444" column="13" source="standard:function-naming" />
-        <error line="444" column="26" source="standard:function-signature" />
-        <error line="444" column="43" source="standard:function-signature" />
-        <error line="444" column="62" source="standard:function-signature" />
-        <error line="447" column="24" source="standard:multiline-expression-wrapping" />
-        <error line="451" column="69" source="standard:trailing-comma-on-call-site" />
-        <error line="457" column="48" source="standard:trailing-comma-on-call-site" />
-        <error line="462" column="56" source="standard:trailing-comma-on-call-site" />
-        <error line="467" column="67" source="standard:trailing-comma-on-call-site" />
+        <error line="107" column="5" source="standard:function-naming" />
+        <error line="125" column="29" source="standard:multiline-expression-wrapping" />
+        <error line="141" column="98" source="standard:trailing-comma-on-call-site" />
+        <error line="144" column="24" source="standard:multiline-expression-wrapping" />
+        <error line="149" column="75" source="standard:trailing-comma-on-call-site" />
+        <error line="224" column="24" source="standard:multiline-expression-wrapping" />
+        <error line="227" column="70" source="standard:trailing-comma-on-call-site" />
+        <error line="231" column="79" source="standard:trailing-comma-on-call-site" />
+        <error line="235" column="76" source="standard:trailing-comma-on-call-site" />
+        <error line="238" column="45" source="standard:trailing-comma-on-call-site" />
+        <error line="244" column="13" source="standard:function-naming" />
+        <error line="262" column="24" source="standard:multiline-expression-wrapping" />
+        <error line="272" column="47" source="standard:multiline-expression-wrapping" />
+        <error line="272" column="47" source="standard:function-signature" />
+        <error line="285" column="13" source="standard:function-naming" />
+        <error line="310" column="85" source="standard:trailing-comma-on-call-site" />
+        <error line="319" column="34" source="standard:multiline-expression-wrapping" />
+        <error line="334" column="63" source="standard:trailing-comma-on-call-site" />
+        <error line="344" column="46" source="standard:multiline-expression-wrapping" />
+        <error line="345" column="99" source="standard:trailing-comma-on-call-site" />
+        <error line="347" column="56" source="standard:trailing-comma-on-call-site" />
+        <error line="354" column="42" source="standard:multiline-expression-wrapping" />
+        <error line="394" column="107" source="standard:trailing-comma-on-call-site" />
+        <error line="395" column="34" source="standard:trailing-comma-on-call-site" />
+        <error line="410" column="27" source="standard:multiline-expression-wrapping" />
+        <error line="415" column="28" source="standard:multiline-expression-wrapping" />
+        <error line="428" column="13" source="standard:function-naming" />
+        <error line="449" column="36" source="standard:multiline-expression-wrapping" />
+        <error line="460" column="13" source="standard:function-naming" />
+        <error line="516" column="13" source="standard:function-naming" />
+        <error line="574" column="13" source="standard:function-naming" />
+        <error line="630" column="13" source="standard:function-naming" />
+        <error line="634" column="24" source="standard:multiline-expression-wrapping" />
+        <error line="638" column="61" source="standard:trailing-comma-on-call-site" />
+        <error line="641" column="28" source="standard:multiline-expression-wrapping" />
+        <error line="643" column="69" source="standard:trailing-comma-on-call-site" />
+        <error line="649" column="67" source="standard:trailing-comma-on-call-site" />
+        <error line="662" column="13" source="standard:function-naming" />
+        <error line="662" column="28" source="standard:function-signature" />
+        <error line="662" column="51" source="standard:function-signature" />
+        <error line="662" column="74" source="standard:function-signature" />
+        <error line="667" column="25" source="standard:multiline-expression-wrapping" />
+        <error line="669" column="50" source="standard:trailing-comma-on-call-site" />
+        <error line="671" column="35" source="standard:trailing-comma-on-call-site" />
+        <error line="676" column="24" source="standard:multiline-expression-wrapping" />
+        <error line="683" column="26" source="standard:trailing-comma-on-call-site" />
+        <error line="684" column="22" source="standard:trailing-comma-on-call-site" />
+        <error line="686" column="17" source="standard:chain-method-continuation" />
+        <error line="688" column="69" source="standard:trailing-comma-on-call-site" />
+        <error line="691" column="28" source="standard:multiline-expression-wrapping" />
+        <error line="696" column="52" source="standard:trailing-comma-on-call-site" />
+        <error line="702" column="52" source="standard:trailing-comma-on-call-site" />
+        <error line="711" column="24" source="standard:multiline-expression-wrapping" />
+        <error line="716" column="39" source="standard:trailing-comma-on-call-site" />
+        <error line="719" column="67" source="standard:trailing-comma-on-call-site" />
+        <error line="727" column="67" source="standard:trailing-comma-on-call-site" />
+        <error line="741" column="13" source="standard:function-naming" />
+        <error line="741" column="26" source="standard:function-signature" />
+        <error line="741" column="43" source="standard:function-signature" />
+        <error line="741" column="62" source="standard:function-signature" />
+        <error line="744" column="24" source="standard:multiline-expression-wrapping" />
+        <error line="748" column="69" source="standard:trailing-comma-on-call-site" />
+        <error line="754" column="48" source="standard:trailing-comma-on-call-site" />
+        <error line="759" column="56" source="standard:trailing-comma-on-call-site" />
+        <error line="764" column="67" source="standard:trailing-comma-on-call-site" />
     </file>
     <file name="src/main/kotlin/net/aieat/netswissknife/app/ui/screens/wol/WakeOnLanViewModel.kt">
-        <error line="3" column="1" source="standard:import-ordering" />
-        <error line="33" column="5" source="standard:blank-line-before-declaration" />
-        <error line="34" column="5" source="standard:blank-line-before-declaration" />
-        <error line="34" column="24" source="standard:class-signature" />
-        <error line="34" column="49" source="standard:class-signature" />
-        <error line="35" column="5" source="standard:blank-line-before-declaration" />
-        <error line="42" column="25" source="standard:annotation" />
-        <error line="42" column="33" source="standard:annotation" />
-        <error line="49" column="1" source="standard:no-empty-first-line-in-class-body" />
-        <error line="53" column="30" source="standard:multiline-expression-wrapping" />
-        <error line="57" column="38" source="standard:multiline-expression-wrapping" />
-        <error line="62" column="34" source="standard:multiline-expression-wrapping" />
-        <error line="64" column="29" source="standard:chain-method-continuation" />
-        <error line="64" column="61" source="standard:chain-method-continuation" />
-        <error line="79" column="31" source="standard:multiline-expression-wrapping" />
-        <error line="115" column="17" source="standard:multiline-expression-wrapping" />
-        <error line="151" column="22" source="standard:multiline-expression-wrapping" />
-        <error line="165" column="34" source="standard:multiline-expression-wrapping" />
+        <error line="40" column="5" source="standard:blank-line-before-declaration" />
+        <error line="41" column="5" source="standard:blank-line-before-declaration" />
+        <error line="41" column="24" source="standard:class-signature" />
+        <error line="41" column="49" source="standard:class-signature" />
+        <error line="42" column="5" source="standard:blank-line-before-declaration" />
+        <error line="51" column="25" source="standard:annotation" />
+        <error line="51" column="33" source="standard:annotation" />
+        <error line="59" column="1" source="standard:no-empty-first-line-in-class-body" />
+        <error line="63" column="30" source="standard:multiline-expression-wrapping" />
+        <error line="67" column="38" source="standard:multiline-expression-wrapping" />
+        <error line="72" column="34" source="standard:multiline-expression-wrapping" />
+        <error line="74" column="29" source="standard:chain-method-continuation" />
+        <error line="74" column="61" source="standard:chain-method-continuation" />
+        <error line="89" column="31" source="standard:multiline-expression-wrapping" />
+        <error line="254" column="22" source="standard:multiline-expression-wrapping" />
+        <error line="268" column="34" source="standard:multiline-expression-wrapping" />
     </file>
     <file name="src/main/kotlin/net/aieat/netswissknife/app/ui/theme/AppThemeTokens.kt">
         <error line="20" column="5" source="standard:spacing-between-declarations-with-comments" />
@@ -4783,14 +4780,14 @@
         <error line="29" column="46" source="standard:function-start-of-body-spacing" />
         <error line="29" column="47" source="standard:no-multi-spaces" />
         <error line="29" column="86" source="standard:no-multi-spaces" />
-        <error line="30" column="1" source="standard:spacing-between-declarations-with-annotations" />
-        <error line="30" column="5" source="standard:blank-line-before-declaration" />
-        <error line="30" column="48" source="standard:function-start-of-body-spacing" />
-        <error line="30" column="49" source="standard:no-multi-spaces" />
-        <error line="30" column="88" source="standard:no-multi-spaces" />
-        <error line="32" column="27" source="standard:function-signature" />
-        <error line="32" column="49" source="standard:function-signature" />
-        <error line="32" column="108" source="standard:function-signature" />
+        <error line="32" column="1" source="standard:spacing-between-declarations-with-annotations" />
+        <error line="32" column="5" source="standard:blank-line-before-declaration" />
+        <error line="32" column="48" source="standard:function-start-of-body-spacing" />
+        <error line="32" column="49" source="standard:no-multi-spaces" />
+        <error line="32" column="88" source="standard:no-multi-spaces" />
+        <error line="34" column="27" source="standard:function-signature" />
+        <error line="34" column="49" source="standard:function-signature" />
+        <error line="34" column="108" source="standard:function-signature" />
     </file>
     <file name="src/test/kotlin/net/aieat/netswissknife/app/data/RecentHostsRepositoryTest.kt">
         <error line="30" column="1" source="standard:no-empty-first-line-in-class-body" />
@@ -5525,43 +5522,44 @@
     </file>
     <file name="src/test/kotlin/net/aieat/netswissknife/app/ui/screens/wol/WakeOnLanViewModelTest.kt">
         <error line="3" column="1" source="standard:import-ordering" />
-        <error line="45" column="1" source="standard:no-empty-first-line-in-class-body" />
-        <error line="79" column="23" source="standard:multiline-expression-wrapping" />
-        <error line="81" column="32" source="standard:multiline-expression-wrapping" />
-        <error line="118" column="25" source="standard:multiline-expression-wrapping" />
-        <error line="120" column="32" source="standard:multiline-expression-wrapping" />
-        <error line="120" column="49" source="standard:multiline-expression-wrapping" />
-        <error line="120" column="49" source="standard:wrapping" />
-        <error line="120" column="61" source="standard:multiline-expression-wrapping" />
-        <error line="123" column="13" source="standard:wrapping" />
-        <error line="136" column="65" source="standard:multiline-expression-wrapping" />
-        <error line="136" column="65" source="standard:function-signature" />
-        <error line="139" column="22" source="standard:multiline-expression-wrapping" />
-        <error line="141" column="32" source="standard:multiline-expression-wrapping" />
-        <error line="169" column="24" source="standard:multiline-expression-wrapping" />
-        <error line="176" column="28" source="standard:multiline-expression-wrapping" />
-        <error line="200" column="35" source="standard:multiline-expression-wrapping" />
-        <error line="202" column="32" source="standard:multiline-expression-wrapping" />
-        <error line="220" column="32" source="standard:multiline-expression-wrapping" />
-        <error line="276" column="63" source="standard:multiline-expression-wrapping" />
-        <error line="276" column="63" source="standard:function-signature" />
-        <error line="287" column="61" source="standard:multiline-expression-wrapping" />
-        <error line="287" column="61" source="standard:function-signature" />
-        <error line="297" column="82" source="standard:multiline-expression-wrapping" />
-        <error line="297" column="82" source="standard:function-signature" />
-        <error line="298" column="51" source="standard:multiline-expression-wrapping" />
-        <error line="316" column="54" source="standard:multiline-expression-wrapping" />
-        <error line="316" column="54" source="standard:function-signature" />
-        <error line="325" column="78" source="standard:multiline-expression-wrapping" />
-        <error line="325" column="78" source="standard:function-signature" />
-        <error line="338" column="55" source="standard:multiline-expression-wrapping" />
-        <error line="338" column="55" source="standard:function-signature" />
-        <error line="354" column="37" source="standard:multiline-expression-wrapping" />
-        <error line="354" column="37" source="standard:function-signature" />
-        <error line="365" column="77" source="standard:multiline-expression-wrapping" />
-        <error line="365" column="77" source="standard:function-signature" />
-        <error line="379" column="73" source="standard:multiline-expression-wrapping" />
-        <error line="379" column="73" source="standard:function-signature" />
+        <error line="52" column="1" source="standard:no-empty-first-line-in-class-body" />
+        <error line="86" column="23" source="standard:multiline-expression-wrapping" />
+        <error line="88" column="32" source="standard:multiline-expression-wrapping" />
+        <error line="125" column="25" source="standard:multiline-expression-wrapping" />
+        <error line="127" column="32" source="standard:multiline-expression-wrapping" />
+        <error line="127" column="49" source="standard:multiline-expression-wrapping" />
+        <error line="127" column="49" source="standard:wrapping" />
+        <error line="127" column="61" source="standard:multiline-expression-wrapping" />
+        <error line="130" column="13" source="standard:wrapping" />
+        <error line="143" column="65" source="standard:multiline-expression-wrapping" />
+        <error line="143" column="65" source="standard:function-signature" />
+        <error line="146" column="22" source="standard:multiline-expression-wrapping" />
+        <error line="148" column="32" source="standard:multiline-expression-wrapping" />
+        <error line="176" column="24" source="standard:multiline-expression-wrapping" />
+        <error line="183" column="28" source="standard:multiline-expression-wrapping" />
+        <error line="207" column="35" source="standard:multiline-expression-wrapping" />
+        <error line="209" column="32" source="standard:multiline-expression-wrapping" />
+        <error line="227" column="32" source="standard:multiline-expression-wrapping" />
+        <error line="283" column="63" source="standard:multiline-expression-wrapping" />
+        <error line="283" column="63" source="standard:function-signature" />
+        <error line="294" column="61" source="standard:multiline-expression-wrapping" />
+        <error line="294" column="61" source="standard:function-signature" />
+        <error line="304" column="82" source="standard:multiline-expression-wrapping" />
+        <error line="304" column="82" source="standard:function-signature" />
+        <error line="305" column="51" source="standard:multiline-expression-wrapping" />
+        <error line="323" column="54" source="standard:multiline-expression-wrapping" />
+        <error line="323" column="54" source="standard:function-signature" />
+        <error line="332" column="78" source="standard:multiline-expression-wrapping" />
+        <error line="332" column="78" source="standard:function-signature" />
+        <error line="345" column="55" source="standard:multiline-expression-wrapping" />
+        <error line="345" column="55" source="standard:function-signature" />
+        <error line="361" column="37" source="standard:multiline-expression-wrapping" />
+        <error line="361" column="37" source="standard:function-signature" />
+        <error line="372" column="77" source="standard:multiline-expression-wrapping" />
+        <error line="372" column="77" source="standard:function-signature" />
+        <error line="386" column="73" source="standard:multiline-expression-wrapping" />
+        <error line="386" column="73" source="standard:function-signature" />
+        <error line="600" column="23" source="standard:multiline-expression-wrapping" />
     </file>
     <file name="src/test/kotlin/net/aieat/netswissknife/app/wifi/ScanFreshnessTest.kt">
         <error line="3" column="1" source="standard:import-ordering" />

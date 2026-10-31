@@ -338,6 +338,11 @@
     <ID>FunctionNaming:WifiScanStatusComponents.kt:@Composable fun WifiRefreshIntervalPicker</ID>
     <ID>FunctionNaming:WifiScanStatusComponents.kt:@Composable fun WifiScanFreshnessStatus</ID>
     <ID>FunctionNaming:WifiScanStatusComponents.kt:@Composable private fun ConnectionDetailRow</ID>
+    <ID>FunctionNaming:WakeOnLanScreen.kt:@Composable private fun WolSourceRow</ID>
+    <ID>FunctionNaming:WakeOnLanScreen.kt:@Composable private fun WolStateCard</ID>
+    <ID>FunctionNaming:WakeOnLanScreen.kt:@Composable private fun WolSavedDevicesCard</ID>
+    <ID>FunctionNaming:WakeOnLanScreen.kt:@Composable private fun WolSavedDeviceForm</ID>
+    <ID>FunctionNaming:WakeOnLanScreen.kt:@Composable private fun WolSavedDeviceRow</ID>
     <ID>LargeClass:PortScanViewModelTest.kt:PortScanViewModelTest</ID>
     <ID>LongMethod:AppNavigation.kt:@Composable private fun AppNavHostGraph</ID>
     <ID>LongMethod:CrashActivity.kt:@Composable private fun CrashScreen</ID>
@@ -943,6 +948,7 @@
     <ID>TooManyFunctions:WhoisViewModel.kt:WhoisViewModel : ViewModel</ID>
     <ID>TooManyFunctions:WifiScanScreen.kt:net.aieat.netswissknife.app.ui.screens.WifiScanScreen.kt</ID>
     <ID>TooManyFunctions:WifiScanViewModel.kt:WifiScanViewModel : ViewModel</ID>
+    <ID>TooManyFunctions:WakeOnLanViewModel.kt:WakeOnLanViewModel : ViewModel</ID>
     <ID>UnusedParameter:PingViewModel.kt:PingViewModel$totalCount: Int</ID>
     <ID>UnusedParameter:TlsInspectorScreen.kt:index: Int</ID>
     <ID>VariableNaming:TracerouteScreen.kt:val R = 6371.0</ID>

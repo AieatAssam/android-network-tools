@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Test
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.SocketAddress
+import java.net.SocketException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
@@ -56,7 +57,7 @@ class WakeOnLanRepositoryImplTest {
                 val result =
                     withTimeout(10_000) {
                         repository.sendMagicPacket(
-                            macAddress = "01:02:03:04:05:06",
+                            macAddress = "02:02:03:04:05:06",
                             broadcastAddress = "127.0.0.1",
                             port = port,
                             repeatCount = 3,
@@ -67,11 +68,11 @@ class WakeOnLanRepositoryImplTest {
 
                 assertTrue(result is NetworkResult.Success, "expected Success, got $result")
                 result as NetworkResult.Success
-                assertEquals("01:02:03:04:05:06".uppercase(), result.data.macAddress)
+                assertEquals("02:02:03:04:05:06".uppercase(), result.data.macAddress)
                 assertEquals(3, result.data.packetsSent)
                 assertEquals(port, result.data.port)
 
-                assertArrayEquals(WolMagicPacket.build("01:02:03:04:05:06"), payload)
+                assertArrayEquals(WolMagicPacket.build("02:02:03:04:05:06"), payload)
             }
         }
 
@@ -95,7 +96,7 @@ class WakeOnLanRepositoryImplTest {
 
             val result =
                 repo.sendMagicPacket(
-                    macAddress = "01:02:03:04:05:06",
+                    macAddress = "02:02:03:04:05:06",
                     broadcastAddress = "definitely-not-a-real-host.invalid",
                     port = 9,
                 )
@@ -124,7 +125,7 @@ class WakeOnLanRepositoryImplTest {
                 }
             val repo = WakeOnLanRepositoryImpl(binder = binder, socketFactory = { socket })
 
-            val result = repo.sendMagicPacket("01:02:03:04:05:06", "192.168.1.255", port = 9, repeatCount = 1)
+            val result = repo.sendMagicPacket("02:02:03:04:05:06", "192.168.1.255", port = 9, repeatCount = 1)
 
             assertTrue(result is NetworkResult.Success, "expected Success, got $result")
             assertEquals(listOf(true), boundAtSend)
@@ -158,11 +159,11 @@ class WakeOnLanRepositoryImplTest {
                 )
             val repo = WakeOnLanRepositoryImpl(binder = binder, socketFactory = { socket })
 
-            val result = repo.sendMagicPacket("01:02:03:04:05:06", "192.168.1.255", port = 9, repeatCount = 2)
+            val result = repo.sendMagicPacket("02:02:03:04:05:06", "192.168.1.255", port = 9, repeatCount = 2)
 
             assertTrue(result is NetworkResult.Error)
             result as NetworkResult.Error
-            assertEquals(ErrorCode.WOL_SEND_FAILED, result.info?.code)
+            assertEquals(ErrorCode.WOL_NO_NETWORK, result.info?.code)
             assertTrue(result.cause is LocalNetworkBindingUnavailableException)
             assertEquals(0, sends)
             assertTrue(socket.isClosed)
@@ -184,7 +185,7 @@ class WakeOnLanRepositoryImplTest {
             val binder = FakeNetworkBinder(shouldBindResult = false)
             val repo = WakeOnLanRepositoryImpl(binder = binder, socketFactory = { socket })
 
-            val result = repo.sendMagicPacket("01:02:03:04:05:06", "255.255.255.255", port = 9, repeatCount = 1)
+            val result = repo.sendMagicPacket("02:02:03:04:05:06", "255.255.255.255", port = 9, repeatCount = 1)
 
             assertTrue(result is NetworkResult.Success, "expected success, got $result")
             assertEquals(1, sends)
@@ -215,7 +216,7 @@ class WakeOnLanRepositoryImplTest {
             val session = OperationSession(OperationBudget.start(timeoutMillis = 5_000))
             val pending =
                 async {
-                    repo.sendMagicPacket("01:02:03:04:05:06", "127.0.0.1", 9, 1, session)
+                    repo.sendMagicPacket("02:02:03:04:05:06", "127.0.0.1", 9, 1, session)
                 }
 
             assertTrue(withContext(Dispatchers.IO) { enteredSend.await(3, TimeUnit.SECONDS) })
@@ -252,7 +253,7 @@ class WakeOnLanRepositoryImplTest {
             val session = OperationSession(OperationBudget.start(timeoutMillis = 1_000))
             val pending =
                 async {
-                    repo.sendMagicPacket("01:02:03:04:05:06", "127.0.0.1", 9, 1, session)
+                    repo.sendMagicPacket("02:02:03:04:05:06", "127.0.0.1", 9, 1, session)
                 }
 
             assertTrue(withContext(Dispatchers.IO) { enteredSend.await(3, TimeUnit.SECONDS) })
@@ -277,11 +278,86 @@ class WakeOnLanRepositoryImplTest {
             val socket = DatagramSocket(null as SocketAddress?)
             val repo = WakeOnLanRepositoryImpl(binder = binder, socketFactory = { socket })
 
-            val result = repo.sendMagicPacket("01:02:03:04:05:06", "192.168.1.255", port = 9)
+            val result = repo.sendMagicPacket("02:02:03:04:05:06", "192.168.1.255", port = 9)
 
             assertTrue(result is NetworkResult.Error)
             result as NetworkResult.Error
             assertTrue(result.cause is LocalNetworkPermissionDeniedException)
             assertEquals("permission denied", result.cause?.cause?.message)
+        }
+
+    /** Captures what would be sent without ever touching the network. */
+    private class CapturingSocket : DatagramSocket(null as SocketAddress?) {
+        val sent = mutableListOf<Triple<ByteArray, String, Int>>()
+
+        override fun send(packet: DatagramPacket) {
+            val payload = packet.data.copyOfRange(packet.offset, packet.offset + packet.length)
+            sent += Triple(payload, packet.address.hostAddress, packet.port)
+        }
+    }
+
+    @Test
+    fun `fake socket receives 102-byte magic packets repeatCount times to the destination`() =
+        runBlocking {
+            val socket = CapturingSocket()
+            val repo = WakeOnLanRepositoryImpl(socketFactory = { socket })
+
+            val result = repo.sendMagicPacket("AA-BB-CC-DD-EE-FF", "192.168.1.255", port = 7, repeatCount = 3)
+
+            assertTrue(result is NetworkResult.Success, "expected Success, got $result")
+            assertEquals(3, socket.sent.size)
+            val expected = WolMagicPacket.build("AA:BB:CC:DD:EE:FF")
+            for ((payload, host, port) in socket.sent) {
+                assertEquals(102, payload.size)
+                assertArrayEquals(expected, payload)
+                assertEquals("192.168.1.255", host)
+                assertEquals(7, port)
+            }
+            assertTrue(socket.isClosed)
+        }
+
+    @Test
+    fun `dotted and bare MAC notations produce the same datagram`() =
+        runBlocking {
+            for (mac in listOf("AABB.CCDD.EEFF", "aabbccddeeff")) {
+                val socket = CapturingSocket()
+                val repo = WakeOnLanRepositoryImpl(socketFactory = { socket })
+
+                val result = repo.sendMagicPacket(mac, "255.255.255.255", port = 9, repeatCount = 1)
+
+                assertTrue(result is NetworkResult.Success, "$mac -> $result")
+                assertArrayEquals(WolMagicPacket.build("AA:BB:CC:DD:EE:FF"), socket.sent.single().first, mac)
+            }
+        }
+
+    @Test
+    fun `invalid broadcast address is reported as BROADCAST_INVALID, not as a MAC error`() =
+        runBlocking {
+            for (address in listOf("example.com", "999.1.1.1", "192.168.1")) {
+                val socket = CapturingSocket()
+                val repo = WakeOnLanRepositoryImpl(socketFactory = { socket })
+
+                val result = repo.sendMagicPacket("02:02:03:04:05:06", address, port = 9)
+
+                assertTrue(result is NetworkResult.Error, address)
+                assertEquals(ErrorCode.BROADCAST_INVALID, (result as NetworkResult.Error).info?.code, address)
+                assertTrue(socket.sent.isEmpty(), address)
+            }
+        }
+
+    @Test
+    fun `unreachable network on send maps to WOL_NO_NETWORK`() =
+        runBlocking {
+            val socket =
+                object : DatagramSocket(null as SocketAddress?) {
+                    override fun send(packet: DatagramPacket): Unit = throw SocketException("Network is unreachable")
+                }
+            val repo = WakeOnLanRepositoryImpl(socketFactory = { socket })
+
+            val result = repo.sendMagicPacket("02:02:03:04:05:06", "255.255.255.255", port = 9, repeatCount = 1)
+
+            assertTrue(result is NetworkResult.Error)
+            assertEquals(ErrorCode.WOL_NO_NETWORK, (result as NetworkResult.Error).info?.code)
+            assertTrue(socket.isClosed)
         }
 }

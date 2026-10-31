@@ -1,11 +1,13 @@
 package net.aieat.netswissknife.core.domain
 
-import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.ErrorCode
+import net.aieat.netswissknife.core.network.NetworkResult
+import net.aieat.netswissknife.core.network.operation.OperationSession
 import net.aieat.netswissknife.core.network.wol.WakeOnLanRepository
+import net.aieat.netswissknife.core.network.wol.WolBroadcastProblem
+import net.aieat.netswissknife.core.network.wol.WolMacProblem
 import net.aieat.netswissknife.core.network.wol.WolMagicPacket
 import net.aieat.netswissknife.core.network.wol.WolSendReport
-import net.aieat.netswissknife.core.network.operation.OperationSession
 
 data class WakeOnLanParams(
     val macAddress: String,
@@ -18,8 +20,9 @@ data class WakeOnLanParams(
     }
 }
 
-class WakeOnLanUseCase(private val repository: WakeOnLanRepository) {
-
+class WakeOnLanUseCase(
+    private val repository: WakeOnLanRepository,
+) {
     suspend operator fun invoke(params: WakeOnLanParams): NetworkResult<WolSendReport> {
         return invokeValidated(params, operationSession = null)
     }
@@ -34,10 +37,21 @@ class WakeOnLanUseCase(private val repository: WakeOnLanRepository) {
         operationSession: OperationSession?,
     ): NetworkResult<WolSendReport> {
         val mac = params.macAddress.trim()
-        if (mac.isBlank()) return NetworkResult.error(ErrorCode.MAC_BLANK, "MAC address must not be blank")
-        if (!WolMagicPacket.isValidMac(mac)) return NetworkResult.error(ErrorCode.MAC_INVALID, "Invalid MAC address format")
+        val macProblem = WolMagicPacket.macProblem(mac)
+        if (macProblem == WolMacProblem.BLANK) {
+            return NetworkResult.error(ErrorCode.MAC_BLANK, "MAC address must not be blank")
+        }
+        if (macProblem != null) {
+            return NetworkResult.error(ErrorCode.MAC_INVALID, "Invalid MAC address format: $macProblem")
+        }
         val broadcast = params.broadcastAddress.trim()
-        if (broadcast.isBlank()) return NetworkResult.error(ErrorCode.BROADCAST_BLANK, "Broadcast address must not be blank")
+        val broadcastProblem = WolMagicPacket.broadcastProblem(broadcast)
+        if (broadcastProblem == WolBroadcastProblem.BLANK) {
+            return NetworkResult.error(ErrorCode.BROADCAST_BLANK, "Broadcast address must not be blank")
+        }
+        if (broadcastProblem != null) {
+            return NetworkResult.error(ErrorCode.BROADCAST_INVALID, "Broadcast address must be an IPv4 address")
+        }
         if (params.port !in WakeOnLanParams.MIN_PORT..WakeOnLanParams.MAX_PORT) {
             return NetworkResult.error(
                 ErrorCode.PORT_OUT_OF_RANGE,

@@ -22,7 +22,14 @@ import net.aieat.netswissknife.app.ui.navigation.ToolMacAddress
 import net.aieat.netswissknife.app.ui.navigation.ToolSource
 import net.aieat.netswissknife.core.domain.WakeOnLanParams
 import net.aieat.netswissknife.core.domain.WakeOnLanUseCase
+import net.aieat.netswissknife.app.platform.NetworkStatus
+import net.aieat.netswissknife.app.platform.NetworkStatusProvider
+import net.aieat.netswissknife.app.platform.Transport
+import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.NetworkResult
+import net.aieat.netswissknife.core.network.wol.WolBroadcastProblem
+import net.aieat.netswissknife.core.network.wol.WolMacProblem
+import kotlinx.coroutines.flow.MutableStateFlow
 import net.aieat.netswissknife.core.network.net.LocalNetworkPermissionDeniedException
 import net.aieat.netswissknife.core.network.operation.CancellationReason
 import net.aieat.netswissknife.core.network.operation.OperationSession
@@ -389,5 +396,212 @@ class WakeOnLanViewModelTest {
         completion!!.resume(NetworkResult.Success(stubReport))
 
         assertEquals(WolUiState.Idle, viewModel.uiState.value)
+    }
+
+    @Test
+    fun `dotted, bare and padded MAC notations enable Send and are not flagged`() {
+        for (mac in listOf("AABB.CCDD.EEFF", "aabbccddeeff", " AA-BB-CC-DD-EE-FF ")) {
+            viewModel.onMacAddressChange(mac)
+            assertFalse(viewModel.isMacInvalid, mac)
+            assertTrue(viewModel.canSend, mac)
+        }
+    }
+
+    @Test
+    fun `mixed separators and multicast MACs carry a specific problem and block Send`() {
+        viewModel.onMacAddressChange("AA:BB-CC:DD:EE:FF")
+        assertEquals(WolMacProblem.SEPARATORS, viewModel.macProblem.value)
+        assertFalse(viewModel.canSend)
+
+        viewModel.onMacAddressChange("01:00:5E:00:00:01")
+        assertEquals(WolMacProblem.MULTICAST, viewModel.macProblem.value)
+        assertTrue(viewModel.isMacInvalid)
+        assertFalse(viewModel.canSend)
+    }
+
+    @Test
+    fun `invalid broadcast address blocks Send with an inline problem and never calls the use case`() {
+        runTest {
+            viewModel.onMacAddressChange("AA:BB:CC:DD:EE:FF")
+            viewModel.onBroadcastAddressChange("example.com")
+            assertEquals(WolBroadcastProblem.NOT_IPV4, viewModel.broadcastProblem.value)
+            assertFalse(viewModel.canSend)
+            viewModel.send()
+            coVerify(exactly = 0) { useCase(any(), any()) }
+
+            viewModel.onBroadcastAddressChange("  ")
+            assertEquals(WolBroadcastProblem.BLANK, viewModel.broadcastProblem.value)
+
+            viewModel.onBroadcastAddressChange("192.168.1.255")
+            assertNull(viewModel.broadcastProblem.value)
+            assertTrue(viewModel.canSend)
+        }
+    }
+
+    @Test
+    fun `out-of-range port is flagged inline and blocks Send`() {
+        viewModel.onMacAddressChange("AA:BB:CC:DD:EE:FF")
+        viewModel.onPortChange("0")
+        assertTrue(viewModel.portInvalid.value)
+        assertFalse(viewModel.canSend)
+        viewModel.onPortChange("65535")
+        assertFalse(viewModel.portInvalid.value)
+    }
+
+    @Test
+    fun `typed use case failure keeps its ErrorInfo so the error card can be localized`() {
+        runTest {
+            coEvery { useCase(any(), any()) } returns
+                NetworkResult.error(ErrorCode.WOL_NO_NETWORK, "Network is unreachable")
+
+            viewModel.onMacAddressChange("AA:BB:CC:DD:EE:FF")
+            viewModel.send()
+
+            val state = viewModel.uiState.value as WolUiState.Error
+            assertEquals(ErrorCode.WOL_NO_NETWORK, state.info?.code)
+        }
+    }
+
+    @Test
+    fun `sending while the device is offline still makes one attempt and reports the failure`() {
+        runTest {
+            val offline = WakeOnLanViewModel(useCase, networkStatusProvider = OfflineNetworkStatus())
+            coEvery { useCase(any(), any()) } returns NetworkResult.error(ErrorCode.WOL_NO_NETWORK, "offline")
+
+            offline.onMacAddressChange("AA:BB:CC:DD:EE:FF")
+            assertTrue(offline.canSend, "Send is not hard-blocked offline; the send reports the real failure")
+            offline.send()
+
+            coVerify(exactly = 1) { useCase(any(), any()) }
+            assertEquals(ErrorCode.WOL_NO_NETWORK, (offline.uiState.value as WolUiState.Error).info?.code)
+        }
+    }
+
+    @Test
+    fun `saving a device stores the canonical MAC and dedupes across notations`() {
+        runTest {
+            val store = InMemoryWolSavedDeviceStore()
+            val vm = WakeOnLanViewModel(useCase, savedDeviceStore = store)
+
+            vm.onMacAddressChange("aabb.ccdd.eeff")
+            vm.onDeviceNameChange("Office PC")
+            vm.saveDevice()
+            vm.onMacAddressChange("AA-BB-CC-DD-EE-FF")
+            vm.onDeviceNameChange("Renamed PC")
+            vm.saveDevice()
+
+            assertEquals(listOf(WolSavedDevice("AA:BB:CC:DD:EE:FF", "Renamed PC")), store.current.value)
+            assertEquals(listOf(WolSavedDevice("AA:BB:CC:DD:EE:FF", "Renamed PC")), vm.savedDevices.value)
+        }
+    }
+
+    @Test
+    fun `saving an invalid MAC is a no-op`() {
+        runTest {
+            val store = InMemoryWolSavedDeviceStore()
+            val vm = WakeOnLanViewModel(useCase, savedDeviceStore = store)
+            vm.onMacAddressChange("AA:BB:CC")
+            vm.saveDevice()
+            assertTrue(store.current.value.isEmpty())
+        }
+    }
+
+    @Test
+    fun `editing a device to a MAC that is already saved is a conflict and changes nothing`() {
+        runTest {
+            val a = WolSavedDevice("AA:BB:CC:DD:EE:01", "A")
+            val b = WolSavedDevice("AA:BB:CC:DD:EE:02", "B")
+            val store = InMemoryWolSavedDeviceStore(listOf(a, b))
+            val vm = WakeOnLanViewModel(useCase, savedDeviceStore = store)
+
+            vm.startEditDevice(a)
+            vm.onMacAddressChange("AA:BB:CC:DD:EE:02")
+            vm.saveDevice()
+
+            assertTrue(vm.saveConflict.value)
+            assertEquals(listOf(a, b), store.current.value)
+        }
+    }
+
+    @Test
+    fun `edit replaces the original entry in place and clears the edit state`() {
+        runTest {
+            val a = WolSavedDevice("AA:BB:CC:DD:EE:01", "A")
+            val b = WolSavedDevice("AA:BB:CC:DD:EE:02", "B")
+            val store = InMemoryWolSavedDeviceStore(listOf(a, b))
+            val vm = WakeOnLanViewModel(useCase, savedDeviceStore = store)
+
+            vm.startEditDevice(a)
+            vm.onDeviceNameChange("Renamed")
+            vm.onMacAddressChange("AA:BB:CC:DD:EE:09")
+            vm.saveDevice()
+
+            assertEquals(
+                listOf(WolSavedDevice("AA:BB:CC:DD:EE:09", "Renamed"), b),
+                store.current.value,
+            )
+            assertNull(vm.editingMac.value)
+            assertFalse(vm.saveConflict.value)
+        }
+    }
+
+    @Test
+    fun `delete removes only the chosen device and cancels an edit of it`() {
+        runTest {
+            val a = WolSavedDevice("AA:BB:CC:DD:EE:01", "A")
+            val b = WolSavedDevice("AA:BB:CC:DD:EE:02", "B")
+            val store = InMemoryWolSavedDeviceStore(listOf(a, b))
+            val vm = WakeOnLanViewModel(useCase, savedDeviceStore = store)
+
+            vm.startEditDevice(a)
+            vm.deleteDevice(a.mac)
+
+            assertEquals(listOf(b), store.current.value)
+            assertNull(vm.editingMac.value)
+        }
+    }
+
+    @Test
+    fun `using a saved device fills the MAC and name without sending`() {
+        runTest {
+            val a = WolSavedDevice("AA:BB:CC:DD:EE:01", "Office")
+            val vm = WakeOnLanViewModel(useCase, savedDeviceStore = InMemoryWolSavedDeviceStore(listOf(a)))
+
+            vm.useDevice(a)
+
+            assertEquals("AA:BB:CC:DD:EE:01", vm.macAddress.value)
+            assertEquals("Office", vm.deviceName.value)
+            assertTrue(vm.canSend)
+            coVerify(exactly = 0) { useCase(any(), any()) }
+        }
+    }
+
+    @Test
+    fun `saved devices are restored by a recreated ViewModel from the same store`() {
+        runTest {
+            val store = InMemoryWolSavedDeviceStore()
+            WakeOnLanViewModel(useCase, savedDeviceStore = store).apply {
+                onMacAddressChange("AA:BB:CC:DD:EE:01")
+                onDeviceNameChange("Kept")
+                saveDevice()
+            }
+
+            val recreated = WakeOnLanViewModel(useCase, savedDeviceStore = store)
+
+            assertEquals(listOf(WolSavedDevice("AA:BB:CC:DD:EE:01", "Kept")), recreated.savedDevices.value)
+        }
+    }
+
+    private class OfflineNetworkStatus : NetworkStatusProvider {
+        override val status: MutableStateFlow<NetworkStatus> = MutableStateFlow(OFFLINE)
+    }
+
+    private companion object {
+        val OFFLINE = NetworkStatus(
+            hasInternet = false,
+            hasValidatedInternet = false,
+            hasLocalNetwork = false,
+            transport = Transport.OTHER,
+        )
     }
 }

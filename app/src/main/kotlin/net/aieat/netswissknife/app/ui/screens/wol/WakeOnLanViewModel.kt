@@ -7,16 +7,12 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import net.aieat.netswissknife.core.domain.WakeOnLanParams
-import net.aieat.netswissknife.core.domain.WakeOnLanUseCase
-import net.aieat.netswissknife.core.network.NetworkResult
-import net.aieat.netswissknife.core.network.wol.WolSendReport
-import net.aieat.netswissknife.core.network.operation.CancellationReason
-import net.aieat.netswissknife.core.network.operation.OperationSession
-import net.aieat.netswissknife.core.network.wol.WakeOnLanOperation
 import net.aieat.netswissknife.app.platform.NetworkErrorKind
 import net.aieat.netswissknife.app.platform.NetworkStatus
 import net.aieat.netswissknife.app.platform.NetworkStatusProvider
@@ -26,6 +22,17 @@ import net.aieat.netswissknife.app.ui.navigation.ToolDestination
 import net.aieat.netswissknife.app.ui.navigation.ToolIntentCodec
 import net.aieat.netswissknife.app.ui.navigation.ToolMacAddress
 import net.aieat.netswissknife.app.ui.navigation.ToolSource
+import net.aieat.netswissknife.core.domain.WakeOnLanParams
+import net.aieat.netswissknife.core.domain.WakeOnLanUseCase
+import net.aieat.netswissknife.core.network.ErrorInfo
+import net.aieat.netswissknife.core.network.NetworkResult
+import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationSession
+import net.aieat.netswissknife.core.network.wol.WakeOnLanOperation
+import net.aieat.netswissknife.core.network.wol.WolBroadcastProblem
+import net.aieat.netswissknife.core.network.wol.WolMacProblem
+import net.aieat.netswissknife.core.network.wol.WolMagicPacket
+import net.aieat.netswissknife.core.network.wol.WolSendReport
 import javax.inject.Inject
 
 sealed interface WolUiState {
@@ -34,6 +41,8 @@ sealed interface WolUiState {
     data class Success(val report: WolSendReport) : WolUiState
     data class Error(
         val message: String,
+        /** Typed failure, rendered through ErrorTextMapper so the text is localized. */
+        val info: ErrorInfo? = null,
         val networkErrorKind: NetworkErrorKind = NetworkErrorKind.GENERAL,
     ) : WolUiState
 }
@@ -42,6 +51,7 @@ sealed interface WolUiState {
 class WakeOnLanViewModel @Inject constructor(
     private val wakeOnLan: WakeOnLanUseCase,
     networkStatusProvider: NetworkStatusProvider = NoOpNetworkStatusProvider,
+    private val savedDeviceStore: WolSavedDeviceStore = InMemoryWolSavedDeviceStore(),
     // Hilt supplies the owner-backed handle at runtime; this empty default supports direct unit tests.
     @param:SuppressLint("VisibleForTests")
     private val savedStateHandle: SavedStateHandle = SavedStateHandle(),
@@ -92,6 +102,38 @@ class WakeOnLanViewModel @Inject constructor(
     private val _port = MutableStateFlow(DEFAULT_PORT.toString())
     val port: StateFlow<String> = _port.asStateFlow()
 
+    /** Inline problem for the MAC field; BLANK means "nothing entered yet" and is not an error to show. */
+    val macProblem: StateFlow<WolMacProblem?> =
+        _macAddress
+            .map { WolMagicPacket.macProblem(it) }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, WolMagicPacket.macProblem(_macAddress.value))
+
+    val broadcastProblem: StateFlow<WolBroadcastProblem?> =
+        _broadcastAddress
+            .map { WolMagicPacket.broadcastProblem(it) }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, WolMagicPacket.broadcastProblem(_broadcastAddress.value))
+
+    val portInvalid: StateFlow<Boolean> =
+        _port
+            .map { isPortOutOfRange(it) }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, isPortOutOfRange(_port.value))
+
+    // ── Saved devices ────────────────────────────────────────────────────────
+
+    val savedDevices: StateFlow<List<WolSavedDevice>> =
+        savedDeviceStore.devices.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    private val _deviceName = MutableStateFlow("")
+    val deviceName: StateFlow<String> = _deviceName.asStateFlow()
+
+    /** Canonical MAC of the saved device being edited, or null when saving a new one. */
+    private val _editingMac = MutableStateFlow<String?>(null)
+    val editingMac: StateFlow<String?> = _editingMac.asStateFlow()
+
+    /** Set when an edit would make two saved devices share a MAC; nothing is changed. */
+    private val _saveConflict = MutableStateFlow(false)
+    val saveConflict: StateFlow<Boolean> = _saveConflict.asStateFlow()
+
     private var operationSession: OperationSession? = null
     private var sendGeneration = 0L
 
@@ -109,17 +151,19 @@ class WakeOnLanViewModel @Inject constructor(
 
     /** True when the user has typed something that is not a valid MAC yet. */
     val isMacInvalid: Boolean
-        get() = _macAddress.value.isNotBlank() && ToolMacAddress.parse(_macAddress.value) == null
+        get() = macProblem.value.let { it != null && it != WolMacProblem.BLANK }
 
     val canSend: Boolean
-        get() = ToolMacAddress.parse(_macAddress.value) != null &&
-            _broadcastAddress.value.isNotBlank() &&
-            _port.value.toIntOrNull() in WakeOnLanParams.MIN_PORT..WakeOnLanParams.MAX_PORT &&
-            _uiState.value !is WolUiState.Sending
+        get() =
+            macProblem.value == null &&
+                broadcastProblem.value == null &&
+                !portInvalid.value &&
+                _uiState.value !is WolUiState.Sending
 
     fun onMacAddressChange(value: String) {
         _macAddress.value = value
         savedStateHandle[EDITED_MAC_KEY] = value
+        _saveConflict.value = false
         if (_hasInvalidHandoff.value && ToolMacAddress.parse(value) != null) {
             savedStateHandle[HANDOFF_RECOVERED_KEY] = true
             _hasInvalidHandoff.value = false
@@ -146,6 +190,65 @@ class WakeOnLanViewModel @Inject constructor(
         }
     }
 
+    fun onDeviceNameChange(value: String) {
+        _deviceName.value = value.take(WolSavedDevices.MAX_NAME_LENGTH)
+    }
+
+    /** Saves the current MAC under the entered name, or updates the saved device being edited. */
+    fun saveDevice() {
+        val canonical = WolMagicPacket.canonicalMacOrNull(_macAddress.value) ?: return
+        val name = _deviceName.value
+        val original = _editingMac.value
+        if (original != null) {
+            val outcome = WolSavedDevices.edit(savedDevices.value, original, canonical, name)
+            if (outcome is WolSaveOutcome.Duplicate) {
+                _saveConflict.value = true
+                return
+            }
+            viewModelScope.launch {
+                savedDeviceStore.update { list ->
+                    when (val result = WolSavedDevices.edit(list, original, canonical, name)) {
+                        is WolSaveOutcome.Saved -> result.devices
+                        WolSaveOutcome.Duplicate -> list
+                    }
+                }
+            }
+            _editingMac.value = null
+        } else {
+            viewModelScope.launch {
+                savedDeviceStore.update { list -> WolSavedDevices.upsert(list, canonical, name) }
+            }
+        }
+        _saveConflict.value = false
+        _deviceName.value = ""
+    }
+
+    fun deleteDevice(mac: String) {
+        viewModelScope.launch {
+            savedDeviceStore.update { list -> WolSavedDevices.remove(list, mac) }
+        }
+        if (_editingMac.value == mac) cancelEdit()
+    }
+
+    /** Fills the MAC and name from a saved device. Does not send. */
+    fun useDevice(device: WolSavedDevice) {
+        _editingMac.value = null
+        _deviceName.value = device.name
+        onMacAddressChange(device.mac)
+    }
+
+    fun startEditDevice(device: WolSavedDevice) {
+        _editingMac.value = device.mac
+        _deviceName.value = device.name
+        onMacAddressChange(device.mac)
+    }
+
+    fun cancelEdit() {
+        _editingMac.value = null
+        _deviceName.value = ""
+        _saveConflict.value = false
+    }
+
     fun send() {
         if (!canSend) return
         val params = WakeOnLanParams(
@@ -164,7 +267,7 @@ class WakeOnLanViewModel @Inject constructor(
                 if (sendGeneration != generation || operationSession !== session) return@launch
                 _uiState.value = when (result) {
                     is NetworkResult.Success -> WolUiState.Success(result.data)
-                    is NetworkResult.Error -> WolUiState.Error(result.message, result.cause.toNetworkErrorKind())
+                    is NetworkResult.Error -> errorState(result)
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -173,6 +276,13 @@ class WakeOnLanViewModel @Inject constructor(
             }
         }
     }
+
+    private fun errorState(result: NetworkResult.Error): WolUiState.Error =
+        WolUiState.Error(
+            message = result.message,
+            info = result.info,
+            networkErrorKind = result.cause.toNetworkErrorKind(),
+        )
 
     fun stopSending() {
         sendGeneration++
@@ -197,6 +307,11 @@ class WakeOnLanViewModel @Inject constructor(
     companion object {
         const val DEFAULT_BROADCAST = "255.255.255.255"
         const val DEFAULT_PORT = 9
+
+        private val PORT_RANGE = WakeOnLanParams.MIN_PORT..WakeOnLanParams.MAX_PORT
+
+        private fun isPortOutOfRange(value: String): Boolean = value.toIntOrNull() !in PORT_RANGE
+
         private const val EDITED_MAC_KEY = "editedWolMac"
         private const val HANDOFF_CONSUMED_KEY = "wolHandoffConsumed"
         private const val HANDOFF_SOURCE_KEY = "wolHandoffSource"
