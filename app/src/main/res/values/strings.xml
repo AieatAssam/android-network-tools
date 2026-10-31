@@ -250,6 +250,9 @@
     <!-- Ping Results -->
     <string name="ping_result_header">Ping Results</string>
     <string name="ping_showing_recent">Showing the most recent %1$d of %2$d pings</string>
+    <string name="ping_interrupted_banner">Stopped early after %1$d probes. Statistics cover only the probes that were sent.</string>
+    <string name="ping_stale_result">Showing the previous result for %1$s. Run again to update it for the new host.</string>
+    <string name="ping_reset_advanced">Reset to defaults</string>
     <string name="ping_stats_header">Statistics</string>
     <string name="ping_packets_sent">Sent</string>
     <string name="ping_packets_received">Received</string>
@@ -1196,7 +1199,7 @@
     <string-array name="help_ping_results_bullets">
         <item>Min / Avg / Max - the fastest, typical, and slowest round-trip times seen.</item>
         <item>Jitter - how much RTT varies between pings; high jitter means an unstable connection, even if the average looks fine.</item>
-        <item>Packet loss - the percentage of pings that got no reply; anything above 0%% suggests congestion or a firewall dropping packets.</item>
+        <item>Packet loss - the percentage of pings that got no reply; anything above 0% suggests congestion or a firewall dropping packets.</item>
         <item>Unreachable - the network explicitly rejected the probe before the timeout; this is different from a silent timeout.</item>
     </string-array>
 

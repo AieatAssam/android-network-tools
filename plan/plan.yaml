@@ -56,9 +56,30 @@ work_packages:
         - "Ktlint baseline: Subnet and other pre-existing style entries kept in baseline; no new entries absorbed (verified by per-rule diff)."
   - id: WP02
     title: Ping
-    status: todo
+    status: done
     findings: [A:PING-01, A:PING-02, A:PING-03, A:PING-05, A:PING-06, A:PING-07, A:PING-09]
     notes: "PING-01 (rotation silently ends a run, high) first. Fix literal '0%%'. Advanced slider reset. Label interrupted runs."
+    result:
+      status: done
+      commit: "the WP02 commit on plan/ux-remediation-2026-10-31 (fix(ping): ...); sha not recorded here to keep a single commit"
+      gates: "./gradlew test ktlintCheck detekt, :app:assembleDebug, :app:compileDebugAndroidTestKotlin, :app:koverVerify all green (run one at a time). Device re-test deferred to WP18. ktlint app baseline regenerated: 0 entries added; 99 pre-existing PingScreen.kt indent entries removed by dedenting the LazyColumn block; 2 trailing-comma entries removed in PingViewModel.kt by code touched in this WP."
+      fixed:
+        - "A:PING-01 (root cause verified): PingScreen's ON_STOP observer treated the rotation-driven stop as backgrounding and called onLifecycleStop, which cancelled the run and presented partial stats as final. Now the screen passes Activity.isChangingConfigurations as configurationChange and the ViewModel ignores it, so the run continues. Tests: configuration change keeps normal and continuous ping running. Not device-verified."
+        - "A:PING-01 (labelling): Finished now carries interrupted=true for user stop and background stop of a normal run. The Finished panel shows a 'Stopped early after N probes' banner. Test: interrupted flag for background stop, user stop, and false for a completed run."
+        - "A:PING-02: literal '0%%' in help_ping_results_bullets replaced with '0%' (the array is not formatted). Regression test PingHelpStringsTest. Other %% occurrences in strings.xml are inside format strings and are correct."
+        - "A:PING-03: already addressed by WP01 (IME inset on content in MainActivity). Not re-verified in code beyond that; WP18 device check."
+        - "A:PING-04 (partial): Reset to defaults action added to Advanced options (payload 56, TTL 64, interval 1000). Test: resetAdvancedOptions."
+        - "A:PING-05: when the host field differs from the host of the shown result, the result panel shows 'Showing the previous result for <host>' (testTag STALE_RESULT)."
+        - "A:PING-06: Statistics card uses a neutral surfaceVariant->surface gradient and neutral text. 0% loss is neutral; loss above 0 is error colour."
+        - "README Ping: probe count range corrected to 1-100 (the code slider and coerce range are 1..100, not 1..50). Reset, interrupted and stale-result behaviour documented."
+      not_reproduced:
+        - "A:PING-09 (partial): the finding says Statistics has no export or share. Finished panel already has a Share button (CSV file for continuous runs, or CSV text) and a copy-CSV icon. No code change for that part."
+      deferred:
+        - "A:PING-04 (rest): show the default value next to each slider and make the Advanced section collapse state reset between runs. Not done."
+        - "A:PING-07: Recent chip row clips the last chip with no fade or scroll cue. RecentHostsRow is shared by tools; change it with the other shared chip work, not in Ping alone."
+        - "A:PING-09 (rest): saved targets or presets, per-target history with timestamps, and copy-as-command. Product features, not bugs; needs a decision before work."
+        - "A:PING-08 is UNVERIFIED in the findings and not in this WP's list; not exercised."
+        - "Device verification of rotation (PING-01), IME (PING-03) and the reset and stale states is required at WP18. isChangingConfigurations behaviour on Android 8 was reasoned from framework behaviour, not measured."
   - id: WP03
     title: Traceroute
     status: todo

@@ -14,8 +14,10 @@
 
 ### Ping
 ICMP echo and reachability round-trip latency measurement with real-time streaming results. The app resolves a hostname once per session, then uses icmpenguin ICMP echo with transparent reachability fallback when the socket is unavailable.
-- Configurable probe count (1–50 via slider; default configurable up to 100 in Settings) and timeout (100–30,000 ms)
-- Advanced payload size (0–1,472 bytes), TTL (1–255), and interval (100–10,000 ms) controls
+- Configurable probe count (1–100 via slider; default configurable in Settings) and timeout (100–30,000 ms)
+- Advanced payload size (0–1,472 bytes), TTL (1–255), and interval (100–10,000 ms) controls, with a Reset to defaults action
+- Rotating the device keeps a run going. A run stopped early (Stop, or the app going to the background) is labelled as stopped early, and its statistics cover only the probes that were sent
+- When the host field changes after a run, the previous result is labelled as the previous result for its own host
 - Per-probe RTT reporting with sequence numbers and status (SUCCESS / TIMEOUT / UNREACHABLE / ERROR), including reply IP, TTL, and bytes when available
 - Live stats panel during active ping: packet loss %, min, avg, and max RTT updating after every packet
 - RTT chart with Y-axis ms labels and fill gradient, rendered as results arrive

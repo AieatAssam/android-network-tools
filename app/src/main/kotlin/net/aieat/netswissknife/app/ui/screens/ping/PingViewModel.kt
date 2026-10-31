@@ -155,7 +155,9 @@ sealed interface PingUiState {
     data class Finished(
         val result: PingResult,
         val showRaw: Boolean = false,
-        val sessionLogFile: File? = null
+        val sessionLogFile: File? = null,
+        /** True when the run was stopped (by the user or lifecycle) before all probes were sent. */
+        val interrupted: Boolean = false,
     ) : PingUiState
     data class Error(
         val text: UiText,
@@ -188,6 +190,9 @@ class PingViewModel @Inject constructor(
         private const val HANDOFF_CONSUMED_KEY = "pingHandoffConsumed"
         private const val HANDOFF_SOURCE_KEY = "pingHandoffSource"
         private const val EDITED_HOST_KEY = "editedHost"
+        const val DEFAULT_PAYLOAD_BYTES = 56
+        const val DEFAULT_TTL = 64
+        const val DEFAULT_INTERVAL_MS = 1_000
     }
 
     private val _uiState = MutableStateFlow<PingUiState>(PingUiState.Idle)
@@ -233,13 +238,13 @@ class PingViewModel @Inject constructor(
     private val _timeoutMs = MutableStateFlow(2_000)
     val timeoutMs: StateFlow<Int> = _timeoutMs.asStateFlow()
 
-    private val _payloadBytes = MutableStateFlow(56)
+    private val _payloadBytes = MutableStateFlow(DEFAULT_PAYLOAD_BYTES)
     val payloadBytes: StateFlow<Int> = _payloadBytes.asStateFlow()
 
-    private val _ttl = MutableStateFlow(64)
+    private val _ttl = MutableStateFlow(DEFAULT_TTL)
     val ttl: StateFlow<Int> = _ttl.asStateFlow()
 
-    private val _intervalMs = MutableStateFlow(1_000)
+    private val _intervalMs = MutableStateFlow(DEFAULT_INTERVAL_MS)
     val intervalMs: StateFlow<Int> = _intervalMs.asStateFlow()
 
     private val _continuousMode = MutableStateFlow(false)
@@ -332,6 +337,13 @@ class PingViewModel @Inject constructor(
 
     fun onIntervalChange(value: Int) { _intervalMs.value = value.coerceIn(100, 10_000) }
 
+    /** Restores the advanced-option defaults (payload, TTL and interval). */
+    fun onResetAdvancedOptions() {
+        _payloadBytes.value = DEFAULT_PAYLOAD_BYTES
+        _ttl.value = DEFAULT_TTL
+        _intervalMs.value = DEFAULT_INTERVAL_MS
+    }
+
     fun onToggleContinuous(enabled: Boolean) { _continuousMode.value = enabled }
 
     fun onToggleRawView() {
@@ -364,7 +376,8 @@ class PingViewModel @Inject constructor(
         if (current is PingUiState.Running) {
             if (current.packets.isNotEmpty()) {
                 _uiState.value = PingUiState.Finished(
-                    buildResult(current.host, current.packets, current.totalCount)
+                    buildResult(current.host, current.packets, current.totalCount),
+                    interrupted = true,
                 )
             } else {
                 _uiState.value = PingUiState.Idle
@@ -372,7 +385,13 @@ class PingViewModel @Inject constructor(
         }
     }
 
-    fun onLifecycleStop() {
+    /**
+     * Called when the screen's host is stopped. A configuration change (rotation, theme or
+     * density change) also stops the Activity, but the ViewModel and its run survive it, so
+     * the caller passes [configurationChange] and the run keeps going.
+     */
+    fun onLifecycleStop(configurationChange: Boolean = false) {
+        if (configurationChange) return
         val current = _uiState.value
         if (current is PingUiState.Running && current.isContinuous) {
             stopContinuousPing(CancellationReason.LIFECYCLE_PAUSE)
@@ -404,6 +423,7 @@ class PingViewModel @Inject constructor(
                                 _uiState.value = if (current.packets.isNotEmpty()) {
                                     PingUiState.Finished(
                                         buildResult(current.host, current.packets, current.totalCount),
+                                        interrupted = true,
                                     )
                                 } else {
                                     PingUiState.Idle
