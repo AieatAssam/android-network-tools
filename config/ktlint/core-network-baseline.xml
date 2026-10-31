@@ -7,20 +7,6 @@
         <error line="88" column="1" source="standard:blank-line-between-when-conditions" />
         <error line="88" column="17" source="standard:when-entry-bracing" />
     </file>
-    <file name="src/main/kotlin/net/aieat/netswissknife/core/network/HostValidator.kt">
-        <error line="15" column="29" source="standard:multiline-expression-wrapping" />
-        <error line="16" column="90" source="standard:trailing-comma-on-call-site" />
-        <error line="18" column="33" source="standard:multiline-expression-wrapping" />
-        <error line="19" column="110" source="standard:trailing-comma-on-call-site" />
-        <error line="73" column="29" source="standard:function-signature" />
-        <error line="73" column="42" source="standard:function-signature" />
-        <error line="73" column="64" source="standard:function-signature" />
-        <error line="84" column="1" source="standard:blank-line-between-when-conditions" />
-        <error line="84" column="46" source="standard:when-entry-bracing" />
-        <error line="85" column="1" source="standard:blank-line-between-when-conditions" />
-        <error line="85" column="25" source="standard:when-entry-bracing" />
-        <error line="114" column="16" source="standard:chain-method-continuation" />
-    </file>
     <file name="src/main/kotlin/net/aieat/netswissknife/core/network/MonotonicClock.kt">
         <error line="20" column="64" source="standard:function-signature" />
     </file>
@@ -1755,16 +1741,6 @@
         <error line="700" column="107" source="standard:class-signature" />
         <error line="700" column="119" source="standard:class-signature" />
     </file>
-    <file name="src/main/kotlin/net/aieat/netswissknife/core/network/topology/TopologyMibParser.kt">
-        <error line="9" column="1" source="standard:no-empty-first-line-in-class-body" />
-        <error line="41" column="37" source="standard:trailing-comma-on-call-site" />
-        <error line="73" column="1" source="standard:blank-line-between-when-conditions" />
-        <error line="108" column="42" source="standard:trailing-comma-on-call-site" />
-        <error line="123" column="22" source="standard:multiline-expression-wrapping" />
-        <error line="145" column="25" source="standard:trailing-comma-on-declaration-site" />
-        <error line="150" column="34" source="standard:trailing-comma-on-declaration-site" />
-        <error line="159" column="30" source="standard:trailing-comma-on-declaration-site" />
-    </file>
     <file name="src/main/kotlin/net/aieat/netswissknife/core/network/topology/TopologyModels.kt">
         <error line="4" column="1" source="standard:blank-line-before-declaration" />
         <error line="5" column="1" source="standard:blank-line-before-declaration" />
@@ -2770,20 +2746,6 @@
     <file name="src/test/kotlin/net/aieat/netswissknife/core/network/ErrorInfoTest.kt">
         <error line="29" column="21" source="standard:multiline-expression-wrapping" />
         <error line="42" column="21" source="standard:multiline-expression-wrapping" />
-    </file>
-    <file name="src/test/kotlin/net/aieat/netswissknife/core/network/HostValidatorTest.kt">
-        <error line="3" column="1" source="standard:import-ordering" />
-        <error line="22" column="1" source="standard:no-empty-first-line-in-class-body" />
-        <error line="26" column="1" source="standard:no-empty-first-line-in-class-body" />
-        <error line="61" column="1" source="standard:no-empty-first-line-in-class-body" />
-        <error line="78" column="1" source="standard:no-empty-first-line-in-class-body" />
-        <error line="112" column="1" source="standard:no-empty-first-line-in-class-body" />
-        <error line="140" column="34" source="standard:trailing-comma-on-call-site" />
-        <error line="141" column="14" source="standard:trailing-comma-on-call-site" />
-        <error line="153" column="45" source="standard:trailing-comma-on-call-site" />
-        <error line="154" column="14" source="standard:trailing-comma-on-call-site" />
-        <error line="201" column="36" source="standard:trailing-comma-on-call-site" />
-        <error line="202" column="14" source="standard:trailing-comma-on-call-site" />
     </file>
     <file name="src/test/kotlin/net/aieat/netswissknife/core/network/dns/DnsMessageMapperTest.kt">
         <error line="17" column="1" source="standard:no-empty-first-line-in-class-body" />
@@ -5047,14 +5009,6 @@
         <error line="387" column="53" source="standard:chain-method-continuation" />
         <error line="388" column="9" source="standard:blank-line-before-declaration" />
     </file>
-    <file name="src/test/kotlin/net/aieat/netswissknife/core/network/tls/TlsNetworkBindingTest.kt">
-        <error line="18" column="53" source="standard:multiline-expression-wrapping" />
-        <error line="18" column="53" source="standard:function-signature" />
-        <error line="19" column="25" source="standard:multiline-expression-wrapping" />
-        <error line="55" column="22" source="standard:multiline-expression-wrapping" />
-        <error line="62" column="27" source="standard:multiline-expression-wrapping" />
-        <error line="74" column="22" source="standard:multiline-expression-wrapping" />
-    </file>
     <file name="src/test/kotlin/net/aieat/netswissknife/core/network/tls/TlsTestCertificates.kt">
         <error line="8" column="22" source="standard:multiline-expression-wrapping" />
     </file>
@@ -5386,14 +5340,6 @@
         <error line="1226" column="24" source="standard:multiline-expression-wrapping" />
         <error line="1226" column="24" source="standard:function-signature" />
         <error line="1240" column="25" source="standard:trailing-comma-on-declaration-site" />
-    </file>
-    <file name="src/test/kotlin/net/aieat/netswissknife/core/network/topology/TopologyMibParserTest.kt">
-        <error line="9" column="1" source="standard:no-empty-first-line-in-class-body" />
-        <error line="21" column="20" source="standard:multiline-expression-wrapping" />
-        <error line="25" column="68" source="standard:trailing-comma-on-call-site" />
-        <error line="37" column="20" source="standard:multiline-expression-wrapping" />
-        <error line="38" column="63" source="standard:trailing-comma-on-call-site" />
-        <error line="80" column="22" source="standard:chain-method-continuation" />
     </file>
     <file name="src/test/kotlin/net/aieat/netswissknife/core/network/topology/TopologyNodeParserTest.kt">
         <error line="7" column="1" source="standard:no-empty-first-line-in-class-body" />

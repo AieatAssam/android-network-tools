@@ -206,7 +206,8 @@ private fun ToolGrid(onNavigate: (String) -> Unit) {
                         .fillMaxSize()
                         .testTag(HomeScreenTestTags.TOOL_GRID),
                 columns = GridCells.Adaptive(minSize = 160.dp),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                // Bottom inset clears the 52dp "scroll for more" overlay so the last tile text is readable.
+                contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 60.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {

@@ -115,7 +115,7 @@ fun ToolHeroHeader(
                 }
 
                 if (onHelpClick != null) {
-                    IconButton(onClick = onHelpClick) {
+                    IconButton(onClick = onHelpClick, modifier = Modifier.size(ToolTouchTargetSize)) {
                         Icon(
                             imageVector = Icons.Default.Info,
                             contentDescription = stringResource(R.string.action_help),

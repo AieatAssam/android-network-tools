@@ -51,6 +51,7 @@ import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
 import net.aieat.netswissknife.app.ui.components.RecentHostsRow
 import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
 import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
+import net.aieat.netswissknife.app.ui.components.ToolTextField
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.ui.theme.AppShapes
@@ -329,7 +330,7 @@ private fun TopologyScreenContent(
 
                 AnimatedVisibility(visible = configExpanded) {
                     Column(modifier = Modifier.padding(top = 12.dp)) {
-                        OutlinedTextField(
+                        ToolTextField(
                             value = targetIp,
                             onValueChange = { targetIp = it },
                             label = { Text(stringResource(R.string.topology_target_ip_label)) },
@@ -343,13 +344,6 @@ private fun TopologyScreenContent(
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                            trailingIcon = {
-                                if (targetIp.isNotEmpty()) {
-                                    IconButton(onClick = { targetIp = "" }) {
-                                        Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.clear))
-                                    }
-                                }
-                            },
                         )
 
                         RecentHostsRow(

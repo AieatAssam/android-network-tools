@@ -28,7 +28,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Calculate
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.NetworkCheck
@@ -41,10 +40,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -66,16 +63,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import net.aieat.netswissknife.app.ui.components.ToolTextField
 import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
@@ -233,24 +233,23 @@ private fun SubnetCidrInputs(
     onExampleSelected: (String) -> Unit,
     canCalculate: Boolean
 ) {
+    val focusManager = LocalFocusManager.current
+    val submit: () -> Unit = {
+        focusManager.clearFocus()
+        onCalculate()
+    }
+
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        OutlinedTextField(
+        ToolTextField(
             value = input,
             onValueChange = onInputChange,
             modifier = Modifier.fillMaxWidth(),
             label = { Text(stringResource(R.string.subnet_input_label)) },
             placeholder = { Text(stringResource(R.string.subnet_input_placeholder)) },
             leadingIcon = { Icon(Icons.Default.NetworkCheck, contentDescription = null) },
-            trailingIcon = {
-                if (input.isNotEmpty()) {
-                    IconButton(onClick = { onInputChange("") }) {
-                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.clear))
-                    }
-                }
-            },
             singleLine = true,
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-            keyboardActions = KeyboardActions(onDone = { onCalculate() })
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { submit() })
         )
 
         Button(
@@ -278,42 +277,34 @@ private fun SubnetRangeInputs(
     onCalculate: () -> Unit,
     canCalculate: Boolean
 ) {
+    val focusManager = LocalFocusManager.current
+    val submit: () -> Unit = {
+        focusManager.clearFocus()
+        onCalculate()
+    }
+
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        OutlinedTextField(
+        ToolTextField(
             value = minIp,
             onValueChange = onMinIpChange,
             modifier = Modifier.fillMaxWidth(),
             label = { Text(stringResource(R.string.subnet_min_ip_label)) },
             placeholder = { Text(stringResource(R.string.subnet_min_ip_placeholder)) },
             leadingIcon = { Icon(Icons.Default.NetworkCheck, contentDescription = null) },
-            trailingIcon = {
-                if (minIp.isNotEmpty()) {
-                    IconButton(onClick = { onMinIpChange("") }) {
-                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.clear))
-                    }
-                }
-            },
             singleLine = true,
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next)
         )
 
-        OutlinedTextField(
+        ToolTextField(
             value = maxIp,
             onValueChange = onMaxIpChange,
             modifier = Modifier.fillMaxWidth(),
             label = { Text(stringResource(R.string.subnet_max_ip_label)) },
             placeholder = { Text(stringResource(R.string.subnet_max_ip_placeholder)) },
             leadingIcon = { Icon(Icons.Default.NetworkCheck, contentDescription = null) },
-            trailingIcon = {
-                if (maxIp.isNotEmpty()) {
-                    IconButton(onClick = { onMaxIpChange("") }) {
-                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.clear))
-                    }
-                }
-            },
             singleLine = true,
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-            keyboardActions = KeyboardActions(onDone = { onCalculate() })
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { submit() })
         )
 
         Button(

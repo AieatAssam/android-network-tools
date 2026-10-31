@@ -27,7 +27,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -39,7 +38,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -68,6 +66,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
+import net.aieat.netswissknife.app.ui.components.ToolTextField
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
@@ -249,19 +248,12 @@ private fun WolInputCard(
             modifier = Modifier.padding(AppSpacing.m),
             verticalArrangement = Arrangement.spacedBy(AppSpacing.s + AppSpacing.xs)
         ) {
-            OutlinedTextField(
+            ToolTextField(
                 value = macAddress,
                 onValueChange = onMacChange,
                 label = { Text(stringResource(R.string.wol_mac_label)) },
                 placeholder = { Text(stringResource(R.string.wol_mac_placeholder), fontFamily = FontFamily.Monospace) },
                 leadingIcon = { Icon(Icons.Default.Memory, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-                trailingIcon = {
-                    if (macAddress.isNotEmpty()) {
-                        IconButton(onClick = { onMacChange("") }) {
-                            Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.clear))
-                        }
-                    }
-                },
                 isError = isMacInvalid,
                 supportingText = if (isMacInvalid) {
                     { Text(stringResource(R.string.wol_mac_invalid)) }

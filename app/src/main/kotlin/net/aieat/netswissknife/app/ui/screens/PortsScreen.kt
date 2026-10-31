@@ -121,6 +121,7 @@ import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
 import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.components.ToolStopButton
+import net.aieat.netswissknife.app.ui.components.ToolTextField
 import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
 import net.aieat.netswissknife.app.ui.i18n.asString
@@ -519,22 +520,12 @@ private fun PortScanInputCard(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             // Host input
-            OutlinedTextField(
+            ToolTextField(
                 value = host,
                 onValueChange = onHostChange,
                 label = { Text(stringResource(R.string.ports_host_label)) },
                 placeholder = { Text(stringResource(R.string.ports_host_placeholder)) },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                trailingIcon = {
-                    if (host.isNotEmpty()) {
-                        IconButton(
-                            onClick = { onHostChange("") },
-                            enabled = !isScanning,
-                        ) {
-                            Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.clear))
-                        }
-                    }
-                },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions =

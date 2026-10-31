@@ -26,7 +26,6 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.ExpandMore
@@ -83,6 +82,7 @@ import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
 import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
 import net.aieat.netswissknife.app.ui.components.ToolErrorCard
+import net.aieat.netswissknife.app.ui.components.ToolTextField
 import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.R
@@ -318,23 +318,13 @@ private fun TlsInputSection(
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
 
             // Host field
-            OutlinedTextField(
+            ToolTextField(
                 value         = host,
                 onValueChange = onHostChange,
                 label         = { Text(stringResource(R.string.tls_host_label)) },
                 placeholder   = { Text(stringResource(R.string.tls_host_placeholder)) },
                 leadingIcon   = {
                     Icon(Icons.Default.Lock, contentDescription = null)
-                },
-                trailingIcon  = {
-                    if (host.isNotEmpty()) {
-                        IconButton(onClick = { onHostChange("") }) {
-                            Icon(
-                                Icons.Default.Clear,
-                                contentDescription = stringResource(R.string.clear)
-                            )
-                        }
-                    }
                 },
                 isError       = isHostInvalid,
                 supportingText = if (isHostInvalid) {

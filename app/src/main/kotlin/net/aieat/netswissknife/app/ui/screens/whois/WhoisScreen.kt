@@ -63,7 +63,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -99,6 +98,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
 import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
 import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
+import net.aieat.netswissknife.app.ui.components.ToolTextField
 import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.R
@@ -183,23 +183,13 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
             // ── Input card ─────────────────────────────────────────────────────
             ElevatedCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    OutlinedTextField(
+                    ToolTextField(
                         value = uiState.query,
                         onValueChange = viewModel::onQueryChange,
                         modifier = Modifier.fillMaxWidth(),
                         label = { Text(stringResource(R.string.whois_query_label)) },
                         placeholder = { Text(stringResource(R.string.whois_query_placeholder)) },
                         leadingIcon = { Icon(Icons.AutoMirrored.Filled.ManageSearch, contentDescription = null) },
-                        trailingIcon = {
-                            if (uiState.query.isNotEmpty()) {
-                                IconButton(
-                                    onClick = { viewModel.onQueryChange("") },
-                                    enabled = !uiState.isLoading,
-                                ) {
-                                    Icon(Icons.Default.Close, contentDescription = stringResource(R.string.clear))
-                                }
-                            }
-                        },
                         singleLine = true,
                         enabled = !uiState.isLoading
                     )

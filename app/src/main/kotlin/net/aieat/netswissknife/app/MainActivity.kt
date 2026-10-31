@@ -4,6 +4,11 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MoreHoriz
@@ -13,11 +18,13 @@ import androidx.compose.material3.adaptive.currentWindowAdaptiveInfoV2
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffoldDefaults
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScope
+import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteType
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.WindowCompat
@@ -83,8 +90,20 @@ fun NetSwissKnifeApp(navController: NavHostController) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navigationRouteIdentity(navBackStackEntry?.destination?.route)
     val windowAdaptiveInfo = currentWindowAdaptiveInfoV2()
+    val layoutType = NavigationSuiteScaffoldDefaults.calculateFromAdaptiveInfo(windowAdaptiveInfo)
+    // The app draws edge-to-edge (setDecorFitsSystemWindows(false)), so adjustResize no longer
+    // lifts content above the keyboard and the system nav bar is not reserved for us. Pad the
+    // content by the larger of the two: the nav bar when a rail is shown (no bottom bar to
+    // absorb it) and the IME while a text field is focused. union() takes the max per edge,
+    // so the keyboard inset (which also spans the nav bar) is not double counted.
+    val contentInsets =
+        if (layoutType == NavigationSuiteType.NavigationRail) {
+            WindowInsets.navigationBars.union(WindowInsets.ime)
+        } else {
+            WindowInsets.ime
+        }
     NavigationSuiteScaffold(
-        layoutType = NavigationSuiteScaffoldDefaults.calculateFromAdaptiveInfo(windowAdaptiveInfo),
+        layoutType = layoutType,
         navigationSuiteItems = {
             appNavigationSuiteItems(
                 currentRoute = currentRoute,
@@ -96,7 +115,7 @@ fun NetSwissKnifeApp(navController: NavHostController) {
             )
         },
     ) {
-        AdaptiveContentBounds {
+        AdaptiveContentBounds(modifier = Modifier.windowInsetsPadding(contentInsets)) {
             AppNavHost(navController = navController)
         }
     }

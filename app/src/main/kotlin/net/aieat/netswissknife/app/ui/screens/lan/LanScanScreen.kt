@@ -123,6 +123,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
 import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
 import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
+import net.aieat.netswissknife.app.ui.components.ToolTextField
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
 import net.aieat.netswissknife.app.ui.components.ToolStopButton
@@ -1184,18 +1185,11 @@ private fun LanFinishedContent(
         } else {
             NetworkTopologyCard(hosts = summary.hosts)
 
-            OutlinedTextField(
+            ToolTextField(
                 value = searchQuery,
                 onValueChange = onSearchQueryChange,
                 placeholder = { Text(stringResource(R.string.lan_search_placeholder)) },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                trailingIcon = {
-                    if (searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { onSearchQueryChange("") }) {
-                            Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.clear))
-                        }
-                    }
-                },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )

@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Http
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
@@ -102,6 +103,7 @@ import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
 import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
 import net.aieat.netswissknife.app.ui.components.ToolErrorCard
+import net.aieat.netswissknife.app.ui.components.ToolTextField
 import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.R
@@ -495,20 +497,13 @@ private fun HttpProbeInputCard(
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             // URL field
-            OutlinedTextField(
+            ToolTextField(
                 value = url,
                 onValueChange = onUrlChange,
                 enabled = formEnabled,
                 label = { Text(stringResource(R.string.httprobe_url_label)) },
                 placeholder = { Text(stringResource(R.string.httprobe_url_placeholder)) },
                 leadingIcon = { Icon(Icons.Default.Http, contentDescription = null) },
-                trailingIcon = {
-                    if (url.isNotEmpty()) {
-                        IconButton(onClick = { onUrlChange("") }, enabled = formEnabled) {
-                            Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.clear))
-                        }
-                    }
-                },
                 isError = isUrlInvalid,
                 supportingText = if (isUrlInvalid) {
                     {
@@ -663,12 +658,13 @@ private fun HttpProbeInputCard(
                 enter = expandVertically() + fadeIn(),
                 exit = shrinkVertically() + fadeOut()
             ) {
-                OutlinedTextField(
+                ToolTextField(
                     value = uiState.body,
                     onValueChange = onBodyChange,
                     enabled = formEnabled,
                     label = { Text(stringResource(R.string.httprobe_body_label)) },
                     placeholder = { Text(stringResource(R.string.httprobe_body_placeholder)) },
+                    leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
                     modifier = Modifier.fillMaxWidth().height(120.dp),
                     textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
                     maxLines = 6

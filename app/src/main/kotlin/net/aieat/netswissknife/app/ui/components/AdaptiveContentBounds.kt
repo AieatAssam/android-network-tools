@@ -9,8 +9,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
-/** Standard M3 "tablet form" reading-width cap for single-column tool screens. */
-val AdaptiveContentMaxWidth = 840.dp
+/**
+ * Reading-width cap for tool content on tablet-class windows. Tool forms and result cards
+ * stretched across a 960dp landscape tablet were hard to scan (A:SHELL-02, C:SUB-04,
+ * B:GAP-01), so content is held to a column-width that still fits a two-field form.
+ */
+val AdaptiveContentMaxWidth = 640.dp
 
 /**
  * Caps tool-screen content to [AdaptiveContentMaxWidth] and centers it on wide
@@ -20,8 +24,11 @@ val AdaptiveContentMaxWidth = 840.dp
  * content slot with this once reflows every screen without per-screen edits.
  */
 @Composable
-fun AdaptiveContentBounds(content: @Composable () -> Unit) {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+fun AdaptiveContentBounds(
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         Box(modifier = Modifier.widthIn(max = AdaptiveContentMaxWidth).fillMaxHeight()) {
             content()
         }

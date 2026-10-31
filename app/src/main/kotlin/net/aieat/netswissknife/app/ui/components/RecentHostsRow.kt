@@ -6,9 +6,11 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -16,10 +18,10 @@ import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -43,6 +45,10 @@ fun RecentHostsRow(
         exit = fadeOut(),
         modifier = modifier
     ) {
+        val listState = rememberLazyListState()
+        // Keyed items keep their scroll offset when a new host is prepended, which left the
+        // newest chip clipped at the start edge. Re-anchor to the first chip on every change.
+        LaunchedEffect(recentHosts.firstOrNull()) { listState.scrollToItem(0) }
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -56,6 +62,8 @@ fun RecentHostsRow(
             )
             LazyRow(
                 modifier = Modifier.weight(1f),
+                state = listState,
+                contentPadding = PaddingValues(horizontal = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 items(recentHosts, key = { it }) { host ->
@@ -75,7 +83,7 @@ fun RecentHostsRow(
                         IconButton(
                             onClick = { onRemoveHost(host) },
                             enabled = actionsEnabled,
-                            modifier = Modifier.minimumInteractiveComponentSize()
+                            modifier = Modifier.size(ToolTouchTargetSize)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Close,
@@ -90,7 +98,7 @@ fun RecentHostsRow(
             IconButton(
                 onClick = onClearAll,
                 enabled = actionsEnabled,
-                modifier = Modifier.minimumInteractiveComponentSize()
+                modifier = Modifier.size(ToolTouchTargetSize)
             ) {
                 Icon(
                     imageVector = Icons.Default.DeleteSweep,

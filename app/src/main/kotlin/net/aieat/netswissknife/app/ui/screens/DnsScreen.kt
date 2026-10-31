@@ -111,6 +111,7 @@ import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
 import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
 import net.aieat.netswissknife.app.ui.components.ToolErrorCard
+import net.aieat.netswissknife.app.ui.components.ToolTextField
 import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
@@ -360,6 +361,8 @@ private fun DnsInputCard(
     onClearRecentHosts: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val keyboardController = LocalSoftwareKeyboardController.current
+
     val isBusy = isLoading || isCanceling
     val isCustomServerValid = selectedServer !is DnsServer.Custom || customServerAddress.trim().let {
         HostValidator.isValidIpv4(it) || HostValidator.isValidIpv6(it)
@@ -374,7 +377,7 @@ private fun DnsInputCard(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // Domain input
-            OutlinedTextField(
+            ToolTextField(
                 value = domain,
                 onValueChange = onDomainChange,
                 label = { Text(stringResource(R.string.dns_domain_label)) },
@@ -386,13 +389,6 @@ private fun DnsInputCard(
                         tint = MaterialTheme.colorScheme.primary
                     )
                 },
-                trailingIcon = {
-                    if (domain.isNotEmpty() && !isBusy) {
-                        IconButton(onClick = { onDomainChange("") }) {
-                            Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.clear))
-                        }
-                    }
-                },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Uri,
@@ -400,12 +396,14 @@ private fun DnsInputCard(
                 ),
                 keyboardActions = KeyboardActions(
                     onSearch = {
+                        keyboardController?.hide()
                         if (!isBusy && canLookup) onLookup()
                     }
                 ),
                 enabled = !isBusy,
                 modifier = Modifier.fillMaxWidth().testTag(DnsScreenTestTags.DOMAIN_INPUT),
-                shape = AppShapes.medium
+                shape = AppShapes.medium,
+                showClear = domain.isNotEmpty() && !isBusy,
             )
 
             RecentHostsRow(

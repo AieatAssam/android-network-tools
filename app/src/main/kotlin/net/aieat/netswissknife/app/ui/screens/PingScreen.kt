@@ -64,7 +64,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -125,6 +124,7 @@ import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
 import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
 import net.aieat.netswissknife.app.ui.components.ToolErrorCard
+import net.aieat.netswissknife.app.ui.components.ToolTextField
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
 import net.aieat.netswissknife.app.ui.components.ToolStopButton
 import net.aieat.netswissknife.app.ui.components.hapticAction
@@ -425,20 +425,13 @@ private fun PingInputCard(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // Host input
-            OutlinedTextField(
+            ToolTextField(
                 value = host,
                 onValueChange = onHostChange,
                 label = { Text(stringResource(R.string.ping_host_label)) },
                 placeholder = { Text(stringResource(R.string.ping_host_placeholder)) },
                 leadingIcon = {
                     Icon(Icons.Default.NetworkCheck, contentDescription = null)
-                },
-                trailingIcon = {
-                    if (host.isNotEmpty()) {
-                        IconButton(onClick = { onHostChange("") }) {
-                            Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.clear))
-                        }
-                    }
                 },
                 isError = isHostInvalid,
                 supportingText = if (isHostInvalid) {

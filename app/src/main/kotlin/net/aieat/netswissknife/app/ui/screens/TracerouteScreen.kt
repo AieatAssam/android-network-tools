@@ -40,7 +40,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bolt
-import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -66,7 +65,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -102,6 +100,7 @@ import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
 import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
 import net.aieat.netswissknife.app.ui.components.ToolErrorCard
+import net.aieat.netswissknife.app.ui.components.ToolTextField
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
 import net.aieat.netswissknife.app.ui.components.ToolStopButton
 import net.aieat.netswissknife.app.ui.components.hapticAction
@@ -397,22 +396,12 @@ private fun TracerouteInputCard(
             )
 
             // Host field
-            OutlinedTextField(
+            ToolTextField(
                 value         = host,
                 onValueChange = onHostChange,
                 label         = { Text(stringResource(R.string.traceroute_host_label)) },
                 placeholder   = { Text(stringResource(R.string.traceroute_host_placeholder)) },
                 leadingIcon   = { Icon(Icons.Default.Router, null) },
-                trailingIcon  = {
-                    if (host.isNotEmpty()) {
-                        IconButton(
-                            onClick = { onHostChange("") },
-                            enabled = !isBusy,
-                        ) {
-                            Icon(Icons.Default.Clear, stringResource(R.string.clear))
-                        }
-                    }
-                },
                 isError = isHostInvalid,
                 supportingText = if (isHostInvalid) {
                     { Text(stringResource(R.string.error_invalid_host)) }
