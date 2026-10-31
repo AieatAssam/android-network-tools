@@ -16,12 +16,14 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.operation.OperationBudget
 import net.aieat.netswissknife.core.network.operation.OperationSession
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import java.net.SocketTimeoutException
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SpeedTestEngineRepositoryTest {
@@ -35,6 +37,10 @@ class SpeedTestEngineRepositoryTest {
         var cancelledDownload = false
         var suspendDownload = false
         var serverDuration = 12.5
+        var loadedProbeStalls = false
+        var httpCalls = 0
+        var uploadFailure: Exception? = null
+        var uploadSilent = false
 
         override suspend fun connectRtt(host: String, port: Int) = connect
 
@@ -48,6 +54,9 @@ class SpeedTestEngineRepositoryTest {
         }
 
         override suspend fun httpRtt(url: String): HttpRtt {
+            httpCalls++
+            // Warmup (2) and idle latency (1) run first; later calls are loaded-latency probes.
+            if (loadedProbeStalls && httpCalls > 3) throw SocketTimeoutException("timeout")
             return HttpRtt(totalMs = 15, serverMs = serverDuration)
         }
 
@@ -72,8 +81,9 @@ class SpeedTestEngineRepositoryTest {
 
         override fun upload(url: String, streams: Int, durationMs: Long): Flow<ChunkEvent> = flow {
             streamsUp = streams
+            uploadFailure?.let { throw it }
             delay(800)
-            emit(ChunkEvent(0, 50, 500))
+            if (!uploadSilent) emit(ChunkEvent(0, 50, 500))
         }
     }
 
@@ -210,5 +220,42 @@ class SpeedTestEngineRepositoryTest {
         runCurrent()
         job.cancelAndJoin()
         assertTrue(engine.cancelledDownload)
+    }
+
+    @Test
+    fun `a stalled loaded latency probe is skipped and does not fail the transfer phases`() {
+        runTest {
+            val engine = FakeEngine().apply { loadedProbeStalls = true }
+            val repository = SpeedTestRepositoryImpl(engine, SpeedTestConfig(latencyProbes = 1))
+            val events = repository.runSpeedTest().toList()
+            val failures = events.filterIsInstance<SpeedTestEvent.Failed>()
+            assertTrue(failures.isEmpty(), failures.toString())
+            assertTrue(events.any { it is SpeedTestEvent.UploadFinished })
+        }
+    }
+
+    @Test
+    fun `an upload that times out before moving any bytes reports a stall not a raw timeout`() {
+        runTest {
+            val engine = FakeEngine().apply { uploadFailure = SocketTimeoutException("timeout") }
+            val repository = SpeedTestRepositoryImpl(engine, SpeedTestConfig(latencyProbes = 1))
+            val events = repository.runSpeedTest().toList()
+            val failed = events.filterIsInstance<SpeedTestEvent.Failed>().single()
+            assertEquals(SpeedTestPhase.UPLOAD, failed.phase)
+            assertEquals(ErrorCode.NETWORK_TIMEOUT, failed.info.code)
+            assertEquals("Upload stalled", failed.info.developerMessage)
+        }
+    }
+
+    @Test
+    fun `an upload that completes with no bytes is reported as a stall`() {
+        runTest {
+            val engine = FakeEngine().apply { uploadSilent = true }
+            val repository = SpeedTestRepositoryImpl(engine, SpeedTestConfig(latencyProbes = 1))
+            val events = repository.runSpeedTest().toList()
+            val failed = events.filterIsInstance<SpeedTestEvent.Failed>().single()
+            assertEquals(SpeedTestPhase.UPLOAD, failed.phase)
+            assertEquals(ErrorCode.NETWORK_TIMEOUT, failed.info.code)
+        }
     }
 }

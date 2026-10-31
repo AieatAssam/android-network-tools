@@ -180,6 +180,10 @@ Internet connection speed test measuring latency, download, and upload throughpu
 - Three-phase sequence: **latency** (10 round-trip probes), **download**, then **upload** — each streamed live as it runs
 - Animated phase stepper, live circular speed gauge, and a live throughput-over-time chart per phase
 - Final results: latency min/avg/max/jitter, download/upload average & peak Mbps, and total data transferred, each with its own throughput chart
+- Upload is time-boxed to the phase window and counts the bytes actually written, so a slow or briefly stalled uplink still produces a result; a stalled POST is retried on a new connection until the window ends
+- A stalled latency probe under load is skipped rather than failing the run
+- Failure keeps the latency and download results already measured, names the phase that failed, and offers Run again. The error text is a plain-language reason, not raw exception text
+- Cancel returns to the start screen with a "Test canceled" notice and keeps any finished latency and download results. There is one Start button
 - Share button exports a plain-text summary of the results
 - **Powered by Cloudflare** — measurement traffic is sent to and timed against `speed.cloudflare.com` (`/__down` and `/__up`), the same backend that powers Cloudflare's public speed test at <https://speed.cloudflare.com>. Net Swiss Knife is an independent app and is **not affiliated with, sponsored by, or endorsed by Cloudflare, Inc.**; "Cloudflare" and the Cloudflare logo are trademarks of Cloudflare, Inc. Full attribution is also shown in-app under Settings → Data Source Attributions.
 

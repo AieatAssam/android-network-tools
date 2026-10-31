@@ -1583,6 +1583,10 @@
     <string name="speedtest_running_upload">Testing upload speed…</string>
     <string name="speedtest_error_title">Speed test failed</string>
     <string name="speedtest_error_phase">Failed during %1$s</string>
+    <string name="speedtest_error_reason_timeout">The connection stopped responding before the test finished. Try again, or move closer to your router.</string>
+    <string name="speedtest_error_reason_generic">A network error interrupted the test. Check your connection and try again.</string>
+    <string name="speedtest_canceled">Test canceled</string>
+    <string name="speedtest_partial_heading">Results so far</string>
 
     <string name="speedtest_mbps_suffix">Mbps</string>
     <string name="speedtest_ms_suffix">ms</string>

@@ -327,9 +327,23 @@ work_packages:
     notes: "Decode DNS-SD escapes (\\DDD decimal bytes as UTF-8, \\. \\\\ ). Empty-search state. Export honours filter. Determine which limit raises the banner; do not show an error-styled banner for normal scans. Unify tool name 'Subnet Calculator'."
   - id: WP13
     title: Speed Test
-    status: todo
+    status: done
+    result:
+      status: done
+      commit: "recorded by git log: fix(speedtest) commit on plan/ux-remediation-2026-10-31"
+      gates: "./gradlew test ktlintCheck detekt :app:assembleDebug :app:compileDebugAndroidTestKotlin :core-network:koverVerify :core-domain:koverVerify :app:koverVerify green (BUILD SUCCESSFUL). ktlint: :app and :core-network baselines regenerated; per-rule counts did not increase (line shifts only). detekt: config/detekt baselines unchanged (new code adds no Composable functions). Device not run; no real internet speed test run."
+      fixed:
+        - "D:SPD-01: root cause is not a total call cap (callTimeout unset). OkHttp write/read timeouts are per-IO inactivity, but the upload loop turned any socket stall into a phase failure, and it only counted bytes after a full POST response. Fix: upload counts bytes as the body is written (CountingUploadBody), a stalled POST keeps its sent bytes and is retried on a new connection until the window ends, and each POST is bounded by the remaining window (withTimeoutOrNull). writeTimeout 10 s (UPLOAD_WRITE_TIMEOUT_SECONDS). A loaded-latency probe that stalls is skipped instead of failing the phase. A zero-byte upload reports 'Upload stalled' (NETWORK_TIMEOUT) rather than 0 Mbps. Tests: OkHttpTransferEngineTest (upload stall keeps bytes, window cancels in-flight request), SpeedTestEngineRepositoryTest (stalled loaded probe, stall before bytes, silent upload)."
+        - "D:SPD-02: SpeedTestUiState.Error carries reason (ErrorCode) and PartialSpeedTest (latency, download, server). The screen shows the failed phase, a friendly localized reason (timeout vs generic), the partial cards and Run again. Raw exception text is no longer rendered. Tests: SpeedTestViewModelTest PartialResultsAndCancel, androidTest errorState_showsFriendlyReasonAndRetryCallsOnRetry."
+        - "D:SPD-03: cancel returns to Idle(canceled = true) with a 'Test canceled' notice and keeps partial results. The circle hero is now decorative (not clickable, no Start contentDescription); the full-width Start button is the single primary action. Stream chips are FilledTonalButtons with dropdowns, so they are real controls (not informational) and were kept. Tests: ViewModel cancel tests, androidTest canceledIdle_showsCanceledNoticeAndSingleStartButton."
+        - "README Speed Test section updated (time-boxed upload, stall tolerance, partial results, cancel notice, single Start)."
+      not_reproduced:
+        - "ON_STOP/ON_PAUSE rotation cancel: no lifecycle observer in the speed test screen; the ViewModel is not cleared on rotation, so onCleared (LIFECYCLE_PAUSE) runs only on real destruction. no_change_needed."
+      deferred:
+        - "SPD-01 root cause on the tablet is still unconfirmed by logs (the 'timeout' could be the write stall, the response read, or a loaded-probe read). The fix covers all three paths, but the device re-run is WP18."
+        - "Upload throughput is computed over the full window, including stalled time, so a stalling link reports a lower Mbps rather than a failure. Intended, but confirm on the tablet."
     findings: [D:SPD-01, D:SPD-02, D:SPD-03]
-    notes: "Upload phase times out (suspect OkHttp write/call timeout ~5s). Fix, keep partial results on failure, friendly error text, 'Canceled' message, single Start control."
+    notes: "Upload stall must give a result (partial bytes over the window), not a raw timeout. Keep partial latency/download on failure with a friendly reason and Run again. Cancel shows 'Test canceled'. One primary Start action."
   - id: WP14
     title: Wake-on-LAN
     status: todo

@@ -54,6 +54,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -99,6 +100,7 @@ import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.util.formatBytes
 import net.aieat.netswissknife.app.util.shareText
+import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.speedtest.LatencyStats
 import net.aieat.netswissknife.core.network.speedtest.SpeedTestPhase
 import net.aieat.netswissknife.core.network.speedtest.SpeedTestResult
@@ -154,6 +156,29 @@ fun SpeedTestScreen(viewModel: SpeedTestViewModel = hiltViewModel()) {
                 }
             }
 
+            if ((uiState as? SpeedTestUiState.Idle)?.canceled == true) {
+                item {
+                    OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Text(
+                                text = stringResource(R.string.speedtest_canceled),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                        }
+                    }
+                }
+            }
+
             item {
                 val shareSubject = stringResource(R.string.share_subject_speedtest, "results")
                 AnimatedContent(
@@ -190,6 +215,38 @@ fun SpeedTestScreen(viewModel: SpeedTestViewModel = hiltViewModel()) {
                             (uiState as? SpeedTestUiState.Error)?.let {
                                 SpeedTestErrorContent(it, onRetry = viewModel::onRetry)
                             }
+                    }
+                }
+            }
+
+            val partial =
+                when (val state = uiState) {
+                    is SpeedTestUiState.Idle -> state.partial
+                    is SpeedTestUiState.Error -> state.partial
+                    else -> PartialSpeedTest()
+                }
+            if (!partial.isEmpty) {
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(
+                            text = stringResource(R.string.speedtest_partial_heading),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        if (partial.latency != LatencyStats.EMPTY) {
+                            LatencyResultCard(
+                                title = stringResource(R.string.speedtest_idle_latency_header),
+                                stats = partial.latency,
+                            )
+                        }
+                        partial.download?.let { download ->
+                            ThroughputResultCard(
+                                title = stringResource(R.string.speedtest_download_header),
+                                icon = Icons.Default.ArrowDownward,
+                                accentColor = MaterialTheme.colorScheme.primary,
+                                result = download,
+                            )
+                        }
                     }
                 }
             }
@@ -344,8 +401,7 @@ private fun SpeedTestIdleContent(
                             )
                         ),
                         shape = CircleShape
-                    )
-                    .clickable(onClick = hapticAction(onStart)),
+                    ),
                 contentAlignment = Alignment.Center
             ) {
                 Surface(
@@ -354,9 +410,10 @@ private fun SpeedTestIdleContent(
                     modifier = Modifier.size(96.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
+                        // Decorative only: the Start button below is the single primary action.
                         Icon(
-                            imageVector = Icons.Default.PlayArrow,
-                            contentDescription = stringResource(R.string.speedtest_start_button),
+                            imageVector = Icons.Default.Speed,
+                            contentDescription = null,
                             tint = MaterialTheme.colorScheme.onPrimary,
                             modifier = Modifier.size(44.dp)
                         )
@@ -915,6 +972,13 @@ private fun SpeedTestErrorContent(state: SpeedTestUiState.Error, onRetry: () -> 
         SpeedTestPhase.DOWNLOAD -> R.string.speedtest_phase_download
         SpeedTestPhase.UPLOAD -> R.string.speedtest_phase_upload
     }
+    // Friendly, localized reason only: the raw exception text in state.message is never shown.
+    val reasonLabel =
+        if (state.reason == ErrorCode.NETWORK_TIMEOUT) {
+            R.string.speedtest_error_reason_timeout
+        } else {
+            R.string.speedtest_error_reason_generic
+        }
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier
@@ -943,7 +1007,7 @@ private fun SpeedTestErrorContent(state: SpeedTestUiState.Error, onRetry: () -> 
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                text = state.message,
+                text = stringResource(reasonLabel),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
