@@ -1,5 +1,6 @@
 package net.aieat.netswissknife.app.ui.screens.httprobe
 
+import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
@@ -108,16 +109,13 @@ import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.theme.AccentBlueLight
-import net.aieat.netswissknife.app.ui.theme.AccentBrown
 import net.aieat.netswissknife.app.ui.theme.AccentGreenLight
 import net.aieat.netswissknife.app.ui.theme.AccentGreyDeep
 import net.aieat.netswissknife.app.ui.theme.AccentGreyLight
 import net.aieat.netswissknife.app.ui.theme.AccentOrangeDeep
 import net.aieat.netswissknife.app.ui.theme.AccentOrangeLight
-import net.aieat.netswissknife.app.ui.theme.AccentPurple
 import net.aieat.netswissknife.app.ui.theme.AccentRedDeep
 import net.aieat.netswissknife.app.ui.theme.AccentRedLight
-import net.aieat.netswissknife.app.ui.theme.AccentTeal
 import net.aieat.netswissknife.app.ui.theme.StatusBlueDeep
 import net.aieat.netswissknife.app.ui.theme.StatusGoodDeep
 import net.aieat.netswissknife.app.ui.theme.StatusWarnDeep
@@ -163,6 +161,7 @@ fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
     val recentHosts by viewModel.recentHosts.collectAsStateWithLifecycle()
     val hasInvalidHandoff by viewModel.hasInvalidHandoff.collectAsStateWithLifecycle()
     val sourceContext by viewModel.sourceContextState.collectAsStateWithLifecycle()
+    val plainHandoff by viewModel.plainHttpHandoff.collectAsStateWithLifecycle()
     val announcementPhase = when {
         uiState.isLoading -> ToolAnnouncementPhase.RUNNING
         uiState.isCanceled -> ToolAnnouncementPhase.CANCELED
@@ -216,18 +215,24 @@ fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
                 ToolSource.MDNS -> R.string.httprobe_source_mdns
                 else -> null
             }
-            if (sourceLabel != null) {
+            val sourceText: String? =
+                plainHandoff?.let { context.getString(R.string.httprobe_plain_http_handoff, it.host, it.port) }
+                    ?: sourceLabel?.let { context.getString(it) }
+            if (sourceText != null) {
                 item {
+                    val isPlainNotice = plainHandoff != null
+                    val typography = MaterialTheme.typography
+                    val colors = MaterialTheme.colorScheme
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            text = stringResource(sourceLabel),
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.secondary,
-                            modifier = Modifier.testTag(HttpProbeScreenTestTags.SOURCE_CONTEXT),
+                            text = sourceText,
+                            style = if (isPlainNotice) typography.bodyMedium else typography.labelLarge,
+                            color = if (isPlainNotice) colors.onSurfaceVariant else colors.secondary,
+                            modifier = Modifier.weight(1f).testTag(HttpProbeScreenTestTags.SOURCE_CONTEXT),
                         )
                         TextButton(
                             onClick = viewModel::clearPrefill,
@@ -288,7 +293,9 @@ fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
                     uiState.isCanceled    -> DisplayState.Canceled
                     uiState.blockedRedirectWarning != null ->
                         DisplayState.BlockedRedirect(requireNotNull(uiState.blockedRedirectWarning))
-                    uiState.error != null -> DisplayState.Error(uiState.error!!)
+                    uiState.error != null -> DisplayState.Error(
+                        ErrorTextMapper.map(uiState.errorInfo, uiState.error!!).asString(),
+                    )
                     uiState.result != null -> DisplayState.Success(uiState.result!!)
                     else                  -> DisplayState.Idle
                 }
@@ -305,6 +312,7 @@ fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
                         is DisplayState.Error   -> HttpProbeErrorContent(state.message) { viewModel.send() }
                         is DisplayState.BlockedRedirect -> HttpProbeBlockedRedirectContent(state.warning)
                         is DisplayState.Success -> {
+                            val curlCopiedMessage = stringResource(R.string.httprobe_curl_copied)
                             val shareSubject = stringResource(
                                 R.string.share_subject_http,
                                 safeRedirectDisplayValue(state.result.request.url),
@@ -323,6 +331,7 @@ fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
                                     viewModel.copyAsCurl()?.let { command ->
                                         clipboardScope.launch {
                                             clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("cURL", command)))
+                                            Toast.makeText(context, curlCopiedMessage, Toast.LENGTH_SHORT).show()
                                         }
                                     }
                                 },
@@ -553,8 +562,8 @@ private fun HttpProbeInputCard(
                         enabled = formEnabled,
                         label = { Text(method.name, style = MaterialTheme.typography.labelMedium) },
                         colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = methodColor(method).copy(alpha = 0.2f),
-                            selectedLabelColor = methodColor(method)
+                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
                         )
                     )
                 }
@@ -1010,7 +1019,7 @@ private fun OverviewTabContent(result: HttpProbeResult) {
         )
         LabeledValue(
             stringResource(R.string.httprobe_content_type),
-            result.responseHeaders["Content-Type"]?.firstOrNull() ?: "N/A"
+            httpHeaderValue(result.responseHeaders, "Content-Type") ?: "N/A"
         )
         if (result.redirectChain.isNotEmpty()) {
             HorizontalDivider()
@@ -1516,17 +1525,6 @@ private fun timingColor(ms: Long): Color = when {
     ms < 200  -> StatusGoodDeep
     ms < 800  -> StatusWarnDeep
     else      -> MaterialTheme.colorScheme.error
-}
-
-@Composable
-private fun methodColor(method: HttpMethod): Color = when (method) {
-    HttpMethod.GET     -> StatusBlueDeep
-    HttpMethod.POST    -> StatusGoodDeep
-    HttpMethod.PUT     -> StatusWarnDeep
-    HttpMethod.PATCH   -> AccentPurple
-    HttpMethod.DELETE  -> MaterialTheme.colorScheme.error
-    HttpMethod.HEAD    -> AccentTeal
-    HttpMethod.OPTIONS -> AccentBrown
 }
 
 /**

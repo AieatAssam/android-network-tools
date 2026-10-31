@@ -69,6 +69,7 @@ object ErrorTextMapper {
         ErrorCode.DNS_NO_RESULT -> R.string.err_dns_no_result
         ErrorCode.NETWORK_TIMEOUT -> R.string.err_network_timeout
         ErrorCode.NETWORK_REQUEST_FAILED -> R.string.err_network_request_failed
+        ErrorCode.NETWORK_CONNECTION_REFUSED -> R.string.err_network_connection_refused
         ErrorCode.WHOIS_INVALID_QUERY -> R.string.err_whois_invalid_query
         ErrorCode.WHOIS_IANA_FAILED -> R.string.err_whois_iana_failed
         ErrorCode.WHOIS_RESPONSE_TOO_LARGE -> R.string.err_whois_response_too_large

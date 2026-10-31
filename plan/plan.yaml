@@ -247,9 +247,30 @@ work_packages:
         - "Auto-mode fallback chain does not show the failed RDAP attempt; the answered-by line states the outcome only."
   - id: WP10
     title: HTTP Probe
-    status: todo
-    findings: [C:HTTP-01, C:HTTP-02, C:HTTP-05, C:HTTP-06, C:HTTP-07, D:HTTP-05, D:HTTP-06, D:MDNS-05]
+    status: done
+    findings: [C:HTTP-01, C:HTTP-02, C:HTTP-05, C:HTTP-06, C:HTTP-07, D:HTTP-05, D:HTTP-06, D:HTTP-07, D:MDNS-05]
     notes: "Content-Type N/A in Overview; timing phases must sum <= total; cURL copy feedback (snackbar); stale 'prefilled' banner; mDNS->HTTP Probe must produce an acceptable URL (prefer https/ allow cleartext for LAN explicitly with a warning, decide and document)."
+    result:
+      status: done
+      commit: "fix(httprobe) commit on plan/ux-remediation-2026-10-31 (see git log)"
+      gates: "./gradlew test ktlintCheck detekt :app:assembleDebug :app:compileDebugAndroidTestKotlin :core-network:koverVerify :core-domain:koverVerify :app:koverVerify, one foreground run, all green. ktlint baselines regenerated for :app and :core-network after line shifts; per-rule counts did not increase (app: function-signature -1 and no-multi-spaces -6 from removed methodColor; core-network unchanged). Device run deferred to WP18."
+      fixed:
+        - "C:HTTP-01: Overview Content-Type used a case-sensitive map get, while HTTP/2 names are lowercase. Now httpHeaderValue (case-insensitive). Test: HttpProbePrivacyTest header lookup."
+        - "C:HTTP-02: OkHttp's connect window can contain the TLS handshake, so TLS was counted in both Connect and TLS. TCP connect now ends at TLS start (tcpConnectMs). HttpTimingBreakdown also caps DNS, connect and TLS to the TTFB budget, so the phases reconcile to TTFB. Previously the server-wait was clamped to 0 silently. Tests: HttpTimingPhasesTest. Not checked against OkHttp source (no sources jar cached); the fix does not depend on event order."
+        - "C:HTTP-05: safeRedirectDisplayValue always appended '/[path omitted]'. A root URL now shows '/'; only an existing path is marked '[path omitted]' and a query-only root '[query omitted]'. Test: HttpProbePrivacyTest. Instrumented expectation updated."
+        - "C:HTTP-06: transport failures are classified from the cause chain: DNS (UnknownHostException, DNS_LOOKUP_FAILED), timeout (InterruptedIOException or connect timed out, NETWORK_TIMEOUT), refused (ConnectException, new NETWORK_CONNECTION_REFUSED with string err_network_connection_refused). The screen shows the localized ErrorTextMapper copy through the new errorInfo state field. Tests: HttpProbeTransportFailureTest."
+        - "C:HTTP-07: selected method chips use primaryContainer and onPrimaryContainer for every method. methodColor removed."
+        - "D:HTTP-05: Copy as cURL shows a Toast (cURL command copied to clipboard). Toast is the app's existing copy-feedback pattern in LAN, mDNS and Topology. A Snackbar was not added because the screen has no Scaffold."
+        - "D:HTTP-06: editing the URL clears the provenance label and the plain-HTTP notice (ViewModel onUrlChange). Test: editing the handed-off URL clears the provenance."
+        - "D:MDNS-05 decision: plain HTTP stays disabled (core-domain validation, deliberate). Cleartext to LAN addresses was NOT added, because it needs an opt-in warning design and new validation. Handoff rule: port 443 prefills https://host/, port 8443 prefills https://host:8443/, any other port (e.g. 80) prefills nothing and shows an explanation with host and port. This applies to mDNS and LAN Scanner handoffs. Documented in README HTTP Probe. Tests: HttpProbeViewModelTest handoff tests."
+      not_reproduced:
+        - "D:HTTP-07 (body field icon and clear): already in place. The body uses ToolTextField with a leading icon and the default clear button (WP01). no_change_needed."
+        - "Rotation cancel (ON_STOP/ON_PAUSE): the HTTP Probe has no lifecycle observer. The ViewModel cancels only in onCleared, so a rotation does not cancel a request. no_change_needed."
+        - "C:HTTP-03 and C:HTTP-04: handled in WP01."
+      deferred:
+        - "Device re-test in WP18: example.com timing sum, root URL, DNS / refused / timeout messages, mDNS :80 and :8443 handoffs, cURL toast."
+        - "OkHttp event order for connect versus TLS was reasoned from the listener API, not confirmed in the library source. Check the timing numbers on device."
+        - "OkHttpEngine.kt unnecessary safe call warning (pre-existing) left alone."
   - id: WP11
     title: Subnet Calculator
     status: todo

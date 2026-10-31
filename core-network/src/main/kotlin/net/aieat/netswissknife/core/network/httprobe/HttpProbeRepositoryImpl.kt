@@ -25,6 +25,9 @@ import net.aieat.netswissknife.core.network.operation.ensureCurrentOperationActi
 import net.aieat.netswissknife.core.network.net.NetworkBinder
 import java.io.ByteArrayOutputStream
 import java.io.IOException
+import java.io.InterruptedIOException
+import java.net.ConnectException
+import java.net.UnknownHostException
 import okhttp3.ResponseHeaderLimitException
 import java.net.MalformedURLException
 import java.net.URI
@@ -128,7 +131,7 @@ class HttpProbeRepositoryImpl internal constructor(
                     }
                     throw OperationCancellationException(reason, e)
                 }
-                NetworkResult.error(ErrorCode.NETWORK_REQUEST_FAILED, developerMessage = "Network request failed", cause = e)
+                transportFailure(e)
             } catch (e: Exception) {
                 session.cancellationReason?.let { reason ->
                     if (reason == CancellationReason.DEADLINE_EXCEEDED) {
@@ -402,3 +405,29 @@ class HttpProbeRepositoryImpl internal constructor(
             else -> first + second
         }
 }
+
+/**
+ * Names the transport failure so the user can tell a DNS failure, a timeout and a refused
+ * connection apart. OkHttp often wraps the root cause, so the whole cause chain is searched.
+ */
+private fun transportFailure(e: IOException): NetworkResult.Error {
+    val causes = generateSequence<Throwable>(e) { current -> current.cause?.takeIf { it !== current } }.toList()
+    val code =
+        when {
+            causes.any { it is UnknownHostException } -> ErrorCode.DNS_LOOKUP_FAILED
+            causes.any { it is InterruptedIOException } -> ErrorCode.NETWORK_TIMEOUT
+            causes.any { it is ConnectException && it.hasMessage("refused") } -> ErrorCode.NETWORK_CONNECTION_REFUSED
+            causes.any { it is ConnectException && it.hasMessage("timed out") } -> ErrorCode.NETWORK_TIMEOUT
+            else -> ErrorCode.NETWORK_REQUEST_FAILED
+        }
+    val message =
+        when (code) {
+            ErrorCode.DNS_LOOKUP_FAILED -> "DNS lookup failed: the host name could not be resolved"
+            ErrorCode.NETWORK_TIMEOUT -> "HTTP request timed out"
+            ErrorCode.NETWORK_CONNECTION_REFUSED -> "Connection refused by the server"
+            else -> "Network request failed"
+        }
+    return NetworkResult.error(code, developerMessage = message, cause = e)
+}
+
+private fun Throwable.hasMessage(fragment: String): Boolean = message.orEmpty().contains(fragment, ignoreCase = true)

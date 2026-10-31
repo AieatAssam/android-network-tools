@@ -32,6 +32,7 @@ import net.aieat.netswissknife.app.ui.navigation.ToolSource
 import net.aieat.netswissknife.core.domain.HttpProbeParams
 import net.aieat.netswissknife.core.domain.HttpProbeUseCase
 import net.aieat.netswissknife.core.domain.validateHttpProbeUrl
+import net.aieat.netswissknife.core.network.ErrorInfo
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.httprobe.HttpMethod
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeOperation
@@ -54,6 +55,12 @@ data class PendingEntityReplayApproval(
     val statusCode: Int
 )
 
+/** A mDNS or LAN handoff to a plain-HTTP port, which HTTP Probe cannot send. No URL is filled in. */
+data class PlainHttpHandoff(
+    val host: String,
+    val port: Int,
+)
+
 data class BlockedHttpRedirectWarning(
     val sourceUrl: String,
     val destinationUrl: String,
@@ -72,6 +79,8 @@ data class HttpProbeUiState(
     val isCanceled: Boolean = false,
     val result: HttpProbeResult? = null,
     val error: String? = null,
+    /** Typed cause of [error], so the screen can show localized copy. */
+    val errorInfo: ErrorInfo? = null,
     val blockedRedirectWarning: BlockedHttpRedirectWarning? = null,
     val pendingEntityReplayApproval: PendingEntityReplayApproval? = null,
     val selectedTab: Int = 0,
@@ -113,6 +122,13 @@ class HttpProbeViewModel @Inject constructor(
     )
     val sourceContext: ToolSource? get() = _sourceContext.value
     val sourceContextState: StateFlow<ToolSource?> = _sourceContext.asStateFlow()
+    private val _plainHttpHandoff =
+        MutableStateFlow(
+            handoffTarget
+                ?.takeIf { httpUrlForTarget(it) == null && _sourceContext.value != null }
+                ?.let { PlainHttpHandoff(host = it.host.canonical, port = requireNotNull(it.port).value) },
+        )
+    val plainHttpHandoff: StateFlow<PlainHttpHandoff?> = _plainHttpHandoff.asStateFlow()
 
     private val _uiState = MutableStateFlow(
         HttpProbeUiState(
@@ -168,6 +184,11 @@ class HttpProbeViewModel @Inject constructor(
     fun onUrlChange(url: String) {
         if (!updateRequestInput { it.copy(url = url) }) return
         savedStateHandle[EDITED_URL_KEY] = url
+        // Once the user edits the URL it is no longer the handed-off destination, so the provenance
+        // label and the plain-HTTP explanation would be stale.
+        _sourceContext.value = null
+        savedStateHandle.remove<String>(HANDOFF_SOURCE_KEY)
+        _plainHttpHandoff.value = null
         if (_hasInvalidHandoff.value && validateHttpProbeUrl(url) == null) {
             savedStateHandle[HANDOFF_RECOVERED_KEY] = true
             _hasInvalidHandoff.value = false
@@ -178,6 +199,7 @@ class HttpProbeViewModel @Inject constructor(
     fun clearPrefill() {
         if (_uiState.value.isLoading) return
         _sourceContext.value = null
+        _plainHttpHandoff.value = null
         savedStateHandle.remove<String>(HANDOFF_SOURCE_KEY)
         savedStateHandle[HANDOFF_CONSUMED_KEY] = true
         onUrlChange("")
@@ -270,6 +292,7 @@ class HttpProbeViewModel @Inject constructor(
                 isCanceled = false,
                 result = null,
                 error = null,
+                errorInfo = null,
                 blockedRedirectWarning = null,
                 selectedTab = 0,
             )
@@ -342,6 +365,7 @@ class HttpProbeViewModel @Inject constructor(
                                 isCanceled = false,
                                 pendingEntityReplayApproval = null,
                                 error = result.message.takeUnless { blocked != null },
+                                errorInfo = result.info.takeUnless { blocked != null },
                                 blockedRedirectWarning = blocked?.let {
                                     BlockedHttpRedirectWarning(
                                         sourceUrl = it.sourceUrl,
@@ -377,6 +401,7 @@ class HttpProbeViewModel @Inject constructor(
                         isCanceled = false,
                         pendingEntityReplayApproval = null,
                         error = "Request failed: $detail",
+                        errorInfo = null,
                     )
                 }
             } finally {
@@ -410,6 +435,7 @@ class HttpProbeViewModel @Inject constructor(
                 isCanceled = false,
                 result = null,
                 error = null,
+                errorInfo = null,
                 blockedRedirectWarning = null,
                 pendingEntityReplayApproval = null,
                 selectedTab = 0,
@@ -431,10 +457,22 @@ class HttpProbeViewModel @Inject constructor(
     }
 }
 
-internal fun httpUrlForTarget(target: ToolDestination.HostTarget): String {
+/**
+ * The URL prefilled from a mDNS or LAN handoff. HTTP Probe only sends HTTPS, so a service on a
+ * plain-HTTP port gets no URL (null) and the screen explains why. 443 and 8443 are the
+ * conventional TLS ports, and 443 uses the default port in the URL.
+ */
+private const val HTTPS_DEFAULT_PORT = 443
+private const val HTTPS_ALTERNATE_PORT = 8443
+
+internal fun httpUrlForTarget(target: ToolDestination.HostTarget): String? {
     val host = target.host.canonical.let { canonical ->
         val address = canonical.removeSurrounding("[", "]")
         if (':' in address) "[${address.replace("%", "%25")}]" else address
     }
-    return "http://$host:${requireNotNull(target.port).value}/"
+    return when (requireNotNull(target.port).value) {
+        HTTPS_DEFAULT_PORT -> "https://$host/"
+        HTTPS_ALTERNATE_PORT -> "https://$host:$HTTPS_ALTERNATE_PORT/"
+        else -> null
+    }
 }
