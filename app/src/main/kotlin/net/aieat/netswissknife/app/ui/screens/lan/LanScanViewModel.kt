@@ -572,9 +572,31 @@ class LanScanViewModel
             cancelWithPartial(CancellationReason.USER_STOP)
         }
 
-        /** Pauses active probing when the LAN tool leaves the foreground. */
-        fun onLifecyclePause() {
+        /**
+         * Pauses active probing when the LAN tool leaves the foreground. A configuration change
+         * (rotation, theme or density change) also stops the Activity, but the ViewModel and its
+         * scan survive it, so the caller passes [configurationChange] and the scan keeps going.
+         */
+        fun onLifecyclePause(configurationChange: Boolean = false) {
+            if (configurationChange) return
             cancelWithPartial(CancellationReason.LIFECYCLE_PAUSE)
+        }
+
+        /**
+         * Back first collapses an expanded host row so the scan results stay on screen. Returns
+         * false when no row is expanded, and Back then leaves the tool as usual.
+         */
+        fun collapseExpandedHost(): Boolean {
+            val collapsed: LanScanUiState? =
+                when (val current = _uiState.value) {
+                    is LanScanUiState.Scanning -> current.expandedHostIp?.let { current.copy(expandedHostIp = null) }
+                    is LanScanUiState.Finished -> current.expandedHostIp?.let { current.copy(expandedHostIp = null) }
+                    is LanScanUiState.Canceled -> current.expandedHostIp?.let { current.copy(expandedHostIp = null) }
+                    else -> null
+                }
+            if (collapsed == null) return false
+            _uiState.value = collapsed
+            return true
         }
 
         private fun cancelWithPartial(reason: CancellationReason) {

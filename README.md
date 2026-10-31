@@ -60,6 +60,8 @@ Local network device discovery across IPv4 subnets.
 - Concurrent host probes (1–500) with real-time progress streaming, post-probe ARP enrichment, and final summary
 - Search results by IP, hostname, or vendor; filter by gateway or hosts with open ports
 - Expanded hosts include a direct **Scan ports** hand-off; the OUI registry contains 50,000+ prefixes and can be refreshed with `python3 tools/oui/update_oui.py`
+- Back closes an expanded host first and keeps the results; a rotation keeps the scan running; there is no pull-to-refresh, so a swipe never discards results (use **Re-scan**)
+- Uncertain probe rows name the reason and port (for example "TCP probe timed out, port 80") rather than raw exception text
 
 ### DNS Lookup
 Full DNS record resolution with multiple resolver options and protocol-level response details.
@@ -100,6 +102,7 @@ SNMP-based network topology discovery via BFS traversal.
 - VLAN discovery via Cisco VTP MIB and IEEE 802.1Q standard MIB
 - Interactive force-layout canvas with pan/zoom gestures and node detail bottom sheet
 - Recent seed IPs are saved locally for quick reuse
+- **Discover Topology** sits below the SNMP configuration card, outside its scroll area, and the keyboard Done action on the seed IP field starts discovery; Cancel appears in the same place while a scan runs
 - Configurable max hops (1–10), timeout, and SNMP v3 auth/priv protocols (MD5, SHA-1/256/512; DES, AES-128/192/256)
 - Reuses one SNMP4J session per discovery and closes it on completion or cancellation
 - LLDP neighbour addresses are decoded from the LLDP management-address index; CDP accepts dotted and hex-octet cache addresses

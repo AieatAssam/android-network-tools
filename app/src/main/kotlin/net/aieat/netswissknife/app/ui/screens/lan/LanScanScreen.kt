@@ -1,8 +1,10 @@
 package net.aieat.netswissknife.app.ui.screens.lan
 
+import android.app.Activity
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
@@ -85,7 +87,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -158,15 +159,20 @@ fun LanScreen(
     onNavigate: (String) -> Unit = {},
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
+    val activity = LocalContext.current as? Activity
+    // Rotation also stops and disposes this screen. The Activity reports it through
+    // isChangingConfigurations, and the scan must keep running across that recreation.
     DisposableEffect(lifecycleOwner, viewModel) {
         val observer =
             LifecycleEventObserver { _, event ->
-                if (event == Lifecycle.Event.ON_STOP) viewModel.onLifecyclePause()
+                if (event == Lifecycle.Event.ON_STOP) {
+                    viewModel.onLifecyclePause(configurationChange = activity?.isChangingConfigurations == true)
+                }
             }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
-            viewModel.onLifecyclePause()
+            viewModel.onLifecyclePause(configurationChange = activity?.isChangingConfigurations == true)
         }
     }
 
@@ -256,6 +262,16 @@ fun LanScreen(
     val hostSortOrder by viewModel.hostSortOrder.collectAsStateWithLifecycle()
     val recentSubnets by viewModel.recentSubnets.collectAsStateWithLifecycle()
 
+    // Back closes an open host row first, so the scan results stay on screen.
+    val expandedHostIp =
+        when (val state = uiState) {
+            is LanScanUiState.Scanning -> state.expandedHostIp
+            is LanScanUiState.Finished -> state.expandedHostIp
+            is LanScanUiState.Canceled -> state.expandedHostIp
+            else -> null
+        }
+    BackHandler(enabled = expandedHostIp != null) { viewModel.collapseExpandedHost() }
+
     val announcementPhase =
         when (val state = uiState) {
             LanScanUiState.Idle -> {
@@ -289,18 +305,15 @@ fun LanScreen(
     var showHelp by remember { mutableStateOf(false) }
 
     val isRefreshing = uiState is LanScanUiState.Scanning || uiState is LanScanUiState.Canceling
-    val canRefresh = uiState is LanScanUiState.Finished || uiState is LanScanUiState.Canceled || uiState is LanScanUiState.Error
     var editSettings by rememberSaveable { mutableStateOf(false) }
     var activeFilter by rememberSaveable { mutableStateOf(HostFilter.All) }
     LaunchedEffect(isRefreshing) {
         if (isRefreshing) editSettings = false
     }
 
-    PullToRefreshBox(
-        isRefreshing = isRefreshing,
-        onRefresh = { if (canRefresh) viewModel.startScan() },
-        modifier = Modifier.fillMaxSize(),
-    ) {
+    // No pull-to-refresh here: a swipe at the top used to restart the scan and discard the
+    // results without any confirmation. Re-scan is an explicit action on the results.
+    Box(modifier = Modifier.fillMaxSize()) {
         AnimatedVisibility(
             visible = visible,
             enter = fadeIn(AppMotion.enter(400)) + slideInVertically(AppMotion.enter(400)) { it / 6 },
@@ -500,7 +513,7 @@ fun LanScreen(
                 }
             }
         }
-    } // end PullToRefreshBox
+    } // end Box
 
     if (showHelp) {
         ToolHelpSheet(
@@ -1071,7 +1084,9 @@ private fun LanFinishedContent(
                                             R.string.lan_diagnostic_entry,
                                             diagnostic.ip,
                                             stringResource(diagnosticReasonLabel(diagnostic.reason)),
-                                            diagnostic.detail?.let { " ($it)" }.orEmpty(),
+                                            diagnostic.port
+                                                ?.let { stringResource(R.string.lan_diagnostic_port, it) }
+                                                .orEmpty(),
                                         ),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1544,7 +1559,9 @@ private fun HostCompactHeader(
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
+        // The left side fills the remaining width, so a plain SpaceBetween left no gap and the
+        // gateway label touched the latency text. An explicit gap keeps them apart.
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(

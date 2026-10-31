@@ -16,6 +16,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -279,6 +280,28 @@ class TopologyDiscoveryScreenTest {
     }
 
     @Test
+    fun keyboardDoneOnSeedField_startsDiscovery() {
+        val viewModel = fakeViewModel(TopologyUiState.Idle)
+        var submitted: TopologyParams? = null
+        every { viewModel.startDiscovery(any()) } answers { submitted = firstArg() }
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                TopologyDiscoveryScreen(viewModel = viewModel)
+            }
+        }
+        composeRule.mainClock.advanceTimeBy(500L)
+
+        composeRule
+            .onNodeWithText(context.getString(R.string.topology_target_ip_label))
+            .performTextInput("10.109.208.1")
+        composeRule
+            .onNodeWithText(context.getString(R.string.topology_target_ip_label))
+            .performImeAction()
+
+        assertEquals("10.109.208.1", submitted?.targetIp)
+    }
+
+    @Test
     fun targetIpWithOuterWhitespace_startsWithNormalizedSeed() {
         val viewModel = fakeViewModel(TopologyUiState.Idle)
         var submitted: TopologyParams? = null
@@ -511,7 +534,6 @@ class TopologyDiscoveryScreenTest {
             .performTextInput(target)
         composeRule
             .onNodeWithText(context.getString(R.string.topology_discover_button))
-            .performScrollTo()
             .assertIsDisplayed()
             .assertIsEnabled()
             .performClick()

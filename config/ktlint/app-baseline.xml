@@ -518,38 +518,38 @@
         <error line="461" column="70" source="standard:trailing-comma-on-call-site" />
     </file>
     <file name="src/androidTest/kotlin/net/aieat/netswissknife/app/ui/screens/topology/TopologyDiscoveryScreenTest.kt">
-        <error line="95" column="24" source="standard:chain-method-continuation" />
-        <error line="95" column="60" source="standard:chain-method-continuation" />
-        <error line="96" column="39" source="standard:chain-method-continuation" />
-        <error line="135" column="27" source="standard:multiline-expression-wrapping" />
-        <error line="139" column="26" source="standard:trailing-comma-on-call-site" />
-        <error line="151" column="31" source="standard:multiline-expression-wrapping" />
-        <error line="155" column="30" source="standard:trailing-comma-on-call-site" />
-        <error line="202" column="20" source="standard:chain-method-continuation" />
-        <error line="206" column="27" source="standard:multiline-expression-wrapping" />
-        <error line="215" column="20" source="standard:chain-method-continuation" />
-        <error line="221" column="27" source="standard:multiline-expression-wrapping" />
-        <error line="229" column="24" source="standard:chain-method-continuation" />
-        <error line="229" column="60" source="standard:chain-method-continuation" />
-        <error line="230" column="39" source="standard:chain-method-continuation" />
-        <error line="237" column="56" source="standard:function-signature" />
-        <error line="356" column="112" source="standard:trailing-comma-on-call-site" />
-        <error line="368" column="24" source="standard:chain-method-continuation" />
-        <error line="368" column="60" source="standard:chain-method-continuation" />
-        <error line="369" column="39" source="standard:chain-method-continuation" />
-        <error line="437" column="21" source="standard:multiline-expression-wrapping" />
-        <error line="442" column="75" source="standard:trailing-comma-on-call-site" />
-        <error line="458" column="21" source="standard:multiline-expression-wrapping" />
-        <error line="463" column="33" source="standard:trailing-comma-on-call-site" />
-        <error line="521" column="26" source="standard:function-signature" />
-        <error line="521" column="38" source="standard:function-signature" />
-        <error line="521" column="53" source="standard:function-signature" />
-        <error line="521" column="57" source="standard:multiline-expression-wrapping" />
-        <error line="521" column="57" source="standard:function-signature" />
-        <error line="533" column="29" source="standard:trailing-comma-on-call-site" />
-        <error line="538" column="56" source="standard:trailing-comma-on-declaration-site" />
-        <error line="543" column="51" source="standard:multiline-expression-wrapping" />
-        <error line="544" column="70" source="standard:trailing-comma-on-call-site" />
+        <error line="96" column="24" source="standard:chain-method-continuation" />
+        <error line="96" column="60" source="standard:chain-method-continuation" />
+        <error line="97" column="39" source="standard:chain-method-continuation" />
+        <error line="136" column="27" source="standard:multiline-expression-wrapping" />
+        <error line="140" column="26" source="standard:trailing-comma-on-call-site" />
+        <error line="152" column="31" source="standard:multiline-expression-wrapping" />
+        <error line="156" column="30" source="standard:trailing-comma-on-call-site" />
+        <error line="203" column="20" source="standard:chain-method-continuation" />
+        <error line="207" column="27" source="standard:multiline-expression-wrapping" />
+        <error line="216" column="20" source="standard:chain-method-continuation" />
+        <error line="222" column="27" source="standard:multiline-expression-wrapping" />
+        <error line="230" column="24" source="standard:chain-method-continuation" />
+        <error line="230" column="60" source="standard:chain-method-continuation" />
+        <error line="231" column="39" source="standard:chain-method-continuation" />
+        <error line="238" column="56" source="standard:function-signature" />
+        <error line="379" column="112" source="standard:trailing-comma-on-call-site" />
+        <error line="391" column="24" source="standard:chain-method-continuation" />
+        <error line="391" column="60" source="standard:chain-method-continuation" />
+        <error line="392" column="39" source="standard:chain-method-continuation" />
+        <error line="460" column="21" source="standard:multiline-expression-wrapping" />
+        <error line="465" column="75" source="standard:trailing-comma-on-call-site" />
+        <error line="481" column="21" source="standard:multiline-expression-wrapping" />
+        <error line="486" column="33" source="standard:trailing-comma-on-call-site" />
+        <error line="543" column="26" source="standard:function-signature" />
+        <error line="543" column="38" source="standard:function-signature" />
+        <error line="543" column="53" source="standard:function-signature" />
+        <error line="543" column="57" source="standard:multiline-expression-wrapping" />
+        <error line="543" column="57" source="standard:function-signature" />
+        <error line="555" column="29" source="standard:trailing-comma-on-call-site" />
+        <error line="560" column="56" source="standard:trailing-comma-on-declaration-site" />
+        <error line="565" column="51" source="standard:multiline-expression-wrapping" />
+        <error line="566" column="70" source="standard:trailing-comma-on-call-site" />
     </file>
     <file name="src/androidTest/kotlin/net/aieat/netswissknife/app/ui/screens/whois/WhoisScreenTest.kt">
         <error line="3" column="1" source="standard:import-ordering" />
@@ -2863,24 +2863,24 @@
     </file>
     <file name="src/main/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanScreen.kt">
         <error line="3" column="1" source="standard:import-ordering" />
-        <error line="156" column="5" source="standard:function-naming" />
-        <error line="532" column="13" source="standard:function-naming" />
-        <error line="544" column="13" source="standard:function-naming" />
-        <error line="712" column="13" source="standard:function-naming" />
-        <error line="740" column="13" source="standard:function-naming" />
-        <error line="773" column="13" source="standard:function-naming" />
-        <error line="833" column="13" source="standard:function-naming" />
-        <error line="857" column="13" source="standard:function-naming" />
-        <error line="920" column="41" source="standard:function-expression-body" />
-        <error line="925" column="13" source="standard:function-naming" />
-        <error line="992" column="13" source="standard:function-naming" />
-        <error line="1269" column="13" source="standard:function-naming" />
-        <error line="1301" column="13" source="standard:function-naming" />
-        <error line="1357" column="13" source="standard:function-naming" />
-        <error line="1410" column="13" source="standard:function-naming" />
-        <error line="1666" column="13" source="standard:function-naming" />
-        <error line="1806" column="13" source="standard:function-naming" />
-        <error line="1837" column="13" source="standard:function-naming" />
+        <error line="157" column="5" source="standard:function-naming" />
+        <error line="545" column="13" source="standard:function-naming" />
+        <error line="557" column="13" source="standard:function-naming" />
+        <error line="725" column="13" source="standard:function-naming" />
+        <error line="753" column="13" source="standard:function-naming" />
+        <error line="786" column="13" source="standard:function-naming" />
+        <error line="846" column="13" source="standard:function-naming" />
+        <error line="870" column="13" source="standard:function-naming" />
+        <error line="933" column="41" source="standard:function-expression-body" />
+        <error line="938" column="13" source="standard:function-naming" />
+        <error line="1005" column="13" source="standard:function-naming" />
+        <error line="1284" column="13" source="standard:function-naming" />
+        <error line="1316" column="13" source="standard:function-naming" />
+        <error line="1372" column="13" source="standard:function-naming" />
+        <error line="1425" column="13" source="standard:function-naming" />
+        <error line="1683" column="13" source="standard:function-naming" />
+        <error line="1823" column="13" source="standard:function-naming" />
+        <error line="1854" column="13" source="standard:function-naming" />
     </file>
     <file name="src/main/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanViewModel.kt">
         <error line="61" column="5" source="standard:function-signature" />
@@ -3848,18 +3848,18 @@
         <error line="289" column="34" source="standard:multiline-expression-wrapping" />
     </file>
     <file name="src/main/kotlin/net/aieat/netswissknife/app/ui/screens/topology/TopologyDiscoveryScreen.kt">
-        <error line="64" column="5" source="standard:function-naming" />
-        <error line="125" column="13" source="standard:function-naming" />
-        <error line="934" column="13" source="standard:function-naming" />
-        <error line="1000" column="17" source="standard:function-naming" />
-        <error line="1059" column="13" source="standard:function-naming" />
-        <error line="1119" column="13" source="standard:function-naming" />
-        <error line="1184" column="13" source="standard:function-naming" />
-        <error line="1232" column="13" source="standard:function-naming" />
-        <error line="1490" column="13" source="standard:function-naming" />
-        <error line="1669" column="13" source="standard:function-naming" />
-        <error line="1691" column="13" source="standard:function-naming" />
-        <error line="1721" column="13" source="standard:function-naming" />
+        <error line="68" column="5" source="standard:function-naming" />
+        <error line="129" column="13" source="standard:function-naming" />
+        <error line="966" column="13" source="standard:function-naming" />
+        <error line="1032" column="17" source="standard:function-naming" />
+        <error line="1091" column="13" source="standard:function-naming" />
+        <error line="1151" column="13" source="standard:function-naming" />
+        <error line="1216" column="13" source="standard:function-naming" />
+        <error line="1264" column="13" source="standard:function-naming" />
+        <error line="1522" column="13" source="standard:function-naming" />
+        <error line="1701" column="13" source="standard:function-naming" />
+        <error line="1723" column="13" source="standard:function-naming" />
+        <error line="1753" column="13" source="standard:function-naming" />
     </file>
     <file name="src/main/kotlin/net/aieat/netswissknife/app/ui/screens/topology/TopologyDiscoveryViewModel.kt">
         <error line="3" column="1" source="standard:import-ordering" />

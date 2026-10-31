@@ -146,9 +146,32 @@ work_packages:
       note: "Orchestrator finished gates/commit after implementer hand-back stalled."
   - id: WP06
     title: LAN Scanner + Topology
-    status: todo
+    status: done
     findings: [B:LAN-01, B:LAN-02, B:LAN-03, B:LAN-04, B:LAN-05, B:LAN-06, B:TOPO-01, B:TOPO-02, B:TOPO-04]
     notes: "TOPO-01 (button hidden in inner scroll card, Enter doesn't start) first. LAN host detail as proper destination/bottom sheet so Back keeps results. LAN-04 verify before acting."
+    result:
+      status: done
+      commit: "the WP06 commit on plan/ux-remediation-2026-10-31 (fix(lan,topology): ...); sha not recorded here to keep a single commit"
+      gates: "Final foreground run green: test, ktlintCheck, detekt, :app:assembleDebug, :app:compileDebugAndroidTestKotlin, core-network/core-domain/app koverVerify. app ktlint baseline regenerated twice for line shifts only; per-rule counts unchanged at 5339 total. LanScanViewModelTest 7/7 pass incl. 2 new tests. Instrumented tests compiled only, not run; Topology helper no longer calls performScrollTo on the Discover button and gained a keyboard-Done test. Device re-test deferred to WP18."
+      fixed:
+        - "TOPO-01: Discover Topology and Cancel moved out of the scrolling SNMP card into a fixed action area below it; keyboard Done on the seed field starts discovery (shared startDiscoveryIfReady guard). Not device-verified."
+        - "TOPO-02: seed field has a leading router icon (ToolTextField)."
+        - "TOPO-03 (and PORTS-02 wording on this screen): seed error now uses HostValidator.problemOf + messageRes instead of the generic string."
+        - "LAN-01 (Back part): Back collapses an open host row first (LanScanViewModel.collapseExpandedHost, BackHandler) so results stay on screen."
+        - "LAN-03: uncertain-probe rows show reason and port (\"TCP probe timed out, port 80\"), not raw Java exception text. Raw detail stays in the model only."
+        - "LAN-05: pull-to-refresh removed (a swipe restarted the scan and discarded results; spinner over the header). Re-scan remains the explicit action."
+        - "LAN-02: host header row used SpaceBetween with a weighted left side, leaving no gap, so the Gateway label touched Latency. Explicit spacedBy(8dp). Not device-verified."
+        - "Topology rotation: non-secret form inputs (seed, SNMP version, v3 user and protocols, max hops, neighbour toggle, card expanded) are rememberSaveable, so rotation no longer clears the seed and disables Discover. Community and v3 passwords stay remember (kept out of the saved-state Bundle)."
+        - "Lifecycle (LAN, same bug class as PORTS-04): ON_STOP and onDispose cancelled the scan on rotation. onLifecyclePause(configurationChange) now ignores configuration changes, mirroring WP05. Topology has no lifecycle cancel (checked; no change needed)."
+      not_reproduced:
+        - "LAN-04 (missing ARP hosts): no code defect. ARP is enrichment only by design; presence needs ICMP, TCP connect, or NetBIOS/mDNS evidence (LanScanRepositoryImpl, README, help text). STALE ARP entries are not fresh presence. Run-to-run variance (55-57) is probe timeout variance, not ARP. Needs per-IP evidence on device, see device_checks."
+        - "TOPO-04 (community pre-filled): default community 'public' is intentional and the field is masked (PasswordVisualTransformation). no_change_needed."
+      deferred:
+        - "LAN-06 (+N chip over nav bar): content inset is central in MainActivity (WP01, navigation bars on rail, IME otherwise). Likely fixed by WP01; device check at WP18."
+        - "LAN-01 / PORTS-08: leaving the LAN tool still discards results (ViewModel is scoped to the nav entry). Owned by WP15 (SavedStateHandle/persistence)."
+        - "Topology positive path and cancel need an SNMP device; not testable on this LAN."
+      device_checks_for_wp18: ["Topology Discover button visible with config card open and scrolled; Enter starts discovery", "LAN rotation mid-scan keeps running", "LAN Back with expanded row keeps results", "LAN-04: check the 7 ARP-only IPs against probe results"]
+      note: "LanScanViewModelTest new cases were written before the implementation, but no separate RED run was made. The first gate run failed on baseline line shifts and two real style errors (blank line, import order) plus one long line; all fixed before the green run."
   - id: WP07
     title: Wi-Fi Scanner
     status: todo
