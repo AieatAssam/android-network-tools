@@ -847,7 +847,12 @@ class WifiScanViewModelTest {
                 assertTrue(!viewModel.autoRefresh.value)
 
                 pendingResult.complete(stubResult(stubAp()))
-                runCurrent()
+                // The operation runner finishes on real executors, so poll with a bound.
+                val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+                while (viewModel.uiState.value !is WifiScanUiState.Success && System.nanoTime() < deadline) {
+                    runCurrent()
+                    Thread.sleep(10)
+                }
                 viewModel.onLifecycleResume()
                 runCurrent()
 
