@@ -36,6 +36,21 @@ class RdapMapperTest {
     }
 
     @Test
+    fun `keeps Verisign RDAP status strings exactly as served`() {
+        // Trimmed from a live rdap.verisign.com/com/v1/domain/example.com response.
+        val statuses = """["client delete prohibited","client transfer prohibited","client update prohibited"]"""
+        val raw =
+            """{"objectClassName":"domain","ldhName":"EXAMPLE.COM","status":$statuses,""" +
+                """"events":[{"eventAction":"registration","eventDate":"1995-08-14T04:00:00Z"}]}"""
+        val result = RdapMapper.map(raw, "example.com", WhoisQueryType.DOMAIN, "rdap.verisign.com")
+
+        assertEquals(
+            listOf("client delete prohibited", "client transfer prohibited", "client update prohibited"),
+            result.statusCodes,
+        )
+    }
+
+    @Test
     fun `maps IP network allocation fields`() {
         val result = RdapMapper.map(
             fixture("ip-8.8.8.8.json"),

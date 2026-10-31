@@ -849,7 +849,8 @@
     <string name="whois_hop_latency_ms">%1$d ms</string>
     <string name="whois_querying_server">Querying %1$s…</string>
     <string name="whois_raw_responses">Raw RDAP/WHOIS Responses</string>
-    <string name="whois_show_raw">Show raw response</string>
+    <string name="whois_answered_by_rdap">Answered by RDAP from %1$s</string>
+    <string name="whois_answered_by_whois">Answered by WHOIS (port 43) from %1$s</string>
     <string name="whois_lifecycle">Lifecycle</string>
     <string name="whois_registered">Registered</string>
     <string name="whois_updated">Updated</string>

@@ -18,6 +18,8 @@ import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
 import net.aieat.netswissknife.core.domain.WhoisLookupUseCase
 import net.aieat.netswissknife.core.domain.WhoisParams
+import net.aieat.netswissknife.core.network.ErrorCode
+import net.aieat.netswissknife.core.network.HostProblem
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.whois.WhoisHop
 import net.aieat.netswissknife.core.network.whois.WhoisQueryType
@@ -329,6 +331,61 @@ class WhoisViewModelTest {
         progress.tryEmit(stubHop.copy(operationId = session.budget.operationId))
         runCurrent()
         assertTrue(viewModel.uiState.value.hopStates.isEmpty(), "stopped lookup must ignore late progress")
+    }
+
+    @Test
+    fun `configuration change keeps the lookup running`() {
+        runTest {
+            var receivedSession: OperationSession? = null
+            coEvery { whoisLookupUseCase(any(), any()) } coAnswers {
+                receivedSession = secondArg()
+                kotlinx.coroutines.awaitCancellation()
+            }
+            viewModel.onQueryChange("example.com")
+            viewModel.lookup()
+            runCurrent()
+            val session = checkNotNull(receivedSession)
+
+            viewModel.onLifecyclePause(configurationChange = true)
+            runCurrent()
+
+            assertTrue(viewModel.uiState.value.isLoading)
+            assertFalse(viewModel.uiState.value.isCanceled)
+            assertFalse(session.cancellationReason == CancellationReason.LIFECYCLE_PAUSE)
+        }
+    }
+
+    @Test
+    fun `invalid IPv4 address reports its specific host problem`() {
+        runTest {
+            val invalid =
+                NetworkResult.error(
+                    ErrorCode.WHOIS_INVALID_QUERY,
+                    developerMessage = "Enter a valid domain, IP address, or ASN without spaces",
+                )
+            coEvery { whoisLookupUseCase(any(), any()) } returns invalid
+            viewModel.onQueryChange("999.1.1.1")
+            viewModel.lookup()
+
+            assertEquals(HostProblem.IPV4_INVALID, viewModel.uiState.value.inputProblem)
+            assertNotNull(viewModel.uiState.value.error)
+        }
+    }
+
+    @Test
+    fun `a non-query error does not carry a host problem`() {
+        runTest {
+            val failed =
+                NetworkResult.error(
+                    ErrorCode.WHOIS_LOOKUP_FAILED,
+                    developerMessage = "lookup failed",
+                )
+            coEvery { whoisLookupUseCase(any(), any()) } returns failed
+            viewModel.onQueryChange("999.1.1.1")
+            viewModel.lookup()
+
+            assertNull(viewModel.uiState.value.inputProblem)
+        }
     }
 
     @Test

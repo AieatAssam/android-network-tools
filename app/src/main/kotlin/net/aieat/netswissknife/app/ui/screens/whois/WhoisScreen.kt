@@ -1,5 +1,6 @@
 package net.aieat.netswissknife.app.ui.screens.whois
 
+import android.app.Activity
 import android.content.Intent
 import androidx.core.net.toUri
 import androidx.compose.animation.AnimatedContent
@@ -19,6 +20,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -90,6 +92,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -100,6 +103,7 @@ import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
 import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.components.ToolTextField
 import net.aieat.netswissknife.app.ui.components.hapticAction
+import net.aieat.netswissknife.app.ui.components.messageRes
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
@@ -111,7 +115,7 @@ import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.core.network.whois.WhoisProtocol
 import net.aieat.netswissknife.core.network.whois.WhoisQueryType
 import net.aieat.netswissknife.core.network.whois.WhoisResult
-import net.aieat.netswissknife.core.network.whois.WhoisServerRole
+import net.aieat.netswissknife.core.network.whois.answeringProtocol
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -142,14 +146,19 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
+    // Rotation also reaches ON_STOP and disposes this screen. The Activity reports it through
+    // isChangingConfigurations, and the lookup must keep running across that recreation.
+    val activity = context as? Activity
     DisposableEffect(lifecycleOwner, viewModel) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_STOP) viewModel.onLifecyclePause()
+            if (event == Lifecycle.Event.ON_STOP) {
+                viewModel.onLifecyclePause(configurationChange = activity?.isChangingConfigurations == true)
+            }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
-            viewModel.onLifecyclePause()
+            viewModel.onLifecyclePause(configurationChange = activity?.isChangingConfigurations == true)
         }
     }
 
@@ -327,7 +336,7 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
                     }
                     error != null -> {
                         ErrorCard(
-                            message = error,
+                            message = uiState.inputProblem?.let { stringResource(it.messageRes()) } ?: error,
                             onRetry = viewModel::lookup,
                             hopStates = uiState.hopStates
                         )
@@ -486,8 +495,9 @@ private fun HopNodeCircle(
     infiniteTransition: InfiniteTransition,
     modifier: Modifier = Modifier
 ) {
-    val roleColor = hopRoleContainerColor(hop.server.role)
-    val roleOnColor = hopRoleOnContainerColor(hop.server.role)
+    // Every completed hop uses the same success colour; the role is shown in the label below.
+    val doneColor = MaterialTheme.colorScheme.primaryContainer
+    val doneOnColor = MaterialTheme.colorScheme.onPrimaryContainer
 
     val pulseScale by infiniteTransition.animateFloat(
         initialValue = 0.9f,
@@ -500,7 +510,7 @@ private fun HopNodeCircle(
         targetValue = when (hop.status) {
             HopStatus.PENDING -> MaterialTheme.colorScheme.surface
             HopStatus.QUERYING -> MaterialTheme.colorScheme.primaryContainer
-            HopStatus.DONE -> roleColor
+            HopStatus.DONE -> doneColor
             HopStatus.FAILED -> MaterialTheme.colorScheme.errorContainer
             HopStatus.SKIPPED -> MaterialTheme.colorScheme.surface
         },
@@ -520,7 +530,7 @@ private fun HopNodeCircle(
                 HopStatus.DONE ->
                     Icon(
                         Icons.Default.Check, contentDescription = null,
-                        modifier = Modifier.size(20.dp), tint = roleOnColor
+                        modifier = Modifier.size(20.dp), tint = doneOnColor
                     )
                 HopStatus.FAILED ->
                     Icon(
@@ -572,25 +582,6 @@ private fun HopNodeLabels(hop: HopUiState, modifier: Modifier = Modifier) {
         }
     }
 }
-
-@Composable
-private fun hopRoleContainerColor(role: WhoisServerRole): Color = when (role) {
-    WhoisServerRole.IANA -> MaterialTheme.colorScheme.tertiaryContainer
-    WhoisServerRole.REGISTRY -> MaterialTheme.colorScheme.primaryContainer
-    WhoisServerRole.REGISTRAR -> MaterialTheme.colorScheme.secondaryContainer
-    WhoisServerRole.RIR -> MaterialTheme.colorScheme.secondaryContainer
-    WhoisServerRole.RDAP -> MaterialTheme.colorScheme.primaryContainer
-}
-
-@Composable
-private fun hopRoleOnContainerColor(role: WhoisServerRole): Color = when (role) {
-    WhoisServerRole.IANA -> MaterialTheme.colorScheme.onTertiaryContainer
-    WhoisServerRole.REGISTRY -> MaterialTheme.colorScheme.onPrimaryContainer
-    WhoisServerRole.REGISTRAR -> MaterialTheme.colorScheme.onSecondaryContainer
-    WhoisServerRole.RIR -> MaterialTheme.colorScheme.onSecondaryContainer
-    WhoisServerRole.RDAP -> MaterialTheme.colorScheme.onPrimaryContainer
-}
-
 
 // ── Idle Card ─────────────────────────────────────────────────────────────────
 
@@ -695,8 +686,25 @@ fun WhoisResultsSection(
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
+            Box(modifier = Modifier.weight(1f)) {
+                val answeredBy = result.answeringProtocol()
+                val answeringHost = result.hops.lastOrNull { it.error == null }?.let { it.server.host }
+                if (answeredBy != null && answeringHost != null) {
+                    val labelRes = if (answeredBy == WhoisProtocol.RDAP) {
+                        R.string.whois_answered_by_rdap
+                    } else {
+                        R.string.whois_answered_by_whois
+                    }
+                    Text(
+                        text = stringResource(labelRes, answeringHost),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
             IconButton(onClick = onShare) {
                 Icon(
                     imageVector = Icons.Default.Share,
@@ -811,7 +819,7 @@ fun DomainResultCard(result: WhoisResult, onOpenUrl: (String) -> Unit) {
                         result.statusCodes.forEach { status ->
                             SuggestionChip(
                                 onClick = {},
-                                label = { Text(humanReadableStatus(status), style = MaterialTheme.typography.labelSmall) }
+                                label = { Text(whoisStatusLabel(status), style = MaterialTheme.typography.labelSmall) }
                             )
                         }
                     }
@@ -871,20 +879,6 @@ fun DomainResultCard(result: WhoisResult, onOpenUrl: (String) -> Unit) {
                     }
                 }
             }
-
-            // Raw toggle
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = stringResource(R.string.whois_show_raw),
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            }
         }
     }
 }
@@ -942,6 +936,7 @@ fun RawResponseAccordion(result: WhoisResult, showRaw: Boolean, onToggle: () -> 
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .clickable(role = Role.Button, onClick = onToggle)
                     .padding(16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
@@ -1070,25 +1065,6 @@ private fun expiryColor(epochMs: Long?): Color? {
         daysLeft < 30 -> MaterialTheme.colorScheme.error
         daysLeft < 90 -> MaterialTheme.colorScheme.tertiary
         else -> null
-    }
-}
-
-private fun humanReadableStatus(raw: String): String {
-    val stripped = raw.substringBefore(" ").trim()
-    return when (stripped) {
-        "clientTransferProhibited" -> "Transfer Locked"
-        "clientDeleteProhibited" -> "Delete Locked"
-        "clientUpdateProhibited" -> "Update Locked"
-        "serverTransferProhibited" -> "Server Transfer Locked"
-        "clientHold" -> "Client Hold"
-        "pendingDelete" -> "Pending Delete"
-        else -> {
-            stripped
-                .removePrefix("client")
-                .removePrefix("server")
-                .replace(Regex("(?<=[a-z])(?=[A-Z])"), " ")
-                .replaceFirstChar { it.uppercase() }
-        }
     }
 }
 

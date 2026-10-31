@@ -117,10 +117,14 @@ Domain, IP, and ASN registration lookup using RDAP with WHOIS fallback.
 - Supports domain names, IPv4, IPv6, and ASN queries
 - Protocol selector: Auto tries RDAP first and falls back to WHOIS; RDAP and WHOIS modes use only the selected protocol
 - Domain RDAP uses the [IANA DNS bootstrap](https://data.iana.org/rdap/dns.json) to choose a registry endpoint; IP and ASN requests use the [rdap.org](https://rdap.org/) redirector
-- WHOIS fallback uses the IANA-to-registry-to-registrar referral chain for domains and ARIN/referring RIRs for IPs and ASNs
+- WHOIS fallback uses the IANA-to-registry-to-registrar referral chain for domains and ARIN/referring RIRs for IPs and ASNs. A registrar referral to whois.iana.org is not queried again, since IANA holds no registrar record
+- Domain dates (registered, updated, expires), name servers, status codes and DNSSEC come from the registry record, never from the IANA step. Registrar and registrant fields come from the registrar record when one answers, otherwise from the registry record
 - Parsed fields include registrar, registration/expiry/update dates, name servers, status codes, DNSSEC, registrant organization/country, and network ranges
-- Human-readable status code labels (e.g. "clientTransferProhibited" → "Transfer Locked")
-- Live relay-chain visualiser shows the RDAP or WHOIS servers used; raw responses are available for inspection
+- Status chips show human-readable labels for both RDAP phrasing (e.g. "client transfer prohibited") and WHOIS codes (e.g. "clientTransferProhibited"), e.g. "Transfer Locked"; unlisted statuses keep their words
+- Each result states which protocol answered (RDAP or WHOIS port 43) and the server used
+- Live relay-chain visualiser shows the RDAP or WHOIS servers used; completed hops share one success colour
+- Invalid input names the specific problem (e.g. "An IPv4 address needs four numbers from 0 to 255" for 999.1.1.1)
+- The raw RDAP/WHOIS response section expands from its whole header row; the lookup keeps running across screen rotation
 
 ### HTTP Probe
 HTTPS request tester with security header analysis. Plain HTTP requests are disabled in this release.

@@ -14,6 +14,7 @@ import net.aieat.netswissknife.core.network.operation.OperationBudget
 import net.aieat.netswissknife.core.network.operation.OperationDeadlineExceededException
 import net.aieat.netswissknife.core.network.operation.OperationSession
 import net.aieat.netswissknife.core.network.testkit.FakeClock
+import net.aieat.netswissknife.core.network.whois.WhoisProtocol
 import net.aieat.netswissknife.core.network.whois.WhoisResult
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
@@ -23,6 +24,7 @@ import org.junit.jupiter.api.Test
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.InputStream
+import java.time.Instant
 import java.net.InetAddress
 import java.net.Socket
 import java.net.SocketAddress
@@ -405,5 +407,107 @@ class WhoisRegistrableDomainTest {
     @DisplayName("unknown suffix falls back to the last two labels")
     fun `unknown suffix falls back to last two labels`() {
         assertEquals("bar.unknown-tld", repo.extractRegistrableDomain("foo.bar.unknown-tld"))
+    }
+}
+
+@DisplayName("WhoisRepositoryImpl – registry record selection")
+class WhoisRegistryRecordSelectionTest {
+    private val ianaResponse =
+        listOf(
+            "domain:       COM",
+            "created:      1992-01-01",
+            "changed:      2017-08-24",
+            "status:       ACTIVE",
+            "refer:        whois.verisign-grs.com",
+        ).joinToString("\r\n", postfix = "\r\n")
+
+    private val verisignResponse =
+        listOf(
+            "Domain Name: EXAMPLE.COM",
+            "Registry Domain ID: 2336799_DOMAIN_COM-VRSN",
+            "Registrar WHOIS Server: WHOIS_REFERRER",
+            "Registrar URL: http://res-dom.iana.org",
+            "Updated Date: 2026-08-14T08:01:43Z",
+            "Creation Date: 1995-08-14T04:00:00Z",
+            "Registry Expiry Date: 2027-08-13T04:00:00Z",
+            "Registrar: RESERVED-Internet Assigned Numbers Authority",
+            "Domain Status: clientDeleteProhibited https://icann.org/epp#clientDeleteProhibited",
+            "Domain Status: clientTransferProhibited https://icann.org/epp#clientTransferProhibited",
+            "Name Server: ELLIOTT.NS.CLOUDFLARE.COM",
+            "Name Server: HERA.NS.CLOUDFLARE.COM",
+            "DNSSEC: signedDelegation",
+        ).joinToString("\r\n", postfix = "\r\n")
+
+    private fun scriptedRepository(responses: List<String>): WhoisRepositoryImpl {
+        val remaining = responses.toMutableList()
+        return WhoisRepositoryImpl(
+            resolver = WhoisHostResolver { InetAddress.getByAddress(byteArrayOf(8, 8, 8, 8)) },
+            socketFactory =
+                WhoisSocketFactory {
+                    val response = remaining.removeAt(0)
+                    object : Socket() {
+                        override fun connect(
+                            endpoint: SocketAddress?,
+                            timeout: Int,
+                        ) = Unit
+
+                        override fun getOutputStream() = ByteArrayOutputStream()
+
+                        override fun getInputStream(): InputStream = response.toByteArray(Charsets.UTF_8).inputStream()
+
+                        override fun close() = Unit
+                    }
+                },
+        )
+    }
+
+    @Test
+    @DisplayName("IANA referral to whois.iana.org is not re-queried; dates come from the registry record")
+    fun `registry dates win over the IANA created date when the registrar referral is IANA`() {
+        runTest {
+            val repository =
+                scriptedRepository(
+                    listOf(ianaResponse, verisignResponse.replace("WHOIS_REFERRER", "whois.iana.org")),
+                )
+
+            val result = withContext(Dispatchers.IO) { repository.lookup("example.com", 1_000, WhoisProtocol.WHOIS) }
+
+            val data = (result as NetworkResult.Success).data
+            assertEquals(2, data.hops.size, "IANA cannot hold a registrar record, so no third hop is queried")
+            assertEquals(Instant.parse("1995-08-14T04:00:00Z").toEpochMilli(), data.registeredOn)
+            assertEquals(Instant.parse("2026-08-14T08:01:43Z").toEpochMilli(), data.updatedOn)
+            assertEquals(Instant.parse("2027-08-13T04:00:00Z").toEpochMilli(), data.expiresOn)
+            assertEquals(listOf("ELLIOTT.NS.CLOUDFLARE.COM", "HERA.NS.CLOUDFLARE.COM"), data.nameServers)
+            assertEquals(listOf("clientDeleteProhibited", "clientTransferProhibited"), data.statusCodes)
+        }
+    }
+
+    @Test
+    @DisplayName("registrar fields come from the registrar record while dates stay with the registry")
+    fun `registrar record supplies registrar fields and registry supplies dates`() {
+        runTest {
+            val markmonitor =
+                listOf(
+                    "Registrar: MarkMonitor Inc.",
+                    "Registrant Organization: Example Org",
+                    "Creation Date: 2001-01-01T00:00:00Z",
+                ).joinToString("\r\n", postfix = "\r\n")
+            val repository =
+                scriptedRepository(
+                    listOf(
+                        ianaResponse,
+                        verisignResponse.replace("WHOIS_REFERRER", "whois.markmonitor.com"),
+                        markmonitor,
+                    ),
+                )
+
+            val result = withContext(Dispatchers.IO) { repository.lookup("example.com", 1_000, WhoisProtocol.WHOIS) }
+
+            val data = (result as NetworkResult.Success).data
+            assertEquals(3, data.hops.size)
+            assertEquals("MarkMonitor Inc.", data.registrar)
+            assertEquals("Example Org", data.registrantOrg)
+            assertEquals(Instant.parse("1995-08-14T04:00:00Z").toEpochMilli(), data.registeredOn)
+        }
     }
 }

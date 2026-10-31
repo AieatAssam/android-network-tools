@@ -47,3 +47,12 @@ data class WhoisResult(
     /** RDAP object handle when supplied (for example, an IP-network or ASN registry ID). */
     val handle: String? = null,
 )
+
+/**
+ * The protocol that produced this result, taken from the last successful hop: an RDAP hop
+ * means RDAP answered; any port-43 hop means WHOIS did. Null when no hop succeeded.
+ */
+fun WhoisResult.answeringProtocol(): WhoisProtocol? {
+    val last = hops.lastOrNull { it.error == null } ?: return null
+    return if (last.server.role == WhoisServerRole.RDAP) WhoisProtocol.RDAP else WhoisProtocol.WHOIS
+}

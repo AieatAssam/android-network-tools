@@ -307,7 +307,10 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
             _hopProgress.emit(failedHop)
             return buildDomainResult(domain, WhoisQueryType.DOMAIN, hops, overallStart)
         }
-        val registrarWhoisServer = WhoisResponseParser.parseRegistrarWhoisServer(registryHop.second)
+        // IANA holds no registrar record. Asking it again only repeats the TLD entry, so the
+        // registry record stays the source for the domain.
+        val registrarReferral = WhoisResponseParser.parseRegistrarWhoisServer(registryHop.second)
+        val registrarWhoisServer = registrarReferral?.takeUnless { it.equals(IANA_SERVER, ignoreCase = true) }
         val hop2 = WhoisHop(
             server = WhoisServer(registryHost, WhoisServerRole.REGISTRY),
             rawResponse = registryHop.second,
@@ -477,24 +480,34 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
         hops: List<WhoisHop>,
         overallStart: Long
     ): NetworkResult<WhoisResult> {
-        val lastResponse = hops.lastOrNull { it.error == null }?.rawResponse ?: ""
+        // The registry record is authoritative for the domain's lifecycle, status, name servers
+        // and DNSSEC. The IANA step only describes the TLD, so it must not supply those fields.
+        // A registrar record, when one answered, supplies registrar and registrant contact data.
+        val successful = hops.filter { it.error == null && it.rawResponse.isNotBlank() }
+        val registryRecord =
+            successful.lastOrNull { it.server.role == WhoisServerRole.REGISTRY }?.rawResponse
+                ?: successful.lastOrNull { it.server.role != WhoisServerRole.IANA }?.rawResponse
+                ?: ""
+        val contactRecord =
+            successful.lastOrNull { it.server.role == WhoisServerRole.REGISTRAR }?.rawResponse
+                ?: registryRecord
         val p = WhoisResponseParser
         return NetworkResult.Success(
             WhoisResult(
                 query = query,
                 queryType = queryType,
                 hops = hops,
-                domainName = p.parseDomainName(lastResponse),
-                registrar = p.parseRegistrar(lastResponse),
-                registrarUrl = p.parseRegistrarUrl(lastResponse),
-                registeredOn = p.parseRegisteredOn(lastResponse),
-                expiresOn = p.parseExpiresOn(lastResponse),
-                updatedOn = p.parseUpdatedOn(lastResponse),
-                nameServers = p.parseNameServers(lastResponse),
-                statusCodes = p.parseStatusCodes(lastResponse),
-                registrantOrg = p.parseRegistrantOrg(lastResponse),
-                registrantCountry = p.parseRegistrantCountry(lastResponse),
-                dnssec = p.parseDnssec(lastResponse),
+                domainName = p.parseDomainName(registryRecord),
+                registrar = p.parseRegistrar(contactRecord),
+                registrarUrl = p.parseRegistrarUrl(contactRecord),
+                registeredOn = p.parseRegisteredOn(registryRecord),
+                expiresOn = p.parseExpiresOn(registryRecord),
+                updatedOn = p.parseUpdatedOn(registryRecord),
+                nameServers = p.parseNameServers(registryRecord),
+                statusCodes = p.parseStatusCodes(registryRecord),
+                registrantOrg = p.parseRegistrantOrg(contactRecord),
+                registrantCountry = p.parseRegistrantCountry(contactRecord),
+                dnssec = p.parseDnssec(registryRecord),
                 netName = null,
                 netRange = null,
                 orgName = null,

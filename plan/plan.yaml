@@ -225,9 +225,26 @@ work_packages:
         - "Timeout control: not added (HTTP Probe, the closest comparable tool, has none; Ping and Traceroute do expose one)."
   - id: WP09
     title: WHOIS
-    status: todo
+    status: done
     findings: [C:WHOIS-01, C:WHOIS-02, C:WHOIS-03, C:WHOIS-04, C:WHOIS-05, C:WHOIS-06]
     notes: "WHOIS-01 empty status chips (high). WHOIS-02: follow referral to the registry whois server for dates."
+    result:
+      status: done
+      commit: "the WP09 commit on plan/ux-remediation-2026-10-31 (fix(whois): ...); sha not recorded here to keep a single commit"
+      gates: "./gradlew test ktlintCheck detekt :app:assembleDebug :app:compileDebugAndroidTestKotlin :core-network:koverVerify :core-domain:koverVerify :app:koverVerify all green (one run, --no-daemon --no-parallel). Test totals: core-network 1431 (1 skipped), core-domain 233, app 677, 0 failures. ktlint: baselines regenerated after code fixes; per-file, per-rule counts checked against HEAD: core-network 6090 -> 6090, app 5334 -> 5313, no increase. Device re-test deferred to WP18."
+      fixed:
+        - "C:WHOIS-01 (root cause in rendering, not parsing): RDAP serves spaced statuses (live rdap.verisign.com returns 'client delete prohibited'). humanReadableStatus kept only the text before the first space, so each chip was blank. RdapMapper already kept the strings (test with the Verisign payload). Now WhoisLabels.kt matches both RDAP phrases and EPP codes. Tests: WhoisLabelsTest (RED: empty labels), RdapMapperTest.keeps Verisign RDAP status strings."
+        - "C:WHOIS-02 (root cause in result selection): buildDomainResult used the last successful hop. The registrar referral 'whois.iana.org' was re-queried, so IANA's created date (1992) and its status/nserver lines filled the card. Now lifecycle dates, status, name servers and DNSSEC come from the registry record; registrar and registrant fields from a registrar record when one answers; IANA referral is not re-queried. Timeouts and deadline code untouched. Tests: WhoisRegistryRecordSelectionTest (RED: 3 hops; creation 2001 from registrar record)."
+        - "C:WHOIS-03: the whole raw-response header row toggles (clickable, Role.Button). The duplicate 'Show raw response' row with no action was removed; whois_show_raw string removed."
+        - "C:WHOIS-04: invalid queries name the specific problem via HostValidator.problemOf / messageRes (for 999.1.1.1: 'An IPv4 address needs four numbers from 0 to 255'); generic message kept when no specific problem. Tests: WhoisViewModelTest invalid IPv4 and non-query error."
+        - "C:WHOIS-05: all completed hops share one success colour (primaryContainer); the role is shown by its label. hopRole*Color helpers removed."
+        - "C:WHOIS-06 (partly): result states which protocol answered (answeringProtocol(): RDAP or WHOIS port 43) with the server host. Tests: WhoisAnsweringProtocolTest."
+        - "Rotation (ON_STOP / onDispose, same class as PING-01): WhoisScreen called onLifecyclePause() unconditionally, cancelling a lookup on rotation. Now passes Activity.isChangingConfigurations; the ViewModel ignores configurationChange. Test: configuration change keeps the lookup running."
+      not_reproduced: []
+      deferred:
+        - "C:WHOIS-06 root cause for Auto IP/ASN on device not established. Live check: rdap.org answers 302 to https://rdap.arin.net for 8.8.8.8 and AS15169; OkHttp followRedirects(true) should follow same-protocol redirects, so the redirect alone is not the explanation. The device run showed a WHOIS-only chain. Needs a device run or logging to find why RDAP did not answer; the answered-by line makes it visible."
+        - "Live example.com WHOIS-mode re-check on device, dark mode and font scale: WP18."
+        - "Auto-mode fallback chain does not show the failed RDAP attempt; the answered-by line states the outcome only."
   - id: WP10
     title: HTTP Probe
     status: todo

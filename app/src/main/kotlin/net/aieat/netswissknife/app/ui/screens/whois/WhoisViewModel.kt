@@ -20,6 +20,9 @@ import net.aieat.netswissknife.app.platform.NetworkStatusProvider
 import net.aieat.netswissknife.app.platform.NoOpNetworkStatusProvider
 import net.aieat.netswissknife.core.domain.WhoisLookupUseCase
 import net.aieat.netswissknife.core.domain.WhoisParams
+import net.aieat.netswissknife.core.network.ErrorCode
+import net.aieat.netswissknife.core.network.HostProblem
+import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.whois.WhoisHop
 import net.aieat.netswissknife.core.network.whois.WhoisProtocol
@@ -27,6 +30,7 @@ import net.aieat.netswissknife.core.network.whois.WhoisQueryTypeDetector
 import net.aieat.netswissknife.core.network.whois.WhoisResult
 import net.aieat.netswissknife.core.network.whois.WhoisServer
 import net.aieat.netswissknife.core.network.whois.WhoisServerRole
+import net.aieat.netswissknife.core.network.whois.answeringProtocol
 import net.aieat.netswissknife.core.network.operation.CancellationReason
 import net.aieat.netswissknife.core.network.operation.OperationSession
 import net.aieat.netswissknife.core.network.whois.WhoisOperation
@@ -51,6 +55,8 @@ data class WhoisUiState(
     val hopStates: List<HopUiState> = emptyList(),
     val result: WhoisResult? = null,
     val error: String? = null,
+    /** Set when the query is not a valid domain, IP or ASN: names the specific problem. */
+    val inputProblem: HostProblem? = null,
     val showRawResponse: Boolean = false
 )
 
@@ -156,7 +162,8 @@ class WhoisViewModel @Inject constructor(
                 isLifecyclePaused = false,
                 hopStates = emptyList(),
                 result = null,
-                error = null
+                error = null,
+                inputProblem = null,
             )
         }
 
@@ -195,6 +202,7 @@ class WhoisViewModel @Inject constructor(
             progressJob = null
             operationSession = null
             resultJob = null
+            val invalidQuery = (result as? NetworkResult.Error)?.info?.code == ErrorCode.WHOIS_INVALID_QUERY
             _uiState.update { state ->
                 when (result) {
                     is NetworkResult.Success -> state.copy(
@@ -211,7 +219,8 @@ class WhoisViewModel @Inject constructor(
                     )
                     is NetworkResult.Error -> state.copy(
                         isLoading = false,
-                        error = result.message
+                        error = result.message,
+                        inputProblem = if (invalidQuery) HostValidator.problemOf(query) else null,
                     )
                 }
             }
@@ -232,8 +241,12 @@ class WhoisViewModel @Inject constructor(
 
     fun stopLookup() = cancelActiveOperation(CancellationReason.USER_STOP, updateState = true)
 
-    /** Stop an in-flight lookup when this tool leaves the foreground. */
-    fun onLifecyclePause() {
+    /**
+     * Stop an in-flight lookup when this tool leaves the foreground. A [configurationChange]
+     * (rotation) also reaches the screen's stop callbacks, so the lookup keeps running across it.
+     */
+    fun onLifecyclePause(configurationChange: Boolean = false) {
+        if (configurationChange) return
         if (_uiState.value.isCanceling) {
             // If a replacement was requested while cleanup ran, do not start it
             // after the screen has left the foreground. Finish this as a pause.
