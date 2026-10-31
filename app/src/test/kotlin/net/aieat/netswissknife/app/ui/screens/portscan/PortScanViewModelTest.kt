@@ -960,6 +960,87 @@ class PortScanViewModelTest {
         }
 
     @Test
+    fun `configuration change keeps a running scan alive`() =
+        runTest {
+            every { portScanUseCase(any(), any()) } returns
+                kotlinx.coroutines.flow.flow {
+                    emit(PortScanFlowResult.Started("127.0.0.1", 3))
+                    awaitCancellation()
+                }
+            viewModel.onHostChange("example.com")
+            viewModel.startScan()
+
+            viewModel.onLifecyclePause(configurationChange = true)
+
+            assertTrue(viewModel.uiState.value is PortScanUiState.Scanning)
+            assertEquals(null, lastOperationSession.cancellationReason)
+            viewModel.onClear()
+        }
+
+    @Test
+    fun `a stopped scan records how many ports were requested`() =
+        runTest {
+            every { portScanUseCase(any(), any()) } returns
+                kotlinx.coroutines.flow.flow {
+                    emit(PortScanFlowResult.Started("127.0.0.1", 3))
+                    emit(PortScanFlowResult.PortScanned(stubResult, scannedCount = 1, totalCount = 3))
+                    awaitCancellation()
+                }
+            viewModel.onHostChange("example.com")
+            viewModel.startScan()
+
+            viewModel.onStopScan()
+
+            val state = viewModel.uiState.value as PortScanUiState.Finished
+            assertEquals(PortScanUiState.Completion.USER_STOPPED, state.completion)
+            assertEquals(3, state.requestedPorts)
+            viewModel.onClear()
+        }
+
+    @Test
+    fun `editing the host clears a finished result`() =
+        runTest {
+            every { portScanUseCase(any(), any()) } returns flowOf(PortScanFlowResult.ScanComplete(stubSummary))
+            viewModel.onHostChange("example.com")
+            viewModel.startScan()
+
+            viewModel.onHostChange("1.1.1.1")
+
+            assertTrue(viewModel.uiState.value is PortScanUiState.Idle)
+        }
+
+    @Test
+    fun `editing the host clears a failed scan`() =
+        runTest {
+            every { portScanUseCase(any(), any()) } returns
+                flowOf(PortScanFlowResult.ValidationError("invalid host"))
+            viewModel.onHostChange("example.com")
+            viewModel.startScan()
+            assertTrue(viewModel.uiState.value is PortScanUiState.Error)
+
+            viewModel.onHostChange("1.1.1.1")
+
+            assertTrue(viewModel.uiState.value is PortScanUiState.Idle)
+        }
+
+    @Test
+    fun `editing the host during a scan keeps the running scan visible`() =
+        runTest {
+            every { portScanUseCase(any(), any()) } returns
+                kotlinx.coroutines.flow.flow {
+                    emit(PortScanFlowResult.Started("127.0.0.1", 3))
+                    awaitCancellation()
+                }
+            viewModel.onHostChange("example.com")
+            viewModel.startScan()
+
+            viewModel.onHostChange("example.org")
+
+            assertTrue(viewModel.uiState.value is PortScanUiState.Scanning)
+            viewModel.onClear()
+        }
+
+    @Test
     fun `addRecent is called on first port result`() =
         runTest {
             every { portScanUseCase(any(), any()) } returns

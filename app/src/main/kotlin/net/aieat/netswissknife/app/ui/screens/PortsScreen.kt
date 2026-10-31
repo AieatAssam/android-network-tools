@@ -1,5 +1,6 @@
 package net.aieat.netswissknife.app.ui.screens
 
+import android.app.Activity
 import android.content.ClipData
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -123,6 +124,7 @@ import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.components.ToolStopButton
 import net.aieat.netswissknife.app.ui.components.ToolTextField
 import net.aieat.netswissknife.app.ui.components.hapticAction
+import net.aieat.netswissknife.app.ui.components.messageRes
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
 import net.aieat.netswissknife.app.ui.i18n.asString
 import net.aieat.netswissknife.app.ui.i18n.uiText
@@ -132,6 +134,7 @@ import net.aieat.netswissknife.app.ui.screens.portscan.PortScanViewModel
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.core.domain.PortScanPreset
+import net.aieat.netswissknife.core.domain.PortScanRange
 import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.portscan.PortScanResult
 import net.aieat.netswissknife.core.network.portscan.PortScanSummary
@@ -152,15 +155,20 @@ object PortsScreenTestTags {
 @Composable
 fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
     val lifecycleOwner = LocalLifecycleOwner.current
+    val activity = LocalContext.current as? Activity
+    // Rotation also pauses and disposes this screen. The Activity reports it through
+    // isChangingConfigurations, and the scan must keep running across that recreation.
     DisposableEffect(lifecycleOwner) {
         val observer =
             LifecycleEventObserver { _, event ->
-                if (event == Lifecycle.Event.ON_PAUSE) viewModel.onLifecyclePause()
+                if (event == Lifecycle.Event.ON_PAUSE) {
+                    viewModel.onLifecyclePause(configurationChange = activity?.isChangingConfigurations == true)
+                }
             }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
-            viewModel.onLifecyclePause()
+            viewModel.onLifecyclePause(configurationChange = activity?.isChangingConfigurations == true)
         }
     }
     val requestLocalNetworkPermission = rememberLocalNetworkPermissionRequester(viewModel::startScan)
@@ -338,6 +346,22 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
                         text = stringResource(R.string.ports_scan_deadline_partial),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
+            if (finished.completion == PortScanUiState.Completion.USER_STOPPED) {
+                item {
+                    val requested = finished.requestedPorts
+                    Text(
+                        text =
+                            if (requested != null) {
+                                stringResource(R.string.ports_scan_stopped_partial, summary.totalPorts, requested)
+                            } else {
+                                stringResource(R.string.ports_scan_stopped_early)
+                            },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
@@ -520,6 +544,7 @@ private fun PortScanInputCard(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             // Host input
+            val hostProblemRes = if (isHostInvalid) HostValidator.problemOf(host)?.messageRes() else null
             ToolTextField(
                 value = host,
                 onValueChange = onHostChange,
@@ -534,8 +559,8 @@ private fun PortScanInputCard(
                     }),
                 isError = isHostInvalid,
                 supportingText =
-                    if (isHostInvalid) {
-                        { Text(stringResource(R.string.error_invalid_host)) }
+                    if (hostProblemRes != null) {
+                        { Text(stringResource(hostProblemRes)) }
                     } else {
                         null
                     },
@@ -591,12 +616,17 @@ private fun PortScanInputCard(
             val endNum = endPort.toIntOrNull()
             val startInvalid = startPort.isNotEmpty() && (startNum == null || startNum !in 1..65535)
             val endInvalid = endPort.isNotEmpty() && (endNum == null || endNum !in 1..65535)
-            val orderInvalid =
-                startNum != null && endNum != null &&
-                    !startInvalid && !endInvalid && startNum > endNum
+            val rangeProblem =
+                if (startNum != null && endNum != null && !startInvalid && !endInvalid) {
+                    PortScanRange.problemOf(startNum, endNum)
+                } else {
+                    null
+                }
+            val orderInvalid = rangeProblem == PortScanRange.Problem.INVERTED
+            val rangeTooLarge = rangeProblem == PortScanRange.Problem.TOO_LARGE
             val customRangeValid =
                 selectedPreset != PortScanPreset.CUSTOM ||
-                    (startNum != null && endNum != null && !startInvalid && !endInvalid && !orderInvalid)
+                    (startNum != null && endNum != null && !startInvalid && !endInvalid && rangeProblem == null)
 
             AnimatedVisibility(visible = selectedPreset == PortScanPreset.CUSTOM) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -624,7 +654,7 @@ private fun PortScanInputCard(
                             onValueChange = { onEndPortChange(it.filter(Char::isDigit).take(5)) },
                             label = { Text(stringResource(R.string.ports_end_port_label)) },
                             singleLine = true,
-                            isError = endInvalid || orderInvalid,
+                            isError = endInvalid || orderInvalid || rangeTooLarge,
                             supportingText =
                                 if (endInvalid) {
                                     { Text(stringResource(R.string.ports_range_error)) }
@@ -642,8 +672,14 @@ private fun PortScanInputCard(
                         RangeSlider(
                             value = lowerBound.toFloat()..upperBound.toFloat(),
                             onValueChange = { range ->
-                                onStartPortChange(range.start.toInt().toString())
-                                onEndPortChange(range.endInclusive.toInt().toString())
+                                val (newStart, newEnd) =
+                                    PortScanRange.clampSliderChange(
+                                        previousStart = lowerBound,
+                                        newStart = range.start.toInt(),
+                                        newEnd = range.endInclusive.toInt(),
+                                    )
+                                onStartPortChange(newStart.toString())
+                                onEndPortChange(newEnd.toString())
                             },
                             valueRange = 1f..65535f,
                             modifier = Modifier.fillMaxWidth(),
@@ -654,6 +690,14 @@ private fun PortScanInputCard(
                         orderInvalid -> {
                             Text(
                                 text = stringResource(R.string.ports_range_order_error),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
+
+                        rangeTooLarge -> {
+                            Text(
+                                text = stringResource(R.string.ports_range_too_large_error),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.error,
                             )
@@ -1096,18 +1140,13 @@ private fun PortResultRow(result: PortScanResult) {
             PortStatus.CLOSED -> R.string.ports_closed_label
             PortStatus.FILTERED -> R.string.ports_filtered_label
         }
-    val statusAlpha =
-        when (result.status) {
-            PortStatus.OPEN -> 1f
-            else -> 0.65f
-        }
 
     OutlinedCard(
         modifier =
             Modifier
                 .fillMaxWidth()
                 .padding(vertical = 2.dp)
-                .alpha(animatedAlpha * statusAlpha),
+                .alpha(animatedAlpha),
     ) {
         Row(
             modifier = Modifier.padding(12.dp),

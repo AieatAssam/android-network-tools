@@ -20,6 +20,7 @@ import net.aieat.netswissknife.core.domain.PortScanFlowResult
 import net.aieat.netswissknife.core.domain.PortScanDeadlineBudget
 import net.aieat.netswissknife.core.domain.PortScanParams
 import net.aieat.netswissknife.core.domain.PortScanPreset
+import net.aieat.netswissknife.core.domain.PortScanRange
 import net.aieat.netswissknife.core.domain.PortScanUseCase
 import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.MonotonicClock
@@ -60,6 +61,8 @@ sealed interface PortScanUiState {
     data class Finished(
         val summary: PortScanSummary,
         val completion: Completion = Completion.COMPLETE,
+        /** Ports the stopped scan was asked to probe; null when the scan was not stopped early. */
+        val requestedPorts: Int? = null,
     ) : PortScanUiState
     data class Error(val message: String, val isBudgetLimit: Boolean = false) : PortScanUiState
 
@@ -191,6 +194,10 @@ class PortScanViewModel @Inject constructor(
         }
         _host.value = value
         savedStateHandle[EDITED_HOST_KEY] = value
+        // A finished or failed result describes the previous host; do not leave it on screen.
+        if (_uiState.value !is PortScanUiState.Scanning && _uiState.value !is PortScanUiState.Idle) {
+            _uiState.value = PortScanUiState.Idle
+        }
         if (value.isEmpty()) {
             _sourceContext.value = null
             savedStateHandle.remove<String>(HANDOFF_SOURCE_KEY)
@@ -252,8 +259,13 @@ class PortScanViewModel @Inject constructor(
         }
     }
 
-    /** Stops socket probes when the screen leaves the foreground. */
-    fun onLifecyclePause() {
+    /**
+     * Stops socket probes when the screen leaves the foreground. A configuration change
+     * (rotation, theme or density change) also pauses the Activity, but the ViewModel and its
+     * scan survive it, so the caller passes [configurationChange] and the scan keeps going.
+     */
+    fun onLifecyclePause(configurationChange: Boolean = false) {
+        if (configurationChange) return
         val session = scanOperationSession ?: return
         cancelPreservingExpiredDeadline(session, CancellationReason.LIFECYCLE_PAUSE)
         when (session.cancellationReason) {
@@ -303,6 +315,7 @@ class PortScanViewModel @Inject constructor(
             _uiState.value = PortScanUiState.Finished(
                 summary = partial,
                 completion = PortScanUiState.Completion.USER_STOPPED,
+                requestedPorts = current.totalCount.takeIf { it > 0 },
             )
         }
     }
@@ -338,7 +351,7 @@ class PortScanViewModel @Inject constructor(
         val totalPorts = if (_selectedPreset.value == PortScanPreset.CUSTOM) {
             val start = params.startPort
             val end = params.endPort
-            if (start in 1..65_535 && end in start..65_535 && end - start + 1 <= 10_000) {
+            if (PortScanRange.problemOf(start, end) == null) {
                 end - start + 1
             } else {
                 0

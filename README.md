@@ -42,8 +42,12 @@ Network path analysis with per-hop geolocation enrichment.
 ### Port Scanner
 TCP port reachability scanning with service identification.
 - 7 preset port groups: Common Services, Well-Known (1–1024), Web, Databases, Mail, Remote Access, and Custom range (up to 10,000 ports)
-- Concurrent scanning (1–500 simultaneous probes), per-port timeout (100–30,000 ms)
-- Service name resolution and banner grabbing for open ports
+- A custom range is checked as you type: an inverted range or one over 10,000 ports shows a message and disables Scan Ports. Dragging the range slider stops at the 10,000-port cap
+- Concurrent scanning (1–500 simultaneous probes), per-port timeout slider (200–10,000 ms)
+- Service names come from the built-in registry; a port with no registered name shows no service name rather than a generic label
+- Banner grabbing for open ports
+- Invalid hosts show the specific reason (for example, a space, an out-of-range IPv4 octet or an invalid character) instead of one generic message. Editing the host clears the previous result
+- A scan stopped with Stop Scan, or stopped when the app leaves the foreground, is labelled as stopped early with the number of ports scanned so far. A screen rotation does not stop a running scan
 
 ### LAN Scanner
 Local network device discovery across IPv4 subnets.

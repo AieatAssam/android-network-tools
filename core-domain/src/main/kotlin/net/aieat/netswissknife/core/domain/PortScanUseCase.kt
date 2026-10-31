@@ -18,7 +18,7 @@ import net.aieat.netswissknife.core.network.portscan.PortScanUpdate
  * Validation rules:
  * - Host must not be blank and must be a valid hostname/IPv4
  * - For CUSTOM preset: startPort and endPort must be in 1–65535, startPort ≤ endPort
- * - Max custom range: 10 000 ports
+ * - Max custom range: [PortScanRange.MAX_PORTS] ports
  * - timeoutMs must be in 100–30 000
  * - concurrency must be in 1–500
  */
@@ -96,8 +96,17 @@ class PortScanUseCase(
                         return@flow
                     }
                     val rangeSize = params.endPort - params.startPort + 1
-                    if (rangeSize > 10_000) {
-                        emit(PortScanFlowResult.ValidationError(validationError(ErrorCode.PORT_RANGE_TOO_LARGE, "Custom range must not exceed 10 000 ports (got $rangeSize)", 10_000, rangeSize)))
+                    if (rangeSize > PortScanRange.MAX_PORTS) {
+                        emit(
+                            PortScanFlowResult.ValidationError(
+                                validationError(
+                                    ErrorCode.PORT_RANGE_TOO_LARGE,
+                                    "Custom range must not exceed 10 000 ports (got $rangeSize)",
+                                    PortScanRange.MAX_PORTS,
+                                    rangeSize,
+                                ),
+                            ),
+                        )
                         return@flow
                     }
                     (params.startPort..params.endPort).toList()

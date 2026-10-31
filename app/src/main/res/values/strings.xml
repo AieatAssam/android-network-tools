@@ -302,6 +302,7 @@
     <string name="ports_end_port_label">End port</string>
     <string name="ports_range_error">1–65535</string>
     <string name="ports_range_order_error">Start port must be ≤ end port</string>
+    <string name="ports_range_too_large_error">Custom range must not exceed 10,000 ports</string>
     <plurals name="ports_range_count">
         <item quantity="one">%1$d port selected</item>
         <item quantity="other">%1$d ports selected</item>
@@ -826,6 +827,8 @@
     <string name="whois_lifecycle_paused_message">The lookup stopped when WHOIS left the foreground. Retry when ready.</string>
     <string name="ports_scan_budget_exceeded">This scan may exceed the 15-minute limit. Increase concurrency or reduce the port range or timeout.</string>
     <string name="ports_scan_deadline_partial">The 15-minute time limit was reached. Showing the results completed so far.</string>
+    <string name="ports_scan_stopped_partial">Stopped at %1$d of %2$d ports. Showing the results collected so far.</string>
+    <string name="ports_scan_stopped_early">Scan stopped early. Showing the results collected so far.</string>
     <string name="traceroute_time_limit_reached">Time limit reached. Showing hops found so far.</string>
     <string name="lan_scan_estimate_too_large">Estimated scan time exceeds the 10-minute limit. Use a smaller subnet, increase concurrency, or lower the probe timeout.</string>
     <string name="lan_subnet_narrowed_hint">Your network (%1$s) is too large to scan within 10 minutes, so the range around this device is filled in. Edit it to scan another part.</string>
@@ -1238,7 +1241,7 @@
     <string name="help_portscan_params_heading">Key parameters</string>
     <string name="help_portscan_results_heading">Reading the results</string>
     <string-array name="help_portscan_params_bullets">
-        <item>Port range - use a preset (Common, Web, All) or enter a custom range.</item>
+        <item>Port range - use a preset (Common services, Well-known 1–1024, Web, Databases, Mail, Remote access) or enter a custom range of up to 10,000 ports.</item>
         <item>Timeout - how long to wait for each port before giving up.</item>
         <item>Concurrency - how many ports to check at the same time.</item>
     </string-array>

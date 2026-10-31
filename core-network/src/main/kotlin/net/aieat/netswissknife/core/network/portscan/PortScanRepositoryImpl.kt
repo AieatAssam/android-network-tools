@@ -484,7 +484,8 @@ class PortScanRepositoryImpl(
                                 PortScanResult(
                                     port = port,
                                     status = connectResult.status,
-                                    serviceName = portInfo?.serviceName ?: WellKnownPorts.getServiceName(port),
+                                    // Unregistered ports stay unnamed rather than 'Well-known'.
+                                    serviceName = portInfo?.serviceName,
                                     serviceDescription = portInfo?.description,
                                     banner = connectResult.banner,
                                     responseTimeMs = connectResult.responseTimeMs,

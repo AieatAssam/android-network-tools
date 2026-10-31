@@ -131,9 +131,19 @@ work_packages:
         - "A:DNS-02 wording on tablet and the Use Cloudflare path after the new validation: verify on device at WP18."
   - id: WP05
     title: Port Scanner
-    status: todo
+    status: done
     findings: [B:PORTS-01, B:PORTS-02, B:PORTS-03, B:PORTS-04, B:PORTS-05, B:PORTS-06, B:PORTS-07, B:PORTS-09, B:PORTS-10, B:PORTS-11, B:PORTS-12, B:PD-01]
     notes: "Inline validation of custom range (max ports) ; stopped/interrupted scan must be labelled partial; honest host-validation messages."
+    result:
+      fixed: [PORTS-01, PORTS-02, PORTS-03, PORTS-04, PORTS-06, PORTS-07, PORTS-12]
+      deferred:
+        - "PD-01 / PORTS-08: results not Parcelable; owned by WP15"
+        - "PORTS-11: copy snackbar needs Scaffold/SnackbarHost (UNVERIFIED)"
+        - "PORTS-05: edge fade, belongs with A:PING-07 shared chip work"
+        - "PORTS-09: IME Done set; label cannot read 'Scan' with ImeAction.Done"
+        - "PORTS-10: status-bar scrim, device check"
+      device_checks_for_wp18: ["rotation mid-scan on Android 8", "stopped-scan banner"]
+      note: "Orchestrator finished gates/commit after implementer hand-back stalled."
   - id: WP06
     title: LAN Scanner + Topology
     status: todo
