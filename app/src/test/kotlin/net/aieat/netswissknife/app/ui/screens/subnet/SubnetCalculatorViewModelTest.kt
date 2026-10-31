@@ -1,6 +1,7 @@
 package net.aieat.netswissknife.app.ui.screens.subnet
 
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -9,11 +10,19 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import net.aieat.netswissknife.core.domain.SubnetCalculatorUseCase
+import net.aieat.netswissknife.core.network.ErrorCode
+import net.aieat.netswissknife.core.network.ErrorInfo
 import net.aieat.netswissknife.core.network.NetworkResult
+import net.aieat.netswissknife.core.network.subnet.Ipv4Scope
+import net.aieat.netswissknife.core.network.subnet.SubnetAddressRole
 import net.aieat.netswissknife.core.network.subnet.SubnetInfo
+import net.aieat.netswissknife.core.network.subnet.SubnetMembership
+import net.aieat.netswissknife.core.network.subnet.SubnetRow
+import net.aieat.netswissknife.core.network.subnet.SubnetSplit
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
@@ -46,9 +55,28 @@ class SubnetCalculatorViewModelTest {
         hostBits = 8,
         ipClass = "C",
         isPrivate = true,
+        scope = Ipv4Scope.PRIVATE,
         cidrNotation = "192.168.1.0/24",
         inputIsAligned = true,
     )
+
+    private val sampleMembership =
+        SubnetMembership(
+            address = "192.168.1.50",
+            cidrNotation = "192.168.1.0/24",
+            networkAddress = "192.168.1.0",
+            broadcastAddress = "192.168.1.255",
+            role = SubnetAddressRole.USABLE_HOST,
+        )
+
+    private val sampleSplit =
+        SubnetSplit(
+            parentCidr = "192.168.1.0/24",
+            newPrefix = 26,
+            requestedCount = null,
+            subnetCount = 4,
+            rows = listOf(SubnetRow("192.168.1.0/26", "192.168.1.0", "192.168.1.63")),
+        )
 
     @BeforeEach
     fun setUp() {
@@ -56,6 +84,9 @@ class SubnetCalculatorViewModelTest {
         useCase = mockk()
         coEvery { useCase(any()) } returns NetworkResult.Success(sampleSubnetInfo)
         coEvery { useCase.invokeRange(any(), any()) } returns NetworkResult.Success(sampleSubnetInfo)
+        coEvery { useCase.checkMembership(any(), any()) } returns NetworkResult.Success(sampleMembership)
+        coEvery { useCase.splitIntoPrefix(any(), any()) } returns NetworkResult.Success(sampleSplit)
+        coEvery { useCase.splitIntoCount(any(), any()) } returns NetworkResult.Success(sampleSplit)
         viewModel = SubnetCalculatorViewModel(useCase)
     }
 
@@ -123,6 +154,193 @@ class SubnetCalculatorViewModelTest {
 
             assertFalse(viewModel.uiState.value.isRangeMode)
             // input is preserved from before
+        }
+    }
+
+    @Nested
+    @DisplayName("editing clears stale results (SUB-02)")
+    inner class StaleResults {
+        @Test
+        fun `clearing the input clears the previous result`() {
+            runTest {
+                viewModel.onInputChange("192.168.1.0/24")
+                viewModel.calculate()
+                assertTrue(viewModel.uiState.value.result != null)
+
+                viewModel.onInputChange("")
+
+                assertNull(viewModel.uiState.value.result)
+            }
+        }
+
+        @Test
+        fun `editing the input clears the result and its error`() {
+            runTest {
+                coEvery { useCase("192.168.1.0/") } returns NetworkResult.error(ErrorCode.SUBNET_PREFIX_MISSING)
+                viewModel.onInputChange("192.168.1.0/")
+                viewModel.calculate()
+                assertTrue(viewModel.uiState.value.error != null)
+
+                viewModel.onInputChange("192.168.1.0/2")
+
+                assertNull(viewModel.uiState.value.error)
+                assertNull(viewModel.uiState.value.result)
+            }
+        }
+
+        @Test
+        fun `editing a range bound clears the range result`() {
+            runTest {
+                viewModel.toggleMode()
+                viewModel.onMinIpChange("192.168.1.0")
+                viewModel.onMaxIpChange("192.168.1.255")
+                viewModel.calculateRange()
+                assertTrue(viewModel.uiState.value.result != null)
+
+                viewModel.onMaxIpChange("192.168.1.1")
+
+                assertNull(viewModel.uiState.value.result)
+            }
+        }
+
+        @Test
+        fun `calculation error keeps its typed code`() {
+            runTest {
+                coEvery { useCase("10.0.0.0/") } returns NetworkResult.error(ErrorCode.SUBNET_PREFIX_MISSING)
+                viewModel.onInputChange("10.0.0.0/")
+                viewModel.calculate()
+
+                val error: NetworkResult.Error? = viewModel.uiState.value.error
+                val info: ErrorInfo? = error?.info
+                val code: ErrorCode? = info?.code
+                assertEquals(ErrorCode.SUBNET_PREFIX_MISSING, code)
+            }
+        }
+    }
+
+    @Nested
+    @DisplayName("is this address in the subnet?")
+    inner class Membership {
+        @Test
+        fun `checking an address keeps the calculated result`() {
+            runTest {
+                viewModel.onInputChange("192.168.1.0/24")
+                viewModel.calculate()
+
+                viewModel.onCheckIpChange("192.168.1.50")
+
+                assertTrue(viewModel.uiState.value.result != null)
+                assertEquals(sampleMembership, viewModel.uiState.value.membership)
+            }
+        }
+
+        @Test
+        fun `membership is checked against the calculated network`() {
+            runTest {
+                viewModel.onInputChange("192.168.1.0/24")
+                viewModel.calculate()
+
+                viewModel.onCheckIpChange("192.168.1.50")
+
+                coVerify { useCase.checkMembership("192.168.1.50", "192.168.1.0/24") }
+            }
+        }
+
+        @Test
+        fun `no membership check happens without a result`() {
+            runTest {
+                viewModel.onCheckIpChange("192.168.1.50")
+
+                coVerify(exactly = 0) { useCase.checkMembership(any(), any()) }
+                assertNull(viewModel.uiState.value.membership)
+            }
+        }
+
+        @Test
+        fun `changing the address clears the previous answer`() {
+            runTest {
+                viewModel.onInputChange("192.168.1.0/24")
+                viewModel.calculate()
+                viewModel.onCheckIpChange("192.168.1.50")
+
+                viewModel.onCheckIpChange("")
+
+                assertNull(viewModel.uiState.value.membership)
+            }
+        }
+    }
+
+    @Nested
+    @DisplayName("split into equal subnets")
+    inner class Split {
+        @Test
+        fun `split by prefix stores the split`() {
+            runTest {
+                viewModel.onInputChange("192.168.1.0/24")
+                viewModel.calculate()
+                viewModel.onSplitInputChange("26")
+
+                viewModel.splitNetwork()
+
+                assertEquals(sampleSplit, viewModel.uiState.value.split)
+                coVerify { useCase.splitIntoPrefix("192.168.1.0/24", 26) }
+            }
+        }
+
+        @Test
+        fun `split by count uses the count mode`() {
+            runTest {
+                viewModel.onInputChange("192.168.1.0/24")
+                viewModel.calculate()
+                viewModel.onSplitModeChange(SubnetSplitMode.BY_COUNT)
+                viewModel.onSplitInputChange("3")
+
+                viewModel.splitNetwork()
+
+                coVerify { useCase.splitIntoCount("192.168.1.0/24", 3L) }
+            }
+        }
+
+        @Test
+        fun `unparseable prefix is sent as an invalid value`() {
+            runTest {
+                viewModel.onInputChange("192.168.1.0/24")
+                viewModel.calculate()
+                viewModel.onSplitInputChange("abc")
+
+                viewModel.splitNetwork()
+
+                coVerify { useCase.splitIntoPrefix("192.168.1.0/24", -1) }
+            }
+        }
+
+        @Test
+        fun `changing the mode clears the split`() {
+            runTest {
+                viewModel.onInputChange("192.168.1.0/24")
+                viewModel.calculate()
+                viewModel.onSplitInputChange("26")
+                viewModel.splitNetwork()
+
+                viewModel.onSplitModeChange(SubnetSplitMode.BY_COUNT)
+
+                assertNull(viewModel.uiState.value.split)
+                assertEquals("", viewModel.uiState.value.splitInput)
+            }
+        }
+
+        @Test
+        fun `editing the network clears the split`() {
+            runTest {
+                viewModel.onInputChange("192.168.1.0/24")
+                viewModel.calculate()
+                viewModel.onSplitInputChange("26")
+                viewModel.splitNetwork()
+
+                viewModel.onInputChange("10.0.0.0/8")
+
+                assertNull(viewModel.uiState.value.split)
+            }
         }
     }
 }

@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <baseline version="1.0">
     <file name="src/main/kotlin/net/aieat/netswissknife/core/network/ErrorInfo.kt">
-        <error line="86" column="54" source="standard:multiline-expression-wrapping" />
-        <error line="86" column="54" source="standard:function-signature" />
-        <error line="88" column="13" source="standard:when-entry-bracing" />
-        <error line="89" column="1" source="standard:blank-line-between-when-conditions" />
-        <error line="89" column="17" source="standard:when-entry-bracing" />
+        <error line="94" column="54" source="standard:multiline-expression-wrapping" />
+        <error line="94" column="54" source="standard:function-signature" />
+        <error line="96" column="13" source="standard:when-entry-bracing" />
+        <error line="97" column="1" source="standard:blank-line-between-when-conditions" />
+        <error line="97" column="17" source="standard:when-entry-bracing" />
     </file>
     <file name="src/main/kotlin/net/aieat/netswissknife/core/network/MonotonicClock.kt">
         <error line="20" column="64" source="standard:function-signature" />
@@ -1349,37 +1349,8 @@
         <error line="74" column="23" source="standard:multiline-expression-wrapping" />
         <error line="74" column="23" source="standard:function-signature" />
     </file>
-    <file name="src/main/kotlin/net/aieat/netswissknife/core/network/subnet/SubnetCalculatorRepository.kt">
-        <error line="21" column="24" source="standard:function-signature" />
-        <error line="21" column="39" source="standard:function-signature" />
-        <error line="21" column="52" source="standard:function-signature" />
-    </file>
     <file name="src/main/kotlin/net/aieat/netswissknife/core/network/subnet/SubnetCalculatorRepositoryImpl.kt">
         <error line="7" column="1" source="standard:no-empty-first-line-in-class-body" />
-        <error line="8" column="72" source="standard:multiline-expression-wrapping" />
-        <error line="8" column="72" source="standard:function-signature" />
-        <error line="16" column="27" source="standard:multiline-expression-wrapping" />
-        <error line="47" column="14" source="standard:trailing-comma-on-call-site" />
-        <error line="55" column="33" source="standard:function-signature" />
-        <error line="55" column="48" source="standard:function-signature" />
-        <error line="55" column="61" source="standard:function-signature" />
-        <error line="55" column="92" source="standard:multiline-expression-wrapping" />
-        <error line="55" column="92" source="standard:function-signature" />
-        <error line="91" column="30" source="standard:multiline-expression-wrapping" />
-        <error line="100" column="1" source="standard:blank-line-between-when-conditions" />
-        <error line="106" column="1" source="standard:blank-line-between-when-conditions" />
-        <error line="106" column="21" source="standard:when-entry-bracing" />
-        <error line="116" column="25" source="standard:multiline-expression-wrapping" />
-        <error line="123" column="47" source="standard:function-signature" />
-        <error line="129" column="33" source="standard:if-else-wrapping" />
-        <error line="129" column="33" source="standard:multiline-if-else" />
-        <error line="130" column="14" source="standard:if-else-wrapping" />
-        <error line="130" column="14" source="standard:multiline-if-else" />
-        <error line="157" column="45" source="standard:multiline-expression-wrapping" />
-        <error line="157" column="45" source="standard:function-signature" />
-    </file>
-    <file name="src/main/kotlin/net/aieat/netswissknife/core/network/subnet/SubnetModels.kt">
-        <error line="1" column="1" source="standard:filename" />
     </file>
     <file name="src/main/kotlin/net/aieat/netswissknife/core/network/tls/ChainAnalyzer.kt">
         <error line="3" column="1" source="standard:import-ordering" />

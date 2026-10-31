@@ -71,6 +71,14 @@
     <string name="err_subnet_blank">Enter a subnet.</string>
     <string name="err_subnet_invalid">The subnet is invalid.</string>
     <string name="err_subnet_range_invalid">The subnet range is invalid.</string>
+    <string name="err_subnet_address_invalid">%1$s is not a valid IPv4 address. Use four numbers from 0 to 255, such as 192.168.1.0.</string>
+    <string name="err_subnet_prefix_missing">Enter a prefix length after the slash, for example /24.</string>
+    <string name="err_subnet_prefix_invalid">/%1$s is not a valid prefix. Use a number from 0 to 32, such as /24.</string>
+    <string name="err_subnet_leading_zero">%1$s has a leading zero. Remove it, for example 8 instead of 08.</string>
+    <string name="err_subnet_mask_non_contiguous">That subnet mask is not contiguous, so it is not a valid mask.</string>
+    <string name="err_subnet_ipv6_unsupported">IPv6 is not supported yet. Enter an IPv4 address or subnet.</string>
+    <string name="err_subnet_split_prefix_invalid">The new prefix must be longer than the current one and no longer than /32.</string>
+    <string name="err_subnet_split_count_invalid">Choose between 1 and %1$s subnets for this network.</string>
     <string name="err_no_response">No response was received.</string>
     <string name="err_network_io">A network error occurred.</string>
 
@@ -117,7 +125,7 @@
     <string name="tool_httprobe_label">HTTP Probe</string>
     <string name="tool_httprobe_short_label">HTTP</string>
     <string name="tool_httprobe_description">HTTPS request tester with security header analysis</string>
-    <string name="tool_subnet_label">Subnet Calc</string>
+    <string name="tool_subnet_label">Subnet Calculator</string>
     <string name="tool_subnet_short_label">Subnet</string>
     <string name="tool_subnet_description">IPv4 subnet calculator with binary breakdown and notation conversion</string>
     <string name="tool_mdns_label">mDNS Browser</string>
@@ -988,7 +996,10 @@
     <string name="subnet_idle_body">Supports CIDR (192.168.1.0/24), dot-decimal mask (192.168.1.0/255.255.255.0) or a bare IP (/32 assumed).</string>
     <string name="subnet_error_title">Invalid Input</string>
     <string name="subnet_retry">Retry</string>
-    <string name="subnet_overview_hosts">%1$s usable hosts</string>
+    <plurals name="subnet_overview_hosts">
+        <item quantity="one">%1$s usable host</item>
+        <item quantity="other">%1$s usable hosts</item>
+    </plurals>
     <string name="subnet_network_address">Network address</string>
     <string name="subnet_broadcast">Broadcast</string>
     <string name="subnet_first_host">First host</string>
@@ -1006,7 +1017,7 @@
     </plurals>
     <string name="subnet_binary_ip">IP address</string>
     <string name="subnet_binary_mask">Subnet mask</string>
-    <string name="subnet_binary_network">Network addr</string>
+    <string name="subnet_binary_network">Network address</string>
     <string name="subnet_notations_title">Notation Equivalents</string>
     <string name="subnet_notation_cidr">CIDR</string>
     <string name="subnet_notation_mask">Dot-decimal mask</string>
@@ -1017,10 +1028,19 @@
     <string name="subnet_ip_class">IP class</string>
     <string name="subnet_class_label">Class %1$s</string>
     <string name="subnet_scope">Scope</string>
-    <string name="subnet_scope_private">Private</string>
+    <string name="subnet_scope_private">Private (RFC 1918)</string>
+    <string name="subnet_scope_shared">Shared (CGNAT, RFC 6598)</string>
+    <string name="subnet_scope_loopback">Loopback</string>
+    <string name="subnet_scope_link_local">Link-local</string>
+    <string name="subnet_scope_this_network">This network</string>
+    <string name="subnet_scope_documentation">Documentation only</string>
+    <string name="subnet_scope_benchmark">Benchmarking</string>
+    <string name="subnet_scope_multicast">Multicast</string>
+    <string name="subnet_scope_reserved">Reserved</string>
     <string name="subnet_scope_public">Public</string>
-    <string name="subnet_prefix_bits">Prefix / host bits</string>
-    <string name="subnet_prefix_of_32">%1$d / 32</string>
+    <string name="subnet_scope_mixed">Mixed (spans several ranges)</string>
+    <string name="subnet_prefix_bits">Prefix length</string>
+    <string name="subnet_prefix_value">/%1$d</string>
     <string name="subnet_host_bit_count">Host bits</string>
     <plurals name="subnet_bits_count">
         <item quantity="one">%1$d bit</item>
@@ -1041,15 +1061,53 @@
     <string name="subnet_alignment_warning_title">IP Not on Network Boundary</string>
     <string name="subnet_alignment_warning_body">%1$s is not a valid network address for /%2$d. The actual network starts at %3$s. Cloud providers like Azure require the exact network address in subnet definitions.</string>
     <!-- Tooltips -->
+    <string name="subnet_explain_field">Explain %1$s</string>
+    <plurals name="subnet_describe_network_bits">
+        <item quantity="one">%1$d network bit</item>
+        <item quantity="other">%1$d network bits</item>
+    </plurals>
+    <plurals name="subnet_describe_host_bits">
+        <item quantity="one">%1$d host bit</item>
+        <item quantity="other">%1$d host bits</item>
+    </plurals>
+    <string name="subnet_binary_row_description">%1$s, %2$s, %3$s</string>
+    <string name="subnet_copy_button">Copy</string>
+    <string name="subnet_share_button">Share</string>
+    <string name="subnet_copied">Copied to clipboard</string>
+    <string name="subnet_share_subject">Subnet %1$s</string>
+    <string name="subnet_check_title">Is this address in the subnet?</string>
+    <string name="subnet_check_label">IP address to check</string>
+    <string name="subnet_check_placeholder">e.g. 192.168.1.50</string>
+    <string name="subnet_check_idle">Type an address to see whether it belongs to this subnet.</string>
+    <string name="subnet_check_yes">Yes, %1$s is inside %2$s.</string>
+    <string name="subnet_check_no">No, %1$s is outside %2$s.</string>
+    <string name="subnet_check_reason_usable">It is a usable host address in this subnet.</string>
+    <string name="subnet_check_reason_network">It is the network address. It identifies the subnet and cannot be assigned to a device.</string>
+    <string name="subnet_check_reason_broadcast">It is the broadcast address. Packets sent to it reach every device in the subnet.</string>
+    <string name="subnet_check_reason_outside">The subnet covers %1$s to %2$s.</string>
+    <string name="subnet_split_title">Split into equal subnets</string>
+    <string name="subnet_split_by_prefix">New prefix</string>
+    <string name="subnet_split_by_count">Number of subnets</string>
+    <string name="subnet_split_prefix_label">New prefix length</string>
+    <string name="subnet_split_prefix_placeholder">e.g. 26</string>
+    <string name="subnet_split_count_label">Number of subnets</string>
+    <string name="subnet_split_count_placeholder">e.g. 4</string>
+    <string name="subnet_split_button">Split</string>
+    <plurals name="subnet_split_summary">
+        <item quantity="one">%1$s subnet of /%2$d</item>
+        <item quantity="other">%1$s subnets of /%2$d</item>
+    </plurals>
+    <string name="subnet_split_rounded">You asked for %1$s. Equal subnets come in powers of two, so the split uses %2$s.</string>
+    <string name="subnet_split_truncated">Showing the first %1$d of %2$s subnets.</string>
     <string name="tooltip_network_address">The network address is the first address in a subnet, with all host bits set to 0. It identifies the subnet itself and cannot be assigned to any device. Example: in 192.168.1.0/24 the network address is 192.168.1.0.</string>
     <string name="tooltip_broadcast">The broadcast address is the last address in a subnet, with all host bits set to 1. Packets sent here are delivered to every device in the subnet. Example: in 192.168.1.0/24 the broadcast is 192.168.1.255.</string>
-    <string name="tooltip_first_host">The first usable IP address - one above the network address. This is the lowest address you can assign to a device.</string>
-    <string name="tooltip_last_host">The last usable IP address - one below the broadcast address. This is the highest address you can assign to a device.</string>
-    <string name="tooltip_usable_hosts">The count of addresses that can be assigned to devices. Always (2^host_bits − 2) because the network and broadcast addresses are reserved.</string>
+    <string name="tooltip_first_host">The first usable IP address, one above the network address. This is the lowest address you can assign to a device. For /31 and /32 no address is reserved, so it is the network address itself.</string>
+    <string name="tooltip_last_host">The last usable IP address, one below the broadcast address. This is the highest address you can assign to a device. For /31 and /32 no address is reserved, so it is the broadcast address itself.</string>
+    <string name="tooltip_usable_hosts">Addresses that can be assigned to devices. Normally 2^host_bits − 2, because the network and broadcast addresses are reserved. A /31 has 2 usable hosts (RFC 3021) and a /32 has 1.</string>
     <string name="tooltip_wildcard">The wildcard mask is the bitwise inverse of the subnet mask. Bits set to 1 are "don\'t care" bits. Used in ACLs and OSPF configurations.</string>
     <string name="tooltip_cidr">Classless Inter-Domain Routing notation combines an IP address with a prefix length (the number of network bits). Example: 192.168.1.0/24 means 24 network bits and 8 host bits.</string>
     <string name="tooltip_ip_class">A legacy classification of IPv4 ranges before CIDR replaced it. Class A covers 0–127, B covers 128–191, C covers 192–223. Class D is multicast, E is reserved.</string>
-    <string name="tooltip_scope">Whether the address falls within RFC 1918 private ranges (10.x, 172.16–31.x, 192.168.x) or is publicly routable on the internet.</string>
+    <string name="tooltip_scope">Which special-purpose block the whole subnet sits in. RFC 1918 private addresses are not routed on the internet. Shared CGNAT space (100.64.0.0/10) is used by carriers. A subnet that spans several blocks, such as 0.0.0.0/0, is labelled mixed.</string>
 
     <!-- Settings Screen -->
     <string name="settings_screen_title">Settings</string>
@@ -1433,7 +1491,7 @@
     <string name="help_subnet_concept_heading">What is a subnet?</string>
     <string name="help_subnet_concept_body">An IP address has two parts: a network part shared by every device on that local network, and a host part unique to each device - like a street name shared by a block of houses and a house number unique to each one. The subnet mask (the "/24" in CIDR notation) says how many bits belong to each part, which determines how many devices fit and where one network\'s addresses end and the next begins. Splitting a large network into smaller subnets is how organizations keep traffic organized, secure, and easier to manage.</string>
     <string name="help_subnet_what_heading">What it does</string>
-    <string name="help_subnet_what_body">Calculates network details from a CIDR notation or dot-decimal mask input, and can find the smallest subnet that covers a given IP range.</string>
+    <string name="help_subnet_what_body">Calculates network details from a CIDR notation or dot-decimal mask input, and can find the smallest subnet that covers a given IP range. Under the result you can check whether an address is inside the subnet, split it into equal subnets, copy the result, or share it as text.</string>
     <string name="help_subnet_params_heading">Input modes</string>
     <string name="help_subnet_results_heading">Reading the results</string>
     <string-array name="help_subnet_params_bullets">

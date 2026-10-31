@@ -1,5 +1,6 @@
 package net.aieat.netswissknife.app.ui.screens.subnet
 
+import android.content.res.Resources
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -29,8 +30,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Lan
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.NetworkCheck
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
@@ -40,6 +41,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.PlainTooltip
@@ -54,19 +56,23 @@ import androidx.compose.material3.TooltipDefaults
 import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -75,15 +81,20 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import net.aieat.netswissknife.app.ui.components.ToolTextField
-import net.aieat.netswissknife.app.ui.components.hapticAction
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
+import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
-import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
 import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
+import net.aieat.netswissknife.app.ui.components.ToolTextField
+import net.aieat.netswissknife.app.ui.components.hapticAction
+import net.aieat.netswissknife.app.ui.i18n.ErrorTextMapper
+import net.aieat.netswissknife.app.ui.i18n.asString
 import net.aieat.netswissknife.app.ui.theme.AppMotion
+import net.aieat.netswissknife.core.network.subnet.Ipv4Scope
 import net.aieat.netswissknife.core.network.subnet.SubnetInfo
 
 @Composable
@@ -168,9 +179,9 @@ fun SubnetCalculatorScreen(viewModel: SubnetCalculatorViewModel = hiltViewModel(
                 label = "subnet-state"
             ) { (result, error, rangeMode) ->
                 when {
-                    result != null -> SubnetResultContent(result)
+                    result != null -> SubnetResultContent(result, uiState, viewModel)
                     error != null  -> SubnetErrorCard(
-                        message = error,
+                        message = ErrorTextMapper.map(error.info, error.message).asString(),
                         onRetry = if (rangeMode) viewModel::calculateRange else viewModel::calculate
                     )
                     else           -> SubnetIdleCard(isRangeMode = rangeMode)
@@ -246,7 +257,7 @@ private fun SubnetCidrInputs(
             modifier = Modifier.fillMaxWidth(),
             label = { Text(stringResource(R.string.subnet_input_label)) },
             placeholder = { Text(stringResource(R.string.subnet_input_placeholder)) },
-            leadingIcon = { Icon(Icons.Default.NetworkCheck, contentDescription = null) },
+            leadingIcon = { Icon(Icons.Default.Lan, contentDescription = null) },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = { submit() })
@@ -290,7 +301,7 @@ private fun SubnetRangeInputs(
             modifier = Modifier.fillMaxWidth(),
             label = { Text(stringResource(R.string.subnet_min_ip_label)) },
             placeholder = { Text(stringResource(R.string.subnet_min_ip_placeholder)) },
-            leadingIcon = { Icon(Icons.Default.NetworkCheck, contentDescription = null) },
+            leadingIcon = { Icon(Icons.Default.Lan, contentDescription = null) },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next)
         )
@@ -301,7 +312,7 @@ private fun SubnetRangeInputs(
             modifier = Modifier.fillMaxWidth(),
             label = { Text(stringResource(R.string.subnet_max_ip_label)) },
             placeholder = { Text(stringResource(R.string.subnet_max_ip_placeholder)) },
-            leadingIcon = { Icon(Icons.Default.NetworkCheck, contentDescription = null) },
+            leadingIcon = { Icon(Icons.Default.Lan, contentDescription = null) },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = { submit() })
@@ -418,7 +429,11 @@ private fun SubnetErrorCard(message: String, onRetry: () -> Unit) {
 // ── Results content ───────────────────────────────────────────────────────────
 
 @Composable
-private fun SubnetResultContent(info: SubnetInfo) {
+private fun SubnetResultContent(
+    info: SubnetInfo,
+    state: SubnetCalculatorUiState,
+    viewModel: SubnetCalculatorViewModel,
+) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         if (!info.inputIsAligned) {
             SubnetAlignmentWarning(info)
@@ -427,6 +442,22 @@ private fun SubnetResultContent(info: SubnetInfo) {
         SubnetBinaryVisualizerCard(info)
         SubnetNotationsCard(info)
         SubnetPropertiesCard(info)
+        SubnetMembershipCard(
+            input = state.checkIpInput,
+            membership = state.membership,
+            error = state.membershipError,
+            onInputChange = viewModel::onCheckIpChange,
+        )
+        SubnetSplitCard(
+            mode = state.splitMode,
+            input = state.splitInput,
+            split = state.split,
+            error = state.splitError,
+            onModeChange = viewModel::onSplitModeChange,
+            onInputChange = viewModel::onSplitInputChange,
+            onSplit = viewModel::splitNetwork,
+        )
+        SubnetShareActions(info)
     }
 }
 
@@ -502,9 +533,10 @@ private fun SubnetOverviewCard(info: SubnetInfo) {
                         fontFamily = FontFamily.Monospace
                     )
                     Text(
-                        text = stringResource(
-                            R.string.subnet_overview_hosts,
-                            formatHostCount(info.usableHosts)
+                        text = pluralStringResource(
+                            R.plurals.subnet_overview_hosts,
+                            subnetPluralQuantity(info.usableHosts),
+                            formatSubnetCount(info.usableHosts)
                         ),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
@@ -537,11 +569,11 @@ private fun SubnetOverviewCard(info: SubnetInfo) {
                 )
                 SubnetInfoRow(
                     label = stringResource(R.string.subnet_total_hosts),
-                    value = formatHostCount(info.totalHosts)
+                    value = formatSubnetCount(info.totalHosts)
                 )
                 SubnetInfoRow(
                     label = stringResource(R.string.subnet_usable_hosts),
-                    value = formatHostCount(info.usableHosts),
+                    value = formatSubnetCount(info.usableHosts),
                     tooltip = stringResource(R.string.tooltip_usable_hosts)
                 )
             }
@@ -604,6 +636,18 @@ private fun SubnetBinaryVisualizerCard(info: SubnetInfo) {
     }
 }
 
+/** One spoken description per binary row, so TalkBack does not read individual bits. */
+private fun binaryRowDescription(
+    resources: Resources,
+    label: String,
+    prefixLength: Int,
+    hostBits: Int,
+): String {
+    val networkText = resources.getQuantityString(R.plurals.subnet_describe_network_bits, prefixLength, prefixLength)
+    val hostText = resources.getQuantityString(R.plurals.subnet_describe_host_bits, hostBits, hostBits)
+    return resources.getString(R.string.subnet_binary_row_description, label, networkText, hostText)
+}
+
 @Composable
 private fun LegendItem(color: androidx.compose.ui.graphics.Color, label: String) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -619,63 +663,73 @@ private fun LegendItem(color: androidx.compose.ui.graphics.Color, label: String)
 
 @Composable
 private fun BinaryBitsRow(label: String, binaryDotted: String, prefixLength: Int) {
-    val networkColor = MaterialTheme.colorScheme.primary
-    val hostColor = MaterialTheme.colorScheme.tertiary
-    val networkBg = MaterialTheme.colorScheme.primaryContainer
-    val hostBg = MaterialTheme.colorScheme.tertiaryContainer
-
     // Strip dots to get a flat 32-bit string, then re-add octet grouping with colors
     val bits = binaryDotted.replace(".", "")
+    val resources = LocalContext.current.resources
+    val description = binaryRowDescription(resources, label, prefixLength, bits.length - prefixLength)
 
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+    Column(
+        modifier = Modifier.clearAndSetSemantics { contentDescription = description },
+        verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(3.dp)
-        ) {
-            bits.chunked(8).forEachIndexed { octetIdx, octet ->
-                val octetStart = octetIdx * 8
-                Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(1.dp)) {
-                    octet.forEachIndexed { bitIdx, bit ->
-                        val absoluteBit = octetStart + bitIdx
-                        val isNetwork = absoluteBit < prefixLength
-                        val bg = if (isNetwork) networkBg else hostBg
-                        val fg = if (isNetwork) networkColor else hostColor
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(24.dp)
-                                .clip(RoundedCornerShape(2.dp))
-                                .background(bg)
-                                .border(
-                                    width = if (absoluteBit == prefixLength - 1 || absoluteBit == prefixLength) 1.dp else 0.dp,
-                                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
-                                    shape = RoundedCornerShape(2.dp)
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = bit.toString(),
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontFamily = FontFamily.Monospace,
-                                    fontWeight = if (isNetwork) FontWeight.Bold else FontWeight.Normal
-                                ),
-                                color = fg
-                            )
-                        }
+        BinaryBitCells(bits = bits, prefixLength = prefixLength)
+    }
+}
+
+@Suppress("FunctionNaming", "ktlint:standard:function-naming") // Compose naming convention.
+@Composable
+private fun BinaryBitCells(bits: String, prefixLength: Int) {
+    val networkColor = MaterialTheme.colorScheme.primary
+    val hostColor = MaterialTheme.colorScheme.tertiary
+    val networkBg = MaterialTheme.colorScheme.primaryContainer
+    val hostBg = MaterialTheme.colorScheme.tertiaryContainer
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(3.dp)
+    ) {
+        bits.chunked(8).forEachIndexed { octetIdx, octet ->
+            val octetStart = octetIdx * 8
+            Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(1.dp)) {
+                octet.forEachIndexed { bitIdx, bit ->
+                    val absoluteBit = octetStart + bitIdx
+                    val isNetwork = absoluteBit < prefixLength
+                    val bg = if (isNetwork) networkBg else hostBg
+                    val fg = if (isNetwork) networkColor else hostColor
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(24.dp)
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(bg)
+                            .border(
+                                width = if (absoluteBit == prefixLength - 1 || absoluteBit == prefixLength) 1.dp else 0.dp,
+                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
+                                shape = RoundedCornerShape(2.dp)
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = bit.toString(),
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = if (isNetwork) FontWeight.Bold else FontWeight.Normal
+                            ),
+                            color = fg
+                        )
                     }
                 }
-                if (octetIdx < 3) {
-                    Text(
-                        text = ".",
-                        style = MaterialTheme.typography.labelSmall,
-                        modifier = Modifier.align(Alignment.CenterVertically)
-                    )
-                }
+            }
+            if (octetIdx < 3) {
+                Text(
+                    text = ".",
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.align(Alignment.CenterVertically)
+                )
             }
         }
     }
@@ -725,6 +779,13 @@ private fun SubnetNotationsCard(info: SubnetInfo) {
 
 // ── Properties card ───────────────────────────────────────────────────────────
 
+private fun scopeIconFor(scope: Ipv4Scope): ImageVector =
+    when (scope) {
+        Ipv4Scope.PRIVATE -> Icons.Default.Lock
+        Ipv4Scope.PUBLIC -> Icons.Default.Public
+        else -> Icons.Default.Info
+    }
+
 @Composable
 private fun SubnetPropertiesCard(info: SubnetInfo) {
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
@@ -755,26 +816,25 @@ private fun SubnetPropertiesCard(info: SubnetInfo) {
                 }
             }
 
-            // Private / Public badge
+            // Scope of the whole subnet (private, shared, public, mixed, ...)
             SubnetInfoRow(
                 label = stringResource(R.string.subnet_scope),
                 tooltip = stringResource(R.string.tooltip_scope)
             ) {
-                val (scopeIcon, scopeLabel, scopeColor, scopeContainerColor) = if (info.isPrivate) {
-                    Quad(
-                        Icons.Default.Lock,
-                        stringResource(R.string.subnet_scope_private),
-                        MaterialTheme.colorScheme.onSecondaryContainer,
-                        MaterialTheme.colorScheme.secondaryContainer
-                    )
-                } else {
-                    Quad(
-                        Icons.Default.Public,
-                        stringResource(R.string.subnet_scope_public),
-                        MaterialTheme.colorScheme.onTertiaryContainer,
+                val isPublic = info.scope == Ipv4Scope.PUBLIC
+                val scopeIcon = scopeIconFor(info.scope)
+                val scopeColor =
+                    if (isPublic) {
+                        MaterialTheme.colorScheme.onTertiaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSecondaryContainer
+                    }
+                val scopeContainerColor =
+                    if (isPublic) {
                         MaterialTheme.colorScheme.tertiaryContainer
-                    )
-                }
+                    } else {
+                        MaterialTheme.colorScheme.secondaryContainer
+                    }
                 Surface(shape = RoundedCornerShape(8.dp), color = scopeContainerColor) {
                     Row(
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
@@ -788,7 +848,7 @@ private fun SubnetPropertiesCard(info: SubnetInfo) {
                             tint = scopeColor
                         )
                         Text(
-                            text = scopeLabel,
+                            text = stringResource(info.scope.labelRes()),
                             style = MaterialTheme.typography.labelLarge,
                             color = scopeColor,
                             fontWeight = FontWeight.SemiBold
@@ -799,7 +859,7 @@ private fun SubnetPropertiesCard(info: SubnetInfo) {
 
             SubnetInfoRow(
                 label = stringResource(R.string.subnet_prefix_bits),
-                value = stringResource(R.string.subnet_prefix_of_32, info.prefixLength)
+                value = stringResource(R.string.subnet_prefix_value, info.prefixLength)
             )
             SubnetInfoRow(
                 label = stringResource(R.string.subnet_host_bit_count),
@@ -839,6 +899,7 @@ private fun SubnetInfoRow(
             )
             if (tooltip != null) {
                 val tooltipState = rememberTooltipState(isPersistent = true)
+                val tooltipScope = rememberCoroutineScope()
                 TooltipBox(
                     positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
                     tooltip = {
@@ -851,12 +912,17 @@ private fun SubnetInfoRow(
                     },
                     state = tooltipState
                 ) {
-                    Icon(
-                        Icons.Default.Info,
-                        contentDescription = stringResource(R.string.action_help),
-                        modifier = Modifier.size(14.dp),
-                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
-                    )
+                    IconButton(
+                        onClick = { tooltipScope.launch { tooltipState.show() } },
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Info,
+                            contentDescription = stringResource(R.string.subnet_explain_field, label),
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
                 }
             }
         }
@@ -885,12 +951,4 @@ private fun SubnetInfoRow(
             fontWeight = FontWeight.Medium
         )
     }
-}
-
-private data class Quad<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
-
-private fun formatHostCount(count: Long): String = when {
-    count >= 1_000_000L -> "%.2fM".format(count / 1_000_000.0)
-    count >= 1_000L     -> "%.1fK".format(count / 1_000.0)
-    else                -> count.toString()
 }

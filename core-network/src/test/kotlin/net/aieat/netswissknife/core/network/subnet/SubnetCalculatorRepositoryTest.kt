@@ -89,7 +89,7 @@ class SubnetCalculatorRepositoryTest {
         val result = repo.calculate("not-an-ip")
         assertTrue(result is NetworkResult.Error)
         val error = result as NetworkResult.Error
-        assertEquals(ErrorCode.SUBNET_INVALID, error.info?.code)
+        assertEquals(ErrorCode.SUBNET_ADDRESS_INVALID, error.info?.code)
         assertEquals(error.message, error.info?.developerMessage)
     }
 
@@ -160,7 +160,9 @@ class SubnetCalculatorRepositoryTest {
         assertTrue(result is NetworkResult.Success)
         val info = (result as NetworkResult.Success).data
         assertEquals(2L, info.totalHosts)
-        assertEquals(0L, info.usableHosts)
+        assertEquals(2L, info.usableHosts)
+        assertEquals("192.168.1.0", info.firstHost)
+        assertEquals("192.168.1.1", info.lastHost)
     }
 
     @Test

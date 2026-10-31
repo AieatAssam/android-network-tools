@@ -60,9 +60,15 @@ class SubnetCalculatorScreenTest {
     @Test
     fun invalidRange_showsMinMaxValidationError() {
         val errorResult = SubnetCalculatorRepositoryImpl().calculateRange("10.0.0.50", "10.0.0.10")
-        val message = (errorResult as NetworkResult.Error).message
+        val error = errorResult as NetworkResult.Error
+        val message = error.message
         val viewModel = fakeSubnetViewModel(
-            SubnetCalculatorUiState(isRangeMode = true, minIpInput = "10.0.0.50", maxIpInput = "10.0.0.10", error = message)
+            SubnetCalculatorUiState(
+                isRangeMode = true,
+                minIpInput = "10.0.0.50",
+                maxIpInput = "10.0.0.10",
+                error = error,
+            )
         )
 
         composeRule.setContent {

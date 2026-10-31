@@ -27,6 +27,10 @@ class ErrorTextMapperTest {
         ErrorCode.TTL_OUT_OF_RANGE to listOf(1, 255),
         ErrorCode.INTERVAL_OUT_OF_RANGE to listOf(100, 10_000),
         ErrorCode.RETRIES_OUT_OF_RANGE to listOf(1, 5),
+        ErrorCode.SUBNET_ADDRESS_INVALID to listOf("999.1.1.1"),
+        ErrorCode.SUBNET_PREFIX_INVALID to listOf("33"),
+        ErrorCode.SUBNET_LEADING_ZERO to listOf("08"),
+        ErrorCode.SUBNET_SPLIT_COUNT_INVALID to listOf("256"),
     )
 
     @Test

@@ -155,13 +155,19 @@ LAN service discovery via multicast DNS (RFC 6762 / DNS-SD RFC 6763).
 - Requires Wi-Fi multicast lock (`CHANGE_WIFI_MULTICAST_STATE`) for reliable reception on Android
 
 ### Subnet Calculator
-IPv4 subnet calculator with visual binary breakdown and multi-notation conversion.
+IPv4 subnet calculator with binary breakdown, notation conversion, an "is this address in the subnet?" check, and equal splitting. **IPv4 only**: IPv6 input is rejected with an explanation. IPv6 support is deferred.
 - Two input modes: **CIDR / Mask** and **IP Range** (finds the tightest subnet covering a given min–max IP pair)
 - CIDR mode accepts CIDR (`192.168.1.0/24`), dot-decimal mask (`192.168.1.0/255.255.255.0`), space-separated mask, or bare IP (assumes `/32`)
-- Computes: network address, broadcast, first/last usable host, total and usable host counts
-- **Binary Breakdown card**: colour-coded bit grid distinguishing network bits (blue) from host bits (orange) for IP address, subnet mask, and network address rows
+- Input is rejected with a specific message when the prefix is missing (`192.168.1.0/`), out of range (`/33`), has a leading zero (`/08`, `010.1.1.1`, which are not guessed), or the dotted mask is not contiguous
+- Computes: network address, broadcast, first/last usable host, and exact total and usable address counts (thousands separators on screen, plain digits in copied text)
+- Follows RFC 3021 for `/31`: two usable hosts, with first and last host being the two addresses. `/32` is a single host whose first and last host are the address itself
+- **Scope badge** for the whole subnet: Private (RFC 1918), Shared (CGNAT, 100.64.0.0/10), Loopback, Link-local, This network (0.0.0.0/8), Documentation, Benchmarking (198.18.0.0/15), Multicast, Reserved (240.0.0.0/4), Public, or Mixed when the subnet spans several blocks (for example 0.0.0.0/0)
+- **Binary Breakdown card**: colour-coded bit grid distinguishing network bits (blue) from host bits (orange) for IP address, subnet mask, and network address rows. Each row is announced to screen readers as one description
 - **Notation Equivalents card**: CIDR, dot-decimal mask, wildcard mask, hex mask (`0xFFFFFF00`), and binary mask
-- **Address Properties card**: IP class (A/B/C/D/E), private/public scope badge (RFC 1918 + loopback + link-local), prefix and host bit counts
+- **Address Properties card**: IP class (A/B/C/D/E), scope badge, prefix length, and host-bit count. Each info icon explains its own field
+- **Is this address in the subnet?** card: type an IPv4 address to check it against the calculated subnet. The answer is yes or no, with the reason (usable host, network address, broadcast address, or the subnet range when it is outside)
+- **Split into equal subnets** card: divide the subnet either into a new prefix (for example `/26`) or into a number of subnets. A count is rounded up to a power of two, and the result says so (3 requested gives 4). Lists the networks with their first and last addresses, up to 256 rows; a larger split shows the first 256 and the total
+- **Copy** and **Share** buttons put a plain-text summary of the calculated subnet on the clipboard or into the share sheet
 - Quick example chips for common subnets (`/8`, `/12`, `/16`, `/24`, `/30`, `/0`)
 - Network alignment warning when the entered IP is not on a network boundary, showing the corrected network address
 

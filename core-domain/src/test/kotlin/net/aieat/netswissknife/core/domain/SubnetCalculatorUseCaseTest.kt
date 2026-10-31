@@ -5,6 +5,7 @@ import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import net.aieat.netswissknife.core.network.NetworkResult
+import net.aieat.netswissknife.core.network.subnet.Ipv4Scope
 import net.aieat.netswissknife.core.network.subnet.SubnetCalculatorRepository
 import net.aieat.netswissknife.core.network.subnet.SubnetInfo
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -35,6 +36,7 @@ class SubnetCalculatorUseCaseTest {
             hostBits = 8,
             ipClass = "C",
             isPrivate = true,
+            scope = Ipv4Scope.PRIVATE,
             cidrNotation = "192.168.1.0/24",
             inputIsAligned = false,
         )

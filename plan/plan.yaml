@@ -273,9 +273,37 @@ work_packages:
         - "OkHttpEngine.kt unnecessary safe call warning (pre-existing) left alone."
   - id: WP11
     title: Subnet Calculator
-    status: todo
+    status: done
     findings: [C:SUB-01, C:SUB-02, C:SUB-03, C:SUB-05, C:SUB-06, C:SUB-07, C:SUB-08, C:SUB-10, C:SUB-11, C:SUB-13, C:SUB-14, C:SUB-15, C:SUB-12]
     notes: "/31 and /32 semantics (RFC 3021) ; copy/share; exact counts; IPv6 support if tractable else deferred with README note. Add 'is IP in subnet' and VLSM split as separate sub-tasks after the bugs."
+    result:
+      status: done
+      commit: "fix(subnet) commit on plan/ux-remediation-2026-10-31 (see git log)"
+      gates: "./gradlew test, ktlintCheck, detekt, :app:assembleDebug, :app:compileDebugAndroidTestKotlin, :core-network:koverVerify, :core-domain:koverVerify, :app:koverVerify all green. ktlint baselines regenerated for :app, :core-network, :core-domain after line shifts; per-rule counts did not increase (verified per file and rule against HEAD). Device re-test deferred to WP18."
+      fixed:
+        - "SUB-01: /31 reports 2 usable hosts (RFC 3021); first/last rows match. /32 unchanged. Tests: SubnetInputAndOperationsTest, SubnetCalculatorRepositoryTest."
+        - "SUB-02: editing or clearing the input, or a range bound, clears the result, error, membership and split. Tests: SubnetCalculatorViewModelTest StaleResults."
+        - "SUB-03: each info icon is a 48dp IconButton with its own description (Explain <field>); each binary row is one TalkBack description via clearAndSetSemantics."
+        - "SUB-05: Copy (LocalClipboard, toast) and Share (shareText) of a plain-text summary. Long-press copy per value was not added."
+        - "SUB-06: exact counts with locale thousands separators. Tests: SubnetFormatAndShareTextTest."
+        - "SUB-07: row relabelled 'Prefix length', value '/24'."
+        - "SUB-08: whole-subnet scope enum (Ipv4Scope) covering private, shared CGNAT, loopback, link-local, this network, documentation, benchmarking, multicast, reserved, public, mixed. 0.0.0.0/0 is Mixed. Tests: SubnetInputAndOperationsTest scope tests."
+        - "SUB-10: input icon is the Lan glyph (was the ping glyph)."
+        - "SUB-11: 'Enter a prefix length after the slash, for example /24.' via new ErrorCode SUBNET_PREFIX_MISSING, rendered through ErrorTextMapper."
+        - "SUB-13: binary row label 'Network address'."
+        - "SUB-14: leading zeros in prefix and octets are rejected (SUBNET_LEADING_ZERO) with a message, not guessed."
+        - "SUB-15: plurals for usable hosts ('1 usable host' / '0 usable hosts')."
+        - "APP-03: 'Subnet Calculator' in nav label and tool_subnet_label."
+        - "Feature: 'Is this address in the subnet?' card (yes/no plus reason). Core: checkMembership, role enum."
+        - "Feature: 'Split into equal subnets' card by new prefix or by count (rounded up to a power of two), up to 256 rows with a truncation note. Core: splitIntoPrefix / splitIntoCount."
+        - "Tooltips corrected for /31 and /32 (usable hosts, first and last host) and for scope."
+      not_reproduced:
+        - "SUB-09 (keyboard opens on entry): no focus request exists in the subnet screen source; the URI keyboard and dismiss-on-submit part was done in WP01. no_change_needed; verify on device at WP18."
+        - "SUB-04 (tablet width): width cap from WP01 applies; two-pane layout deferred (WP01 note)."
+      deferred:
+        - "SUB-12 IPv6: deferred. README states IPv4 only; IPv6 input is rejected with SUBNET_IPV6_UNSUPPORTED ('IPv6 is not supported yet')."
+        - "Detekt FunctionNaming and ktlint function-naming for new Compose functions are suppressed per file (Compose PascalCase), not baselined."
+        - "Device re-test in WP18: scope badge, copy toast, membership and split layout, TalkBack row descriptions."
   - id: WP12
     title: mDNS Browser
     status: todo

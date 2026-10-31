@@ -116,7 +116,7 @@ sealed class NavRoutes(
         }
     }
 
-    object SubnetCalculator : NavRoutes("subnet", "Subnet Calc", Icons.Default.Calculate)
+    object SubnetCalculator : NavRoutes("subnet", "Subnet Calculator", Icons.Default.Calculate)
 
     object MdnsDiscovery : NavRoutes("mdns", "mDNS Browser", Icons.Default.CellTower)
 
