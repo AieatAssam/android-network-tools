@@ -6,7 +6,7 @@
 
 ## Overview
 
-Net Swiss Knife provides 15 network tools: Ping, Traceroute, Port Scanner, LAN Scanner, DNS Lookup, Wi-Fi Scanner, Network Topology, TLS Inspector, WHOIS Lookup, HTTP Probe, Subnet Calculator, mDNS Browser, Speed Test, Wake-on-LAN, and Network Info. This policy explains what data the app uses, where it is sent, and how it is handled.
+Net Swiss Knife provides 16 network tools: Ping, Traceroute, Port Scanner, LAN Scanner, DNS Lookup, Wi-Fi Scanner, Network Topology, TLS Inspector, WHOIS Lookup, HTTP Probe, Subnet Calculator, mDNS Browser, Speed Test, Wake-on-LAN, Network Info, and MAC Lookup. This policy explains what data the app uses, where it is sent, and how it is handled.
 
 ---
 
