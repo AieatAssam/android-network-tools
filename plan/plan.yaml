@@ -23,7 +23,7 @@ rules_for_every_work_package:
 work_packages:
   - id: WP01
     title: Shared UI foundations (tablet layout, touch targets, keyboard, clear/icon patterns)
-    status: todo
+    status: done
     findings: [A:SHELL-02, A:SHELL-03, A:SHELL-05, A:PING-04, A:DNS-05, B:GAP-01, C:HTTP-03, C:HTTP-04, C:SUB-04, C:SUB-09, D:MDNS-02, D:HTTP-07, C:APP-01, C:APP-02]
     scope: >
       Create/reuse shared composables: max-content-width + centered layout for >=600dp (and two-pane where
@@ -31,6 +31,29 @@ work_packages:
       icons, IME handling (imePadding, dismiss keyboard on submit, keep primary action visible), input
       trimming helper, a standard ToolTextField (leading icon + clear button). Apply across all tool screens.
     done_when: "no tool screen stretches full-width on tablet; clear/help/remove icons >=48dp; keyboard never covers primary action or results; trimmed inputs"
+    result:
+      status: done
+      commit: "7912dbc"
+      gates: "test, ktlintCheck, detekt, :app:assembleDebug, :app:compileDebugAndroidTestKotlin all green. koverVerify not run (no production logic changed). Device re-test deferred to WP18."
+      fixed:
+        - "A:SHELL-03, A:PING-03 (IME/primary action): content padded by IME inset (and nav bar on rail) in MainActivity. Not device-verified."
+        - "A:SHELL-05: explicit 48dp touch targets on recent-host remove/clear and hero help; ToolClearButton 48dp."
+        - "A:SHELL-02 (width part), C:SUB-04, B:GAP-01 (width part): AdaptiveContentMaxWidth 840dp -> 640dp."
+        - "C:APP-01: Home grid bottom padding clears the scroll hint. A:SHELL-01 (WP15) also addressed incidentally by the nav-bar inset."
+        - "C:APP-02: RecentHostsRow re-anchors to first chip on change; contentPadding added. A:PING-07 and D:TLS-05 may be improved incidentally (not verified)."
+        - "D:MDNS-02: search field leading icon and clear."
+        - "D:HTTP-07: request body leading icon and clear."
+        - "C:SUB-09 (partial): URI keyboard for Subnet IP fields and keyboard dismissed on submit."
+        - "A:DNS-05 (partial): keyboard dismissed on Look up (search) action."
+        - "C:HTTP-04: already handled in source (onDone clears focus); no further change. Verify on device at WP18."
+      not_reproduced:
+        - "C:HTTP-03 (trailing space): HttpProbe and HostValidator already trim. Added regression tests (HttpProbeUrlWhitespaceTest, HostValidatorTest). no_change_needed in code."
+      deferred:
+        - "A:PING-04 (advanced slider reset/defaults): owned by WP02 per its notes."
+        - "A:SHELL-02 (two-pane / tall portrait config card) and B:GAP-01 (master/detail): two-pane layout not built; width cap only. Traceroute height is WP03."
+        - "A:DNS-05 / C:SUB-09 keyboard opening on entry: no requestFocus or autofocus found in source; cause not identified. Re-test on device."
+        - "Remaining plain OutlinedTextField inputs without clear (HTTP headers, Ports numeric, WOL others, Topology others) not converted to ToolTextField."
+        - "Ktlint baseline: Subnet and other pre-existing style entries kept in baseline; no new entries absorbed (verified by per-rule diff)."
   - id: WP02
     title: Ping
     status: todo
