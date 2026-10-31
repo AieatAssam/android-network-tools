@@ -469,10 +469,10 @@
         <error line="153" column="18" source="standard:multiline-if-else" />
     </file>
     <file name="src/main/kotlin/net/aieat/netswissknife/core/network/lan/OuiDatabase.kt">
-        <error line="16" column="22" source="standard:multiline-expression-wrapping" />
-        <error line="16" column="45" source="standard:chain-method-continuation" />
-        <error line="19" column="22" source="standard:chain-method-continuation" />
-        <error line="67" column="29" source="standard:multiline-expression-wrapping" />
+        <error line="27" column="22" source="standard:multiline-expression-wrapping" />
+        <error line="27" column="45" source="standard:chain-method-continuation" />
+        <error line="30" column="22" source="standard:chain-method-continuation" />
+        <error line="99" column="29" source="standard:multiline-expression-wrapping" />
     </file>
     <file name="src/main/kotlin/net/aieat/netswissknife/core/network/lan/PresenceClassifier.kt">
         <error line="5" column="25" source="standard:class-signature" />
@@ -3656,8 +3656,8 @@
         <error line="190" column="77" source="standard:chain-method-continuation" />
     </file>
     <file name="src/test/kotlin/net/aieat/netswissknife/core/network/lan/OuiDatabaseTest.kt">
-        <error line="11" column="1" source="standard:no-empty-first-line-in-class-body" />
-        <error line="50" column="52" source="standard:trailing-comma-on-call-site" />
+        <error line="14" column="1" source="standard:no-empty-first-line-in-class-body" />
+        <error line="53" column="52" source="standard:trailing-comma-on-call-site" />
     </file>
     <file name="src/test/kotlin/net/aieat/netswissknife/core/network/lan/PresenceClassifierTest.kt">
         <error line="11" column="24" source="standard:multiline-expression-wrapping" />

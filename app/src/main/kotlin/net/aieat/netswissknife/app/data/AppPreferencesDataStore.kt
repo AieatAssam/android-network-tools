@@ -68,6 +68,9 @@ object AppPreferenceKeys {
     /** Stores recent subnets for LAN Scanner (CIDR notation). */
     val RECENT_LAN_SUBNETS = stringPreferencesKey("recent_lan_subnets")
 
+    /** Stores recent MAC addresses and OUI prefixes for MAC Lookup, one entry per pasted address. */
+    val RECENT_OUI_LOOKUPS = stringPreferencesKey("recent_oui_lookups")
+
     /** All recent-host keys — iterate this to clear all at once. */
     val ALL_RECENT_HOST_KEYS: List<Preferences.Key<String>> =
         listOf(
@@ -80,5 +83,6 @@ object AppPreferenceKeys {
             RECENT_HTTP_HOSTS,
             RECENT_TOPOLOGY_SEEDS,
             RECENT_LAN_SUBNETS,
+            RECENT_OUI_LOOKUPS,
         )
 }

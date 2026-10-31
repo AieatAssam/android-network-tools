@@ -1,15 +1,26 @@
 package net.aieat.netswissknife.core.network.lan
 
+import net.aieat.netswissknife.core.network.oui.OuiBlockSize
+import net.aieat.netswissknife.core.network.oui.OuiMatch
+import net.aieat.netswissknife.core.network.oui.OuiRegistry
 import java.util.Locale
 
 /** IEEE OUI registry backed by a lazily loaded classpath resource. */
-object OuiDatabase {
+object OuiDatabase : OuiRegistry {
     private const val RESOURCE = "/oui/oui-prefixes.tsv"
     private val PLAIN_MAC = Regex("[0-9A-F]{12}")
     private val COLON_MAC = Regex("(?:[0-9A-F]{2}:){5}[0-9A-F]{2}")
     private val HYPHEN_MAC = Regex("(?:[0-9A-F]{2}-){5}[0-9A-F]{2}")
     private val DOTTED_MAC = Regex("[0-9A-F]{4}(?:\\.[0-9A-F]{4}){2}")
-    private val PREFIX_LENGTHS = listOf(9, 7, 6)
+    private const val OUI_DIGITS = 6
+    private const val MA_M_DIGITS = 7
+    private const val MAC_DIGITS = 12
+    private const val LOCAL_ADMIN_BIT = 0x02
+    private const val FIRST_OCTET_DIGITS = 2
+    private const val HEX_RADIX = 16
+    private const val ZERO_OUI = "000000"
+    private const val HEX_DIGITS = "0123456789ABCDEF"
+    private val PREFIX_LENGTHS = listOf(9, MA_M_DIGITS, OUI_DIGITS)
     private val VALID_PREFIX_LENGTHS = PREFIX_LENGTHS.toSet()
 
     private val entries: Map<String, String> by lazy {
@@ -37,19 +48,40 @@ object OuiDatabase {
 
     /** Returns true for locally administered MAC addresses, which have no reliable OUI. */
     fun isLocallyAdministered(macAddress: String): Boolean {
-        val first = normalise(macAddress)?.take(2)?.toIntOrNull(16) ?: return false
-        return first and 0x02 != 0
+        val hex = normalise(macAddress) ?: return false
+        return isLocallyAdministeredHex(hex)
     }
 
     /** Looks up a complete MAC in plain, colon, hyphen, or Cisco dotted notation. */
-    fun lookup(macAddress: String): String? {
-        if (isLocallyAdministered(macAddress)) return null
-        val normalised = normalise(macAddress) ?: return null
-        if (normalised.startsWith("000000")) return null
-        for (length in PREFIX_LENGTHS) {
-            entries[normalised.take(length)]?.let { return it }
+    fun lookup(macAddress: String): String? = normalise(macAddress)?.let { match(it)?.vendor }
+
+    /**
+     * Longest registered block for [hexDigits]: hex without separators (either case), 6 digits for an
+     * OUI prefix or 12 for a MAC. Locally administered and all-zero prefixes never match.
+     */
+    override fun match(hexDigits: String): OuiMatch? {
+        val hex = hexDigits.uppercase(Locale.ROOT)
+        if (!isLookupable(hex)) return null
+        val length = PREFIX_LENGTHS.firstOrNull { it <= hex.length && entries.containsKey(hex.take(it)) }
+        return length?.let { OuiMatch(entries.getValue(hex.take(it)), blockSizeFor(it)) }
+    }
+
+    private fun isLookupable(hex: String): Boolean {
+        val validLength = hex.length in OUI_DIGITS..MAC_DIGITS
+        val allHex = hex.all { it in HEX_DIGITS }
+        return validLength && allHex && !isLocallyAdministeredHex(hex) && !hex.startsWith(ZERO_OUI)
+    }
+
+    private fun blockSizeFor(prefixLength: Int): OuiBlockSize =
+        when (prefixLength) {
+            OUI_DIGITS -> OuiBlockSize.MA_L
+            MA_M_DIGITS -> OuiBlockSize.MA_M
+            else -> OuiBlockSize.MA_S
         }
-        return null
+
+    private fun isLocallyAdministeredHex(hexDigits: String): Boolean {
+        val firstOctet = hexDigits.take(FIRST_OCTET_DIGITS).toInt(HEX_RADIX)
+        return firstOctet and LOCAL_ADMIN_BIT != 0
     }
 
     private fun normalise(macAddress: String): String? {

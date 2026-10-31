@@ -216,6 +216,15 @@ Shows the device's active network, its IP configuration, and an optional public 
 - Refresh re-reads the local network. The screen also updates when the default network changes or its addresses or routes change
 - Copy any value with its copy icon or by pressing and holding its row. Copy all and Share produce a plain-text summary
 
+### MAC Lookup
+Identifies the vendor behind a MAC address or an OUI prefix, using the IEEE registry bundled with the app. Fully offline: nothing is sent to any service.
+- Input: paste one or many, one per line or separated by commas, semicolons, or spaces. Colon, hyphen, Cisco dotted, and bare hex are accepted in any letter case. A three-byte OUI prefix such as `B8-27-EB` is looked up on its own. Multicast and broadcast addresses are accepted and labelled as such
+- Per address: the normalized address in colon, hyphen, Cisco dotted, and bare hex (upper or lower case, each with a copy button); the vendor name, or "Unknown vendor" when the registry has no block for it; the block size (MA-L, MA-M, or MA-S) when the registry lists it; the type (unicast, multicast, or broadcast); and whether the address is locally administered
+- Locally administered (randomized or private) addresses are labelled, and no vendor is shown for them, because the vendor code does not identify the hardware. Broadcast addresses show no vendor
+- Malformed entries stay in the results with the reason they were rejected. A paste with no valid entry shows an error
+- Paste from clipboard fills the field and looks it up at once. Recent lookups are kept on this device (the last five), and each can be removed or all cleared
+- Copy all and Share produce a plain-text summary of every entry. The first 100 entries of a paste are analysed; the rest are reported as not looked up
+
 ## Networking behavior
 
 LAN-directed sockets use the selected Wi-Fi or Ethernet network when the destination is within that network's subnet. This lets local discovery and device queries reach the LAN when a VPN is active; destinations outside the local subnet continue to use Android's normal route. mDNS joins the selected interface and can use an ephemeral query port when port 5353 is unavailable.
@@ -345,6 +354,7 @@ apkanalyzer dex packages app/build/outputs/apk/release/app-release-unsigned.apk 
 | `speedtest` | Speed Test | Implemented |
 | `wol` | Wake-on-LAN | Implemented |
 | `netinfo` | Network Info | Implemented |
+| `oui` | MAC Lookup | Implemented |
 
 ---
 

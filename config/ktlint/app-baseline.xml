@@ -1103,59 +1103,59 @@
     </file>
     <file name="src/main/kotlin/net/aieat/netswissknife/app/ui/navigation/AppNavigation.kt">
         <error line="3" column="1" source="standard:import-ordering" />
-        <error line="76" column="1" source="standard:indent" />
-        <error line="81" column="1" source="standard:indent" />
-        <error line="86" column="1" source="standard:indent" />
-        <error line="91" column="1" source="standard:indent" />
-        <error line="96" column="1" source="standard:indent" />
-        <error line="100" column="1" source="standard:indent" />
-        <error line="111" column="5" source="standard:function-naming" />
-        <error line="111" column="16" source="standard:function-signature" />
-        <error line="111" column="50" source="standard:function-signature" />
-        <error line="111" column="79" source="standard:function-signature" />
-        <error line="117" column="14" source="standard:function-naming" />
-        <error line="126" column="13" source="standard:function-naming" />
-        <error line="132" column="23" source="standard:no-multi-spaces" />
-        <error line="134" column="18" source="standard:no-multi-spaces" />
-        <error line="135" column="25" source="standard:no-multi-spaces" />
-        <error line="136" column="24" source="standard:no-multi-spaces" />
-        <error line="137" column="28" source="standard:no-multi-spaces" />
-        <error line="138" column="27" source="standard:no-multi-spaces" />
-        <error line="138" column="54" source="standard:trailing-comma-on-call-site" />
-        <error line="141" column="19" source="standard:no-multi-spaces" />
-        <error line="142" column="29" source="standard:no-multi-spaces" />
-        <error line="143" column="28" source="standard:no-multi-spaces" />
-        <error line="144" column="32" source="standard:no-multi-spaces" />
-        <error line="145" column="31" source="standard:no-multi-spaces" />
-        <error line="145" column="59" source="standard:trailing-comma-on-call-site" />
-        <error line="154" column="25" source="standard:multiline-expression-wrapping" />
-        <error line="170" column="25" source="standard:multiline-expression-wrapping" />
-        <error line="186" column="41" source="standard:no-multi-spaces" />
-        <error line="194" column="41" source="standard:no-multi-spaces" />
-        <error line="195" column="46" source="standard:no-multi-spaces" />
-        <error line="202" column="25" source="standard:multiline-expression-wrapping" />
-        <error line="220" column="49" source="standard:no-multi-spaces" />
-        <error line="223" column="25" source="standard:multiline-expression-wrapping" />
-        <error line="236" column="54" source="standard:no-multi-spaces" />
-        <error line="237" column="51" source="standard:no-multi-spaces" />
-        <error line="240" column="47" source="standard:no-multi-spaces" />
-        <error line="243" column="25" source="standard:multiline-expression-wrapping" />
-        <error line="258" column="19" source="standard:no-multi-spaces" />
-        <error line="259" column="29" source="standard:no-multi-spaces" />
-        <error line="260" column="28" source="standard:no-multi-spaces" />
-        <error line="261" column="32" source="standard:no-multi-spaces" />
-        <error line="262" column="31" source="standard:no-multi-spaces" />
+        <error line="77" column="1" source="standard:indent" />
+        <error line="82" column="1" source="standard:indent" />
+        <error line="87" column="1" source="standard:indent" />
+        <error line="92" column="1" source="standard:indent" />
+        <error line="97" column="1" source="standard:indent" />
+        <error line="101" column="1" source="standard:indent" />
+        <error line="112" column="5" source="standard:function-naming" />
+        <error line="112" column="16" source="standard:function-signature" />
+        <error line="112" column="50" source="standard:function-signature" />
+        <error line="112" column="79" source="standard:function-signature" />
+        <error line="118" column="14" source="standard:function-naming" />
+        <error line="127" column="13" source="standard:function-naming" />
+        <error line="133" column="23" source="standard:no-multi-spaces" />
+        <error line="135" column="18" source="standard:no-multi-spaces" />
+        <error line="136" column="25" source="standard:no-multi-spaces" />
+        <error line="137" column="24" source="standard:no-multi-spaces" />
+        <error line="138" column="28" source="standard:no-multi-spaces" />
+        <error line="139" column="27" source="standard:no-multi-spaces" />
+        <error line="139" column="54" source="standard:trailing-comma-on-call-site" />
+        <error line="142" column="19" source="standard:no-multi-spaces" />
+        <error line="143" column="29" source="standard:no-multi-spaces" />
+        <error line="144" column="28" source="standard:no-multi-spaces" />
+        <error line="145" column="32" source="standard:no-multi-spaces" />
+        <error line="146" column="31" source="standard:no-multi-spaces" />
+        <error line="146" column="59" source="standard:trailing-comma-on-call-site" />
+        <error line="155" column="25" source="standard:multiline-expression-wrapping" />
+        <error line="171" column="25" source="standard:multiline-expression-wrapping" />
+        <error line="187" column="41" source="standard:no-multi-spaces" />
+        <error line="195" column="41" source="standard:no-multi-spaces" />
+        <error line="196" column="46" source="standard:no-multi-spaces" />
+        <error line="203" column="25" source="standard:multiline-expression-wrapping" />
+        <error line="221" column="49" source="standard:no-multi-spaces" />
+        <error line="224" column="25" source="standard:multiline-expression-wrapping" />
+        <error line="237" column="54" source="standard:no-multi-spaces" />
+        <error line="238" column="51" source="standard:no-multi-spaces" />
+        <error line="241" column="47" source="standard:no-multi-spaces" />
+        <error line="244" column="25" source="standard:multiline-expression-wrapping" />
+        <error line="260" column="19" source="standard:no-multi-spaces" />
+        <error line="261" column="29" source="standard:no-multi-spaces" />
+        <error line="262" column="28" source="standard:no-multi-spaces" />
+        <error line="263" column="32" source="standard:no-multi-spaces" />
+        <error line="264" column="31" source="standard:no-multi-spaces" />
     </file>
     <file name="src/main/kotlin/net/aieat/netswissknife/app/ui/navigation/MoreToolsSheet.kt">
         <error line="76" column="5" source="standard:function-naming" />
         <error line="304" column="13" source="standard:function-naming" />
     </file>
     <file name="src/main/kotlin/net/aieat/netswissknife/app/ui/navigation/NavRoutes.kt">
-        <error line="43" column="19" source="standard:property-naming" />
-        <error line="64" column="19" source="standard:property-naming" />
-        <error line="93" column="19" source="standard:property-naming" />
-        <error line="108" column="19" source="standard:property-naming" />
-        <error line="127" column="19" source="standard:property-naming" />
+        <error line="44" column="19" source="standard:property-naming" />
+        <error line="65" column="19" source="standard:property-naming" />
+        <error line="94" column="19" source="standard:property-naming" />
+        <error line="109" column="19" source="standard:property-naming" />
+        <error line="128" column="19" source="standard:property-naming" />
     </file>
     <file name="src/main/kotlin/net/aieat/netswissknife/app/ui/navigation/ToolIntent.kt">
         <error line="7" column="21" source="standard:class-signature" />
@@ -4752,14 +4752,14 @@
         <error line="29" column="46" source="standard:function-start-of-body-spacing" />
         <error line="29" column="47" source="standard:no-multi-spaces" />
         <error line="29" column="86" source="standard:no-multi-spaces" />
-        <error line="32" column="1" source="standard:spacing-between-declarations-with-annotations" />
-        <error line="32" column="5" source="standard:blank-line-before-declaration" />
-        <error line="32" column="48" source="standard:function-start-of-body-spacing" />
-        <error line="32" column="49" source="standard:no-multi-spaces" />
-        <error line="32" column="88" source="standard:no-multi-spaces" />
-        <error line="34" column="27" source="standard:function-signature" />
-        <error line="34" column="49" source="standard:function-signature" />
-        <error line="34" column="108" source="standard:function-signature" />
+        <error line="35" column="1" source="standard:spacing-between-declarations-with-annotations" />
+        <error line="35" column="5" source="standard:blank-line-before-declaration" />
+        <error line="35" column="48" source="standard:function-start-of-body-spacing" />
+        <error line="35" column="49" source="standard:no-multi-spaces" />
+        <error line="35" column="88" source="standard:no-multi-spaces" />
+        <error line="37" column="27" source="standard:function-signature" />
+        <error line="37" column="49" source="standard:function-signature" />
+        <error line="37" column="108" source="standard:function-signature" />
     </file>
     <file name="src/test/kotlin/net/aieat/netswissknife/app/data/RecentHostsRepositoryTest.kt">
         <error line="30" column="1" source="standard:no-empty-first-line-in-class-body" />
@@ -4954,9 +4954,9 @@
     <file name="src/test/kotlin/net/aieat/netswissknife/app/ui/a11y/ToolStateAnnouncerCoverageTest.kt">
         <error line="3" column="1" source="standard:import-ordering" />
         <error line="12" column="31" source="standard:multiline-expression-wrapping" />
-        <error line="29" column="30" source="standard:multiline-expression-wrapping" />
-        <error line="35" column="33" source="standard:multiline-expression-wrapping" />
-        <error line="35" column="37" source="standard:chain-method-continuation" />
+        <error line="30" column="30" source="standard:multiline-expression-wrapping" />
+        <error line="36" column="33" source="standard:multiline-expression-wrapping" />
+        <error line="36" column="37" source="standard:chain-method-continuation" />
     </file>
     <file name="src/test/kotlin/net/aieat/netswissknife/app/ui/a11y/TouchTargetAuditTest.kt">
         <error line="3" column="1" source="standard:import-ordering" />

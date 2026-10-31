@@ -429,9 +429,28 @@ work_packages:
         - "ToolStateAnnouncerCoverageTest expected list gained netinfo/NetInfoScreen.kt (14 to 15 screens); the screen derives announcementPhase from uiState like the other tools."
   - id: WP17
     title: NEW TOOL – MAC / OUI Vendor Lookup
-    status: todo
+    status: done
     findings: [D:GAP-01]
     notes: "Reuse the bundled OUI resource already used by the LAN scanner (route 'oui'). Accept any MAC format, randomised/locally-administered MAC detection, copy. Full checklist + README."
+    result:
+      status: done
+      commit: "the single feat(oui) commit on plan/ux-remediation-2026-10-31; sha not recorded here to keep a single commit"
+      gates: "./gradlew test (all unit suites, including app), ktlintCheck, detekt, core-network/core-domain/app koverVerify, :app:assembleDebug, :app:compileDebugAndroidTestKotlin all green, run one at a time. App and core-network ktlint baselines regenerated after line shifts: per-rule counts identical to HEAD (0 entries added). No detekt baseline change."
+      fixed:
+        - "D:GAP-01: new tool MAC Lookup (route oui, Home tile, More > Wi-Fi & LAN, icon Fingerprint). Reuses the single bundled IEEE registry (OuiDatabase, now implementing the OuiRegistry interface) that the LAN and Wi-Fi scanners use; no data duplicated."
+        - "Lenient parser MacInputParser in core-network accepts colon, hyphen, Cisco dotted and bare hex in any case, a bare 3-byte OUI prefix, and multicast and broadcast addresses. Pasted text splits on newlines, commas, semicolons and whitespace. WolMagicPacket validator is intentionally not reused (it rejects multicast and broadcast)."
+        - "Per address: normalized form in colon, hyphen, dotted and bare notation (upper or lower, copy each), vendor or explicit reason (unknown, locally administered, broadcast), MA-L/MA-M/MA-S block size from the registry prefix length, unicast/multicast/broadcast type, locally-administered flag and explanation."
+        - "Inline validation counts invalid entries as the user types; malformed entries stay in the results with their reason. Copy all and Share use a plain-text summary built in core-network from localised labels. Lookups are capped at 100 entries per paste."
+        - "Paste from clipboard fills the field and looks up at once. Recent lookups use the shared RecentHostsRepository (new RECENT_OUI_LOOKUPS key, included in clear-all)."
+        - "UI: hero, ToolTextField with icon and clear, animated AnimatedContent idle/loading/results/error states, ElevatedCards, 48dp copy and clear targets, strings.xml only, theme tokens only, help sheet."
+        - "Tests: MacInputParserTest, MacLookupEngineTest, MacLookupSummaryFormatterTest, OuiDatabaseTest additions (match, block size, OUI-only input), OuiLookupUseCaseTest, OuiLookupViewModelTest, AppPreferenceKeysTest, ToolStateAnnouncerCoverageTest (15 to 16 screens), and compile-only OuiLookupScreenTest."
+      not_reproduced: []
+      deferred:
+        - "Device check at WP18: clipboard paste behaviour, copy and share, layout on tablet, and the first OUI registry load time."
+        - "'Scan this device' was implemented as the paste-from-clipboard convenience, as specified. Android 10+ hides the device's own hardware address, so reading it was not attempted."
+        - "PRIVACY_POLICY.md not changed: the tool is fully offline. Its opening sentence still says 15 network tools and is now stale (16). Orchestrator to decide whether to correct the count."
+        - "The all-zero MAC 00:00:00:00:00:00 is not special-cased: it is reported as an unknown vendor."
+        - "OuiLookupViewModel is not added to the app Kover include list, following the WP16 NetInfoViewModel precedent. The parser, engine, and use case carry the tested logic in core modules."
   - id: WP18
     title: Final verification
     status: todo

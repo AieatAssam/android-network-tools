@@ -1,5 +1,8 @@
 package net.aieat.netswissknife.core.network.lan
 
+import net.aieat.netswissknife.core.network.oui.OuiBlockSize
+import net.aieat.netswissknife.core.network.oui.OuiMatch
+import net.aieat.netswissknife.core.network.oui.OuiRegistry
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -74,5 +77,39 @@ class OuiDatabaseTest {
     fun `locally administered addresses have no vendor`() {
         assertTrue(OuiDatabase.isLocallyAdministered("02:00:00:00:00:01"))
         assertNull(OuiDatabase.lookup("02:00:00:00:00:01"))
+    }
+
+    @Test
+    fun `match reports the block size of the longest registered prefix`() {
+        assertEquals(
+            OuiMatch("Converging Systems Inc.", OuiBlockSize.MA_S),
+            OuiDatabase.match("001BC5000ABC"),
+        )
+        assertEquals(
+            OuiMatch("Shinko Technos co.,ltd.", OuiBlockSize.MA_M),
+            OuiDatabase.match("0055DA0ABCDE"),
+        )
+        assertEquals(
+            OuiMatch("Raspberry Pi Foundation", OuiBlockSize.MA_L),
+            OuiDatabase.match("B827EB"),
+        )
+    }
+
+    @Test
+    fun `match accepts a bare six digit OUI prefix and refuses shorter input`() {
+        assertEquals("Raspberry Pi Foundation", OuiDatabase.match("b827eb")?.vendor)
+        assertNull(OuiDatabase.match("B827E"))
+    }
+
+    @Test
+    fun `match returns null for locally administered and zero prefixes`() {
+        assertNull(OuiDatabase.match("020000000001"))
+        assertNull(OuiDatabase.match("000000112233"))
+    }
+
+    @Test
+    fun `is the registry the lookup layer depends on`() {
+        val registry: OuiRegistry = OuiDatabase
+        assertEquals("Raspberry Pi Foundation", registry.match("B827EB112233")?.vendor)
     }
 }
