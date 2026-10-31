@@ -120,6 +120,8 @@ import net.aieat.netswissknife.app.ui.theme.AppShapes
 import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.mdns.DiscoveredService
+import net.aieat.netswissknife.core.network.mdns.MdnsDiscoveryLimits
+import net.aieat.netswissknife.core.network.mdns.MdnsTruncationReason
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -165,12 +167,7 @@ fun MdnsDiscoveryScreen(
                 )
 
                 if (uiState.truncationReasons.isNotEmpty()) {
-                    Text(
-                        text = stringResource(R.string.mdns_partial_results_status),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+                    TruncationBanner(uiState.truncationReasons)
                 }
 
                 ControlRow(
@@ -398,6 +395,65 @@ private fun StatBadge(
     }
 }
 
+/**
+ * Informational note shown only when a configured limit was actually reached during the scan.
+ * It is neutral (not error-styled) and names each limit, so a complete scan never looks like a failure.
+ */
+@Composable
+@Suppress("FunctionNaming", "ktlint:standard:function-naming")
+private fun TruncationBanner(reasons: Set<MdnsTruncationReason>) {
+    val limits = reasons.sortedBy { it.ordinal }.map { limitLabel(it) }
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.Top,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Icon(
+            imageVector = Icons.Default.Info,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(18.dp),
+        )
+        Text(
+            text = stringResource(R.string.mdns_partial_results_status, limits.joinToString(", ")),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun limitLabel(reason: MdnsTruncationReason): String =
+    when (reason) {
+        MdnsTruncationReason.SERVICE_TYPE_LIMIT -> {
+            stringResource(R.string.mdns_limit_service_types, MdnsDiscoveryLimits.DEFAULT_MAX_SERVICE_TYPES)
+        }
+
+        MdnsTruncationReason.INSTANCE_LIMIT -> {
+            stringResource(R.string.mdns_limit_services, MdnsDiscoveryLimits.DEFAULT_MAX_INSTANCES)
+        }
+
+        MdnsTruncationReason.ADDRESS_LIMIT -> {
+            stringResource(
+                R.string.mdns_limit_addresses,
+                MdnsDiscoveryLimits.DEFAULT_MAX_ADDRESSES_PER_SERVICE,
+                MdnsDiscoveryLimits.DEFAULT_MAX_ADDRESS_BYTES_PER_SERVICE,
+            )
+        }
+
+        MdnsTruncationReason.TXT_BYTES_LIMIT -> {
+            stringResource(R.string.mdns_limit_txt, MdnsDiscoveryLimits.DEFAULT_MAX_TXT_BYTES_PER_SERVICE)
+        }
+
+        MdnsTruncationReason.QUERY_LIMIT -> {
+            stringResource(R.string.mdns_limit_queries, MdnsDiscoveryLimits.DEFAULT_MAX_QUERIES)
+        }
+
+        MdnsTruncationReason.PACKET_RECORD_LIMIT -> {
+            stringResource(R.string.mdns_limit_records, MdnsDiscoveryLimits.DEFAULT_MAX_RECORDS_PER_PACKET)
+        }
+    }
+
 // ── Control row ───────────────────────────────────────────────────────────────
 
 @Composable
@@ -590,10 +646,12 @@ internal fun buildMdnsShareText(
     isScanning: Boolean,
     isCanceling: Boolean,
     scanCanceled: Boolean,
-    truncationReasons: Set<net.aieat.netswissknife.core.network.mdns.MdnsTruncationReason>,
+    truncationReasons: Set<MdnsTruncationReason>,
+    filterQuery: String = "",
 ): String =
     buildString {
         appendLine("mDNS services: ${services.size}")
+        if (filterQuery.isNotBlank()) appendLine("Filter: ${filterQuery.trim()}")
         when {
             isCanceling -> appendLine("Discovery stopping; partial results.")
             isScanning -> appendLine("Discovery in progress; partial results.")
@@ -614,16 +672,25 @@ private fun ServiceList(
     isScanning: Boolean,
     isCanceling: Boolean,
     scanCanceled: Boolean,
-    truncationReasons: Set<net.aieat.netswissknife.core.network.mdns.MdnsTruncationReason>,
+    truncationReasons: Set<MdnsTruncationReason>,
     onPingHost: (String) -> Unit,
     onHttpProbe: (DiscoveredService) -> Unit,
 ) {
     val expandedTypes = remember { mutableStateMapOf<String, Boolean>() }
     var searchQuery by rememberSaveable { mutableStateOf("") }
-    val allServices = servicesByType.values.flatten()
     val filteredByType = filterMdnsServices(servicesByType, searchQuery)
-    val report = buildMdnsShareText(allServices, isScanning, isCanceling, scanCanceled, truncationReasons)
+    // Copy and Share export exactly what the list shows, so the filter is part of the report.
+    val report =
+        buildMdnsShareText(
+            services = filteredByType.values.flatten(),
+            isScanning = isScanning,
+            isCanceling = isCanceling,
+            scanCanceled = scanCanceled,
+            truncationReasons = truncationReasons,
+            filterQuery = searchQuery,
+        )
     val shareSubject = stringResource(R.string.mdns_screen_title)
+    val noMatch = searchQuery.isNotBlank() && filteredByType.isEmpty() && servicesByType.isNotEmpty()
 
     LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         item {
@@ -633,6 +700,11 @@ private fun ServiceList(
                 report = report,
                 shareSubject = shareSubject,
             )
+        }
+        if (noMatch) {
+            item {
+                NoMatchHint(query = searchQuery, onClear = { searchQuery = "" })
+            }
         }
         if (scanCanceled) {
             item {
@@ -652,7 +724,7 @@ private fun ServiceList(
     }
 }
 
-private fun filterMdnsServices(
+internal fun filterMdnsServices(
     servicesByType: Map<String, List<DiscoveredService>>,
     searchQuery: String,
 ): Map<String, List<DiscoveredService>> =
@@ -954,6 +1026,46 @@ private fun ServiceItem(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+@Suppress("FunctionNaming", "ktlint:standard:function-naming")
+private fun NoMatchHint(
+    query: String,
+    onClear: () -> Unit,
+) {
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { visible = true }
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn() + expandVertically(),
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(top = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Default.Search,
+                contentDescription = null,
+                modifier = Modifier.size(48.dp),
+                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
+            )
+            Text(
+                text = stringResource(R.string.mdns_no_match_title, query.trim()),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 24.dp),
+            )
+            FilledTonalButton(onClick = onClear) {
+                Text(stringResource(R.string.mdns_no_match_clear))
             }
         }
     }

@@ -1196,7 +1196,15 @@
     <string name="mdns_canceled_title">Discovery canceled</string>
     <string name="mdns_canceled_empty_body">No services were found before discovery stopped.</string>
     <string name="mdns_canceled_partial">Discovery canceled. Showing services found so far.</string>
-    <string name="mdns_partial_results_status">Discovery reached a safety limit. Showing the services found so far.</string>
+    <string name="mdns_partial_results_status">Some results were capped by a limit: %1$s. Showing the services found so far.</string>
+    <string name="mdns_limit_service_types">service types (max %1$d)</string>
+    <string name="mdns_limit_services">services (max %1$d)</string>
+    <string name="mdns_limit_addresses">addresses per service (max %1$d addresses or %2$d bytes)</string>
+    <string name="mdns_limit_txt">TXT data per service (max %1$d bytes)</string>
+    <string name="mdns_limit_queries">queries (max %1$d)</string>
+    <string name="mdns_limit_records">records per packet (max %1$d)</string>
+    <string name="mdns_no_match_title">No services match \"%1$s\"</string>
+    <string name="mdns_no_match_clear">Clear search</string>
     <string name="mdns_clear_button">Clear</string>
     <string name="mdns_empty_title">No services found</string>
     <string name="mdns_empty_body">No mDNS services responded. Ensure devices are on the same network and try again.</string>
@@ -1516,7 +1524,7 @@
     <string-array name="help_mdns_params_bullets">
         <item>Scan - starts an 8-second discovery window; run it multiple times to catch devices that announce infrequently.</item>
         <item>Stop - end the current scan early.</item>
-        <item>Reset - clear all results.</item>
+        <item>Clear - remove all results from the list.</item>
     </string-array>
     <string-array name="help_mdns_results_bullets">
         <item>Services are grouped by type (e.g. _http._tcp, _airplay._tcp).</item>

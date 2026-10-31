@@ -13,11 +13,12 @@ object MdnsPacketParser {
      * "My Printer._http._tcp.local." → "My Printer"
      */
     fun extractDisplayName(instanceName: String): String {
-        val stripped = instanceName.trimEnd('.')
-        // Find the first component that starts with underscore — that's the service type start
-        val parts = stripped.split(".")
-        val typeStart = parts.indexOfFirst { it.startsWith("_") }
-        return if (typeStart > 0) parts.take(typeStart).joinToString(".") else stripped
+        // Find the first component that starts with underscore — that's the service type start.
+        // Labels are split on unescaped dots only, so "Office\.Floor2" stays one label.
+        val labels = DnsSdEscapes.splitLabels(instanceName)
+        val typeStart = labels.indexOfFirst { it.startsWith("_") }
+        val nameLabels = if (typeStart > 0) labels.take(typeStart) else labels
+        return DnsSdEscapes.decode(nameLabels.joinToString("."))
     }
 
     /**
@@ -25,8 +26,7 @@ object MdnsPacketParser {
      * "My Printer._http._tcp.local." → "_http._tcp"
      */
     fun extractServiceType(instanceName: String): String {
-        val stripped = instanceName.trimEnd('.')
-        val parts = stripped.split(".")
+        val parts = DnsSdEscapes.splitLabels(instanceName)
         val typeStart = parts.indexOfFirst { it.startsWith("_") }
         return if (typeStart >= 0) {
             val localIdx = parts.lastIndexOf("local")

@@ -205,4 +205,38 @@ class MdnsDiscoverySessionTest {
         assertEquals(1, session.instanceCount)
         assertTrue(session.scheduledQueryCount <= 4)
     }
+
+    @Test
+    fun `typical 50-service LAN with shared hosts stays free of truncation`() {
+        val session = MdnsDiscoverySession()
+        val types = (1..12).map { "_svc$it._tcp.local." }
+        session.process(types.map { MdnsSessionRecord.Ptr("_services._dns-sd._udp.local.", it) })
+
+        for (index in 0 until 50) {
+            val type = types[index % types.size]
+            val instance = "Device $index.$type"
+            val host = "host${index / 5}.local."
+            session.process(listOf(MdnsSessionRecord.Ptr(type, instance)))
+            session.process(
+                listOf(
+                    MdnsSessionRecord.Srv(instance, host, 8000 + index),
+                    MdnsSessionRecord.Txt(instance, listOf("model=Device$index", "path=/status", "txtvers=1")),
+                ),
+            )
+        }
+        for (host in 0 until 10) {
+            val name = "host$host.local."
+            session.process(
+                listOf(
+                    MdnsSessionRecord.Address(name, "192.168.1.${10 + host}"),
+                    MdnsSessionRecord.Address(name, "fe80:0:0:0:0:0:0:${host + 1}"),
+                    MdnsSessionRecord.Address(name, "2001:db8:0:0:0:0:0:${host + 1}"),
+                ),
+            )
+        }
+
+        assertEquals(50, session.instanceCount)
+        assertEquals(50, session.totalFound)
+        assertTrue(session.truncationReasons.isEmpty(), "unexpected truncation: ${session.truncationReasons}")
+    }
 }

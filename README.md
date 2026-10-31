@@ -151,7 +151,11 @@ LAN service discovery via multicast DNS (RFC 6762 / DNS-SD RFC 6763).
 - Per-service details: display name, hostname, port, IP addresses (IPv4 and IPv6), and TXT record key-value pairs
 - Live streaming results: services appear as they are discovered, grouped by service type with animated list entries
 - Expandable service items show full TXT record details on tap
-- Configurable scan duration (8-second window); scan can be stopped at any time
+- Fixed 8-second scan window per Scan (there is no duration control); scan can be stopped at any time. Clear removes all results
+- Instance names are shown decoded: DNS-SD escapes such as `\032` (space), `\226\128\153` (UTF-8 for ’) and `\(...\)` become readable text; malformed escapes are shown exactly as received
+- Search filters the list by service type, name, hostname, IP address, and TXT key or value; a search with no matches shows an empty-state message with a Clear search action
+- Copy and Share export only the services currently shown (the active search is noted as a `Filter:` line)
+- Per-scan caps: 64 service types, 256 services, 16 addresses or 1 KB of addresses per service, 4 KB of TXT data per service, 1024 queries, and 512 records per packet. If a cap is reached, a neutral note names it; a complete scan that stays within the caps shows no note
 - Requires Wi-Fi multicast lock (`CHANGE_WIFI_MULTICAST_STATE`) for reliable reception on Android
 
 ### Subnet Calculator

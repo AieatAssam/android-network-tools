@@ -306,7 +306,23 @@ work_packages:
         - "Device re-test in WP18: scope badge, copy toast, membership and split layout, TalkBack row descriptions."
   - id: WP12
     title: mDNS Browser
-    status: todo
+    status: done
+    result:
+      status: done
+      commit: "recorded by git log: fix(mdns) commit on plan/ux-remediation-2026-10-31"
+      gates: "./gradlew test ktlintCheck detekt :app:assembleDebug :app:compileDebugAndroidTestKotlin :core-network:koverVerify :core-domain:koverVerify :app:koverVerify green (BUILD SUCCESSFUL). ktlint: :app baseline regenerated, per-rule counts unchanged (line shifts only). Device not run."
+      fixed:
+        - "D:MDNS-01: DnsSdEscapes helper (decimal \\DDD as UTF-8, \\X literals, malformed left as written) used for displayName; instanceName stays raw as key. Tests: DnsSdEscapesTest, MdnsPacketParserTest."
+        - "D:MDNS-02: search already uses ToolTextField (leading icon + clear) from WP01; verified, no further change."
+        - "D:MDNS-03: no-match state with message and Clear search action."
+        - "D:MDNS-04: Copy/Share export the filtered services with a Filter: line. Tests: MdnsSearchExportTest."
+        - "D:MDNS-06: README corrected (fixed 8 s window, no duration control); help 'Reset' renamed to 'Clear'. No duration chips added."
+        - "D:MDNS-07: banner is neutral (not error-styled) and names each limit that fired with its maximum. Shown only when a limit fired. Session regression test: typical 50-service LAN raises no truncation. Limits not raised: the device trigger is unverified; likely candidates are per-service address count/bytes (16 / 1 KB) on a host advertising many addresses, or TXT (4 KB). The banner now names it on the next device run."
+      not_reproduced:
+        - "ON_STOP/ON_PAUSE rotation cancel: no lifecycle observer in the mDNS screen; ViewModel LIFECYCLE_PAUSE closeable runs only on ViewModel clear. no_change_needed."
+      deferred:
+        - "MDNS-07 root cause on the tablet: needs device run with the new banner text."
+        - "MDNS-04 pasting full multi-line report into single-line field: UNVERIFIED on device."
     findings: [D:MDNS-01, D:MDNS-03, D:MDNS-04, D:MDNS-06, D:MDNS-07, C:APP-03]
     notes: "Decode DNS-SD escapes (\\DDD decimal bytes as UTF-8, \\. \\\\ ). Empty-search state. Export honours filter. Determine which limit raises the banner; do not show an error-styled banner for normal scans. Unify tool name 'Subnet Calculator'."
   - id: WP13

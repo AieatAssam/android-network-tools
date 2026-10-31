@@ -138,4 +138,39 @@ class MdnsPacketParserTest {
         assertNotNull(msg)
         assertNotNull(msg!!.question)
     }
+
+    // ── DNS-SD escapes in instance names (MDNS-01) ────────────────────────────
+
+    @Test
+    fun `extractDisplayName decodes decimal and UTF-8 escapes`() {
+        assertEquals(
+            "Aieat\u2019s MacBook Air",
+            MdnsPacketParser.extractDisplayName("""Aieat\226\128\153s\032MacBook\032Air._airplay._tcp.local."""),
+        )
+    }
+
+    @Test
+    fun `extractDisplayName decodes parentheses escapes`() {
+        assertEquals(
+            "HP LaserJet 300 colorMFP M375nw (615DC8)",
+            MdnsPacketParser.extractDisplayName(
+                """HP\032LaserJet\032300\032colorMFP\032M375nw\032\(615DC8\)._http._tcp.local.""",
+            ),
+        )
+    }
+
+    @Test
+    fun `extractDisplayName keeps an escaped dot inside the instance label`() {
+        assertEquals("Office.Floor2", MdnsPacketParser.extractDisplayName("""Office\.Floor2._ipp._tcp.local."""))
+    }
+
+    @Test
+    fun `extractServiceType ignores an escaped dot inside the instance label`() {
+        assertEquals("_ipp._tcp", MdnsPacketParser.extractServiceType("""Office\.Floor2._ipp._tcp.local."""))
+    }
+
+    @Test
+    fun `extractDisplayName leaves malformed escapes as written`() {
+        assertEquals("""Bad\999 name""", MdnsPacketParser.extractDisplayName("""Bad\999 name._http._tcp.local."""))
+    }
 }

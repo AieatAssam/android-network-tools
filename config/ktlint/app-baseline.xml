@@ -2885,19 +2885,19 @@
         <error line="6" column="67" source="standard:function-signature" />
     </file>
     <file name="src/main/kotlin/net/aieat/netswissknife/app/ui/screens/mdns/MdnsDiscoveryScreen.kt">
-        <error line="126" column="5" source="standard:function-naming" />
-        <error line="290" column="13" source="standard:function-naming" />
-        <error line="375" column="13" source="standard:function-naming" />
-        <error line="404" column="13" source="standard:function-naming" />
-        <error line="453" column="13" source="standard:function-naming" />
-        <error line="485" column="13" source="standard:function-naming" />
-        <error line="520" column="13" source="standard:function-naming" />
-        <error line="532" column="13" source="standard:function-naming" />
-        <error line="548" column="13" source="standard:function-naming" />
-        <error line="612" column="13" source="standard:function-naming" />
-        <error line="758" column="13" source="standard:function-naming" />
-        <error line="821" column="13" source="standard:function-naming" />
-        <error line="963" column="13" source="standard:function-naming" />
+        <error line="128" column="5" source="standard:function-naming" />
+        <error line="287" column="13" source="standard:function-naming" />
+        <error line="372" column="13" source="standard:function-naming" />
+        <error line="460" column="13" source="standard:function-naming" />
+        <error line="509" column="13" source="standard:function-naming" />
+        <error line="541" column="13" source="standard:function-naming" />
+        <error line="576" column="13" source="standard:function-naming" />
+        <error line="588" column="13" source="standard:function-naming" />
+        <error line="604" column="13" source="standard:function-naming" />
+        <error line="670" column="13" source="standard:function-naming" />
+        <error line="830" column="13" source="standard:function-naming" />
+        <error line="893" column="13" source="standard:function-naming" />
+        <error line="1075" column="13" source="standard:function-naming" />
     </file>
     <file name="src/main/kotlin/net/aieat/netswissknife/app/ui/screens/mdns/MdnsDiscoveryViewModel.kt">
         <error line="3" column="1" source="standard:import-ordering" />
