@@ -17,4 +17,26 @@ data class TlsInspectorResult(
     val protocolProbeNotTestable: Set<String> = emptySet(),
     val ocspStapled: Boolean? = null,
     val pinMatch: Boolean? = null,
-)
+) {
+    /**
+     * Overall verdict. A chain the device trusts is still a failed connection when the certificate
+     * is for another hostname, is expired or not yet valid, or does not match the expected pin.
+     * [isChainTrusted] reports only the trust-store decision.
+     */
+    val isConnectionTrusted: Boolean
+        get() {
+            if (!isChainTrusted || hostnameMatches == false || pinMatch == false) return false
+            return chainIssues.none { it in BLOCKING_ISSUES }
+        }
+
+    private companion object {
+        val BLOCKING_ISSUES =
+            setOf(
+                ChainIssue.UNTRUSTED,
+                ChainIssue.EXPIRED,
+                ChainIssue.NOT_YET_VALID,
+                ChainIssue.HOSTNAME_MISMATCH,
+                ChainIssue.PIN_MISMATCH,
+            )
+    }
+}

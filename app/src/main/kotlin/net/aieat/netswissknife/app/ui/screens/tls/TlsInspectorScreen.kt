@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
+import androidx.compose.material3.ChipColors
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.HorizontalDivider
@@ -59,6 +60,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.luminance
+import net.aieat.netswissknife.app.ui.components.messageRes
+import net.aieat.netswissknife.app.ui.theme.StatusGoodDeep
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalContext
@@ -328,7 +332,7 @@ private fun TlsInputSection(
                 },
                 isError       = isHostInvalid,
                 supportingText = if (isHostInvalid) {
-                    { Text(stringResource(R.string.error_invalid_host)) }
+                    { Text(stringResource(HostValidator.problemOf(host)?.messageRes() ?: R.string.error_invalid_host)) }
                 } else null,
                 enabled       = !isLoading,
                 singleLine    = true,
@@ -529,6 +533,7 @@ private fun TlsLoadingContent() {
 private fun TlsErrorContent(message: String, descriptionKey: String?, onRetry: () -> Unit) {
     val visibleMessage = when (descriptionKey) {
         TlsInspectorErrorKeys.PIN_INVALID_DESCRIPTION -> stringResource(R.string.tls_pin_invalid)
+        TlsInspectorErrorKeys.NOT_TLS_PORT_DESCRIPTION -> stringResource(R.string.tls_not_tls_port)
         else -> message
     }
     ToolErrorCard(
@@ -629,20 +634,18 @@ private fun ConnectionCard(result: TlsInspectorResult) {
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold
                     )
+                    // Verdict, not the bare chain result: hostname, expiry and pin failures
+                    // make the connection untrusted even when the chain verifies.
+                    val trusted = result.isConnectionTrusted
                     SuggestionChip(
                         onClick = {},
                         label   = {
                             Text(
-                                if (result.isChainTrusted) stringResource(R.string.tls_trusted)
+                                if (trusted) stringResource(R.string.tls_trusted)
                                 else stringResource(R.string.tls_untrusted)
                             )
                         },
-                        colors  = SuggestionChipDefaults.suggestionChipColors(
-                            containerColor = if (result.isChainTrusted)
-                                MaterialTheme.colorScheme.tertiaryContainer
-                            else
-                                MaterialTheme.colorScheme.secondaryContainer
-                        )
+                        colors  = verdictChipColors(trusted),
                     )
                 }
 
@@ -729,6 +732,21 @@ private fun ConnectionCard(result: TlsInspectorResult) {
             }
         }
     }
+}
+
+/**
+ * Verdict chip colours. Trusted uses the success token rather than the error role; untrusted uses
+ * the error role. The verdict already folds in hostname, expiry and pin failures.
+ */
+@Composable
+private fun verdictChipColors(trusted: Boolean): ChipColors {
+    // Brighter green on dark surfaces keeps label contrast; the deeper one suits light surfaces.
+    val onDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val successText = if (onDark) StatusGood else StatusGoodDeep
+    return SuggestionChipDefaults.suggestionChipColors(
+        containerColor = if (trusted) StatusGoodDeep.copy(alpha = 0.12f) else MaterialTheme.colorScheme.errorContainer,
+        labelColor = if (trusted) successText else MaterialTheme.colorScheme.onErrorContainer,
+    )
 }
 
 // ── Certificate card ──────────────────────────────────────────────────────────
@@ -1005,7 +1023,8 @@ internal fun buildTlsShareText(result: TlsInspectorResult): String = buildString
     appendLine("TLS – ${result.host}:${result.port}")
     appendLine("Protocol: ${result.tlsVersion}")
     appendLine("Cipher: ${result.cipherSuite}")
-    appendLine("Trusted: ${result.isChainTrusted}")
+    appendLine("Trusted: ${result.isConnectionTrusted}")
+    appendLine("Chain trusted: ${result.isChainTrusted}")
     appendLine("Connect: ${result.connectTimeMs} ms; handshake: ${result.handshakeTimeMs} ms")
     result.alpn?.let { appendLine("ALPN: $it") }
     result.hostnameMatches?.let { appendLine("Hostname match: $it") }
@@ -1048,4 +1067,5 @@ private fun net.aieat.netswissknife.core.network.tls.ChainIssue.stringRes(): Int
     net.aieat.netswissknife.core.network.tls.ChainIssue.WEAK_SIGNATURE -> R.string.tls_issue_weak_signature
     net.aieat.netswissknife.core.network.tls.ChainIssue.WEAK_KEY -> R.string.tls_issue_weak_key
     net.aieat.netswissknife.core.network.tls.ChainIssue.INCOMPLETE_CHAIN -> R.string.tls_issue_incomplete_chain
+    net.aieat.netswissknife.core.network.tls.ChainIssue.PIN_MISMATCH -> R.string.tls_issue_pin_mismatch
 }

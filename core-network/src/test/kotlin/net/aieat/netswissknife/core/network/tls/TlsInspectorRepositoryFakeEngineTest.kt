@@ -171,6 +171,100 @@ class TlsInspectorRepositoryFakeEngineTest {
         assertTrue(result.data.protocolProbeUnknown.isEmpty())
     }
 
+    @Test
+    fun `hostname mismatch on a trusted chain is not a trusted connection`() {
+        runTest {
+            val result = trustedInspection("wrong.host.badssl.com")
+
+            assertEquals(true, result.isChainTrusted)
+            assertEquals(false, result.hostnameMatches)
+            assertTrue(ChainIssue.HOSTNAME_MISMATCH in result.chainIssues)
+            assertFalse(result.isConnectionTrusted)
+        }
+    }
+
+    @Test
+    fun `matching hostname and pin on a trusted chain is a trusted connection`() {
+        runTest {
+            val options = TlsInspectorOptions(expectedPinSha256 = expectedPin())
+            val result = trustedInspection("www.example.com", options)
+
+            assertEquals(true, result.pinMatch)
+            assertTrue(result.isConnectionTrusted)
+        }
+    }
+
+    @Test
+    fun `pin mismatch adds a finding and overrides a trusted chain`() {
+        runTest {
+            val options = TlsInspectorOptions(expectedPinSha256 = "00".repeat(32))
+            val result = trustedInspection("www.example.com", options)
+
+            assertEquals(false, result.pinMatch)
+            assertTrue(ChainIssue.PIN_MISMATCH in result.chainIssues)
+            assertFalse(result.isConnectionTrusted)
+        }
+    }
+
+    @Test
+    fun `expired leaf overrides a trusted chain`() {
+        runTest {
+            val result = trustedInspection("www.example.com", now = certificate.notAfter.time + 1_000)
+
+            assertTrue(ChainIssue.EXPIRED in result.chainIssues)
+            assertFalse(result.isConnectionTrusted)
+        }
+    }
+
+    @Test
+    fun `plaintext response on a TLS port is reported as a non-TLS port`() {
+        runTest {
+            listOf("wrong version number", "Unsupported or unrecognized SSL message").forEach { message ->
+                val repository = repositoryWithEngine(FakeEngine(handshakeFailure = SSLProtocolException(message)))
+
+                val error = repository.inspect("www.example.com", 443, 5_000) as NetworkResult.Error
+
+                assertEquals("tls_not_tls_port", error.descriptionKey, message)
+            }
+        }
+    }
+
+    @Test
+    fun `ordinary handshake failure keeps its generic message`() {
+        runTest {
+            val failure = SSLHandshakeException("Received fatal alert: handshake_failure")
+            val repository = repositoryWithEngine(FakeEngine(handshakeFailure = failure))
+
+            val error = repository.inspect("www.example.com", 443, 5_000) as NetworkResult.Error
+
+            assertEquals(null, error.descriptionKey)
+        }
+    }
+
+    private fun expectedPin(): String = TlsCertificateParser.sha256Fingerprint(certificate.encoded).replace(":", "")
+
+    private fun repositoryWithEngine(
+        engine: FakeEngine,
+        now: Long = certificate.notBefore.time + 1_000,
+        trusted: Boolean = true,
+    ): TlsInspectorRepositoryImpl {
+        val repository = TlsInspectorRepositoryImpl()
+        repository.handshakeEngine = engine
+        repository.wallClockMillis = { now }
+        repository.chainTrustOverride = { trusted }
+        return repository
+    }
+
+    /** Forces a trusted chain so only hostname, pin and time decide the verdict. */
+    private suspend fun trustedInspection(
+        host: String,
+        options: TlsInspectorOptions = TlsInspectorOptions(),
+        now: Long = certificate.notBefore.time + 1_000,
+    ): TlsInspectorResult {
+        val repository = repositoryWithEngine(FakeEngine(), now = now, trusted = true)
+        return (repository.inspect(host, 443, 5_000, options) as NetworkResult.Success).data
+    }
+
     private inner class FakeEngine(
         private val enabled: Set<String> = emptySet(),
         private val rejected: Set<String> = emptySet(),
@@ -179,6 +273,7 @@ class TlsInspectorRepositoryFakeEngineTest {
         private val protocolVersionProtocolFailures: Set<String> = emptySet(),
         private val onConnect: () -> Unit = {},
         private val onHandshake: () -> Unit = {},
+        private val handshakeFailure: Throwable? = null,
     ) : TlsHandshakeEngine {
         val openCount = AtomicInteger()
         val closedCount = AtomicInteger()
@@ -203,6 +298,7 @@ class TlsInspectorRepositoryFakeEngineTest {
 
                 override fun handshake() {
                     onHandshake()
+                    handshakeFailure?.let { throw it }
                     if (protocol in rejected) throw SSLHandshakeException("Received fatal alert: protocol_version")
                     if (protocol in protocolVersionProtocolFailures) {
                         throw SSLProtocolException("Received fatal alert: protocol_version")

@@ -23,6 +23,7 @@ object ChainAnalyzer {
         trusted: Boolean,
         nowMillis: Long,
         hostnameMatches: Boolean? = null,
+        pinMatch: Boolean? = null,
     ): List<ChainIssue> {
         if (certificates.isEmpty()) return if (trusted) emptyList() else listOf(ChainIssue.UNTRUSTED)
 
@@ -44,6 +45,7 @@ object ChainAnalyzer {
         if (isCryptographicallySelfSigned(leaf)) issues += ChainIssue.SELF_SIGNED
         if (!trusted) issues += ChainIssue.UNTRUSTED
         if (hostnameMatches == false) issues += ChainIssue.HOSTNAME_MISMATCH
+        if (pinMatch == false) issues += ChainIssue.PIN_MISMATCH
 
         if ((0 until certificates.lastIndex).any { index -> !linksTo(certificates[index], certificates[index + 1]) }) {
             issues += ChainIssue.INCOMPLETE_CHAIN

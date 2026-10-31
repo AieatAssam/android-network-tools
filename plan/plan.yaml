@@ -201,9 +201,28 @@ work_packages:
       note: "Process: ktlintFormat rewrote about 360 unrelated files (imports, trailing commas, androidTest sources). All were reverted to HEAD with git checkout; the tree was clean before the WP began, so nothing was lost. The VM import order was restored by hand."
   - id: WP08
     title: TLS Inspector
-    status: todo
+    status: done
     findings: [C:TLS-01, C:TLS-02, C:TLS-03, C:TLS-04, C:TLS-05, C:TLS-06, D:TLS-05, D:TLS-06]
     notes: "TLS-01 (hostname mismatch must not read 'Trusted') is the top security-correctness item. TLS-04 may be Android 8 trust store: verify, document if platform. D:TLS-06 = README says timeout configurable: either add a timeout control or fix README."
+    result:
+      status: done
+      commit: "fix(tls) commit on plan/ux-remediation-2026-10-31 (see git log)"
+      gates: "./gradlew test ktlintCheck detekt :app:assembleDebug :app:compileDebugAndroidTestKotlin :core-network:koverVerify :core-domain:koverVerify :app:koverVerify, one foreground invocation. ktlint baselines regenerated for core-domain, core-network and app; per-rule counts equal HEAD or lower. Device re-test deferred to WP18."
+      fixed:
+        - "C:TLS-01 (BUG, high): TlsInspectorResult.isConnectionTrusted is the overall verdict. A hostname mismatch, expiry, not-yet-valid leaf or pin mismatch makes it untrusted even when the chain verifies. isChainTrusted stays trust-store only. Tests: TlsInspectorVerdictTest and fake-engine cases (trust override seam)."
+        - "C:TLS-02: the Trusted chip uses the success token (StatusGoodDeep, brighter on dark surfaces); the error role is used only for untrusted."
+        - "C:TLS-03: SHA-256 pin mismatch adds ChainIssue.PIN_MISMATCH (finding text added) and fails the verdict. Pin comparison is case-insensitive."
+        - "C:TLS-05: a plaintext response on a TLS port (wrong version number / unsupported or unrecognized SSL message / unknown protocol) maps to 'This port answered with plain text, not TLS' (descriptionKey tls_not_tls_port). Message-based mapping; confirm on device."
+        - "D:TLS-05: shared RecentHostsRow fades the trailing edge while more chips are off-screen (alpha mask, shown only when canScrollForward). Not device-verified."
+        - "D:TLS-06: README corrected to a fixed 10-second timeout. HTTP Probe also has no timeout control, so no control was added here."
+        - "Host field supporting text uses HostValidator.problemOf(...).messageRes(). The ViewModel still returns English validation messages (not localised): existing tests lock those strings, so changing them was deferred."
+        - "C:TLS-04 (partial): untrusted finding text now says 'not trusted by this device's certificate store'. The chain check is host-independent and uses the platform trust store, so a 1.1.1.1 vs example.com difference is the device's roots (Android 8). Root cause not reproduced; confirm on device at WP18."
+      not_reproduced:
+        - "C:TLS-06 (connect 5202 ms outlier): not reproduced; no source change. Re-test on device before filing."
+        - "Rotation cancelling an inspection (ON_STOP / ON_PAUSE, isChangingConfigurations): the TLS screen has no lifecycle observer and the ViewModel closeable only runs in onCleared, so rotation does not cancel. no_change_needed."
+      deferred:
+        - "C:TLS-04 root cause: needs a device trust-store check (WP18)."
+        - "Timeout control: not added (HTTP Probe, the closest comparable tool, has none; Ping and Traceroute do expose one)."
   - id: WP09
     title: WHOIS
     status: todo

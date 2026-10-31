@@ -773,7 +773,9 @@
     <string name="tls_issue_not_yet_valid">A certificate is not yet valid</string>
     <string name="tls_issue_expires_soon">A certificate expires soon</string>
     <string name="tls_issue_self_signed">The chain contains a self-signed certificate</string>
-    <string name="tls_issue_untrusted">The certificate chain is not trusted</string>
+    <string name="tls_issue_untrusted">The certificate chain is not trusted by this device\'s certificate store</string>
+    <string name="tls_issue_pin_mismatch">The certificate does not match the expected SHA-256 pin</string>
+    <string name="tls_not_tls_port">This port answered with plain text, not TLS. Check the port, or use HTTP Probe for a plain-HTTP service.</string>
     <string name="tls_issue_hostname_mismatch">The certificate does not match this hostname</string>
     <string name="tls_issue_weak_signature">A weak signature algorithm was found</string>
     <string name="tls_issue_weak_key">A weak public key was found</string>

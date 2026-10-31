@@ -89,9 +89,12 @@ Wi-Fi environment analysis with SSID grouping and spectrum visualisation.
 
 ### TLS Inspector
 SSL/TLS certificate analysis for any TCP host, without sending an HTTP request.
-- Configurable host, port (default 443), and timeout (500–30 000 ms)
+- Configurable host and port (default 443). The inspection timeout is fixed at 10 seconds; there is no timeout setting
 - Presented peer chain: subject/issuer, validity dates, SANs, serial number, signature and public-key details, and SHA-256 fingerprint per certificate
 - Checks device trust, hostname match, expiry/not-yet-valid dates, incomplete chains, self-signed certificates, weak signatures, and weak keys
+- Overall verdict is "Trusted" only when the chain is trusted by this device, the hostname matches, the leaf certificate is within its validity dates, and any expected pin matches. A hostname mismatch, expiry, not-yet-valid date, or pin mismatch each makes the verdict "Untrusted", even when the chain itself verifies
+- A certificate that is not in this device's trust store is reported as untrusted by this device, which can differ from other clients on older Android versions
+- A port that answers with plain text rather than TLS (for example port 80) is reported as "does not appear to speak TLS"
 - Connection summary includes negotiated TLS version, ALPN, cipher suite, connect time, and handshake time
 - Optional older-TLS-version probes, expected SHA-256 leaf-certificate pin comparison, and PEM chain sharing
 

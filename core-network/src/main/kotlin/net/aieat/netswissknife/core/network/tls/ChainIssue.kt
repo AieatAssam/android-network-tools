@@ -11,4 +11,7 @@ enum class ChainIssue {
     WEAK_SIGNATURE,
     WEAK_KEY,
     INCOMPLETE_CHAIN,
+
+    /** The leaf certificate's SHA-256 does not match the expected pin supplied by the user. */
+    PIN_MISMATCH,
 }
