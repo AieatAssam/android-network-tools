@@ -407,9 +407,26 @@ work_packages:
         - "Device verification of leave-and-return, rotation and process death (am kill-all) for LAN, Port and the form tools: WP18."
   - id: WP16
     title: NEW TOOL – Network Info (local interfaces, gateway, DNS servers, public IP)
-    status: todo
+    status: done
     findings: [D:GAP-01, A:PING-09]
     notes: "Follow claude/tool_instructions.md fully (route 'netinfo'). Pure-Kotlin parsing in core-*, Android ConnectivityManager reads in :app behind an interface. Public IP via HTTPS (e.g. api.ipify.org) with explicit user action, copy buttons. Full UI checklist + README rows + tests."
+    result:
+      status: done
+      commit: "the single feat(netinfo) commit on plan/ux-remediation-2026-10-31; sha not recorded here to keep a single commit"
+      gates: "./gradlew test (core-network, core-domain and app unit suites green), ktlintCheck, detekt, :app:assembleDebug, :app:compileDebugAndroidTestKotlin, :core-network:koverVerify, :core-domain:koverVerify, :app:koverVerify all green, run one at a time. App ktlint baseline regenerated: per-rule counts identical to HEAD (0 entries added, none for netinfo). No detekt baseline change. Device verification deferred to WP18."
+      fixed:
+        - "D:GAP-01 / A:PING-09: new tool Network Info (route netinfo, Home tile, More > Diagnostics, icon SettingsEthernet). Active network: transports, metered and roaming. Wi-Fi link: RSSI, link speed, frequency with band and channel. SSID is shown only when ACCESS_FINE_LOCATION is already granted, otherwise 'Unavailable'; no new permission."
+        - "IP configuration: every interface address with scope (private, shared, link-local, unique local, global, multicast, special-purpose), prefix, IPv4 mask (IPv6 prefix only), gateways from default routes (IPv4 and IPv6), DNS servers, MTU, search domains, proxy. MAC is shown only for Wi-Fi and Ethernet and only when reported; Android 10+ hidden state and placeholder 02:00:00:00:00:00 are never shown as a value."
+        - "Public IP: explicit Check public IP only (never on entry, refresh or network callbacks). OkHttp HTTPS to api4.ipify.org and api6.ipify.org, redirects refused, body capped at 128 bytes and validated as an address of the requested family. IPv6 failure is reported as 'no public IPv6' and does not fail IPv4. Reverse DNS and geo/ASN reuse the existing traceroute facilities (TracerouteReverseDns, GeoIp chain). Results are discarded when the network identity changes."
+        - "Copy: per-value copy icon (48dp) and long-press on the row; Copy all and Share give a plain-text summary built in core-network from localised labels."
+        - "Live updates: default-network callback, debounced 300 ms, re-reads the local snapshot. Refresh re-reads the local network without contacting the internet."
+        - "Tests: core-network IP literal parsing and scope, mask, MAC/SSID/sentinel policies, public IP parser, OkHttp repository (MockWebServer: success, IPv6 endpoint, redirects, non-2xx, invalid and oversized bodies, timeout), summary formatter, network identity; core-domain PublicIpLookupUseCase; app NetInfoViewModel (no lookup on entry, single-flight check, network-change invalidation, stale result discard, live event); instrumented NetInfoScreenTest (compile only)."
+      not_reproduced: []
+      deferred:
+        - "Not verified on hardware: Wi-Fi SSID redaction with and without location permission on API 31+ (transportInfo), MAC behaviour on Android 8-9 vs 10+, IPv6 absence on a real network, live callback timing. Device check at WP18."
+        - "Private DNS server name is not shown. Only the resolved DNS servers are listed."
+        - "Public IP results have no time-based expiry; they are cleared only when the network identity changes."
+        - "ToolStateAnnouncerCoverageTest expected list gained netinfo/NetInfoScreen.kt (14 to 15 screens); the screen derives announcementPhase from uiState like the other tools."
   - id: WP17
     title: NEW TOOL – MAC / OUI Vendor Lookup
     status: todo

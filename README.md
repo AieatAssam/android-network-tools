@@ -206,6 +206,16 @@ Wake sleeping or powered-down machines on the local network with a UDP magic pac
 - Saved devices (stored on this device only): save the current MAC under an optional name, use a saved device to fill the form, edit a saved device's name or MAC, and delete it. A MAC is stored once, whichever notation it was entered in; an edit that would make two entries share a MAC is refused
 - In-app help explains BIOS/OS requirements
 
+### Network Info
+Shows the device's active network, its IP configuration, and an optional public IP check. Read-only and local, except for the public IP check you start yourself.
+- Active network: transports (Wi-Fi, cellular, Ethernet, VPN, Bluetooth), and whether the network is metered or roaming
+- Wi-Fi link (Wi-Fi only): signal strength (dBm), link speed (Mbps), and frequency with band and channel. The network name is shown only when location permission has already been granted for the Wi-Fi Scanner; otherwise it reads "Unavailable". This tool requests no new permission
+- IP configuration: every address on the active interface, with scope (private, shared, link-local, unique local, global, multicast, or special-purpose), prefix length, and the IPv4 subnet mask. IPv6 shows the prefix length only. Also gateways (default routes), DNS servers, MTU, search domains, and proxy settings
+- MAC address: shown for Wi-Fi and Ethernet only when Android provides it. Android 10 and newer hide hardware addresses from apps, so the value is shown as unavailable there rather than a placeholder. Locally administered (randomized) addresses are labelled
+- Public IP: runs only when you tap Check public IP, never on screen entry or refresh. It requests `api4.ipify.org` (IPv4) and `api6.ipify.org` (IPv6) over HTTPS. A network without IPv6 reports "No public IPv6 address" rather than an error. Each address found is then looked up for reverse DNS and approximate location and ASN. Results are cleared when the network changes
+- Refresh re-reads the local network. The screen also updates when the default network changes or its addresses or routes change
+- Copy any value with its copy icon or by pressing and holding its row. Copy all and Share produce a plain-text summary
+
 ## Networking behavior
 
 LAN-directed sockets use the selected Wi-Fi or Ethernet network when the destination is within that network's subnet. This lets local discovery and device queries reach the LAN when a VPN is active; destinations outside the local subnet continue to use Android's normal route. mDNS joins the selected interface and can use an ephemeral query port when port 5353 is unavailable.
@@ -334,6 +344,7 @@ apkanalyzer dex packages app/build/outputs/apk/release/app-release-unsigned.apk 
 | `mdns` | mDNS Service Browser | Implemented |
 | `speedtest` | Speed Test | Implemented |
 | `wol` | Wake-on-LAN | Implemented |
+| `netinfo` | Network Info | Implemented |
 
 ---
 

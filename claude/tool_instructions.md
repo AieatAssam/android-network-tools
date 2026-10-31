@@ -410,3 +410,4 @@ Both must succeed before committing.
 | mDNS Browser | `mdns` | Local DNS-SD service discovery with host, port, address, and TXT details |
 | Speed Test | `speedtest` | Cloudflare-backed latency, download, and upload measurement |
 | Wake-on-LAN | `wol` | UDP magic-packet sender with configurable broadcast settings |
+| Network Info | `netinfo` | Active network, Wi-Fi link, IP configuration, and an explicit public IP check |

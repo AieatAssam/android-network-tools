@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.NetworkCheck
 import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.Router
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SettingsEthernet
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.TravelExplore
 import androidx.compose.material.icons.filled.WifiFind
@@ -135,6 +136,8 @@ sealed class NavRoutes(
         }
     }
 
+    object NetworkInfo : NavRoutes("netinfo", "Network Info", Icons.Default.SettingsEthernet)
+
     object Settings : NavRoutes("settings", "Settings", Icons.Default.Settings)
 
     companion object {
@@ -238,6 +241,13 @@ sealed class NavRoutes(
                     R.string.tool_wol_short_label,
                     Icons.Default.PowerSettingsNew,
                     R.string.tool_wol_description,
+                ),
+                ToolInfo(
+                    "netinfo",
+                    R.string.tool_netinfo_label,
+                    R.string.tool_netinfo_short_label,
+                    Icons.Default.SettingsEthernet,
+                    R.string.tool_netinfo_description,
                 ),
             )
 

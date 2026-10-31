@@ -61,7 +61,7 @@ private data class ToolSection(
 
 private val TOOL_SECTIONS =
     listOf(
-        ToolSection(R.string.more_section_diagnostics, listOf("ping", "traceroute", "ports", "dns")),
+        ToolSection(R.string.more_section_diagnostics, listOf("ping", "traceroute", "ports", "dns", "netinfo")),
         ToolSection(R.string.more_section_wifi_lan, listOf("wifi_scan", "lan", "topology", "mdns")),
         ToolSection(R.string.more_section_security, listOf("tls", "whois", "httprobe")),
         ToolSection(R.string.more_section_utilities, listOf("subnet", "speedtest", "wol")),
