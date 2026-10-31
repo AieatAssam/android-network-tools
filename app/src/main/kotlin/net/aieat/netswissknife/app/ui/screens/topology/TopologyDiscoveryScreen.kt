@@ -85,6 +85,7 @@ fun TopologyDiscoveryScreen(viewModel: TopologyDiscoveryViewModel = hiltViewMode
             networkStatus = networkStatus,
             onGrantPermission = requestLocalNetworkPermission,
             recentSeeds = recentSeeds,
+            initialSeed = viewModel.restoredSeed.orEmpty(),
             onStartDiscovery = { params -> viewModel.startDiscovery(params) },
             onRemoveRecentSeed = { seed -> viewModel.removeRecentSeed(seed) },
             onClearRecentSeeds = { viewModel.clearRecentSeeds() },
@@ -131,6 +132,7 @@ private fun TopologyScreenContent(
     networkStatus: net.aieat.netswissknife.app.platform.NetworkStatus,
     onGrantPermission: () -> Unit,
     recentSeeds: List<String>,
+    initialSeed: String,
     onStartDiscovery: (TopologyParams) -> Unit,
     onRemoveRecentSeed: (String) -> Unit,
     onClearRecentSeeds: () -> Unit,
@@ -142,7 +144,7 @@ private fun TopologyScreenContent(
 ) {
     // Non-secret form inputs survive rotation (rememberSaveable). Community string and v3
     // passwords stay in plain remember so credentials never reach the saved-state Bundle.
-    var targetIp by rememberSaveable { mutableStateOf("") }
+    var targetIp by rememberSaveable { mutableStateOf(initialSeed) }
     var snmpVersion by rememberSaveable { mutableStateOf(SnmpVersion.V2C) }
     var community by remember { mutableStateOf("public") }
     var v3Username by rememberSaveable { mutableStateOf("") }

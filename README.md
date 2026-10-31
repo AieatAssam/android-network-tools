@@ -25,6 +25,7 @@ ICMP echo and reachability round-trip latency measurement with real-time streami
   - Rolling window of the last 100 packets drives live stats and chart
   - Full session log streamed to a temp CSV file; shareable via the Share button on completion
 - Tools with recent-target support save up to five entries on-device and show quick-select chips; clear recent targets from Settings
+- Only a valid host is saved to recent targets. A dotted name whose last label is all digits (for example two addresses typed together, `10.109.208.25010.109.208.200`) is rejected as an invalid address and is never run
 - CSV exports retain the original columns and append reply TTL and payload bytes.
 
 ### Traceroute
@@ -75,6 +76,9 @@ Full DNS record resolution with multiple resolver options and protocol-level res
 - The domain field is checked as you type: names with spaces, empty labels or invalid characters show a plain-language message and Look up stays disabled. Names with leading underscores (SRV, TXT owner labels) are accepted
 - Editing the name, record type or server clears a finished result or error so an old answer is not shown for a new query
 - The name, record type and resolver survive rotation and process death; leaving the tool with Back clears them
+- An NXDOMAIN answer is shown as a neutral "Domain not found" card, not as a success. A NOERROR answer keeps the success styling; server failures and other RCODEs use the error styling
+- Record types scroll sideways with a fade on each cut-off edge and a chevron beside the chips while more are off-screen
+- Look up is scrolled into view when the on-screen keyboard opens, so it is not covered by the keyboard
 - The Additional section starts collapsed, since it usually holds EDNS OPT pseudo-records (labelled `OPT`); an MX record of `0 .` is annotated as a null MX
 - System DNS is never silently replaced with Cloudflare; when Android reports no resolver, the UI explains the failure and offers an explicit Cloudflare fallback. Private DNS status is shown when available.
 - IDN hostnames and trailing-dot FQDNs are normalized consistently across network tools.
@@ -85,7 +89,7 @@ Wi-Fi environment analysis with SSID grouping and spectrum visualisation.
 - **Spectrum Analyser** — frequency-domain triangle chart per AP (X = MHz, Y = RSSI −100 to −30 dBm) with channel gridlines and one SSID label per network at its strongest peak. Labels are ellipsised to a fixed width and stacked upward when they would collide; a label with no free position is left off, and the network list below is the legend. Each network gets a stable accent colour derived from its SSID hash
 - Band tab-row switches between detected 2.4 / 5 / 6 GHz bands; spectrum and network list update per band
 - Best-channel callout recommends the least-congested of channels 1, 6, and 11 when 2.4 GHz is active. Each candidate is scored from every 2.4 GHz AP whose channel overlaps it (±4 channels), including channels with no AP of their own, so a channel is not recommended just because nothing is on it. The callout is hidden when no 2.4 GHz AP was scanned
-- Search (SSID, BSSID or vendor) narrows both the network list and the spectrum; a search with no match shows a message
+- Search (SSID, BSSID or vendor) narrows both the network list and the spectrum; a search with no match shows a message. Clear empties the search and closes the keyboard
 - Expandable network cards show each BSSID with channel, width, RSSI, and vendor; tap any BSSID for full detail sheet. Reorders from a refresh animate, and expanding a network pins the order until every card is collapsed
 - Detail sheet: signal arc gauge, band/channel/width/standard, security capability tokens, live connection stats (IP, TX/RX speed) when connected. "Standard max (theoretical)" is a PHY ceiling, not this link's rate: Wi-Fi 4 shows 289 Mbps at 20 MHz and 600 Mbps at 40 MHz (4 streams); other standards show their ceiling, which needs the widest channel and the most streams. Scan results do not report spatial streams, so a per-link rate is not shown
 - Each refresh requests a platform scan; auto-refresh is configurable (Off / 15 / 30 / 60 seconds, default 30 seconds). Android throttles foreground scans to four per two minutes, so the screen shows result age and when a request was throttled; Location Services must be enabled.
@@ -111,6 +115,7 @@ SNMP-based network topology discovery via BFS traversal.
 - VLAN discovery via Cisco VTP MIB and IEEE 802.1Q standard MIB
 - Interactive force-layout canvas with pan/zoom gestures and node detail bottom sheet
 - Recent seed IPs are saved locally for quick reuse
+- The last discovery (its seed and final state) is kept while the app is open, so leaving the tool and coming back shows the same result. A discovery still running when the tool is left is kept as a canceled, partial result. Community strings and v3 passwords are never kept
 - **Discover Topology** sits below the SNMP configuration card, outside its scroll area, and the keyboard Done action on the seed IP field starts discovery; Cancel appears in the same place while a scan runs
 - Configurable max hops (1–10), timeout, and SNMP v3 auth/priv protocols (MD5, SHA-1/256/512; DES, AES-128/192/256)
 - Reuses one SNMP4J session per discovery and closes it on completion or cancellation
@@ -123,6 +128,7 @@ Domain, IP, and ASN registration lookup using RDAP with WHOIS fallback.
 - Domain RDAP uses the [IANA DNS bootstrap](https://data.iana.org/rdap/dns.json) to choose a registry endpoint; IP and ASN requests use the [rdap.org](https://rdap.org/) redirector
 - WHOIS fallback uses the IANA-to-registry-to-registrar referral chain for domains and ARIN/referring RIRs for IPs and ASNs. A registrar referral to whois.iana.org is not queried again, since IANA holds no registrar record
 - Domain dates (registered, updated, expires), name servers, status codes and DNSSEC come from the registry record, never from the IANA step. Registrar and registrant fields come from the registrar record when one answers, otherwise from the registry record
+- DNSSEC reads "Signed" or "Unsigned" whichever protocol answered: the WHOIS value `signedDelegation` is shown as "Signed", and any other unlisted value is shown as readable text
 - Parsed fields include registrar, registration/expiry/update dates, name servers, status codes, DNSSEC, registrant organization/country, and network ranges
 - Status chips show human-readable labels for both RDAP phrasing (e.g. "client transfer prohibited") and WHOIS codes (e.g. "clientTransferProhibited"), e.g. "Transfer Locked"; unlisted statuses keep their words
 - Each result states which protocol answered (RDAP or WHOIS port 43) and the server used
@@ -220,9 +226,11 @@ Shows the device's active network, its IP configuration, and an optional public 
 Identifies the vendor behind a MAC address or an OUI prefix, using the IEEE registry bundled with the app. Fully offline: nothing is sent to any service.
 - Input: paste one or many, one per line or separated by commas, semicolons, or spaces. Colon, hyphen, Cisco dotted, and bare hex are accepted in any letter case. A three-byte OUI prefix such as `B8-27-EB` is looked up on its own. Multicast and broadcast addresses are accepted and labelled as such
 - Per address: the normalized address in colon, hyphen, Cisco dotted, and bare hex (upper or lower case, each with a copy button); the vendor name, or "Unknown vendor" when the registry has no block for it; the block size (MA-L, MA-M, or MA-S) when the registry lists it; the type (unicast, multicast, or broadcast); and whether the address is locally administered
-- Locally administered (randomized or private) addresses are labelled, and no vendor is shown for them, because the vendor code does not identify the hardware. Broadcast addresses show no vendor
+- Locally administered (randomized or private) addresses are labelled, and no vendor is shown for them, because the vendor code does not identify the hardware. Unicast addresses only: the locally administered flag reads "Not applicable" for broadcast and multicast, because the bit is not an owner's assignment for a group address. Broadcast addresses show no vendor
+- The same address entered in several notations (for example `00:1A:2B:3C:4D:5E` and `001a2b3c4d5e`) is one card, marked "Entered N times, merged into one card". Copy all and Share carry the same count
 - Malformed entries stay in the results with the reason they were rejected. A paste with no valid entry shows an error
 - Paste from clipboard fills the field and looks it up at once. Recent lookups are kept on this device (the last five), and each can be removed or all cleared
+- Look up, Paste and choosing a recent lookup close the keyboard, and the results are scrolled into view
 - Copy all and Share produce a plain-text summary of every entry. The first 100 entries of a paste are analysed; the rest are reported as not looked up
 
 ## Networking behavior

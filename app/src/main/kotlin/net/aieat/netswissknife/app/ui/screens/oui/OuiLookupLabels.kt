@@ -1,6 +1,8 @@
 package net.aieat.netswissknife.app.ui.screens.oui
 
+import android.content.Context
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.core.network.oui.MacAddressKind
@@ -15,6 +17,7 @@ internal fun rememberOuiSummaryLabels(): MacLookupSummaryLabels {
     val unicast = stringResource(R.string.oui_type_unicast)
     val multicast = stringResource(R.string.oui_type_multicast)
     val broadcast = stringResource(R.string.oui_type_broadcast)
+    val resources = LocalContext.current.resources
     return MacLookupSummaryLabels(
         title = stringResource(R.string.oui_screen_title),
         input = stringResource(R.string.oui_summary_input),
@@ -25,11 +28,13 @@ internal fun rememberOuiSummaryLabels(): MacLookupSummaryLabels {
         block = stringResource(R.string.oui_block_short),
         yes = stringResource(R.string.oui_yes),
         no = stringResource(R.string.oui_no),
+        notApplicable = stringResource(R.string.oui_not_applicable),
         unknownVendor = stringResource(R.string.oui_vendor_unknown),
         locallyAdministeredVendor = stringResource(R.string.oui_vendor_locally_administered),
         broadcastVendor = stringResource(R.string.oui_vendor_broadcast),
         rejected = stringResource(R.string.oui_rejected),
         noEntries = stringResource(R.string.oui_no_entries),
+        entered = { count -> resources.getQuantityString(R.plurals.oui_entered_times, count, count) },
         kindName = { kind ->
             when (kind) {
                 MacAddressKind.UNICAST -> unicast

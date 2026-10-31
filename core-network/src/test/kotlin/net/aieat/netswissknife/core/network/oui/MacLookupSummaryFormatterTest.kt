@@ -1,6 +1,7 @@
 package net.aieat.netswissknife.core.network.oui
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
@@ -18,12 +19,14 @@ class MacLookupSummaryFormatterTest {
             block = "Block",
             yes = "Yes",
             no = "No",
+            notApplicable = "Not applicable",
             unknownVendor = "Unknown vendor",
             locallyAdministeredVendor = "Not meaningful (locally administered)",
             broadcastVendor = "Not applicable (broadcast)",
             rejected = "Not a MAC address or OUI prefix",
             noEntries = "No entries",
             kindName = ::kindLabel,
+            entered = { "Entered $it times" },
         )
 
     private fun kindLabel(kind: MacAddressKind): String =
@@ -85,5 +88,29 @@ class MacLookupSummaryFormatterTest {
     @Test
     fun `an empty input gives a stated empty report`() {
         assertEquals("MAC Lookup\nNo entries\n", MacLookupSummaryFormatter.format(emptyList(), labels))
+    }
+
+    @Test
+    fun `broadcast reports local administration as not applicable, not yes`() {
+        val entry = MacLookupEngine(NoBlocks).lookup("FF:FF:FF:FF:FF:FF")
+
+        val text = MacLookupSummaryFormatter.format(listOf(entry), labels)
+
+        assertTrue(text.contains("Locally administered: Not applicable"), text)
+        assertFalse(text.contains("Locally administered: Yes"), text)
+    }
+
+    @Test
+    fun `a repeated address states how many times it was entered`() {
+        val entries = MacLookupEngine(NoBlocks).lookupAll("00:1A:2B:3C:4D:5E 00-1a-2b-3c-4d-5e")
+        val merged = MacLookupDedupe.collapse(entries)
+
+        val text = MacLookupSummaryFormatter.format(merged, labels)
+
+        assertTrue(text.contains("Entered 2 times"), text)
+    }
+
+    private object NoBlocks : OuiRegistry {
+        override fun match(hexDigits: String): OuiMatch? = null
     }
 }

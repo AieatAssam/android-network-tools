@@ -4,11 +4,15 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import net.aieat.netswissknife.core.network.oui.MacInputParser
+import net.aieat.netswissknife.core.network.oui.MacLookupDedupe
 import net.aieat.netswissknife.core.network.oui.MacLookupEngine
 import net.aieat.netswissknife.core.network.oui.MacLookupEntry
 import net.aieat.netswissknife.core.network.oui.OuiRegistry
 
-/** Result of one MAC Lookup. [truncated] is true when the paste held more entries than were analysed. */
+/**
+ * Result of one MAC Lookup. [truncated] is true when the paste held more entries than were analysed.
+ * [entries] holds one entry per distinct address, with [MacLookupEntry.Address.occurrences] counting its pastes.
+ */
 data class OuiLookupReport(
     val entries: List<MacLookupEntry>,
     val truncated: Boolean,
@@ -28,7 +32,8 @@ class OuiLookupUseCase(
         withContext(dispatcher) {
             val pieces = MacInputParser.splitEntries(params)
             OuiLookupReport(
-                entries = pieces.take(MAX_ENTRIES).map(engine::lookup),
+                // One card per address: the same MAC in several notations is merged and counted.
+                entries = MacLookupDedupe.collapse(pieces.take(MAX_ENTRIES).map(engine::lookup)),
                 truncated = pieces.size > MAX_ENTRIES,
             )
         }

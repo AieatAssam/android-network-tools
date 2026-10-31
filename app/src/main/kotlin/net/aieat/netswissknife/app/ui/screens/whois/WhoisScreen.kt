@@ -855,7 +855,7 @@ fun DomainResultCard(result: WhoisResult, onOpenUrl: (String) -> Unit) {
             // DNSSEC
             val dnssec = result.dnssec
             if (dnssec != null) {
-                LabeledRow(label = stringResource(R.string.whois_dnssec), value = dnssec)
+                LabeledRow(label = stringResource(R.string.whois_dnssec), value = dnssecText(dnssec))
                 HorizontalDivider()
             }
 
@@ -1094,5 +1094,17 @@ private fun buildWhoisShareText(result: net.aieat.netswissknife.core.network.who
         appendLine()
         appendLine("--- Raw WHOIS ---")
         append(rawWhois)
+    }
+}
+
+/** The DNSSEC row text: one localised label for each known state, humanized text otherwise. */
+@Composable
+@Suppress("FunctionNaming", "ktlint:standard:function-naming")
+private fun dnssecText(raw: String): String {
+    val signed = stringResource(R.string.whois_dnssec_signed)
+    val unsigned = stringResource(R.string.whois_dnssec_unsigned)
+    return when (val label = whoisDnssecLabel(raw)) {
+        is WhoisDnssecLabel.Text -> label.text
+        is WhoisDnssecLabel.Known -> if (label.state == WhoisDnssecState.SIGNED) signed else unsigned
     }
 }

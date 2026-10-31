@@ -64,4 +64,14 @@ class OuiLookupUseCaseTest {
             assertEquals(OuiLookupUseCase.MAX_ENTRIES, report.entries.size)
             assertTrue(report.truncated)
         }
+
+    @Test
+    fun `the same address in four notations is one entry counted four times`() =
+        runBlocking {
+            val report =
+                useCase().invoke("00:1A:2B:3C:4D:5E, 00-1a-2b-3c-4d-5e, 001A.2B3C.4D5E, 001a2b3c4d5e")
+
+            assertEquals(1, report.entries.size)
+            assertEquals(4, (report.entries.single() as MacLookupEntry.Address).occurrences)
+        }
 }

@@ -214,7 +214,7 @@
     <string name="dns_raw_response">Raw DNS response</string>
     <string name="dns_no_records_title">No records found</string>
     <string name="dns_no_records_subtitle">No %1$s records were returned for %2$s.</string>
-    <string name="dns_nxdomain_title">Domain does not exist</string>
+    <string name="dns_nxdomain_title">Domain not found</string>
     <string name="dns_nxdomain_subtitle">The DNS server reports that %1$s does not exist.</string>
     <string name="dns_rcode_error_title">DNS lookup was not completed</string>
     <string name="dns_rcode_error_subtitle">The DNS server returned %1$s for %2$s.</string>
@@ -869,6 +869,8 @@
     <string name="whois_domain_status">Domain Status</string>
     <string name="whois_name_servers">Name Servers</string>
     <string name="whois_dnssec">DNSSEC</string>
+    <string name="whois_dnssec_signed">Signed</string>
+    <string name="whois_dnssec_unsigned">Unsigned</string>
     <string name="whois_registrant">Registrant</string>
     <string name="whois_net_range">Network Range</string>
     <string name="whois_org">Organization</string>
@@ -1842,6 +1844,11 @@
     <string name="oui_prefix_note">OUI prefix only. The vendor and block come from the first three octets, and the rest of the address is not known.</string>
     <string name="oui_yes">Yes</string>
     <string name="oui_no">No</string>
+    <string name="oui_not_applicable">Not applicable</string>
+    <plurals name="oui_entered_times">
+        <item quantity="one">Entered %1$d time, merged into one card</item>
+        <item quantity="other">Entered %1$d times, merged into one card</item>
+    </plurals>
     <string name="oui_notation_title">Notations</string>
     <string name="oui_notation_colon">Colon</string>
     <string name="oui_notation_hyphen">Hyphen</string>

@@ -3,6 +3,13 @@ package net.aieat.netswissknife.core.network.oui
 /** Unicast, multicast (group bit set) or the all-ones broadcast address. */
 enum class MacAddressKind { UNICAST, MULTICAST, BROADCAST }
 
+/**
+ * The U/L bit as it applies to an address. Only a unicast address has an owner whose
+ * assignment can be private or registered; broadcast and multicast are groups, so the bit
+ * does not apply to them.
+ */
+enum class LocalAdministration { LOCAL, UNIVERSAL, NOT_APPLICABLE }
+
 /** Textual notations the MAC Lookup tool offers. */
 enum class MacNotation { COLON, HYPHEN, DOTTED, BARE }
 
@@ -25,15 +32,18 @@ sealed interface VendorResult {
 
 /**
  * One analysed address. [hex] is 12 uppercase digits for a MAC or 6 for an OUI prefix on its own.
- * For a prefix, [kind] and [locallyAdministered] come from its first octet alone.
+ * For a prefix, [kind] and [localAdministration] come from its first octet alone.
  */
 data class MacAddressInfo(
     val hex: String,
     val kind: MacAddressKind,
-    val locallyAdministered: Boolean,
+    val localAdministration: LocalAdministration,
     val vendor: VendorResult,
 ) {
     val isPrefixOnly: Boolean get() = hex.length == PREFIX_DIGITS
+
+    /** True only for a unicast address with the U/L bit set. */
+    val locallyAdministered: Boolean get() = localAdministration == LocalAdministration.LOCAL
 
     fun format(
         notation: MacNotation,
@@ -62,6 +72,8 @@ sealed interface MacLookupEntry {
     data class Address(
         override val input: String,
         val info: MacAddressInfo,
+        /** How many pasted entries were this same address in another notation (1 when unique). */
+        val occurrences: Int = 1,
     ) : MacLookupEntry
 
     data class Rejected(
@@ -87,10 +99,20 @@ class MacLookupEngine(
     private fun describe(hex: String): MacAddressInfo {
         val firstOctet = hex.take(OCTET_DIGITS).toInt(HEX_RADIX)
         val kind = kindOf(hex, firstOctet)
-        val locallyAdministered = firstOctet and LOCAL_BIT != 0
-        val vendor = vendorOf(hex, kind, locallyAdministered)
-        return MacAddressInfo(hex, kind, locallyAdministered, vendor)
+        val localAdministration = localAdministrationOf(kind, firstOctet)
+        val vendor = vendorOf(hex, kind, localAdministration)
+        return MacAddressInfo(hex, kind, localAdministration, vendor)
     }
+
+    private fun localAdministrationOf(
+        kind: MacAddressKind,
+        firstOctet: Int,
+    ): LocalAdministration =
+        when {
+            kind != MacAddressKind.UNICAST -> LocalAdministration.NOT_APPLICABLE
+            firstOctet and LOCAL_BIT != 0 -> LocalAdministration.LOCAL
+            else -> LocalAdministration.UNIVERSAL
+        }
 
     private fun kindOf(
         hex: String,
@@ -105,11 +127,11 @@ class MacLookupEngine(
     private fun vendorOf(
         hex: String,
         kind: MacAddressKind,
-        locallyAdministered: Boolean,
+        localAdministration: LocalAdministration,
     ): VendorResult =
         when {
             kind == MacAddressKind.BROADCAST -> VendorResult.NotApplicable
-            locallyAdministered -> VendorResult.LocallyAdministered
+            localAdministration == LocalAdministration.LOCAL -> VendorResult.LocallyAdministered
             else -> registry.match(hex)?.let { VendorResult.Known(it.vendor, it.blockSize) } ?: VendorResult.Unknown
         }
 
@@ -118,5 +140,29 @@ class MacLookupEngine(
         const val LOCAL_BIT = 0x02
         const val OCTET_DIGITS = 2
         const val HEX_RADIX = 16
+    }
+}
+
+/**
+ * Merges pasted entries that name the same address. The first notation is kept, with the number
+ * of entries it stands for. Rejected entries and OUI prefixes keep their place and are not merged.
+ */
+object MacLookupDedupe {
+    fun collapse(entries: List<MacLookupEntry>): List<MacLookupEntry> {
+        val result = mutableListOf<MacLookupEntry>()
+        val indexByHex = HashMap<String, Int>()
+        entries.forEach { entry ->
+            if (entry is MacLookupEntry.Address) {
+                val existing = indexByHex[entry.info.hex]
+                if (existing != null) {
+                    val first = result[existing] as MacLookupEntry.Address
+                    result[existing] = first.copy(occurrences = first.occurrences + entry.occurrences)
+                    return@forEach
+                }
+                indexByHex[entry.info.hex] = result.size
+            }
+            result += entry
+        }
+        return result
     }
 }

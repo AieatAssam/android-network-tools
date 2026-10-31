@@ -13,6 +13,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Dp
@@ -33,8 +34,14 @@ fun ToolClearButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
 ) {
+    // Tapping the trailing icon focuses the field first, which opens the keyboard over the results.
+    // Clear is the end of the edit, so it drops focus and the keyboard goes with it.
+    val focusManager = LocalFocusManager.current
     IconButton(
-        onClick = onClick,
+        onClick = {
+            onClick()
+            focusManager.clearFocus()
+        },
         enabled = enabled,
         modifier = modifier.size(ToolTouchTargetSize),
     ) {

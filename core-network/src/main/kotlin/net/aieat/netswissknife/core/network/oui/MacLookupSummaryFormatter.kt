@@ -14,12 +14,15 @@ data class MacLookupSummaryLabels(
     val block: String,
     val yes: String,
     val no: String,
+    val notApplicable: String,
     val unknownVendor: String,
     val locallyAdministeredVendor: String,
     val broadcastVendor: String,
     val rejected: String,
     val noEntries: String,
     val kindName: (MacAddressKind) -> String,
+    /** Reads "Entered 2 times" style text for an address that was pasted more than once. */
+    val entered: (Int) -> String,
 )
 
 /** Plain-text report for Copy and Share. Rejected entries stay in the report with their reason. */
@@ -51,11 +54,22 @@ object MacLookupSummaryFormatter {
         appendLine("${labels.input}: ${entry.input}")
         appendLine("${labels.address}: ${info.format(MacNotation.COLON, uppercase = true)}")
         appendLine("${labels.type}: ${labels.kindName(info.kind)}")
-        appendLine("${labels.locallyAdministered}: ${if (info.locallyAdministered) labels.yes else labels.no}")
+        appendLine("${labels.locallyAdministered}: ${localAdministrationText(info, labels)}")
         appendLine("${labels.vendor}: ${vendorText(info.vendor, labels)}")
         val known = info.vendor as? VendorResult.Known
         if (known != null) appendLine("${labels.block}: ${known.blockSize.registryName}")
+        if (entry.occurrences > 1) appendLine(labels.entered(entry.occurrences))
     }
+
+    private fun localAdministrationText(
+        info: MacAddressInfo,
+        labels: MacLookupSummaryLabels,
+    ): String =
+        when (info.localAdministration) {
+            LocalAdministration.LOCAL -> labels.yes
+            LocalAdministration.UNIVERSAL -> labels.no
+            LocalAdministration.NOT_APPLICABLE -> labels.notApplicable
+        }
 
     private fun vendorText(
         vendor: VendorResult,

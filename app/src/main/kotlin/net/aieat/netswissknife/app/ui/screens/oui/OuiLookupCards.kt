@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
@@ -24,6 +26,8 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -38,6 +42,7 @@ import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.ui.theme.AppShapes
 import net.aieat.netswissknife.app.ui.theme.AppSpacing
 import net.aieat.netswissknife.core.domain.OuiLookupUseCase
+import net.aieat.netswissknife.core.network.oui.LocalAdministration
 import net.aieat.netswissknife.core.network.oui.MacAddressInfo
 import net.aieat.netswissknife.core.network.oui.MacAddressKind
 import net.aieat.netswissknife.core.network.oui.MacLookupEntry
@@ -60,11 +65,16 @@ internal fun OuiResultsContent(
     onShare: () -> Unit,
     onClear: () -> Unit,
 ) {
+    // Results land below the input card. Bring the header into view so they are not hidden under
+    // the keyboard or below the fold after Look up.
+    val headerInView = remember { BringIntoViewRequester() }
+    LaunchedEffect(results) { headerInView.bringIntoView() }
     Column(
         modifier = Modifier.fillMaxWidth().testTag(OuiLookupTestTags.RESULTS),
         verticalArrangement = Arrangement.spacedBy(AppSpacing.cardGap),
     ) {
         OuiResultsHeader(
+            modifier = Modifier.bringIntoViewRequester(headerInView),
             results = results,
             lowercase = lowercase,
             onLowercaseChange = onLowercaseChange,
@@ -84,6 +94,7 @@ internal fun OuiResultsContent(
 @Composable
 @Suppress("FunctionNaming", "ktlint:standard:function-naming")
 private fun OuiResultsHeader(
+    modifier: Modifier = Modifier,
     results: OuiLookupPhase.Results,
     lowercase: Boolean,
     onLowercaseChange: (Boolean) -> Unit,
@@ -92,7 +103,7 @@ private fun OuiResultsHeader(
     onClear: () -> Unit,
 ) {
     val count = results.entries.size
-    ElevatedCard(shape = AppShapes.large, modifier = Modifier.fillMaxWidth()) {
+    ElevatedCard(shape = AppShapes.large, modifier = modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(CARD_PADDING_DP.dp),
             verticalArrangement = Arrangement.spacedBy(ROW_GAP_DP.dp),
@@ -183,6 +194,13 @@ internal fun OuiAddressCard(
                 fontFamily = FontFamily.Monospace,
                 color = MaterialTheme.colorScheme.onSurface,
             )
+            if (entry.occurrences > 1) {
+                Text(
+                    text = pluralStringResource(R.plurals.oui_entered_times, entry.occurrences, entry.occurrences),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             if (info.isPrefixOnly) {
                 Text(
                     text = stringResource(R.string.oui_prefix_note),
@@ -219,10 +237,7 @@ private fun OuiAddressFields(info: MacAddressInfo) {
         )
     }
     OuiField(stringResource(R.string.oui_type_label), stringResource(kindRes(info.kind)))
-    OuiField(
-        stringResource(R.string.oui_local_label),
-        stringResource(if (info.locallyAdministered) R.string.oui_yes else R.string.oui_no),
-    )
+    OuiField(stringResource(R.string.oui_local_label), localAdministrationText(info.localAdministration))
     if (info.locallyAdministered && info.kind == MacAddressKind.UNICAST) {
         Text(
             text = stringResource(R.string.oui_local_explanation),
@@ -231,6 +246,17 @@ private fun OuiAddressFields(info: MacAddressInfo) {
         )
     }
 }
+
+@Composable
+@Suppress("FunctionNaming", "ktlint:standard:function-naming")
+private fun localAdministrationText(state: LocalAdministration): String =
+    stringResource(
+        when (state) {
+            LocalAdministration.LOCAL -> R.string.oui_yes
+            LocalAdministration.UNIVERSAL -> R.string.oui_no
+            LocalAdministration.NOT_APPLICABLE -> R.string.oui_not_applicable
+        },
+    )
 
 @Composable
 @Suppress("FunctionNaming", "ktlint:standard:function-naming")

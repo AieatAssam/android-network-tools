@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -86,11 +87,15 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.vector.ImageVector
 import android.content.ClipData
 import androidx.annotation.StringRes
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
@@ -103,6 +108,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.ui.draw.clipToBounds
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -117,6 +123,7 @@ import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.RecentHostsRow
+import net.aieat.netswissknife.app.ui.components.ScrollEdgeFadeWidth
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.ui.theme.AppShapes
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
@@ -124,6 +131,7 @@ import net.aieat.netswissknife.app.ui.screens.dns.DnsUiState
 import net.aieat.netswissknife.app.ui.screens.dns.DnsViewModel
 import net.aieat.netswissknife.app.ui.screens.dns.dnsRecordIconLabel
 import net.aieat.netswissknife.app.ui.components.messageRes
+import net.aieat.netswissknife.app.ui.components.scrollEdgeFade
 import net.aieat.netswissknife.core.network.HostProblem
 import net.aieat.netswissknife.core.network.dns.DnsNameValidator
 import net.aieat.netswissknife.app.util.shareText
@@ -135,6 +143,8 @@ import net.aieat.netswissknife.core.network.dns.DnsServer
 import net.aieat.netswissknife.app.ui.i18n.asString
 import net.aieat.netswissknife.app.ui.i18n.uiDescription
 import net.aieat.netswissknife.app.ui.i18n.uiLabel
+import net.aieat.netswissknife.app.ui.screens.dns.DnsResponseTone
+import net.aieat.netswissknife.app.ui.screens.dns.dnsResponseTone
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
@@ -376,6 +386,9 @@ private fun DnsInputCard(
     val domainProblemText = domainProblem?.let { stringResource(dnsNameProblemRes(it, domain)) }
     val domainSupporting: (@Composable () -> Unit)? = domainProblemText?.let { message -> { Text(message) } }
     val canLookup = domain.isNotBlank() && domainProblem == null && isCustomServerValid
+    val lookupInView = remember { BringIntoViewRequester() }
+    val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+    LaunchedEffect(imeVisible) { if (imeVisible) lookupInView.bringIntoView() }
     ElevatedCard(
         modifier = modifier.fillMaxWidth(),
         shape = AppShapes.large
@@ -451,13 +464,15 @@ private fun DnsInputCard(
                 )
             }
 
-            // Lookup button
+            // Lookup button. The keyboard can open over it while the domain field has focus, so
+            // it is scrolled into view whenever the IME appears.
             Button(
                 onClick = hapticAction(if (isLoading) onCancelLookup else onLookup),
                 enabled = isLoading || (!isCanceling && canLookup),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp)
+                    .bringIntoViewRequester(lookupInView)
                     .testTag(DnsScreenTestTags.CANCEL_LOOKUP),
                 shape = AppShapes.medium,
                 colors = ButtonDefaults.buttonColors(
@@ -525,61 +540,59 @@ private fun RecordTypeChips(
 ) {
     val scrollState = rememberScrollState()
 
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
+    // The chips scroll in their own viewport, which fades the cut-off edge. The "more" chevron sits
+    // beside the viewport, never over a chip.
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier
-                .horizontalScroll(scrollState)
-                .padding(end = 36.dp)
-                .testTag(DnsScreenTestTags.RECORD_TYPE_CHIPS),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        Box(
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .clipToBounds()
+                    .scrollEdgeFade(
+                        canScrollBackward = scrollState.canScrollBackward,
+                        canScrollForward = scrollState.canScrollForward,
+                    ),
         ) {
-            DnsRecordType.entries.forEach { type ->
-                val isSelected = type == selected
-                FilterChip(
-                    selected = isSelected,
-                    enabled = enabled,
-                    onClick = { onSelect(type) },
-                    label = {
-                        Text(
-                            text = type.displayName,
-                            style = MaterialTheme.typography.labelMedium
+            Row(
+                modifier = Modifier
+                    .horizontalScroll(scrollState)
+                    .padding(end = ScrollEdgeFadeWidth)
+                    .testTag(DnsScreenTestTags.RECORD_TYPE_CHIPS),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                DnsRecordType.entries.forEach { type ->
+                    val isSelected = type == selected
+                    FilterChip(
+                        selected = isSelected,
+                        enabled = enabled,
+                        onClick = { onSelect(type) },
+                        label = {
+                            Text(
+                                text = type.displayName,
+                                style = MaterialTheme.typography.labelMedium
+                            )
+                        },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
                         )
-                    },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                        selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
                     )
-                )
+                }
             }
         }
 
         if (scrollState.canScrollForward) {
-            Box(
+            Icon(
+                imageVector = Icons.Default.ChevronRight,
+                contentDescription = stringResource(R.string.dns_record_types_scroll_hint),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .fillMaxHeight()
-                    .width(36.dp)
-                    .background(
-                        Brush.horizontalGradient(
-                            listOf(
-                                MaterialTheme.colorScheme.background.copy(alpha = 0f),
-                                MaterialTheme.colorScheme.background
-                            )
-                        )
-                    )
-                    .testTag(DnsScreenTestTags.RECORD_TYPE_SCROLL_HINT),
-                contentAlignment = Alignment.CenterEnd
-            ) {
-                Icon(
-                    imageVector = Icons.Default.ChevronRight,
-                    contentDescription = stringResource(R.string.dns_record_types_scroll_hint),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
+                    .padding(start = 4.dp)
+                    .size(20.dp)
+            )
         }
     }
 }
@@ -948,20 +961,31 @@ private fun DnsResultSummaryCard(
     val context = LocalContext.current
     val shareSubject = stringResource(R.string.share_subject_dns, result.recordType.name, result.domain)
     val shareServerLine = stringResource(R.string.dns_share_server, result.server.uiLabel().asString())
+    val tone = dnsResponseTone(result.rcode)
+    val onContainer =
+        when (tone) {
+            DnsResponseTone.SUCCESS -> MaterialTheme.colorScheme.onPrimaryContainer
+            DnsResponseTone.NOT_FOUND -> MaterialTheme.colorScheme.onSurface
+            DnsResponseTone.FAILURE -> MaterialTheme.colorScheme.onErrorContainer
+        }
+    // A found name keeps the success gradient. NXDOMAIN is neutral: it is a definitive answer,
+    // not a success, and must not read as one.
+    val colors = MaterialTheme.colorScheme
+    val successBrush = Brush.linearGradient(listOf(colors.primaryContainer, colors.secondaryContainer))
+    val neutralBrush = Brush.linearGradient(listOf(colors.surfaceVariant, colors.surface))
+    val failureBrush = Brush.linearGradient(listOf(colors.errorContainer, colors.errorContainer))
+    val containerBrush = when (tone) {
+        DnsResponseTone.SUCCESS -> successBrush
+        DnsResponseTone.NOT_FOUND -> neutralBrush
+        DnsResponseTone.FAILURE -> failureBrush
+    }
     ElevatedCard(
         shape = AppShapes.large,
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
             modifier = Modifier
-                .background(
-                    Brush.linearGradient(
-                        listOf(
-                            MaterialTheme.colorScheme.primaryContainer,
-                            MaterialTheme.colorScheme.secondaryContainer
-                        )
-                    )
-                )
+                .background(containerBrush)
                 .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -974,7 +998,7 @@ private fun DnsResultSummaryCard(
                     Text(
                         text = result.domain,
                         style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        color = onContainer,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -992,11 +1016,12 @@ private fun DnsResultSummaryCard(
                     Text(
                         text = stringResource(R.string.dns_rcode, result.rcode),
                         style = MaterialTheme.typography.labelMedium,
-                        color = when (result.rcode) {
-                            "NOERROR" -> MaterialTheme.colorScheme.onPrimaryContainer
-                            "NXDOMAIN" -> MaterialTheme.colorScheme.primary
-                            else -> MaterialTheme.colorScheme.error
-                        }
+                        color =
+                            when (tone) {
+                                DnsResponseTone.SUCCESS -> onContainer
+                                DnsResponseTone.NOT_FOUND -> MaterialTheme.colorScheme.onSurfaceVariant
+                                DnsResponseTone.FAILURE -> onContainer
+                            }
                     )
                     Text(
                         text = stringResource(R.string.dns_flags, result.flags.joinToString(" ").ifEmpty { "N/A" }),
@@ -1030,20 +1055,20 @@ private fun DnsResultSummaryCard(
                         Icon(
                             imageVector = Icons.Default.Share,
                             contentDescription = stringResource(R.string.action_share),
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                            tint = onContainer
                         )
                     }
                     IconButton(onClick = onClear) {
                         Icon(
                             imageVector = Icons.Default.Clear,
                             contentDescription = stringResource(R.string.clear),
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                            tint = onContainer
                         )
                     }
                 }
             }
 
-            HorizontalDivider(color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.2f))
+            HorizontalDivider(color = onContainer.copy(alpha = 0.2f))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),

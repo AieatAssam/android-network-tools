@@ -38,4 +38,22 @@ class WhoisLabelsTest {
     fun `client hold with spaces`() {
         assertEquals("Client Hold", whoisStatusLabel("client hold"))
     }
+
+    @Test
+    @DisplayName("the WHOIS signedDelegation value reads as Signed, like RDAP")
+    fun `DNSSEC values map to one label per state`() {
+        assertEquals(WhoisDnssecLabel.Known(WhoisDnssecState.SIGNED), whoisDnssecLabel("signedDelegation"))
+        assertEquals(WhoisDnssecLabel.Known(WhoisDnssecState.SIGNED), whoisDnssecLabel("Signed"))
+        assertEquals(WhoisDnssecLabel.Known(WhoisDnssecState.UNSIGNED), whoisDnssecLabel("unsigned"))
+        assertEquals(WhoisDnssecLabel.Known(WhoisDnssecState.UNSIGNED), whoisDnssecLabel("Unsigned"))
+    }
+
+    @Test
+    @DisplayName("an unlisted DNSSEC value is humanized, never shown as raw camel case")
+    fun `unknown DNSSEC values are humanized`() {
+        assertEquals(
+            WhoisDnssecLabel.Text("Unsigned delegation pending"),
+            whoisDnssecLabel("unsignedDelegationPending"),
+        )
+    }
 }

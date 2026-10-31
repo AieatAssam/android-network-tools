@@ -127,11 +127,18 @@ object HostValidator {
             IDN
                 .toASCII(host, IDN.ALLOW_UNASSIGNED)
                 .lowercase(Locale.ROOT)
-                .takeIf { it.length <= MAX_HOSTNAME_LENGTH && hostnameRegex.matches(it) }
+                .takeIf { it.length <= MAX_HOSTNAME_LENGTH && hostnameRegex.matches(it) && !endsInNumericLabel(it) }
         } catch (_: IllegalArgumentException) {
             null
         }
     }
+
+    /**
+     * A name whose last label is all digits is never a hostname (RFC 3696 section 2): it is either
+     * a malformed IPv4 literal, such as two addresses typed together, or a typo. Dotted numeric
+     * input that is not a valid IPv4 address is rejected here.
+     */
+    private fun endsInNumericLabel(host: String): Boolean = host.substringAfterLast('.').all { it in '0'..'9' }
 
     private val ipv4ShapedRegex = Regex("""^\d+(\.\d+)*$""")
 

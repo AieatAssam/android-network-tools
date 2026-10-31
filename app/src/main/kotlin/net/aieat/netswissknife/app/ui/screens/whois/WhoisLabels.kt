@@ -34,3 +34,38 @@ private val KNOWN_LABELS =
         "clienthold" to "Client Hold",
         "pendingdelete" to "Pending Delete",
     )
+
+/** The two DNSSEC states WHOIS reports, shown with one localised label each. */
+enum class WhoisDnssecState { SIGNED, UNSIGNED }
+
+/** A DNSSEC value as shown: a known state (localised by the screen) or a humanized unlisted value. */
+sealed interface WhoisDnssecLabel {
+    data class Known(
+        val state: WhoisDnssecState,
+    ) : WhoisDnssecLabel
+
+    data class Text(
+        val text: String,
+    ) : WhoisDnssecLabel
+}
+
+/**
+ * Maps the DNSSEC value from either source to one label. Port-43 WHOIS reports
+ * `signedDelegation` or `unsigned`, and RDAP reports "Signed" or "Unsigned"; both must read the same.
+ * Anything else is humanized rather than shown as raw camel case.
+ */
+internal fun whoisDnssecLabel(raw: String): WhoisDnssecLabel {
+    val key = raw.filterNot(Char::isWhitespace).lowercase(Locale.ROOT)
+    val words =
+        raw
+            .replace(Regex("(?<=[a-z])(?=[A-Z])"), " ")
+            .split(Regex("\\s+"))
+            .filter(String::isNotEmpty)
+            .map { it.lowercase(Locale.ROOT) }
+    val humanized = words.joinToString(" ").replaceFirstChar { it.uppercase(Locale.ROOT) }
+    return when (key) {
+        "signed", "signeddelegation" -> WhoisDnssecLabel.Known(WhoisDnssecState.SIGNED)
+        "unsigned" -> WhoisDnssecLabel.Known(WhoisDnssecState.UNSIGNED)
+        else -> WhoisDnssecLabel.Text(humanized)
+    }
+}

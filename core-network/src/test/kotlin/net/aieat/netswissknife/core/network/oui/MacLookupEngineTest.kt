@@ -91,16 +91,17 @@ class MacLookupEngineTest {
 
         assertEquals(MacAddressKind.BROADCAST, entry.info.kind)
         assertEquals(VendorResult.NotApplicable, entry.info.vendor)
-        assertTrue(entry.info.locallyAdministered, "the broadcast address has the U/L bit set")
+        assertEquals(LocalAdministration.NOT_APPLICABLE, entry.info.localAdministration)
+        assertFalse(entry.info.locallyAdministered, "the U/L bit does not apply to broadcast")
     }
 
     @Test
-    fun `an IPv6 multicast MAC is multicast and locally administered, so it gets no vendor`() {
+    fun `an IPv6 multicast MAC is multicast with no local administration claim and no locally administered vendor`() {
         val entry = address("33:33:00:00:00:01")
 
         assertEquals(MacAddressKind.MULTICAST, entry.info.kind)
-        assertTrue(entry.info.locallyAdministered)
-        assertEquals(VendorResult.LocallyAdministered, entry.info.vendor)
+        assertEquals(LocalAdministration.NOT_APPLICABLE, entry.info.localAdministration)
+        assertEquals(VendorResult.Unknown, entry.info.vendor)
     }
 
     @Test

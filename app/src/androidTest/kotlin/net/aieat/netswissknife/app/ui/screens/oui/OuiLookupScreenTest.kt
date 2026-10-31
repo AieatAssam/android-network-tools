@@ -14,6 +14,7 @@ import io.mockk.mockk
 import kotlinx.coroutines.flow.MutableStateFlow
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.theme.NetSwissKnifeTheme
+import net.aieat.netswissknife.core.network.oui.LocalAdministration
 import net.aieat.netswissknife.core.network.oui.MacAddressInfo
 import net.aieat.netswissknife.core.network.oui.MacAddressKind
 import net.aieat.netswissknife.core.network.oui.MacLookupEntry
@@ -58,7 +59,7 @@ class OuiLookupScreenTest {
                     MacAddressInfo(
                         hex = "B827EB112233",
                         kind = MacAddressKind.UNICAST,
-                        locallyAdministered = false,
+                        localAdministration = LocalAdministration.UNIVERSAL,
                         vendor = VendorResult.Known("Raspberry Pi Foundation", OuiBlockSize.MA_L),
                     ),
             )

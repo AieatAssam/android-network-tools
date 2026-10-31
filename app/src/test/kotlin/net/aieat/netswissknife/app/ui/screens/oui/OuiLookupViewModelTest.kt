@@ -15,6 +15,7 @@ import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
 import net.aieat.netswissknife.core.domain.OuiLookupReport
 import net.aieat.netswissknife.core.domain.OuiLookupUseCase
+import net.aieat.netswissknife.core.network.oui.LocalAdministration
 import net.aieat.netswissknife.core.network.oui.MacAddressInfo
 import net.aieat.netswissknife.core.network.oui.MacAddressKind
 import net.aieat.netswissknife.core.network.oui.MacInputProblem
@@ -51,7 +52,7 @@ class OuiLookupViewModelTest {
             MacAddressInfo(
                 hex = "B827EB112233",
                 kind = MacAddressKind.UNICAST,
-                locallyAdministered = false,
+                localAdministration = LocalAdministration.UNIVERSAL,
                 vendor = VendorResult.Unknown,
             ),
         )

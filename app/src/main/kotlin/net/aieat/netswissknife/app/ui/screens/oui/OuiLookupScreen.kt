@@ -41,6 +41,7 @@ import androidx.compose.ui.platform.Clipboard
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -155,6 +156,7 @@ private fun OuiLookupBody(
     onHelp: () -> Unit,
     actions: OuiLookupActions,
 ) {
+    val dismissRecent = dismissKeyboard()
     AnimatedVisibility(
         visible = visible,
         enter = fadeIn(AppMotion.enter()) + slideInVertically(AppMotion.enter()) { it / SLIDE_DIVISOR },
@@ -181,7 +183,10 @@ private fun OuiLookupBody(
             )
             RecentHostsRow(
                 recentHosts = recents,
-                onHostSelected = actions.onRecentSelected,
+                onHostSelected = { entry ->
+                    dismissRecent()
+                    actions.onRecentSelected(entry)
+                },
                 onRemoveHost = actions.onRecentRemoved,
                 onClearAll = actions.onRecentsCleared,
                 actionsEnabled = uiState.phase != OuiLookupPhase.Loading,
@@ -207,6 +212,9 @@ private fun OuiInputCard(
     lookupEnabled: Boolean,
     actions: OuiLookupActions,
 ) {
+    // Look up and Paste are actions on the field's text, so the keyboard closes before they run;
+    // the results then appear where the keyboard was rather than under it.
+    val dismiss = dismissKeyboard()
     ElevatedCard(shape = AppShapes.large, modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(CARD_PADDING_DP.dp),
@@ -215,7 +223,11 @@ private fun OuiInputCard(
             OuiInputField(input, invalidCount, lookupEnabled, actions)
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(BUTTON_GAP_DP.dp)) {
                 OutlinedButton(
-                    onClick = hapticAction(actions.onPaste),
+                    onClick =
+                        hapticAction {
+                            dismiss()
+                            actions.onPaste()
+                        },
                     modifier = Modifier.weight(1f).testTag(OuiLookupTestTags.PASTE),
                 ) {
                     Icon(Icons.Default.ContentPaste, contentDescription = null)
@@ -223,7 +235,11 @@ private fun OuiInputCard(
                     Text(stringResource(R.string.oui_action_paste))
                 }
                 Button(
-                    onClick = hapticAction(actions.onLookup),
+                    onClick =
+                        hapticAction {
+                            dismiss()
+                            actions.onLookup()
+                        },
                     enabled = lookupEnabled,
                     modifier = Modifier.weight(1f).testTag(OuiLookupTestTags.LOOKUP),
                 ) {
@@ -338,6 +354,18 @@ private fun OuiHelpSheet(onDismiss: () -> Unit) {
             ),
         onDismiss = onDismiss,
     )
+}
+
+/** Clears focus and hides the keyboard, so a result shown next is not covered by the IME. */
+@Composable
+@Suppress("FunctionNaming", "ktlint:standard:function-naming")
+private fun dismissKeyboard(): () -> Unit {
+    val focusManager = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    return {
+        focusManager.clearFocus()
+        keyboard?.hide()
+    }
 }
 
 /** The first text item on the clipboard, or null when it holds no text. */

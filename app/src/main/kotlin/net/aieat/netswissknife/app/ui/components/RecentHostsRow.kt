@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
@@ -25,39 +24,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.CompositingStrategy
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import net.aieat.netswissknife.app.R
-
-/** Width of the fade that signals more chips are off-screen to the trailing edge. */
-private val TrailingFadeWidth = 24.dp
-
-/**
- * Fades the trailing edge only while more chips can scroll in. Offscreen compositing lets the
- * DstIn alpha mask fade the chips themselves, so it works on any background.
- */
-private fun Modifier.trailingFade(listState: LazyListState): Modifier =
-    graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-        .drawWithContent {
-            drawContent()
-            if (listState.canScrollForward) {
-                drawRect(
-                    brush = Brush.horizontalGradient(
-                        colors = listOf(Color.Black, Color.Transparent),
-                        startX = size.width - TrailingFadeWidth.toPx(),
-                        endX = size.width,
-                    ),
-                    blendMode = BlendMode.DstIn,
-                )
-            }
-        }
 
 @Composable
 fun RecentHostsRow(
@@ -91,9 +61,14 @@ fun RecentHostsRow(
                 modifier = Modifier.padding(end = 4.dp)
             )
             LazyRow(
-                modifier = Modifier.weight(1f).trailingFade(listState),
+                modifier = Modifier
+                    .weight(1f)
+                    .scrollEdgeFade(
+                        canScrollBackward = listState.canScrollBackward,
+                        canScrollForward = listState.canScrollForward,
+                    ),
                 state = listState,
-                contentPadding = PaddingValues(horizontal = 4.dp),
+                contentPadding = PaddingValues(start = 4.dp, end = ScrollEdgeFadeWidth),
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 items(recentHosts, key = { it }) { host ->

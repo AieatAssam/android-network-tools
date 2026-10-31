@@ -198,57 +198,57 @@ private fun ToolGrid(onNavigate: (String) -> Unit) {
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
         )
-        Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
-            LazyVerticalGrid(
-                state = gridState,
-                modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .testTag(HomeScreenTestTags.TOOL_GRID),
-                columns = GridCells.Adaptive(minSize = 160.dp),
-                // Bottom inset clears the 52dp "scroll for more" overlay so the last tile text is readable.
-                contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 60.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                itemsIndexed(NavRoutes.allTools, key = { _, tool -> tool.route }) { index, tool ->
-                    AnimatedToolCard(
-                        tool = tool,
-                        delayMs = index * 60,
-                        skipEntrance = gridAppeared,
-                        onClick = hapticAction { onNavigate(tool.route) },
-                    )
-                }
-            }
-
-            if (gridState.canScrollForward) {
-                Box(
-                    modifier =
-                        Modifier
-                            .align(Alignment.BottomCenter)
-                            .fillMaxWidth()
-                            .height(52.dp)
-                            .background(
-                                Brush.verticalGradient(
-                                    listOf(
-                                        MaterialTheme.colorScheme.background.copy(alpha = 0f),
-                                        MaterialTheme.colorScheme.background,
-                                    ),
-                                ),
-                            ).testTag(HomeScreenTestTags.SCROLL_HINT),
-                    contentAlignment = Alignment.BottomCenter,
-                ) {
-                    Text(
-                        text = stringResource(R.string.home_tools_scroll_hint),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(bottom = 8.dp),
-                    )
-                }
+        LazyVerticalGrid(
+            state = gridState,
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .testTag(HomeScreenTestTags.TOOL_GRID),
+            columns = GridCells.Adaptive(minSize = 160.dp),
+            contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            itemsIndexed(NavRoutes.allTools, key = { _, tool -> tool.route }) { index, tool ->
+                AnimatedToolCard(
+                    tool = tool,
+                    delayMs = index * 60,
+                    skipEntrance = gridAppeared,
+                    onClick = hapticAction { onNavigate(tool.route) },
+                )
             }
         }
+
+        // The hint has its own slot below the grid. It never overlays a tile, and the slot keeps its
+        // height whether or not the grid can scroll, so the grid does not resize when the hint appears.
+        HomeScrollHint(visible = gridState.canScrollForward)
     }
 }
+
+/** The "scroll for more tools" line. Only its alpha animates; the slot height is fixed. */
+@Composable
+@Suppress("FunctionNaming", "ktlint:standard:function-naming")
+private fun HomeScrollHint(visible: Boolean) {
+    val alpha by animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec = AppMotion.enter(200),
+        label = "home-scroll-hint-alpha",
+    )
+    Box(
+        modifier = Modifier.fillMaxWidth().height(HOME_SCROLL_HINT_HEIGHT),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = stringResource(R.string.home_tools_scroll_hint),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.alpha(alpha).testTag(HomeScreenTestTags.SCROLL_HINT),
+        )
+    }
+}
+
+private val HOME_SCROLL_HINT_HEIGHT = 32.dp
 
 @Composable
 @Suppress("FunctionNaming", "ktlint:standard:function-naming")
