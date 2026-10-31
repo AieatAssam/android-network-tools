@@ -452,9 +452,22 @@ work_packages:
         - "The all-zero MAC 00:00:00:00:00:00 is not special-cased: it is reported as an unknown vendor."
         - "OuiLookupViewModel is not added to the app Kover include list, following the WP16 NetInfoViewModel precedent. The parser, engine, and use case carry the tested logic in core modules."
   - id: WP18
-    title: Final verification
+    title: Final verification (device) round 1
+    status: done
+    notes: "Orchestrator: plan/findings/VERIFY-1.md and VERIFY-2.md. Most fixes PASS on the tablet; failures and new V-* issues feed WP19/WP20."
+  - id: WP19
+    title: Round-2 UI fixes from device verification (keyboard, Home hint, small UX)
     status: todo
-    notes: "Orchestrator only: full gradle gates, install on tablet, re-run each tool's repro from the findings, fill a verification table here."
-
+    findings: [VERIFY-1:SHELL-01, VERIFY-1:V-02, VERIFY-1:V-03, VERIFY-1:V-01, VERIFY-1:V-06, VERIFY-1:V-07, VERIFY-1:DNS-06, VERIFY-1:PING-07, VERIFY-2:V-01, VERIFY-2:V-02, VERIFY-2:V-05, VERIFY-2:V-08, VERIFY-2:SUB-04]
+    notes: "SHELL-01 Home hint still overlaps last tile row. V-02 DNS/Ports IME reopens and covers primary action after rotation/dark/font change. V-03 NXDOMAIN must not be a green success card. V-01 garbled Ping host saved as recent (VERIFY-1) and MAC Lookup keyboard covers results (VERIFY-2): different findings share ID V-01. Wi-Fi search Clear pops keyboard. Topology state lost on leave (use ToolSessionMemory). Chip-row clip/scroll cues (DNS-06/PING-07). MAC Lookup duplicate notations -> dedupe. Broadcast 'Locally administered: Yes' wrong. WHOIS DNSSEC raw 'signedDelegation' -> 'Signed'. SUB-04 landscape two-column if cheap, else defer."
+  - id: WP20
+    title: Round-2 logic fixes from device verification
+    status: todo
+    findings: [VERIFY-2:V-07, VERIFY-2:TLS-05, VERIFY-2:V-04, VERIFY-2:V-03, VERIFY-1:V-04, VERIFY-1:V-05, VERIFY-2:TLS-04]
+    notes: "V-07 (medium) rdap.org returns 403 to OkHttp default User-Agent -> send an app User-Agent on every RDAP request, test with MockWebServer asserting header. TLS-05 port 80 still 'Handshake failed' -> detect plaintext/HTTP reply bytes. HTTP Probe Cancel intermittently ignored (VERIFY-2 V-04) -> investigate cancellation of in-flight call. WoL re-saving a MAC silently renames saved device (VERIFY-2 V-03) -> confirm/keep name. Traceroute: stop after destination reached even if more probes in flight (VERIFY-1 V-04); unreachable-host trace of 30 hops all from own IP with 'Reached: No' needs an explanation (VERIFY-1 V-05) and early stop heuristic. TLS-04: say 'this device lacks the issuing root (SSL.com)' in the finding text when the chain is only untrusted because of a missing root."
+  - id: WP21
+    title: Final verification (device) round 2
+    status: todo
+    notes: "Orchestrator: re-run failed/new items from WP19/WP20 on the tablet."
 deferred_not_in_scope:
   - "Packet capture / PCAP (needs VpnService; large). ARP table (blocked on Android 10+). DNS benchmark and bandwidth monitor: candidates for the next plan after WP16/17 prove the new-tool pipeline."
