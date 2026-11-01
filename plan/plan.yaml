@@ -515,7 +515,13 @@ work_packages:
       device_checks_for_wp21: ["WHOIS 8.8.8.8 in Auto: result shows the 'RDAP could not answer' note; RDAP lookup itself works (no 403)", "TLS example.com:80 shows 'does not appear to speak TLS'; 1.1.1.1 shows 'does not include the issuing root (...)'", "HTTP Probe: rotate during a slow request, then Cancel; always ends at Request canceled", "WoL: save an existing MAC with no name (name kept, note shown) and with a new name (renamed, note shown)", "Traceroute 1.1.1.1: stops at the destination; no hops after it", "Traceroute to 10.109.208.250: stops early with the unreachable message and Reached No"]
   - id: WP21
     title: Final verification (device) round 2
+    status: done
+    notes: "plan/findings/VERIFY-3.md. Most round-2 fixes PASS; remaining items go to WP22."
+  - id: WP22
+    title: Round-3 fixes for items that failed or appeared in VERIFY-3
     status: todo
-    notes: "Orchestrator: re-run failed/new items from WP19/WP20 on the tablet."
-deferred_not_in_scope:
-  - "Packet capture / PCAP (needs VpnService; large). ARP table (blocked on Android 10+). DNS benchmark and bandwidth monitor: candidates for the next plan after WP16/17 prove the new-tool pipeline."
+    findings: [VERIFY-3:V-07-wifi-clear-keyboard, VERIFY-3:V-01-mac-lookup-keyboard, VERIFY-3:V-09, VERIFY-3:V-10, VERIFY-3:V-11, VERIFY-3:V-12, VERIFY-3:V-13]
+    notes: "Wi-Fi search Clear still opens keyboard over results (2/2). MAC Lookup keyboard stays open after Look up (2/2). V-09 Ping hard-codes 'Hostname or IP cannot contain spaces' in PingScreen.kt: use HostValidator.problemOf/messageRes. V-10 invalid recents saved before the fix are never purged: validate on read/purge. V-11 after rotation/dark mode the IME reopens focusing the DNS server field: prevent restored focus from reopening the IME (e.g. clear focus after restore, or windowSoftInputMode). V-12 empty gap in Topology result layout. V-13 HTTP Probe Cancel intermittently ignored (1 of 14 ended as timeout, plus 2 unconfirmed landscape runs)."
+  - id: WP23
+    title: Final device spot-check of WP22
+    status: todo
