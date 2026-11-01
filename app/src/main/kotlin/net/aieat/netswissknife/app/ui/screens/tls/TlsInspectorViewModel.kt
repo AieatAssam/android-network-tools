@@ -14,6 +14,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
+import net.aieat.netswissknife.app.data.purgeInvalidHostRecents
+import net.aieat.netswissknife.app.data.validHostRecents
 import net.aieat.netswissknife.app.platform.NetworkStatus
 import net.aieat.netswissknife.app.platform.NetworkStatusProvider
 import net.aieat.netswissknife.app.platform.NoOpNetworkStatusProvider
@@ -124,7 +126,14 @@ class TlsInspectorViewModel @Inject constructor(
 
     val recentHosts: StateFlow<List<String>> = recentHostsRepository
         .getRecents(AppPreferenceKeys.RECENT_TLS_HOSTS)
+        .validHostRecents()
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    init {
+        viewModelScope.launch {
+            recentHostsRepository.purgeInvalidHostRecents(AppPreferenceKeys.RECENT_TLS_HOSTS)
+        }
+    }
 
     fun onHostChange(value: String) {
         if (_uiState.value.isLoading) return

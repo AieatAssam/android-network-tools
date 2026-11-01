@@ -40,8 +40,6 @@ import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.Clipboard
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -60,6 +58,7 @@ import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
 import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.components.ToolTextField
 import net.aieat.netswissknife.app.ui.components.hapticAction
+import net.aieat.netswissknife.app.ui.components.rememberDismissKeyboard
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.ui.theme.AppShapes
 import net.aieat.netswissknife.app.ui.theme.AppSpacing
@@ -156,7 +155,7 @@ private fun OuiLookupBody(
     onHelp: () -> Unit,
     actions: OuiLookupActions,
 ) {
-    val dismissRecent = dismissKeyboard()
+    val dismissRecent = rememberDismissKeyboard()
     AnimatedVisibility(
         visible = visible,
         enter = fadeIn(AppMotion.enter()) + slideInVertically(AppMotion.enter()) { it / SLIDE_DIVISOR },
@@ -214,7 +213,7 @@ private fun OuiInputCard(
 ) {
     // Look up and Paste are actions on the field's text, so the keyboard closes before they run;
     // the results then appear where the keyboard was rather than under it.
-    val dismiss = dismissKeyboard()
+    val dismiss = rememberDismissKeyboard()
     ElevatedCard(shape = AppShapes.large, modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(CARD_PADDING_DP.dp),
@@ -260,7 +259,7 @@ private fun OuiInputField(
     lookupEnabled: Boolean,
     actions: OuiLookupActions,
 ) {
-    val focusManager = LocalFocusManager.current
+    val dismiss = rememberDismissKeyboard()
     ToolTextField(
         value = input,
         onValueChange = actions.onInputChange,
@@ -285,7 +284,7 @@ private fun OuiInputField(
         keyboardActions =
             KeyboardActions(
                 onSearch = {
-                    focusManager.clearFocus()
+                    dismiss()
                     if (lookupEnabled) actions.onLookup()
                 },
             ),
@@ -354,18 +353,6 @@ private fun OuiHelpSheet(onDismiss: () -> Unit) {
             ),
         onDismiss = onDismiss,
     )
-}
-
-/** Clears focus and hides the keyboard, so a result shown next is not covered by the IME. */
-@Composable
-@Suppress("FunctionNaming", "ktlint:standard:function-naming")
-private fun dismissKeyboard(): () -> Unit {
-    val focusManager = LocalFocusManager.current
-    val keyboard = LocalSoftwareKeyboardController.current
-    return {
-        focusManager.clearFocus()
-        keyboard?.hide()
-    }
 }
 
 /** The first text item on the clipboard, or null when it holds no text. */

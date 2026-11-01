@@ -46,7 +46,7 @@ class RecentHostsRepository @Inject constructor(
                 .take(MAX_RECENTS)
             if (sanitized.isEmpty()) {
                 prefs.remove(key)
-            } else {
+            } else if (sanitized != existing) {
                 prefs[key] = sanitized.joinToString(SEPARATOR)
             }
         }

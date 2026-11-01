@@ -19,6 +19,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
+import net.aieat.netswissknife.app.data.purgeInvalidHostRecents
+import net.aieat.netswissknife.app.data.validHostRecents
 import net.aieat.netswissknife.app.platform.LinkInfoProvider
 import net.aieat.netswissknife.app.platform.LiteralDestinationClassifier
 import net.aieat.netswissknife.app.platform.NetworkStatus
@@ -129,7 +131,14 @@ class TracerouteViewModel
         val recentHosts: StateFlow<List<String>> =
             recentHostsRepository
                 .getRecents(AppPreferenceKeys.RECENT_TRACEROUTE_HOSTS)
+                .validHostRecents()
                 .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+        init {
+            viewModelScope.launch {
+                recentHostsRepository.purgeInvalidHostRecents(AppPreferenceKeys.RECENT_TRACEROUTE_HOSTS)
+            }
+        }
 
         private var traceJob: Job? = null
         private var traceSession: OperationSession? = null

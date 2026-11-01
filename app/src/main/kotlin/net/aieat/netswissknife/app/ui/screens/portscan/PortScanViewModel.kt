@@ -20,6 +20,8 @@ import kotlinx.coroutines.launch
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
 import net.aieat.netswissknife.app.data.ToolSessionMemory
+import net.aieat.netswissknife.app.data.purgeInvalidHostRecents
+import net.aieat.netswissknife.app.data.validHostRecents
 import net.aieat.netswissknife.app.platform.LinkInfoProvider
 import net.aieat.netswissknife.app.platform.LiteralDestinationClassifier
 import net.aieat.netswissknife.app.platform.OperationAvailability
@@ -195,7 +197,14 @@ class PortScanViewModel @Inject constructor(
 
     val recentHosts: StateFlow<List<String>> = recentHostsRepository
         .getRecents(AppPreferenceKeys.RECENT_PORTS_HOSTS)
+        .validHostRecents()
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    init {
+        viewModelScope.launch {
+            recentHostsRepository.purgeInvalidHostRecents(AppPreferenceKeys.RECENT_PORTS_HOSTS)
+        }
+    }
 
     private var scanJob: Job? = null
     private var scanStartedAtNanos: Long? = null

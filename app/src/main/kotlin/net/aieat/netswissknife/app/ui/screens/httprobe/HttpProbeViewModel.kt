@@ -396,6 +396,9 @@ class HttpProbeViewModel @Inject constructor(
                     ?: e::class.simpleName
                     ?: "Unknown request error"
                 _uiState.update {
+                    // A transport error reported after Cancel (for example an IOException from a
+                    // cancelled call) is still the user's cancel, not a failure.
+                    if (userStopRequested) return@update it.canceled()
                     it.copy(
                         isLoading = false,
                         isCanceling = false,

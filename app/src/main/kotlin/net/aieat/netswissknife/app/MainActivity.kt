@@ -35,6 +35,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import dagger.hilt.android.AndroidEntryPoint
 import net.aieat.netswissknife.app.ui.components.AdaptiveContentBounds
+import net.aieat.netswissknife.app.ui.components.RecreatedKeyboardGuard
 import net.aieat.netswissknife.app.ui.navigation.AppNavHost
 import net.aieat.netswissknife.app.ui.navigation.AppNavigationViewModel
 import net.aieat.netswissknife.app.ui.navigation.MoreToolsSheet
@@ -72,6 +73,7 @@ class MainActivity : ComponentActivity() {
                     else -> isSystemInDarkTheme()
                 }
             NetSwissKnifeTheme(darkTheme = darkTheme, dynamicColor = dynamicColor) {
+                RecreatedKeyboardGuard()
                 val navController = rememberNavController()
                 NetSwissKnifeApp(navController)
             }

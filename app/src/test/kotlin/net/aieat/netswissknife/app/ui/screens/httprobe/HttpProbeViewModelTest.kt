@@ -54,6 +54,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
+import java.io.IOException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
@@ -888,6 +889,114 @@ class HttpProbeViewModelTest {
                 assertNull(finalState.error)
                 assertNull(finalState.result)
             }
+    }
+
+    @Nested
+    @DisplayName("cancel ordering")
+    inner class CancelOrdering {
+        private fun timeoutResult(): NetworkResult<HttpProbeResult> =
+            NetworkResult.error(
+                ErrorCode.NETWORK_TIMEOUT,
+                developerMessage = "HTTP request timed out",
+            )
+
+        private fun cancelOrderingViewModel(): HttpProbeViewModel =
+            HttpProbeViewModel(useCase, recentHostsRepository).also {
+                it.onUrlChange("https://example.com")
+            }
+
+        @Test
+        fun `cancel before the first emission ends canceled when a timeout arrives afterwards`() {
+            val release = CompletableDeferred<NetworkResult<HttpProbeResult>>()
+            coEvery { useCase(any(), any()) } coAnswers { release.await() }
+            val vm = cancelOrderingViewModel()
+
+            vm.send()
+            vm.cancel()
+            release.complete(timeoutResult())
+
+            val state = vm.uiState.value
+            assertTrue(state.isCanceled)
+            assertFalse(state.isLoading)
+            assertFalse(state.isCanceling)
+            assertNull(state.error)
+            assertNull(state.result)
+        }
+
+        @Test
+        fun `cancel immediately after send wins over a call that ignores cancellation and succeeds`() {
+            val release = CompletableDeferred<NetworkResult<HttpProbeResult>>()
+            coEvery { useCase(any(), any()) } coAnswers {
+                withContext(NonCancellable) { release.await() }
+            }
+            val vm = cancelOrderingViewModel()
+
+            vm.send()
+            vm.cancel()
+            release.complete(NetworkResult.Success(stubResult))
+
+            val state = vm.uiState.value
+            assertTrue(state.isCanceled)
+            assertFalse(state.isLoading)
+            assertNull(state.result)
+            assertNull(state.error)
+        }
+
+        @Test
+        fun `timeout reported while cancel is in flight ends canceled, not as a timeout`() {
+            val entered = CompletableDeferred<OperationSession>()
+            val release = CompletableDeferred<NetworkResult<HttpProbeResult>>()
+            coEvery { useCase(any(), any()) } coAnswers {
+                entered.complete(secondArg())
+                withContext(NonCancellable) { release.await() }
+            }
+            val vm = cancelOrderingViewModel()
+
+            vm.send()
+            assertTrue(entered.isCompleted)
+            vm.cancel()
+            // The session reports the cancel; the call then returns a timeout as a result.
+            assertEquals(CancellationReason.USER_STOP, entered.getCompleted().cancellationReason)
+            release.complete(timeoutResult())
+
+            val state = vm.uiState.value
+            assertTrue(state.isCanceled)
+            assertNull(state.error)
+        }
+
+        @Test
+        fun `a non-cancellation exception after cancel ends as canceled, not as a request failure`() {
+            val release = CompletableDeferred<Unit>()
+            coEvery { useCase(any(), any()) } coAnswers {
+                withContext(NonCancellable) { release.await() }
+                throw IOException("Canceled")
+            }
+            val vm = cancelOrderingViewModel()
+
+            vm.send()
+            vm.cancel()
+            release.complete(Unit)
+
+            val state = vm.uiState.value
+            assertTrue(state.isCanceled)
+            assertFalse(state.isLoading)
+            assertNull(state.error)
+        }
+
+        @Test
+        fun `a timeout that completes before cancel stays a timeout and cancel does nothing`() {
+            coEvery { useCase(any(), any()) } returns
+                timeoutResult()
+            val vm = cancelOrderingViewModel()
+
+            vm.send()
+            vm.cancel()
+
+            val state = vm.uiState.value
+            assertFalse(state.isCanceled)
+            assertFalse(state.isLoading)
+            assertTrue(state.error != null)
+        }
     }
 
     @Nested

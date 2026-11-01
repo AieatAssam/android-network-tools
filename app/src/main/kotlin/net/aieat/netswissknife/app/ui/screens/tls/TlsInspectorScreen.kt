@@ -332,7 +332,7 @@ private fun TlsInputSection(
                 },
                 isError       = isHostInvalid,
                 supportingText = if (isHostInvalid) {
-                    { Text(stringResource(HostValidator.problemOf(host)?.messageRes() ?: R.string.error_invalid_host)) }
+                    { Text(stringResource(HostValidator.problemOf(host)?.messageRes() ?: R.string.error_host_invalid)) }
                 } else null,
                 enabled       = !isLoading,
                 singleLine    = true,

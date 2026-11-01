@@ -25,7 +25,7 @@ ICMP echo and reachability round-trip latency measurement with real-time streami
   - Rolling window of the last 100 packets drives live stats and chart
   - Full session log streamed to a temp CSV file; shareable via the Share button on completion
 - Tools with recent-target support save up to five entries on-device and show quick-select chips; clear recent targets from Settings
-- Only a valid host is saved to recent targets. A dotted name whose last label is all digits (for example two addresses typed together, `10.109.208.25010.109.208.200`) is rejected as an invalid address and is never run
+- Only a valid host is saved to recent targets. A dotted name whose last label is all digits (for example two addresses typed together, `10.109.208.25010.109.208.200`) is rejected as an invalid address and is never run. Recents saved by an earlier version that fail this rule are removed the first time the tool opens, and are never shown
 - CSV exports retain the original columns and append reply TTL and payload bytes.
 
 ### Traceroute
@@ -80,7 +80,7 @@ Full DNS record resolution with multiple resolver options and protocol-level res
 - The name, record type and resolver survive rotation and process death; leaving the tool with Back clears them
 - An NXDOMAIN answer is shown as a neutral "Domain not found" card, not as a success. A NOERROR answer keeps the success styling; server failures and other RCODEs use the error styling
 - Record types scroll sideways with a fade on each cut-off edge and a chevron beside the chips while more are off-screen
-- Look up is scrolled into view when the on-screen keyboard opens, so it is not covered by the keyboard
+- Look up is scrolled into view when the on-screen keyboard opens, so it is not covered by the keyboard. After rotation, dark mode or a font change the keyboard does not reopen by itself
 - The Additional section starts collapsed, since it usually holds EDNS OPT pseudo-records (labelled `OPT`); an MX record of `0 .` is annotated as a null MX
 - System DNS is never silently replaced with Cloudflare; when Android reports no resolver, the UI explains the failure and offers an explicit Cloudflare fallback. Private DNS status is shown when available.
 - IDN hostnames and trailing-dot FQDNs are normalized consistently across network tools.
@@ -119,7 +119,7 @@ SNMP-based network topology discovery via BFS traversal.
 - Interactive force-layout canvas with pan/zoom gestures and node detail bottom sheet
 - Recent seed IPs are saved locally for quick reuse
 - The last discovery (its seed and final state) is kept while the app is open, so leaving the tool and coming back shows the same result. A discovery still running when the tool is left is kept as a canceled, partial result. Community strings and v3 passwords are never kept
-- **Discover Topology** sits below the SNMP configuration card, outside its scroll area, and the keyboard Done action on the seed IP field starts discovery; Cancel appears in the same place while a scan runs
+- **Discover Topology** sits below the SNMP configuration card, outside its scroll area, and the keyboard Done action on the seed IP field starts discovery; Cancel appears in the same place while a scan runs. The failure or result card starts directly under Discover
 - Configurable max hops (1–10), timeout, and SNMP v3 auth/priv protocols (MD5, SHA-1/256/512; DES, AES-128/192/256)
 - Reuses one SNMP4J session per discovery and closes it on completion or cancellation
 - LLDP neighbour addresses are decoded from the LLDP management-address index; CDP accepts dotted and hex-octet cache addresses

@@ -31,6 +31,8 @@ import kotlinx.coroutines.withContext
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
+import net.aieat.netswissknife.app.data.purgeInvalidHostRecents
+import net.aieat.netswissknife.app.data.validHostRecents
 import net.aieat.netswissknife.app.platform.LinkInfoProvider
 import net.aieat.netswissknife.app.platform.LiteralDestinationClassifier
 import net.aieat.netswissknife.app.platform.NetworkStatus
@@ -252,7 +254,14 @@ class PingViewModel @Inject constructor(
 
     val recentHosts: StateFlow<List<String>> = recentHostsRepository
         .getRecents(AppPreferenceKeys.RECENT_PING_HOSTS)
+        .validHostRecents()
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    init {
+        viewModelScope.launch {
+            recentHostsRepository.purgeInvalidHostRecents(AppPreferenceKeys.RECENT_PING_HOSTS)
+        }
+    }
 
     private var pingJob: Job? = null
     private var pingOperationSession: OperationSession? = null

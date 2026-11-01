@@ -221,4 +221,62 @@ class RecentHostsRepositoryTest {
             assertTrue(repository.getRecents(AppPreferenceKeys.RECENT_HTTP_HOSTS).first().isEmpty())
         }
     }
+
+    @Nested
+    @DisplayName("host recents validity")
+    inner class HostRecentValidity {
+        @Test
+        fun `validHostRecents drops rejected entries and keeps order`() {
+            testScope.runTest {
+                dataStore.edit { prefs ->
+                    prefs[AppPreferenceKeys.RECENT_PING_HOSTS] =
+                        "10.109.208.25010.109.208.200|example.com|bad host|10.0.0.1"
+                }
+
+                val shown = repository.getRecents(AppPreferenceKeys.RECENT_PING_HOSTS).validHostRecents().first()
+                assertEquals(listOf("example.com", "10.0.0.1"), shown)
+                // Reading never writes: the invalid entries stay stored until a sanitize runs.
+                val stored = dataStore.data.first()[AppPreferenceKeys.RECENT_PING_HOSTS]
+                assertEquals("10.109.208.25010.109.208.200|example.com|bad host|10.0.0.1", stored)
+            }
+        }
+
+        @Test
+        fun `sanitizing removes invalid entries only`() {
+            testScope.runTest {
+                dataStore.edit { prefs ->
+                    prefs[AppPreferenceKeys.RECENT_PING_HOSTS] = "10.109.208.25010.109.208.200|example.com"
+                    prefs[AppPreferenceKeys.RECENT_TRACEROUTE_HOSTS] = "not a host|1.1.1.1"
+                }
+
+                repository.purgeInvalidHostRecents(AppPreferenceKeys.RECENT_PING_HOSTS)
+
+                val stored = dataStore.data.first()
+                assertEquals("example.com", stored[AppPreferenceKeys.RECENT_PING_HOSTS])
+                assertEquals("not a host|1.1.1.1", stored[AppPreferenceKeys.RECENT_TRACEROUTE_HOSTS])
+            }
+        }
+
+        @Test
+        fun `sanitizing clears a key with only invalid entries`() {
+            testScope.runTest {
+                dataStore.edit { prefs ->
+                    prefs[AppPreferenceKeys.RECENT_PING_HOSTS] = "bad host|10.109.208.25010.109.208.200"
+                }
+
+                repository.purgeInvalidHostRecents(AppPreferenceKeys.RECENT_PING_HOSTS)
+
+                assertTrue(repository.getRecents(AppPreferenceKeys.RECENT_PING_HOSTS).first().isEmpty())
+                assertEquals(null, dataStore.data.first()[AppPreferenceKeys.RECENT_PING_HOSTS])
+            }
+        }
+
+        @Test
+        fun `isValidHostRecent accepts hosts and IP literals and rejects garbled values`() {
+            assertTrue(isValidHostRecent("example.com"))
+            assertTrue(isValidHostRecent("192.168.1.1"))
+            assertFalse(isValidHostRecent("10.109.208.25010.109.208.200"))
+            assertFalse(isValidHostRecent("bad host"))
+        }
+    }
 }

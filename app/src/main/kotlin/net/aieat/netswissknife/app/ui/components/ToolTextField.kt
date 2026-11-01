@@ -13,7 +13,6 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Dp
@@ -26,6 +25,9 @@ val ToolTouchTargetSize: Dp = 48.dp
 /**
  * Clear (X) control for a text field or recent-host chip. The whole 48dp box is the
  * touch target, so the glyph itself can stay small without shrinking the hit area.
+ *
+ * The caller decides what clearing means and whether focus should leave the field; see
+ * [ToolTextField], which drops focus and hides the keyboard after clearing.
  */
 @Composable
 @Suppress("FunctionNaming", "ktlint:standard:function-naming")
@@ -34,14 +36,8 @@ fun ToolClearButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
 ) {
-    // Tapping the trailing icon focuses the field first, which opens the keyboard over the results.
-    // Clear is the end of the edit, so it drops focus and the keyboard goes with it.
-    val focusManager = LocalFocusManager.current
     IconButton(
-        onClick = {
-            onClick()
-            focusManager.clearFocus()
-        },
+        onClick = onClick,
         enabled = enabled,
         modifier = modifier.size(ToolTouchTargetSize),
     ) {
@@ -77,9 +73,21 @@ fun ToolTextField(
     keyboardActions: KeyboardActions = KeyboardActions.Default,
     shape: Shape = OutlinedTextFieldDefaults.shape,
 ) {
+    // Clearing is the end of the edit: focus leaves the field and the keyboard closes with it, so
+    // the keyboard does not open over results. The dismissal lives here, not in the button, because
+    // the button leaves composition when the field empties.
+    val dismissKeyboard = rememberDismissKeyboard()
     val trailing: (@Composable () -> Unit)? =
         if (showClear) {
-            { ToolClearButton(onClick = { onValueChange("") }, enabled = enabled) }
+            {
+                ToolClearButton(
+                    onClick = {
+                        onValueChange("")
+                        dismissKeyboard()
+                    },
+                    enabled = enabled,
+                )
+            }
         } else {
             null
         }

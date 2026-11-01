@@ -170,7 +170,7 @@ private fun TopologyScreenContent(
     // Name the specific reason (spaces, bad characters, bad label...) rather than one generic message.
     val targetIpErrorRes: Int? =
         if (isTargetIpInvalid) {
-            HostValidator.problemOf(targetIp)?.messageRes() ?: R.string.error_invalid_host
+            HostValidator.problemOf(targetIp)?.messageRes() ?: R.string.error_host_invalid
         } else {
             null
         }
@@ -1155,12 +1155,13 @@ private fun ErrorContent(
     retryEnabled: Boolean,
     onRetry: () -> Unit,
 ) {
+    // Top-aligned: the failure card sits directly under Discover instead of floating mid-slot.
     Box(
         modifier =
             Modifier
                 .fillMaxSize()
                 .padding(16.dp),
-        contentAlignment = Alignment.Center,
+        contentAlignment = Alignment.TopCenter,
     ) {
         ElevatedCard(
             modifier =
