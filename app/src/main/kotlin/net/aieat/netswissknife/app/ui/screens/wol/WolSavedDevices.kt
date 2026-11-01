@@ -56,17 +56,45 @@ object WolSavedDevices {
     private const val LINE_SEPARATOR = "\n"
     private const val FIELD_SEPARATOR = '\t'
 
-    /** Adds [mac] or, when already saved, renames that entry. [mac] must be canonical. */
+    /**
+     * Adds [mac], or when it is already saved keeps that entry's name unless [name] is a new,
+     * non-blank name, which renames it. [mac] must be canonical.
+     */
     fun upsert(
         devices: List<WolSavedDevice>,
         mac: String,
         name: String,
     ): List<WolSavedDevice> {
-        val device = WolSavedDevice(mac, sanitizeName(name))
+        val typed = sanitizeName(name)
         return if (devices.any { it.mac == mac }) {
-            devices.map { if (it.mac == mac) device else it }
+            devices.map { existing ->
+                when {
+                    existing.mac != mac -> existing
+                    typed.isEmpty() -> existing
+                    else -> WolSavedDevice(mac, typed)
+                }
+            }
         } else {
-            devices + device
+            devices + WolSavedDevice(mac, typed)
+        }
+    }
+
+    /**
+     * Explains a save of [mac] that already exists: the saved name is kept when no new name was
+     * typed (or it matches), otherwise the device is renamed. Null when [mac] is not saved yet.
+     */
+    fun saveNotice(
+        devices: List<WolSavedDevice>,
+        mac: String,
+        name: String,
+    ): WolSaveNotice? {
+        val existing = devices.firstOrNull { it.mac == mac } ?: return null
+        val previous = displayName(existing)
+        val typed = sanitizeName(name)
+        return if (typed.isEmpty() || typed == existing.name) {
+            WolSaveNotice.KeptName(previous)
+        } else {
+            WolSaveNotice.Renamed(previousName = previous, name = typed)
         }
     }
 

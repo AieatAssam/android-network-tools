@@ -785,6 +785,7 @@
     <string name="tls_issue_expires_soon">A certificate expires soon</string>
     <string name="tls_issue_self_signed">The chain contains a self-signed certificate</string>
     <string name="tls_issue_untrusted">The certificate chain is not trusted by this device\'s certificate store</string>
+    <string name="tls_issue_untrusted_root">This device\'s trust store does not include the issuing root (%1$s)</string>
     <string name="tls_issue_pin_mismatch">The certificate does not match the expected SHA-256 pin</string>
     <string name="tls_not_tls_port">This port answered with plain text, not TLS. Check the port, or use HTTP Probe for a plain-HTTP service.</string>
     <string name="tls_issue_hostname_mismatch">The certificate does not match this hostname</string>
@@ -847,6 +848,7 @@
     <string name="ports_scan_stopped_partial">Stopped at %1$d of %2$d ports. Showing the results collected so far.</string>
     <string name="ports_scan_stopped_early">Scan stopped early. Showing the results collected so far.</string>
     <string name="traceroute_time_limit_reached">Time limit reached. Showing hops found so far.</string>
+    <string name="traceroute_unreachable_from_device">Host unreachable from this network (no route / destination host unreachable)</string>
     <string name="lan_scan_estimate_too_large">Estimated scan time exceeds the 10-minute limit. Use a smaller subnet, increase concurrency, or lower the probe timeout.</string>
     <string name="lan_subnet_narrowed_hint">Your network (%1$s) is too large to scan within 10 minutes, so the range around this device is filled in. Edit it to scan another part.</string>
     <string name="lan_scan_suggested_button">Scan %1$s</string>
@@ -862,6 +864,7 @@
     <string name="whois_raw_responses">Raw RDAP/WHOIS Responses</string>
     <string name="whois_answered_by_rdap">Answered by RDAP from %1$s</string>
     <string name="whois_answered_by_whois">Answered by WHOIS (port 43) from %1$s</string>
+    <string name="whois_rdap_fallback_note">RDAP could not answer (%1$s), so WHOIS answered instead.</string>
     <string name="whois_lifecycle">Lifecycle</string>
     <string name="whois_registered">Registered</string>
     <string name="whois_updated">Updated</string>
@@ -1656,6 +1659,8 @@
     <string name="wol_edit_device_description">Edit saved device %1$s</string>
     <string name="wol_delete_device_description">Delete saved device %1$s</string>
     <string name="wol_device_conflict">That MAC address is already saved as another device.</string>
+    <string name="wol_device_name_kept">Already saved as %1$s. The saved name was kept.</string>
+    <string name="wol_device_renamed">Already saved as %1$s. Renamed to %2$s.</string>
     <string name="wol_error_title">Failed to send</string>
     <string name="wol_retry_button">Retry</string>
     <string name="help_wol_concept_heading">What is Wake-on-LAN?</string>

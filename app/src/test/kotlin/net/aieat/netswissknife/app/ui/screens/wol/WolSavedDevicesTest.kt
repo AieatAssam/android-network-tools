@@ -22,6 +22,30 @@ class WolSavedDevicesTest {
     }
 
     @Test
+    fun `re-saving a saved MAC with a blank name keeps the saved name`() {
+        assertEquals(listOf(a, b), WolSavedDevices.upsert(listOf(a, b), a.mac, "   "))
+    }
+
+    @Test
+    fun `save notice reports a kept name when a saved MAC is re-saved without a new name`() {
+        assertEquals(WolSaveNotice.KeptName("A"), WolSavedDevices.saveNotice(listOf(a, b), a.mac, ""))
+        assertEquals(WolSaveNotice.KeptName("A"), WolSavedDevices.saveNotice(listOf(a, b), a.mac, "A"))
+    }
+
+    @Test
+    fun `save notice reports the rename when a saved MAC gets a new name`() {
+        assertEquals(
+            WolSaveNotice.Renamed(previousName = "A", name = "Renamed"),
+            WolSavedDevices.saveNotice(listOf(a, b), a.mac, "Renamed"),
+        )
+    }
+
+    @Test
+    fun `save notice is absent for a MAC that is not saved yet`() {
+        assertEquals(null, WolSavedDevices.saveNotice(listOf(a), b.mac, "B"))
+    }
+
+    @Test
     fun `blank name is stored empty and displays as the MAC`() {
         val stored = WolSavedDevices.upsert(emptyList(), a.mac, "   ")
         assertEquals("", stored.single().name)

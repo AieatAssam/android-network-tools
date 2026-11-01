@@ -8,6 +8,7 @@ import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
@@ -30,6 +31,7 @@ import net.aieat.netswissknife.app.ui.navigation.ToolSource
 import net.aieat.netswissknife.core.domain.HttpProbeParams
 import net.aieat.netswissknife.core.domain.HttpProbeUseCase
 import net.aieat.netswissknife.core.domain.validateHttpProbeUrl
+import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.httprobe.CrossOriginEntityReplay
 import net.aieat.netswissknife.core.network.httprobe.HttpMethod
@@ -841,6 +843,50 @@ class HttpProbeViewModelTest {
                 cancelViewModel.onUrlChange("https://replacement.example")
                 assertEquals("https://replacement.example", cancelViewModel.uiState.value.url)
                 assertFalse(cancelViewModel.uiState.value.isCanceled)
+            }
+
+        @Test
+        fun `user cancel ends as canceled when the call reports a timeout after cancellation`() =
+            runTest {
+                val entered = CompletableDeferred<Unit>()
+                val release = CompletableDeferred<Unit>()
+                val repository =
+                    object : HttpProbeRepository {
+                        override suspend fun probe(request: HttpProbeRequest): NetworkResult<HttpProbeResult> {
+                            error("The session-aware path is required")
+                        }
+
+                        override suspend fun probe(
+                            request: HttpProbeRequest,
+                            operationSession: OperationSession,
+                        ): NetworkResult<HttpProbeResult> {
+                            entered.complete(Unit)
+                            // A call that does not stop promptly, then reports a timeout as a result.
+                            withContext(NonCancellable) { release.await() }
+                            return NetworkResult.error(
+                                ErrorCode.NETWORK_TIMEOUT,
+                                developerMessage = "HTTP request timed out",
+                            )
+                        }
+                    }
+                val cancelViewModel = HttpProbeViewModel(HttpProbeUseCase(repository), recentHostsRepository)
+                cancelViewModel.onUrlChange("https://example.com")
+                cancelViewModel.send()
+                withContext(Dispatchers.Default.limitedParallelism(1)) {
+                    withTimeout(5_000) { entered.await() }
+                }
+
+                cancelViewModel.cancel()
+                release.complete(Unit)
+
+                val finalState =
+                    withContext(Dispatchers.Default.limitedParallelism(1)) {
+                        withTimeout(5_000) { cancelViewModel.uiState.first { !it.isLoading } }
+                    }
+                assertTrue(finalState.isCanceled)
+                assertFalse(finalState.isCanceling)
+                assertNull(finalState.error)
+                assertNull(finalState.result)
             }
     }
 

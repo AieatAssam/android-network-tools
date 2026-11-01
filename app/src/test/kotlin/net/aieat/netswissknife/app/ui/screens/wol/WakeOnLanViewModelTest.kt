@@ -496,6 +496,40 @@ class WakeOnLanViewModelTest {
     }
 
     @Test
+    fun `re-saving a saved MAC without a name keeps its name and says so`() {
+        runTest {
+            val store = InMemoryWolSavedDeviceStore()
+            val vm = WakeOnLanViewModel(useCase, savedDeviceStore = store)
+
+            vm.onMacAddressChange("02:AB:CD:EF:12:34")
+            vm.savedDeviceEditor.onDeviceNameChange("QA dummy")
+            vm.savedDeviceEditor.saveDevice()
+            vm.savedDeviceEditor.saveDevice()
+
+            assertEquals(listOf(WolSavedDevice("02:AB:CD:EF:12:34", "QA dummy")), store.current.value)
+            assertEquals(WolSaveNotice.KeptName("QA dummy"), vm.saveNotice.value)
+            assertEquals("", vm.deviceName.value)
+        }
+    }
+
+    @Test
+    fun `re-saving a saved MAC with a new name reports the rename`() {
+        runTest {
+            val store = InMemoryWolSavedDeviceStore()
+            val vm = WakeOnLanViewModel(useCase, savedDeviceStore = store)
+
+            vm.onMacAddressChange("02:AB:CD:EF:12:34")
+            vm.savedDeviceEditor.onDeviceNameChange("QA dummy")
+            vm.savedDeviceEditor.saveDevice()
+            vm.savedDeviceEditor.onDeviceNameChange("dup")
+            vm.savedDeviceEditor.saveDevice()
+
+            assertEquals(listOf(WolSavedDevice("02:AB:CD:EF:12:34", "dup")), store.current.value)
+            assertEquals(WolSaveNotice.Renamed(previousName = "QA dummy", name = "dup"), vm.saveNotice.value)
+        }
+    }
+
+    @Test
     fun `saving an invalid MAC is a no-op`() {
         runTest {
             val store = InMemoryWolSavedDeviceStore()

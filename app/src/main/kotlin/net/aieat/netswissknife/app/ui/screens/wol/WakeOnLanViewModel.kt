@@ -133,6 +133,7 @@ class WakeOnLanViewModel @Inject constructor(
     val deviceName: StateFlow<String> = savedDeviceEditor.deviceName
     val editingMac: StateFlow<String?> = savedDeviceEditor.editingMac
     val saveConflict: StateFlow<Boolean> = savedDeviceEditor.saveConflict
+    val saveNotice: StateFlow<WolSaveNotice?> = savedDeviceEditor.saveNotice
 
     private var operationSession: OperationSession? = null
     private var sendGeneration = 0L

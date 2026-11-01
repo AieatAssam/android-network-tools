@@ -32,6 +32,10 @@ class WolSavedDeviceEditor(
     private val _editingMac = MutableStateFlow<String?>(null)
     val editingMac: StateFlow<String?> = _editingMac.asStateFlow()
 
+    /** Explains what happened to the name on the last save of an already saved MAC. */
+    private val _saveNotice = MutableStateFlow<WolSaveNotice?>(null)
+    val saveNotice: StateFlow<WolSaveNotice?> = _saveNotice.asStateFlow()
+
     /** Set when an edit would make two saved devices share a MAC; nothing is changed. */
     private val _saveConflict = MutableStateFlow(false)
     val saveConflict: StateFlow<Boolean> = _saveConflict.asStateFlow()
@@ -43,6 +47,7 @@ class WolSavedDeviceEditor(
 
     fun onDeviceNameChange(value: String) {
         _deviceName.value = value.take(WolSavedDevices.MAX_NAME_LENGTH)
+        _saveNotice.value = null
     }
 
     /** Saves the current MAC under the entered name, or updates the saved device being edited. */
@@ -51,6 +56,7 @@ class WolSavedDeviceEditor(
         val name = _deviceName.value
         val original = _editingMac.value
         if (original != null) {
+            _saveNotice.value = null
             val outcome = WolSavedDevices.edit(savedDevices.value, original, canonical, name)
             if (outcome is WolSaveOutcome.Duplicate) {
                 _saveConflict.value = true
@@ -66,6 +72,7 @@ class WolSavedDeviceEditor(
             }
             _editingMac.value = null
         } else {
+            _saveNotice.value = WolSavedDevices.saveNotice(savedDevices.value, canonical, name)
             scope.launch {
                 store.update { list -> WolSavedDevices.upsert(list, canonical, name) }
             }
@@ -83,12 +90,14 @@ class WolSavedDeviceEditor(
 
     /** Fills the MAC and name from a saved device. Does not send. */
     fun useDevice(device: WolSavedDevice) {
+        _saveNotice.value = null
         _editingMac.value = null
         _deviceName.value = device.name
         fillMac(device.mac)
     }
 
     fun startEditDevice(device: WolSavedDevice) {
+        _saveNotice.value = null
         _editingMac.value = device.mac
         _deviceName.value = device.name
         fillMac(device.mac)
@@ -98,5 +107,6 @@ class WolSavedDeviceEditor(
         _editingMac.value = null
         _deviceName.value = ""
         _saveConflict.value = false
+        _saveNotice.value = null
     }
 }

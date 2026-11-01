@@ -698,6 +698,15 @@ private fun TracerouteFinishedPanel(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
 
+        if (result.unreachableFromThisDevice) {
+            Text(
+                text = stringResource(R.string.traceroute_unreachable_from_device),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.testTag("traceroute_unreachable_from_device"),
+            )
+        }
+
         if (canceled) {
             Text(
                 text = pluralStringResource(

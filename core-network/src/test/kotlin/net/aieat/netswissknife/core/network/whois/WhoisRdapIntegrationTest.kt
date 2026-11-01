@@ -270,6 +270,38 @@ class WhoisRdapIntegrationTest {
         assertEquals(0, sockets.get())
     }
 
+    @Test
+    fun `auto fallback to WHOIS keeps the RDAP failure as a visible reason`() =
+        runTest {
+            val sockets = AtomicInteger()
+            val rdap =
+                client { url ->
+                    if (url == bootstrapUrl) bootstrapResponse() else RdapHttpResponse(403, "", url.toString())
+                }
+            val repo = repository(rdap, sockets, listOf("NetName: TEST-NET\r\n"))
+
+            val result = repo.lookup("8.8.8.8", 2_000, OperationSession(OperationBudget.start()), WhoisProtocol.AUTO)
+
+            val data = (result as NetworkResult.Success).data
+            assertEquals("RDAP request failed with HTTP 403", data.rdapFallbackReason)
+            val firstHop = data.hops.first()
+            assertEquals(WhoisServerRole.RIR, firstHop.server.role)
+        }
+
+    @Test
+    fun `a WHOIS answer without an RDAP failure has no fallback reason`() =
+        runTest {
+            val rdap =
+                client { url ->
+                    if (url == bootstrapUrl) bootstrapResponse() else RdapHttpResponse(403, "", url.toString())
+                }
+            val repo = repository(rdap, AtomicInteger(), listOf("NetName: TEST-NET\r\n"))
+
+            val forced = repo.lookup("8.8.8.8", 2_000, OperationSession(OperationBudget.start()), WhoisProtocol.WHOIS)
+
+            assertEquals(null, (forced as NetworkResult.Success).data.rdapFallbackReason)
+        }
+
     private fun client(handler: suspend (HttpUrl) -> RdapHttpResponse): RdapClient = RdapClient(
         transport = RdapTransport(handler),
         bootstrapUrl = bootstrapUrl,

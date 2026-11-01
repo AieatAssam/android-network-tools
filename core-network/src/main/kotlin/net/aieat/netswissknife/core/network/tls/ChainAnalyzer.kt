@@ -53,6 +53,17 @@ object ChainAnalyzer {
         return issues.toList()
     }
 
+    /**
+     * The issuing root that the device lacks, named by the last certificate's issuer. When the
+     * server sends the root, its issuer is itself, so the name is the root either way.
+     */
+    fun untrustedRootName(certificates: List<X509Certificate>): String? {
+        val last = certificates.lastOrNull() ?: return null
+        val principal = last.issuerX500Principal.name
+        val commonName = Regex("CN=([^,]+)").find(principal)?.groupValues?.get(1)
+        return commonName?.trim() ?: principal
+    }
+
     private fun hasWeakSignature(signatureAlgorithm: String): Boolean {
         val normalized = signatureAlgorithm.uppercase().replace("-", "")
         return listOf("MD2", "MD4", "MD5", "SHA1").any(normalized::contains)

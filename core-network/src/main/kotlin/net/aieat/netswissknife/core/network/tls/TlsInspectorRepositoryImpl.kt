@@ -112,6 +112,13 @@ class TlsInspectorRepositoryImpl(
                     // String.equals is false for a null leaf pin, so no separate null check is needed.
                     val pinMatch = options.expectedPinSha256?.equals(leafPin, ignoreCase = true)
                     val issues = ChainAnalyzer.analyze(certificates, trusted, now, hostnameMatches, pinMatch)
+                    // Only a sole untrusted-chain finding can be explained by one missing root.
+                    val rootName =
+                        if (issues == listOf(ChainIssue.UNTRUSTED)) {
+                            ChainAnalyzer.untrustedRootName(certificates)
+                        } else {
+                            null
+                        }
                     val protocolProbes = if (options.probeProtocols) {
                         probeProtocols(engine, host, port, timeoutMs, operationSession)
                     } else {
@@ -135,6 +142,7 @@ class TlsInspectorRepositoryImpl(
                             protocolProbeUnknown = protocolProbes?.unknown.orEmpty(),
                             protocolProbeNotTestable = protocolProbes?.notTestable.orEmpty(),
                             pinMatch = pinMatch,
+                            untrustedRootName = rootName,
                         )
                     )
                 }
@@ -335,8 +343,13 @@ class TlsInspectorRepositoryImpl(
         val PIN_PATTERN = Regex("[0-9A-Fa-f]{64}")
         val PROTOCOL_VERSION_ALERT = Regex("fatal alert:\\s*protocol_version\\b", RegexOption.IGNORE_CASE)
         val PLAINTEXT_RESPONSE_ALERT = Regex(PLAINTEXT_RESPONSE_PATTERN, RegexOption.IGNORE_CASE)
+
+        // Spellings differ by provider: OpenSSL/Conscrypt print WRONG_VERSION_NUMBER with underscores,
+        // Conscrypt's record parser says "Unable to parse TLS packet header", and JSSE says
+        // "Unrecognized SSL message, plaintext connection?".
         const val PLAINTEXT_RESPONSE_PATTERN =
-            "wrong version number|unsupported or unrecognized ssl message|unknown protocol"
+            "wrong version number|wrong_version_number|unsupported or unrecognized ssl message|" +
+                "unrecognized ssl message|plaintext connection|unable to parse tls packet header|unknown protocol"
         const val NOT_TLS_PORT_DESCRIPTION = "tls_not_tls_port"
         val CANDIDATE_PROTOCOLS = listOf("TLSv1", "TLSv1.1", "TLSv1.2", "TLSv1.3")
     }

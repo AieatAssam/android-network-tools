@@ -712,6 +712,13 @@ fun WhoisResultsSection(
                 )
             }
         }
+        result.rdapFallbackReason?.let { reason ->
+            Text(
+                text = stringResource(R.string.whois_rdap_fallback_note, reason),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         when (result.queryType) {
             WhoisQueryType.DOMAIN -> DomainResultCard(result, onOpenUrl)
             WhoisQueryType.IPV4, WhoisQueryType.IPV6, WhoisQueryType.ASN -> IpAsnResultCard(result)

@@ -230,6 +230,44 @@ class TlsInspectorRepositoryFakeEngineTest {
     }
 
     @Test
+    fun `plaintext reply variants from OpenSSL, Conscrypt and JSSE map to the non-TLS port message`() {
+        runTest {
+            listOf(
+                // OpenSSL-style token used by Android 8 (Conscrypt on OpenSSL): underscores, not spaces.
+                "SSL handshake aborted: Failure in SSL library, usually a protocol error " +
+                    "error:100000f7:SSL routines:OPENSSL_internal:WRONG_VERSION_NUMBER",
+                // Conscrypt record-header parser.
+                "Unable to parse TLS packet header",
+                // JSSE wording for a plaintext peer.
+                "Unrecognized SSL message, plaintext connection?",
+            ).forEach { message ->
+                val repository = repositoryWithEngine(FakeEngine(handshakeFailure = SSLProtocolException(message)))
+
+                val error = repository.inspect("www.example.com", 443, 5_000) as NetworkResult.Error
+
+                assertEquals("tls_not_tls_port", error.descriptionKey, message)
+            }
+        }
+    }
+
+    @Test
+    fun `generic Handshake failed wrapper is classified by its native cause`() {
+        runTest {
+            // Android reports the top-level exception as "Handshake failed"; the protocol-level
+            // reason is only on the cause.
+            val failure =
+                SSLHandshakeException("Handshake failed").apply {
+                    initCause(SSLProtocolException("SSL handshake aborted: WRONG_VERSION_NUMBER"))
+                }
+            val repository = repositoryWithEngine(FakeEngine(handshakeFailure = failure))
+
+            val error = repository.inspect("www.example.com", 443, 5_000) as NetworkResult.Error
+
+            assertEquals("tls_not_tls_port", error.descriptionKey)
+        }
+    }
+
+    @Test
     fun `ordinary handshake failure keeps its generic message`() {
         runTest {
             val failure = SSLHandshakeException("Received fatal alert: handshake_failure")
@@ -239,6 +277,36 @@ class TlsInspectorRepositoryFakeEngineTest {
 
             assertEquals(null, error.descriptionKey)
         }
+    }
+
+    @Test
+    fun `untrusted chain whose only finding is the unknown issuing root names that root`() {
+        runTest {
+            val result = repositoryWithEngine(FakeEngine(), trusted = false).inspect("www.example.com", 443, 5_000)
+
+            val actual = (result as NetworkResult.Success).data
+            assertEquals(listOf(ChainIssue.UNTRUSTED), actual.chainIssues)
+            assertFalse(actual.isConnectionTrusted)
+            assertEquals(commonNameOf(certificate.issuerX500Principal.name), actual.untrustedRootName)
+        }
+    }
+
+    @Test
+    fun `untrusted chain with another finding does not claim a specific missing root`() {
+        runTest {
+            val expiredAt = certificate.notAfter.time + 1_000
+            val repository = repositoryWithEngine(FakeEngine(), now = expiredAt, trusted = false)
+            val result = repository.inspect("www.example.com", 443, 5_000)
+
+            val actual = (result as NetworkResult.Success).data
+            assertTrue(ChainIssue.EXPIRED in actual.chainIssues)
+            assertEquals(null, actual.untrustedRootName)
+        }
+    }
+
+    private fun commonNameOf(distinguishedName: String): String {
+        val match = Regex("CN=([^,]+)").find(distinguishedName)
+        return match?.groupValues?.get(1) ?: distinguishedName
     }
 
     private fun expectedPin(): String = TlsCertificateParser.sha256Fingerprint(certificate.encoded).replace(":", "")

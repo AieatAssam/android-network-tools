@@ -91,6 +91,7 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
             OperationRunner.run(session) {
                 withContext(Dispatchers.IO) {
                     val start = clock.nowNanos()
+                    var rdapFallbackReason: String? = null
                     if (protocol != WhoisProtocol.WHOIS && rdapClient != null) {
                         val rdapResult = tryRdapLookup(
                             client = rdapClient,
@@ -104,6 +105,7 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
                             operationId = session.budget.operationId,
                             responseBudget = responseBudget,
                             allowFallback = protocol == WhoisProtocol.AUTO,
+                            onFallback = { rdapFallbackReason = it },
                         )
                         if (rdapResult != null) return@withContext rdapResult
                     }
@@ -113,25 +115,38 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
                             developerMessage = "RDAP lookup returned no result",
                         )
                     }
-                    when (normalizedQuery.type) {
-                        WhoisQueryType.DOMAIN -> performDomainLookup(
-                            normalizedQuery.value,
-                            timeoutMs,
-                            start,
-                            session.budget,
-                            session.budget.operationId,
-                            responseBudget
-                        )
-                        WhoisQueryType.IPV4, WhoisQueryType.IPV6, WhoisQueryType.ASN ->
-                            performIpAsnLookup(
-                                normalizedQuery.value,
-                                normalizedQuery.type,
-                                timeoutMs,
-                                start,
-                                session.budget,
-                                session.budget.operationId,
-                                responseBudget
-                            )
+                    val whoisResult =
+                        when (normalizedQuery.type) {
+                            WhoisQueryType.DOMAIN -> {
+                                performDomainLookup(
+                                    normalizedQuery.value,
+                                    timeoutMs,
+                                    start,
+                                    session.budget,
+                                    session.budget.operationId,
+                                    responseBudget,
+                                )
+                            }
+
+                            WhoisQueryType.IPV4, WhoisQueryType.IPV6, WhoisQueryType.ASN -> {
+                                performIpAsnLookup(
+                                    normalizedQuery.value,
+                                    normalizedQuery.type,
+                                    timeoutMs,
+                                    start,
+                                    session.budget,
+                                    session.budget.operationId,
+                                    responseBudget,
+                                )
+                            }
+                        }
+                    // Auto mode: keep the RDAP error visible when WHOIS answered instead.
+                    val reason = rdapFallbackReason
+                    val successful = whoisResult as? NetworkResult.Success
+                    if (reason != null && successful != null) {
+                        NetworkResult.Success(successful.data.copy(rdapFallbackReason = reason))
+                    } else {
+                        whoisResult
                     }
                 }
             }
@@ -169,6 +184,7 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
 
     /** Returns a mapped success, or null when ordinary RDAP failures should use WHOIS. */
     private suspend fun tryRdapLookup(
+        onFallback: (String) -> Unit,
         client: RdapClient,
         query: String,
         resultQuery: String,
@@ -194,6 +210,7 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
             budget.throwIfExpired()
             ensureCurrentOperationActive()
             if (!allowFallback) throw failure
+            onFallback(rdapFailureReason(failure))
             return null
         } catch (failure: Exception) {
             // The operation runner cancels this suspended exchange when its shared deadline
@@ -201,6 +218,7 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
             budget.throwIfExpired()
             ensureCurrentOperationActive()
             if (!allowFallback) throw failure
+            onFallback(rdapFailureReason(failure))
             return null
         }
 
@@ -210,6 +228,7 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
             budget.throwIfExpired()
             ensureCurrentOperationActive()
             if (!allowFallback) throw IOException("RDAP record was not found")
+            onFallback("RDAP has no record for this query")
             return null
         }
 
@@ -231,6 +250,7 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
             budget.throwIfExpired()
             ensureCurrentOperationActive()
             if (!allowFallback) throw failure
+            onFallback(rdapFailureReason(failure))
             return null
         }
 
@@ -589,4 +609,10 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
             "dev"   to "whois.nic.google"
         )
     }
+}
+
+/** The RDAP error shown when WHOIS answers instead of RDAP. */
+private fun rdapFailureReason(failure: Throwable): String {
+    val message = failure.message?.takeIf { it.isNotBlank() }
+    return message ?: "RDAP request failed"
 }

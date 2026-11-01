@@ -46,6 +46,8 @@ data class WhoisResult(
     val totalQueryTimeMs: Long,
     /** RDAP object handle when supplied (for example, an IP-network or ASN registry ID). */
     val handle: String? = null,
+    /** Set when Auto mode used WHOIS because RDAP failed: the RDAP error, for display. */
+    val rdapFallbackReason: String? = null,
 )
 
 /**

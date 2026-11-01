@@ -122,6 +122,7 @@ fun WakeOnLanScreen(viewModel: WakeOnLanViewModel = hiltViewModel()) {
     val deviceName by viewModel.deviceName.collectAsStateWithLifecycle()
     val editingMac by viewModel.editingMac.collectAsStateWithLifecycle()
     val saveConflict by viewModel.saveConflict.collectAsStateWithLifecycle()
+    val saveNotice by viewModel.saveNotice.collectAsStateWithLifecycle()
     val announcementPhase = when (uiState) {
         WolUiState.Idle -> null
         WolUiState.Sending -> ToolAnnouncementPhase.RUNNING
@@ -204,6 +205,7 @@ fun WakeOnLanScreen(viewModel: WakeOnLanViewModel = hiltViewModel()) {
                 deviceName = deviceName,
                 editingMac = editingMac,
                 conflict = saveConflict,
+                notice = saveNotice,
                 canSave = macProblem == null && macAddress.isNotBlank() && !isSending,
                 isSending = isSending,
                 onNameChange = viewModel.savedDeviceEditor::onDeviceNameChange,
@@ -480,6 +482,7 @@ private fun WolSavedDevicesCard(
     deviceName: String,
     editingMac: String?,
     conflict: Boolean,
+    notice: WolSaveNotice?,
     canSave: Boolean,
     isSending: Boolean,
     onNameChange: (String) -> Unit,
@@ -502,6 +505,7 @@ private fun WolSavedDevicesCard(
                 deviceName = deviceName,
                 editingMac = editingMac,
                 conflict = conflict,
+                notice = notice,
                 canSave = canSave,
                 isSending = isSending,
                 onNameChange = onNameChange,
@@ -536,6 +540,7 @@ private fun WolSavedDeviceForm(
     deviceName: String,
     editingMac: String?,
     conflict: Boolean,
+    notice: WolSaveNotice?,
     canSave: Boolean,
     isSending: Boolean,
     onNameChange: (String) -> Unit,
@@ -563,6 +568,7 @@ private fun WolSavedDeviceForm(
                 style = MaterialTheme.typography.bodySmall,
             )
         }
+        notice?.let { WolSaveNoticeText(it) }
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,

@@ -721,7 +721,7 @@ private fun ConnectionCard(result: TlsInspectorResult) {
                                     )
                                 }
                                 Text(
-                                    stringResource(issue.stringRes()),
+                                    issueText(issue, result.untrustedRootName),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.error,
                                 )
@@ -1056,6 +1056,18 @@ internal fun buildTlsShareText(result: TlsInspectorResult): String = buildString
 internal fun buildTlsPemShareText(result: TlsInspectorResult): String = result.chain
     .mapNotNull { it.pemEncoded.takeIf(String::isNotBlank)?.trim() }
     .joinToString(separator = "\n", postfix = "\n")
+
+/** Names the missing issuing root when it is the only finding; otherwise the generic issue text. */
+@Composable
+private fun issueText(
+    issue: net.aieat.netswissknife.core.network.tls.ChainIssue,
+    untrustedRootName: String?,
+): String =
+    if (issue == net.aieat.netswissknife.core.network.tls.ChainIssue.UNTRUSTED && untrustedRootName != null) {
+        stringResource(R.string.tls_issue_untrusted_root, untrustedRootName)
+    } else {
+        stringResource(issue.stringRes())
+    }
 
 private fun net.aieat.netswissknife.core.network.tls.ChainIssue.stringRes(): Int = when (this) {
     net.aieat.netswissknife.core.network.tls.ChainIssue.EXPIRED -> R.string.tls_issue_expired

@@ -38,6 +38,8 @@ Network path analysis with per-hop geolocation enrichment.
 - Host validation names the problem (spaces, IPv4 value out of range, empty or invalid hostname label, IPv6, length)
 - Journey Intelligence labels GeoIP locations as approximate. When a hop's location cannot be reached within the measured RTT at about 200 km per ms (light in fibre), the distance, route, and "Speed vs light" figures are hidden and the card says why
 - Backgrounding the app stops a running trace and keeps the hops found so far; a screen rotation does not stop it
+- The trace stops at the first hop whose reply comes from the destination; probes already in flight for later hops are dropped
+- When two or more consecutive replies all come from this device's own addresses, the trace stops early and reports "Host unreachable from this network (no route / destination host unreachable)" with Reached: No. A destination on the local subnet that does not answer is typically reported this way
 - Editing the host field clears a previous "Trace failed" message
 - The host and settings survive rotation and process death; leaving the tool with Back clears them
 
@@ -102,7 +104,8 @@ SSL/TLS certificate analysis for any TCP host, without sending an HTTP request.
 - Checks device trust, hostname match, expiry/not-yet-valid dates, incomplete chains, self-signed certificates, weak signatures, and weak keys
 - Overall verdict is "Trusted" only when the chain is trusted by this device, the hostname matches, the leaf certificate is within its validity dates, and any expected pin matches. A hostname mismatch, expiry, not-yet-valid date, or pin mismatch each makes the verdict "Untrusted", even when the chain itself verifies
 - A certificate that is not in this device's trust store is reported as untrusted by this device, which can differ from other clients on older Android versions
-- A port that answers with plain text rather than TLS (for example port 80) is reported as "does not appear to speak TLS"
+- A port that answers with plain text rather than TLS (for example port 80) is reported as "does not appear to speak TLS". The check recognises the wording used by Android's OpenSSL/Conscrypt and by JSSE for a plaintext peer
+- When the only chain finding is an issuing root that this device does not have, the finding names it: "This device's trust store does not include the issuing root (<name>)". The verdict stays untrusted
 - Connection summary includes negotiated TLS version, ALPN, cipher suite, connect time, and handshake time
 - Optional older-TLS-version probes, expected SHA-256 leaf-certificate pin comparison, and PEM chain sharing
 
@@ -125,6 +128,8 @@ SNMP-based network topology discovery via BFS traversal.
 Domain, IP, and ASN registration lookup using RDAP with WHOIS fallback.
 - Supports domain names, IPv4, IPv6, and ASN queries
 - Protocol selector: Auto tries RDAP first and falls back to WHOIS; RDAP and WHOIS modes use only the selected protocol
+- Every RDAP request (bootstrap and lookup) identifies the app with a `NetSwissKnife/<version>` User-Agent, because rdap.org refuses OkHttp's default agent with HTTP 403
+- When Auto falls back to WHOIS, the result shows a note naming the RDAP error (for example "RDAP could not answer (RDAP request failed with HTTP 403), so WHOIS answered instead.")
 - Domain RDAP uses the [IANA DNS bootstrap](https://data.iana.org/rdap/dns.json) to choose a registry endpoint; IP and ASN requests use the [rdap.org](https://rdap.org/) redirector
 - WHOIS fallback uses the IANA-to-registry-to-registrar referral chain for domains and ARIN/referring RIRs for IPs and ASNs. A registrar referral to whois.iana.org is not queried again, since IANA holds no registrar record
 - Domain dates (registered, updated, expires), name servers, status codes and DNSSEC come from the registry record, never from the IANA step. Registrar and registrant fields come from the registrar record when one answers, otherwise from the registry record
@@ -151,6 +156,7 @@ HTTPS request tester with security header analysis. Plain HTTP requests are disa
   - **Security**: grades HSTS strength, CSP enforcement and script directives, clickjacking protection, deprecated X-XSS-Protection, MIME sniffing, referrer and permissions policies, cross-origin opener/embedder policies, Server version disclosure, and each Set-Cookie flag set. HTTPS-to-HTTP downgrade evidence appears separately in a blocked-redirect warning.
 - Copy the configured request as a shell-quoted cURL command, including method, custom headers, body, and redirect behavior. Redirect following is omitted when custom headers, a body, or a non-GET/HEAD method could diverge from the app's redirect handling; otherwise exported commands only follow HTTPS redirects to prevent downgrades. The UI explains when following is suppressed. A "cURL command copied to clipboard" confirmation is shown.
 - Failures are named by cause: a DNS failure ("The DNS lookup failed."), a timeout ("The network request timed out."), a refused connection ("The server refused the connection."), or a generic network failure.
+- Cancel while a request is sending ends it as "Request canceled", even when the call reports a timeout or an answer as Cancel is pressed; the button shows "Stopping" until the request has released its connection
 - Opening from mDNS Browser or LAN Scanner: HTTP Probe sends HTTPS only, so the handoff prefills `https://host/` for port 443 and `https://host:8443/` for port 8443. For any other port, such as the common plain-HTTP port 80, no URL is filled in and an explanation is shown. Plain HTTP is not sent to LAN addresses either. Cleartext support would need a separate, explicit warning-based design, so it was deferred.
 - The prefilled-from banner is removed as soon as the URL is edited.
 
@@ -210,6 +216,7 @@ Wake sleeping or powered-down machines on the local network with a UDP magic pac
 - Success card reports the send and states that Wake-on-LAN is fire-and-forget: no delivery confirmation is returned. It confirms target MAC, broadcast address, port and packet count
 - Errors are specific: no local Wi-Fi or Ethernet network, a local-network permission denial, an invalid broadcast address, or a general send failure. Each has a Retry action
 - Saved devices (stored on this device only): save the current MAC under an optional name, use a saved device to fill the form, edit a saved device's name or MAC, and delete it. A MAC is stored once, whichever notation it was entered in; an edit that would make two entries share a MAC is refused
+- Saving a MAC that is already saved never silently renames it. With the name field left blank the saved name is kept; with a new name the device is renamed. Either way a note says what happened (for example "Already saved as QA dummy. Renamed to dup.")
 - In-app help explains BIOS/OS requirements
 
 ### Network Info

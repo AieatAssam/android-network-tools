@@ -6,6 +6,8 @@ data class TracerouteResult(
     val hops: List<HopResult>,
     val rawOutput: String,
     val totalTimeMs: Long,
+    /** True when every reply came from this device, so the host is unreachable from this network. */
+    val unreachableFromThisDevice: Boolean = false,
 ) {
     /** True only when the native traceroute engine identified a response from the destination. */
     val reachedDestination: Boolean

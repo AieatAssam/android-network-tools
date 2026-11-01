@@ -2,6 +2,7 @@ package net.aieat.netswissknife.app.di
 
 import net.aieat.netswissknife.app.traceroute.IcmpEnginTracerouteRepositoryImpl
 import net.aieat.netswissknife.app.traceroute.BoundedTracerouteReverseDnsLookup
+import net.aieat.netswissknife.app.traceroute.currentDeviceAddresses
 import net.aieat.netswissknife.core.domain.TracerouteUseCase
 import net.aieat.netswissknife.core.network.traceroute.GeoIpRepository
 import net.aieat.netswissknife.core.network.traceroute.GeoIpRepositoryImpl
@@ -40,5 +41,6 @@ object TracerouteModule {
         tracerouteRepository,
         geoIpRepository,
         reverseDnsRepository,
+        localAddresses = ::currentDeviceAddresses,
     )
 }

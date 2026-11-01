@@ -65,6 +65,13 @@ class RdapResponseTooLargeException(val observedBytes: Int, val limitBytes: Int)
 class RdapResponseReadException(val observedBytes: Int, cause: IOException) :
     IOException("RDAP response body could not be read", cause)
 
+/** Identifies the app to RDAP servers; the default OkHttp User-Agent is refused with HTTP 403. */
+fun rdapUserAgent(versionName: String): String =
+    "NetSwissKnife/$versionName " +
+        "(+https://github.com/AieatAssam/android-network-tools)"
+
+internal const val RDAP_USER_AGENT_DEFAULT = "NetSwissKnife (+https://github.com/AieatAssam/android-network-tools)"
+
 /** RFC 9224 bootstrap-based RDAP lookup with a bounded in-memory DNS bootstrap cache. */
 class RdapClient(
     private val transport: RdapTransport,
@@ -80,7 +87,14 @@ class RdapClient(
         asnRedirectorUrl: HttpUrl = RDAP_ORG_URL,
         nowNanos: () -> Long = System::nanoTime,
         dns: Dns = Dns.SYSTEM,
-    ) : this(OkHttpRdapTransport(client, dns), bootstrapUrl, ipRedirectorUrl, asnRedirectorUrl, nowNanos)
+        userAgent: String = RDAP_USER_AGENT_DEFAULT,
+    ) : this(
+        OkHttpRdapTransport(client, dns, userAgent = userAgent),
+        bootstrapUrl,
+        ipRedirectorUrl,
+        asnRedirectorUrl,
+        nowNanos,
+    )
 
     /** Local-address access is available only to same-module MockWebServer tests. */
     internal constructor(
@@ -91,8 +105,9 @@ class RdapClient(
         nowNanos: () -> Long,
         dns: Dns,
         allowPrivateHostnamesForTests: Set<String>,
+        userAgent: String = RDAP_USER_AGENT_DEFAULT,
     ) : this(
-        OkHttpRdapTransport(client, dns, allowPrivateHostnamesForTests),
+        OkHttpRdapTransport(client, dns, allowPrivateHostnamesForTests, userAgent),
         bootstrapUrl,
         ipRedirectorUrl,
         asnRedirectorUrl,
@@ -344,6 +359,7 @@ private class OkHttpRdapTransport(
     client: OkHttpClient,
     dns: Dns = Dns.SYSTEM,
     allowPrivateHostnamesForTests: Set<String> = emptySet(),
+    private val userAgent: String = RDAP_USER_AGENT_DEFAULT,
 ) : RdapTransport {
     private val client = client.newBuilder()
         .dns(PublicInternetDns(dns, allowPrivateHostnamesForTests))
@@ -353,7 +369,12 @@ private class OkHttpRdapTransport(
         .build()
 
     override suspend fun get(url: HttpUrl): RdapHttpResponse = suspendCancellableCoroutine { continuation ->
-        val call = client.newCall(Request.Builder().url(url).header("Accept", "application/rdap+json, application/json").get().build())
+        val builder = Request.Builder()
+        builder.url(url)
+        builder.header("Accept", "application/rdap+json, application/json")
+        builder.header("User-Agent", userAgent)
+        builder.get()
+        val call = client.newCall(builder.build())
         continuation.invokeOnCancellation { call.cancel() }
         call.enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {

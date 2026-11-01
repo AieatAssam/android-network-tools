@@ -337,6 +337,7 @@ class TracerouteViewModel
             val accumulated = mutableListOf<HopResult>()
             var terminalError: String? = null
             var terminalEventReceived = false
+            var unreachableFromThisDevice = false
 
             // Transition to Running immediately so the UI responds before the first hop
             // arrives.  If validation fails the first emission will overwrite this with Error.
@@ -365,6 +366,10 @@ class TracerouteViewModel
                                         saveRecentHostAfterHop(validatedHost)
                                         recentSaved = true
                                     }
+                                }
+
+                                is TracerouteFlowResult.UnreachableFromThisDevice -> {
+                                    unreachableFromThisDevice = true
                                 }
 
                                 is TracerouteFlowResult.HopEnriched -> {
@@ -453,7 +458,12 @@ class TracerouteViewModel
 
                                         else -> {
                                             TracerouteUiState.Finished(
-                                                buildResult(current.host, current.hops, elapsedMsSince(startedAtNanos)),
+                                                buildResult(
+                                                    current.host,
+                                                    current.hops,
+                                                    elapsedMsSince(startedAtNanos),
+                                                    unreachableFromThisDevice,
+                                                ),
                                             )
                                         }
                                     }
@@ -500,6 +510,7 @@ class TracerouteViewModel
             host: String,
             hops: List<HopResult>,
             totalMs: Long = 0L,
+            unreachableFromThisDevice: Boolean = false,
         ): TracerouteResult {
             val ordered = hops.sortedBy { it.hopNumber }
             return TracerouteResult(
@@ -508,6 +519,7 @@ class TracerouteViewModel
                 hops = ordered,
                 rawOutput = buildRawOutput(host, ordered),
                 totalTimeMs = totalMs,
+                unreachableFromThisDevice = unreachableFromThisDevice,
             )
         }
 

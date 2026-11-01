@@ -17,6 +17,8 @@ data class TlsInspectorResult(
     val protocolProbeNotTestable: Set<String> = emptySet(),
     val ocspStapled: Boolean? = null,
     val pinMatch: Boolean? = null,
+    /** Named issuing root when the only chain finding is an unknown root; null otherwise. */
+    val untrustedRootName: String? = null,
 ) {
     /**
      * Overall verdict. A chain the device trusts is still a failed connection when the certificate

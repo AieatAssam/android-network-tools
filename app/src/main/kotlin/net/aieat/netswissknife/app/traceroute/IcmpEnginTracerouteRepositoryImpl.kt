@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.transformWhile
 import kotlinx.coroutines.withTimeoutOrNull
 import me.impa.icmpenguin.ProbeType
 import me.impa.icmpenguin.trace.PortStrategy
@@ -26,6 +27,7 @@ import net.aieat.netswissknife.core.network.traceroute.HopStatus
 import net.aieat.netswissknife.core.network.traceroute.TracerouteOperation
 import net.aieat.netswissknife.core.network.traceroute.TracerouteProbeType
 import net.aieat.netswissknife.core.network.traceroute.TracerouteRepository
+import net.aieat.netswissknife.core.network.traceroute.TracerouteStopPolicy
 
 /**
  * [TracerouteRepository] implementation powered by the **icmpenguin** library.
@@ -50,6 +52,8 @@ class IcmpEnginTracerouteRepositoryImpl(
     ) -> Flow<HopResult> = ::nativeTrace,
     private val hostResolver: TracerouteHostResolver = BoundedTracerouteHostResolver(),
     private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
+    /** Addresses of this device, used to recognise replies that never left it. */
+    private val localAddresses: () -> Set<String> = ::currentDeviceAddresses,
 ) : TracerouteRepository {
     override fun trace(
         host: String,
@@ -122,6 +126,7 @@ class IcmpEnginTracerouteRepositoryImpl(
                     } catch (_: LinkageError) {
                         throw NativeTracerouteUnavailableException()
                     }
+                val deviceAddresses = localAddresses()
                 operationSession.concurrencyLimiter.withPermits(nativeConcurrency) {
                     nativeFlow
                         .catch { failure ->
@@ -129,7 +134,8 @@ class IcmpEnginTracerouteRepositoryImpl(
                             throw failure
                         }.map { hop ->
                             hop.copy(resolvedDestinationIp = resolvedHost.takeIf(String::isNotBlank))
-                        }.collect { hop ->
+                        }.untilTraceFinishes(deviceAddresses)
+                        .collect { hop ->
                             currentCoroutineContext().ensureActive()
                             operationSession.budget.throwIfExpired()
                             this@channelFlow.send(hop)
@@ -138,6 +144,22 @@ class IcmpEnginTracerouteRepositoryImpl(
             }
         }.flowOn(dispatcher)
 }
+
+/**
+ * Passes hops until [TracerouteStopPolicy] says the trace is finished (destination reached, or every
+ * reply came from this device). Probes already in flight for later TTLs are dropped here.
+ */
+private fun Flow<HopResult>.untilTraceFinishes(deviceAddresses: Set<String>): Flow<HopResult> =
+    flow {
+        val observed = mutableListOf<HopResult>()
+        emitAll(
+            transformWhile { hop ->
+                observed += hop
+                emit(hop)
+                TracerouteStopPolicy.stopAfter(observed, deviceAddresses) == null
+            },
+        )
+    }
 
 /** Stable failure when the bounded hostname lookup reaches its independent time limit. */
 class TracerouteHostResolutionTimeoutException : Exception("Hostname lookup timed out")

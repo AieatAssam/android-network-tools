@@ -151,6 +151,12 @@ class HttpProbeViewModel @Inject constructor(
     private var activeReplayDecision: ActiveReplayDecision? = null
     private var operationSession: OperationSession? = null
 
+    /**
+     * Set by Cancel for the current request. Once it is set, whatever the call returns (a result,
+     * an error such as a timeout, or a cancellation) the request ends as canceled, not as that outcome.
+     */
+    private var userStopRequested = false
+
     init {
         if (savedStateHandle.get<Boolean>(HANDOFF_CONSUMED_KEY) != true) {
             // NavBackStackEntry arguments remain present after recreation. Snapshot the
@@ -300,6 +306,7 @@ class HttpProbeViewModel @Inject constructor(
         val runId = UUID.randomUUID().toString()
         val session = HttpProbeOperation.newInteractiveSession()
         operationSession = session
+        userStopRequested = false
 
         viewModelScope.launch {
             val headers = state.customHeaders
@@ -347,6 +354,7 @@ class HttpProbeViewModel @Inject constructor(
                 )
 
                 _uiState.update { current ->
+                    if (userStopRequested) return@update current.canceled()
                     when (result) {
                         is NetworkResult.Success -> current.copy(
                             isLoading = false,
@@ -379,15 +387,8 @@ class HttpProbeViewModel @Inject constructor(
                     }
                 }
             } catch (e: CancellationException) {
-                if (session.cancellationReason == CancellationReason.USER_STOP) {
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            isCanceling = false,
-                            isCanceled = true,
-                            pendingEntityReplayApproval = null,
-                        )
-                    }
+                if (userStopRequested || session.cancellationReason == CancellationReason.USER_STOP) {
+                    _uiState.update { it.canceled() }
                 }
                 throw e
             } catch (e: Exception) {
@@ -411,10 +412,24 @@ class HttpProbeViewModel @Inject constructor(
     }
 
     fun cancel() {
-        if (!_uiState.value.isLoading || _uiState.value.isCanceling || operationSession == null) return
+        val state = _uiState.value
+        if (!state.isLoading || state.isCanceling) return
+        userStopRequested = true
         _uiState.update { it.copy(isCanceling = true) }
         cancelRequest(CancellationReason.USER_STOP)
     }
+
+    private fun HttpProbeUiState.canceled(): HttpProbeUiState =
+        copy(
+            isLoading = false,
+            isCanceling = false,
+            isCanceled = true,
+            result = null,
+            error = null,
+            errorInfo = null,
+            blockedRedirectWarning = null,
+            pendingEntityReplayApproval = null,
+        )
 
     private fun cancelRequest(reason: CancellationReason) {
         operationSession?.let { session ->

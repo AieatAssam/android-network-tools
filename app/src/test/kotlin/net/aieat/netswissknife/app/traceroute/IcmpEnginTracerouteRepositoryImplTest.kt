@@ -163,6 +163,56 @@ class IcmpEnginTracerouteRepositoryImplTest {
         }
 
     @Test
+    fun `trace stops at the first hop where the destination replied and drops later duplicates`() =
+        runBlocking {
+            val repository =
+                IcmpEnginTracerouteRepositoryImpl(
+                    nativeTraceFactory = { _, _, _, _, _, _, _ ->
+                        flow {
+                            (1..10).forEach { emit(HopResult(it, "192.0.2.$it", null, 3L, HopStatus.SUCCESS)) }
+                            emit(HopResult(11, "1.1.1.1", null, 21L, HopStatus.SUCCESS, destinationReached = true))
+                            // Probes already in flight for later TTLs must not reach the user.
+                            emit(HopResult(12, "1.1.1.1", null, 21L, HopStatus.SUCCESS, destinationReached = true))
+                            emit(HopResult(13, "1.1.1.1", null, 21L, HopStatus.SUCCESS, destinationReached = true))
+                        }
+                    },
+                    hostResolver = TracerouteHostResolver { _, _ -> "1.1.1.1" },
+                )
+
+            val hops =
+                withTimeout(5_000) {
+                    repository.trace("1.1.1.1", 30, 500, 1, TracerouteProbeType.ICMP, 56).toList()
+                }
+
+            assertEquals((1..11).toList(), hops.map { it.hopNumber })
+            assertTrue(hops.last().destinationReached)
+        }
+
+    @Test
+    fun `replies that all come from this device stop the trace early as unreachable`() =
+        runBlocking {
+            val device = "10.109.208.146"
+            val repository =
+                IcmpEnginTracerouteRepositoryImpl(
+                    nativeTraceFactory = { _, _, _, _, _, _, _ ->
+                        flow {
+                            (1..30).forEach { emit(HopResult(it, device, null, 3_000L, HopStatus.SUCCESS)) }
+                        }
+                    },
+                    hostResolver = TracerouteHostResolver { _, _ -> "10.109.208.250" },
+                    localAddresses = { setOf(device) },
+                )
+
+            val hops =
+                withTimeout(5_000) {
+                    repository.trace("10.109.208.250", 30, 3_000, 1, TracerouteProbeType.ICMP, 56).toList()
+                }
+
+            assertEquals(2, hops.size)
+            assertTrue(hops.none { it.destinationReached })
+        }
+
+    @Test
     fun `resolved destination stays available when final hop times out`() =
         runBlocking {
             val repository =
