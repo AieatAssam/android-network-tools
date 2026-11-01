@@ -554,7 +554,8 @@ work_packages:
         - "MAC Lookup: FF:FF:FF:FF:FF:FF still shows Not applicable; four notations of one MAC still merge (regression from WP19)"
   - id: WP23
     title: Final device spot-check of WP22
-    status: todo
+    status: dropped
+    notes: "Superseded by VERIFY-4 and the WP24 device acceptance loop."
   - id: WP24
     title: Focus sink stops the keyboard reopening on API<28; one dismissal helper app-wide; status-bar inset (VERIFY-4 V-15); V-13 closure
     status: done
@@ -598,3 +599,16 @@ work_packages:
         - "KeyboardDismissTest is compile-only (see red_green)."
         - "TalkBack: the sink was not checked with TalkBack on the tablet. Its semantics are cleared in code and asserted in KeyboardDismissTest only (not run)."
       no_change_needed: []
+  - id: WP25
+    title: Keep tool state across Back/forward; restore field focus on rotation with IME open
+    status: todo
+    findings: [WP15-deferred, WP24-caveat-1]
+    notes: "(1) DNS, Traceroute, WHOIS, Subnet Calculator, Wake-on-LAN, HTTP Probe forms and last results survive Back/forward via the existing ToolSessionMemory (never secrets); (2) Ping Advanced sliders (count, timeout, payload, TTL, interval) persist across return; (3) WoL saved-device name field restored; (4) with the IME open while typing, rotation should reopen the keyboard on the same field (WP24 closes it): save focused-field id via rememberSaveable and request focus for that field only when the IME was open."
+  - id: WP26
+    title: Result export and copy parity (Traceroute, DNS, Port Scanner, WHOIS, HTTP Probe, TLS, Wi-Fi)
+    status: todo
+    findings: [A:TR-08, A:DNS-08, A:PING-09, D:GAP-01]
+    notes: "Every tool with a result gets Copy and Share of a plain-text summary (Subnet, mDNS, Network Info, MAC Lookup, Ping and LAN already have some). Pure formatters in core modules with tests; copy feedback via the shared toast/snackbar pattern; strings in strings.xml; README updated per tool."
+  - id: WP27
+    title: Final verification (device) of WP25-WP26
+    status: todo
