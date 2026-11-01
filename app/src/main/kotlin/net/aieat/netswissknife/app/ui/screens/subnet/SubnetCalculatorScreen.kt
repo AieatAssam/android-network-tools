@@ -67,7 +67,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
@@ -91,6 +90,7 @@ import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
 import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.components.ToolTextField
 import net.aieat.netswissknife.app.ui.components.hapticAction
+import net.aieat.netswissknife.app.ui.components.rememberDismissKeyboard
 import net.aieat.netswissknife.app.ui.i18n.ErrorTextMapper
 import net.aieat.netswissknife.app.ui.i18n.asString
 import net.aieat.netswissknife.app.ui.theme.AppMotion
@@ -244,9 +244,9 @@ private fun SubnetCidrInputs(
     onExampleSelected: (String) -> Unit,
     canCalculate: Boolean
 ) {
-    val focusManager = LocalFocusManager.current
+    val dismissKeyboard = rememberDismissKeyboard()
     val submit: () -> Unit = {
-        focusManager.clearFocus()
+        dismissKeyboard()
         onCalculate()
     }
 
@@ -264,7 +264,7 @@ private fun SubnetCidrInputs(
         )
 
         Button(
-            onClick = hapticAction(onCalculate),
+            onClick = hapticAction(submit),
             modifier = Modifier.fillMaxWidth(),
             enabled = canCalculate
         ) {
@@ -288,9 +288,9 @@ private fun SubnetRangeInputs(
     onCalculate: () -> Unit,
     canCalculate: Boolean
 ) {
-    val focusManager = LocalFocusManager.current
+    val dismissKeyboard = rememberDismissKeyboard()
     val submit: () -> Unit = {
-        focusManager.clearFocus()
+        dismissKeyboard()
         onCalculate()
     }
 
@@ -319,7 +319,7 @@ private fun SubnetRangeInputs(
         )
 
         Button(
-            onClick = hapticAction(onCalculate),
+            onClick = hapticAction(submit),
             modifier = Modifier.fillMaxWidth(),
             enabled = canCalculate
         ) {

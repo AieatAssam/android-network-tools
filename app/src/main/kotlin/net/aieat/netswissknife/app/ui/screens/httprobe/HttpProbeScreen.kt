@@ -83,7 +83,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
@@ -122,6 +121,7 @@ import net.aieat.netswissknife.app.ui.theme.StatusWarnDeep
 import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.RecentHostsRow
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
+import net.aieat.netswissknife.app.ui.components.rememberDismissKeyboard
 import net.aieat.netswissknife.app.util.formatBytes
 import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.core.network.httprobe.HttpMethod
@@ -494,7 +494,7 @@ private fun HttpProbeInputCard(
     onRemoveRecentHost: (String) -> Unit,
     onClearRecentHosts: () -> Unit
 ) {
-    val focusManager = LocalFocusManager.current
+    val dismissKeyboard = rememberDismissKeyboard()
     val url = uiState.url
     val formEnabled = !uiState.isLoading
     val urlValidationError = if (url.isNotBlank()) validateHttpProbeUrlInfo(url) else null
@@ -531,7 +531,7 @@ private fun HttpProbeInputCard(
                     imeAction = ImeAction.Done
                 ),
                 keyboardActions = KeyboardActions(onDone = {
-                    focusManager.clearFocus()
+                    dismissKeyboard()
                     onSend()
                 })
             )
@@ -710,7 +710,7 @@ private fun HttpProbeInputCard(
             ) {
                 Button(
                     onClick = hapticAction {
-                        focusManager.clearFocus()
+                        dismissKeyboard()
                         onSend()
                     },
                     enabled = uiState.url.isNotBlank() && !uiState.isLoading && !isUrlInvalid,

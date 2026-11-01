@@ -68,7 +68,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.background
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
@@ -93,6 +92,7 @@ import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.RecentHostsRow
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
+import net.aieat.netswissknife.app.ui.components.rememberDismissKeyboard
 import net.aieat.netswissknife.app.ui.theme.StatusBlue
 import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.app.ui.theme.StatusGood
@@ -311,7 +311,7 @@ private fun TlsInputSection(
     onRemoveRecentHost: (String) -> Unit,
     onClearRecentHosts: () -> Unit
 ) {
-    val focusManager = LocalFocusManager.current
+    val dismissKeyboard = rememberDismissKeyboard()
     val protocolToggleLabel = stringResource(R.string.tls_probe_protocols_label)
     val normalizedHost = HostValidator.normalize(host)
     val isHostInvalid = host.isNotBlank() && normalizedHost == null
@@ -369,7 +369,7 @@ private fun TlsInputSection(
                 ),
                 keyboardActions = KeyboardActions(
                     onDone = {
-                        focusManager.clearFocus()
+                        dismissKeyboard()
                         if (!isLoading && normalizedHost != null && isPortValid) onInspect()
                     }
                 )
@@ -417,7 +417,7 @@ private fun TlsInputSection(
             ) {
                 Button(
                     onClick   = hapticAction {
-                        focusManager.clearFocus()
+                        dismissKeyboard()
                         onInspect()
                     },
                     enabled   = normalizedHost != null && isPortValid && !isLoading,

@@ -96,7 +96,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.pluralStringResource
@@ -131,6 +130,7 @@ import net.aieat.netswissknife.app.ui.screens.dns.DnsUiState
 import net.aieat.netswissknife.app.ui.screens.dns.DnsViewModel
 import net.aieat.netswissknife.app.ui.screens.dns.dnsRecordIconLabel
 import net.aieat.netswissknife.app.ui.components.messageRes
+import net.aieat.netswissknife.app.ui.components.rememberDismissKeyboard
 import net.aieat.netswissknife.app.ui.components.scrollEdgeFade
 import net.aieat.netswissknife.core.network.HostProblem
 import net.aieat.netswissknife.core.network.dns.DnsNameValidator
@@ -376,7 +376,7 @@ private fun DnsInputCard(
     onClearRecentHosts: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val keyboardController = LocalSoftwareKeyboardController.current
+    val dismissKeyboard = rememberDismissKeyboard()
 
     val isBusy = isLoading || isCanceling
     val isCustomServerValid = selectedServer !is DnsServer.Custom || customServerAddress.trim().let {
@@ -417,7 +417,7 @@ private fun DnsInputCard(
                 ),
                 keyboardActions = KeyboardActions(
                     onSearch = {
-                        keyboardController?.hide()
+                        dismissKeyboard()
                         if (!isBusy && canLookup) onLookup()
                     }
                 ),
@@ -646,7 +646,7 @@ private fun DnsServerSelector(
     enabled: Boolean
 ) {
     var expanded by remember { mutableStateOf(false) }
-    val keyboardController = LocalSoftwareKeyboardController.current
+    val dismissKeyboard = rememberDismissKeyboard()
 
     // Text shown in the field: preset display name, or the typed custom address.
     val fieldValue = if (selectedServer is DnsServer.Custom) customServerAddress
@@ -724,7 +724,7 @@ private fun DnsServerSelector(
                     onClick = {
                         onServerChange(server)
                         expanded = false
-                        keyboardController?.hide()
+                        dismissKeyboard()
                     },
                     contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
                 )

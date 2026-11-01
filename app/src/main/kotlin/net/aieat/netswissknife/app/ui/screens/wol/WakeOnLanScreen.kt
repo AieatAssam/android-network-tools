@@ -60,7 +60,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -82,6 +81,7 @@ import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
 import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.components.ToolTextField
 import net.aieat.netswissknife.app.ui.components.hapticAction
+import net.aieat.netswissknife.app.ui.components.rememberDismissKeyboard
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
 import net.aieat.netswissknife.app.ui.i18n.ErrorTextMapper
 import net.aieat.netswissknife.app.ui.i18n.asString
@@ -301,7 +301,7 @@ private fun WolInputCard(
     onPortChange: (String) -> Unit,
     onSend: () -> Unit,
 ) {
-    val focusManager = LocalFocusManager.current
+    val dismissKeyboard = rememberDismissKeyboard()
     var showAdvanced by remember { mutableStateOf(false) }
     // A problem in a hidden field would leave Send disabled with no visible reason; open the panel.
     val advancedInvalid = broadcastProblem != null || portInvalid
@@ -417,7 +417,7 @@ private fun WolInputCard(
             Button(
                 onClick =
                     hapticAction {
-                        focusManager.clearFocus()
+                        dismissKeyboard()
                         onSend()
                     },
                 enabled = canSend,

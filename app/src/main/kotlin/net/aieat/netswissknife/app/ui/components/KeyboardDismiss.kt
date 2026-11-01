@@ -1,77 +1,78 @@
 package net.aieat.netswissknife.app.ui.components
 
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
-import androidx.compose.runtime.withFrameNanos
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusManager
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.platform.LocalWindowInfo
-import kotlinx.coroutines.flow.first
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.unit.dp
+
+/** Focus target that takes focus when no text field should. Provided by [FocusSinkHost]. */
+val LocalFocusSink = compositionLocalOf<FocusRequester?> { null }
 
 /**
- * Returns an action that drops focus and hides the soft keyboard.
+ * Wraps the activity content in a 1dp invisible focus target placed first in traversal order.
  *
- * The dismissal runs twice: once immediately, and again after the composition that follows the
- * caller's state update. A focus change or IME request made during the same input event (a tap on
- * a trailing icon, a button click that also triggers a state change) can otherwise put the field
- * back in focus after the immediate call, which reopens the keyboard over the results.
+ * Why it exists: on Android 8.0 and 8.1 (API 26-27) the framework does not keep focus where Compose
+ * leaves it. When the window regains focus, or after the activity is recreated, the framework hands
+ * focus to the first focusable view of the window. Compose's [FocusManager.clearFocus] is also
+ * undone by that re-grant, so the first text field on screen (the DNS domain, the Port Scanner port
+ * field) took focus back and reopened the soft keyboard. From API 28 the framework leaves focus
+ * alone and the problem does not occur.
+ *
+ * With the sink first, that re-grant lands on the sink, not on a text field. The sink has no
+ * semantics (TalkBack does not see it) and no indication (no focus highlight), so it is invisible.
+ */
+@Composable
+@Suppress("FunctionNaming", "ktlint:standard:function-naming")
+fun FocusSinkHost(content: @Composable () -> Unit) {
+    val sink = remember { FocusRequester() }
+    CompositionLocalProvider(LocalFocusSink provides sink) {
+        Box {
+            Box(
+                Modifier
+                    .size(1.dp)
+                    .focusRequester(sink)
+                    .focusable()
+                    .clearAndSetSemantics {},
+            )
+            content()
+        }
+    }
+}
+
+/** Moves focus to the sink so no text field keeps it; clears focus when no sink is provided. */
+private fun moveFocusToSink(
+    focusManager: FocusManager,
+    sink: FocusRequester?,
+) {
+    val moved = runCatching { sink?.requestFocus() }.getOrNull() == true
+    if (!moved) focusManager.clearFocus()
+}
+
+/**
+ * Returns the single app-wide keyboard dismissal: it moves focus to the [FocusSinkHost] sink and
+ * hides the soft keyboard. Use it for every "done" action (Look up, Scan, Start, Clear, a recent
+ * chip) instead of calling clearFocus() or keyboard.hide() directly, so the focus and IME behaviour
+ * stays the same on every API level.
  */
 @Composable
 fun rememberDismissKeyboard(): () -> Unit {
     val focusManager = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
-    var pendingRequests by remember { mutableIntStateOf(0) }
-    LaunchedEffect(pendingRequests) {
-        if (pendingRequests > 0) {
-            focusManager.clearFocus()
-            keyboard?.hide()
-        }
-    }
-    return {
-        focusManager.clearFocus()
-        keyboard?.hide()
-        pendingRequests++
-    }
-}
-
-/**
- * Keeps the keyboard closed when the activity is recreated (rotation, dark mode, font scale) while
- * it was closed before. The framework restores focus to the field the user last edited, and that
- * focus request opens the keyboard over the screen. If the keyboard was open at the time of the
- * change, the user was typing, so it is left alone.
- *
- * Place once at the root of the activity content.
- */
-@Composable
-@Suppress("FunctionNaming", "ktlint:standard:function-naming")
-fun RecreatedKeyboardGuard() {
-    val density = LocalDensity.current
-    val imeVisible = WindowInsets.ime.getBottom(density) > 0
-    val focusManager = LocalFocusManager.current
-    val keyboard = LocalSoftwareKeyboardController.current
-    val windowInfo = LocalWindowInfo.current
-    // Saved with the activity: whether the keyboard was open the last time the content was shown.
-    var imeOpenBeforeRecreation by rememberSaveable { mutableStateOf(false) }
-    // Read once, before the effect below writes the current value, so the restored value is kept.
-    val openBeforeRecreation = remember { imeOpenBeforeRecreation }
-    LaunchedEffect(imeVisible) { imeOpenBeforeRecreation = imeVisible }
-    LaunchedEffect(Unit) {
-        if (!openBeforeRecreation) {
-            // Focus comes back with the window: wait for it, then let one frame pass so the
-            // restored focus is cleared after it has been applied.
-            snapshotFlow { windowInfo.isWindowFocused }.first { it }
-            withFrameNanos { }
-            focusManager.clearFocus()
+    val sink = LocalFocusSink.current
+    return remember(focusManager, keyboard, sink) {
+        {
+            moveFocusToSink(focusManager, sink)
             keyboard?.hide()
         }
     }

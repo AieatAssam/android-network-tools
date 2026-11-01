@@ -30,7 +30,6 @@ import androidx.compose.ui.input.pointer.*
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringArrayResource
@@ -56,6 +55,7 @@ import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
 import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.components.ToolTextField
 import net.aieat.netswissknife.app.ui.components.messageRes
+import net.aieat.netswissknife.app.ui.components.rememberDismissKeyboard
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.ui.theme.AppShapes
@@ -174,7 +174,7 @@ private fun TopologyScreenContent(
         } else {
             null
         }
-    val keyboard = LocalSoftwareKeyboardController.current
+    val dismissKeyboard = rememberDismissKeyboard()
     val canStartDiscovery =
         !isInProgress && normalizedTargetIp != null &&
             !(v3PrivProto != V3PrivProtocol.NONE && v3AuthProto == V3AuthProtocol.NONE)
@@ -375,7 +375,7 @@ private fun TopologyScreenContent(
                             keyboardActions =
                                 KeyboardActions(
                                     onDone = {
-                                        keyboard?.hide()
+                                        dismissKeyboard()
                                         startDiscoveryIfReady()
                                     },
                                 ),

@@ -95,7 +95,6 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringArrayResource
@@ -129,6 +128,7 @@ import net.aieat.netswissknife.app.ui.components.ToolStopButton
 import net.aieat.netswissknife.app.ui.components.ToolTextField
 import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.ui.components.messageRes
+import net.aieat.netswissknife.app.ui.components.rememberDismissKeyboard
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
 import net.aieat.netswissknife.app.ui.i18n.asString
 import net.aieat.netswissknife.app.ui.i18n.uiText
@@ -227,7 +227,7 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
         label = "screen-alpha",
     )
 
-    val keyboardController = LocalSoftwareKeyboardController.current
+    val dismissKeyboard = rememberDismissKeyboard()
     val clipboard = LocalClipboard.current
     val clipScope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -294,7 +294,7 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
                 onConcurrencyChange = viewModel::onConcurrencyChange,
                 onAggressiveProbesChange = viewModel::onAggressiveProbesChange,
                 onStartScan = {
-                    keyboardController?.hide()
+                    dismissKeyboard()
                     requestLocalNetworkPermission(host)
                 },
                 onStopScan = viewModel::onStopScan,

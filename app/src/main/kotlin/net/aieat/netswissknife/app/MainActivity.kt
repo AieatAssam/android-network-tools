@@ -7,6 +7,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
@@ -35,7 +36,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import dagger.hilt.android.AndroidEntryPoint
 import net.aieat.netswissknife.app.ui.components.AdaptiveContentBounds
-import net.aieat.netswissknife.app.ui.components.RecreatedKeyboardGuard
+import net.aieat.netswissknife.app.ui.components.FocusSinkHost
 import net.aieat.netswissknife.app.ui.navigation.AppNavHost
 import net.aieat.netswissknife.app.ui.navigation.AppNavigationViewModel
 import net.aieat.netswissknife.app.ui.navigation.MoreToolsSheet
@@ -73,9 +74,10 @@ class MainActivity : ComponentActivity() {
                     else -> isSystemInDarkTheme()
                 }
             NetSwissKnifeTheme(darkTheme = darkTheme, dynamicColor = dynamicColor) {
-                RecreatedKeyboardGuard()
-                val navController = rememberNavController()
-                NetSwissKnifeApp(navController)
+                FocusSinkHost {
+                    val navController = rememberNavController()
+                    NetSwissKnifeApp(navController)
+                }
             }
         }
     }
@@ -94,15 +96,17 @@ fun NetSwissKnifeApp(navController: NavHostController) {
     val windowAdaptiveInfo = currentWindowAdaptiveInfoV2()
     val layoutType = NavigationSuiteScaffoldDefaults.calculateFromAdaptiveInfo(windowAdaptiveInfo)
     // The app draws edge-to-edge (setDecorFitsSystemWindows(false)), so adjustResize no longer
-    // lifts content above the keyboard and the system nav bar is not reserved for us. Pad the
-    // content by the larger of the two: the nav bar when a rail is shown (no bottom bar to
-    // absorb it) and the IME while a text field is focused. union() takes the max per edge,
-    // so the keyboard inset (which also spans the nav bar) is not double counted.
+    // lifts content above the keyboard, and neither the system nav bar nor the status bar is
+    // reserved for us. Pad the content by the status bar (top) and by the larger of the nav bar
+    // (when a rail is shown, with no bottom bar to absorb it) and the IME while a text field is
+    // focused. union() takes the max per edge, so the keyboard inset, which also spans the nav
+    // bar, is not double counted. Without the status bar inset, scrolled content (for example the
+    // DNS record-type chips in landscape, VERIFY-4 V-15) ran under the clock and battery icons.
     val contentInsets =
         if (layoutType == NavigationSuiteType.NavigationRail) {
-            WindowInsets.navigationBars.union(WindowInsets.ime)
+            WindowInsets.navigationBars.union(WindowInsets.ime).union(WindowInsets.statusBars)
         } else {
-            WindowInsets.ime
+            WindowInsets.ime.union(WindowInsets.statusBars)
         }
     NavigationSuiteScaffold(
         layoutType = layoutType,

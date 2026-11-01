@@ -26,7 +26,6 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
@@ -36,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.ToolTextField
 import net.aieat.netswissknife.app.ui.components.hapticAction
+import net.aieat.netswissknife.app.ui.components.rememberDismissKeyboard
 import net.aieat.netswissknife.app.ui.i18n.ErrorTextMapper
 import net.aieat.netswissknife.app.ui.i18n.asString
 import net.aieat.netswissknife.core.network.NetworkResult
@@ -53,7 +53,7 @@ internal fun SubnetSplitCard(
     onInputChange: (String) -> Unit,
     onSplit: () -> Unit,
 ) {
-    val focusManager = LocalFocusManager.current
+    val dismissKeyboard = rememberDismissKeyboard()
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -69,7 +69,7 @@ internal fun SubnetSplitCard(
                 input = input,
                 onInputChange = onInputChange,
                 onDone = {
-                    focusManager.clearFocus()
+                    dismissKeyboard()
                     onSplit()
                 },
             )

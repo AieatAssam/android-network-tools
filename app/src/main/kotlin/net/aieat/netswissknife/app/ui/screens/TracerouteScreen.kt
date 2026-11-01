@@ -102,6 +102,7 @@ import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
 import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
 import net.aieat.netswissknife.app.ui.components.ToolErrorCard
 import net.aieat.netswissknife.app.ui.components.ToolTextField
+import net.aieat.netswissknife.app.ui.components.rememberDismissKeyboard
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
 import net.aieat.netswissknife.app.ui.components.ToolStopButton
 import net.aieat.netswissknife.app.ui.components.hapticAction
@@ -112,7 +113,6 @@ import net.aieat.netswissknife.app.ui.theme.StatusGood
 import net.aieat.netswissknife.app.ui.theme.StatusLime
 import net.aieat.netswissknife.app.ui.theme.StatusUnknown
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
@@ -383,7 +383,7 @@ private fun TracerouteInputCard(
     onRemoveRecentHost: (String) -> Unit,
     onClearRecentHosts: () -> Unit
 ) {
-    val keyboard = LocalSoftwareKeyboardController.current
+    val dismissKeyboard = rememberDismissKeyboard()
     val mtuDiscovery = packetSize == 0
     val normalizedHost = HostValidator.normalize(host)
     // Blank input is not an error yet; a non-blank host gets a specific reason when it is invalid.
@@ -418,7 +418,7 @@ private fun TracerouteInputCard(
                 modifier      = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
                 keyboardActions = KeyboardActions(onGo = {
-                    keyboard?.hide()
+                    dismissKeyboard()
                     if (!isBusy && canStart) onStart()
                 })
             )
@@ -540,7 +540,7 @@ private fun TracerouteInputCard(
                 }
             } else {
                 Button(
-                    onClick  = hapticAction { keyboard?.hide(); onStart() },
+                    onClick  = hapticAction { dismissKeyboard(); onStart() },
                     enabled  = canStart && !isBusy,
                     modifier = Modifier.fillMaxWidth()
                 ) {

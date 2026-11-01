@@ -537,6 +537,8 @@ work_packages:
       not_reproduced:
         - "VERIFY-3:V-13 (HTTP Probe attempt 1): no ordering inside the ViewModel shows a timeout while the cancel flag is unset after cancel() has run; every result path checks it. Either the timeout came before the tap, or cancel() was never called (the tap missed the Cancel button, which sits in the right half of the row while loading). VERIFY-3 has no tap timing or logcat for attempt 1, so this cannot be decided from the evidence. WP23 must record tap coordinates and timing."
       no_change_needed: []
+      closed_as_unproven:
+        - "VERIFY-3:V-13 and VERIFY-4:V-16 (HTTP Probe Cancel): NOT REPRODUCIBLE, closed as unproven in WP24. VERIFY-4 ran 19 of 19 controlled attempts (Cancel 0 s to 5 s after Send, after rotation, after the IME was closed with Back, with the IME closed); every one ended 'Request canceled'. The single failure, VERIFY-4 W0, was an uncontrolled warm-up: Send and Cancel were in separate commands, so the tap timing was never recorded, and logcat shows no cancel evidence. Its screenshot shows a genuine 'The network request timed out.' from the NetworkResult.Error path. The WP20/WP22 ViewModel hardening (cancel-ordering and exception-after-cancel handling) is kept. Re-open only if the failure recurs with Cancel tap timing and logcat recorded."
       deferred:
         - "VERIFY-3:V-11 device result: if the root guard is not enough on device, the next step is a focus-clearing guard closer to the field that was restored (not built)."
         - "VERIFY-3:V-13 logging on the cancel path: not added. The brief asked for logging-free tests and no device logging was added in this WP. Tap timing and logcat are needed on the device."
@@ -553,3 +555,46 @@ work_packages:
   - id: WP23
     title: Final device spot-check of WP22
     status: todo
+  - id: WP24
+    title: Focus sink stops the keyboard reopening on API<28; one dismissal helper app-wide; status-bar inset (VERIFY-4 V-15); V-13 closure
+    status: done
+    findings: [VERIFY-4:V-14, VERIFY-4:V-15, VERIFY-4:V-16, VERIFY-3:V-13, VERIFY-3:V-07-wifi-clear-keyboard, VERIFY-3:V-01-mac-lookup-keyboard, VERIFY-3:V-11]
+    scope: >
+      Keep the FocusSinkHost change (the root cause on API 26-27 is the framework re-granting focus to the
+      first focusable view). Make it the one keyboard mechanism: rememberDismissKeyboard() moves focus to the
+      sink and hides the IME, and every dismissal in app/src/main uses it. Remove the stacked workarounds
+      (RecreatedKeyboardGuard and the delayed second dismissal) if the device checks still pass. Reserve the
+      status-bar inset (V-15). Close HTTP Probe V-13 as unproven.
+    result:
+      status: done
+      commit: "recorded by git log: fix(ui): focus sink stops the keyboard reopening on API<28 (WP24) (this block is part of it)"
+      gates: "./gradlew test (BUILD SUCCESSFUL); ktlintCheck detekt (green after the code was final); :app:assembleDebug; :app:compileDebugAndroidTestKotlin; :core-network:koverVerify; :core-domain:koverVerify; :app:koverVerify (all BUILD SUCCESSFUL). :app:ktlintGenerateBaseline was run after the code changes: app baseline 5246 entries before and after, no (file, rule) count increased versus HEAD; the diff is line shifts. The new code has no ktlint findings and no baseline entries were added for it. ktlintFormat not used. Gradle was run one invocation at a time in the foreground."
+      red_green: "The sink is a Compose focus mechanism, not pure logic, so no RED test was written first. KeyboardDismissTest (androidTest) covers the helper: focus leaves the field, hide() is called, show() is never requested, and no node is focused in the semantics tree. It compiles (compileDebugAndroidTestKotlin) but was NOT executed: device instrumented runs were outside this WP's rules. Run it before relying on its semantics assertions."
+      root_cause: "Android 8.0 and 8.1 (API 26-27), confirmed on device by the orchestrator: when the window regains focus or the activity is recreated, the framework gives focus to the first focusable view, undoing Compose clearFocus(). With the 1dp FocusSinkHost first in traversal, that focus lands on the sink, not a text field. From API 28 the framework leaves focus alone."
+      fixed:
+        - "Keyboard reopening (VERIFY-3 V-11, VERIFY-3 V-07, VERIFY-3 V-01, VERIFY-4 V-14): FocusSinkHost wraps the activity content in MainActivity. The sink has no semantics (clearAndSetSemantics) and no indication (no focus highlight). Device-verified on the final APK, see the table below."
+        - "Stacked workarounds removed: RecreatedKeyboardGuard (and its call in MainActivity) and the delayed second dismissal in rememberDismissKeyboard (the pendingRequests LaunchedEffect). Outcome of the experiment: every device check passed without them, so they were removed rather than kept."
+        - "One dismissal mechanism: rememberDismissKeyboard() is used by ToolTextField (Clear), MAC Lookup, DNS (Search action and the server menu), Ports, Ping, Traceroute, Topology, Subnet Calculator (Done and Calculate), Subnet membership and split cards, WoL, HTTP Probe, and TLS Inspector. No call site in app/src/main calls clearFocus() or keyboard.hide() directly any more."
+        - "Ping Start and Subnet Calculate now also dismiss the keyboard. Ping Start was below the visible area with the IME open (found by check f); it is brought into view when the IME opens, as DNS Look up and Port Scanner Scan already were."
+        - "VERIFY-4 V-15 (content under the status bar): MainActivity reserves the status-bar top inset with the nav-bar and IME insets (union per edge). This is app-wide, not DNS-only: every tool shares the same content padding, which had no top inset. Verified on DNS in landscape: the scrolled cards are clipped at the bottom of the status bar (dns_v15_after.png in the WP24 scratch folder), nothing runs under the clock or battery icons."
+        - "VERIFY-4 V-14 (Port Scanner shows the keyboard on entry): not reproduced on the final build. Check a (open from the rail, IME closed, no focused field) passed for Port Scanner. Not isolated separately; attributed to the same focus re-grant."
+        - "Subnet Calculate and Ping Start: onClick dismisses the keyboard (Subnet reuses its existing submit lambda, so the ktlint baseline does not grow)."
+      closed_as_unproven:
+        - "VERIFY-3:V-13 / VERIFY-4:V-16 (HTTP Probe Cancel): closed as unproven, see WP22 result.closed_as_unproven. The WP20/WP22 ViewModel hardening is kept. No code change in WP24."
+      device_acceptance: "Tablet U8BBB20806201256 (Android 8.0), debug APK built from this commit and installed with adb install -r. Checks are scripted with uiautomator dump (focused EditText nodes, labels) and dumpsys input_method (mInputShown). Each tool was opened from Home (fresh entry). Final restore: accelerometer_rotation 1, user_rotation 0, font_scale 1.0, night no, ACCESS_FINE_LOCATION revoked (verified). Some first-pass failures on the final APK were runner errors (Wi-Fi search field scrolled out of view; Subnet/MAC not found in the More sheet after the previous run); each was re-run after the runner was fixed, and the re-runs are the results below. Ping (g) failed once on the first pass with focus leaving the window after the first Tab; the re-run passed (6 tabs), the first-pass cause is not isolated."
+      device_checks:
+        - "a open, IME closed, no focused field: DNS PASS, Ports PASS, Subnet PASS, Ping PASS, Wi-Fi PASS, MAC PASS"
+        - "b rotate landscape and back with IME closed: stays closed (all six PASS)"
+        - "c dark mode on/off and font 1.3 with IME closed: stays closed (all six PASS)"
+        - "d Back after typing: IME hidden (all six PASS)"
+        - "d primary action hides IME: DNS Look up PASS, Ports Scan Ports PASS, Subnet Calculate PASS (after fix), Ping Start PASS (after fix), MAC Look up PASS; Wi-Fi has no action button (Clear is e)"
+        - "e Wi-Fi search Clear x3: PASS 3 of 3 (re-run)"
+        - "e MAC Look up x3 (three MACs), Paste from clipboard x3, recent select x3: PASS 9 of 9 (re-run)"
+        - "f IME open while typing, rotate: no crash, primary action visible: PASS for DNS, Ports, Subnet, Ping, Wi-Fi (no action), MAC. The IME closes on rotation in this case (see deferred)."
+        - "g hardware Tab (keyevent 61) reaches the first text field without trapping focus: DNS 7 Tabs, Ports 7, Subnet 9, Ping 6, Wi-Fi 9, MAC 7"
+        - "V-15 DNS landscape: content clipped at the status bar (screenshot dns_v15_after.png in the WP24 scratch folder)"
+      deferred:
+        - "IME open + rotation: the IME now closes and no field keeps focus (the sink takes the focus the framework re-grants on API 26-27, so the typed field loses focus). WP22 kept the IME open on this path only because the field was the first focusable view. Check f requires only no crash and a visible primary action, so it passes. A targeted restore of the field's focus when the IME was open before recreation is not built."
+        - "KeyboardDismissTest is compile-only (see red_green)."
+        - "TalkBack: the sink was not checked with TalkBack on the tablet. Its semantics are cleared in code and asserted in KeyboardDismissTest only (not run)."
+      no_change_needed: []
