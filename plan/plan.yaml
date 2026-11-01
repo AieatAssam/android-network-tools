@@ -630,3 +630,12 @@ work_packages:
   - id: WP27
     title: Final verification (device) of WP25-WP26
     status: todo
+  - id: WP28
+    title: LAN Scanner results summary card - readable and responsive
+    status: todo
+    findings: [USER-REPORT-2026-11-01]
+    notes: "User: 'lan scan results show unreadable summary on top of the table. ugly and does not scale right'. Suspects in lan/LanScanScreen.kt ~L1028-1170: title row with tiny duration, bodySmall subtitle, fixed-width SpaceEvenly StatChips with labelSmall 80%-alpha labels, three equal-weight buttons in one row. Screenshot first (portrait, landscape, font 1.3), then redesign."
+  - id: WP29
+    title: Decide on IME-open focus restore (fix or remove dead code from WP25 part 3)
+    status: todo
+
