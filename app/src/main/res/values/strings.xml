@@ -412,7 +412,14 @@
     <string name="lan_empty_body">No endpoints were confirmed during this scan. Inconclusive probe attempts may be available under diagnostics. Verify the network range and try increasing the timeout.</string>
     <string name="lan_stat_scanned">Scanned</string>
     <string name="lan_stat_alive">Confirmed</string>
-    <string name="lan_stat_subnet">Subnet</string>
+    <string name="lan_stat_subnet">Prefix</string>
+    <string name="lan_prefix_value_format">/%1$s</string>
+    <plurals name="lan_summary_headline_format">
+        <item quantity="one">%1$d host confirmed of %2$d scanned</item>
+        <item quantity="other">%1$d hosts confirmed of %2$d scanned</item>
+    </plurals>
+    <string name="lan_summary_meta_format">%1$s · %2$s</string>
+    <string name="lan_settings_detail_format">%1$s · %2$s</string>
     <string name="lan_show_diagnostics">Show uncertain probes (%1$d)</string>
     <string name="lan_hide_diagnostics">Hide uncertain probes</string>
     <string name="lan_diagnostic_entry">%1$s: %2$s%3$s</string>

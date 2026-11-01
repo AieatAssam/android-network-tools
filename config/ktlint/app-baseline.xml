@@ -2840,24 +2840,23 @@
     </file>
     <file name="src/main/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanScreen.kt">
         <error line="3" column="1" source="standard:import-ordering" />
-        <error line="157" column="5" source="standard:function-naming" />
-        <error line="545" column="13" source="standard:function-naming" />
-        <error line="557" column="13" source="standard:function-naming" />
-        <error line="725" column="13" source="standard:function-naming" />
-        <error line="753" column="13" source="standard:function-naming" />
-        <error line="786" column="13" source="standard:function-naming" />
-        <error line="846" column="13" source="standard:function-naming" />
-        <error line="870" column="13" source="standard:function-naming" />
-        <error line="933" column="41" source="standard:function-expression-body" />
-        <error line="938" column="13" source="standard:function-naming" />
-        <error line="1005" column="13" source="standard:function-naming" />
-        <error line="1284" column="13" source="standard:function-naming" />
-        <error line="1316" column="13" source="standard:function-naming" />
-        <error line="1372" column="13" source="standard:function-naming" />
-        <error line="1425" column="13" source="standard:function-naming" />
-        <error line="1683" column="13" source="standard:function-naming" />
-        <error line="1823" column="13" source="standard:function-naming" />
-        <error line="1854" column="13" source="standard:function-naming" />
+        <error line="163" column="5" source="standard:function-naming" />
+        <error line="551" column="13" source="standard:function-naming" />
+        <error line="563" column="13" source="standard:function-naming" />
+        <error line="741" column="13" source="standard:function-naming" />
+        <error line="769" column="13" source="standard:function-naming" />
+        <error line="802" column="13" source="standard:function-naming" />
+        <error line="862" column="13" source="standard:function-naming" />
+        <error line="901" column="13" source="standard:function-naming" />
+        <error line="964" column="41" source="standard:function-expression-body" />
+        <error line="969" column="13" source="standard:function-naming" />
+        <error line="1036" column="13" source="standard:function-naming" />
+        <error line="1416" column="13" source="standard:function-naming" />
+        <error line="1472" column="13" source="standard:function-naming" />
+        <error line="1525" column="13" source="standard:function-naming" />
+        <error line="1783" column="13" source="standard:function-naming" />
+        <error line="1923" column="13" source="standard:function-naming" />
+        <error line="1954" column="13" source="standard:function-naming" />
     </file>
     <file name="src/main/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanViewModel.kt">
         <error line="64" column="5" source="standard:function-signature" />

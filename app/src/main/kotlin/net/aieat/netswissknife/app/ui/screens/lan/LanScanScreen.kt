@@ -32,6 +32,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -41,6 +42,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -64,6 +66,8 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material3.Button
@@ -103,9 +107,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.pluralStringResource
@@ -705,13 +711,23 @@ private fun LanScanSettingsSummary(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text(
-                text = "$subnet · ${timeoutMs}ms · $concurrency",
-                style = MaterialTheme.typography.bodyMedium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = subnet,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text =
+                        stringResource(
+                            R.string.lan_settings_detail_format,
+                            stringResource(R.string.lan_timeout_label, timeoutMs),
+                            stringResource(R.string.lan_concurrency_label, concurrency),
+                        ),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             if (canExpand) {
                 TextButton(onClick = onExpand) {
                     Text(stringResource(R.string.lan_edit_settings))
@@ -847,21 +863,36 @@ private fun LanCancelingContent(summary: LanScanSummary) {
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            CircularProgressIndicator()
-            Text(stringResource(R.string.lan_canceling_title), style = MaterialTheme.typography.titleMedium)
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                StatChip(
-                    label = stringResource(R.string.lan_stat_scanned),
-                    value = summary.totalScanned.toString(),
-                )
-                StatChip(
-                    label = stringResource(R.string.lan_stat_alive),
-                    value = summary.aliveHosts.toString(),
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 3.dp)
+                Text(
+                    text = stringResource(R.string.lan_canceling_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
             }
+            LanStatGrid(
+                stats =
+                    listOf(
+                        LanStat(
+                            value = summary.totalScanned.toString(),
+                            label = stringResource(R.string.lan_stat_scanned),
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        ),
+                        LanStat(
+                            value = summary.aliveHosts.toString(),
+                            label = stringResource(R.string.lan_stat_alive),
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        ),
+                    ),
+            )
         }
     }
 }
@@ -1020,19 +1051,21 @@ private fun LanFinishedContent(
 ) {
     val context = LocalContext.current
     val shareSubject = stringResource(R.string.share_subject_lan, summary.subnet)
+    val prefixLength = summary.subnet.substringAfter("/")
     val filteredHosts =
         remember(summary.hosts, searchQuery, activeFilter) {
             filterLanHosts(summary.hosts, searchQuery, activeFilter)
         }
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        // Summary stats card
-        ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
+        // Summary card: status, then the headline count, then context, diagnostics and actions.
+        var entered by rememberSaveable { mutableStateOf(false) }
+        LaunchedEffect(Unit) { entered = true }
+        AnimatedVisibility(visible = entered, enter = fadeIn() + slideInVertically()) {
+            ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -1042,127 +1075,158 @@ private fun LanFinishedContent(
                             if (isCanceled) Icons.Default.Stop else Icons.Default.CheckCircle,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(22.dp),
+                            modifier = Modifier.size(24.dp),
                         )
                         Text(
                             text = title,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface,
                         )
                     }
-                    Text(
-                        text = stringResource(R.string.lan_duration_format, summary.scanDurationMs),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
 
-                subtitle?.let {
-                    Text(
-                        text = it,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-
-                if (summary.uncertainCount > 0) {
-                    TextButton(onClick = onToggleDiagnostics) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(
-                            if (showDiagnostics) {
-                                stringResource(R.string.lan_hide_diagnostics)
-                            } else {
-                                stringResource(R.string.lan_show_diagnostics, summary.uncertainCount)
-                            },
+                            text =
+                                pluralStringResource(
+                                    R.plurals.lan_summary_headline_format,
+                                    summary.aliveHosts,
+                                    summary.aliveHosts,
+                                    summary.totalScanned,
+                                ),
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface,
                         )
+                        Text(
+                            text =
+                                stringResource(
+                                    R.string.lan_summary_meta_format,
+                                    summary.subnet,
+                                    stringResource(R.string.lan_duration_format, summary.scanDurationMs),
+                                ),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        subtitle?.let {
+                            Text(
+                                text = it,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
-                    if (showDiagnostics) {
-                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            summary.uncertainHosts.forEach { diagnostic ->
-                                Text(
-                                    text =
-                                        stringResource(
-                                            R.string.lan_diagnostic_entry,
-                                            diagnostic.ip,
-                                            stringResource(diagnosticReasonLabel(diagnostic.reason)),
-                                            diagnostic.port
-                                                ?.let { stringResource(R.string.lan_diagnostic_port, it) }
-                                                .orEmpty(),
-                                        ),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                            if (summary.uncertainCount > summary.uncertainHosts.size) {
-                                Text(
-                                    text =
-                                        stringResource(
-                                            R.string.lan_diagnostics_truncated,
-                                            summary.uncertainHosts.size,
-                                            summary.uncertainCount,
-                                        ),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
+
+                    if (summary.uncertainCount > 0) {
+                        TextButton(
+                            onClick = onToggleDiagnostics,
+                            contentPadding = PaddingValues(horizontal = 0.dp),
+                        ) {
+                            Icon(
+                                imageVector =
+                                    if (showDiagnostics) {
+                                        Icons.Default.VisibilityOff
+                                    } else {
+                                        Icons.Default.Visibility
+                                    },
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                if (showDiagnostics) {
+                                    stringResource(R.string.lan_hide_diagnostics)
+                                } else {
+                                    stringResource(R.string.lan_show_diagnostics, summary.uncertainCount)
+                                },
+                            )
+                        }
+                        AnimatedVisibility(visible = showDiagnostics) {
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                summary.uncertainHosts.forEach { diagnostic ->
+                                    Text(
+                                        text =
+                                            stringResource(
+                                                R.string.lan_diagnostic_entry,
+                                                diagnostic.ip,
+                                                stringResource(diagnosticReasonLabel(diagnostic.reason)),
+                                                diagnostic.port
+                                                    ?.let { stringResource(R.string.lan_diagnostic_port, it) }
+                                                    .orEmpty(),
+                                            ),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                if (summary.uncertainCount > summary.uncertainHosts.size) {
+                                    Text(
+                                        text =
+                                            stringResource(
+                                                R.string.lan_diagnostics_truncated,
+                                                summary.uncertainHosts.size,
+                                                summary.uncertainCount,
+                                            ),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
                             }
                         }
                     }
-                }
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                ) {
-                    StatChip(
-                        label = stringResource(R.string.lan_stat_scanned),
-                        value = summary.totalScanned.toString(),
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    LanStatGrid(
+                        stats =
+                            listOf(
+                                LanStat(
+                                    value = summary.totalScanned.toString(),
+                                    label = stringResource(R.string.lan_stat_scanned),
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                ),
+                                LanStat(
+                                    value = summary.aliveHosts.toString(),
+                                    label = stringResource(R.string.lan_stat_alive),
+                                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                ),
+                                LanStat(
+                                    value = stringResource(R.string.lan_prefix_value_format, prefixLength),
+                                    label = stringResource(R.string.lan_stat_subnet),
+                                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                ),
+                            ),
                     )
-                    StatChip(
-                        label = stringResource(R.string.lan_stat_alive),
-                        value = summary.aliveHosts.toString(),
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    )
-                    StatChip(
-                        label = stringResource(R.string.lan_stat_subnet),
-                        value = summary.subnet.substringAfter("/") + " prefix",
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    )
-                }
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    FilledTonalButton(
-                        onClick = onRescan,
-                        modifier = Modifier.weight(1f),
-                    ) {
+                    // Rescan is the single primary action; Share and Clear wrap onto a
+                    // second line instead of squeezing into equal-width buttons.
+                    Button(onClick = onRescan, modifier = Modifier.fillMaxWidth()) {
                         Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(4.dp))
+                        Spacer(Modifier.width(8.dp))
                         Text(stringResource(R.string.lan_rescan_button))
                     }
-                    FilledTonalButton(
-                        onClick = {
-                            context.shareText(
-                                text = buildLanShareText(summary),
-                                subject = shareSubject,
-                            )
-                        },
-                        modifier = Modifier.weight(1f),
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(0.dp),
                     ) {
-                        Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text(stringResource(R.string.action_share))
-                    }
-                    FilledTonalButton(
-                        onClick = onClear,
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        Icon(Icons.Default.Clear, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text(stringResource(R.string.lan_clear_button))
+                        TextButton(
+                            onClick = {
+                                context.shareText(
+                                    text = buildLanShareText(summary),
+                                    subject = shareSubject,
+                                )
+                            },
+                            contentPadding = PaddingValues(horizontal = 0.dp),
+                        ) {
+                            Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(stringResource(R.string.action_share))
+                        }
+                        TextButton(onClick = onClear, contentPadding = PaddingValues(horizontal = 0.dp)) {
+                            Icon(Icons.Default.Clear, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(stringResource(R.string.lan_clear_button))
+                        }
                     }
                 }
             }
@@ -1280,31 +1344,67 @@ private fun diagnosticReasonLabel(reason: LanScanDiagnosticReason): Int =
         LanScanDiagnosticReason.TCP_UNKNOWN_FAILURE -> R.string.lan_diagnostic_tcp_unknown
     }
 
+private data class LanStat(
+    val value: String,
+    val label: String,
+    val containerColor: Color,
+    val contentColor: Color,
+)
+
+/**
+ * Stat tiles that wrap by available width and font scale (see [lanStatColumnCount]),
+ * so no tile is squeezed or truncated at phone width or large font.
+ */
 @Composable
-private fun StatChip(
-    label: String,
-    value: String,
-    containerColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.surfaceVariant,
-    contentColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onSurfaceVariant,
+@Suppress("FunctionNaming", "ktlint:standard:function-naming")
+private fun LanStatGrid(stats: List<LanStat>) {
+    val fontScale = LocalDensity.current.fontScale
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        val columns =
+            lanStatColumnCount(
+                availableWidthDp = maxWidth.value,
+                fontScale = fontScale,
+                statCount = stats.size,
+            )
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            lanStatRows(stats, columns).forEach { rowStats ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    rowStats.forEach { stat ->
+                        LanStatTile(stat = stat, modifier = Modifier.weight(1f))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+@Suppress("FunctionNaming", "ktlint:standard:function-naming")
+private fun LanStatTile(
+    stat: LanStat,
+    modifier: Modifier = Modifier,
 ) {
     Column(
         modifier =
-            Modifier
-                .clip(RoundedCornerShape(12.dp))
-                .background(containerColor)
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+            modifier
+                .clip(RoundedCornerShape(16.dp))
+                .background(stat.containerColor)
+                .padding(horizontal = 12.dp, vertical = 10.dp),
     ) {
         Text(
-            text = value,
-            style = MaterialTheme.typography.titleMedium,
+            text = stat.value,
+            style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
-            color = contentColor,
+            color = stat.contentColor,
         )
         Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = contentColor.copy(alpha = 0.8f),
+            text = stat.label,
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = FontWeight.Medium,
+            color = stat.contentColor,
         )
     }
 }

@@ -632,9 +632,41 @@ work_packages:
     status: todo
   - id: WP28
     title: LAN Scanner results summary card - readable and responsive
-    status: todo
+    status: done
     findings: [USER-REPORT-2026-11-01]
     notes: "User: 'lan scan results show unreadable summary on top of the table. ugly and does not scale right'. Suspects in lan/LanScanScreen.kt ~L1028-1170: title row with tiny duration, bodySmall subtitle, fixed-width SpaceEvenly StatChips with labelSmall 80%-alpha labels, three equal-weight buttons in one row. Screenshot first (portrait, landscape, font 1.3), then redesign."
+    result:
+      status: done
+      commit: "fix(lan): readable, responsive scan summary (WP28)"
+      gates: "see commit message; ./gradlew test ktlintCheck detekt :app:assembleDebug :app:compileDebugAndroidTestKotlin koverVerify x3 run in one foreground pass"
+      problems_before:
+        - "Portrait/landscape/dark: three equal-weight buttons; 'Share results' wraps to two lines and makes the row uneven. Rescan/Share/Clear compete at equal width."
+        - "Stat chips were fixed-width SpaceEvenly with labelSmall labels at 80% alpha; '24 prefix' with a 'Subnet' label was unclear and hardcoded in code."
+        - "Duration sat as a tiny labelSmall on the title row; no headline, so the summary had no clear hierarchy."
+        - "Font 1.3: Share results wraps, buttons squeezed; labels low contrast."
+        - "Settings summary was one truncating bodyMedium line with unlabelled '1000ms · 50'."
+      changes:
+        - "Summary card: status title, titleLarge plural headline ('N hosts confirmed of M scanned'), bodyMedium subnet and duration line."
+        - "Stat tiles: adaptive grid (LanStatGrid, 1-3 columns from width and font scale via lanStatColumnCount); titleLarge numbers, bodySmall labels at full contrast."
+        - "Rescan is the single primary Button; Share and Clear are text buttons in a FlowRow that wraps. Diagnostics toggle has an eye icon."
+        - "Canceled/stopped variant and settings summary restyled with the same components; AnimatedVisibility entry and diagnostics expand/collapse."
+        - "Unit test LanSummaryLayoutTest (8 cases). Strings added in strings.xml (plural headline, meta, prefix value, settings detail). No behaviour change."
+      device_verification: "Tablet U8BBB20806201256, Android 8.0. Restored: accelerometer 1, user_rotation 0, font 1.0, night no, wm reset."
+      screenshots:
+        before_portrait: "/tmp/claude-1000/-home-dev-android-network-tools/6c563765-8559-49b8-a00c-5c809e24f314/scratchpad/wp28/before-portrait.png"
+        before_landscape: "/tmp/claude-1000/-home-dev-android-network-tools/6c563765-8559-49b8-a00c-5c809e24f314/scratchpad/wp28/before-landscape.png"
+        before_font13: "/tmp/claude-1000/-home-dev-android-network-tools/6c563765-8559-49b8-a00c-5c809e24f314/scratchpad/wp28/before-font13.png"
+        before_dark: "/tmp/claude-1000/-home-dev-android-network-tools/6c563765-8559-49b8-a00c-5c809e24f314/scratchpad/wp28/before-dark.png"
+        before_canceled: "/tmp/claude-1000/-home-dev-android-network-tools/6c563765-8559-49b8-a00c-5c809e24f314/scratchpad/wp28/before-canceling-1.png"
+        after_portrait: "/tmp/claude-1000/-home-dev-android-network-tools/6c563765-8559-49b8-a00c-5c809e24f314/scratchpad/wp28/after-portrait2.png"
+        after_landscape: "/tmp/claude-1000/-home-dev-android-network-tools/6c563765-8559-49b8-a00c-5c809e24f314/scratchpad/wp28/after-landscape.png"
+        after_font13: "/tmp/claude-1000/-home-dev-android-network-tools/6c563765-8559-49b8-a00c-5c809e24f314/scratchpad/wp28/after-font13.png"
+        after_dark: "/tmp/claude-1000/-home-dev-android-network-tools/6c563765-8559-49b8-a00c-5c809e24f314/scratchpad/wp28/after-dark.png"
+        after_phone360: "/tmp/claude-1000/-home-dev-android-network-tools/6c563765-8559-49b8-a00c-5c809e24f314/scratchpad/wp28/after-phone360.png"
+        after_phone360_font13_headline: "/tmp/claude-1000/-home-dev-android-network-tools/6c563765-8559-49b8-a00c-5c809e24f314/scratchpad/wp28/after-phone360-font13.png"
+      not_verified:
+        - "Stat tiles at 360dp with font 1.3 (2-column wrap) not captured on device (phone-size navigation issues); covered by unit test lanStatColumnCount and 360dp normal-font capture."
+        - "LanCancelingContent (transient 'Stopping' state) not captured; the canceled summary variant was."
   - id: WP29
     title: Decide on IME-open focus restore (fix or remove dead code from WP25 part 3)
     status: todo
