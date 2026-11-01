@@ -669,5 +669,23 @@ work_packages:
         - "LanCancelingContent (transient 'Stopping' state) not captured; the canceled summary variant was."
   - id: WP29
     title: Decide on IME-open focus restore (fix or remove dead code from WP25 part 3)
-    status: todo
+    status: done
+    findings: [WP25-open-item-IME-rotation, USER-REPORT-2026-11-01-duration, USER-REPORT-2026-11-01-lan-map-labels]
+    result:
+      status: done
+      commit: "recorded by git log: fix(app) WP29 commit on plan/ux-remediation-2026-10-31 (this block is part of it)"
+      decision: >
+        Restoring focus with the IME open was attempted in WP25 part 3 and dropped. Device check: with the keyboard open on the DNS
+        domain field, rotating to landscape left the IME shown but no field had focus until rotating back. The
+        restore code (Modifier.restoreFocusIfImeWasOpen, ToolTextField restoreFocusKey, DNS/Ports call sites, the compile-only
+        RestoreFocusIfImeWasOpenTest) was removed. WP24 FocusSinkHost and rememberDismissKeyboard are unchanged.
+      intended_behaviour: "With the IME open, a rotation closes the keyboard and focus is not restored; the user taps the field again. Documented in the KDoc of rememberDismissKeyboard and in README (Domain-field bullet)."
+      changes:
+        - "Durations: net.aieat.netswissknife.app.ui.format.humanDuration (pure, unit-tested in HumanDurationTest) picks ms below 1 s, one-decimal seconds below 60 s, then 'N min' / 'N min M s'. Strings duration_*_format in strings.xml replace lan_duration_format and ports_scan_duration."
+        - "Applied to the LAN scan summary meta line and the Port Scanner summary duration. Latency measurements (ping RTT, LAN ping, TLS, WHOIS hop latency, HTTP timing) are unchanged. LAN share text still uses raw ms (plain-text export, not a UI label)."
+        - "LAN Network Map: lanTopologyNodeName (pure, LanTopologyLabelTest) returns no name when vendor/hostname are missing or equal the last octet; TopologyNode then shows only the octet caption. Long vendor names keep maxLines=1 with ellipsis."
+      tests: "./gradlew test (BUILD SUCCESSFUL, new HumanDurationTest 6 cases and LanTopologyLabelTest 6 cases), ktlintCheck, detekt, :app:assembleDebug, :app:compileDebugAndroidTestKotlin, :core-network:koverVerify, :core-domain:koverVerify, :app:koverVerify all green, run one at a time in the foreground."
+      baseline: "config/ktlint/app-baseline.xml regenerated after line shifts in DnsScreen, PortsScreen and LanScanScreen: 5233 entries before and after; no (file, rule) count increased. No detekt baseline change. ktlintFormat not used."
+      device: "Not run in this WP (not required). Tablet settings were not changed."
+      no_change_needed: []
 

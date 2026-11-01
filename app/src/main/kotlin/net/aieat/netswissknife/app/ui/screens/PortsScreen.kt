@@ -130,6 +130,7 @@ import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.ui.components.messageRes
 import net.aieat.netswissknife.app.ui.components.rememberDismissKeyboard
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
+import net.aieat.netswissknife.app.ui.format.humanDurationText
 import net.aieat.netswissknife.app.ui.i18n.asString
 import net.aieat.netswissknife.app.ui.i18n.uiText
 import net.aieat.netswissknife.app.ui.navigation.ToolSource
@@ -558,7 +559,6 @@ private fun PortScanInputCard(
             ToolTextField(
                 value = host,
                 onValueChange = onHostChange,
-                restoreFocusKey = "portsHost",
                 label = { Text(stringResource(R.string.ports_host_label)) },
                 placeholder = { Text(stringResource(R.string.ports_host_placeholder)) },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
@@ -1055,7 +1055,7 @@ private fun PortScanSummaryCard(
                     Text(
                         text =
                             "${stringResource(R.string.ports_duration_label)}: " +
-                                stringResource(R.string.ports_scan_duration, summary.scanDurationMs),
+                                humanDurationText(summary.scanDurationMs),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

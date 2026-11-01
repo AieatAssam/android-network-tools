@@ -72,11 +72,6 @@ fun ToolTextField(
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     keyboardActions: KeyboardActions = KeyboardActions.Default,
     shape: Shape = OutlinedTextFieldDefaults.shape,
-    /**
-     * Names the field for [restoreFocusIfImeWasOpen]: when the activity is recreated with the keyboard
-     * open on this field, the keyboard is shown again on it. Null leaves the field out of the restore.
-     */
-    restoreFocusKey: String? = null,
 ) {
     // Clearing is the end of the edit: focus leaves the field and the keyboard closes with it, so
     // the keyboard does not open over results. The dismissal lives here, not in the button, because
@@ -99,7 +94,7 @@ fun ToolTextField(
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
-        modifier = if (restoreFocusKey != null) modifier.restoreFocusIfImeWasOpen(restoreFocusKey) else modifier,
+        modifier = modifier,
         enabled = enabled,
         label = label,
         placeholder = placeholder,

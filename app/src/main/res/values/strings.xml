@@ -363,7 +363,6 @@
     <string name="ports_show_all_with_counts">Show all (%1$d closed, %2$d filtered)</string>
     <string name="ports_show_open">Show open only</string>
     <string name="ports_resolved_ip">Resolved IP: %1$s</string>
-    <string name="ports_scan_duration">%1$d ms</string>
 
     <!-- LAN Scanner Screen -->
     <string name="lan_screen_title">LAN Scanner</string>
@@ -430,7 +429,10 @@
     <string name="lan_diagnostic_tcp_policy_denied">TCP probe denied by policy</string>
     <string name="lan_diagnostic_tcp_unknown">TCP probe failed (unknown cause)</string>
     <string name="lan_diagnostics_truncated">Showing %1$d of %2$d uncertain probe details.</string>
-    <string name="lan_duration_format">%1$d ms</string>
+    <string name="duration_milliseconds_format">%1$d ms</string>
+    <string name="duration_seconds_format">%1$.1f s</string>
+    <string name="duration_minutes_format">%1$d min</string>
+    <string name="duration_minutes_seconds_format">%1$d min %2$d s</string>
     <string name="lan_ping_format">%1$d ms</string>
     <string name="lan_ping_status_format">Latency %1$d ms</string>
     <plurals name="lan_open_ports_count">

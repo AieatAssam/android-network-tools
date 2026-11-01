@@ -131,6 +131,7 @@ import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
 import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
 import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.components.ToolTextField
+import net.aieat.netswissknife.app.ui.format.humanDurationText
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
 import net.aieat.netswissknife.app.ui.components.ToolStopButton
@@ -1103,7 +1104,7 @@ private fun LanFinishedContent(
                                 stringResource(
                                     R.string.lan_summary_meta_format,
                                     summary.subnet,
-                                    stringResource(R.string.lan_duration_format, summary.scanDurationMs),
+                                    humanDurationText(summary.scanDurationMs),
                                 ),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1454,7 +1455,7 @@ private fun NetworkTopologyCard(hosts: List<LanHost>) {
                     hosts.filter { !it.isGateway }.take(20).forEach { host ->
                         TopologyNode(
                             icon = hostIcon(host),
-                            label = host.vendor ?: host.hostname?.split(".")?.firstOrNull() ?: host.ip.substringAfterLast("."),
+                            label = lanTopologyNodeName(host.vendor, host.hostname, host.ip),
                             ip = host.ip,
                             isGateway = false,
                         )
@@ -1471,7 +1472,7 @@ private fun NetworkTopologyCard(hosts: List<LanHost>) {
 @Composable
 private fun TopologyNode(
     icon: ImageVector,
-    label: String,
+    label: String?,
     ip: String,
     isGateway: Boolean,
 ) {
@@ -1506,12 +1507,14 @@ private fun TopologyNode(
                 modifier = Modifier.size(22.dp),
             )
         }
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+        label?.let { name ->
+            Text(
+                text = name,
+                style = MaterialTheme.typography.labelSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
         Text(
             text = ip.substringAfterLast("."),
             style = MaterialTheme.typography.labelSmall,

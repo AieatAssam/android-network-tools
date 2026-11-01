@@ -80,7 +80,7 @@ Full DNS record resolution with multiple resolver options and protocol-level res
 - The name, record type and resolver survive rotation and process death. Leaving the tool with Back keeps them and the last finished result for the app session (in memory only); a lookup still running when you leave is not restored as running, and Stop or clearing the results is not restored either
 - An NXDOMAIN answer is shown as a neutral "Domain not found" card, not as a success. A NOERROR answer keeps the success styling; server failures and other RCODEs use the error styling
 - Record types scroll sideways with a fade on each cut-off edge and a chevron beside the chips while more are off-screen
-- Look up is scrolled into view when the on-screen keyboard opens, so it is not covered by the keyboard. After rotation, dark mode or a font change the keyboard stays closed, unless it was open on the Domain field when the screen was recreated (a rotation with the keyboard open), in which case it reopens on that field
+- Look up is scrolled into view when the on-screen keyboard opens, so it is not covered by the keyboard. After rotation, dark mode or a font change the keyboard stays closed. If the keyboard is open when the screen rotates, the rotation closes it and focus is not restored; tap the field to reopen the keyboard
 - The Additional section starts collapsed, since it usually holds EDNS OPT pseudo-records (labelled `OPT`); an MX record of `0 .` is annotated as a null MX
 - System DNS is never silently replaced with Cloudflare; when Android reports no resolver, the UI explains the failure and offers an explicit Cloudflare fallback. Private DNS status is shown when available.
 - IDN hostnames and trailing-dot FQDNs are normalized consistently across network tools.
