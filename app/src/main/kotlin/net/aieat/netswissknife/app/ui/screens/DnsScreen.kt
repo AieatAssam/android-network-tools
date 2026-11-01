@@ -401,6 +401,7 @@ private fun DnsInputCard(
             ToolTextField(
                 value = domain,
                 onValueChange = onDomainChange,
+                restoreFocusKey = "dnsDomain",
                 label = { Text(stringResource(R.string.dns_domain_label)) },
                 placeholder = { Text(stringResource(R.string.dns_domain_placeholder)) },
                 leadingIcon = {

@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
+import net.aieat.netswissknife.app.data.ToolSessionMemory
 import net.aieat.netswissknife.app.platform.NetworkStatus
 import net.aieat.netswissknife.app.platform.NetworkStatusProvider
 import net.aieat.netswissknife.app.platform.NoOpNetworkStatusProvider
@@ -52,6 +53,21 @@ private const val DNS_RECORD_TYPE_KEY = "dnsRecordType"
 private const val DNS_SERVER_KEY = "dnsServer"
 private const val DNS_CUSTOM_SERVER_KEY = "dnsCustomServer"
 
+/** [ToolSessionMemory] slot holding the last DNS form and terminal result. */
+private const val DNS_SESSION_KEY = "dnsSession"
+
+/**
+ * The DNS form and its last terminal result, kept in [ToolSessionMemory] when the tool is left.
+ * The resolver is kept as its form key, so the System resolver is read from the device again.
+ */
+internal data class DnsSessionSnapshot(
+    val domain: String,
+    val recordType: DnsRecordType,
+    val serverKey: String,
+    val customServerAddress: String,
+    val finished: DnsUiState?,
+)
+
 /** Stable key for a resolver choice. The System resolver's addresses come from the device, not the form. */
 private fun DnsServer.formKey(): String =
     when (this) {
@@ -86,9 +102,19 @@ class DnsViewModel @Inject constructor(
     // Hilt supplies the owner-backed handle at runtime; this empty default supports direct unit tests.
     @param:SuppressLint("VisibleForTests")
     private val savedStateHandle: SavedStateHandle = SavedStateHandle(),
+    private val sessionMemory: ToolSessionMemory = ToolSessionMemory(),
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow<DnsUiState>(DnsUiState.Idle)
+    // Restore order: a SavedStateHandle value (rotation) wins over the snapshot kept when the tool
+    // was left, which in turn wins over the defaults. A kept result is shown only for the same domain.
+    private val restoredSession: DnsSessionSnapshot? = sessionMemory.get<DnsSessionSnapshot>(DNS_SESSION_KEY)
+    private val initialDomain: String =
+        savedStateHandle.get<String>(DNS_DOMAIN_KEY) ?: restoredSession?.domain.orEmpty()
+
+    private val _uiState =
+        MutableStateFlow<DnsUiState>(
+            restoredSession?.takeIf { it.domain == initialDomain }?.finished ?: DnsUiState.Idle,
+        )
     val uiState: StateFlow<DnsUiState> = _uiState.asStateFlow()
     val networkStatus: StateFlow<NetworkStatus> = networkStatusProvider.status
     private var lookupJob: Job? = null
@@ -104,23 +130,32 @@ class DnsViewModel @Inject constructor(
 
     // ── Form field state ─────────────────────────────────────────────────────
 
-    private val _domain = MutableStateFlow(savedStateHandle.get<String>(DNS_DOMAIN_KEY).orEmpty())
+    private val _domain = MutableStateFlow(initialDomain)
     val domain: StateFlow<String> = _domain.asStateFlow()
 
     private val _recordType =
         MutableStateFlow(
-            enumFromSavedName(savedStateHandle.get<String>(DNS_RECORD_TYPE_KEY), DnsRecordType.entries)
+            enumFromSavedName(
+                savedStateHandle.get<String>(DNS_RECORD_TYPE_KEY) ?: restoredSession?.recordType?.name,
+                DnsRecordType.entries,
+            )
                 ?: DnsRecordType.A,
         )
     val recordType: StateFlow<DnsRecordType> = _recordType.asStateFlow()
 
     // The custom address is declared first: a saved "custom" choice reads it.
-    private val _customServerAddress = MutableStateFlow(savedStateHandle.get<String>(DNS_CUSTOM_SERVER_KEY).orEmpty())
+    private val _customServerAddress =
+        MutableStateFlow(
+            savedStateHandle.get<String>(DNS_CUSTOM_SERVER_KEY) ?: restoredSession?.customServerAddress.orEmpty(),
+        )
     val customServerAddress: StateFlow<String> = _customServerAddress.asStateFlow()
 
     private val _selectedServer =
         MutableStateFlow<DnsServer>(
-            dnsServerFromFormKey(savedStateHandle.get<String>(DNS_SERVER_KEY), _customServerAddress.value)
+            dnsServerFromFormKey(
+                savedStateHandle.get<String>(DNS_SERVER_KEY) ?: restoredSession?.serverKey,
+                _customServerAddress.value,
+            )
                 ?: DnsServer.System(),
         )
     val selectedServer: StateFlow<DnsServer> = _selectedServer.asStateFlow()
@@ -327,7 +362,19 @@ class DnsViewModel @Inject constructor(
     }
 
     override fun onCleared() {
+        // A running lookup is cancelled here and is not kept as running; only a finished result is kept.
         cancelLookup(CancellationReason.LIFECYCLE_PAUSE, terminalState = null)
+        val current = _uiState.value
+        sessionMemory.put(
+            DNS_SESSION_KEY,
+            DnsSessionSnapshot(
+                domain = _domain.value,
+                recordType = _recordType.value,
+                serverKey = _selectedServer.value.formKey(),
+                customServerAddress = _customServerAddress.value,
+                finished = current.takeIf { it is DnsUiState.Success || it is DnsUiState.Error },
+            ),
+        )
     }
 
     private companion object {

@@ -601,9 +601,27 @@ work_packages:
       no_change_needed: []
   - id: WP25
     title: Keep tool state across Back/forward; restore field focus on rotation with IME open
-    status: todo
+    status: partial
     findings: [WP15-deferred, WP24-caveat-1]
-    notes: "(1) DNS, Traceroute, WHOIS, Subnet Calculator, Wake-on-LAN, HTTP Probe forms and last results survive Back/forward via the existing ToolSessionMemory (never secrets); (2) Ping Advanced sliders (count, timeout, payload, TTL, interval) persist across return; (3) WoL saved-device name field restored; (4) with the IME open while typing, rotation should reopen the keyboard on the same field (WP24 closes it): save focused-field id via rememberSaveable and request focus for that field only when the IME was open."
+    result:
+      status: partial
+      commit: "recorded by git log: feat(app) WP25 commit on plan/ux-remediation-2026-10-31 (this block is part of it)"
+      gates: "./gradlew test (app 817 tests, 0 failures), ktlintCheck, detekt, :app:assembleDebug, :app:compileDebugAndroidTestKotlin, :core-network:koverVerify, :core-domain:koverVerify, :app:koverVerify all BUILD SUCCESSFUL, run one at a time in the foreground. ktlint app baseline regenerated: 5246 entries at HEAD, 5234 now, no (file, rule) count increased. ktlintFormat not used."
+      mechanism: >
+        DNS, Traceroute, WHOIS, Subnet, Wake-on-LAN and HTTP Probe snapshot their form and last terminal result into ToolSessionMemory in onCleared and read it back in the constructor (SavedStateHandle wins, then the snapshot, then the default). Running requests are not kept as running. HTTP Probe strips request headers, body and the replay callback before the result is stored. Subnet keeps its whole state (plain data). Ping sliders live in PingSliders (SavedStateHandle plus snapshot, DataStore defaults guarded). The WoL saved-device name is seeded into WolSavedDeviceEditor. Focus restore: Modifier.restoreFocusIfImeWasOpen(key) in KeyboardDismiss.kt keeps a rememberSaveable flag (focused and IME visible), written only while the window has focus, and requests focus after recreation only when the flag was set. ToolTextField takes restoreFocusKey; DNS Domain and Ports host use it.
+      tests: "Unit: DnsSessionRestoreTest, TracerouteSessionRestoreTest, WhoisSessionRestoreTest, SubnetSessionRestoreTest, WolSessionRestoreTest, HttpProbeSessionRestoreTest (asserts no secret value in ToolSessionMemory.slots), PingSliderRestoreTest. androidTest (compile-only, not executed): RestoreFocusIfImeWasOpenTest."
+      device_check_table:
+        - "DNS: domain typed, Back to Home, reopen: domain kept. PASS (one run)."
+        - "DNS: keyboard open on the domain field, rotate to landscape: IME stays shown but no field has focus; after rotating back to portrait the field is focused again. FAIL / not fixed on device. The restore does not yet put focus on the field in landscape."
+        - "DNS: keyboard closed, rotate: stays closed. PASS."
+        - "DNS: Back with keyboard open hides the IME. PASS."
+        - "Not run on device in this WP: Traceroute, WHOIS, Subnet, WoL, HTTP Probe Back/return; Ports IME-open rotation; Ping slider persistence; dark mode and font 1.3 with IME closed; keyboard on entry for each tool. Covered by unit tests only."
+      device_settings_restored: "accelerometer_rotation 1, user_rotation 0, font_scale 1.0, night no."
+      open_items:
+        - "IME-open rotation: focus restore does not hold in landscape on DNS (see device check 2). Needs a logcat-level look at when the flag is saved and when focus is requested."
+        - "KeyboardDismissTest and RestoreFocusIfImeWasOpenTest are compile-only."
+        - "copy-as-cURL of a restored HTTP Probe result omits request headers and body (they are not kept)."
+(1) DNS, Traceroute, WHOIS, Subnet Calculator, Wake-on-LAN, HTTP Probe forms and last results survive Back/forward via the existing ToolSessionMemory (never secrets); (2) Ping Advanced sliders (count, timeout, payload, TTL, interval) persist across return; (3) WoL saved-device name field restored; (4) with the IME open while typing, rotation should reopen the keyboard on the same field (WP24 closes it): save focused-field id via rememberSaveable and request focus for that field only when the IME was open."
   - id: WP26
     title: Result export and copy parity (Traceroute, DNS, Port Scanner, WHOIS, HTTP Probe, TLS, Wi-Fi)
     status: todo

@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
+import net.aieat.netswissknife.app.data.ToolSessionMemory
 import net.aieat.netswissknife.app.data.purgeInvalidHostRecents
 import net.aieat.netswissknife.app.data.validHostRecents
 import net.aieat.netswissknife.app.platform.LinkInfoProvider
@@ -75,6 +76,20 @@ sealed interface TracerouteUiState {
     ) : TracerouteUiState
 }
 
+/**
+ * The Traceroute form and its last terminal result (finished, stopped by the user, or failed), kept in
+ * [ToolSessionMemory] when the tool is left. A running trace is never kept as running.
+ */
+internal data class TracerouteSessionSnapshot(
+    val host: String,
+    val maxHops: Int,
+    val timeoutMs: Int,
+    val probesPerHop: Int,
+    val probeType: TracerouteProbeType,
+    val packetSize: Int,
+    val finished: TracerouteUiState?,
+)
+
 @HiltViewModel
 class TracerouteViewModel
     @Inject
@@ -86,6 +101,7 @@ class TracerouteViewModel
         // Hilt supplies the owner-backed handle at runtime; this empty default supports direct unit tests.
         @param:SuppressLint("VisibleForTests")
         private val savedStateHandle: SavedStateHandle = SavedStateHandle(),
+        private val sessionMemory: ToolSessionMemory = ToolSessionMemory(),
     ) : ViewModel() {
         companion object {
             // Resource cleanup may block while cancellation closes native or socket handles.
@@ -99,33 +115,52 @@ class TracerouteViewModel
             private const val PROBES_KEY = "traceProbesPerHop"
             private const val PROBE_TYPE_KEY = "traceProbeType"
             private const val PACKET_SIZE_KEY = "tracePacketSize"
+
+            /** [ToolSessionMemory] slot for the form and last terminal result when the tool is left. */
+            private const val SESSION_KEY = "traceSession"
         }
 
-        private val _uiState = MutableStateFlow<TracerouteUiState>(TracerouteUiState.Idle)
+        // Restore order: a SavedStateHandle value (rotation) wins over the snapshot kept when the tool
+        // was left, which in turn wins over the defaults. A kept result is shown only for the same host.
+        private val restoredSession: TracerouteSessionSnapshot? =
+            sessionMemory.get<TracerouteSessionSnapshot>(SESSION_KEY)
+        private val initialHost: String =
+            savedStateHandle.get<String>(HOST_KEY) ?: restoredSession?.host.orEmpty()
+
+        private val _uiState =
+            MutableStateFlow<TracerouteUiState>(
+                restoredSession?.takeIf { it.host == initialHost }?.finished ?: TracerouteUiState.Idle,
+            )
         val uiState: StateFlow<TracerouteUiState> = _uiState.asStateFlow()
         val networkStatus: StateFlow<NetworkStatus> = networkStatusProvider.status
 
-        private val _host = MutableStateFlow(savedStateHandle.get<String>(HOST_KEY).orEmpty())
+        private val _host = MutableStateFlow(initialHost)
         val host: StateFlow<String> = _host.asStateFlow()
 
-        private val _maxHops = MutableStateFlow(savedStateHandle.get<Int>(MAX_HOPS_KEY) ?: 30)
+        private val _maxHops =
+            MutableStateFlow(savedStateHandle.get<Int>(MAX_HOPS_KEY) ?: restoredSession?.maxHops ?: 30)
         val maxHops: StateFlow<Int> = _maxHops.asStateFlow()
 
-        private val _timeoutMs = MutableStateFlow(savedStateHandle.get<Int>(TIMEOUT_KEY) ?: 3_000)
+        private val _timeoutMs =
+            MutableStateFlow(savedStateHandle.get<Int>(TIMEOUT_KEY) ?: restoredSession?.timeoutMs ?: 3_000)
         val timeoutMs: StateFlow<Int> = _timeoutMs.asStateFlow()
 
-        private val _probesPerHop = MutableStateFlow(savedStateHandle.get<Int>(PROBES_KEY) ?: 1)
+        private val _probesPerHop =
+            MutableStateFlow(savedStateHandle.get<Int>(PROBES_KEY) ?: restoredSession?.probesPerHop ?: 1)
         val probesPerHop: StateFlow<Int> = _probesPerHop.asStateFlow()
 
         private val _probeType =
             MutableStateFlow(
-                enumFromSavedName(savedStateHandle.get<String>(PROBE_TYPE_KEY), TracerouteProbeType.entries)
-                    ?: TracerouteProbeType.ICMP,
+                enumFromSavedName(
+                    savedStateHandle.get<String>(PROBE_TYPE_KEY) ?: restoredSession?.probeType?.name,
+                    TracerouteProbeType.entries,
+                ) ?: TracerouteProbeType.ICMP,
             )
         val probeType: StateFlow<TracerouteProbeType> = _probeType.asStateFlow()
 
         /** 0 = MTU discovery; positive value = fixed packet size in bytes. */
-        private val _packetSize = MutableStateFlow(savedStateHandle.get<Int>(PACKET_SIZE_KEY) ?: 56)
+        private val _packetSize =
+            MutableStateFlow(savedStateHandle.get<Int>(PACKET_SIZE_KEY) ?: restoredSession?.packetSize ?: 56)
         val packetSize: StateFlow<Int> = _packetSize.asStateFlow()
 
         val recentHosts: StateFlow<List<String>> =
@@ -511,6 +546,26 @@ class TracerouteViewModel
         override fun onCleared() {
             traceGeneration++
             cancelActiveTrace(CancellationReason.LIFECYCLE_PAUSE)
+            // Only a terminal state is kept: a trace that is still running is cancelled, not restored as running.
+            val state = _uiState.value
+            val finished =
+                state.takeIf {
+                    it is TracerouteUiState.Finished ||
+                        it is TracerouteUiState.Canceled ||
+                        it is TracerouteUiState.Error
+                }
+            sessionMemory.put(
+                SESSION_KEY,
+                TracerouteSessionSnapshot(
+                    host = _host.value,
+                    maxHops = _maxHops.value,
+                    timeoutMs = _timeoutMs.value,
+                    probesPerHop = _probesPerHop.value,
+                    probeType = _probeType.value,
+                    packetSize = _packetSize.value,
+                    finished = finished,
+                ),
+            )
         }
 
         // ── Helpers ──────────────────────────────────────────────────────────────

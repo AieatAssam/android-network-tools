@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
+import net.aieat.netswissknife.app.data.ToolSessionMemory
 import net.aieat.netswissknife.app.platform.NetworkStatus
 import net.aieat.netswissknife.app.platform.NetworkStatusProvider
 import net.aieat.netswissknife.app.platform.NoOpNetworkStatusProvider
@@ -88,6 +89,32 @@ data class HttpProbeUiState(
     val prettyJson: Boolean = false,
 )
 
+/** [ToolSessionMemory] slot for the HTTP Probe URL, method, redirect flag and last finished result. */
+private const val HTTP_SESSION_KEY = "httpProbeSession"
+
+/**
+ * What HTTP Probe keeps when the tool is left: the URL, method, redirect flag and the last finished
+ * result. Request headers and the request body are never kept (they can hold tokens), so the result is
+ * stored without them; see [forSessionMemory].
+ */
+internal data class HttpProbeSessionSnapshot(
+    val url: String,
+    val method: HttpMethod,
+    val followRedirects: Boolean,
+    val result: HttpProbeResult?,
+)
+
+/** Drops the request headers, body and replay callback before a result is kept in memory. */
+internal fun HttpProbeResult.forSessionMemory(): HttpProbeResult =
+    copy(
+        request =
+            request.copy(
+                headers = emptyList(),
+                body = null,
+                approveCrossOriginEntityReplay = null,
+            ),
+    )
+
 @HiltViewModel
 class HttpProbeViewModel @Inject constructor(
     private val useCase: HttpProbeUseCase,
@@ -96,7 +123,11 @@ class HttpProbeViewModel @Inject constructor(
     // Hilt supplies the owner-backed handle at runtime; this empty default supports direct unit tests.
     @param:SuppressLint("VisibleForTests")
     private val savedStateHandle: SavedStateHandle = SavedStateHandle(),
+    private val sessionMemory: ToolSessionMemory = ToolSessionMemory(),
 ) : ViewModel() {
+
+    private val restoredSession: HttpProbeSessionSnapshot? =
+        sessionMemory.get<HttpProbeSessionSnapshot>(HTTP_SESSION_KEY)
 
     private val routeHost = savedStateHandle.get<String>("host")
     private val rawIntentArgument = savedStateHandle.get<String>("intent")
@@ -130,16 +161,30 @@ class HttpProbeViewModel @Inject constructor(
         )
     val plainHttpHandoff: StateFlow<PlainHttpHandoff?> = _plainHttpHandoff.asStateFlow()
 
-    private val _uiState = MutableStateFlow(
-        HttpProbeUiState(
-            url = if (savedStateHandle.get<Boolean>(HANDOFF_CONSUMED_KEY) == true) {
-                savedStateHandle.get<String>(EDITED_URL_KEY).orEmpty()
-            } else {
-                savedStateHandle.get<String>(EDITED_URL_KEY)
-                    ?: if (_hasInvalidHandoff.value) "" else handoffTarget?.let(::httpUrlForTarget).orEmpty()
-            },
-        ),
-    )
+    // A handoff (route or intent) wins over the URL kept when the tool was left; a kept result is shown
+    // only for the URL it was produced from.
+    private val initialUrl: String =
+        if (savedStateHandle.get<Boolean>(HANDOFF_CONSUMED_KEY) == true) {
+            savedStateHandle.get<String>(EDITED_URL_KEY).orEmpty()
+        } else {
+            savedStateHandle.get<String>(EDITED_URL_KEY)
+                ?: if (_hasInvalidHandoff.value) {
+                    ""
+                } else {
+                    handoffTarget?.let(::httpUrlForTarget)
+                        ?: restoredSession?.takeIf { handoffTarget == null }?.url.orEmpty()
+                }
+        }
+
+    private val _uiState =
+        MutableStateFlow(
+            HttpProbeUiState(
+                url = initialUrl,
+                method = restoredSession?.method ?: HttpMethod.GET,
+                followRedirects = restoredSession?.followRedirects ?: true,
+                result = restoredSession?.takeIf { it.url == initialUrl }?.result,
+            ),
+        )
     val uiState: StateFlow<HttpProbeUiState> = _uiState.asStateFlow()
     val networkStatus: StateFlow<NetworkStatus> = networkStatusProvider.status
     private data class ActiveReplayDecision(
@@ -464,6 +509,18 @@ class HttpProbeViewModel @Inject constructor(
 
     override fun onCleared() {
         cancelRequest(CancellationReason.LIFECYCLE_PAUSE)
+        // A request still running is cancelled and not kept as running; headers and body are never kept.
+        val state = _uiState.value
+        val kept = state.result?.takeIf { !state.isLoading && !state.isCanceling }
+        sessionMemory.put(
+            HTTP_SESSION_KEY,
+            HttpProbeSessionSnapshot(
+                url = state.url,
+                method = state.method,
+                followRedirects = state.followRedirects,
+                result = kept?.forSessionMemory(),
+            ),
+        )
     }
 
     private companion object {

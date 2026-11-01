@@ -15,7 +15,7 @@
 ### Ping
 ICMP echo and reachability round-trip latency measurement with real-time streaming results. The app resolves a hostname once per session, then uses icmpenguin ICMP echo with transparent reachability fallback when the socket is unavailable.
 - Configurable probe count (1–100 via slider; default configurable in Settings) and timeout (100–30,000 ms)
-- Advanced payload size (0–1,472 bytes), TTL (1–255), and interval (100–10,000 ms) controls, with a Reset to defaults action
+- Advanced payload size (0–1,472 bytes), TTL (1–255), and interval (100–10,000 ms) controls, with a Reset to defaults action. The count, timeout, payload, TTL and interval sliders keep their values when you leave and return (in memory for the app session, and through saved state across rotation and process death); ping results are not kept
 - Rotating the device keeps a run going. A run stopped early (Stop, or the app going to the background) is labelled as stopped early, and its statistics cover only the probes that were sent
 - When the host field changes after a run, the previous result is labelled as the previous result for its own host
 - Per-probe RTT reporting with sequence numbers and status (SUCCESS / TIMEOUT / UNREACHABLE / ERROR), including reply IP, TTL, and bytes when available
@@ -41,7 +41,7 @@ Network path analysis with per-hop geolocation enrichment.
 - The trace stops at the first hop whose reply comes from the destination; probes already in flight for later hops are dropped
 - When two or more consecutive replies all come from this device's own addresses, the trace stops early and reports "Host unreachable from this network (no route / destination host unreachable)" with Reached: No. A destination on the local subnet that does not answer is typically reported this way
 - Editing the host field clears a previous "Trace failed" message
-- The host and settings survive rotation and process death; leaving the tool with Back clears them
+- The host and settings survive rotation and process death. Leaving the tool with Back keeps the host, settings and last finished result for the rest of the app session (in memory only, never on disk). A trace still running when you leave is not restored as running
 
 ### Port Scanner
 TCP port reachability scanning with service identification.
@@ -77,10 +77,10 @@ Full DNS record resolution with multiple resolver options and protocol-level res
 - Returns each record's actual RR type and section, RCODE, AA/AD/TC/RD/RA flags, query time, server actually used, and raw DNS response
 - The domain field is checked as you type: names with spaces, empty labels or invalid characters show a plain-language message and Look up stays disabled. Names with leading underscores (SRV, TXT owner labels) are accepted
 - Editing the name, record type or server clears a finished result or error so an old answer is not shown for a new query
-- The name, record type and resolver survive rotation and process death; leaving the tool with Back clears them
+- The name, record type and resolver survive rotation and process death. Leaving the tool with Back keeps them and the last finished result for the app session (in memory only); a lookup still running when you leave is not restored as running, and Stop or clearing the results is not restored either
 - An NXDOMAIN answer is shown as a neutral "Domain not found" card, not as a success. A NOERROR answer keeps the success styling; server failures and other RCODEs use the error styling
 - Record types scroll sideways with a fade on each cut-off edge and a chevron beside the chips while more are off-screen
-- Look up is scrolled into view when the on-screen keyboard opens, so it is not covered by the keyboard. After rotation, dark mode or a font change the keyboard does not reopen by itself
+- Look up is scrolled into view when the on-screen keyboard opens, so it is not covered by the keyboard. After rotation, dark mode or a font change the keyboard stays closed, unless it was open on the Domain field when the screen was recreated (a rotation with the keyboard open), in which case it reopens on that field
 - The Additional section starts collapsed, since it usually holds EDNS OPT pseudo-records (labelled `OPT`); an MX record of `0 .` is annotated as a null MX
 - System DNS is never silently replaced with Cloudflare; when Android reports no resolver, the UI explains the failure and offers an explicit Cloudflare fallback. Private DNS status is shown when available.
 - IDN hostnames and trailing-dot FQDNs are normalized consistently across network tools.
@@ -140,7 +140,7 @@ Domain, IP, and ASN registration lookup using RDAP with WHOIS fallback.
 - Live relay-chain visualiser shows the RDAP or WHOIS servers used; completed hops share one success colour
 - Invalid input names the specific problem (e.g. "An IPv4 address needs four numbers from 0 to 255" for 999.1.1.1)
 - The raw RDAP/WHOIS response section expands from its whole header row; the lookup keeps running across screen rotation
-- The query and protocol survive rotation and process death; leaving the tool with Back clears them
+- The query and protocol survive rotation and process death. Leaving the tool with Back keeps the query, protocol and the finished result for the query it was run for (in memory only); a lookup still running when you leave is not restored as running. Request headers are not involved
 
 ### HTTP Probe
 HTTPS request tester with security header analysis. Plain HTTP requests are disabled in this release.
@@ -159,6 +159,7 @@ HTTPS request tester with security header analysis. Plain HTTP requests are disa
 - Cancel while a request is sending ends it as "Request canceled", even when the call reports a timeout or an answer as Cancel is pressed; the button shows "Stopping" until the request has released its connection
 - Opening from mDNS Browser or LAN Scanner: HTTP Probe sends HTTPS only, so the handoff prefills `https://host/` for port 443 and `https://host:8443/` for port 8443. For any other port, such as the common plain-HTTP port 80, no URL is filled in and an explanation is shown. Plain HTTP is not sent to LAN addresses either. Cleartext support would need a separate, explicit warning-based design, so it was deferred.
 - The prefilled-from banner is removed as soon as the URL is edited.
+- Leaving the tool with Back keeps the URL, method, redirect flag and the last finished result for the app session (in memory only, never on disk). Request headers and the request body are never kept, so a result shown again has no request headers or body: its cURL copy omits them. A request still running when you leave is cancelled and not restored as running
 
 ### mDNS Service Browser
 LAN service discovery via multicast DNS (RFC 6762 / DNS-SD RFC 6763).
@@ -191,7 +192,7 @@ IPv4 subnet calculator with binary breakdown, notation conversion, an "is this a
 - **Copy** and **Share** buttons put a plain-text summary of the calculated subnet on the clipboard or into the share sheet
 - Quick example chips for common subnets (`/8`, `/12`, `/16`, `/24`, `/30`, `/0`)
 - Network alignment warning when the entered IP is not on a network boundary, showing the corrected network address
-- Entered fields survive rotation and process death; a result is recalculated when you calculate again. Leaving the tool with Back clears the fields
+- Entered fields survive rotation and process death. Leaving the tool with Back keeps the fields and the last calculated result for the app session (in memory only)
 
 ### Speed Test
 Internet connection speed test measuring latency, download, and upload throughput.
@@ -212,7 +213,7 @@ Wake sleeping or powered-down machines on the local network with a UDP magic pac
 - Real-time validation with a specific inline message for each problem: wrong length, invalid characters, mixed separators, multicast, broadcast or all-zero address
 - Advanced options: broadcast address (default `255.255.255.255`; any dotted-decimal IPv4 address such as a subnet-directed `192.168.1.255` is accepted; host names and IPv6 are rejected inline) and UDP port (default 9, valid 1-65535). The panel opens automatically when one of these fields is invalid
 - Sends 3 duplicate packets per request for reliability over lossy UDP
-- The MAC, broadcast address and port survive rotation and process death; leaving the tool with Back clears them. The saved-device name field is not kept
+- The MAC, broadcast address and port survive rotation and process death. Leaving the tool with Back keeps them, the saved-device name being typed, and the last finished send (Success or Error) for the app session, in memory only; a send still in progress is not restored as running
 - Success card reports the send and states that Wake-on-LAN is fire-and-forget: no delivery confirmation is returned. It confirms target MAC, broadcast address, port and packet count
 - Errors are specific: no local Wi-Fi or Ethernet network, a local-network permission denial, an invalid broadcast address, or a general send failure. Each has a Retry action
 - Saved devices (stored on this device only): save the current MAC under an optional name, use a saved device to fill the form, edit a saved device's name or MAC, and delete it. A MAC is stored once, whichever notation it was entered in; an edit that would make two entries share a MAC is refused

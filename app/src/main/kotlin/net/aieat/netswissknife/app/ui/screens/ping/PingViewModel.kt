@@ -31,6 +31,7 @@ import kotlinx.coroutines.withContext
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
+import net.aieat.netswissknife.app.data.ToolSessionMemory
 import net.aieat.netswissknife.app.data.purgeInvalidHostRecents
 import net.aieat.netswissknife.app.data.validHostRecents
 import net.aieat.netswissknife.app.platform.LinkInfoProvider
@@ -182,6 +183,7 @@ class PingViewModel @Inject constructor(
     @param:SuppressLint("VisibleForTests")
     private val savedStateHandle: SavedStateHandle = SavedStateHandle(),
     @param:ApplicationContext private val applicationContext: Context? = null,
+    private val sessionMemory: ToolSessionMemory = ToolSessionMemory(),
 ) : ViewModel() {
 
     companion object {
@@ -234,19 +236,21 @@ class PingViewModel @Inject constructor(
     val sourceContext: ToolSource? get() = _sourceContext.value
     val sourceContextState: StateFlow<ToolSource?> = _sourceContext.asStateFlow()
 
-    private val _count = MutableStateFlow(10)
+    // The advanced sliders restore from saved state first, then the values kept when the tool was left.
+    private val sliders = PingSliders(savedStateHandle, sessionMemory)
+    private val _count = sliders.count
     val count: StateFlow<Int> = _count.asStateFlow()
 
-    private val _timeoutMs = MutableStateFlow(2_000)
+    private val _timeoutMs = sliders.timeoutMs
     val timeoutMs: StateFlow<Int> = _timeoutMs.asStateFlow()
 
-    private val _payloadBytes = MutableStateFlow(DEFAULT_PAYLOAD_BYTES)
+    private val _payloadBytes = sliders.payloadBytes
     val payloadBytes: StateFlow<Int> = _payloadBytes.asStateFlow()
 
-    private val _ttl = MutableStateFlow(DEFAULT_TTL)
+    private val _ttl = sliders.ttl
     val ttl: StateFlow<Int> = _ttl.asStateFlow()
 
-    private val _intervalMs = MutableStateFlow(DEFAULT_INTERVAL_MS)
+    private val _intervalMs = sliders.intervalMs
     val intervalMs: StateFlow<Int> = _intervalMs.asStateFlow()
 
     private val _continuousMode = MutableStateFlow(false)
@@ -310,8 +314,11 @@ class PingViewModel @Inject constructor(
         }
         viewModelScope.launch {
             val prefs = dataStore.data.first()
-            _count.value = prefs[AppPreferenceKeys.DEFAULT_PING_COUNT] ?: 10
-            _timeoutMs.value = prefs[AppPreferenceKeys.DEFAULT_TIMEOUT_MS] ?: 2_000
+            // A kept or saved slider value beats the DataStore default, which would otherwise overwrite it.
+            sliders.applyDefaults(
+                prefs[AppPreferenceKeys.DEFAULT_PING_COUNT] ?: 10,
+                prefs[AppPreferenceKeys.DEFAULT_TIMEOUT_MS] ?: 2_000,
+            )
         }
     }
 
@@ -336,21 +343,31 @@ class PingViewModel @Inject constructor(
         savedStateHandle[HANDOFF_CONSUMED_KEY] = true
     }
 
-    fun onCountChange(value: Int) { _count.value = value.coerceIn(1, 100) }
+    fun onCountChange(value: Int) {
+        _count.setKept(savedStateHandle, COUNT_KEY, value.coerceIn(1, 100))
+    }
 
-    fun onTimeoutChange(value: Int) { _timeoutMs.value = value.coerceIn(100, 30_000) }
+    fun onTimeoutChange(value: Int) {
+        _timeoutMs.setKept(savedStateHandle, TIMEOUT_KEY, value.coerceIn(100, 30_000))
+    }
 
-    fun onPayloadSizeChange(value: Int) { _payloadBytes.value = value.coerceIn(0, 1_472) }
+    fun onPayloadSizeChange(value: Int) {
+        _payloadBytes.setKept(savedStateHandle, PAYLOAD_KEY, value.coerceIn(0, 1_472))
+    }
 
-    fun onTtlChange(value: Int) { _ttl.value = value.coerceIn(1, 255) }
+    fun onTtlChange(value: Int) {
+        _ttl.setKept(savedStateHandle, TTL_KEY, value.coerceIn(1, 255))
+    }
 
-    fun onIntervalChange(value: Int) { _intervalMs.value = value.coerceIn(100, 10_000) }
+    fun onIntervalChange(value: Int) {
+        _intervalMs.setKept(savedStateHandle, INTERVAL_KEY, value.coerceIn(100, 10_000))
+    }
 
     /** Restores the advanced-option defaults (payload, TTL and interval). */
     fun onResetAdvancedOptions() {
-        _payloadBytes.value = DEFAULT_PAYLOAD_BYTES
-        _ttl.value = DEFAULT_TTL
-        _intervalMs.value = DEFAULT_INTERVAL_MS
+        _payloadBytes.setKept(savedStateHandle, PAYLOAD_KEY, DEFAULT_PAYLOAD_BYTES)
+        _ttl.setKept(savedStateHandle, TTL_KEY, DEFAULT_TTL)
+        _intervalMs.setKept(savedStateHandle, INTERVAL_KEY, DEFAULT_INTERVAL_MS)
     }
 
     fun onToggleContinuous(enabled: Boolean) { _continuousMode.value = enabled }
@@ -742,6 +759,17 @@ class PingViewModel @Inject constructor(
     }
 
     override fun onCleared() {
+        // Only the slider values are kept for Back and return; ping results are not kept.
+        sessionMemory.put(
+            SLIDERS_SESSION_KEY,
+            SliderSnapshot(
+                count = _count.value,
+                timeoutMs = _timeoutMs.value,
+                payloadBytes = _payloadBytes.value,
+                ttl = _ttl.value,
+                intervalMs = _intervalMs.value,
+            ),
+        )
         pingOperationSession?.cancel(CancellationReason.LIFECYCLE_PAUSE)
         pingOperationSession = null
         val sessions = retiringSessions.toList() + listOfNotNull(continuousSession)

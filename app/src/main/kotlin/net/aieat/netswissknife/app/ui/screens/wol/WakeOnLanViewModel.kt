@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import net.aieat.netswissknife.app.data.ToolSessionMemory
 import net.aieat.netswissknife.app.platform.NetworkErrorKind
 import net.aieat.netswissknife.app.platform.NetworkStatus
 import net.aieat.netswissknife.app.platform.NetworkStatusProvider
@@ -47,6 +48,19 @@ sealed interface WolUiState {
     ) : WolUiState
 }
 
+/**
+ * The Wake-on-LAN form, the saved-device name being typed, and the last finished send (Success or
+ * Error), kept in [ToolSessionMemory] when the tool is left. No secret is involved: the MAC, broadcast
+ * address, port and device name are the only fields kept.
+ */
+internal data class WolSessionSnapshot(
+    val mac: String,
+    val broadcastAddress: String,
+    val port: String,
+    val deviceName: String,
+    val finished: WolUiState?,
+)
+
 @HiltViewModel
 class WakeOnLanViewModel @Inject constructor(
     private val wakeOnLan: WakeOnLanUseCase,
@@ -55,7 +69,11 @@ class WakeOnLanViewModel @Inject constructor(
     // Hilt supplies the owner-backed handle at runtime; this empty default supports direct unit tests.
     @param:SuppressLint("VisibleForTests")
     private val savedStateHandle: SavedStateHandle = SavedStateHandle(),
+    private val sessionMemory: ToolSessionMemory = ToolSessionMemory(),
 ) : ViewModel() {
+
+    // A route or intent handoff wins over the snapshot kept when the tool was left.
+    private val restoredSession: WolSessionSnapshot? = sessionMemory.get<WolSessionSnapshot>(WOL_SESSION_KEY)
 
     private val routeMac = savedStateHandle.get<String>("mac")?.let(ToolMacAddress::parse)
     private val rawIntentArgument = savedStateHandle.get<String>("intent")
@@ -83,24 +101,34 @@ class WakeOnLanViewModel @Inject constructor(
 
     val networkStatus: StateFlow<NetworkStatus> = networkStatusProvider.status
 
-    private val _uiState = MutableStateFlow<WolUiState>(WolUiState.Idle)
-    val uiState: StateFlow<WolUiState> = _uiState.asStateFlow()
-
     private val _macAddress = MutableStateFlow(
         if (handoffConsumed) {
             savedStateHandle.get<String>(EDITED_MAC_KEY).orEmpty()
         } else {
             savedStateHandle.get<String>(EDITED_MAC_KEY)
-                ?: if (_hasInvalidHandoff.value) "" else handoffMac?.value.orEmpty()
+                ?: if (_hasInvalidHandoff.value) "" else handoffMac?.value ?: restoredSession?.mac.orEmpty()
         },
     )
     val macAddress: StateFlow<String> = _macAddress.asStateFlow()
 
-    private val _broadcastAddress = MutableStateFlow(savedStateHandle.get<String>(BROADCAST_KEY) ?: DEFAULT_BROADCAST)
+    private val _broadcastAddress =
+        MutableStateFlow(
+            savedStateHandle.get<String>(BROADCAST_KEY) ?: restoredSession?.broadcastAddress ?: DEFAULT_BROADCAST,
+        )
     val broadcastAddress: StateFlow<String> = _broadcastAddress.asStateFlow()
 
-    private val _port = MutableStateFlow(savedStateHandle.get<String>(PORT_KEY) ?: DEFAULT_PORT.toString())
+    private val _port =
+        MutableStateFlow(
+            savedStateHandle.get<String>(PORT_KEY) ?: restoredSession?.port ?: DEFAULT_PORT.toString(),
+        )
     val port: StateFlow<String> = _port.asStateFlow()
+
+    // Declared after the MAC: a finished send is shown again only for the MAC it was sent to.
+    private val _uiState =
+        MutableStateFlow<WolUiState>(
+            restoredSession?.takeIf { it.mac == _macAddress.value }?.finished ?: WolUiState.Idle,
+        )
+    val uiState: StateFlow<WolUiState> = _uiState.asStateFlow()
 
     /** Inline problem for the MAC field; BLANK means "nothing entered yet" and is not an error to show. */
     val macProblem: StateFlow<WolMacProblem?> =
@@ -128,6 +156,7 @@ class WakeOnLanViewModel @Inject constructor(
             scope = viewModelScope,
             currentMac = { _macAddress.value },
             fillMac = { mac -> onMacAddressChange(mac) },
+            initialDeviceName = restoredSession?.deviceName.orEmpty(),
         )
     val savedDevices: StateFlow<List<WolSavedDevice>> = savedDeviceEditor.savedDevices
     val deviceName: StateFlow<String> = savedDeviceEditor.deviceName
@@ -246,6 +275,18 @@ class WakeOnLanViewModel @Inject constructor(
         sendGeneration++
         operationSession?.cancel(CancellationReason.LIFECYCLE_PAUSE)
         operationSession = null
+        // A send still in progress is not kept as running; only a finished Success or Error is.
+        val state = _uiState.value
+        sessionMemory.put(
+            WOL_SESSION_KEY,
+            WolSessionSnapshot(
+                mac = _macAddress.value,
+                broadcastAddress = _broadcastAddress.value,
+                port = _port.value,
+                deviceName = savedDeviceEditor.deviceName.value,
+                finished = state.takeIf { it is WolUiState.Success || it is WolUiState.Error },
+            ),
+        )
     }
 
     companion object {
@@ -264,5 +305,8 @@ class WakeOnLanViewModel @Inject constructor(
         // Advanced-options values; they survive rotation and process death, not leaving the tool.
         private const val BROADCAST_KEY = "wolBroadcastAddress"
         private const val PORT_KEY = "wolPort"
+
+        /** [ToolSessionMemory] slot for the form, device name and last finished send when the tool is left. */
+        private const val WOL_SESSION_KEY = "wolSession"
     }
 }

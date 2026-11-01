@@ -558,6 +558,7 @@ private fun PortScanInputCard(
             ToolTextField(
                 value = host,
                 onValueChange = onHostChange,
+                restoreFocusKey = "portsHost",
                 label = { Text(stringResource(R.string.ports_host_label)) },
                 placeholder = { Text(stringResource(R.string.ports_host_placeholder)) },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },

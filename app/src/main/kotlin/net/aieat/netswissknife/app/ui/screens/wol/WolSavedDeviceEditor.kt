@@ -21,11 +21,13 @@ class WolSavedDeviceEditor(
     private val scope: CoroutineScope,
     private val currentMac: () -> String,
     private val fillMac: (String) -> Unit,
+    /** Name typed before the tool was left, restored by the ViewModel from the session memory. */
+    initialDeviceName: String = "",
 ) {
     val savedDevices: StateFlow<List<WolSavedDevice>> =
         store.devices.stateIn(scope, SharingStarted.Eagerly, emptyList())
 
-    private val _deviceName = MutableStateFlow("")
+    private val _deviceName = MutableStateFlow(initialDeviceName.take(WolSavedDevices.MAX_NAME_LENGTH))
     val deviceName: StateFlow<String> = _deviceName.asStateFlow()
 
     /** Canonical MAC of the saved device being edited, or null when saving a new one. */

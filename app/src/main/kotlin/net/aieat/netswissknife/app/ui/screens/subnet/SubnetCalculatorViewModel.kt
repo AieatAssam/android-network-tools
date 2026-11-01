@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import net.aieat.netswissknife.app.data.ToolSessionMemory
 import net.aieat.netswissknife.app.util.enumFromSavedName
 import net.aieat.netswissknife.core.domain.SubnetCalculatorUseCase
 import net.aieat.netswissknife.core.network.NetworkResult
@@ -57,29 +58,42 @@ private fun SavedStateHandle.writeInputs(state: SubnetCalculatorUiState) {
     this[KEY_SPLIT_INPUT] = state.splitInput
 }
 
+/** [ToolSessionMemory] slot holding the last calculator state (inputs and derived results) when left. */
+private const val KEY_SESSION = "subnetSession"
+private const val SESSION_CLOSEABLE_KEY = "subnet_session_memory"
+
 @HiltViewModel
 class SubnetCalculatorViewModel @Inject constructor(
     private val useCase: SubnetCalculatorUseCase,
     // Hilt supplies the owner-backed handle at runtime; this empty default supports direct unit tests.
     @param:SuppressLint("VisibleForTests")
     private val savedStateHandle: SavedStateHandle = SavedStateHandle(),
+    private val sessionMemory: ToolSessionMemory = ToolSessionMemory(),
 ) : ViewModel() {
 
+    // The calculator has no running state: its whole state (inputs and the results they produced) is
+    // plain data, so the state kept when the tool was left is restored as it was and the handle is reseeded.
     private val _uiState =
         MutableStateFlow(
-            SubnetCalculatorUiState(
-                input = savedStateHandle.get<String>(KEY_INPUT).orEmpty(),
-                isRangeMode = savedStateHandle.get<Boolean>(KEY_RANGE_MODE) ?: false,
-                minIpInput = savedStateHandle.get<String>(KEY_MIN_IP).orEmpty(),
-                maxIpInput = savedStateHandle.get<String>(KEY_MAX_IP).orEmpty(),
-                checkIpInput = savedStateHandle.get<String>(KEY_CHECK_IP).orEmpty(),
-                splitMode =
-                    enumFromSavedName(savedStateHandle.get<String>(KEY_SPLIT_MODE), SubnetSplitMode.entries)
-                        ?: SubnetSplitMode.BY_PREFIX,
-                splitInput = savedStateHandle.get<String>(KEY_SPLIT_INPUT).orEmpty(),
-            ),
+            sessionMemory.get<SubnetCalculatorUiState>(KEY_SESSION)?.also { savedStateHandle.writeInputs(it) }
+                ?: SubnetCalculatorUiState(
+                    input = savedStateHandle.get<String>(KEY_INPUT).orEmpty(),
+                    isRangeMode = savedStateHandle.get<Boolean>(KEY_RANGE_MODE) ?: false,
+                    minIpInput = savedStateHandle.get<String>(KEY_MIN_IP).orEmpty(),
+                    maxIpInput = savedStateHandle.get<String>(KEY_MAX_IP).orEmpty(),
+                    checkIpInput = savedStateHandle.get<String>(KEY_CHECK_IP).orEmpty(),
+                    splitMode =
+                        enumFromSavedName(savedStateHandle.get<String>(KEY_SPLIT_MODE), SubnetSplitMode.entries)
+                            ?: SubnetSplitMode.BY_PREFIX,
+                    splitInput = savedStateHandle.get<String>(KEY_SPLIT_INPUT).orEmpty(),
+                ),
         )
     val uiState: StateFlow<SubnetCalculatorUiState> = _uiState.asStateFlow()
+
+    init {
+        // Runs when the ViewModel is cleared (Back), so the state is kept for the app session.
+        addCloseable(SESSION_CLOSEABLE_KEY, AutoCloseable { sessionMemory.put(KEY_SESSION, _uiState.value) })
+    }
 
     fun onInputChange(value: String) {
         _uiState.value = _uiState.value.withoutResult().copy(input = value)
