@@ -662,7 +662,11 @@ work_packages:
       no_change_needed: ["Wi-Fi Scanner", "Network Topology", "Subnet Calculator", "mDNS", "Network Info", "MAC Lookup", "Ping Share"]
   - id: WP27
     title: Final verification (device) of WP25-WP26
-    status: todo
+    status: done
+    result:
+      status: done
+      report: plan/findings/VERIFY-5.md
+      summary: "Back/forward state, copy/share (no secrets in clipboard), LAN summary in portrait/landscape/font 1.3/dark, keyboard regression and 16-tool smoke all PASS. New low issues V5-01..V5-06 carried to WP30+. Unverified: Topology/WoL/Speed Test/Ping share."
   - id: WP28
     title: LAN Scanner results summary card - readable and responsive
     status: done
