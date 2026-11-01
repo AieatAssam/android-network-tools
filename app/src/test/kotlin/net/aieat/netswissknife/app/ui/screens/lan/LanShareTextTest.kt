@@ -37,9 +37,10 @@ class LanShareTextTest {
             uncertainCount = 1,
         )
 
-        val text = buildLanShareText(summary)
+        val text = buildLanShareText(summary, durationText = "1.3 s")
 
         assertTrue(text.contains("Confirmed hosts: 1 / 254"))
+        assertTrue(text.contains("Duration: 1.3 s"))
         assertTrue(text.contains("192.168.1.1 (router.local) [Router Vendor] 3ms ports:80,443"))
         assertFalse(text.contains("192.168.1.88"))
         assertFalse(text.contains("Connection refused"))

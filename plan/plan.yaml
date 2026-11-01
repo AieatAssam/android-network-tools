@@ -624,9 +624,42 @@ work_packages:
 (1) DNS, Traceroute, WHOIS, Subnet Calculator, Wake-on-LAN, HTTP Probe forms and last results survive Back/forward via the existing ToolSessionMemory (never secrets); (2) Ping Advanced sliders (count, timeout, payload, TTL, interval) persist across return; (3) WoL saved-device name field restored; (4) with the IME open while typing, rotation should reopen the keyboard on the same field (WP24 closes it): save focused-field id via rememberSaveable and request focus for that field only when the IME was open."
   - id: WP26
     title: Result export and copy parity (Traceroute, DNS, Port Scanner, WHOIS, HTTP Probe, TLS, Wi-Fi)
-    status: todo
+    status: done
     findings: [A:TR-08, A:DNS-08, A:PING-09, D:GAP-01]
     notes: "Every tool with a result gets Copy and Share of a plain-text summary (Subnet, mDNS, Network Info, MAC Lookup, Ping and LAN already have some). Pure formatters in core modules with tests; copy feedback via the shared toast/snackbar pattern; strings in strings.xml; README updated per tool."
+    result:
+      status: done
+      commit: "recorded by git log: feat(app): copy and share results for every tool (WP26) (this block is part of it)"
+      gates: "./gradlew test ktlintCheck detekt (BUILD SUCCESSFUL); :app:assembleDebug; :app:compileDebugAndroidTestKotlin; :core-network:koverVerify; :core-domain:koverVerify; :app:koverVerify (all BUILD SUCCESSFUL), one invocation at a time in the foreground. ktlint app baseline regenerated twice: per (file, rule) counts are equal or lower than HEAD in every file (5233 -> 5229 entries); no entry for the new files. ktlintFormat not used."
+      decisions:
+        - "Copy copies exactly the text that Share already sends. Existing export builders keep their output (they were only made internal where a golden test needed them), so no timestamp or footer was added to them. Only the new Wake-on-LAN report has a timestamp and footer."
+        - "Shared helper: app/ui/components/CopyWithFeedback.kt rememberCopyWithFeedback() (LocalClipboard + the lan_copied 'Copied to clipboard' toast, the same pattern used by Subnet, NetInfo and MAC Lookup). Used by the new Copy actions and by the Ping and Port Scanner copies that had no feedback."
+        - "LAN share text: scan duration switched to humanDurationText (WP29 formatter), passed in as a parameter because the text is built outside composition. This changes the LAN export line from 1250ms to 1.3 s; the only sanctioned change to an existing export."
+        - "Copy buttons: header IconButtons (48dp, Material default minimum) where the header is an icon row (Traceroute, DNS, WHOIS, TLS, HTTP Probe, Speed Test header, WoL). LAN keeps its WP28 FlowRow text button pattern."
+      audit:
+        - {tool: Ping, copy_before: "CSV and raw-output copies with no feedback", share_before: "CSV file or text", action: "feedback added to both copies (shared helper); export unchanged"}
+        - {tool: Traceroute, copy_before: "none", share_before: "rawOutput (hop list, built from hops on every path)", action: "Copy added, same text as Share"}
+        - {tool: Port Scanner, copy_before: "Copy report, no feedback", share_before: "buildScanReport (open ports with banners)", action: "feedback added; export unchanged"}
+        - {tool: LAN Scanner, copy_before: "per-field copy only", share_before: "buildLanShareText (confirmed hosts)", action: "result Copy added (same text as Share); duration via humanDurationText"}
+        - {tool: DNS Lookup, copy_before: "per-record and raw-response copy, no result copy", share_before: "buildDnsShareText (type, server, time, records with TTL)", action: "result Copy added (same text as Share); golden test"}
+        - {tool: Wi-Fi Scanner, copy_before: "Copy with feedback (toolbar)", share_before: "buildWifiShareText", action: "none (verified)"}
+        - {tool: Network Topology, copy_before: "Copy with feedback", share_before: "report", action: "none (verified)"}
+        - {tool: TLS Inspector, copy_before: "none", share_before: "buildTlsShareText, plus Share PEM", action: "Copy added, same text as Share"}
+        - {tool: WHOIS, copy_before: "none", share_before: "buildWhoisShareText (parsed fields + raw)", action: "Copy added, same text as Share; golden test"}
+        - {tool: HTTP Probe, copy_before: "cURL and body copy only", share_before: "buildHttpShareText (no request headers or body)", action: "summary Copy added, same text as Share (sensitive response headers already excluded)"}
+        - {tool: Subnet Calculator, copy_before: "Copy with feedback", share_before: "buildSubnetShareText", action: "none (verified)"}
+        - {tool: mDNS, copy_before: "Copy with feedback", share_before: "buildMdnsShareText (filtered view)", action: "none (verified)"}
+        - {tool: Speed Test, copy_before: "none", share_before: "buildSpeedTestShareText", action: "Copy added in the results header, same text as Share"}
+        - {tool: Wake-on-LAN, copy_before: "none", share_before: "none", action: "new buildWolShareText (MAC, broadcast, port, packets, injected time, footer) with Copy and Share in the success card; golden test"}
+        - {tool: Network Info, copy_before: "per-row copy and Copy all, with feedback", share_before: "summary", action: "none (verified)"}
+        - {tool: MAC Lookup, copy_before: "Copy all with feedback", share_before: "summary", action: "none (verified)"}
+      tests: "New: WolShareTextTest (golden + no credential fields), DnsShareTextTest (golden with TTL, golden no-records), WhoisShareTextTest (golden). Updated: LanShareTextTest (duration line). Existing HttpProbePrivacyTest, PortsScreenReportTest and TLS tests still pass unchanged."
+      device: "Not run. Instrumented and device checks were not required for this WP and the tablet was not touched."
+      deferred:
+        - "DNS per-record copy and raw-response copy still have no toast (per-item copies, outside the result-level Copy)."
+        - "Export texts of Traceroute, DNS, TLS, WHOIS, HTTP Probe, Speed Test and LAN still lack a timestamp and footer, by design (existing exports unchanged). Revisit only as a separate change with golden test updates."
+        - "Copy and Share rows in the LAN summary and Speed Test header have not been screenshot-checked on device at font 1.3."
+      no_change_needed: ["Wi-Fi Scanner", "Network Topology", "Subnet Calculator", "mDNS", "Network Info", "MAC Lookup", "Ping Share"]
   - id: WP27
     title: Final verification (device) of WP25-WP26
     status: todo

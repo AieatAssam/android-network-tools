@@ -1192,6 +1192,7 @@
     <string name="share_subject_http">HTTP – %1$s</string>
     <string name="share_subject_dns">DNS %1$s – %2$s</string>
     <string name="share_subject_speedtest">Speed Test – %1$s</string>
+    <string name="share_subject_wol">Wake-on-LAN – %1$s</string>
 
     <!-- mDNS Screen -->
     <string name="mdns_screen_title">mDNS Browser</string>

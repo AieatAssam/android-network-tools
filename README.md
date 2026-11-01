@@ -27,6 +27,7 @@ ICMP echo and reachability round-trip latency measurement with real-time streami
 - Tools with recent-target support save up to five entries on-device and show quick-select chips; clear recent targets from Settings
 - Only a valid host is saved to recent targets. A dotted name whose last label is all digits (for example two addresses typed together, `10.109.208.25010.109.208.200`) is rejected as an invalid address and is never run. Recents saved by an earlier version that fail this rule are removed the first time the tool opens, and are never shown
 - CSV exports retain the original columns and append reply TTL and payload bytes.
+- Copy (CSV) and the raw output copy put the text on the clipboard and confirm with "Copied to clipboard"
 
 ### Traceroute
 Network path analysis with per-hop geolocation enrichment.
@@ -42,6 +43,7 @@ Network path analysis with per-hop geolocation enrichment.
 - When two or more consecutive replies all come from this device's own addresses, the trace stops early and reports "Host unreachable from this network (no route / destination host unreachable)" with Reached: No. A destination on the local subnet that does not answer is typically reported this way
 - Editing the host field clears a previous "Trace failed" message
 - The host and settings survive rotation and process death. Leaving the tool with Back keeps the host, settings and last finished result for the rest of the app session (in memory only, never on disk). A trace still running when you leave is not restored as running
+- Copy and Share in the Trace Results header send the same text: the hop list (the raw output)
 
 ### Port Scanner
 TCP port reachability scanning with service identification.
@@ -50,6 +52,7 @@ TCP port reachability scanning with service identification.
 - Concurrent scanning (1–500 simultaneous probes), per-port timeout slider (200–10,000 ms)
 - Service names come from the built-in registry; a port with no registered name shows no service name rather than a generic label
 - Banner grabbing for open ports
+- Copy report and Share report in the result header send a plain-text report (host, IP, port counts, duration, open ports with banners and TLS subject). Copy confirms with "Copied to clipboard"
 - Invalid hosts show the specific reason (for example, a space, an out-of-range IPv4 octet or an invalid character) instead of one generic message. Editing the host clears the previous result
 - A scan stopped with Stop Scan, or stopped when the app leaves the foreground, is labelled as stopped early with the number of ports scanned so far. A screen rotation does not stop a running scan
 - Leaving the tool and coming back keeps the host, port range, preset, timeout, concurrency and the last finished result, but a result is shown again only for the host it scanned. After a process death the form returns and the result does not
@@ -68,6 +71,7 @@ Local network device discovery across IPv4 subnets.
 - Back closes an expanded host first and keeps the results; a rotation keeps the scan running; there is no pull-to-refresh, so a swipe never discards results (use **Re-scan**)
 - Leaving the tool and coming back shows the last result, subnet, timeout and concurrency again (kept while the app stays open). After a process death the subnet, timeout and concurrency return but the result does not, since results are not saved to disk
 - Uncertain probe rows name the reason and port (for example "TCP probe timed out, port 80") rather than raw exception text
+- Copy and Share send the confirmed hosts as plain text; the scan duration is written as on screen (for example `1.3 s`, `2 min 5 s`)
 
 ### DNS Lookup
 Full DNS record resolution with multiple resolver options and protocol-level response details.
@@ -84,6 +88,7 @@ Full DNS record resolution with multiple resolver options and protocol-level res
 - The Additional section starts collapsed, since it usually holds EDNS OPT pseudo-records (labelled `OPT`); an MX record of `0 .` is annotated as a null MX
 - System DNS is never silently replaced with Cloudflare; when Android reports no resolver, the UI explains the failure and offers an explicit Cloudflare fallback. Private DNS status is shown when available.
 - IDN hostnames and trailing-dot FQDNs are normalized consistently across network tools.
+- Copy and Share in the result header send a plain-text summary: type, domain, server, query time, and every record with its TTL. Copy confirms with "Copied to clipboard". Per-record and raw-response copies are unchanged
 
 ### Wi-Fi Scanner
 Wi-Fi environment analysis with SSID grouping and spectrum visualisation.
@@ -108,6 +113,7 @@ SSL/TLS certificate analysis for any TCP host, without sending an HTTP request.
 - When the only chain finding is an issuing root that this device does not have, the finding names it: "This device's trust store does not include the issuing root (<name>)". The verdict stays untrusted
 - Connection summary includes negotiated TLS version, ALPN, cipher suite, connect time, and handshake time
 - Optional older-TLS-version probes, expected SHA-256 leaf-certificate pin comparison, and PEM chain sharing
+- Copy and Share in the result header send the connection summary, each certificate from leaf to root, and the chain findings as plain text. Share PEM still sends the PEM chain
 
 ### Network Topology Discovery
 SNMP-based network topology discovery via BFS traversal.
@@ -140,6 +146,7 @@ Domain, IP, and ASN registration lookup using RDAP with WHOIS fallback.
 - Live relay-chain visualiser shows the RDAP or WHOIS servers used; completed hops share one success colour
 - Invalid input names the specific problem (e.g. "An IPv4 address needs four numbers from 0 to 255" for 999.1.1.1)
 - The raw RDAP/WHOIS response section expands from its whole header row; the lookup keeps running across screen rotation
+- Copy and Share in the result header send the parsed fields (registrar, dates, name servers, status) and the raw WHOIS text
 - The query and protocol survive rotation and process death. Leaving the tool with Back keeps the query, protocol and the finished result for the query it was run for (in memory only); a lookup still running when you leave is not restored as running. Request headers are not involved
 
 ### HTTP Probe
@@ -160,6 +167,7 @@ HTTPS request tester with security header analysis. Plain HTTP requests are disa
 - Opening from mDNS Browser or LAN Scanner: HTTP Probe sends HTTPS only, so the handoff prefills `https://host/` for port 443 and `https://host:8443/` for port 8443. For any other port, such as the common plain-HTTP port 80, no URL is filled in and an explanation is shown. Plain HTTP is not sent to LAN addresses either. Cleartext support would need a separate, explicit warning-based design, so it was deferred.
 - The prefilled-from banner is removed as soon as the URL is edited.
 - Leaving the tool with Back keeps the URL, method, redirect flag and the last finished result for the app session (in memory only, never on disk). Request headers and the request body are never kept, so a result shown again has no request headers or body: its cURL copy omits them. A request still running when you leave is cancelled and not restored as running
+- Copy and Share in the response header send a plain-text summary: status, final URL, redirects, response headers, size, and security checks. Cookie, Set-Cookie, Authorization and Proxy-Authorization values are omitted, and request headers and the request body are never included
 
 ### mDNS Service Browser
 LAN service discovery via multicast DNS (RFC 6762 / DNS-SD RFC 6763).
@@ -204,6 +212,7 @@ Internet connection speed test measuring latency, download, and upload throughpu
 - Failure keeps the latency and download results already measured, names the phase that failed, and offers Run again. The error text is a plain-language reason, not raw exception text
 - Cancel returns to the start screen with a "Test canceled" notice and keeps any finished latency and download results. There is one Start button
 - Share button exports a plain-text summary of the results
+- Copy icon in the results header copies the same plain-text summary to the clipboard
 - **Powered by Cloudflare** — measurement traffic is sent to and timed against `speed.cloudflare.com` (`/__down` and `/__up`), the same backend that powers Cloudflare's public speed test at <https://speed.cloudflare.com>. Net Swiss Knife is an independent app and is **not affiliated with, sponsored by, or endorsed by Cloudflare, Inc.**; "Cloudflare" and the Cloudflare logo are trademarks of Cloudflare, Inc. Full attribution is also shown in-app under Settings → Data Source Attributions.
 
 ### Wake-on-LAN
@@ -219,6 +228,7 @@ Wake sleeping or powered-down machines on the local network with a UDP magic pac
 - Saved devices (stored on this device only): save the current MAC under an optional name, use a saved device to fill the form, edit a saved device's name or MAC, and delete it. A MAC is stored once, whichever notation it was entered in; an edit that would make two entries share a MAC is refused
 - Saving a MAC that is already saved never silently renames it. With the name field left blank the saved name is kept; with a new name the device is renamed. Either way a note says what happened (for example "Already saved as QA dummy. Renamed to dup.")
 - In-app help explains BIOS/OS requirements
+- After a send, Copy and Share put a plain-text report on the clipboard or in the share sheet: target MAC, broadcast address, UDP port, packets sent, and the time the text was generated. The report states that delivery is not confirmed
 
 ### Network Info
 Shows the device's active network, its IP configuration, and an optional public IP check. Read-only and local, except for the public IP check you start yourself.

@@ -36,6 +36,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExpandLess
@@ -121,6 +122,7 @@ import net.aieat.netswissknife.app.ui.theme.StatusWarnDeep
 import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.RecentHostsRow
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
+import net.aieat.netswissknife.app.ui.components.rememberCopyWithFeedback
 import net.aieat.netswissknife.app.ui.components.rememberDismissKeyboard
 import net.aieat.netswissknife.app.util.formatBytes
 import net.aieat.netswissknife.app.util.shareText
@@ -849,11 +851,24 @@ private fun HttpProbeSuccessContent(
     onCopyCurl: () -> Unit,
     onShare: () -> Unit
 ) {
+    val copyResult = rememberCopyWithFeedback()
+    val atLeastFormat = stringResource(R.string.httprobe_response_size_at_least)
+    // Copy sends the same summary as Share: status, headers and timings, never request headers or body.
+    val summaryText =
+        remember(result, atLeastFormat) {
+            buildHttpShareText(result, responseSizeText(result, atLeastFormat))
+        }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.End
         ) {
+            IconButton(onClick = { copyResult(summaryText) }) {
+                Icon(
+                    imageVector = Icons.Default.ContentCopy,
+                    contentDescription = stringResource(R.string.action_copy),
+                )
+            }
             IconButton(onClick = onShare) {
                 Icon(
                     imageVector = Icons.Default.Share,

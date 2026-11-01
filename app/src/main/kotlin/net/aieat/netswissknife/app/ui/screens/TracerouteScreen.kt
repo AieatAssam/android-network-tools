@@ -41,6 +41,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -102,6 +103,7 @@ import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
 import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
 import net.aieat.netswissknife.app.ui.components.ToolErrorCard
 import net.aieat.netswissknife.app.ui.components.ToolTextField
+import net.aieat.netswissknife.app.ui.components.rememberCopyWithFeedback
 import net.aieat.netswissknife.app.ui.components.rememberDismissKeyboard
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
 import net.aieat.netswissknife.app.ui.components.ToolStopButton
@@ -798,9 +800,31 @@ private fun TracerouteFinishedPanel(
 
 // ── Stats summary ─────────────────────────────────────────────────────────────
 
+/** Copy and Share both send [rawOutput], the same text the Share action always sent. */
+@Composable
+@Suppress("FunctionNaming", "ktlint:standard:function-naming")
+private fun TraceResultActions(
+    rawOutput: String,
+    shareSubject: String,
+    onClear: () -> Unit,
+) {
+    val context = LocalContext.current
+    val copyResult = rememberCopyWithFeedback()
+    Row {
+        IconButton(onClick = { copyResult(rawOutput) }) {
+            Icon(Icons.Default.ContentCopy, contentDescription = stringResource(R.string.action_copy))
+        }
+        IconButton(onClick = { context.shareText(text = rawOutput, subject = shareSubject) }) {
+            Icon(Icons.Default.Share, contentDescription = stringResource(R.string.action_share))
+        }
+        TextButton(onClick = onClear) {
+            Text(stringResource(R.string.traceroute_clear_button))
+        }
+    }
+}
+
 @Composable
 private fun TraceStatsSummary(result: TracerouteResult, onClear: () -> Unit) {
-    val context = LocalContext.current
     val shareSubject = stringResource(R.string.share_subject_traceroute, result.host)
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -813,19 +837,11 @@ private fun TraceStatsSummary(result: TracerouteResult, onClear: () -> Unit) {
                     stringResource(R.string.traceroute_result_header),
                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold)
                 )
-                Row {
-                    IconButton(onClick = {
-                        context.shareText(
-                            text = result.rawOutput,
-                            subject = shareSubject
-                        )
-                    }) {
-                        Icon(Icons.Default.Share, contentDescription = stringResource(R.string.action_share))
-                    }
-                    TextButton(onClick = onClear) {
-                        Text(stringResource(R.string.traceroute_clear_button))
-                    }
-                }
+                TraceResultActions(
+                    rawOutput = result.rawOutput,
+                    shareSubject = shareSubject,
+                    onClear = onClear,
+                )
             }
             Spacer(Modifier.height(8.dp))
             Row(

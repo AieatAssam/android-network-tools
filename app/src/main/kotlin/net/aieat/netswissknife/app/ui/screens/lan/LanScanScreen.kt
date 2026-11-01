@@ -52,6 +52,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.DeviceHub
@@ -136,6 +137,7 @@ import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
 import net.aieat.netswissknife.app.ui.components.ToolStopButton
 import net.aieat.netswissknife.app.ui.components.hapticAction
+import net.aieat.netswissknife.app.ui.components.rememberCopyWithFeedback
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.RecentHostsRow
@@ -1052,6 +1054,8 @@ private fun LanFinishedContent(
 ) {
     val context = LocalContext.current
     val shareSubject = stringResource(R.string.share_subject_lan, summary.subnet)
+    val shareDuration = humanDurationText(summary.scanDurationMs)
+    val copyResult = rememberCopyWithFeedback()
     val prefixLength = summary.subnet.substringAfter("/")
     val filteredHosts =
         remember(summary.hosts, searchQuery, activeFilter) {
@@ -1211,9 +1215,17 @@ private fun LanFinishedContent(
                         verticalArrangement = Arrangement.spacedBy(0.dp),
                     ) {
                         TextButton(
+                            onClick = { copyResult(buildLanShareText(summary, shareDuration)) },
+                            contentPadding = PaddingValues(horizontal = 0.dp),
+                        ) {
+                            Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(stringResource(R.string.action_copy))
+                        }
+                        TextButton(
                             onClick = {
                                 context.shareText(
-                                    text = buildLanShareText(summary),
+                                    text = buildLanShareText(summary, shareDuration),
                                     subject = shareSubject,
                                 )
                             },

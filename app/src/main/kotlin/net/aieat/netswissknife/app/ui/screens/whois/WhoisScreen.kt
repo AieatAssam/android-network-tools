@@ -44,6 +44,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.Error
@@ -102,6 +103,7 @@ import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
 import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
 import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.components.ToolTextField
+import net.aieat.netswissknife.app.ui.components.rememberCopyWithFeedback
 import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.ui.components.messageRes
 import net.aieat.netswissknife.app.ui.theme.AppMotion
@@ -683,6 +685,7 @@ fun WhoisResultsSection(
     onShare: () -> Unit,
     onOpenUrl: (String) -> Unit
 ) {
+    val copyResult = rememberCopyWithFeedback()
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -704,6 +707,12 @@ fun WhoisResultsSection(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+            }
+            IconButton(onClick = { copyResult(buildWhoisShareText(result)) }) {
+                Icon(
+                    imageVector = Icons.Default.ContentCopy,
+                    contentDescription = stringResource(R.string.action_copy),
+                )
             }
             IconButton(onClick = onShare) {
                 Icon(
@@ -1083,7 +1092,7 @@ private fun flagEmoji(countryCode: String): String {
         .joinToString("")
 }
 
-private fun buildWhoisShareText(result: net.aieat.netswissknife.core.network.whois.WhoisResult): String = buildString {
+internal fun buildWhoisShareText(result: net.aieat.netswissknife.core.network.whois.WhoisResult): String = buildString {
     appendLine("WHOIS – ${result.query}")
     appendLine()
     result.registrar?.let { appendLine("Registrar: $it") }

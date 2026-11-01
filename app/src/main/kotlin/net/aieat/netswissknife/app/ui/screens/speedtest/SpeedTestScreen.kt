@@ -40,6 +40,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.NetworkCheck
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Stop
@@ -90,6 +91,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.aieat.netswissknife.app.ui.components.hapticAction
+import net.aieat.netswissknife.app.ui.components.rememberCopyWithFeedback
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
@@ -814,6 +816,27 @@ private fun MiniResultCard(
 
 // ── Finished state ────────────────────────────────────────────────────────────
 
+/** Results title with a Copy action. Copy sends the same text as Share (buildSpeedTestShareText). */
+@Composable
+@Suppress("FunctionNaming", "ktlint:standard:function-naming")
+private fun SpeedTestResultHeader(result: SpeedTestResult) {
+    val copyResult = rememberCopyWithFeedback()
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = stringResource(R.string.speedtest_results_header),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+        )
+        IconButton(onClick = { copyResult(buildSpeedTestShareText(result)) }) {
+            Icon(Icons.Default.ContentCopy, contentDescription = stringResource(R.string.action_copy))
+        }
+    }
+}
+
 @Composable
 private fun SpeedTestResultContent(
     result: SpeedTestResult,
@@ -824,13 +847,8 @@ private fun SpeedTestResultContent(
     LaunchedEffect(Unit) {
         listOf(80L, 120L, 120L).forEach { d -> delay(d); visibleCards++ }
     }
-
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(
-            text = stringResource(R.string.speedtest_results_header),
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold
-        )
+        SpeedTestResultHeader(result)
 
         result.serverInfo?.let { ServerInfoChip(it) }
 

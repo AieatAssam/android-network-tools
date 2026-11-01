@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
@@ -92,6 +93,7 @@ import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.RecentHostsRow
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
+import net.aieat.netswissknife.app.ui.components.rememberCopyWithFeedback
 import net.aieat.netswissknife.app.ui.components.rememberDismissKeyboard
 import net.aieat.netswissknife.app.ui.theme.StatusBlue
 import net.aieat.netswissknife.app.util.shareText
@@ -555,12 +557,20 @@ private fun TlsSuccessContent(result: TlsInspectorResult) {
     val context = LocalContext.current
     val shareSubject = stringResource(R.string.share_subject_tls, result.host, result.port)
     val pemShareSubject = stringResource(R.string.tls_share_pem_subject, result.host, result.port)
+    val copyResult = rememberCopyWithFeedback()
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.End,
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            // Copy and Share both send buildTlsShareText, the same text as before.
+            IconButton(onClick = { copyResult(buildTlsShareText(result)) }) {
+                Icon(
+                    imageVector = Icons.Default.ContentCopy,
+                    contentDescription = stringResource(R.string.action_copy),
+                )
+            }
             IconButton(onClick = {
                 context.shareText(
                     text = buildTlsShareText(result),

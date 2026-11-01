@@ -30,6 +30,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.Edit
@@ -39,6 +40,7 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.Router
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -60,6 +62,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -81,6 +84,7 @@ import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
 import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.components.ToolTextField
 import net.aieat.netswissknife.app.ui.components.hapticAction
+import net.aieat.netswissknife.app.ui.components.rememberCopyWithFeedback
 import net.aieat.netswissknife.app.ui.components.rememberDismissKeyboard
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
 import net.aieat.netswissknife.app.ui.i18n.ErrorTextMapper
@@ -89,9 +93,11 @@ import net.aieat.netswissknife.app.ui.navigation.ToolSource
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.ui.theme.AppShapes
 import net.aieat.netswissknife.app.ui.theme.AppSpacing
+import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.core.network.wol.WolBroadcastProblem
 import net.aieat.netswissknife.core.network.wol.WolMacProblem
 import net.aieat.netswissknife.core.network.wol.WolSendReport
+import java.time.Instant
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
@@ -696,6 +702,9 @@ private fun WolSuccessCard(report: WolSendReport, onSendAgain: () -> Unit) {
         ),
         label = "wol-success-icon"
     )
+    val context = LocalContext.current
+    val copyResult = rememberCopyWithFeedback()
+    val shareSubject = stringResource(R.string.share_subject_wol, report.macAddress)
 
     ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = AppShapes.large) {
         Column(
@@ -753,11 +762,21 @@ private fun WolSuccessCard(report: WolSendReport, onSendAgain: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            TextButton(
-                onClick = onSendAgain,
-                modifier = Modifier.heightIn(min = MinTouchTarget),
-            ) {
-                Text(stringResource(R.string.wol_send_again))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = { copyResult(buildWolShareText(report, Instant.now())) }) {
+                    Icon(Icons.Default.ContentCopy, contentDescription = stringResource(R.string.action_copy))
+                }
+                IconButton(onClick = {
+                    context.shareText(buildWolShareText(report, Instant.now()), shareSubject)
+                }) {
+                    Icon(Icons.Default.Share, contentDescription = stringResource(R.string.action_share))
+                }
+                TextButton(
+                    onClick = onSendAgain,
+                    modifier = Modifier.heightIn(min = MinTouchTarget),
+                ) {
+                    Text(stringResource(R.string.wol_send_again))
+                }
             }
         }
     }

@@ -95,10 +95,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import android.content.ClipData
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.platform.ClipEntry
-import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -121,7 +117,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import kotlinx.coroutines.launch
 import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
 import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
@@ -135,6 +130,7 @@ import net.aieat.netswissknife.app.ui.components.ToolStopButton
 import net.aieat.netswissknife.app.ui.components.ToolTextField
 import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.ui.components.messageRes
+import net.aieat.netswissknife.app.ui.components.rememberCopyWithFeedback
 import net.aieat.netswissknife.app.ui.components.rememberDismissKeyboard
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
 import net.aieat.netswissknife.app.ui.i18n.asString
@@ -824,8 +820,7 @@ private fun PingFinishedPanel(
     onToggleRaw: () -> Unit,
     onClear: () -> Unit
 ) {
-    val clipboard = LocalClipboard.current
-    val coroutineScope = rememberCoroutineScope()
+    val copyResult = rememberCopyWithFeedback()
     val result = state.result
     val context = LocalContext.current
     val shareSubject = stringResource(R.string.share_subject_ping, result.host)
@@ -887,7 +882,7 @@ private fun PingFinishedPanel(
                         fontWeight = FontWeight.SemiBold
                     )
                     IconButton(onClick = {
-                        coroutineScope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("", PingCsvSerializer.serialize(result)))) }
+                        copyResult(PingCsvSerializer.serialize(result))
                     }) {
                         Icon(Icons.Default.ContentCopy, contentDescription = stringResource(R.string.ping_copy_csv))
                     }
@@ -1382,8 +1377,7 @@ private fun RawOutputCard(
     showRaw: Boolean,
     onToggle: () -> Unit
 ) {
-    val clipboard = LocalClipboard.current
-    val scope = rememberCoroutineScope()
+    val copyRaw = rememberCopyWithFeedback()
 
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -1400,7 +1394,7 @@ private fun RawOutputCard(
                 Row {
                     if (showRaw) {
                         IconButton(onClick = {
-                            scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("", rawOutput))) }
+                            copyRaw(rawOutput)
                         }) {
                             Icon(Icons.Default.ContentCopy, contentDescription = stringResource(R.string.ping_copy_raw))
                         }

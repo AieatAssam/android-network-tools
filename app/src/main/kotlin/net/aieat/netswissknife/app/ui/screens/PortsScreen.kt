@@ -1,7 +1,6 @@
 package net.aieat.netswissknife.app.ui.screens
 
 import android.app.Activity
-import android.content.ClipData
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
@@ -83,7 +82,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -92,8 +90,6 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.platform.ClipEntry
-import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
@@ -115,7 +111,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import kotlinx.coroutines.launch
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.RecentHostsRow
@@ -128,6 +123,7 @@ import net.aieat.netswissknife.app.ui.components.ToolStopButton
 import net.aieat.netswissknife.app.ui.components.ToolTextField
 import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.ui.components.messageRes
+import net.aieat.netswissknife.app.ui.components.rememberCopyWithFeedback
 import net.aieat.netswissknife.app.ui.components.rememberDismissKeyboard
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
 import net.aieat.netswissknife.app.ui.format.humanDurationText
@@ -229,8 +225,7 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
     )
 
     val dismissKeyboard = rememberDismissKeyboard()
-    val clipboard = LocalClipboard.current
-    val clipScope = rememberCoroutineScope()
+    val copyReport = rememberCopyWithFeedback()
     val context = LocalContext.current
     var showAll by rememberSaveable { mutableStateOf(false) }
     var showHelp by remember { mutableStateOf(false) }
@@ -376,7 +371,7 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
                 PortScanSummaryCard(
                     summary = summary,
                     onCopy = {
-                        clipScope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("", buildScanReport(summary)))) }
+                        copyReport(buildScanReport(summary))
                     },
                     onShare = {
                         context.shareText(

@@ -118,6 +118,7 @@ import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
 import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
 import net.aieat.netswissknife.app.ui.components.ToolErrorCard
 import net.aieat.netswissknife.app.ui.components.ToolTextField
+import net.aieat.netswissknife.app.ui.components.rememberCopyWithFeedback
 import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
@@ -961,6 +962,7 @@ private fun DnsResultSummaryCard(
     val context = LocalContext.current
     val shareSubject = stringResource(R.string.share_subject_dns, result.recordType.name, result.domain)
     val shareServerLine = stringResource(R.string.dns_share_server, result.server.uiLabel().asString())
+    val copyResult = rememberCopyWithFeedback()
     val tone = dnsResponseTone(result.rcode)
     val onContainer =
         when (tone) {
@@ -1046,6 +1048,14 @@ private fun DnsResultSummaryCard(
                     }
                 }
                 Row {
+                    // Copy and Share both send buildDnsShareText, so the clipboard matches the share text.
+                    IconButton(onClick = { copyResult(buildDnsShareText(result, shareServerLine)) }) {
+                        Icon(
+                            imageVector = Icons.Default.ContentCopy,
+                            contentDescription = stringResource(R.string.action_copy),
+                            tint = onContainer,
+                        )
+                    }
                     IconButton(onClick = {
                         context.shareText(
                             text = buildDnsShareText(result, shareServerLine),
@@ -1564,7 +1574,7 @@ private fun DnsRawToggleCard(
     }
 }
 
-private fun buildDnsShareText(result: DnsResult, serverLine: String): String = buildString {
+internal fun buildDnsShareText(result: DnsResult, serverLine: String): String = buildString {
     appendLine("DNS ${result.recordType.name} – ${result.domain}")
     appendLine(serverLine)
     appendLine("Query time: ${result.queryTimeMs}ms")
