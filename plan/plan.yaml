@@ -886,3 +886,18 @@ work_packages:
         - "PHA-10 Wake-on-LAN in More sheet: at 480 portrait the sheet scrolls to the end and lists Speed Test and Wake-on-LAN under Utilities (checked on device). At 533 with font 1.3 the sheet could not be scrolled to the bottom reliably in this pass (swipes ended in a mid-scroll state); Wake-on-LAN was not located. Left open. Source: MORE_TOOL_SECTIONS lists wol in utilities; the sheet is a verticalScroll column."
         - "PHA-14 Port Scanner Filtered stat tile: still tertiaryContainer (PortsScreen.kt, StatChip for ports_filtered_ports). The WP33 change only neutralised the list rows. Not changed in WP35b: needs a device screenshot after a scan to choose the tile colour. Open."
         - "Not started in WP35b: V6A-03, V6A-04, V6A-05, V6A-06, V6A-07, V6A-08, V6A-09, V6A-10, V6A-11, V6A-12, V6A-13, PHA-02 (LAN List/Map toggle), PHA-21 (Home hero at 360dp + font 1.3)."
+      wp35cde:
+        commits: "02d1e59 WP35c shared fixes; 544888a core-network ktlint follow-up; 064e582 PHA-21 (WP35e)"
+        changes:
+          - "V6A-04: resolverErrorMessage (core-network, pure) maps UnknownHostException to the plain Ping sentence; TracerouteViewModel uses it. Unit-tested. Ping keeps its strings.xml copy; the sentence is now in two places and must stay identical."
+          - "V6A-05: Topology failure card scrolls in a short slot (no clipping); the Retry button was already inside the card. 'Discovery Failed' moved to strings.xml."
+          - "V6A-12: shared DisabledActionHint line, used by Ping, Traceroute and Topology (Topology names the missing SNMPv3 settings when the target is valid)."
+          - "V6A-03: ToolErrorCard action row has a 12dp gap (applies to every error card)."
+          - "PHA-14: Port Scanner Filtered tile uses surfaceVariant / onSurfaceVariant (neutral), not tertiaryContainer."
+          - "PHA-10: More sheet fade overlay that covered the last rows removed; footer clears the navigation bar. MoreToolsSheetCoverageTest (already present) asserts every route is in exactly one section. Not re-checked on device after the change."
+          - "PHA-21: compact hero also when the window is narrower than 380dp (isCompactHeroWidth, red then green). Checked at 533 dpi, font 1.3: first tool card now about 23% down the screen (was about 56%)."
+        not_done:
+          - "PHA-02 LAN list/map segmented toggle (default List, remembered in ToolSessionMemory): not started. Map and list are still both on screen."
+          - "V6A-06 (Topology SNMP card clip, UNVERIFIED repro), V6A-07 (Traceroute target twice), V6A-08 (DNS NXDOMAIN host three times), V6A-09 (DNS 'Additional' label placement), V6A-10 (LAN 'devices' vs 'Confirmed hosts' wording), V6A-11 (LAN '201' twice), V6A-13 (Wi-Fi band twice): not started."
+          - "Device checks not done for WP35c/e changes: Topology error card, Traceroute unresolved host message, Clear/Retry gap, More sheet at 533 with font 1.3 (scroll to Wake-on-LAN), landscape for all tools except Ping, Port Scanner Filtered tile colour."
+          - "Coverage note: the ImeFocusRevealTest RED was observed; the ResolverErrorMessage unit test was written together with its implementation and was green on first run (not observed red)."
