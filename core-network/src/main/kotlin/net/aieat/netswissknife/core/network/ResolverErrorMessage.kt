@@ -7,9 +7,10 @@ import java.net.UnknownHostException
  * (V6A-04). Ping shows the same sentence from its string resource; keep the two identical.
  * Returns null for failures that are not about name resolution, so callers keep their own text.
  */
-fun resolverErrorMessage(error: Throwable, host: String): String? =
-    if (error is UnknownHostException) {
-        "Could not find an address for $host. Check the name, then try again."
-    } else {
-        null
-    }
+fun resolverErrorMessage(
+    error: Throwable,
+    host: String,
+): String? {
+    if (error !is UnknownHostException) return null
+    return "Could not find an address for $host. Check the name, then try again."
+}

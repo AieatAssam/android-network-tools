@@ -1,10 +1,10 @@
 package net.aieat.netswissknife.core.network
 
-import java.io.IOException
-import java.net.UnknownHostException
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
+import java.io.IOException
+import java.net.UnknownHostException
 
 class ResolverErrorMessageTest {
     @Test
