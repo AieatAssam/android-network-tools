@@ -41,3 +41,15 @@ class ScreenHeightModeTest {
         assertEquals(1, homeGridColumns(availableWidthDp = 120))
     }
 }
+
+class NarrowHeroTest {
+    @Test
+    fun `360dp wide window uses the compact hero even when it is tall`() {
+        assertTrue(isCompactHeroWidth(360))
+    }
+
+    @Test
+    fun `400dp wide window keeps the full hero`() {
+        assertFalse(isCompactHeroWidth(400))
+    }
+}

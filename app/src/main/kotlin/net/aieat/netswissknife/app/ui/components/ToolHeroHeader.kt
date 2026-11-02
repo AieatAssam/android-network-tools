@@ -61,7 +61,8 @@ fun ToolHeroHeader(
 ) {
     // On short windows (phone landscape) the hero shrinks so the tool's first input and results sit
     // above the fold (PHA-23). The subtitle moves behind the help button in that mode.
-    val compact = isCompactHeroHeight(LocalConfiguration.current.screenHeightDp)
+    val config = LocalConfiguration.current
+    val compact = isCompactHero(config.screenHeightDp, config.screenWidthDp)
     ElevatedCard(
         modifier = modifier.fillMaxWidth(),
         shape = AppShapes.large,

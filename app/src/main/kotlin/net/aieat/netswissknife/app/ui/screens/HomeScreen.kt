@@ -62,7 +62,7 @@ import kotlinx.coroutines.delay
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.ui.components.homeGridColumns
-import net.aieat.netswissknife.app.ui.components.isCompactHeroHeight
+import net.aieat.netswissknife.app.ui.components.isCompactHero
 import net.aieat.netswissknife.app.ui.navigation.NavRoutes
 import net.aieat.netswissknife.app.ui.navigation.ToolInfo
 import net.aieat.netswissknife.app.ui.theme.AppMotion
@@ -94,7 +94,8 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
             visible = headerVisible,
             enter = fadeIn(AppMotion.enter(500)) + slideInVertically(AppMotion.enter(500)) { -40 },
         ) {
-            HeroHeader(compact = isCompactHeroHeight(LocalConfiguration.current.screenHeightDp))
+            val config = LocalConfiguration.current
+            HeroHeader(compact = isCompactHero(config.screenHeightDp, config.screenWidthDp))
         }
 
         AnimatedVisibility(
