@@ -775,7 +775,7 @@ work_packages:
   - id: WP32
     title: Result-screen de-duplication across tools
     status: todo
-    findings: [PHB-04, PHB-05, PHB-06, PHB-07, PHB-08, PHB-09, PHB-14, PHB-17, PHB-19, PHB-22, PHB-23, PHB-24, PHB-27, PHA-13, PHA-17, PHA-18]
+    findings: [PHB-12, PHB-04, PHB-05, PHB-06, PHB-07, PHB-08, PHB-09, PHB-14, PHB-17, PHB-19, PHB-22, PHB-23, PHB-24, PHB-27, PHA-13, PHA-17, PHA-18]
     notes: "Rule: a summary/header/banner/chip holds aggregate or derived info only; never restate input echoed elsewhere or per-row data."
   - id: WP33
     title: Phone-round behaviour and error-state fixes
