@@ -1,4 +1,4 @@
-package net.aieat.netswissknife.app.ui.screens.portscan
+package net.aieat.netswissknife.app.ui.format
 
 /**
  * The resolved address to show under the host, or null when it would only repeat the host

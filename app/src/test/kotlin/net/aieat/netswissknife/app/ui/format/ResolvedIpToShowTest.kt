@@ -1,4 +1,4 @@
-package net.aieat.netswissknife.app.ui.screens.portscan
+package net.aieat.netswissknife.app.ui.format
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull

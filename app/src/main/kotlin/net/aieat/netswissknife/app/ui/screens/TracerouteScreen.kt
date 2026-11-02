@@ -90,6 +90,7 @@ import androidx.compose.ui.text.withStyle
 import net.aieat.netswissknife.app.ui.components.DisabledActionHint
 import net.aieat.netswissknife.app.ui.components.ResultActionsRow
 import net.aieat.netswissknife.app.ui.format.humanDurationText
+import net.aieat.netswissknife.app.ui.format.resolvedIpToShow
 import androidx.compose.foundation.layout.RowScope
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
 import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
@@ -927,10 +928,11 @@ private fun TraceStatsSummary(result: TracerouteResult, onClear: () -> Unit) {
                         stringResource(R.string.traceroute_stat_no)
                 )
             }
-            if (result.resolvedIp != null) {
+            // An IP target resolves to itself; showing it again repeats the target.
+            resolvedIpToShow(result.host, result.resolvedIp)?.let { ip ->
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    stringResource(R.string.traceroute_resolved_ip, result.resolvedIp!!),
+                    stringResource(R.string.traceroute_resolved_ip, ip),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

@@ -801,9 +801,10 @@ internal fun buildWifiShareText(result: net.aieat.netswissknife.core.network.wif
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
                 )
-                if (result.detectedBands.isNotEmpty()) {
+                // With several bands the band tabs name them, so the hero names a band only when there is one.
+                if (result.detectedBands.size == 1) {
                     Text(
-                        result.detectedBands.joinToString(" · ") { it.displayName },
+                        result.detectedBands.single().displayName,
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
                     )

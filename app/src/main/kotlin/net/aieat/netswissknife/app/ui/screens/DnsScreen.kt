@@ -900,6 +900,20 @@ private fun DnsResultPanel(
         // Summary card
         DnsResultSummaryCard(result = result, onClear = onClear)
 
+        // Answers first. Authority and Additional follow them, as the DNS message orders its sections.
+        if (result.records.isEmpty()) {
+            DnsNoRecordsCard(result = result)
+        } else {
+            Text(
+                text = stringResource(R.string.dns_answer_section),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(start = 4.dp),
+            )
+            result.records.forEachIndexed { index, record ->
+                DnsRecordCard(record = record, index = index)
+            }
+        }
         if (result.authority.isNotEmpty()) {
             DnsSectionCard(
                 title = stringResource(R.string.dns_authority_section),
@@ -912,15 +926,6 @@ private fun DnsResultPanel(
                 records = result.additional,
                 initiallyExpanded = false,
             )
-        }
-
-        // Records / empty state
-        if (result.records.isEmpty()) {
-            DnsNoRecordsCard(result = result)
-        } else {
-            result.records.forEachIndexed { index, record ->
-                DnsRecordCard(record = record, index = index)
-            }
         }
 
         // Raw response toggle
@@ -1376,13 +1381,14 @@ private fun PlainValueDisplay(value: String) {
 
 @Composable
 private fun DnsNoRecordsCard(result: DnsResult) {
+    // The domain is the summary card's title, so these subtitles do not repeat it.
     val (title, subtitle) = when (result.rcode) {
         "NOERROR" -> R.string.dns_no_records_title to
-            stringResource(R.string.dns_no_records_subtitle, result.recordType.displayName, result.domain)
+            stringResource(R.string.dns_no_records_subtitle, result.recordType.displayName)
         "NXDOMAIN" -> R.string.dns_nxdomain_title to
-            stringResource(R.string.dns_nxdomain_subtitle, result.domain)
+            stringResource(R.string.dns_nxdomain_subtitle)
         else -> R.string.dns_rcode_error_title to
-            stringResource(R.string.dns_rcode_error_subtitle, result.rcode, result.domain)
+            stringResource(R.string.dns_rcode_error_subtitle, result.rcode)
     }
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),

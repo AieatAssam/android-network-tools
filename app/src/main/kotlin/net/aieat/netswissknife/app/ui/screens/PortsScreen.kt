@@ -113,12 +113,12 @@ import net.aieat.netswissknife.app.ui.components.rememberDismissKeyboard
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
 import net.aieat.netswissknife.app.ui.components.scrollIntoViewOnFocus
 import net.aieat.netswissknife.app.ui.format.humanDurationText
+import net.aieat.netswissknife.app.ui.format.resolvedIpToShow
 import net.aieat.netswissknife.app.ui.i18n.asString
 import net.aieat.netswissknife.app.ui.i18n.uiText
 import net.aieat.netswissknife.app.ui.navigation.ToolSource
 import net.aieat.netswissknife.app.ui.screens.portscan.PortScanUiState
 import net.aieat.netswissknife.app.ui.screens.portscan.PortScanViewModel
-import net.aieat.netswissknife.app.ui.screens.portscan.resolvedIpToShow
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.core.domain.PortScanPreset
