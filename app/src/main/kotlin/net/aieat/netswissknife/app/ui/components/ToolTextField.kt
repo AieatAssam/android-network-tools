@@ -1,5 +1,7 @@
 package net.aieat.netswissknife.app.ui.components
 
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
@@ -13,16 +15,23 @@ import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.launch
 import net.aieat.netswissknife.app.R
 
 /** Minimum touch target for icon-only controls inside tool forms and result cards. */
@@ -119,19 +128,37 @@ fun ToolTextField(
 }
 
 /**
- * Scrolls the field that gains focus into view inside its scrolling parent (PHB-01). The request
- * covers the field's supporting and error text, because they are part of the same layout. It does
- * nothing when the field is already visible. Apply it to every text field in a tool form, whether it
- * is a [ToolTextField] or a plain [androidx.compose.material3.OutlinedTextField].
+ * Keeps the focused field, its supporting and error text, and the row under it (recent hosts) on
+ * screen above the keyboard (PHB-01, V6A-01). Apply it to every text field in a tool form, whether
+ * it is a [ToolTextField] or a plain [androidx.compose.material3.OutlinedTextField].
+ *
+ * The request is made again whenever the keyboard height or the field's size changes, not only on
+ * focus. The keyboard animates in over a few hundred milliseconds and the layout above it changes
+ * with it, so a single request made on focus lands on a layout that is about to move. The request
+ * covers the field plus [IME_REVEAL_TRAILING_DP] (see [focusRevealHeightPx]). Screens must not add
+ * their own keyboard-triggered scroll to a button: that scroll moves the field off screen (V6A-01).
  */
 @Composable
 @Suppress("ktlint:standard:function-naming")
 fun Modifier.scrollIntoViewOnFocus(): Modifier {
     val requester = remember { BringIntoViewRequester() }
-    val scope = rememberCoroutineScope()
+    val density = LocalDensity.current
+    val imeBottomPx = WindowInsets.ime.getBottom(density)
+    val windowHeightPx = LocalWindowInfo.current.containerSize.height
+    val trailingPx = with(density) { IME_REVEAL_TRAILING_DP.dp.roundToPx() }
+    var focused by remember { mutableStateOf(false) }
+    var fieldSize by remember { mutableStateOf(IntSize.Zero) }
+    val visibleHeightPx = windowHeightPx - imeBottomPx
+    LaunchedEffect(focused, imeBottomPx, visibleHeightPx, fieldSize) {
+        if (focused && fieldSize.height > 0) {
+            val revealHeight = focusRevealHeightPx(fieldSize.height, trailingPx, visibleHeightPx)
+            requester.bringIntoView(
+                Rect(0f, 0f, fieldSize.width.toFloat(), revealHeight.toFloat()),
+            )
+        }
+    }
     return this
         .bringIntoViewRequester(requester)
-        .onFocusChanged { state ->
-            if (state.isFocused) scope.launch { requester.bringIntoView() }
-        }
+        .onSizeChanged { fieldSize = it }
+        .onFocusChanged { focused = it.isFocused }
 }

@@ -858,3 +858,26 @@ work_packages:
   - id: WP34
     title: Phone-mode device verification of WP30-WP33 (density 480 / 533, landscape, dark, font 1.3)
     status: todo
+  - id: WP35
+    title: Keyboard clearance root cause (V6A-01) and V6A follow-ups
+    status: partial
+    findings: [V6A-01, V6A-02, V6A-03, V6A-04, V6A-05, V6A-06, V6A-07, V6A-08, V6A-09, V6A-10, V6A-11, V6A-12, V6A-13, PHA-02, PHA-10, PHA-14, PHA-21]
+    notes: "Findings ledger: plan/findings/VERIFY-6A.md. Part A (IME) first, then the rest in the order given by the owner. Items not listed under result.changes are not done."
+    result:
+      status: partial
+      commit: "fix(app): keep focused field and primary action above the keyboard (WP35a)"
+      root_cause: "Ping, DNS Lookup and Port Scanner each ran a LaunchedEffect that brought the primary button into view when the IME appeared. That scroll ran after the field's own focus scroll and moved the page so the button sat just above the keyboard, which pushed the field and Recent row off screen. The field-level scroll also requested only the field rectangle, so the Recent row below it was never included, and it was issued once on focus, before the keyboard animation settled."
+      changes:
+        - "scrollIntoViewOnFocus (ToolTextField.kt) now requests the focused field plus IME_REVEAL_TRAILING_DP (72dp, the Recent row), via focusRevealHeightPx (pure, unit-tested in ImeFocusRevealTest). It re-requests whenever the keyboard height, window height or field size changes, so it settles on the final layout."
+        - "Removed the button-level keyboard scroll from Ping (Start), DNS (Look up) and Port Scanner (Scan). Primary actions may now sit under the keyboard and are one scroll away with the field still visible (spec: prefer visible when height allows)."
+      tests: "ImeFocusRevealTest (4): RED was real (2 assertion failures against a stub returning the field height), GREEN after implementation. The Compose modifier itself has no unit test; it is covered by device checks only."
+      device: "Tablet at density 480 (sw400dp), keyboard open after tapping the main field. Portrait: Ping, DNS Lookup, Traceroute, Port Scanner, Network Topology keep the field and Recent row above the keyboard (screenshots checked: scratchpad/wp35/p_*.png). Landscape 640x353: Ping keeps field and all Recent chips above the keyboard. Before the fix, Ping showed only the disabled Start button above the keyboard."
+      not_done:
+        - "Not device-captured with the IME open: TLS Inspector, WHOIS Lookup, HTTP Probe, Subnet Calculator, MAC Lookup, Wake-on-LAN, LAN Scanner (portrait), and landscape for all tools except Ping. They use the same modifier and were not checked by eye. The earlier More-sheet helper missed Network Topology, TLS and WHOIS because the sheet needed a slower drag; not fixed in this pass."
+        - "V6A-02 (primary action under keyboard on Traceroute/Topology): accepted as one scroll away under the new rule; not changed."
+        - "V6A-03, V6A-04, V6A-05, V6A-06, V6A-07, V6A-08, V6A-09, V6A-10, V6A-11, V6A-12, V6A-13: not started."
+        - "PHA-02 LAN map/list duplication, PHA-10 Wake-on-LAN More sheet, PHA-14 Port Scanner Filtered tile colour, PHA-21 Home hero at 360dp + font 1.3: not started."
+      baseline: "ktlint app baseline regenerated (pure line shifts in DnsScreen, PingScreen, PortsScreen after removing lines and imports). Per-(file, rule) counts vs HEAD: no increases; total 5124 unchanged. detekt baseline untouched."
+      gates: "./gradlew test ktlintCheck detekt :app:assembleDebug :app:compileDebugAndroidTestKotlin :core-network:koverVerify :core-domain:koverVerify :app:koverVerify --no-daemon --no-parallel - green on the final tree (one run failed on ktlint line-keyed baseline entries before regeneration; fixed as above)."
+      readme: "No README change: the IME change alters no documented feature."
+      restore: "Device restored: density reset (320), size reset, accelerometer_rotation 1, user_rotation 0, font_scale 1.0, night no, location revoked, app force-stopped."

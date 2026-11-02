@@ -22,7 +22,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -73,6 +72,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -85,15 +85,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.vector.ImageVector
 import android.content.ClipData
 import androidx.annotation.StringRes
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.relocation.BringIntoViewRequester
-import androidx.compose.foundation.relocation.bringIntoViewRequester
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.pluralStringResource
@@ -386,9 +381,6 @@ private fun DnsInputCard(
     val domainProblemText = domainProblem?.let { stringResource(dnsNameProblemRes(it, domain)) }
     val domainSupporting: (@Composable () -> Unit)? = domainProblemText?.let { message -> { Text(message) } }
     val canLookup = domain.isNotBlank() && domainProblem == null && isCustomServerValid
-    val lookupInView = remember { BringIntoViewRequester() }
-    val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
-    LaunchedEffect(imeVisible) { if (imeVisible) lookupInView.bringIntoView() }
     ElevatedCard(
         modifier = modifier.fillMaxWidth(),
         shape = AppShapes.large
@@ -464,15 +456,14 @@ private fun DnsInputCard(
                 )
             }
 
-            // Lookup button. The keyboard can open over it while the domain field has focus, so
-            // it is scrolled into view whenever the IME appears.
+            // Lookup button. While the domain field has focus the field is kept on screen (see
+            // scrollIntoViewOnFocus); the button may sit under the keyboard and is one scroll away.
             Button(
                 onClick = hapticAction(if (isLoading) onCancelLookup else onLookup),
                 enabled = isLoading || (!isCanceling && canLookup),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp)
-                    .bringIntoViewRequester(lookupInView)
                     .testTag(DnsScreenTestTags.CANCEL_LOOKUP),
                 shape = AppShapes.medium,
                 colors = ButtonDefaults.buttonColors(

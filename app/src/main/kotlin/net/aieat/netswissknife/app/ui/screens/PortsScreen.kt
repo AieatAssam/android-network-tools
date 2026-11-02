@@ -24,18 +24,14 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.relocation.BringIntoViewRequester
-import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -532,12 +528,6 @@ private fun PortScanInputCard(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            // The keyboard can open over Scan while the host field has focus, so Scan is brought
-            // into view whenever the IME appears.
-            val scanInView = remember { BringIntoViewRequester() }
-            val imeVisible = WindowInsets.isImeVisible
-            LaunchedEffect(imeVisible) { if (imeVisible) scanInView.bringIntoView() }
-
             // Host input
             val hostProblemRes = if (isHostInvalid) HostValidator.problemOf(host)?.messageRes() else null
             ToolTextField(
@@ -808,7 +798,6 @@ private fun PortScanInputCard(
                         modifier =
                             Modifier
                                 .weight(1f)
-                                .bringIntoViewRequester(scanInView)
                                 .testTag(PortsScreenTestTags.SCAN_BUTTON),
                     ) {
                         Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp))
