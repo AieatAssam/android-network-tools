@@ -901,3 +901,33 @@ work_packages:
           - "V6A-06 (Topology SNMP card clip, UNVERIFIED repro), V6A-07 (Traceroute target twice), V6A-08 (DNS NXDOMAIN host three times), V6A-09 (DNS 'Additional' label placement), V6A-10 (LAN 'devices' vs 'Confirmed hosts' wording), V6A-11 (LAN '201' twice), V6A-13 (Wi-Fi band twice): not started."
           - "Device checks not done for WP35c/e changes: Topology error card, Traceroute unresolved host message, Clear/Retry gap, More sheet at 533 with font 1.3 (scroll to Wake-on-LAN), landscape for all tools except Ping, Port Scanner Filtered tile colour."
           - "Coverage note: the ImeFocusRevealTest RED was observed; the ResolverErrorMessage unit test was written together with its implementation and was green on first run (not observed red)."
+  - id: WP36
+    title: LAN list/map toggle, V6A wording and duplicate-text fixes (WP36a-c), V6A-06 device check
+    status: done
+    findings: [PHA-02, V6A-06, V6A-07, V6A-08, V6A-09, V6A-10, V6A-11, V6A-13]
+    notes: "Rule for this package: no information duplicated on a screen. Each finding was checked against source before change. Findings ledger: plan/findings/VERIFY-6A.md and plan/findings/PHA.md."
+    result:
+      status: done
+      commits: "bc763c9 WP36a (PHA-02); 3f13aa4 WP36b (V6A-10, V6A-11); 9d8007f WP36c (V6A-07, V6A-08, V6A-09, V6A-13); 90c4a90 docs (README for WP36c)"
+      changes:
+        - "PHA-02: Devices heading has a List / Map toggle (default List) over the same filtered, sorted list; one view at a time. LanResultView holds the pure rules (default, stored-name parsing, reveal goes to list); ViewModel keeps the choice in savedStateHandle and in the ToolSessionMemory snapshot. A map tap switches to List, scrolls to the row after it is composed, and expands it. Tests: LanResultViewTest (RED observed against a stub: 4 assertion failures), LanScanSessionRestoreTest additions."
+        - "V6A-11: sheet title is 'Uncertain probes'; the count stays on the summary button, and the sheet shows a count only in the truncation line. Device-confirmed at 533 with font 1.3."
+        - "V6A-10: Copy/Share text uses the summary headline ('N devices found') and the address count and duration, from strings.xml through LanShareLabels; the builder no longer hard-codes English. Scanning and idle copy use 'devices'. Golden test LanShareTextTest updated."
+        - "V6A-07: Traceroute shows Resolved IP only when it differs from the target (shared resolvedIpToShow moved to ui/format)."
+        - "V6A-08: DNS subtitles (NOERROR, NXDOMAIN, RCODE errors) no longer repeat the domain; the summary title carries it. This also removes a fourth occurrence the finding did not list. DnsScreenTest expectations updated."
+        - "V6A-09: Answer records come first under an 'Answer' label; Authority and Additional follow them."
+        - "V6A-13: Wi-Fi hero names a band only when exactly one band is detected; with several, the band tabs carry them."
+      rejected:
+        - "V6A-06 (Topology SNMP card clip): reproduced at 480 portrait, first open, the Community String field is cut at the card bottom. This is the scroll boundary of the SNMP card (heightIn max 40% of screen height with verticalScroll, TopologyDiscoveryScreen.kt ~line 323). Scrolling inside the card brings the field and Discover Topology fully into view (screenshot topo_p480_b.png). No change. The green dot under Discover was not seen again. Open question: the card has no scroll indicator, so the clip reads as a defect; a scroll affordance is a design call, not made here."
+      not_done:
+        - "V6A-08 Recent chip: the Recent row shows the typed host as a history chip. It is the shared RecentHostsRow used by every tool, and hiding the current value would change all tools. Kept; needs a decision."
+        - "PHA-03 is still visible on device: 10.109.208.146 shows 'Latency 0 ms' (host confirmed without an ICMP reply). Not in WP36 scope."
+        - "Device checks not run for the WP36c screens (Traceroute resolved line, DNS Answer order, Wi-Fi hero). Unit and instrumented tests were updated; the screens were not captured."
+        - "Observed, not triaged: in landscape at 480 dpi the More sheet shows only Diagnostics items (Ping, Settings, Debug Logs) and would not scroll to Wi-Fi & LAN, so LAN Scanner could not be opened from the sheet in landscape. Portrait works."
+      device:
+        - "Tablet U8BBB20806201256, debug build. Configurations: 480 portrait (sw400dp), 533 + font 1.3 portrait (sw360dp), 480 landscape (sw400dp w640dp), 480 portrait dark."
+        - "Each configuration change restarted the app at Home, so the LAN result was lost and one scan was run per configuration (four local-/24 scans in total, 58 to 62 devices). Landscape was scanned in portrait and then rotated; the result survived that rotation."
+        - "List and Map captured in each configuration. Map node tap in portrait 480 switched to List and expanded and scrolled to the device (screenshot lan_p480_reveal.png)."
+        - "Uncertain sheet title 'Uncertain probes' confirmed at 533 with font 1.3."
+      gates: "After each commit: ./gradlew test ktlintCheck detekt :app:assembleDebug :app:compileDebugAndroidTestKotlin :core-network:koverVerify :core-domain:koverVerify :app:koverVerify --no-daemon --no-parallel green. ktlint baseline regenerated for line shifts only; per-(file, rule) counts vs HEAD unchanged (checked with a script each time)."
+      restore: "Device restored: wm density reset, wm size reset, accelerometer_rotation 1, user_rotation 0, font_scale 1.0, night no, ACCESS_FINE_LOCATION and ACCESS_COARSE_LOCATION revoked."
