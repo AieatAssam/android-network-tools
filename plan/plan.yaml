@@ -931,3 +931,42 @@ work_packages:
         - "Uncertain sheet title 'Uncertain probes' confirmed at 533 with font 1.3."
       gates: "After each commit: ./gradlew test ktlintCheck detekt :app:assembleDebug :app:compileDebugAndroidTestKotlin :core-network:koverVerify :core-domain:koverVerify :app:koverVerify --no-daemon --no-parallel green. ktlint baseline regenerated for line shifts only; per-(file, rule) counts vs HEAD unchanged (checked with a script each time)."
       restore: "Device restored: wm density reset, wm size reset, accelerometer_rotation 1, user_rotation 0, font_scale 1.0, night no, ACCESS_FINE_LOCATION and ACCESS_COARSE_LOCATION revoked."
+  - id: WP37
+    title: VERIFY-6B fixes (TLS wording, Subnet inline input, mDNS fold, MAC copy, PHB and V6B-03..14 follow-ups), 480 device pass
+    status: partial
+    findings: [V6B-01, V6B-02, V6B-03, V6B-04, V6B-05, V6B-06, V6B-07, V6B-08, V6B-09, V6B-10, V6B-11, V6B-12, V6B-13, V6B-14, PHB-04, PHB-08, PHB-10, PHB-11, PHB-16, PHB-21]
+    notes: "Findings ledger: plan/findings/VERIFY-6B.md (committed first, 6d2b6e9). Rule: no information duplicated on a screen; phone-first (400dp, 360dp + font 1.3, landscape, dark)."
+    result:
+      status: partial
+      commits: "89480e6 WP37a (V6B-01, V6B-02, V6B-05, V6B-06, V6B-07); 7d04ec4 WP37b (V6B-03, V6B-04, V6B-08, V6B-09 part, V6B-14, PHB-21)"
+      changes:
+        - "V6B-01: TlsInspectorRepositoryImpl maps UnknownHostException through resolverErrorMessage (shared Ping/Traceroute sentence). RED observed (core FakeEngine test: JVM message returned), GREEN after change."
+        - "V6B-02: SubnetCalculatorUseCase.cidrInputError (synchronous). ViewModel holds inputError, checks as you type; Calculate disabled and keyboard submit guarded while set. Subnet error card has no Retry (all Subnet errors are input errors). Core-domain and ViewModel tests added; the ViewModel tests were red by compile (missing symbol) before the change."
+        - "V6B-07: mDNS hero folds to title and count row once results exist (compact, same pattern as ToolHeroHeader); idle subtitle is full width. Device: list header and first service sit above the nav bar at 480 portrait."
+        - "V6B-06: notice is 'Some devices reported more than we show (first 16 addresses per service). Showing all services found.' after a finished scan, 'Showing the services found so far.' while running. Copy/Share carry the same sentence instead of the TRUNCATION enum token. buildMdnsShareText takes truncationNote (test RED by compile, then GREEN)."
+        - "V6B-05: MacLookupSummaryFormatter omits the Input line when it equals the normalised address (case-insensitive); kept when written differently. RED observed (assertFalse on Input:)."
+        - "V6B-04: WHOIS 'Answered by' caption removed (query chain already names the protocol); RDAP fallback note kept."
+        - "V6B-03 / PHB-21: HTTP Probe hero subtitle drops 'Plain HTTP is disabled in this release.' (the error keeps it with 'Use an HTTPS URL.'). Device: hero reads in full at 480 portrait."
+        - "V6B-08: Speed Test chart axis uses niceAxisStep (1, 2, 5 x 10^n; three intervals). RED compile-red, then GREEN (SpeedChartAxisTest, 3 tests)."
+        - "V6B-09 (latency part): 0 ms RTT reads 'Latency under 1 ms' (lan_ping_under_1ms). README updated."
+        - "V6B-14: Subnet Copy and Share sit directly under the overview hero (device-checked at 480 portrait)."
+        - "Subnet binary breakdown: legend 'Network: 24 bits' / 'Host: 8 bits' is the only visible count; the per-row description is a screen-reader label only (device-checked). Not changed."
+      rejected:
+        - "PHB-04 binary captions: no visible repeat on device; the repeated text is contentDescription for TalkBack only."
+        - "PHB-16 WoL split card: device shows one ElevatedCard holding MAC, Advanced, Send, Saved devices (idle, 480 portrait). V6B observation not reproduced at this HEAD."
+        - "V6B-13 (primary action under keyboard in landscape): same rule as V6A-02 (WP35): the action is one scroll away with the field visible."
+        - "V6B-10 (Inspect button under bar at 360 + 1.3): the list has 16dp bottom content padding, so the button scrolls fully clear. Not device-checked at 360 + 1.3."
+        - "V6B-11 (MAC Recent row hidden with error): the row is absent when there are no recents; on device no lookup had succeeded yet, so the row was not drawn. Consistent with the report's context, not a separate defect."
+      not_done:
+        - "PHB-10 MAC auto-capitalisation: SwiftKey still shows 'Zz 00:1A' with capitalization None, autoCorrect off and KeyboardType.Ascii. KeyboardType.Uri was tried on device, still capitalised, and changed the key layout, so it was reverted. Needs an IME-side setting or a different approach; open."
+        - "PHB-08 HTTP URL repeat: the URL Recent chip is the shared RecentHostsRow used by every tool (same decision as V6A-08, WP36). Not changed; needs a decision. Result title keeps the URL."
+        - "PHB-11 typo recents: stays rejected (WP33)."
+        - "V6B-09 'this device' label: needs the device's own address in the LAN scan model. Not done."
+        - "V6B-12 landscape More sheet footer: not changed. At 533 with font 1.3 in portrait the More sheet would not scroll to the Security section by swipe during this pass (same family as PHA-10, WP35b)."
+        - "Device checks not run: landscape for every changed screen, 533 with font 1.3 for mDNS, Subnet error and HTTP hero (the sheet could not reach HTTP Probe at 533/1.3), dark mode, WHOIS and TLS results (outside the target list), TLS unresolved-host card (not sent to an unresolvable name on the device)."
+        - "PHB-03, PHB-06, PHB-17, PHB-18, PHB-19, PHB-22, PHB-27: not re-tested in this package."
+      tests: "Unit tests added or changed: TlsInspectorRepositoryFakeEngineTest (unresolved host), SubnetCalculatorUseCaseTest (cidrInputError), SubnetCalculatorViewModelTest (inline error, valid entry clears it), FormInputRestoreTest and SubnetSessionRestoreTest (cidrInputError stub), MacLookupSummaryFormatterTest (Input line), MdnsSearchExportTest and DiscoveryShareTextTest (truncationNote), SpeedChartAxisTest (new)."
+      baseline: "ktlint baselines regenerated for line shifts after each group; per-(file, rule) counts vs HEAD: no increases (app 5121 to 5114, core-domain 863, core-network 6028). Hand-fixed the new-code violations found on the first regeneration. detekt baselines untouched. Detekt fixes: mDNS and Subnet long lines, SubnetCalculatorViewModel function count (cidrProblem moved to a top-level extension)."
+      gates: "Group 1 (89480e6) and group 2 (7d04ec4): ./gradlew test ktlintCheck detekt :app:assembleDebug :app:compileDebugAndroidTestKotlin :core-network:koverVerify :core-domain:koverVerify :app:koverVerify --no-daemon --no-parallel green (GATE_EXIT 0). The OuiInputKeyboard URI experiment was reverted before group 2; its unit test passed but was not committed."
+      device: "Tablet U8BBB20806201256, debug build. 480 portrait (sw400dp) for Subnet (inline error, valid result, Copy/Share placement, binary legend), MAC Lookup (IME), HTTP Probe hero, mDNS (scan, folded hero, notice), Wake-on-LAN idle (no packet sent). 533 + font 1.3 for HTTP Probe attempted (sheet scroll failed). Screenshots in the WP37 scratch folder."
+      restore: "Device restored: wm density reset, wm size reset, accelerometer_rotation 1, user_rotation 0, font_scale 1.0, night no, ACCESS_FINE_LOCATION and ACCESS_COARSE_LOCATION revoked, app force-stopped."
