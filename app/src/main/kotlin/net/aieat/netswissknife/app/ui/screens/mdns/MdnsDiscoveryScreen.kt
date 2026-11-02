@@ -133,8 +133,9 @@ fun MdnsDiscoveryScreen(
     LaunchedEffect(Unit) { visible = true }
     var showHelp by remember { mutableStateOf(false) }
 
+    // The scan has its own status in the hero and list; the pull indicator here would sit over the title (PHB-13).
     PullToRefreshBox(
-        isRefreshing = uiState.isScanning,
+        isRefreshing = false,
         onRefresh = { viewModel.startScan() },
         modifier = Modifier.fillMaxSize(),
     ) {
@@ -429,7 +430,6 @@ private fun limitLabel(reason: MdnsTruncationReason): String =
             stringResource(
                 R.string.mdns_limit_addresses,
                 MdnsDiscoveryLimits.DEFAULT_MAX_ADDRESSES_PER_SERVICE,
-                MdnsDiscoveryLimits.DEFAULT_MAX_ADDRESS_BYTES_PER_SERVICE,
             )
         }
 
@@ -767,11 +767,15 @@ private fun ServiceScanningStatus(isCanceling: Boolean) {
             modifier = Modifier.size(14.dp).semantics { contentDescription = scanningCd },
             strokeWidth = 2.dp,
         )
-        Text(
-            stringResource(if (isCanceling) R.string.mdns_canceling_hint else R.string.mdns_scanning_inline_label),
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-        )
+        // While scanning, the hero already shows the count and elapsed time and the Stop button
+        // says the scan is running, so the status line only names a cancel in progress (PHB-14).
+        if (isCanceling) {
+            Text(
+                stringResource(R.string.mdns_canceling_hint),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+            )
+        }
     }
 }
 

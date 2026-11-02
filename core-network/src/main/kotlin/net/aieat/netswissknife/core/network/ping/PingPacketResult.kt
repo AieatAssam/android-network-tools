@@ -19,5 +19,7 @@ data class PingPacketResult(
     val replyTtl: Int? = null,
     val bytes: Int? = null,
     val fromIp: String? = null,
-    val engine: PingEngineKind? = null
+    val engine: PingEngineKind? = null,
+    /** True when the host name could not be resolved, so no probe was sent. */
+    val unresolvedHost: Boolean = false,
 )

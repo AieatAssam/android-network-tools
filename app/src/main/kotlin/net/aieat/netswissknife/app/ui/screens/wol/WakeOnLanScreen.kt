@@ -40,6 +40,7 @@ import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.Router
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
@@ -139,6 +140,7 @@ fun WakeOnLanScreen(viewModel: WakeOnLanViewModel = hiltViewModel()) {
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
     var showHelp by remember { mutableStateOf(false) }
+    var pendingDelete by remember { mutableStateOf<WolSavedDevice?>(null) }
     val isSending = uiState is WolUiState.Sending
     val canSend = !isSending && macProblem == null && broadcastProblem == null && !portInvalid
 
@@ -196,6 +198,24 @@ fun WakeOnLanScreen(viewModel: WakeOnLanViewModel = hiltViewModel()) {
                 onBroadcastChange = viewModel::onBroadcastAddressChange,
                 onPortChange = viewModel::onPortChange,
                 onSend = viewModel::send,
+                // Saving the MAC sits in the same card, so one form covers entering, sending and saving (PHB-16).
+                savedDevices = {
+                    WolSavedDevicesSection(
+                        devices = savedDevices,
+                        deviceName = deviceName,
+                        editingMac = editingMac,
+                        conflict = saveConflict,
+                        notice = saveNotice,
+                        canSave = macProblem == null && macAddress.isNotBlank() && !isSending,
+                        isSending = isSending,
+                        onNameChange = viewModel.savedDeviceEditor::onDeviceNameChange,
+                        onSave = viewModel.savedDeviceEditor::saveDevice,
+                        onCancelEdit = viewModel.savedDeviceEditor::cancelEdit,
+                        onUse = viewModel.savedDeviceEditor::useDevice,
+                        onEdit = viewModel.savedDeviceEditor::startEditDevice,
+                        onDelete = { pendingDelete = it },
+                    )
+                },
             )
 
             WolStateCard(
@@ -204,23 +224,31 @@ fun WakeOnLanScreen(viewModel: WakeOnLanViewModel = hiltViewModel()) {
                 onSendAgain = viewModel::reset,
                 onRetry = viewModel::send,
             )
-
-            WolSavedDevicesCard(
-                devices = savedDevices,
-                deviceName = deviceName,
-                editingMac = editingMac,
-                conflict = saveConflict,
-                notice = saveNotice,
-                canSave = macProblem == null && macAddress.isNotBlank() && !isSending,
-                isSending = isSending,
-                onNameChange = viewModel.savedDeviceEditor::onDeviceNameChange,
-                onSave = viewModel.savedDeviceEditor::saveDevice,
-                onCancelEdit = viewModel.savedDeviceEditor::cancelEdit,
-                onUse = viewModel.savedDeviceEditor::useDevice,
-                onEdit = viewModel.savedDeviceEditor::startEditDevice,
-                onDelete = { viewModel.savedDeviceEditor.deleteDevice(it.mac) },
-            )
         }
+    }
+
+    pendingDelete?.let { device ->
+        val label = WolSavedDevices.displayName(device)
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            title = { Text(stringResource(R.string.wol_delete_confirm_title)) },
+            text = { Text(stringResource(R.string.wol_delete_confirm_body, label)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.savedDeviceEditor.deleteDevice(device.mac)
+                        pendingDelete = null
+                    },
+                ) {
+                    Text(stringResource(R.string.wol_delete_confirm_action), color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDelete = null }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            },
+        )
     }
 
     if (showHelp) {
@@ -305,6 +333,7 @@ private fun WolInputCard(
     onBroadcastChange: (String) -> Unit,
     onPortChange: (String) -> Unit,
     onSend: () -> Unit,
+    savedDevices: @Composable () -> Unit,
 ) {
     val dismissKeyboard = rememberDismissKeyboard()
     var showAdvanced by remember { mutableStateOf(false) }
@@ -435,6 +464,8 @@ private fun WolInputCard(
                 Spacer(Modifier.width(8.dp))
                 Text(stringResource(R.string.wol_send_button))
             }
+            HorizontalDivider()
+            savedDevices()
         }
     }
 }
@@ -482,7 +513,7 @@ private fun WolStateCard(
 
 @Composable
 @Suppress("FunctionNaming", "ktlint:standard:function-naming")
-private fun WolSavedDevicesCard(
+private fun WolSavedDevicesSection(
     devices: List<WolSavedDevice>,
     deviceName: String,
     editingMac: String?,
@@ -497,43 +528,38 @@ private fun WolSavedDevicesCard(
     onEdit: (WolSavedDevice) -> Unit,
     onDelete: (WolSavedDevice) -> Unit,
 ) {
-    ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = AppShapes.large) {
-        Column(
-            modifier = Modifier.padding(AppSpacing.m),
-            verticalArrangement = Arrangement.spacedBy(AppSpacing.s + AppSpacing.xs),
-        ) {
+    Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.s + AppSpacing.xs)) {
+        Text(
+            text = stringResource(R.string.wol_saved_title),
+            style = MaterialTheme.typography.titleMedium,
+        )
+        WolSavedDeviceForm(
+            deviceName = deviceName,
+            editingMac = editingMac,
+            conflict = conflict,
+            notice = notice,
+            canSave = canSave,
+            isSending = isSending,
+            onNameChange = onNameChange,
+            onSave = onSave,
+            onCancelEdit = onCancelEdit,
+        )
+        HorizontalDivider()
+        if (devices.isEmpty()) {
             Text(
-                text = stringResource(R.string.wol_saved_title),
-                style = MaterialTheme.typography.titleMedium,
+                text = stringResource(R.string.wol_saved_empty),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            WolSavedDeviceForm(
-                deviceName = deviceName,
-                editingMac = editingMac,
-                conflict = conflict,
-                notice = notice,
-                canSave = canSave,
-                isSending = isSending,
-                onNameChange = onNameChange,
-                onSave = onSave,
-                onCancelEdit = onCancelEdit,
-            )
-            HorizontalDivider()
-            if (devices.isEmpty()) {
-                Text(
-                    text = stringResource(R.string.wol_saved_empty),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+        } else {
+            devices.forEach { device ->
+                WolSavedDeviceRow(
+                    device = device,
+                    isSending = isSending,
+                    onUse = { onUse(device) },
+                    onEdit = { onEdit(device) },
+                    onDelete = { onDelete(device) },
                 )
-            } else {
-                devices.forEach { device ->
-                    WolSavedDeviceRow(
-                        device = device,
-                        isSending = isSending,
-                        onUse = { onUse(device) },
-                        onEdit = { onEdit(device) },
-                        onDelete = { onDelete(device) },
-                    )
-                }
             }
         }
     }

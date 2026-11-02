@@ -15,7 +15,8 @@
 ### Ping
 ICMP echo and reachability round-trip latency measurement with real-time streaming results. The app resolves a hostname once per session, then uses icmpenguin ICMP echo with transparent reachability fallback when the socket is unavailable.
 - Configurable probe count (1–100 via slider; default configurable in Settings) and timeout (100–30,000 ms)
-- Advanced payload size (0–1,472 bytes), TTL (1–255), and interval (100–10,000 ms) controls, with a Reset to defaults action. The count, timeout, payload, TTL and interval sliders keep their values when you leave and return (in memory for the app session, and through saved state across rotation and process death); ping results are not kept
+- A host that does not resolve shows a "Ping failed" error with the name and a Retry action, not a packet-loss figure. Such a host is not kept in recents
+- Advanced payload size (0–1,472 bytes), TTL (1–255), and interval (100–10,000 ms, in 100 ms steps) controls, with a Reset to defaults action. The count, timeout, payload, TTL and interval sliders keep their values when you leave and return (in memory for the app session, and through saved state across rotation and process death); ping results are not kept
 - Rotating the device keeps a run going. A run stopped early (Stop, or the app going to the background) is labelled as stopped early, and its statistics cover only the probes that were sent
 - When the host field changes after a run, the previous result is labelled as the previous result for its own host
 - Per-probe RTT reporting with sequence numbers and status (SUCCESS / TIMEOUT / UNREACHABLE / ERROR), including reply IP, TTL, and bytes when available
@@ -34,6 +35,8 @@ Network path analysis with per-hop geolocation enrichment.
 - Configurable max hops (1–64), timeout (500–30,000 ms), and probes per hop (1–5)
 - Dual protocol support: ICMP and UDP
 - Automatic MTU discovery or custom packet size (28–1,472 bytes)
+- Once a trace has a result, the configuration folds to one line (host, hops, probes, timeout) with a Show settings action; hop details come before the journey statistics
+- A trace that stops because you left the screen reads "Trace stopped when you left the screen" with its partial hops; a trace stopped with Stop reads "Trace canceled"
 - Hops show IP address, per-probe RTTs, and min/average/max when multiple probes are requested; reverse DNS and geolocation fill in asynchronously when available
 - Hop Details and Raw Output list hops in hop-number order; a timed-out hop is shown as `* * *` in both
 - Host validation names the problem (spaces, IPv4 value out of range, empty or invalid hostname label, IPv6, length)
@@ -95,6 +98,7 @@ Full DNS record resolution with multiple resolver options and protocol-level res
 
 ### Wi-Fi Scanner
 Wi-Fi environment analysis with SSID grouping and spectrum visualisation.
+- The hero states the access-point count; the scan is started by a labelled **Scan** button, and the time of the last scan is in the Updated line
 - Access points grouped by SSID + security; mesh/dual-band routers appear as one entry with a per-BSSID drill-down
 - **Spectrum Analyser** — frequency-domain triangle chart per AP (X = MHz, Y = RSSI −100 to −30 dBm) with channel gridlines and one SSID label per network at its strongest peak. Labels are ellipsised to a fixed width and stacked upward when they would collide; a label with no free position is left off, and the network list below is the legend. Each network gets a stable accent colour derived from its SSID hash
 - Band tab-row switches between detected 2.4 / 5 / 6 GHz bands; spectrum and network list update per band
@@ -108,6 +112,7 @@ Wi-Fi environment analysis with SSID grouping and spectrum visualisation.
 ### TLS Inspector
 SSL/TLS certificate analysis for any TCP host, without sending an HTTP request.
 - Configurable host and port (default 443). The inspection timeout is fixed at 10 seconds; there is no timeout setting
+- Cancel ends the inspection in a neutral "Inspection canceled" card with a Retry action; a timeout reads "The server did not answer in time. Check the host and port."
 - Presented peer chain: subject/issuer, validity dates, SANs, serial number, signature and public-key details, and SHA-256 fingerprint per certificate
 - Checks device trust, hostname match, expiry/not-yet-valid dates, incomplete chains, self-signed certificates, weak signatures, and weak keys
 - Overall verdict is "Trusted" only when the chain is trusted by this device, the hostname matches, the leaf certificate is within its validity dates, and any expected pin matches. A hostname mismatch, expiry, not-yet-valid date, or pin mismatch each makes the verdict "Untrusted", even when the chain itself verifies. A line under the verdict states what it rests on, and the certificate findings list what failed
@@ -132,6 +137,7 @@ SNMP-based network topology discovery via BFS traversal.
 - **Discover Topology** sits below the SNMP configuration card, outside its scroll area, and the keyboard Done action on the seed IP field starts discovery; Cancel appears in the same place while a scan runs. The failure or result card starts directly under Discover
 - Configurable max hops (1–10), timeout, and SNMP v3 auth/priv protocols (MD5, SHA-1/256/512; DES, AES-128/192/256)
 - Reuses one SNMP4J session per discovery and closes it on completion or cancellation
+- The collapsed SNMP Configuration header names the target and SNMP version, so the folded card still shows what was scanned
 - LLDP neighbour addresses are decoded from the LLDP management-address index; CDP accepts dotted and hex-octet cache addresses
 
 ### WHOIS Lookup
@@ -150,7 +156,8 @@ Domain, IP, and ASN registration lookup using RDAP with WHOIS fallback.
 - Live relay-chain visualiser shows the RDAP or WHOIS servers used; completed hops share one success colour
 - Invalid input names the specific problem (e.g. "An IPv4 address needs four numbers from 0 to 255" for 999.1.1.1)
 - The raw RDAP/WHOIS response section expands from its whole header row (one chevron shows its state; there is no second switch); the lookup keeps running across screen rotation. A single ASN or address range is shown once (for example `15169`), not as `15169-15169`
-- Copy and Share sit at the foot of the results and send the parsed fields (registrar, dates, name servers, status) and the raw WHOIS text
+- Copy and Share sit at the foot of the results and send the parsed fields (registrar, dates as calendar dates, name servers, status) and the raw WHOIS text
+- The query is checked as you type: an invalid query shows an inline message, Look up stays disabled and nothing is sent, so there is no Retry for an input error
 - The query and protocol survive rotation and process death. Leaving the tool with Back keeps the query, protocol and the finished result for the query it was run for (in memory only); a lookup still running when you leave is not restored as running. Request headers are not involved
 
 ### HTTP Probe
@@ -229,7 +236,7 @@ Wake sleeping or powered-down machines on the local network with a UDP magic pac
 - The MAC, broadcast address and port survive rotation and process death. Leaving the tool with Back keeps them, the saved-device name being typed, and the last finished send (Success or Error) for the app session, in memory only; a send still in progress is not restored as running
 - Success card reports the send and states that Wake-on-LAN is fire-and-forget: no delivery confirmation is returned. It confirms target MAC, broadcast address, port and packet count
 - Errors are specific: no local Wi-Fi or Ethernet network, a local-network permission denial, an invalid broadcast address, or a general send failure. Each has a Retry action
-- Saved devices (stored on this device only): save the current MAC under an optional name, use a saved device to fill the form, edit a saved device's name or MAC, and delete it. A MAC is stored once, whichever notation it was entered in; an edit that would make two entries share a MAC is refused
+- Saved devices (stored on this device only) sit in the same card as the MAC form, so entering, sending and saving use one flow. Save the current MAC under an optional name, use a saved device to fill the form, edit a saved device's name or MAC, and delete it (deleting asks for confirmation). A MAC is stored once, whichever notation it was entered in; an edit that would make two entries share a MAC is refused
 - Saving a MAC that is already saved never silently renames it. With the name field left blank the saved name is kept; with a new name the device is renamed. Either way a note says what happened (for example "Already saved as QA dummy. Renamed to dup.")
 - In-app help explains BIOS/OS requirements
 - After a send, Copy and Share put a plain-text report on the clipboard or in the share sheet: target MAC, broadcast address, UDP port, packets sent, and the time the text was generated. The report states that delivery is not confirmed

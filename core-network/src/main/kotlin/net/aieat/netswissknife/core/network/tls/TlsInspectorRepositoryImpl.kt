@@ -29,6 +29,9 @@ internal fun interface TlsInspectorSocketFactory {
     fun create(context: SSLContext): SSLSocket
 }
 
+/** Developer message for a handshake that ran out of time; the app shows it under the error title. */
+private const val TLS_TIMEOUT_MESSAGE = "The server did not answer in time. Check the host and port."
+
 class TlsInspectorRepositoryImpl(
     private val networkBinder: NetworkBinder = NoOpNetworkBinder,
 ) : TlsInspectorRepository {
@@ -150,7 +153,11 @@ class TlsInspectorRepositoryImpl(
                 if (cancelled is OperationCancellationException &&
                     cancelled.reason == CancellationReason.DEADLINE_EXCEEDED
                 ) {
-                    return@withContext NetworkResult.error(ErrorCode.TLS_INSPECTION_FAILED, developerMessage = "TLS inspection timed out", cancelled)
+                    return@withContext NetworkResult.error(
+                        ErrorCode.TLS_INSPECTION_FAILED,
+                        developerMessage = TLS_TIMEOUT_MESSAGE,
+                        cancelled,
+                    )
                 }
                 throw cancelled
             } catch (failure: Exception) {
@@ -159,7 +166,7 @@ class TlsInspectorRepositoryImpl(
                     CancellationReason.DEADLINE_EXCEEDED ->
                         return@withContext NetworkResult.error(
                             ErrorCode.TLS_INSPECTION_FAILED,
-                            developerMessage = "TLS inspection timed out",
+                            developerMessage = TLS_TIMEOUT_MESSAGE,
                             cause = failure,
                         )
                     else -> throw OperationCancellationException(operationSession.cancellationReason!!, failure)

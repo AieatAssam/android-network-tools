@@ -16,6 +16,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import net.aieat.netswissknife.app.R
@@ -33,6 +34,8 @@ fun ResultActionsRow(
     onShare: () -> Unit,
     modifier: Modifier = Modifier,
     extraActions: (@Composable RowScope.() -> Unit)? = null,
+    copyTestTag: String? = null,
+    shareTestTag: String? = null,
 ) {
     val copyResult = rememberCopyWithFeedback()
     Row(
@@ -41,12 +44,18 @@ fun ResultActionsRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         extraActions?.invoke(this)
-        TextButton(onClick = { copyResult(copyText) }) {
+        TextButton(
+            onClick = { copyResult(copyText) },
+            modifier = copyTestTag?.let { Modifier.testTag(it) } ?: Modifier,
+        ) {
             Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(6.dp))
             Text(stringResource(R.string.action_copy))
         }
-        TextButton(onClick = onShare) {
+        TextButton(
+            onClick = onShare,
+            modifier = shareTestTag?.let { Modifier.testTag(it) } ?: Modifier,
+        ) {
             Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(6.dp))
             Text(stringResource(R.string.action_share_short))

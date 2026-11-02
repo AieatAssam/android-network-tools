@@ -2,6 +2,10 @@ package net.aieat.netswissknife.app.ui.screens.whois
 
 import android.app.Activity
 import android.content.Intent
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.core.net.toUri
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -96,7 +100,6 @@ import net.aieat.netswissknife.app.ui.components.ToolRetryButton
 import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.components.ToolTextField
 import net.aieat.netswissknife.app.ui.components.hapticAction
-import net.aieat.netswissknife.app.ui.components.messageRes
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
@@ -185,6 +188,16 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
             // ── Input card ─────────────────────────────────────────────────────
             ElevatedCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    val queryInvalidText = stringResource(R.string.whois_query_invalid)
+                    val queryInvalidSupport: @Composable () -> Unit = { Text(queryInvalidText) }
+                    val queryKeyboard =
+                        KeyboardOptions(
+                            capitalization = KeyboardCapitalization.None,
+                            autoCorrectEnabled = false,
+                            imeAction = ImeAction.Go,
+                        )
+                    val queryActions =
+                        KeyboardActions(onGo = { if (!uiState.isLoading && !uiState.queryInvalid) viewModel.lookup() })
                     ToolTextField(
                         value = uiState.query,
                         onValueChange = viewModel::onQueryChange,
@@ -193,7 +206,12 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
                         placeholder = { Text(stringResource(R.string.whois_query_placeholder)) },
                         leadingIcon = { Icon(Icons.AutoMirrored.Filled.ManageSearch, contentDescription = null) },
                         singleLine = true,
-                        enabled = !uiState.isLoading
+                        enabled = !uiState.isLoading,
+                        isError = uiState.queryInvalid,
+                        supportingText = if (uiState.queryInvalid) queryInvalidSupport else null,
+                        // Domain names are not sentences: no capital letters or autocorrected spaces (PHB-10).
+                        keyboardOptions = queryKeyboard,
+                        keyboardActions = queryActions,
                     )
                     RecentHostsRow(
                         recentHosts = recentHosts,
@@ -228,7 +246,7 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
                     Button(
                         onClick = hapticAction(viewModel::lookup),
                         modifier = Modifier.fillMaxWidth(),
-                        enabled = !uiState.isLoading && uiState.query.isNotBlank()
+                        enabled = !uiState.isLoading && uiState.query.isNotBlank() && !uiState.queryInvalid,
                     ) {
                         Text(stringResource(R.string.whois_lookup_button))
                     }
@@ -300,7 +318,7 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
                 },
                 label = "whois-content-state"
             ) { (isLoading, isCanceled, content) ->
-                val (result, error, isLifecyclePaused) = content
+                val (result, errorMessage, isLifecyclePaused) = content
                 when {
                     result != null -> {
                         val shareSubject = stringResource(R.string.share_subject_whois, result.query)
@@ -327,12 +345,8 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
                             onRetry = viewModel::lookup,
                         )
                     }
-                    error != null -> {
-                        ErrorCard(
-                            message = uiState.inputProblem?.let { stringResource(it.messageRes()) } ?: error,
-                            onRetry = viewModel::lookup,
-                            hopStates = uiState.hopStates
-                        )
+                    errorMessage != null -> {
+                        WhoisFailureCard(errorMessage, uiState.hopStates, viewModel::lookup)
                     }
                     isLoading -> {
                         // Chain visualiser is shown above; no additional content needed during loading
@@ -619,6 +633,16 @@ fun IdleCard(onExampleSelected: (String) -> Unit) {
 }
 
 // ── Error Card ────────────────────────────────────────────────────────────────
+
+@Composable
+@Suppress("FunctionNaming", "ktlint:standard:function-naming")
+private fun WhoisFailureCard(
+    message: String,
+    hopStates: List<HopUiState>,
+    onRetry: () -> Unit,
+) {
+    ErrorCard(message = message, onRetry = onRetry, hopStates = hopStates)
+}
 
 @Composable
 fun ErrorCard(message: String, onRetry: () -> Unit, hopStates: List<HopUiState>) {
@@ -1062,9 +1086,9 @@ internal fun buildWhoisShareText(result: net.aieat.netswissknife.core.network.wh
     appendLine("WHOIS – ${result.query}")
     appendLine()
     result.registrar?.let { appendLine("Registrar: $it") }
-    result.registeredOn?.let { appendLine("Created: $it") }
-    result.updatedOn?.let { appendLine("Updated: $it") }
-    result.expiresOn?.let { appendLine("Expires: $it") }
+    result.registeredOn?.let { appendLine("Created: ${formatDate(it)}") }
+    result.updatedOn?.let { appendLine("Updated: ${formatDate(it)}") }
+    result.expiresOn?.let { appendLine("Expires: ${formatDate(it)}") }
     if (result.nameServers.isNotEmpty()) {
         appendLine("Name Servers: ${result.nameServers.joinToString(", ")}")
     }

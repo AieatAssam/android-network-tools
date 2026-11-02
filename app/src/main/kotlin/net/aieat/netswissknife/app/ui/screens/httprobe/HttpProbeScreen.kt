@@ -1091,8 +1091,13 @@ private fun TimingBreakdown(timings: HttpTimings) {
         if (segments.isEmpty()) {
             Text(stringResource(R.string.httprobe_timing_unavailable), style = MaterialTheme.typography.bodySmall)
         } else {
-            segments.forEach { (label, value, _) ->
-                LabeledValue(stringResource(label), stringResource(R.string.httprobe_timing_value_ms, value ?: 0L))
+            // Each row carries the swatch of its bar segment, so the colours have a key (PHB-08).
+            segments.forEach { (label, value, color) ->
+                TimingLegendRow(
+                    swatch = color,
+                    label = stringResource(label),
+                    value = stringResource(R.string.httprobe_timing_value_ms, value ?: 0L),
+                )
             }
             breakdown.ttfbTotalMs?.let { totalTtfb ->
                 LabeledValue(stringResource(R.string.httprobe_timing_ttfb), stringResource(R.string.httprobe_timing_value_ms, totalTtfb))
@@ -1468,6 +1473,33 @@ private fun SecurityRatingBadge(rating: SecurityRating) {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+@Composable
+@Suppress("FunctionNaming", "ktlint:standard:function-naming")
+private fun TimingLegendRow(
+    swatch: Color,
+    label: String,
+    value: String,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(modifier = Modifier.size(10.dp).clip(RoundedCornerShape(5.dp)).background(swatch))
+        Spacer(Modifier.width(8.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(0.4f).padding(end = 8.dp),
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(0.6f),
+        )
+    }
+}
 
 @Composable
 private fun LabeledValue(label: String, value: String) {

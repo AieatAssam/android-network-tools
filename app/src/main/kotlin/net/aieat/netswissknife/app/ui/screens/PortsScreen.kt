@@ -358,12 +358,13 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
             }
             item {
                 val shareSubject = stringResource(R.string.share_subject_ports, summary.host)
+                val durationText = humanDurationText(summary.scanDurationMs)
                 PortScanSummaryCard(
                     summary = summary,
-                    report = buildScanReport(summary),
+                    report = buildScanReport(summary, durationText),
                     onShare = {
                         context.shareText(
-                            text = buildScanReport(summary),
+                            text = buildScanReport(summary, durationText),
                             subject = shareSubject,
                         )
                     },
@@ -1115,11 +1116,12 @@ private fun PortResultRow(
         label = "port_row_alpha",
     )
 
+    // Filtered means no answer, which is neutral; the tertiary tint read as an error on the list (PHA-14).
     val statusColor =
         when (result.status) {
             PortStatus.OPEN -> MaterialTheme.colorScheme.primary
             PortStatus.CLOSED -> MaterialTheme.colorScheme.onSurfaceVariant
-            PortStatus.FILTERED -> MaterialTheme.colorScheme.tertiary
+            PortStatus.FILTERED -> MaterialTheme.colorScheme.onSurfaceVariant
         }
     val statusLabel =
         when (result.status) {
@@ -1255,13 +1257,17 @@ private fun PortResultRow(
 
 // ── Report builder ────────────────────────────────────────────────────────────
 
-internal fun buildScanReport(summary: PortScanSummary): String =
+/** [durationText] is the same human duration the screen shows (for example "2.1 s"), not raw milliseconds (V5-04). */
+internal fun buildScanReport(
+    summary: PortScanSummary,
+    durationText: String,
+): String =
     buildString {
         appendLine("=== Port Scan Report ===")
         appendLine("Host: ${summary.host}")
         summary.resolvedIp?.let { appendLine("IP: $it") }
         appendLine("Ports scanned: ${summary.totalPorts}")
-        appendLine("Duration: ${summary.scanDurationMs} ms")
+        appendLine("Duration: $durationText")
         appendLine()
         appendLine("Open:     ${summary.openPorts}")
         appendLine("Closed:   ${summary.closedPorts}")

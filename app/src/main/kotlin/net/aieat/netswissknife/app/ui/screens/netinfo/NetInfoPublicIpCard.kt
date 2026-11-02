@@ -6,12 +6,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -22,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.ui.components.ResultActionsRow
 import net.aieat.netswissknife.app.ui.components.ToolErrorCard
 import net.aieat.netswissknife.app.ui.components.ToolRetryButton
 import net.aieat.netswissknife.app.ui.components.hapticAction
@@ -159,17 +157,15 @@ private fun locationText(info: PublicAddressInfo): String? {
     return listOf(geo.city, geo.country).filter { it.isNotBlank() }.joinToString(", ").ifEmpty { null }
 }
 
-/** Refresh re-reads the network; copy-all and share work on the whole summary. */
+/** Refresh re-reads the network; Copy and Share work on the whole summary through the shared row. */
 @Composable
 @Suppress("FunctionNaming", "ktlint:standard:function-naming")
 internal fun NetInfoActionsCard(
     onRefresh: () -> Unit,
-    onCopyAll: () -> Unit,
+    summaryText: String,
     onShare: () -> Unit,
 ) {
     val refresh = hapticAction(onRefresh)
-    val copyAll = hapticAction(onCopyAll)
-    val share = hapticAction(onShare)
     Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.s)) {
         OutlinedButton(
             onClick = refresh,
@@ -178,22 +174,12 @@ internal fun NetInfoActionsCard(
             Icon(imageVector = Icons.Default.Refresh, contentDescription = null)
             Text(text = stringResource(R.string.netinfo_refresh))
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(AppSpacing.s)) {
-            FilledTonalButton(
-                onClick = copyAll,
-                modifier = Modifier.weight(1f).testTag(NetInfoScreenTestTags.COPY_ALL),
-            ) {
-                Icon(imageVector = Icons.Default.ContentCopy, contentDescription = null)
-                Text(text = stringResource(R.string.netinfo_copy_all))
-            }
-            FilledTonalButton(
-                onClick = share,
-                modifier = Modifier.weight(1f).testTag(NetInfoScreenTestTags.SHARE),
-            ) {
-                Icon(imageVector = Icons.Default.Share, contentDescription = null)
-                Text(text = stringResource(R.string.netinfo_share))
-            }
-        }
+        ResultActionsRow(
+            copyText = summaryText,
+            onShare = onShare,
+            copyTestTag = NetInfoScreenTestTags.COPY_ALL,
+            shareTestTag = NetInfoScreenTestTags.SHARE,
+        )
         Text(
             text = stringResource(R.string.netinfo_copy_hint),
             style = MaterialTheme.typography.labelSmall,

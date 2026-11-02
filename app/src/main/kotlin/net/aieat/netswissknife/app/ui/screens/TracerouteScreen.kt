@@ -67,6 +67,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -87,6 +88,8 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import net.aieat.netswissknife.app.ui.components.ResultActionsRow
+import net.aieat.netswissknife.app.ui.format.humanDurationText
+import androidx.compose.foundation.layout.RowScope
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
 import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
 import net.aieat.netswissknife.app.ui.components.ToolRetryButton
@@ -198,6 +201,11 @@ fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
         label         = "screen-alpha"
     )
     var showHelp by remember { mutableStateOf(false) }
+    // Once a result is shown the configuration folds to a one-line summary so the hops are near the top (PHA-16).
+    var settingsExpanded by rememberSaveable { mutableStateOf(true) }
+    val resultShown = uiState.isResultState()
+    LaunchedEffect(resultShown) { if (resultShown) settingsExpanded = false }
+    val settingsCollapsed = !settingsExpanded && uiState !is TracerouteUiState.Idle
 
     LazyColumn(
         modifier          = Modifier.fillMaxSize().alpha(screenAlpha).testTag("traceroute_content_list"),
@@ -235,7 +243,9 @@ fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
                     onStart             = { requestLocalNetworkPermission(host) },
                     onStop              = viewModel::onStop,
                     onRemoveRecentHost  = viewModel::removeRecentHost,
-                    onClearRecentHosts  = viewModel::clearRecentHosts
+                    onClearRecentHosts  = viewModel::clearRecentHosts,
+                    settingsCollapsed = settingsCollapsed,
+                    onExpandSettings = { settingsExpanded = true },
                 )
             }
 
@@ -261,6 +271,7 @@ fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
                             result = state.result,
                             viewMode = state.viewMode,
                             canceled = true,
+                            stoppedWhenLeft = state.stoppedWhenLeft,
                             onToggleMode = viewModel::onToggleViewMode,
                             onClear = viewModel::onClear,
                         )
@@ -350,6 +361,58 @@ private fun TracerouteHeroHeader(onHelpClick: () -> Unit) {
     )
 }
 
+/** Total time as a duration of work, or N/A when no time was measured. */
+@Composable
+@Suppress("FunctionNaming", "ktlint:standard:function-naming")
+private fun totalTimeText(totalTimeMs: Long): String =
+    if (totalTimeMs > 0) {
+        humanDurationText(totalTimeMs)
+    } else {
+        "N/A"
+    }
+
+/** A finished, cancelled or failed trace: the point at which the settings fold to a summary. */
+private fun TracerouteUiState.isResultState(): Boolean =
+    this is TracerouteUiState.Finished ||
+        this is TracerouteUiState.Canceled ||
+        this is TracerouteUiState.Error
+
+// ── Collapsed settings ────────────────────────────────────────────────────────
+
+@Composable
+@Suppress("FunctionNaming", "ktlint:standard:function-naming")
+private fun TracerouteSettingsSummary(
+    host: String,
+    maxHops: Int,
+    probesPerHop: Int,
+    timeoutMs: Int,
+    onExpand: () -> Unit,
+) {
+    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = host,
+                    style = MaterialTheme.typography.titleSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = stringResource(R.string.traceroute_settings_summary, maxHops, probesPerHop, timeoutMs),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            TextButton(onClick = onExpand) {
+                Text(stringResource(R.string.traceroute_settings_show))
+            }
+        }
+    }
+}
+
 // ── Input card ────────────────────────────────────────────────────────────────
 
 @Composable
@@ -373,8 +436,20 @@ private fun TracerouteInputCard(
     onStart: () -> Unit,
     onStop: () -> Unit,
     onRemoveRecentHost: (String) -> Unit,
-    onClearRecentHosts: () -> Unit
+    onClearRecentHosts: () -> Unit,
+    settingsCollapsed: Boolean = false,
+    onExpandSettings: () -> Unit = {},
 ) {
+    if (settingsCollapsed) {
+        TracerouteSettingsSummary(
+            host = host,
+            maxHops = maxHops,
+            probesPerHop = probesPerHop,
+            timeoutMs = timeoutMs,
+            onExpand = onExpandSettings,
+        )
+        return
+    }
     val dismissKeyboard = rememberDismissKeyboard()
     val mtuDiscovery = packetSize == 0
     val normalizedHost = HostValidator.normalize(host)
@@ -684,6 +759,7 @@ private fun TracerouteFinishedPanel(
     result: TracerouteResult,
     viewMode: TracerouteViewMode,
     canceled: Boolean = false,
+    stoppedWhenLeft: Boolean = false,
     timeLimitReached: Boolean = false,
     onToggleMode: () -> Unit,
     onClear: () -> Unit
@@ -702,7 +778,11 @@ private fun TracerouteFinishedPanel(
         if (canceled) {
             Text(
                 text = pluralStringResource(
-                    R.plurals.traceroute_canceled_partial_status,
+                    if (stoppedWhenLeft) {
+                        R.plurals.traceroute_stopped_when_left_status
+                    } else {
+                        R.plurals.traceroute_canceled_partial_status
+                    },
                     result.hops.size,
                     result.hops.size,
                 ),
@@ -723,9 +803,6 @@ private fun TracerouteFinishedPanel(
 
         // Summary stats card
         TraceStatsSummary(result = result, onClear = onClear)
-
-        // Journey intelligence statistics card
-        TraceJourneyStats(result = result)
 
         // Tab row: Hop Details / Raw Output
         // TabRow uses SubcomposeLayout internally, which causes IllegalStateException when
@@ -785,6 +862,9 @@ private fun TracerouteFinishedPanel(
             TracerouteViewMode.Visual -> HopDetailList(result.hops)
             TracerouteViewMode.Raw    -> RawOutputCard(result.rawOutput)
         }
+
+        // Journey intelligence comes after the hops, which are the answer (PHA-16).
+        TraceJourneyStats(result = result)
     }
 }
 
@@ -805,9 +885,6 @@ private fun TraceStatsSummary(result: TracerouteResult, onClear: () -> Unit) {
                     stringResource(R.string.traceroute_result_header),
                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold)
                 )
-                TextButton(onClick = onClear) {
-                    Text(stringResource(R.string.traceroute_clear_button))
-                }
             }
             Spacer(Modifier.height(8.dp))
             Row(
@@ -820,7 +897,7 @@ private fun TraceStatsSummary(result: TracerouteResult, onClear: () -> Unit) {
                 )
                 StatChip(
                     label = stringResource(R.string.traceroute_stat_time),
-                    value = if (result.totalTimeMs > 0) "${result.totalTimeMs}ms" else "N/A"
+                    value = totalTimeText(result.totalTimeMs),
                 )
                 StatChip(
                     label = stringResource(R.string.traceroute_stat_reached),
@@ -841,6 +918,11 @@ private fun TraceStatsSummary(result: TracerouteResult, onClear: () -> Unit) {
             ResultActionsRow(
                 copyText = result.rawOutput,
                 onShare = { context.shareText(text = result.rawOutput, subject = shareSubject) },
+                extraActions = {
+                    TextButton(onClick = onClear) {
+                        Text(stringResource(R.string.traceroute_clear_button))
+                    }
+                },
             )
         }
     }

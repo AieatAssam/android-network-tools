@@ -19,7 +19,6 @@ import net.aieat.netswissknife.app.data.RecentHostsRepository
 import net.aieat.netswissknife.core.domain.WhoisLookupUseCase
 import net.aieat.netswissknife.core.domain.WhoisParams
 import net.aieat.netswissknife.core.network.ErrorCode
-import net.aieat.netswissknife.core.network.HostProblem
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.whois.WhoisHop
 import net.aieat.netswissknife.core.network.whois.WhoisQueryType
@@ -356,35 +355,24 @@ class WhoisViewModelTest {
     }
 
     @Test
-    fun `invalid IPv4 address reports its specific host problem`() {
+    fun `an invalid query is flagged as the user types and never reaches the lookup`() {
         runTest {
-            val invalid =
-                NetworkResult.error(
-                    ErrorCode.WHOIS_INVALID_QUERY,
-                    developerMessage = "Enter a valid domain, IP address, or ASN without spaces",
-                )
-            coEvery { whoisLookupUseCase(any(), any()) } returns invalid
-            viewModel.onQueryChange("999.1.1.1")
-            viewModel.lookup()
+            viewModel.onQueryChange("bad domain!!")
 
-            assertEquals(HostProblem.IPV4_INVALID, viewModel.uiState.value.inputProblem)
-            assertNotNull(viewModel.uiState.value.error)
+            assertTrue(viewModel.uiState.value.queryInvalid)
+            viewModel.lookup()
+            coVerify(exactly = 0) { whoisLookupUseCase(any(), any()) }
+            assertNull(viewModel.uiState.value.error)
         }
     }
 
     @Test
-    fun `a non-query error does not carry a host problem`() {
+    fun `correcting the query clears the invalid flag`() {
         runTest {
-            val failed =
-                NetworkResult.error(
-                    ErrorCode.WHOIS_LOOKUP_FAILED,
-                    developerMessage = "lookup failed",
-                )
-            coEvery { whoisLookupUseCase(any(), any()) } returns failed
-            viewModel.onQueryChange("999.1.1.1")
-            viewModel.lookup()
+            viewModel.onQueryChange("bad domain!!")
+            viewModel.onQueryChange("example.com")
 
-            assertNull(viewModel.uiState.value.inputProblem)
+            assertFalse(viewModel.uiState.value.queryInvalid)
         }
     }
 

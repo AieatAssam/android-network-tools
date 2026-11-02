@@ -549,6 +549,14 @@ private fun PingInputCard(
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(stringResource(R.string.ping_start_button))
                 }
+                if (!canStart) {
+                    // A disabled button needs its reason next to it (PHA-12).
+                    Text(
+                        text = stringResource(R.string.ping_start_disabled_hint),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
     }
@@ -599,8 +607,12 @@ private fun PingAdvancedOptions(
                     )
                     PingSliderRow(
                         label = stringResource(R.string.ping_interval_label, intervalMs),
-                        value = intervalMs.toFloat(), valueRange = 100f..10_000f, steps = 49,
-                        onValueChange = { onIntervalChange(it.toInt()) }, enabled = enabled
+                        // 99 steps of 100 ms: 100 ms to 10 s in round values (V5-06).
+                        value = intervalMs.toFloat(),
+                        valueRange = 100f..10_000f,
+                        steps = 98,
+                        onValueChange = { onIntervalChange(it.toInt()) },
+                        enabled = enabled,
                     )
                     TextButton(
                         onClick = onResetAdvanced,
@@ -1001,10 +1013,8 @@ private fun StatsCard(stats: PingStats) {
                 StatItem(
                     label = stringResource(R.string.ping_packets_received),
                     value = "${stats.received}",
-                    color = if (stats.received == stats.sent)
-                        MaterialTheme.colorScheme.tertiary
-                    else
-                        MaterialTheme.colorScheme.error
+                    // Received is a count, not a verdict: loss carries the warning colour (PHA-14).
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
                 StatItem(
                     label = stringResource(R.string.ping_packet_loss),

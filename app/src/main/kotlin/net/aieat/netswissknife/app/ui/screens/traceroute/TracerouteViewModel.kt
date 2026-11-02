@@ -63,6 +63,8 @@ sealed interface TracerouteUiState {
     data class Canceled(
         val result: TracerouteResult,
         val viewMode: TracerouteViewMode = TracerouteViewMode.Visual,
+        /** True when the trace stopped because the user left the screen, not because they pressed Stop. */
+        val stoppedWhenLeft: Boolean = false,
     ) : TracerouteUiState
 
     data class Finished(
@@ -480,6 +482,7 @@ class TracerouteViewModel
                                 _uiState.value =
                                     TracerouteUiState.Canceled(
                                         result = buildResult(current.host, current.hops, current.elapsedMs),
+                                        stoppedWhenLeft = cancellationReason == CancellationReason.LIFECYCLE_PAUSE,
                                     )
                             }
 

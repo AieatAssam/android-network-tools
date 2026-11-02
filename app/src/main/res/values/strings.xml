@@ -269,6 +269,8 @@
     <string name="ping_showing_recent">Showing the most recent %1$d of %2$d pings</string>
     <string name="ping_interrupted_banner">Stopped early after %1$d probes. Statistics cover only the probes that were sent.</string>
     <string name="ping_stale_result">Showing the previous result for %1$s. Run again to update it for the new host.</string>
+    <string name="ping_start_disabled_hint">Enter a host to enable Start Ping.</string>
+    <string name="ping_unresolved_message">Could not find an address for %1$s. Check the name, then try again.</string>
     <string name="ping_reset_advanced">Reset to defaults</string>
     <string name="ping_stats_header">Statistics</string>
     <string name="ping_packets_sent">Sent</string>
@@ -384,7 +386,6 @@
     <string name="lan_stop_button">Stop Scan</string>
     <string name="lan_rescan_button">Re-scan</string>
     <string name="lan_clear_button">Clear</string>
-    <string name="lan_share_button">Share</string>
     <string name="lan_retry_button">Retry</string>
 
     <!-- LAN States -->
@@ -629,6 +630,13 @@
         <item quantity="one">Trace canceled. %1$d hop retained as a partial result.</item>
         <item quantity="other">Trace canceled. %1$d hops retained as partial results.</item>
     </plurals>
+    <plurals name="traceroute_stopped_when_left_status">
+        <item quantity="one">Trace stopped when you left the screen. %1$d hop kept as a partial result.</item>
+        <item quantity="other">Trace stopped when you left the screen. %1$d hops kept as partial results.</item>
+    </plurals>
+    <string name="traceroute_settings_summary">%1$d hops · %2$d probes per hop · %3$d ms timeout</string>
+    <string name="traceroute_settings_show">Show settings</string>
+    <string name="traceroute_settings_hide">Hide settings</string>
     <plurals name="traceroute_running_subtitle">
         <item quantity="one">%1$d hop discovered so far</item>
         <item quantity="other">%1$d hops discovered so far</item>
@@ -770,6 +778,7 @@
     <string name="tls_error_title">Inspection failed</string>
     <string name="tls_retry">Retry</string>
     <string name="tls_inspection_canceled">Inspection canceled</string>
+    <string name="tls_inspection_canceled_body">The inspection stopped before it finished. Retry to check the server again.</string>
 
     <!-- TLS Connection Card -->
     <string name="tls_connection_header">Connection</string>
@@ -840,6 +849,7 @@
     <string name="whois_screen_subtitle">Domain and IP registration lookup</string>
     <string name="whois_query_label">Domain, IP, or ASN</string>
     <string name="whois_query_placeholder">e.g. example.com, 8.8.8.8, AS15169</string>
+    <string name="whois_query_invalid">Enter a domain or IP address (or an ASN such as AS15169), with no spaces or symbols.</string>
     <string name="whois_protocol_label">Lookup protocol</string>
     <string name="whois_protocol_auto">Auto</string>
     <string name="whois_protocol_rdap">RDAP</string>
@@ -1184,10 +1194,9 @@
     <string name="mdns_screen_subtitle">Discover services on your local network via multicast DNS</string>
     <string name="mdns_stat_found">found</string>
     <string name="mdns_stat_elapsed">elapsed</string>
-    <string name="mdns_idle_hint">Tap Scan to discover services</string>
+    <string name="mdns_idle_hint">Tap Scan Network to find services</string>
     <string name="mdns_idle_body">Finds printers, Chromecasts, AirPlay, HomeKit, and more</string>
     <string name="mdns_scanning_hint">Listening for mDNS announcements…</string>
-    <string name="mdns_scanning_inline_label">Scanning…</string>
     <string name="mdns_error_title">Discovery failed</string>
     <string name="mdns_error_dismiss">Dismiss</string>
     <string name="mdns_scan_button">Scan Network</string>
@@ -1197,13 +1206,13 @@
     <string name="mdns_canceled_title">Discovery canceled</string>
     <string name="mdns_canceled_empty_body">No services were found before discovery stopped.</string>
     <string name="mdns_canceled_partial">Discovery canceled. Showing services found so far.</string>
-    <string name="mdns_partial_results_status">Some results were capped by a limit: %1$s. Showing the services found so far.</string>
-    <string name="mdns_limit_service_types">service types (max %1$d)</string>
-    <string name="mdns_limit_services">services (max %1$d)</string>
-    <string name="mdns_limit_addresses">addresses per service (max %1$d addresses or %2$d bytes)</string>
-    <string name="mdns_limit_txt">TXT data per service (max %1$d bytes)</string>
-    <string name="mdns_limit_queries">queries (max %1$d)</string>
-    <string name="mdns_limit_records">records per packet (max %1$d)</string>
+    <string name="mdns_partial_results_status">Some devices reported more than we show (%1$s). Showing the services found so far.</string>
+    <string name="mdns_limit_service_types">first %1$d service types</string>
+    <string name="mdns_limit_services">first %1$d services</string>
+    <string name="mdns_limit_addresses">first %1$d addresses per service</string>
+    <string name="mdns_limit_txt">first %1$d bytes of TXT data per service</string>
+    <string name="mdns_limit_queries">first %1$d queries</string>
+    <string name="mdns_limit_records">first %1$d records per packet</string>
     <string name="mdns_no_match_title">No services match \"%1$s\"</string>
     <string name="mdns_no_match_clear">Clear search</string>
     <string name="mdns_clear_button">Clear</string>
@@ -1652,6 +1661,9 @@
     <string name="wol_device_conflict">That MAC address is already saved as another device.</string>
     <string name="wol_device_name_kept">Already saved as %1$s. The saved name was kept.</string>
     <string name="wol_device_renamed">Already saved as %1$s. Renamed to %2$s.</string>
+    <string name="wol_delete_confirm_title">Delete saved device?</string>
+    <string name="wol_delete_confirm_body">%1$s will be removed from Saved devices. You can save it again later.</string>
+    <string name="wol_delete_confirm_action">Delete</string>
     <string name="wol_error_title">Failed to send</string>
     <string name="wol_retry_button">Retry</string>
     <string name="help_wol_concept_heading">What is Wake-on-LAN?</string>
@@ -1778,8 +1790,6 @@
     <string name="netinfo_asn">ASN</string>
     <string name="netinfo_not_checked">Not checked</string>
     <string name="netinfo_refresh">Refresh</string>
-    <string name="netinfo_copy_all">Copy all</string>
-    <string name="netinfo_share">Share</string>
     <string name="netinfo_share_subject">Network Info summary</string>
     <string name="netinfo_copy_description">Copy %1$s</string>
     <string name="netinfo_copy_hint">Tap the copy icon or press and hold a value to copy it.</string>

@@ -52,8 +52,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.DeviceHub
 import androidx.compose.material.icons.filled.Error
@@ -123,6 +121,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.launch
+import net.aieat.netswissknife.app.ui.components.ResultActionsRow
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
 import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
 import net.aieat.netswissknife.app.ui.components.ToolRetryButton
@@ -133,7 +132,6 @@ import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
 import net.aieat.netswissknife.app.ui.components.ToolStopButton
 import net.aieat.netswissknife.app.ui.components.hapticAction
-import net.aieat.netswissknife.app.ui.components.rememberCopyWithFeedback
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.RecentHostsRow
@@ -1297,39 +1295,19 @@ private fun LanSummaryActions(
 ) {
     val context = LocalContext.current
     val shareSubject = stringResource(R.string.share_subject_lan, summary.subnet)
-    val shareDuration = humanDurationText(summary.scanDurationMs)
-    val copyResult = rememberCopyWithFeedback()
-    FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalArrangement = Arrangement.spacedBy(0.dp),
-    ) {
-        TextButton(
-            onClick = { copyResult(buildLanShareText(summary, shareDuration)) },
-            contentPadding = PaddingValues(horizontal = 0.dp),
-        ) {
-            Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(8.dp))
-            Text(stringResource(R.string.action_copy))
-        }
-        TextButton(
-            onClick = {
-                context.shareText(
-                    text = buildLanShareText(summary, shareDuration),
-                    subject = shareSubject,
-                )
-            },
-            contentPadding = PaddingValues(horizontal = 0.dp),
-        ) {
-            Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(8.dp))
-            Text(stringResource(R.string.lan_share_button))
-        }
-        TextButton(onClick = onClear, contentPadding = PaddingValues(horizontal = 0.dp)) {
-            Icon(Icons.Default.Clear, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(8.dp))
-            Text(stringResource(R.string.lan_clear_button))
-        }
-    }
+    val shareText = buildLanShareText(summary, humanDurationText(summary.scanDurationMs))
+    // Same Copy / Share row as every other tool (PHB-12); Clear leads it as the row's tool action.
+    ResultActionsRow(
+        copyText = shareText,
+        onShare = { context.shareText(text = shareText, subject = shareSubject) },
+        extraActions = {
+            TextButton(onClick = onClear) {
+                Icon(Icons.Default.Clear, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(stringResource(R.string.lan_clear_button))
+            }
+        },
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

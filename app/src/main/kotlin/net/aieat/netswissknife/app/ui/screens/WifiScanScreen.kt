@@ -66,7 +66,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -161,9 +161,6 @@ import net.aieat.netswissknife.core.network.wifi.WifiAccessPoint
 import net.aieat.netswissknife.core.network.wifi.WifiBand
 import net.aieat.netswissknife.core.network.wifi.WifiNetwork
 import net.aieat.netswissknife.core.network.wifi.WifiSecurity
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 import kotlin.math.roundToInt
 
 internal fun wifiSpectrumPlotBounds(
@@ -796,17 +793,10 @@ internal fun buildWifiShareText(result: net.aieat.netswissknife.core.network.wif
                     }
                 }
                 Spacer(Modifier.height(4.dp))
-                val time =
-                    remember(result.scanTimestampMs) {
-                        if (result.scanTimestampMs > 0L) {
-                            SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(result.scanTimestampMs))
-                        } else {
-                            null
-                        }
-                    }
+                // Network count is in the list header and the time is in the Updated line, so the hero
+                // states only the access-point count (PHA-20).
                 Text(
-                    listOfNotNull("${result.networks.size} SSIDs · ${result.accessPoints.size} APs", time)
-                        .joinToString(" · "),
+                    stringResource(R.string.wifi_aps_count, result.accessPoints.size),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
                 )
@@ -818,15 +808,20 @@ internal fun buildWifiShareText(result: net.aieat.netswissknife.core.network.wif
                     )
                 }
                 Spacer(Modifier.height(8.dp))
-                FilledTonalIconButton(onClick = hapticAction(onScan)) {
+                // One labelled action: an icon-only refresh was the only scan control (PHA-20).
+                FilledTonalButton(onClick = hapticAction(onScan)) {
                     Icon(
                         Icons.Default.Refresh,
-                        contentDescription = stringResource(R.string.wifi_scan_button),
+                        contentDescription = null,
                         modifier =
-                            Modifier.graphicsLayer {
-                                rotationZ = spinAngle
-                            },
+                            Modifier
+                                .size(18.dp)
+                                .graphicsLayer {
+                                    rotationZ = spinAngle
+                                },
                     )
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.wifi_scan_button))
                 }
             }
         }

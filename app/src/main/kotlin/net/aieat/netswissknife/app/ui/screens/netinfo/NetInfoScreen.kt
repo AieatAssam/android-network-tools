@@ -97,7 +97,7 @@ fun NetInfoScreen(viewModel: NetInfoViewModel = hiltViewModel()) {
                 onCheck = viewModel::checkPublicIp,
                 onRefresh = viewModel::refresh,
                 onCopy = copy,
-                onCopyAll = { copy(summary) },
+                summaryText = summary,
                 onShare = { context.shareText(summary, shareSubject) },
                 onHelp = { showHelp = true },
             )
@@ -117,7 +117,7 @@ private fun NetInfoContent(
     onCheck: () -> Unit,
     onRefresh: () -> Unit,
     onCopy: (String) -> Unit,
-    onCopyAll: () -> Unit,
+    summaryText: String,
     onShare: () -> Unit,
     onHelp: () -> Unit,
 ) {
@@ -143,7 +143,7 @@ private fun NetInfoContent(
 
     NetInfoActionsCard(
         onRefresh = onRefresh,
-        onCopyAll = onCopyAll,
+        summaryText = summaryText,
         onShare = onShare,
     )
 }

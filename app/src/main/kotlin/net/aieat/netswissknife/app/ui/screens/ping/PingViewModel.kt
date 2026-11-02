@@ -360,7 +360,7 @@ class PingViewModel @Inject constructor(
     }
 
     fun onIntervalChange(value: Int) {
-        _intervalMs.setKept(savedStateHandle, INTERVAL_KEY, value.coerceIn(100, 10_000))
+        _intervalMs.setKept(savedStateHandle, INTERVAL_KEY, snapPingIntervalMs(value))
     }
 
     /** Restores the advanced-option defaults (payload, TTL and interval). */
@@ -530,7 +530,7 @@ class PingViewModel @Inject constructor(
                             return@collect
                         }
                         is PingFlowResult.Packet -> {
-                            if (!savedToRecents) {
+                            if (!savedToRecents && shouldRememberPingHost(result.packet)) {
                                 savedToRecents = true
                                 recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_PING_HOSTS, trimmedHost)
                             }
@@ -546,10 +546,10 @@ class PingViewModel @Inject constructor(
 
                 val current = _uiState.value
                 if (pingOperationSession === operationSession && current is PingUiState.Running) {
-                    _uiState.value = if (current.packets.isEmpty()) {
-                        PingUiState.Error("No response received from $trimmedHost")
-                    } else {
-                        PingUiState.Finished(buildResult(current.host, current.packets, params.count))
+                    _uiState.value = when {
+                        current.packets.isEmpty() -> PingUiState.Error("No response received from $trimmedHost")
+                        isUnresolvedHostRun(current.packets) -> unresolvedHostState(trimmedHost, current.packets)
+                        else -> PingUiState.Finished(buildResult(current.host, current.packets, params.count))
                     }
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
@@ -642,7 +642,7 @@ class PingViewModel @Inject constructor(
                         }
                         is PingFlowResult.Packet -> {
                             seq++
-                            if (!savedToRecents) {
+                            if (!savedToRecents && shouldRememberPingHost(result.packet)) {
                                 savedToRecents = true
                                 recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_PING_HOSTS, trimmedHost)
                             }

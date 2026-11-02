@@ -48,6 +48,7 @@ import net.aieat.netswissknife.core.network.traceroute.HopStatus
 import net.aieat.netswissknife.core.network.traceroute.TracerouteOperation
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
@@ -513,6 +514,7 @@ class TracerouteViewModelTest {
                         as TracerouteUiState.Canceled
                 assertEquals(CancellationReason.LIFECYCLE_PAUSE, session?.cancellationReason)
                 assertEquals(listOf(stubHop), canceled.result.hops)
+                assertTrue(canceled.stoppedWhenLeft)
             }
 
         @Test
@@ -597,6 +599,7 @@ class TracerouteViewModelTest {
                     viewModel.uiState.first { it is TracerouteUiState.Canceled }
                         as TracerouteUiState.Canceled
                 assertEquals(listOf(stubHop), canceled.result.hops)
+                assertFalse(canceled.stoppedWhenLeft)
             }
 
         @Test

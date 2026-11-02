@@ -59,6 +59,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.text.style.TextAlign
 import net.aieat.netswissknife.app.ui.components.ResultActionsRow
 import net.aieat.netswissknife.app.ui.components.ToolRetryButton
 import net.aieat.netswissknife.app.ui.theme.StatusGood
@@ -242,7 +243,7 @@ fun TlsInspectorScreen(viewModel: TlsInspectorViewModel = hiltViewModel()) {
                     when (state) {
                         is DisplayState.Idle    -> TlsIdlePlaceholder()
                         is DisplayState.Loading -> TlsLoadingContent()
-                        is DisplayState.Canceled -> TlsCanceledContent()
+                        is DisplayState.Canceled -> TlsCanceledContent(onRetry = { viewModel.inspect() })
                         is DisplayState.Error   -> TlsErrorContent(state.message, state.descriptionKey) { viewModel.inspect() }
                         is DisplayState.Success -> TlsSuccessContent(state.result)
                     }
@@ -496,16 +497,31 @@ private fun TlsIdlePlaceholder() {
 }
 
 @Composable
-private fun TlsCanceledContent() {
+@Suppress("FunctionNaming", "ktlint:standard:function-naming")
+private fun TlsCanceledContent(onRetry: () -> Unit) {
+    // A stopped inspection is not an error, but the card still says what happened and offers the next step (PHB-18).
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = stringResource(R.string.tls_inspection_canceled),
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(20.dp),
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.tls_inspection_canceled),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center,
+            )
+            Text(
+                text = stringResource(R.string.tls_inspection_canceled_body),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+            ToolRetryButton(text = stringResource(R.string.tls_retry), onClick = onRetry)
+        }
     }
 }
 

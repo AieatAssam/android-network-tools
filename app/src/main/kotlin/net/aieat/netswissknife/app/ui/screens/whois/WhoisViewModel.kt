@@ -25,9 +25,6 @@ import net.aieat.netswissknife.app.platform.NoOpNetworkStatusProvider
 import net.aieat.netswissknife.app.util.enumFromSavedName
 import net.aieat.netswissknife.core.domain.WhoisLookupUseCase
 import net.aieat.netswissknife.core.domain.WhoisParams
-import net.aieat.netswissknife.core.network.ErrorCode
-import net.aieat.netswissknife.core.network.HostProblem
-import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.operation.CancellationReason
 import net.aieat.netswissknife.core.network.operation.OperationSession
@@ -59,8 +56,8 @@ data class WhoisUiState(
     val hopStates: List<HopUiState> = emptyList(),
     val result: WhoisResult? = null,
     val error: String? = null,
-    /** Set when the query is not a valid domain, IP or ASN: names the specific problem. */
-    val inputProblem: HostProblem? = null,
+    /** True while the query is not a domain, IP or ASN. Shown inline; Look up is disabled. */
+    val queryInvalid: Boolean = false,
     val showRawResponse: Boolean = false
 )
 
@@ -131,12 +128,14 @@ class WhoisViewModel @Inject constructor(
         savedStateHandle[WHOIS_QUERY_KEY] = value
         _uiState.update { state ->
             val effectiveQueryChanged = lookupIdentity(value) != lookupIdentity(state.query)
+            val invalid = isWhoisQueryInvalid(value)
             if (state.isCanceled && effectiveQueryChanged) {
                 // The canceled card and its partial relay chain belong to the query that
                 // was stopped. Once the user changes the input, Retry must not appear to
                 // retry that old operation while actually submitting a different query.
                 state.copy(
                     query = value,
+                    queryInvalid = invalid,
                     isCanceled = false,
                     isLifecyclePaused = false,
                     hopStates = emptyList(),
@@ -144,7 +143,7 @@ class WhoisViewModel @Inject constructor(
                     error = null,
                 )
             } else {
-                state.copy(query = value)
+                state.copy(query = value, queryInvalid = invalid)
             }
         }
     }
@@ -206,6 +205,11 @@ class WhoisViewModel @Inject constructor(
         if (_uiState.value.isCanceling) return
         val query = _uiState.value.query.trim()
         if (query.isBlank()) return
+        if (isWhoisQueryInvalid(query)) {
+            // Invalid input is a field message, not a failed lookup: nothing is sent and there is nothing to retry.
+            _uiState.update { it.copy(queryInvalid = true) }
+            return
+        }
 
         val activeSession = operationSession
         if (activeSession != null) {
@@ -226,7 +230,7 @@ class WhoisViewModel @Inject constructor(
                 hopStates = emptyList(),
                 result = null,
                 error = null,
-                inputProblem = null,
+                queryInvalid = false,
             )
         }
 
@@ -265,7 +269,6 @@ class WhoisViewModel @Inject constructor(
             progressJob = null
             operationSession = null
             resultJob = null
-            val invalidQuery = (result as? NetworkResult.Error)?.info?.code == ErrorCode.WHOIS_INVALID_QUERY
             _uiState.update { state ->
                 when (result) {
                     is NetworkResult.Success -> state.copy(
@@ -283,7 +286,6 @@ class WhoisViewModel @Inject constructor(
                     is NetworkResult.Error -> state.copy(
                         isLoading = false,
                         error = result.message,
-                        inputProblem = if (invalidQuery) HostValidator.problemOf(query) else null,
                     )
                 }
             }
