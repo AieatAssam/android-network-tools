@@ -30,7 +30,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.Edit
@@ -40,7 +39,6 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.Router
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -85,7 +83,7 @@ import net.aieat.netswissknife.app.ui.components.ToolRetryButton
 import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.components.ToolTextField
 import net.aieat.netswissknife.app.ui.components.hapticAction
-import net.aieat.netswissknife.app.ui.components.rememberCopyWithFeedback
+import net.aieat.netswissknife.app.ui.components.ResultActionsRow
 import net.aieat.netswissknife.app.ui.components.rememberDismissKeyboard
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
 import net.aieat.netswissknife.app.ui.i18n.ErrorTextMapper
@@ -704,7 +702,6 @@ private fun WolSuccessCard(report: WolSendReport, onSendAgain: () -> Unit) {
         label = "wol-success-icon"
     )
     val context = LocalContext.current
-    val copyResult = rememberCopyWithFeedback()
     val shareSubject = stringResource(R.string.share_subject_wol, report.macAddress)
 
     ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = AppShapes.large) {
@@ -763,22 +760,18 @@ private fun WolSuccessCard(report: WolSendReport, onSendAgain: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { copyResult(buildWolShareText(report, Instant.now())) }) {
-                    Icon(Icons.Default.ContentCopy, contentDescription = stringResource(R.string.action_copy))
-                }
-                IconButton(onClick = {
-                    context.shareText(buildWolShareText(report, Instant.now()), shareSubject)
-                }) {
-                    Icon(Icons.Default.Share, contentDescription = stringResource(R.string.action_share))
-                }
-                TextButton(
-                    onClick = onSendAgain,
-                    modifier = Modifier.heightIn(min = MinTouchTarget),
-                ) {
-                    Text(stringResource(R.string.wol_send_again))
-                }
-            }
+            ResultActionsRow(
+                copyText = buildWolShareText(report, Instant.now()),
+                onShare = { context.shareText(buildWolShareText(report, Instant.now()), shareSubject) },
+                extraActions = {
+                    TextButton(
+                        onClick = onSendAgain,
+                        modifier = Modifier.heightIn(min = MinTouchTarget),
+                    ) {
+                        Text(stringResource(R.string.wol_send_again))
+                    }
+                },
+            )
         }
     }
 }

@@ -80,7 +80,6 @@ private class OuiLookupActions(
     val onRecentsCleared: () -> Unit,
     val onClear: () -> Unit,
     val onCopy: (String) -> Unit,
-    val onCopyAll: () -> Unit,
     val onShare: () -> Unit,
 )
 
@@ -124,7 +123,6 @@ fun OuiLookupScreen(viewModel: OuiLookupViewModel = hiltViewModel()) {
             onRecentsCleared = viewModel::onRecentsCleared,
             onClear = viewModel::onClear,
             onCopy = copy,
-            onCopyAll = { copy(summary) },
             onShare = { context.shareText(summary, shareSubject) },
         )
 
@@ -135,6 +133,7 @@ fun OuiLookupScreen(viewModel: OuiLookupViewModel = hiltViewModel()) {
         lowercase = lowercase,
         onLowercaseChange = { lowercase = it },
         onHelp = { showHelp = true },
+        summary = summary,
         actions = actions,
     )
 
@@ -153,6 +152,7 @@ private fun OuiLookupBody(
     lowercase: Boolean,
     onLowercaseChange: (Boolean) -> Unit,
     onHelp: () -> Unit,
+    summary: String,
     actions: OuiLookupActions,
 ) {
     val dismissRecent = rememberDismissKeyboard()
@@ -193,6 +193,7 @@ private fun OuiLookupBody(
             AnimatedContent(targetState = uiState.phase, label = "oui-phase") { phase ->
                 OuiPhaseContent(
                     phase = phase,
+                    summary = summary,
                     lowercase = lowercase,
                     onLowercaseChange = onLowercaseChange,
                     actions = actions,
@@ -296,6 +297,7 @@ private fun OuiInputField(
 @Suppress("FunctionNaming", "ktlint:standard:function-naming")
 private fun OuiPhaseContent(
     phase: OuiLookupPhase,
+    summary: String,
     lowercase: Boolean,
     onLowercaseChange: (Boolean) -> Unit,
     actions: OuiLookupActions,
@@ -317,10 +319,10 @@ private fun OuiPhaseContent(
         is OuiLookupPhase.Results -> {
             OuiResultsContent(
                 results = phase,
+                summary = summary,
                 lowercase = lowercase,
                 onLowercaseChange = onLowercaseChange,
                 onCopy = actions.onCopy,
-                onCopyAll = actions.onCopyAll,
                 onShare = actions.onShare,
                 onClear = actions.onClear,
             )

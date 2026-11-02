@@ -5,12 +5,10 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -41,29 +39,24 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bolt
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FmdGood
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Router
-import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.automirrored.filled.TextSnippet
 import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.TravelExplore
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Slider
@@ -88,12 +81,12 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
+import net.aieat.netswissknife.app.ui.components.ResultActionsRow
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
 import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
 import net.aieat.netswissknife.app.ui.components.ToolRetryButton
@@ -102,7 +95,6 @@ import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
 import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
 import net.aieat.netswissknife.app.ui.components.ToolErrorCard
 import net.aieat.netswissknife.app.ui.components.ToolTextField
-import net.aieat.netswissknife.app.ui.components.rememberCopyWithFeedback
 import net.aieat.netswissknife.app.ui.components.rememberDismissKeyboard
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
 import net.aieat.netswissknife.app.ui.components.ToolStopButton
@@ -140,7 +132,6 @@ import net.aieat.netswissknife.app.ui.screens.traceroute.TracerouteViewMode
 import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.traceroute.CountryFlags
 import net.aieat.netswissknife.app.ui.components.messageRes
-import net.aieat.netswissknife.core.network.HostProblem
 import net.aieat.netswissknife.core.network.traceroute.GeoPlausibility
 import net.aieat.netswissknife.core.network.traceroute.HopGeoLocation
 import net.aieat.netswissknife.core.network.traceroute.HopResult
@@ -799,31 +790,9 @@ private fun TracerouteFinishedPanel(
 
 // ── Stats summary ─────────────────────────────────────────────────────────────
 
-/** Copy and Share both send [rawOutput], the same text the Share action always sent. */
-@Composable
-@Suppress("FunctionNaming", "ktlint:standard:function-naming")
-private fun TraceResultActions(
-    rawOutput: String,
-    shareSubject: String,
-    onClear: () -> Unit,
-) {
-    val context = LocalContext.current
-    val copyResult = rememberCopyWithFeedback()
-    Row {
-        IconButton(onClick = { copyResult(rawOutput) }) {
-            Icon(Icons.Default.ContentCopy, contentDescription = stringResource(R.string.action_copy))
-        }
-        IconButton(onClick = { context.shareText(text = rawOutput, subject = shareSubject) }) {
-            Icon(Icons.Default.Share, contentDescription = stringResource(R.string.action_share))
-        }
-        TextButton(onClick = onClear) {
-            Text(stringResource(R.string.traceroute_clear_button))
-        }
-    }
-}
-
 @Composable
 private fun TraceStatsSummary(result: TracerouteResult, onClear: () -> Unit) {
+    val context = LocalContext.current
     val shareSubject = stringResource(R.string.share_subject_traceroute, result.host)
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -836,11 +805,9 @@ private fun TraceStatsSummary(result: TracerouteResult, onClear: () -> Unit) {
                     stringResource(R.string.traceroute_result_header),
                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold)
                 )
-                TraceResultActions(
-                    rawOutput = result.rawOutput,
-                    shareSubject = shareSubject,
-                    onClear = onClear,
-                )
+                TextButton(onClick = onClear) {
+                    Text(stringResource(R.string.traceroute_clear_button))
+                }
             }
             Spacer(Modifier.height(8.dp))
             Row(
@@ -871,6 +838,10 @@ private fun TraceStatsSummary(result: TracerouteResult, onClear: () -> Unit) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+            ResultActionsRow(
+                copyText = result.rawOutput,
+                onShare = { context.shareText(text = result.rawOutput, subject = shareSubject) },
+            )
         }
     }
 }

@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -48,7 +47,6 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Dns
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -99,7 +97,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.pluralStringResource
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -119,7 +116,7 @@ import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
 import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
 import net.aieat.netswissknife.app.ui.components.ToolErrorCard
 import net.aieat.netswissknife.app.ui.components.ToolTextField
-import net.aieat.netswissknife.app.ui.components.rememberCopyWithFeedback
+import net.aieat.netswissknife.app.ui.components.ResultActionsRow
 import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
@@ -952,7 +949,6 @@ private fun DnsResultSummaryCard(
     val context = LocalContext.current
     val shareSubject = stringResource(R.string.share_subject_dns, result.recordType.name, result.domain)
     val shareServerLine = stringResource(R.string.dns_share_server, result.server.uiLabel().asString())
-    val copyResult = rememberCopyWithFeedback()
     val tone = dnsResponseTone(result.rcode)
     val onContainer =
         when (tone) {
@@ -994,17 +990,6 @@ private fun DnsResultSummaryCard(
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        RecordTypeBadge(type = result.recordType)
-                        Text(
-                            text = stringResource(R.string.dns_result_server, result.server.uiLabel().asString()),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
                     Text(
                         text = stringResource(R.string.dns_rcode, result.rcode),
                         style = MaterialTheme.typography.labelMedium,
@@ -1037,34 +1022,12 @@ private fun DnsResultSummaryCard(
                         )
                     }
                 }
-                Row {
-                    // Copy and Share both send buildDnsShareText, so the clipboard matches the share text.
-                    IconButton(onClick = { copyResult(buildDnsShareText(result, shareServerLine)) }) {
-                        Icon(
-                            imageVector = Icons.Default.ContentCopy,
-                            contentDescription = stringResource(R.string.action_copy),
-                            tint = onContainer,
-                        )
-                    }
-                    IconButton(onClick = {
-                        context.shareText(
-                            text = buildDnsShareText(result, shareServerLine),
-                            subject = shareSubject
-                        )
-                    }) {
-                        Icon(
-                            imageVector = Icons.Default.Share,
-                            contentDescription = stringResource(R.string.action_share),
-                            tint = onContainer
-                        )
-                    }
-                    IconButton(onClick = onClear) {
-                        Icon(
-                            imageVector = Icons.Default.Clear,
-                            contentDescription = stringResource(R.string.clear),
-                            tint = onContainer
-                        )
-                    }
+                IconButton(onClick = onClear) {
+                    Icon(
+                        imageVector = Icons.Default.Clear,
+                        contentDescription = stringResource(R.string.clear),
+                        tint = onContainer
+                    )
                 }
             }
 
@@ -1086,6 +1049,16 @@ private fun DnsResultSummaryCard(
                     label = stringResource(R.string.dns_ms)
                 )
             }
+            // Copy and Share both send buildDnsShareText, so the clipboard matches the share text.
+            ResultActionsRow(
+                copyText = buildDnsShareText(result, shareServerLine),
+                onShare = {
+                    context.shareText(
+                        text = buildDnsShareText(result, shareServerLine),
+                        subject = shareSubject
+                    )
+                },
+            )
         }
     }
 }
@@ -1117,22 +1090,6 @@ private fun DnsSectionCard(
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun RecordTypeBadge(type: DnsRecordType) {
-    Surface(
-        shape = RoundedCornerShape(6.dp),
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier
-    ) {
-        Text(
-            text = type.displayName,
-            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-            color = MaterialTheme.colorScheme.onPrimary,
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-        )
     }
 }
 
@@ -1197,21 +1154,15 @@ private fun DnsRecordCard(record: DnsRecord, index: Int) {
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    // The type badge is the one place the record type is shown.
                     RecordTypeIcon(type = record.type, label = dnsRecordIconLabel(record))
-                    Column {
-                        Text(
-                            text = record.rrTypeName,
-                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Text(
-                            text = record.name,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
+                    Text(
+                        text = record.name,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     TtlBadge(ttl = record.ttl)
@@ -1308,14 +1259,6 @@ private fun RecordValueDisplay(record: DnsRecord) {
                         .padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    val isIpv6 = record.type == DnsRecordType.AAAA
-                    Text(
-                        text = if (isIpv6) stringResource(R.string.dns_ipv6_prefix)
-                               else stringResource(R.string.dns_ipv4_prefix),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(Modifier.width(8.dp))
                     Text(
                         text = record.value,
                         style = MaterialTheme.typography.bodyMedium.copy(

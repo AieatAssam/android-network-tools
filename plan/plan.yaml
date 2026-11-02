@@ -774,9 +774,39 @@ work_packages:
       tests: "ImeClearanceTest, ScreenHeightModeTest, MoreToolsSheetCoverageTest, SeparatorBreaksTest (IME helper test written with the helper, not observed red)."
   - id: WP32
     title: Result-screen de-duplication across tools
-    status: todo
+    status: partial
     findings: [PHB-12, PHB-04, PHB-05, PHB-06, PHB-07, PHB-08, PHB-09, PHB-14, PHB-17, PHB-19, PHB-22, PHB-23, PHB-24, PHB-27, PHA-13, PHA-17, PHA-18]
     notes: "Rule: a summary/header/banner/chip holds aggregate or derived info only; never restate input echoed elsewhere or per-row data."
+    result:
+      status: partial
+      commit: "fix(app): remove duplicated information from result screens (WP32)"
+      gates: "./gradlew test, ktlintCheck, detekt, :app:assembleDebug, :app:compileDebugAndroidTestKotlin, :core-network:koverVerify, :core-domain:koverVerify, :app:koverVerify all green (separate foreground invocations, one at a time). ktlint and detekt app baselines regenerated (line shifts): per-rule diff vs HEAD shows no increases (ktlint app 5209 -> 5144; detekt app 962 -> 902). core-network and core-domain baselines reverted to HEAD (untouched modules)."
+      changes:
+        - "Shared ResultActionsRow (ui/components): labelled Copy and Share text buttons, trailing, under the result, Copy through rememberCopyWithFeedback. Replaces per-tool icon/text variants in TLS, HTTP Probe, WHOIS, MAC Lookup, Speed Test, mDNS, Subnet, Port Scanner, DNS, Ping, Wake-on-LAN and Traceroute. Tool extras (Share PEM, Copy as cURL, Send again) sit in the same row. Exported text unchanged."
+        - "PHB-04 Subnet: CIDR shown once (hero); Usable hosts row removed (hero line keeps it); Notation CIDR and Binary rows removed (binary card has the mask); Prefix bits and Host bit count rows removed (legend has the bit counts)."
+        - "PHB-05 TLS: Host / Port row removed (the input shows it); Subject CN row removed (card header); Hostname and Expected pin match rows removed and replaced by one verdict line; expiry shown once as a days-left chip in the header, the date stays in the Valid To row. Remaining: the Issuer CN of a certificate repeats the next card's header (not changed)."
+        - "PHB-06 TLS: ExpiryTone (pure, unit-tested): error when expired or not yet valid, warning within 30 days inclusive, OK beyond. Chip colour uses error container, warning and good tokens; text carries the number."
+        - "PHB-27 TLS: verdict chip now has a detail line stating what it rests on (or which findings failed)."
+        - "PHB-07 WHOIS: query-chain caption states the protocol only (the chain names the server); ASN and single-address ranges shown once (netRangeDisplay, unit-tested); raw section has one affordance (chevron) instead of switch plus chevron."
+        - "PHB-08 HTTP Probe: Method row and Final URL row removed from Overview (chip and banner show them); idle copy no longer lists the methods; idle icon removed."
+        - "PHB-09 MAC Lookup: title repeating the MAC removed (colon notation is the first row with its copy); header Clear renamed Clear results (input keeps its own Clear icon)."
+        - "PHB-14 mDNS: Copy and Share moved from the search bar to the foot of the list. The visible scanning status was not re-checked mid-scan; not changed."
+        - "PHB-17 Wake-on-LAN helper text no longer repeats the field values (broadcast and port)."
+        - "PHB-22 Speed Test: stream settings are equal-width buttons with a dropdown arrow, label and value on two lines (verified: they open a value list, so they are interactive). Idle subtitle and the second gauge icon removed."
+        - "PHB-23 Speed Test: Cloudflare named once (disclaimer); hero clause, header chip and 'Cloudflare' prefix in the server chip removed (server chip reads Edge <colo> · <ASN>)."
+        - "PHB-24 Speed Test: 'Average' changed to 'Avg' (matches latency)."
+        - "PHA-13 Ping: host line removed from the running card and the Statistics card (the field and stale-result line show it). The chart TalkBack description repeating min/avg/max is not visible text; left unchanged (rejected)."
+        - "PHA-17 DNS: record type shown once per record (icon badge), the type text and IPv4/IPv6 prefix removed; header 'via <server>' removed (Server used keeps the resolver actually used)."
+        - "PHA-18 Port Scanner: Resolved IP shown only when it differs from the host (resolvedIpToShow, unit-tested); OPEN badge removed from rows under the Open heading."
+      tests: "New unit tests: ExpiryToneTest (3), NetRangeDisplayTest (4), ResolvedIpToShowTest (4), all passing. Instrumented tests adjusted for removed strings (TLS, HTTP Probe, MAC Lookup). Red state: ExpiryToneTest was written before its implementation (compile-red), but none of the three pure-helper tests was run red on its own; the helpers were written in the same step as their tests. Disclosed, not re-run."
+      device: "Tablet at density 480 (sw400dp, verified via am get-config), landscape not used, dark not used, font 1.0. Screens checked after the change: MAC Lookup (result, notations, Copy/Share row), Speed Test (idle, one run, result with Copy/Share and Run again), mDNS (scan and foot of list), TLS (verdict line, days-left chip, actions row), HTTP Probe (overview, action row), Subnet (binary legend, notations, properties). Not checked on device: WHOIS, Ping, DNS, Port Scanner, Wake-on-LAN result (no packet sent), Subnet hero, and before/after screenshots (no HEAD build was installed for comparison). Restored: density reset, size reset, auto-rotate 1, user_rotation 0, font 1.0, night no, location revoked."
+      deferred:
+        - "PHB-08 timing bar legend (DNS / Connect / TLS / Server / Transfer): not added."
+        - "PHB-05 Issuer CN repeated in the next certificate card header: not changed."
+        - "PHB-12 LAN Scanner and Network Info public IP still use their own copy and share controls (LAN is WP30 screen; not converted). Pattern is labelled text plus icon in both, but placement differs."
+        - "PHB-14 mDNS status wording: not changed (see changes)."
+        - "PHB-19 TLS error card: the body text ('TLS inspection timed out') is a developer message from core-network TlsInspectorRepositoryImpl, asserted by TlsInspectorRepositoryImplTest. Changing it is a core change outside this package."
+      baseline: "ktlint app and detekt app baselines regenerated with line shifts only; per-rule counts did not increase. New code has no lint entries. core baselines untouched."
   - id: WP33
     title: Phone-round behaviour and error-state fixes
     status: todo

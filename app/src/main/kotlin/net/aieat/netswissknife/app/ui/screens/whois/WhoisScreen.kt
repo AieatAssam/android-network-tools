@@ -5,7 +5,6 @@ import android.content.Intent
 import androidx.core.net.toUri
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.InfiniteTransition
 import androidx.compose.animation.core.RepeatMode
@@ -16,7 +15,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -27,12 +25,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -44,15 +40,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.EventBusy
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.automirrored.filled.ManageSearch
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Update
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
@@ -63,11 +56,9 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.SuggestionChip
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -89,7 +80,6 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
@@ -101,10 +91,10 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
 import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
+import net.aieat.netswissknife.app.ui.components.ResultActionsRow
 import net.aieat.netswissknife.app.ui.components.ToolRetryButton
 import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.components.ToolTextField
-import net.aieat.netswissknife.app.ui.components.rememberCopyWithFeedback
 import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.ui.components.messageRes
 import net.aieat.netswissknife.app.ui.theme.AppMotion
@@ -682,41 +672,19 @@ fun WhoisResultsSection(
     onShare: () -> Unit,
     onOpenUrl: (String) -> Unit
 ) {
-    val copyResult = rememberCopyWithFeedback()
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(modifier = Modifier.weight(1f)) {
-                val answeredBy = result.answeringProtocol()
-                val answeringHost = result.hops.lastOrNull { it.error == null }?.let { it.server.host }
-                if (answeredBy != null && answeringHost != null) {
-                    val labelRes = if (answeredBy == WhoisProtocol.RDAP) {
-                        R.string.whois_answered_by_rdap
-                    } else {
-                        R.string.whois_answered_by_whois
-                    }
-                    Text(
-                        text = stringResource(labelRes, answeringHost),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+        // The query chain already names the answering server, so this line says only the protocol.
+        result.answeringProtocol()?.let { answeredBy ->
+            val labelRes = if (answeredBy == WhoisProtocol.RDAP) {
+                R.string.whois_answered_by_rdap
+            } else {
+                R.string.whois_answered_by_whois
             }
-            IconButton(onClick = { copyResult(buildWhoisShareText(result)) }) {
-                Icon(
-                    imageVector = Icons.Default.ContentCopy,
-                    contentDescription = stringResource(R.string.action_copy),
-                )
-            }
-            IconButton(onClick = onShare) {
-                Icon(
-                    imageVector = Icons.Default.Share,
-                    contentDescription = stringResource(R.string.action_share)
-                )
-            }
+            Text(
+                text = stringResource(labelRes),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
         result.rdapFallbackReason?.let { reason ->
             Text(
@@ -732,6 +700,10 @@ fun WhoisResultsSection(
 
         // Raw response accordion
         RawResponseAccordion(result = result, showRaw = showRaw, onToggle = onToggleRaw)
+        ResultActionsRow(
+            copyText = buildWhoisShareText(result),
+            onShare = onShare,
+        )
     }
 }
 
@@ -926,7 +898,7 @@ fun IpAsnResultCard(result: WhoisResult) {
             val orgName = result.orgName
             val country = result.country
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (netRange != null) LabeledRow(stringResource(R.string.whois_net_range), netRange)
+                if (netRange != null) LabeledRow(stringResource(R.string.whois_net_range), netRangeDisplay(netRange))
                 if (orgName != null) LabeledRow(stringResource(R.string.whois_org), orgName)
                 if (country != null) {
                     LabeledRow(
@@ -958,14 +930,11 @@ fun RawResponseAccordion(result: WhoisResult, showRaw: Boolean, onToggle: () -> 
                     text = stringResource(R.string.whois_raw_responses),
                     style = MaterialTheme.typography.titleMedium
                 )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Switch(checked = showRaw, onCheckedChange = { onToggle() })
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Icon(
-                        imageVector = if (showRaw) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                        contentDescription = null
-                    )
-                }
+                // One affordance for one action: the whole row toggles, the chevron shows the state.
+                Icon(
+                    imageVector = if (showRaw) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = null
+                )
             }
             AnimatedVisibility(visible = showRaw) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {

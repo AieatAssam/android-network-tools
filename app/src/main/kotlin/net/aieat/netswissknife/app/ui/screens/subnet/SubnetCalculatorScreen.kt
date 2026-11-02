@@ -77,7 +77,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -570,11 +569,6 @@ private fun SubnetOverviewCard(info: SubnetInfo) {
                     label = stringResource(R.string.subnet_total_hosts),
                     value = formatSubnetCount(info.totalHosts)
                 )
-                SubnetInfoRow(
-                    label = stringResource(R.string.subnet_usable_hosts),
-                    value = formatSubnetCount(info.usableHosts),
-                    tooltip = stringResource(R.string.tooltip_usable_hosts)
-                )
             }
         }
     }
@@ -746,12 +740,6 @@ private fun SubnetNotationsCard(info: SubnetInfo) {
             )
             HorizontalDivider()
             SubnetInfoRow(
-                label = stringResource(R.string.subnet_notation_cidr),
-                value = info.cidrNotation,
-                monospace = true,
-                tooltip = stringResource(R.string.tooltip_cidr)
-            )
-            SubnetInfoRow(
                 label = stringResource(R.string.subnet_notation_mask),
                 value = info.subnetMask,
                 monospace = true
@@ -765,11 +753,6 @@ private fun SubnetNotationsCard(info: SubnetInfo) {
             SubnetInfoRow(
                 label = stringResource(R.string.subnet_notation_hex),
                 value = info.hexMask,
-                monospace = true
-            )
-            SubnetInfoRow(
-                label = stringResource(R.string.subnet_notation_binary),
-                value = info.binaryMask,
                 monospace = true
             )
         }
@@ -855,15 +838,6 @@ private fun SubnetPropertiesCard(info: SubnetInfo) {
                     }
                 }
             }
-
-            SubnetInfoRow(
-                label = stringResource(R.string.subnet_prefix_bits),
-                value = stringResource(R.string.subnet_prefix_value, info.prefixLength)
-            )
-            SubnetInfoRow(
-                label = stringResource(R.string.subnet_host_bit_count),
-                value = pluralStringResource(R.plurals.subnet_bits_count, info.hostBits, info.hostBits)
-            )
         }
     }
 }

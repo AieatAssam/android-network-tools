@@ -185,7 +185,6 @@
     <string name="dns_server_quad9_name">Quad9</string>
     <string name="dns_server_quad9_description">9.9.9.9 - Security-focused resolver that blocks malicious domains</string>
     <string name="dns_server_custom_name">Custom</string>
-    <string name="dns_result_server">via %1$s</string>
     <string name="dns_share_server">Server: %1$s</string>
     <string name="dns_custom_server_placeholder">e.g. 192.168.1.1</string>
     <string name="dns_lookup_button">Look up</string>
@@ -285,7 +284,6 @@
     <string name="ping_error_label_result">Error</string>
     <string name="ping_raw_output">Raw Output</string>
     <string name="ping_copy_raw">Copy raw output</string>
-    <string name="ping_copy_csv">Copy as CSV</string>
     <string name="ping_chart_title">RTT Chart</string>
     <string name="ping_chart_a11y">RTT chart: successful sample count %1$d; axis from %2$d to %3$d ms; %4$s %5$d ms, %6$s %7$.1f ms, %8$s %9$d ms; %10$s</string>
     <plurals name="ping_chart_failed_markers">
@@ -360,7 +358,6 @@
     <string name="ports_filtered_label">FILTERED</string>
     <string name="ports_section_open">Open Ports</string>
     <string name="ports_section_all">All Results</string>
-    <string name="ports_copy_report">Copy report</string>
     <string name="ports_show_all">Show all ports</string>
     <string name="ports_show_all_with_counts">Show all (%1$d closed, %2$d filtered)</string>
     <string name="ports_show_open">Show open only</string>
@@ -778,17 +775,16 @@
     <string name="tls_connection_header">Connection</string>
     <string name="tls_trusted">Trusted</string>
     <string name="tls_untrusted">Untrusted</string>
-    <string name="tls_host_port">Host / Port</string>
+    <string name="tls_verdict_trusted">Chain, hostname and expiry checks passed.</string>
+    <string name="tls_verdict_trusted_pinned">Chain, hostname, expiry and expected pin checks passed.</string>
+    <string name="tls_verdict_untrusted_findings">Failed checks are listed under Certificate findings.</string>
+    <string name="tls_verdict_untrusted_generic">The connection failed a trust check.</string>
     <string name="tls_version">TLS Version</string>
     <string name="tls_cipher_suite">Cipher Suite</string>
     <string name="tls_handshake_time">Handshake</string>
     <string name="tls_ms_format">%1$d ms</string>
     <string name="tls_connect_time">Connect time</string>
-    <string name="tls_hostname_match">Hostname</string>
-    <string name="tls_match">Match</string>
-    <string name="tls_no_match">Mismatch</string>
     <string name="tls_alpn">ALPN</string>
-    <string name="tls_pin_match">Expected pin</string>
     <string name="tls_supported">Supported</string>
     <string name="tls_not_supported">Not supported</string>
     <string name="tls_probe_unknown">Could not determine</string>
@@ -817,12 +813,11 @@
     <!-- TLS Expiry Badges -->
     <string name="tls_expired">EXPIRED</string>
     <plurals name="tls_days_left">
-        <item quantity="one">%1$d day</item>
-        <item quantity="other">%1$d days</item>
+        <item quantity="one">%1$d day left</item>
+        <item quantity="other">%1$d days left</item>
     </plurals>
 
     <!-- TLS Certificate Detail Fields -->
-    <string name="tls_subject_cn">Subject CN</string>
     <string name="tls_subject_org">Subject Org</string>
     <string name="tls_issuer_cn">Issuer CN</string>
     <string name="tls_issuer_org">Issuer Org</string>
@@ -876,8 +871,8 @@
     <string name="whois_hop_latency_ms">%1$d ms</string>
     <string name="whois_querying_server">Querying %1$s…</string>
     <string name="whois_raw_responses">Raw RDAP/WHOIS Responses</string>
-    <string name="whois_answered_by_rdap">Answered by RDAP from %1$s</string>
-    <string name="whois_answered_by_whois">Answered by WHOIS (port 43) from %1$s</string>
+    <string name="whois_answered_by_rdap">Answered by RDAP</string>
+    <string name="whois_answered_by_whois">Answered by WHOIS (port 43)</string>
     <string name="whois_rdap_fallback_note">RDAP could not answer (%1$s), so WHOIS answered instead.</string>
     <string name="whois_lifecycle">Lifecycle</string>
     <string name="whois_registered">Registered</string>
@@ -924,7 +919,7 @@
 
     <!-- HTTP Probe States -->
     <string name="httprobe_idle_title">Enter a URL to probe</string>
-    <string name="httprobe_idle_subtitle">Supports HTTPS GET, POST, PUT, PATCH, DELETE, HEAD, and OPTIONS. Includes security header analysis.</string>
+    <string name="httprobe_idle_subtitle">Sends the request and reports status, timings, headers and a security header check.</string>
     <string name="httprobe_error_title">Request failed</string>
     <string name="httprobe_blocked_redirect_title">Insecure redirect blocked</string>
     <string name="httprobe_blocked_redirect_message">The HTTPS server returned HTTP %1$d and pointed to an insecure HTTP address. The destination was not contacted.</string>
@@ -946,9 +941,7 @@
         <item quantity="one">%1$d redirect</item>
         <item quantity="other">%1$d redirects</item>
     </plurals>
-    <string name="httprobe_method_used">Method</string>
     <string name="httprobe_protocol_label">Protocol</string>
-    <string name="httprobe_final_url">Final URL</string>
     <string name="httprobe_response_size">Body size</string>
     <string name="httprobe_content_type">Content-Type</string>
     <string name="httprobe_redirect_chain">Redirect chain</string>
@@ -998,8 +991,6 @@
     <string name="httprobe_sec_cookie_malformed">Cookie does not contain a valid name and value pair.</string>
 
     <!-- DNS Record labels -->
-    <string name="dns_ipv4_prefix">IPv4</string>
-    <string name="dns_ipv6_prefix">IPv6</string>
     <string name="dns_mx_priority">Priority</string>
     <string name="dns_mx_host">Mail server</string>
     <string name="dns_srv_priority">Priority</string>
@@ -1044,7 +1035,6 @@
     <string name="subnet_notation_mask">Dot-decimal mask</string>
     <string name="subnet_notation_wildcard">Wildcard mask</string>
     <string name="subnet_notation_hex">Hex mask</string>
-    <string name="subnet_notation_binary">Binary mask</string>
     <string name="subnet_properties_title">Address Properties</string>
     <string name="subnet_ip_class">IP class</string>
     <string name="subnet_class_label">Class %1$s</string>
@@ -1060,13 +1050,6 @@
     <string name="subnet_scope_reserved">Reserved</string>
     <string name="subnet_scope_public">Public</string>
     <string name="subnet_scope_mixed">Mixed (spans several ranges)</string>
-    <string name="subnet_prefix_bits">Prefix length</string>
-    <string name="subnet_prefix_value">/%1$d</string>
-    <string name="subnet_host_bit_count">Host bits</string>
-    <plurals name="subnet_bits_count">
-        <item quantity="one">%1$d bit</item>
-        <item quantity="other">%1$d bits</item>
-    </plurals>
     <!-- Mode toggle -->
     <string name="subnet_mode_cidr">CIDR / Mask</string>
     <string name="subnet_mode_range">IP Range</string>
@@ -1092,9 +1075,6 @@
         <item quantity="other">%1$d host bits</item>
     </plurals>
     <string name="subnet_binary_row_description">%1$s, %2$s, %3$s</string>
-    <string name="subnet_copy_button">Copy</string>
-    <string name="subnet_share_button">Share</string>
-    <string name="subnet_copied">Copied to clipboard</string>
     <string name="subnet_share_subject">Subnet %1$s</string>
     <string name="subnet_check_title">Is this address in the subnet?</string>
     <string name="subnet_check_label">IP address to check</string>
@@ -1124,9 +1104,7 @@
     <string name="tooltip_broadcast">The broadcast address is the last address in a subnet, with all host bits set to 1. Packets sent here are delivered to every device in the subnet. Example: in 192.168.1.0/24 the broadcast is 192.168.1.255.</string>
     <string name="tooltip_first_host">The first usable IP address, one above the network address. This is the lowest address you can assign to a device. For /31 and /32 no address is reserved, so it is the network address itself.</string>
     <string name="tooltip_last_host">The last usable IP address, one below the broadcast address. This is the highest address you can assign to a device. For /31 and /32 no address is reserved, so it is the broadcast address itself.</string>
-    <string name="tooltip_usable_hosts">Addresses that can be assigned to devices. Normally 2^host_bits − 2, because the network and broadcast addresses are reserved. A /31 has 2 usable hosts (RFC 3021) and a /32 has 1.</string>
     <string name="tooltip_wildcard">The wildcard mask is the bitwise inverse of the subnet mask. Bits set to 1 are "don\'t care" bits. Used in ACLs and OSPF configurations.</string>
-    <string name="tooltip_cidr">Classless Inter-Domain Routing notation combines an IP address with a prefix length (the number of network bits). Example: 192.168.1.0/24 means 24 network bits and 8 host bits.</string>
     <string name="tooltip_ip_class">A legacy classification of IPv4 ranges before CIDR replaced it. Class A covers 0–127, B covers 128–191, C covers 192–223. Class D is multicast, E is reserved.</string>
     <string name="tooltip_scope">Which special-purpose block the whole subnet sits in. RFC 1918 private addresses are not routed on the internet. Shared CGNAT space (100.64.0.0/10) is used by carriers. A subnet that spans several blocks, such as 0.0.0.0/0, is labelled mixed.</string>
 
@@ -1185,6 +1163,7 @@
     <!-- Share action -->
     <string name="action_share">Share results</string>
     <string name="action_copy">Copy</string>
+    <string name="action_share_short">Share</string>
 
     <!-- Share subjects per tool -->
     <string name="share_subject_ping">Ping – %1$s</string>
@@ -1576,15 +1555,13 @@
 
     <!-- Speed Test -->
     <string name="speedtest_screen_title">Speed Test</string>
-    <string name="speedtest_screen_subtitle">Measure download, upload speed and latency against Cloudflare\'s global network</string>
-    <string name="speedtest_attribution">Powered by Cloudflare Speed Test</string>
+    <string name="speedtest_screen_subtitle">Measure download, upload speed and latency</string>
     <string name="speedtest_attribution_note">Test traffic is sent to and measured by Cloudflare\'s speed.cloudflare.com service. Net Swiss Knife is not affiliated with, sponsored by, or endorsed by Cloudflare, Inc.</string>
 
     <string name="speedtest_idle_title">Ready to test your connection</string>
-    <string name="speedtest_idle_subtitle">Measures latency, download, and upload speed in sequence</string>
-    <string name="speedtest_download_streams">Download streams: %1$d</string>
-    <string name="speedtest_upload_streams">Upload streams: %1$d</string>
-    <string name="speedtest_server_info">Cloudflare %1$s · %2$s</string>
+    <string name="speedtest_download_streams_label">Download streams</string>
+    <string name="speedtest_upload_streams_label">Upload streams</string>
+    <string name="speedtest_server_info">Edge %1$s · %2$s</string>
     <string name="speedtest_server_global_edge">Global edge</string>
     <string name="speedtest_server_unknown_asn">ASN unavailable</string>
     <string name="speedtest_connect_latency">Connect</string>
@@ -1594,7 +1571,6 @@
     <string name="speedtest_start_button">Start Test</string>
     <string name="speedtest_cancel_button">Cancel</string>
     <string name="speedtest_retry">Run again</string>
-    <string name="speedtest_share">Share results</string>
 
     <string name="speedtest_phase_latency">Latency</string>
     <string name="speedtest_phase_download">Download</string>
@@ -1620,7 +1596,7 @@
 
     <string name="speedtest_download_header">Download</string>
     <string name="speedtest_upload_header">Upload</string>
-    <string name="speedtest_avg_speed">Average</string>
+    <string name="speedtest_avg_speed">Avg</string>
     <string name="speedtest_peak_speed">Peak</string>
     <string name="speedtest_data_transferred">Data transferred</string>
     <string name="speedtest_chart_title">Throughput over time</string>
@@ -1653,10 +1629,10 @@
     <string name="wol_mac_problem_zero">00:00:00:00:00:00 is not a device address.</string>
     <string name="wol_advanced_options">Advanced options</string>
     <string name="wol_broadcast_label">Broadcast address</string>
-    <string name="wol_broadcast_hint">255.255.255.255 reaches the whole local network</string>
+    <string name="wol_broadcast_hint">Reaches every device on the local network</string>
     <string name="wol_broadcast_invalid">Enter an IPv4 address such as 192.168.1.255. Host names are not supported.</string>
     <string name="wol_port_label">UDP port</string>
-    <string name="wol_port_hint">Port 9 (discard) is the convention; some devices use 7</string>
+    <string name="wol_port_hint">Discard port; some devices use 7</string>
     <string name="wol_port_invalid">Enter a UDP port from 1 to 65535</string>
     <string name="wol_send_button">Send magic packet</string>
     <string name="wol_sending">Sending magic packet…</string>
@@ -1877,8 +1853,7 @@
     <string name="oui_copy_description">Copy %1$s</string>
     <string name="oui_rejected">Not a MAC address or OUI prefix</string>
     <string name="oui_no_entries">No entries to show.</string>
-    <string name="oui_copy_all">Copy all</string>
-    <string name="oui_share">Share</string>
+    <string name="oui_clear_results">Clear results</string>
     <string name="oui_share_subject">MAC Lookup results</string>
     <string name="oui_copied">Copied</string>
     <string name="help_oui_concept_heading">What a MAC address tells you</string>

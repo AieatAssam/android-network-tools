@@ -3,24 +3,20 @@ package net.aieat.netswissknife.app.ui.screens.oui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -37,6 +33,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.ui.components.ResultActionsRow
 import net.aieat.netswissknife.app.ui.components.ToolTouchTargetSize
 import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.ui.theme.AppShapes
@@ -58,10 +55,10 @@ private const val SECTION_GAP_DP = 12
 @Suppress("FunctionNaming", "ktlint:standard:function-naming")
 internal fun OuiResultsContent(
     results: OuiLookupPhase.Results,
+    summary: String,
     lowercase: Boolean,
     onLowercaseChange: (Boolean) -> Unit,
     onCopy: (String) -> Unit,
-    onCopyAll: () -> Unit,
     onShare: () -> Unit,
     onClear: () -> Unit,
 ) {
@@ -78,8 +75,6 @@ internal fun OuiResultsContent(
             results = results,
             lowercase = lowercase,
             onLowercaseChange = onLowercaseChange,
-            onCopyAll = onCopyAll,
-            onShare = onShare,
             onClear = onClear,
         )
         results.entries.forEach { entry ->
@@ -88,6 +83,11 @@ internal fun OuiResultsContent(
                 is MacLookupEntry.Rejected -> OuiRejectedCard(entry.input)
             }
         }
+        ResultActionsRow(
+            copyText = summary,
+            onShare = onShare,
+            modifier = Modifier.testTag(OuiLookupTestTags.RESULT_ACTIONS),
+        )
     }
 }
 
@@ -98,8 +98,6 @@ private fun OuiResultsHeader(
     results: OuiLookupPhase.Results,
     lowercase: Boolean,
     onLowercaseChange: (Boolean) -> Unit,
-    onCopyAll: () -> Unit,
-    onShare: () -> Unit,
     onClear: () -> Unit,
 ) {
     val count = results.entries.size
@@ -115,8 +113,9 @@ private fun OuiResultsHeader(
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.weight(1f),
                 )
+                // Named for what it clears: the input field has its own Clear icon.
                 TextButton(onClick = hapticAction(onClear), modifier = Modifier.heightIn(min = ToolTouchTargetSize)) {
-                    Text(stringResource(R.string.clear))
+                    Text(stringResource(R.string.oui_clear_results))
                 }
             }
             if (results.truncated) {
@@ -127,24 +126,6 @@ private fun OuiResultsHeader(
                 )
             }
             LowercaseSwitch(lowercase, onLowercaseChange)
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(ROW_GAP_DP.dp)) {
-                OutlinedButton(
-                    onClick = hapticAction(onCopyAll),
-                    modifier = Modifier.weight(1f).testTag(OuiLookupTestTags.COPY_ALL),
-                ) {
-                    Icon(Icons.Default.ContentCopy, contentDescription = null)
-                    Spacer(Modifier.width(ROW_GAP_DP.dp))
-                    Text(stringResource(R.string.oui_copy_all))
-                }
-                OutlinedButton(
-                    onClick = hapticAction(onShare),
-                    modifier = Modifier.weight(1f).testTag(OuiLookupTestTags.SHARE),
-                ) {
-                    Icon(Icons.Default.Share, contentDescription = null)
-                    Spacer(Modifier.width(ROW_GAP_DP.dp))
-                    Text(stringResource(R.string.oui_share))
-                }
-            }
         }
     }
 }
@@ -188,12 +169,6 @@ internal fun OuiAddressCard(
             modifier = Modifier.padding(CARD_PADDING_DP.dp),
             verticalArrangement = Arrangement.spacedBy(SECTION_GAP_DP.dp),
         ) {
-            Text(
-                text = info.format(MacNotation.COLON, uppercase = true),
-                style = MaterialTheme.typography.titleMedium,
-                fontFamily = FontFamily.Monospace,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
             if (entry.occurrences > 1) {
                 Text(
                     text = pluralStringResource(R.plurals.oui_entered_times, entry.occurrences, entry.occurrences),

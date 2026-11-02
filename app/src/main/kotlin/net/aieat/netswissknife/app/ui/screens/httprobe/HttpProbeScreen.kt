@@ -27,7 +27,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -36,8 +35,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -86,7 +83,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -97,6 +93,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import net.aieat.netswissknife.app.ui.components.ResultActionsRow
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
 import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
 import net.aieat.netswissknife.app.ui.components.ToolRetryButton
@@ -124,7 +121,6 @@ import net.aieat.netswissknife.app.ui.theme.StatusWarnDeep
 import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.RecentHostsRow
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
-import net.aieat.netswissknife.app.ui.components.rememberCopyWithFeedback
 import net.aieat.netswissknife.app.ui.components.rememberDismissKeyboard
 import net.aieat.netswissknife.app.util.formatBytes
 import net.aieat.netswissknife.app.util.shareText
@@ -766,12 +762,6 @@ private fun HttpProbeIdlePlaceholder() {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Icon(
-                imageVector = Icons.Default.Http,
-                contentDescription = null,
-                modifier = Modifier.size(56.dp),
-                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
-            )
             Text(
                 text = stringResource(R.string.httprobe_idle_title),
                 style = MaterialTheme.typography.titleMedium,
@@ -849,7 +839,6 @@ private fun HttpProbeSuccessContent(
     onCopyCurl: () -> Unit,
     onShare: () -> Unit
 ) {
-    val copyResult = rememberCopyWithFeedback()
     val atLeastFormat = stringResource(R.string.httprobe_response_size_at_least)
     // Copy sends the same summary as Share: status, headers and timings, never request headers or body.
     val summaryText =
@@ -857,29 +846,6 @@ private fun HttpProbeSuccessContent(
             buildHttpShareText(result, responseSizeText(result, atLeastFormat))
         }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End
-        ) {
-            IconButton(onClick = { copyResult(summaryText) }) {
-                Icon(
-                    imageVector = Icons.Default.ContentCopy,
-                    contentDescription = stringResource(R.string.action_copy),
-                )
-            }
-            IconButton(onClick = onShare) {
-                Icon(
-                    imageVector = Icons.Default.Share,
-                    contentDescription = stringResource(R.string.action_share)
-                )
-            }
-            TextButton(
-                onClick = onCopyCurl,
-                modifier = Modifier.testTag(HttpProbeScreenTestTags.COPY_CURL_ACTION),
-            ) {
-                Text(stringResource(R.string.httprobe_copy_curl))
-            }
-        }
         if (CurlExporter.redirectFollowingSuppressed(result.request)) {
             Text(
                 text = stringResource(R.string.httprobe_curl_redirect_safety),
@@ -933,6 +899,18 @@ private fun HttpProbeSuccessContent(
                 }
             }
         }
+        ResultActionsRow(
+            copyText = summaryText,
+            onShare = onShare,
+            extraActions = {
+                TextButton(
+                    onClick = onCopyCurl,
+                    modifier = Modifier.testTag(HttpProbeScreenTestTags.COPY_CURL_ACTION),
+                ) {
+                    Text(stringResource(R.string.httprobe_copy_curl))
+                }
+            },
+        )
     }
 }
 
@@ -1022,10 +1000,8 @@ private fun OverviewTabContent(result: HttpProbeResult) {
         modifier = Modifier.padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        LabeledValue(stringResource(R.string.httprobe_method_used), result.request.method.name)
         LabeledValue(stringResource(R.string.httprobe_protocol_label), result.protocol)
         TimingBreakdown(result.timings)
-        LabeledValue(stringResource(R.string.httprobe_final_url), safeRedirectDisplayValue(result.finalUrl))
         LabeledValue(
             stringResource(R.string.httprobe_response_size),
             responseSizeText(result, stringResource(R.string.httprobe_response_size_at_least))

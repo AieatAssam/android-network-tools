@@ -6,6 +6,5 @@ object OuiLookupTestTags {
     const val LOOKUP = "oui_lookup"
     const val RESULTS = "oui_results"
     const val LOWERCASE = "oui_lowercase"
-    const val COPY_ALL = "oui_copy_all"
-    const val SHARE = "oui_share"
+    const val RESULT_ACTIONS = "oui_result_actions"
 }

@@ -74,7 +74,7 @@ class OuiLookupScreenTest {
 
         composeRule.onNodeWithTag(OuiLookupTestTags.RESULTS).assertIsDisplayed()
         composeRule.onNodeWithText("Raspberry Pi Foundation").assertIsDisplayed()
-        composeRule.onNodeWithTag(OuiLookupTestTags.COPY_ALL).assertIsDisplayed()
+        composeRule.onNodeWithTag(OuiLookupTestTags.RESULT_ACTIONS).assertIsDisplayed()
     }
 
     @Test

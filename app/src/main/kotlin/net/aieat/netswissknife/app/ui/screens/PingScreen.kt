@@ -47,7 +47,6 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AllInclusive
 import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -57,8 +56,6 @@ import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
@@ -102,12 +99,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
@@ -130,6 +125,7 @@ import net.aieat.netswissknife.app.ui.components.ToolStopButton
 import net.aieat.netswissknife.app.ui.components.ToolTextField
 import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.ui.components.messageRes
+import net.aieat.netswissknife.app.ui.components.ResultActionsRow
 import net.aieat.netswissknife.app.ui.components.rememberCopyWithFeedback
 import net.aieat.netswissknife.app.ui.components.rememberDismissKeyboard
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
@@ -748,11 +744,6 @@ private fun PingRunningPanel(state: PingUiState.Running) {
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
-                Text(
-                    text = state.host,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
                 if (state.packets.isNotEmpty()) {
                     val liveStats = state.stats ?: PingStats.compute(state.packets)
                     HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
@@ -821,7 +812,6 @@ private fun PingFinishedPanel(
     onToggleRaw: () -> Unit,
     onClear: () -> Unit
 ) {
-    val copyResult = rememberCopyWithFeedback()
     val result = state.result
     val context = LocalContext.current
     val shareSubject = stringResource(R.string.share_subject_ping, result.host)
@@ -862,7 +852,7 @@ private fun PingFinishedPanel(
             )
         }
         // Stats card
-        StatsCard(stats = result.stats, host = result.host)
+        StatsCard(stats = result.stats)
 
         // RTT chart
         if (result.packets.any { it.rtTimeMs != null }) {
@@ -882,11 +872,6 @@ private fun PingFinishedPanel(
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold
                     )
-                    IconButton(onClick = {
-                        copyResult(PingCsvSerializer.serialize(result))
-                    }) {
-                        Icon(Icons.Default.ContentCopy, contentDescription = stringResource(R.string.ping_copy_csv))
-                    }
                 }
                 if (result.packets.size < result.stats.sent) {
                     Text(
@@ -916,37 +901,28 @@ private fun PingFinishedPanel(
             onToggle = onToggleRaw
         )
 
-        // Action buttons
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        // Copy sends the CSV; Share sends the session CSV file when there is one, else the same CSV as text.
+        ResultActionsRow(
+            copyText = PingCsvSerializer.serialize(result),
+            onShare = {
+                val logFile = state.sessionLogFile
+                if (logFile != null) {
+                    context.shareCsvFile(logFile, shareSubject, shareSummary)
+                } else {
+                    context.shareText(
+                        text = PingCsvSerializer.serialize(result),
+                        subject = shareSubject
+                    )
+                }
+            },
+        )
+        FilledTonalButton(
+            onClick = onClear,
+            modifier = Modifier.fillMaxWidth()
         ) {
-            FilledTonalButton(
-                onClick = onClear,
-                modifier = Modifier.weight(1f)
-            ) {
-                Icon(Icons.Default.Clear, contentDescription = null)
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(stringResource(R.string.clear))
-            }
-            FilledTonalButton(
-                onClick = {
-                    val logFile = state.sessionLogFile
-                    if (logFile != null) {
-                        context.shareCsvFile(logFile, shareSubject, shareSummary)
-                    } else {
-                        context.shareText(
-                            text = PingCsvSerializer.serialize(result),
-                            subject = shareSubject
-                        )
-                    }
-                },
-                modifier = Modifier.weight(1f)
-            ) {
-                Icon(Icons.Default.Share, contentDescription = null)
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(stringResource(R.string.action_share))
-            }
+            Icon(Icons.Default.Clear, contentDescription = null)
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(stringResource(R.string.clear))
         }
     }
 }
@@ -971,7 +947,7 @@ private fun PingErrorPanel(
 // ── Stats card ────────────────────────────────────────────────────────────────
 
 @Composable
-private fun StatsCard(stats: PingStats, host: String) {
+private fun StatsCard(stats: PingStats) {
     var targetLoss   by remember { mutableStateOf(0f) }
     var targetMin    by remember { mutableStateOf(0f) }
     var targetAvg    by remember { mutableStateOf(0f) }
@@ -1010,11 +986,6 @@ private fun StatsCard(stats: PingStats, host: String) {
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = host,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
             )
             Spacer(modifier = Modifier.height(12.dp))
             // Packet counts row

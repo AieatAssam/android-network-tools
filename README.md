@@ -43,7 +43,7 @@ Network path analysis with per-hop geolocation enrichment.
 - When two or more consecutive replies all come from this device's own addresses, the trace stops early and reports "Host unreachable from this network (no route / destination host unreachable)" with Reached: No. A destination on the local subnet that does not answer is typically reported this way
 - Editing the host field clears a previous "Trace failed" message
 - The host and settings survive rotation and process death. Leaving the tool with Back keeps the host, settings and last finished result for the rest of the app session (in memory only, never on disk). A trace still running when you leave is not restored as running
-- Copy and Share in the Trace Results header send the same text: the hop list (the raw output)
+- Copy and Share at the foot of the Trace Results card send the same text: the hop list (the raw output)
 
 ### Port Scanner
 TCP port reachability scanning with service identification.
@@ -52,7 +52,7 @@ TCP port reachability scanning with service identification.
 - Concurrent scanning (1–500 simultaneous probes), per-port timeout slider (200–10,000 ms)
 - Service names come from the built-in registry; a port with no registered name shows no service name rather than a generic label
 - Banner grabbing for open ports
-- Copy report and Share report in the result header send a plain-text report (host, IP, port counts, duration, open ports with banners and TLS subject). Copy confirms with "Copied to clipboard"
+- Copy and Share at the foot of the summary card send a plain-text report (host, IP, port counts, duration, open ports with banners and TLS subject). Copy confirms with "Copied to clipboard". The host line shows the resolved IP only when it differs from the host, and the Open section does not repeat the Open badge on each row
 - Invalid hosts show the specific reason (for example, a space, an out-of-range IPv4 octet or an invalid character) instead of one generic message. Editing the host clears the previous result
 - A scan stopped with Stop Scan, or stopped when the app leaves the foreground, is labelled as stopped early with the number of ports scanned so far. A screen rotation does not stop a running scan
 - Leaving the tool and coming back keeps the host, port range, preset, timeout, concurrency and the last finished result, but a result is shown again only for the host it scanned. After a process death the form returns and the result does not
@@ -91,7 +91,7 @@ Full DNS record resolution with multiple resolver options and protocol-level res
 - The Additional section starts collapsed, since it usually holds EDNS OPT pseudo-records (labelled `OPT`); an MX record of `0 .` is annotated as a null MX
 - System DNS is never silently replaced with Cloudflare; when Android reports no resolver, the UI explains the failure and offers an explicit Cloudflare fallback. Private DNS status is shown when available.
 - IDN hostnames and trailing-dot FQDNs are normalized consistently across network tools.
-- Copy and Share in the result header send a plain-text summary: type, domain, server, query time, and every record with its TTL. Copy confirms with "Copied to clipboard". Per-record and raw-response copies are unchanged
+- Copy and Share at the foot of the result card send a plain-text summary: type, domain, server, query time, and every record with its TTL. Copy confirms with "Copied to clipboard". The result header names the server used once; each record shows its type once, in its badge. Per-record and raw-response copies are unchanged
 
 ### Wi-Fi Scanner
 Wi-Fi environment analysis with SSID grouping and spectrum visualisation.
@@ -110,13 +110,14 @@ SSL/TLS certificate analysis for any TCP host, without sending an HTTP request.
 - Configurable host and port (default 443). The inspection timeout is fixed at 10 seconds; there is no timeout setting
 - Presented peer chain: subject/issuer, validity dates, SANs, serial number, signature and public-key details, and SHA-256 fingerprint per certificate
 - Checks device trust, hostname match, expiry/not-yet-valid dates, incomplete chains, self-signed certificates, weak signatures, and weak keys
-- Overall verdict is "Trusted" only when the chain is trusted by this device, the hostname matches, the leaf certificate is within its validity dates, and any expected pin matches. A hostname mismatch, expiry, not-yet-valid date, or pin mismatch each makes the verdict "Untrusted", even when the chain itself verifies
+- Overall verdict is "Trusted" only when the chain is trusted by this device, the hostname matches, the leaf certificate is within its validity dates, and any expected pin matches. A hostname mismatch, expiry, not-yet-valid date, or pin mismatch each makes the verdict "Untrusted", even when the chain itself verifies. A line under the verdict states what it rests on, and the certificate findings list what failed
+- Each certificate's header chip shows days left (or EXPIRED / NOT YET VALID) coloured by state: error when expired or not yet valid, warning within 30 days, OK beyond that. The validity end date is shown once, in the card's Valid To row. The connection card does not repeat the host and port you entered
 - A certificate that is not in this device's trust store is reported as untrusted by this device, which can differ from other clients on older Android versions
 - A port that answers with plain text rather than TLS (for example port 80) is reported as "does not appear to speak TLS". The check recognises the wording used by Android's OpenSSL/Conscrypt and by JSSE for a plaintext peer
 - When the only chain finding is an issuing root that this device does not have, the finding names it: "This device's trust store does not include the issuing root (<name>)". The verdict stays untrusted
 - Connection summary includes negotiated TLS version, ALPN, cipher suite, connect time, and handshake time
 - Optional older-TLS-version probes, expected SHA-256 leaf-certificate pin comparison, and PEM chain sharing
-- Copy and Share in the result header send the connection summary, each certificate from leaf to root, and the chain findings as plain text. Share PEM still sends the PEM chain
+- Copy and Share sit at the foot of the results and send the connection summary, each certificate from leaf to root, and the chain findings as plain text. Share PEM still sends the PEM chain, next to them
 
 ### Network Topology Discovery
 SNMP-based network topology discovery via BFS traversal.
@@ -145,11 +146,11 @@ Domain, IP, and ASN registration lookup using RDAP with WHOIS fallback.
 - DNSSEC reads "Signed" or "Unsigned" whichever protocol answered: the WHOIS value `signedDelegation` is shown as "Signed", and any other unlisted value is shown as readable text
 - Parsed fields include registrar, registration/expiry/update dates, name servers, status codes, DNSSEC, registrant organization/country, and network ranges
 - Status chips show human-readable labels for both RDAP phrasing (e.g. "client transfer prohibited") and WHOIS codes (e.g. "clientTransferProhibited"), e.g. "Transfer Locked"; unlisted statuses keep their words
-- Each result states which protocol answered (RDAP or WHOIS port 43) and the server used
+- Each result states which protocol answered (RDAP or WHOIS port 43); the query chain names the server used
 - Live relay-chain visualiser shows the RDAP or WHOIS servers used; completed hops share one success colour
 - Invalid input names the specific problem (e.g. "An IPv4 address needs four numbers from 0 to 255" for 999.1.1.1)
-- The raw RDAP/WHOIS response section expands from its whole header row; the lookup keeps running across screen rotation
-- Copy and Share in the result header send the parsed fields (registrar, dates, name servers, status) and the raw WHOIS text
+- The raw RDAP/WHOIS response section expands from its whole header row (one chevron shows its state; there is no second switch); the lookup keeps running across screen rotation. A single ASN or address range is shown once (for example `15169`), not as `15169-15169`
+- Copy and Share sit at the foot of the results and send the parsed fields (registrar, dates, name servers, status) and the raw WHOIS text
 - The query and protocol survive rotation and process death. Leaving the tool with Back keeps the query, protocol and the finished result for the query it was run for (in memory only); a lookup still running when you leave is not restored as running. Request headers are not involved
 
 ### HTTP Probe
@@ -170,7 +171,7 @@ HTTPS request tester with security header analysis. Plain HTTP requests are disa
 - Opening from mDNS Browser or LAN Scanner: HTTP Probe sends HTTPS only, so the handoff prefills `https://host/` for port 443 and `https://host:8443/` for port 8443. For any other port, such as the common plain-HTTP port 80, no URL is filled in and an explanation is shown. Plain HTTP is not sent to LAN addresses either. Cleartext support would need a separate, explicit warning-based design, so it was deferred.
 - The prefilled-from banner is removed as soon as the URL is edited.
 - Leaving the tool with Back keeps the URL, method, redirect flag and the last finished result for the app session (in memory only, never on disk). Request headers and the request body are never kept, so a result shown again has no request headers or body: its cURL copy omits them. A request still running when you leave is cancelled and not restored as running
-- Copy and Share in the response header send a plain-text summary: status, final URL, redirects, response headers, size, and security checks. Cookie, Set-Cookie, Authorization and Proxy-Authorization values are omitted, and request headers and the request body are never included
+- Copy and Share sit at the foot of the response card, with Copy as cURL, and send a plain-text summary: status, final URL, redirects, response headers, size, and security checks. Cookie, Set-Cookie, Authorization and Proxy-Authorization values are omitted, and request headers and the request body are never included
 
 ### mDNS Service Browser
 LAN service discovery via multicast DNS (RFC 6762 / DNS-SD RFC 6763).
@@ -183,7 +184,7 @@ LAN service discovery via multicast DNS (RFC 6762 / DNS-SD RFC 6763).
 - Fixed 8-second scan window per Scan (there is no duration control); scan can be stopped at any time. Clear removes all results
 - Instance names are shown decoded: DNS-SD escapes such as `\032` (space), `\226\128\153` (UTF-8 for ’) and `\(...\)` become readable text; malformed escapes are shown exactly as received
 - Search filters the list by service type, name, hostname, IP address, and TXT key or value; a search with no matches shows an empty-state message with a Clear search action
-- Copy and Share export only the services currently shown (the active search is noted as a `Filter:` line)
+- Copy and Share at the foot of the list export only the services currently shown (the active search is noted as a `Filter:` line)
 - Per-scan caps: 64 service types, 256 services, 16 addresses or 1 KB of addresses per service, 4 KB of TXT data per service, 1024 queries, and 512 records per packet. If a cap is reached, a neutral note names it; a complete scan that stays within the caps shows no note
 - Requires Wi-Fi multicast lock (`CHANGE_WIFI_MULTICAST_STATE`) for reliable reception on Android
 
@@ -197,10 +198,10 @@ IPv4 subnet calculator with binary breakdown, notation conversion, an "is this a
 - **Scope badge** for the whole subnet: Private (RFC 1918), Shared (CGNAT, 100.64.0.0/10), Loopback, Link-local, This network (0.0.0.0/8), Documentation, Benchmarking (198.18.0.0/15), Multicast, Reserved (240.0.0.0/4), Public, or Mixed when the subnet spans several blocks (for example 0.0.0.0/0)
 - **Binary Breakdown card**: colour-coded bit grid distinguishing network bits (blue) from host bits (orange) for IP address, subnet mask, and network address rows. Each row is announced to screen readers as one description
 - **Notation Equivalents card**: CIDR, dot-decimal mask, wildcard mask, hex mask (`0xFFFFFF00`), and binary mask
-- **Address Properties card**: IP class (A/B/C/D/E), scope badge, prefix length, and host-bit count. Each info icon explains its own field
+- **Address Properties card**: IP class (A/B/C/D/E) and scope badge. The prefix length and host-bit count are shown once, in the binary breakdown legend. Each info icon explains its own field
 - **Is this address in the subnet?** card: type an IPv4 address to check it against the calculated subnet. The answer is yes or no, with the reason (usable host, network address, broadcast address, or the subnet range when it is outside)
 - **Split into equal subnets** card: divide the subnet either into a new prefix (for example `/26`) or into a number of subnets. A count is rounded up to a power of two, and the result says so (3 requested gives 4). Lists the networks with their first and last addresses, up to 256 rows; a larger split shows the first 256 and the total
-- **Copy** and **Share** buttons put a plain-text summary of the calculated subnet on the clipboard or into the share sheet
+- **Copy** and **Share** sit together at the foot of the results and put a plain-text summary of the calculated subnet on the clipboard or into the share sheet. The CIDR appears once, as the result heading; the usable host count is shown once, under it
 - Quick example chips for common subnets (`/8`, `/12`, `/16`, `/24`, `/30`, `/0`)
 - Network alignment warning when the entered IP is not on a network boundary, showing the corrected network address
 - Entered fields survive rotation and process death. Leaving the tool with Back keeps the fields and the last calculated result for the app session (in memory only)
@@ -209,14 +210,14 @@ IPv4 subnet calculator with binary breakdown, notation conversion, an "is this a
 Internet connection speed test measuring latency, download, and upload throughput.
 - Three-phase sequence: **latency** (10 round-trip probes), **download**, then **upload** — each streamed live as it runs
 - Animated phase stepper, live circular speed gauge, and a live throughput-over-time chart per phase
-- Final results: latency min/avg/max/jitter, download/upload average & peak Mbps, and total data transferred, each with its own throughput chart
+- Start screen: download and upload stream counts are two equal buttons (1–8 and 1–4) that open a list of values
+- Final results: latency min/avg/max/jitter, download/upload avg & peak Mbps, and total data transferred, each with its own throughput chart
 - Upload is time-boxed to the phase window and counts the bytes actually written, so a slow or briefly stalled uplink still produces a result; a stalled POST is retried on a new connection until the window ends
 - A stalled latency probe under load is skipped rather than failing the run
 - Failure keeps the latency and download results already measured, names the phase that failed, and offers Run again. The error text is a plain-language reason, not raw exception text
 - Cancel returns to the start screen with a "Test canceled" notice and keeps any finished latency and download results. There is one Start button
-- Share button exports a plain-text summary of the results
-- Copy icon in the results header copies the same plain-text summary to the clipboard
-- **Powered by Cloudflare** — measurement traffic is sent to and timed against `speed.cloudflare.com` (`/__down` and `/__up`), the same backend that powers Cloudflare's public speed test at <https://speed.cloudflare.com>. Net Swiss Knife is an independent app and is **not affiliated with, sponsored by, or endorsed by Cloudflare, Inc.**; "Cloudflare" and the Cloudflare logo are trademarks of Cloudflare, Inc. Full attribution is also shown in-app under Settings → Data Source Attributions.
+- Copy and Share sit together at the foot of the results and export the same plain-text summary; Run again sits below them
+- **Cloudflare attribution** — shown once, in the disclaimer card at the foot of the screen. Measurement traffic is sent to and timed against `speed.cloudflare.com` (`/__down` and `/__up`), the same backend that powers Cloudflare's public speed test at <https://speed.cloudflare.com>. Net Swiss Knife is an independent app and is **not affiliated with, sponsored by, or endorsed by Cloudflare, Inc.**; "Cloudflare" and the Cloudflare logo are trademarks of Cloudflare, Inc. Full attribution is also shown in-app under Settings → Data Source Attributions.
 
 ### Wake-on-LAN
 Wake sleeping or powered-down machines on the local network with a UDP magic packet.

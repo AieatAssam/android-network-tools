@@ -530,7 +530,7 @@ class HttpProbeScreenTest {
             .onNodeWithTag(HttpProbeScreenTestTags.CONTENT_LIST)
             .performScrollToIndex(HttpProbeScreenTestTags.RESULT_PANEL_INDEX)
         composeRule
-            .onNodeWithText(context.getString(R.string.httprobe_method_used))
+            .onNodeWithText(context.getString(R.string.httprobe_protocol_label))
             .performScrollTo()
             .assertIsDisplayed()
         composeRule

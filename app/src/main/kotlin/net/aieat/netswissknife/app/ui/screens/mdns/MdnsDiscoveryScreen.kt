@@ -1,13 +1,8 @@
 package net.aieat.netswissknife.app.ui.screens.mdns
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
-import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
@@ -51,7 +46,6 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Router
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
@@ -64,11 +58,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -80,7 +72,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringArrayResource
@@ -101,6 +92,7 @@ import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.HeroTitleText
 import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
 import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
+import net.aieat.netswissknife.app.ui.components.ResultActionsRow
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
 import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.components.ToolStopButton
@@ -689,6 +681,7 @@ private fun ServiceList(
             truncationReasons = truncationReasons,
             filterQuery = searchQuery,
         )
+    val context = LocalContext.current
     val shareSubject = stringResource(R.string.mdns_screen_title)
     val noMatch = searchQuery.isNotBlank() && filteredByType.isEmpty() && servicesByType.isNotEmpty()
 
@@ -697,8 +690,6 @@ private fun ServiceList(
             ServiceSearchToolbar(
                 searchQuery = searchQuery,
                 onSearchChange = { searchQuery = it },
-                report = report,
-                shareSubject = shareSubject,
             )
         }
         if (noMatch) {
@@ -720,6 +711,12 @@ private fun ServiceList(
             item { ServiceScanningStatus(isCanceling) }
         }
         serviceGroups(filteredByType, expandedTypes, onPingHost, onHttpProbe)
+        item {
+            ResultActionsRow(
+                copyText = report,
+                onShare = { context.shareText(report, shareSubject) },
+            )
+        }
         item { Spacer(Modifier.height(16.dp)) }
     }
 }
@@ -746,11 +743,7 @@ internal fun filterMdnsServices(
 private fun ServiceSearchToolbar(
     searchQuery: String,
     onSearchChange: (String) -> Unit,
-    report: String,
-    shareSubject: String,
 ) {
-    val context = LocalContext.current
-    val copiedMessage = stringResource(R.string.lan_copied)
     ToolTextField(
         value = searchQuery,
         onValueChange = onSearchChange,
@@ -759,20 +752,6 @@ private fun ServiceSearchToolbar(
         singleLine = true,
         modifier = Modifier.fillMaxWidth(),
     )
-    Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
-        TextButton(
-            enabled = report.isNotBlank(),
-            onClick = {
-                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                clipboard.setPrimaryClip(ClipData.newPlainText("mDNS services", report))
-                Toast.makeText(context, copiedMessage, Toast.LENGTH_SHORT).show()
-            },
-        ) { Text(stringResource(R.string.action_copy)) }
-        TextButton(
-            enabled = report.isNotBlank(),
-            onClick = { context.shareText(report, shareSubject) },
-        ) { Text(stringResource(R.string.action_share)) }
-    }
 }
 
 @Composable

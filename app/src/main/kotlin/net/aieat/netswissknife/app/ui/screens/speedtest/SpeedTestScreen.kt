@@ -10,8 +10,6 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
@@ -35,11 +33,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.NetworkCheck
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Stop
@@ -74,7 +72,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
@@ -89,9 +86,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import net.aieat.netswissknife.app.ui.components.ResultActionsRow
 import net.aieat.netswissknife.app.ui.components.ToolRetryButton
 import net.aieat.netswissknife.app.ui.components.hapticAction
-import net.aieat.netswissknife.app.ui.components.rememberCopyWithFeedback
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
@@ -109,8 +106,6 @@ import net.aieat.netswissknife.core.network.speedtest.SpeedTestResult
 import net.aieat.netswissknife.core.network.speedtest.ThroughputResult
 import net.aieat.netswissknife.core.network.speedtest.ThroughputSample
 import net.aieat.netswissknife.core.network.speedtest.ServerInfo
-import kotlin.math.cos
-import kotlin.math.sin
 
 private const val CLOUDFLARE_SPEED_URL = "https://speed.cloudflare.com"
 private const val GAUGE_MAX_MBPS = 1_000.0
@@ -286,8 +281,6 @@ private enum class DisplayPhase { IDLE, RUNNING, FINISHED, ERROR }
 
 @Composable
 private fun SpeedTestHeaderCard(onHelpClick: () -> Unit) {
-    val uriHandler = LocalUriHandler.current
-
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier
@@ -304,21 +297,6 @@ private fun SpeedTestHeaderCard(onHelpClick: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(52.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Speed,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(28.dp)
-                    )
-                }
-                Spacer(Modifier.width(16.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = stringResource(R.string.speedtest_screen_title),
@@ -338,29 +316,6 @@ private fun SpeedTestHeaderCard(onHelpClick: () -> Unit) {
                         imageVector = Icons.Default.Info,
                         contentDescription = stringResource(R.string.action_help),
                         tint = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                }
-            }
-            Surface(
-                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-                shape = RoundedCornerShape(50),
-                modifier = Modifier.clickable { uriHandler.openUri(CLOUDFLARE_SPEED_URL) }
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                ) {
-                    Text(
-                        text = stringResource(R.string.speedtest_attribution),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.OpenInNew,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.size(14.dp)
                     )
                 }
             }
@@ -428,24 +383,26 @@ private fun SpeedTestIdleContent(
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.SemiBold
             )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = stringResource(R.string.speedtest_idle_subtitle),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Spacer(Modifier.height(16.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 StreamSetting(
-                    text = stringResource(R.string.speedtest_download_streams, config.downloadStreams),
+                    label = stringResource(R.string.speedtest_download_streams_label),
+                    value = config.downloadStreams,
+                    modifier = Modifier.weight(1f),
                     choices = 1..8,
                     selected = config.downloadStreams,
-                    onSelect = onDownloadStreamsChange
+                    onSelect = onDownloadStreamsChange,
                 )
                 StreamSetting(
-                    text = stringResource(R.string.speedtest_upload_streams, config.uploadStreams),
+                    label = stringResource(R.string.speedtest_upload_streams_label),
+                    value = config.uploadStreams,
+                    modifier = Modifier.weight(1f),
                     choices = 1..4,
                     selected = config.uploadStreams,
-                    onSelect = onUploadStreamsChange
+                    onSelect = onUploadStreamsChange,
                 )
             }
             Spacer(Modifier.height(20.dp))
@@ -459,10 +416,23 @@ private fun SpeedTestIdleContent(
 }
 
 @Composable
-private fun StreamSetting(text: String, choices: IntRange, selected: Int, onSelect: (Int) -> Unit) {
+private fun StreamSetting(
+    label: String,
+    value: Int,
+    choices: IntRange,
+    selected: Int,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     var expanded by remember { mutableStateOf(false) }
-    Box {
-        FilledTonalButton(onClick = { expanded = true }) { Text(text) }
+    Box(modifier = modifier) {
+        FilledTonalButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.Start) {
+                Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                Text(value.toString(), style = MaterialTheme.typography.titleSmall, maxLines = 1)
+            }
+            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+        }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             choices.forEach { value ->
                 DropdownMenuItem(
@@ -816,25 +786,15 @@ private fun MiniResultCard(
 
 // ── Finished state ────────────────────────────────────────────────────────────
 
-/** Results title with a Copy action. Copy sends the same text as Share (buildSpeedTestShareText). */
+/** Results title. Copy and Share sit together at the foot of the results. */
 @Composable
 @Suppress("FunctionNaming", "ktlint:standard:function-naming")
-private fun SpeedTestResultHeader(result: SpeedTestResult) {
-    val copyResult = rememberCopyWithFeedback()
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = stringResource(R.string.speedtest_results_header),
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-        )
-        IconButton(onClick = { copyResult(buildSpeedTestShareText(result)) }) {
-            Icon(Icons.Default.ContentCopy, contentDescription = stringResource(R.string.action_copy))
-        }
-    }
+private fun SpeedTestResultHeader() {
+    Text(
+        text = stringResource(R.string.speedtest_results_header),
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.SemiBold,
+    )
 }
 
 @Composable
@@ -848,7 +808,7 @@ private fun SpeedTestResultContent(
         listOf(80L, 120L, 120L).forEach { d -> delay(d); visibleCards++ }
     }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        SpeedTestResultHeader(result)
+        SpeedTestResultHeader()
 
         result.serverInfo?.let { ServerInfoChip(it) }
 
@@ -887,18 +847,15 @@ private fun SpeedTestResultContent(
             )
         }
 
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedButton(onClick = onShare, modifier = Modifier.weight(1f)) {
-                Icon(Icons.Default.Share, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.speedtest_share))
-            }
-            ToolRetryButton(
-                text = stringResource(R.string.speedtest_retry),
-                onClick = onRetry,
-                modifier = Modifier.weight(1f),
-            )
-        }
+        ResultActionsRow(
+            copyText = buildSpeedTestShareText(result),
+            onShare = onShare,
+        )
+        ToolRetryButton(
+            text = stringResource(R.string.speedtest_retry),
+            onClick = onRetry,
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 

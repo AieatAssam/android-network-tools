@@ -11,9 +11,9 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -27,11 +27,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ChipColors
@@ -60,8 +57,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import net.aieat.netswissknife.app.ui.components.ResultActionsRow
 import net.aieat.netswissknife.app.ui.components.ToolRetryButton
+import net.aieat.netswissknife.app.ui.theme.StatusGood
+import net.aieat.netswissknife.app.ui.theme.StatusWarn
+import net.aieat.netswissknife.app.ui.theme.StatusWarnDeep
 import net.aieat.netswissknife.app.ui.components.messageRes
 import net.aieat.netswissknife.app.ui.components.scrollIntoViewOnFocus
 import net.aieat.netswissknife.app.ui.format.withSeparatorBreaks
@@ -70,7 +72,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.foundation.background
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
@@ -95,11 +96,9 @@ import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.RecentHostsRow
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
-import net.aieat.netswissknife.app.ui.components.rememberCopyWithFeedback
 import net.aieat.netswissknife.app.ui.components.rememberDismissKeyboard
 import net.aieat.netswissknife.app.ui.theme.StatusBlue
 import net.aieat.netswissknife.app.util.shareText
-import net.aieat.netswissknife.app.ui.theme.StatusGood
 import net.aieat.netswissknife.app.ui.navigation.ToolSource
 import net.aieat.netswissknife.core.domain.TlsInspectorErrorKeys
 import net.aieat.netswissknife.core.network.HostValidator
@@ -118,6 +117,8 @@ object TlsInspectorScreenTestTags {
     const val CLEAR_PREFILL_ACTION = "tls_clear_prefill_action"
     const val PROTOCOL_PROBE_TOGGLE = "tls_protocol_probe_toggle"
     const val EXPECTED_PIN_FIELD = "tls_expected_pin_field"
+    const val VERDICT_DETAIL = "tls_verdict_detail"
+    const val EXPIRY_BADGE = "tls_expiry_badge"
 }
 
 @Composable
@@ -558,32 +559,10 @@ private fun TlsSuccessContent(result: TlsInspectorResult) {
     val context = LocalContext.current
     val shareSubject = stringResource(R.string.share_subject_tls, result.host, result.port)
     val pemShareSubject = stringResource(R.string.tls_share_pem_subject, result.host, result.port)
-    val copyResult = rememberCopyWithFeedback()
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            // Copy and Share both send buildTlsShareText, the same text as before.
-            IconButton(onClick = { copyResult(buildTlsShareText(result)) }) {
-                Icon(
-                    imageVector = Icons.Default.ContentCopy,
-                    contentDescription = stringResource(R.string.action_copy),
-                )
-            }
-            IconButton(onClick = {
-                context.shareText(
-                    text = buildTlsShareText(result),
-                    subject = shareSubject
-                )
-            }) {
-                Icon(
-                    imageVector = Icons.Default.Share,
-                    contentDescription = stringResource(R.string.action_share)
-                )
-            }
-            if (result.chain.any { it.pemEncoded.isNotBlank() }) {
+    val hasPem = result.chain.any { it.pemEncoded.isNotBlank() }
+    val pemAction: (@Composable RowScope.() -> Unit)? =
+        if (hasPem) {
+            {
                 TextButton(onClick = {
                     context.shareText(
                         text = buildTlsPemShareText(result),
@@ -593,7 +572,10 @@ private fun TlsSuccessContent(result: TlsInspectorResult) {
                     Text(stringResource(R.string.tls_share_pem))
                 }
             }
+        } else {
+            null
         }
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         ConnectionCard(result)
         result.chain.forEachIndexed { index, cert ->
             val certLabel = when {
@@ -609,6 +591,16 @@ private fun TlsSuccessContent(result: TlsInspectorResult) {
                 expandedByDefault = index == 0
             )
         }
+        ResultActionsRow(
+            copyText = buildTlsShareText(result),
+            onShare = {
+                context.shareText(
+                    text = buildTlsShareText(result),
+                    subject = shareSubject
+                )
+            },
+            extraActions = pemAction,
+        )
     }
 }
 
@@ -660,12 +652,14 @@ private fun ConnectionCard(result: TlsInspectorResult) {
                     )
                 }
 
+                Text(
+                    text = verdictDetail(result),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.testTag(TlsInspectorScreenTestTags.VERDICT_DETAIL),
+                )
                 HorizontalDivider()
 
-                LabeledValue(
-                    label = stringResource(R.string.tls_host_port),
-                    value = "${result.host}:${result.port}"
-                )
                 LabeledValue(
                     label = stringResource(R.string.tls_version),
                     value = result.tlsVersion
@@ -682,20 +676,8 @@ private fun ConnectionCard(result: TlsInspectorResult) {
                     label = stringResource(R.string.tls_connect_time),
                     value = stringResource(R.string.tls_ms_format, result.connectTimeMs)
                 )
-                result.hostnameMatches?.let { matches ->
-                    LabeledValue(
-                        label = stringResource(R.string.tls_hostname_match),
-                        value = stringResource(if (matches) R.string.tls_match else R.string.tls_no_match),
-                    )
-                }
                 result.alpn?.takeIf { it.isNotBlank() }?.let { alpn ->
                     LabeledValue(stringResource(R.string.tls_alpn), alpn)
-                }
-                result.pinMatch?.let { matches ->
-                    LabeledValue(
-                        label = stringResource(R.string.tls_pin_match),
-                        value = stringResource(if (matches) R.string.tls_match else R.string.tls_no_match),
-                    )
                 }
                 result.protocolSupport?.toSortedMap()?.forEach { (protocol, supported) ->
                     LabeledValue(
@@ -742,6 +724,21 @@ private fun ConnectionCard(result: TlsInspectorResult) {
                 }
             }
         }
+    }
+}
+
+/** One line that says what the verdict rests on, so the Trusted or Untrusted chip is not a bare claim. */
+@Composable
+private fun verdictDetail(result: TlsInspectorResult): String {
+    val trusted = result.isConnectionTrusted
+    return if (trusted && result.pinMatch == true) {
+        stringResource(R.string.tls_verdict_trusted_pinned)
+    } else if (trusted) {
+        stringResource(R.string.tls_verdict_trusted)
+    } else if (result.chainIssues.isNotEmpty()) {
+        stringResource(R.string.tls_verdict_untrusted_findings)
+    } else {
+        stringResource(R.string.tls_verdict_untrusted_generic)
     }
 }
 
@@ -845,71 +842,54 @@ private fun CertificateCard(
 
 @Composable
 private fun ExpiryBadge(cert: TlsCertificate) {
-    val now = System.currentTimeMillis()
-    val daysLeft = TimeUnit.MILLISECONDS.toDays(cert.notAfter - now)
-    val expiryDate = formatDate(cert.notAfter)
-
-    when {
-        cert.notYetValid -> {
-            Surface(
-                shape = MaterialTheme.shapes.small,
-                color = MaterialTheme.colorScheme.errorContainer
-            ) {
-                Text(
-                    text = stringResource(R.string.tls_not_yet_valid),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onErrorContainer,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
-                )
-            }
+    val daysLeft = TimeUnit.MILLISECONDS.toDays(cert.notAfter - System.currentTimeMillis())
+    val tone = expiryTone(daysLeft = daysLeft, expired = cert.isExpired, notYetValid = cert.notYetValid)
+    val label =
+        when {
+            cert.notYetValid -> stringResource(R.string.tls_not_yet_valid)
+            cert.isExpired -> stringResource(R.string.tls_expired)
+            else -> pluralStringResource(R.plurals.tls_days_left, daysLeft.toInt(), daysLeft)
         }
-        cert.isExpired -> {
-            Surface(
-                shape = MaterialTheme.shapes.small,
-                color = MaterialTheme.colorScheme.errorContainer
-            ) {
-                Text(
-                    text  = stringResource(R.string.tls_expired),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onErrorContainer,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
-                )
-            }
-        }
-        daysLeft <= 30 -> {
-            Surface(
-                shape = MaterialTheme.shapes.small,
-                color = MaterialTheme.colorScheme.secondaryContainer
-            ) {
-                Text(
-                    text  = pluralStringResource(R.plurals.tls_days_left, daysLeft.toInt(), daysLeft),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
-                )
-            }
-        }
-        else -> {
-            Surface(
-                shape = MaterialTheme.shapes.small,
-                color = MaterialTheme.colorScheme.tertiaryContainer
-            ) {
-                Text(
-                    text  = expiryDate,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onTertiaryContainer,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
-                )
-            }
-        }
+    // Colour carries the state; the text carries the number. Surfaces stay readable on light and dark.
+    val onDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val container = expiryContainerColor(tone)
+    val content = expiryContentColor(tone, onDark)
+    Surface(shape = MaterialTheme.shapes.small, color = container) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = content,
+            modifier =
+                Modifier
+                    .padding(horizontal = 6.dp, vertical = 3.dp)
+                    .testTag(TlsInspectorScreenTestTags.EXPIRY_BADGE),
+        )
     }
 }
+
+@Composable
+private fun expiryContainerColor(tone: ExpiryTone): Color =
+    when (tone) {
+        ExpiryTone.ERROR -> MaterialTheme.colorScheme.errorContainer
+        ExpiryTone.WARNING -> StatusWarn.copy(alpha = 0.22f)
+        ExpiryTone.OK -> StatusGoodDeep.copy(alpha = 0.12f)
+    }
+
+@Composable
+private fun expiryContentColor(
+    tone: ExpiryTone,
+    onDark: Boolean,
+): Color =
+    when (tone) {
+        ExpiryTone.ERROR -> MaterialTheme.colorScheme.onErrorContainer
+        ExpiryTone.WARNING -> if (onDark) StatusWarn else StatusWarnDeep
+        ExpiryTone.OK -> if (onDark) StatusGood else StatusGoodDeep
+    }
 
 @Composable
 private fun CertificateDetails(cert: TlsCertificate) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         // Subject
-        LabeledValue(stringResource(R.string.tls_subject_cn),  cert.subjectCN.ifBlank { "N/A" })
         cert.subjectOrg?.let { LabeledValue(stringResource(R.string.tls_subject_org), it) }
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
