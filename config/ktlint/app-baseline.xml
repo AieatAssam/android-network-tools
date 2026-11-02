@@ -2791,9 +2791,9 @@
         <error line="977" column="41" source="standard:function-expression-body" />
         <error line="982" column="13" source="standard:function-naming" />
         <error line="1097" column="13" source="standard:function-naming" />
-        <error line="1959" column="13" source="standard:function-naming" />
-        <error line="2083" column="13" source="standard:function-naming" />
-        <error line="2114" column="13" source="standard:function-naming" />
+        <error line="1968" column="13" source="standard:function-naming" />
+        <error line="2092" column="13" source="standard:function-naming" />
+        <error line="2123" column="13" source="standard:function-naming" />
     </file>
     <file name="src/main/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanScanViewModel.kt">
         <error line="64" column="5" source="standard:function-signature" />
@@ -4991,9 +4991,9 @@
         <error line="109" column="48" source="standard:function-signature" />
     </file>
     <file name="src/test/kotlin/net/aieat/netswissknife/app/ui/screens/lan/LanShareTextTest.kt">
-        <error line="14" column="23" source="standard:multiline-expression-wrapping" />
-        <error line="19" column="21" source="standard:multiline-expression-wrapping" />
-        <error line="29" column="30" source="standard:multiline-expression-wrapping" />
+        <error line="23" column="23" source="standard:multiline-expression-wrapping" />
+        <error line="28" column="21" source="standard:multiline-expression-wrapping" />
+        <error line="38" column="30" source="standard:multiline-expression-wrapping" />
     </file>
     <file name="src/test/kotlin/net/aieat/netswissknife/app/ui/screens/mdns/MdnsDiscoveryViewModelTest.kt">
         <error line="3" column="1" source="standard:import-ordering" />

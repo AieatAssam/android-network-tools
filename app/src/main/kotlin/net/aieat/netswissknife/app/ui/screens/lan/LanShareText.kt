@@ -2,26 +2,24 @@ package net.aieat.netswissknife.app.ui.screens.lan
 
 import net.aieat.netswissknife.core.network.lan.LanScanSummary
 
-/**
- * Builds share and copy text from confirmed hosts only; uncertain diagnostics are intentionally excluded.
- * [durationText] is the localised scan duration (see humanDurationText); it is passed in because the
- * formatter needs string resources.
- */
+/** Builds share and copy text from confirmed devices only; uncertain diagnostics are intentionally excluded. */
 internal fun buildLanShareText(
     summary: LanScanSummary,
-    durationText: String,
+    labels: LanShareLabels,
 ): String =
     buildString {
-        appendLine("LAN scan – ${summary.subnet}")
-        appendLine("Confirmed hosts: ${summary.aliveHosts} / ${summary.totalScanned}")
-        appendLine("Duration: $durationText")
+        appendLine(labels.title)
+        appendLine(labels.headline)
+        appendLine(labels.facts)
         appendLine()
         summary.hosts.forEach { host ->
             append(host.ip)
             host.hostname?.let { append(" ($it)") }
             host.vendor?.let { append(" [$it]") }
-            host.pingTimeMs?.let { append(" ${it}ms") }
-            if (host.openPorts.isNotEmpty()) append(" ports:${host.openPorts.joinToString(",")}")
+            host.pingTimeMs?.let { append(" ").append(labels.latencyFormat.format(it)) }
+            if (host.openPorts.isNotEmpty()) {
+                append(" ").append(labels.portsFormat.format(host.openPorts.joinToString(",")))
+            }
             appendLine()
         }
     }

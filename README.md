@@ -65,7 +65,7 @@ Local network device discovery across IPv4 subnets.
 - CIDR subnet scanning (/16–/30) with automatic current-subnet detection
 - Scans are capped at an estimated 10 minutes. When the detected network is too large for that at the current timeout and concurrency (for example a /16 on corporate Wi-Fi), the subnet field is pre-filled with the /24 around this device and a hint names the full network. An over-limit range entered by hand, including prefixes broader than /16, offers a one-tap scan of this device's /24 instead
 - Multi-method presence detection: successful ICMP, completed TCP connections, and correlated NetBIOS NBSTAT or mDNS replies; each confirmed host shows the method(s) that found it
-- Failed connects, timeouts, unreachable routes, and policy failures remain opt-in diagnostics and never inflate the confirmed device count or confirmed-host exports
+- Failed connects, timeouts, unreachable routes, and policy failures remain opt-in diagnostics and never inflate the confirmed device count or confirmed-device exports
 - Per-host details: IP, hostname, MAC address, OUI vendor name, open ports, and the gateway flag from the active default route. Latency is shown only when an ICMP reply was measured; a host confirmed by TCP, NetBIOS or mDNS shows **No ping reply** instead of a value
 - MAC resolution is best-effort: Android 10+ restricts the ARP source, so the UI explains when a MAC cannot be read
 - Concurrent host probes (1–500) with real-time progress streaming, post-probe ARP enrichment, and a final summary
@@ -77,7 +77,7 @@ Local network device discovery across IPv4 subnets.
 - Back closes an expanded host first and keeps the results; a rotation keeps the scan running; there is no pull-to-refresh, so a swipe never discards results (use **Re-scan**)
 - Leaving the tool and coming back shows the last result, subnet, timeout and concurrency again (kept while the app stays open). A scan still running when you left the screen is kept as partial results marked as paused. After a process death the subnet, timeout and concurrency return but the result does not, since results are not saved to disk
 - Uncertain probe rows name the reason and port (for example "TCP probe timed out, port 80") rather than raw exception text
-- Copy and Share send the confirmed hosts as plain text; the scan duration is written as on screen (for example `1.3 s`, `2 min 5 s`)
+- Copy and Share send the confirmed devices as plain text: a title line with the subnet, then the same device headline and address count and duration as on screen (for example `53 devices found` and `254 addresses · 1.3 s`), then one line per device
 
 ### DNS Lookup
 Full DNS record resolution with multiple resolver options and protocol-level response details.

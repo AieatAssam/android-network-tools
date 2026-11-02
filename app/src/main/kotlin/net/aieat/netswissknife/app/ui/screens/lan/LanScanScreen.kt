@@ -1313,8 +1313,22 @@ private fun LanSummaryActions(
     onClear: () -> Unit,
 ) {
     val context = LocalContext.current
-    val shareSubject = stringResource(R.string.share_subject_lan, summary.subnet)
-    val shareText = buildLanShareText(summary, humanDurationText(summary.scanDurationMs))
+    val shareLabels =
+        LanShareLabels(
+            title = stringResource(R.string.share_subject_lan, summary.subnet),
+            headline =
+                pluralStringResource(R.plurals.lan_summary_headline_format, summary.aliveHosts, summary.aliveHosts),
+            facts =
+                stringResource(
+                    R.string.lan_share_facts_format,
+                    pluralStringResource(R.plurals.lan_addresses_count, summary.totalScanned, summary.totalScanned),
+                    humanDurationText(summary.scanDurationMs),
+                ),
+            latencyFormat = stringResource(R.string.lan_share_latency_format),
+            portsFormat = stringResource(R.string.lan_share_ports_format),
+        )
+    val shareSubject = shareLabels.title
+    val shareText = buildLanShareText(summary, shareLabels)
     // Same Copy / Share row as every other tool (PHB-12); Clear leads it as the row's tool action.
     ResultActionsRow(
         copyText = shareText,
@@ -1342,12 +1356,7 @@ private fun LanUncertainProbesSheet(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(
-                text =
-                    pluralStringResource(
-                        R.plurals.lan_uncertain_probes_count,
-                        summary.uncertainCount,
-                        summary.uncertainCount,
-                    ),
+                text = stringResource(R.string.lan_uncertain_probes_title),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
             )

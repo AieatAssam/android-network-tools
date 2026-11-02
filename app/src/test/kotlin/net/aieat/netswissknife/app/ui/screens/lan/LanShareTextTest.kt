@@ -9,6 +9,15 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class LanShareTextTest {
+    private val labels =
+        LanShareLabels(
+            title = "LAN scan – 192.168.1.0/24",
+            headline = "1 device found",
+            facts = "254 addresses · 1.3 s",
+            latencyFormat = "%d ms",
+            portsFormat = "ports:%s",
+        )
+
     @Test
     fun `share includes confirmed hosts and excludes uncertain addresses`() {
         val summary = LanScanSummary(
@@ -37,11 +46,12 @@ class LanShareTextTest {
             uncertainCount = 1,
         )
 
-        val text = buildLanShareText(summary, durationText = "1.3 s")
+        val text = buildLanShareText(summary, labels)
 
-        assertTrue(text.contains("Confirmed hosts: 1 / 254"))
-        assertTrue(text.contains("Duration: 1.3 s"))
-        assertTrue(text.contains("192.168.1.1 (router.local) [Router Vendor] 3ms ports:80,443"))
+        assertTrue(text.startsWith("LAN scan – 192.168.1.0/24\n1 device found\n254 addresses · 1.3 s\n"))
+        assertFalse(text.contains("Confirmed hosts"))
+        assertFalse(text.contains("Duration:"))
+        assertTrue(text.contains("192.168.1.1 (router.local) [Router Vendor] 3 ms ports:80,443"))
         assertFalse(text.contains("192.168.1.88"))
         assertFalse(text.contains("Connection refused"))
     }
@@ -67,9 +77,9 @@ class LanShareTextTest {
                     ),
             )
 
-        val text = buildLanShareText(summary, durationText = "1.3 s")
+        val text = buildLanShareText(summary, labels)
 
         assertTrue(text.contains("192.168.1.9 ports:443"))
-        assertFalse(text.contains("ms"))
+        assertFalse(text.contains(" ms"))
     }
 }
