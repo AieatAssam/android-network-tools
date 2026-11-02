@@ -114,6 +114,7 @@ Wi-Fi environment analysis with SSID grouping and spectrum visualisation.
 SSL/TLS certificate analysis for any TCP host, without sending an HTTP request.
 - Configurable host and port (default 443). The inspection timeout is fixed at 10 seconds; there is no timeout setting
 - Cancel ends the inspection in a neutral "Inspection canceled" card with a Retry action; a timeout reads "The server did not answer in time. Check the host and port."
+- A host that does not resolve reads "Could not find an address for <host>. Check the name, then try again.", the same wording as Ping and Traceroute
 - Presented peer chain: subject/issuer, validity dates, SANs, serial number, signature and public-key details, and SHA-256 fingerprint per certificate
 - Checks device trust, hostname match, expiry/not-yet-valid dates, incomplete chains, self-signed certificates, weak signatures, and weak keys
 - Overall verdict is "Trusted" only when the chain is trusted by this device, the hostname matches, the leaf certificate is within its validity dates, and any expected pin matches. A hostname mismatch, expiry, not-yet-valid date, or pin mismatch each makes the verdict "Untrusted", even when the chain itself verifies. A line under the verdict states what it rests on, and the certificate findings list what failed
@@ -193,7 +194,8 @@ LAN service discovery via multicast DNS (RFC 6762 / DNS-SD RFC 6763).
 - Instance names are shown decoded: DNS-SD escapes such as `\032` (space), `\226\128\153` (UTF-8 for ’) and `\(...\)` become readable text; malformed escapes are shown exactly as received
 - Search filters the list by service type, name, hostname, IP address, and TXT key or value; a search with no matches shows an empty-state message with a Clear search action
 - Copy and Share at the foot of the list export only the services currently shown (the active search is noted as a `Filter:` line)
-- Per-scan caps: 64 service types, 256 services, 16 addresses or 1 KB of addresses per service, 4 KB of TXT data per service, 1024 queries, and 512 records per packet. If a cap is reached, a neutral note names it; a complete scan that stays within the caps shows no note
+- Per-scan caps: 64 service types, 256 services, 16 addresses or 1 KB of addresses per service, 4 KB of TXT data per service, 1024 queries, and 512 records per packet. If a cap is reached, a neutral note names it and says whether all services found are shown; a complete scan that stays within the caps shows no note
+- Once services are found, the hero folds to its title and counts so the list starts near the top of the screen
 - Requires Wi-Fi multicast lock (`CHANGE_WIFI_MULTICAST_STATE`) for reliable reception on Android
 
 ### Subnet Calculator
@@ -224,6 +226,7 @@ Internet connection speed test measuring latency, download, and upload throughpu
 - A stalled latency probe under load is skipped rather than failing the run
 - Failure keeps the latency and download results already measured, names the phase that failed, and offers Run again. The error text is a plain-language reason, not raw exception text
 - Cancel returns to the start screen with a "Test canceled" notice and keeps any finished latency and download results. There is one Start button
+- The CIDR entry is checked as you type: an invalid entry shows an inline message and Calculate stays disabled, so there is no Retry for an input error
 - Copy and Share sit together at the foot of the results and export the same plain-text summary; Run again sits below them
 - **Cloudflare attribution** — shown once, in the disclaimer card at the foot of the screen. Measurement traffic is sent to and timed against `speed.cloudflare.com` (`/__down` and `/__up`), the same backend that powers Cloudflare's public speed test at <https://speed.cloudflare.com>. Net Swiss Knife is an independent app and is **not affiliated with, sponsored by, or endorsed by Cloudflare, Inc.**; "Cloudflare" and the Cloudflare logo are trademarks of Cloudflare, Inc. Full attribution is also shown in-app under Settings → Data Source Attributions.
 
@@ -261,6 +264,7 @@ Identifies the vendor behind a MAC address or an OUI prefix, using the IEEE regi
 - Malformed entries stay in the results with the reason they were rejected. A paste with no valid entry shows an error
 - Paste from clipboard fills the field and looks it up at once. Recent lookups are kept on this device (the last five), and each can be removed or all cleared
 - Look up, Paste and choosing a recent lookup close the keyboard, and the results are scrolled into view
+- Copy and Share omit the `Input` line when the pasted text is already the normalized address; it is kept when it is written differently (for example with hyphens)
 - Copy all and Share produce a plain-text summary of every entry. The first 100 entries of a paste are analysed; the rest are reported as not looked up
 
 ### Layout, keyboard and actions

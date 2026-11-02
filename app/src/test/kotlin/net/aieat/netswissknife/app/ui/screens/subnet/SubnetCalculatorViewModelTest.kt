@@ -2,6 +2,7 @@ package net.aieat.netswissknife.app.ui.screens.subnet
 
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -83,6 +84,7 @@ class SubnetCalculatorViewModelTest {
         Dispatchers.setMain(testDispatcher)
         useCase = mockk()
         coEvery { useCase(any()) } returns NetworkResult.Success(sampleSubnetInfo)
+        every { useCase.cidrInputError(any()) } returns null
         coEvery { useCase.invokeRange(any(), any()) } returns NetworkResult.Success(sampleSubnetInfo)
         coEvery { useCase.checkMembership(any(), any()) } returns NetworkResult.Success(sampleMembership)
         coEvery { useCase.splitIntoPrefix(any(), any()) } returns NetworkResult.Success(sampleSplit)
@@ -204,16 +206,30 @@ class SubnetCalculatorViewModelTest {
         }
 
         @Test
-        fun `calculation error keeps its typed code`() {
+        fun `input error keeps its typed code and shows inline without calculating`() {
             runTest {
-                coEvery { useCase("10.0.0.0/") } returns NetworkResult.error(ErrorCode.SUBNET_PREFIX_MISSING)
+                every { useCase.cidrInputError("10.0.0.0/") } returns
+                    NetworkResult.error(ErrorCode.SUBNET_PREFIX_MISSING)
                 viewModel.onInputChange("10.0.0.0/")
-                viewModel.calculate()
 
-                val error: NetworkResult.Error? = viewModel.uiState.value.error
+                val error = viewModel.uiState.value.inputError
                 val info: ErrorInfo? = error?.info
-                val code: ErrorCode? = info?.code
-                assertEquals(ErrorCode.SUBNET_PREFIX_MISSING, code)
+                assertEquals(ErrorCode.SUBNET_PREFIX_MISSING, info?.code)
+                viewModel.calculate()
+                assertNull(viewModel.uiState.value.result)
+                assertNull(viewModel.uiState.value.error)
+            }
+        }
+
+        @Test
+        fun `a valid entry clears the inline input error`() {
+            runTest {
+                every { useCase.cidrInputError("10.0.0.0/") } returns
+                    NetworkResult.error(ErrorCode.SUBNET_PREFIX_MISSING)
+                viewModel.onInputChange("10.0.0.0/")
+                viewModel.onInputChange("10.0.0.0/8")
+
+                assertNull(viewModel.uiState.value.inputError)
             }
         }
     }

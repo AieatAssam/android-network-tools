@@ -28,6 +28,21 @@ class MdnsSearchExportTest {
     private val byType = mapOf("_airplay._tcp" to listOf(television), "_ipp._tcp" to listOf(printer))
 
     @Test
+    fun `copy text carries the limit sentence in plain words, never the enum name`() {
+        val report =
+            buildMdnsShareText(
+                services = emptyList(),
+                isScanning = false,
+                isCanceling = false,
+                scanCanceled = false,
+                truncationNote = "Some devices reported more than we show (first 16 addresses per service).",
+            )
+
+        assertTrue(report.contains("Some devices reported more than we show"), report)
+        assertFalse(report.contains("ADDRESS_LIMIT"), report)
+    }
+
+    @Test
     fun `export only contains services that match the search filter`() {
         val filtered = filterMdnsServices(byType, "laserjet")
 
@@ -37,7 +52,7 @@ class MdnsSearchExportTest {
                 isScanning = false,
                 isCanceling = false,
                 scanCanceled = false,
-                truncationReasons = emptySet(),
+                truncationNote = null,
                 filterQuery = "laserjet",
             )
 
@@ -55,7 +70,7 @@ class MdnsSearchExportTest {
                 isScanning = false,
                 isCanceling = false,
                 scanCanceled = false,
-                truncationReasons = emptySet(),
+                truncationNote = null,
             )
 
         assertTrue(report.contains("HP LaserJet"), report)

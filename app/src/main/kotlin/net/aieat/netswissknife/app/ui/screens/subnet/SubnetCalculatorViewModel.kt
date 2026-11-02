@@ -26,6 +26,8 @@ data class SubnetCalculatorUiState(
     val result: SubnetInfo? = null,
     /** Typed failure for the last calculation; rendered through ErrorTextMapper. */
     val error: NetworkResult.Error? = null,
+    /** Inline problem with the CIDR entry, checked as the user types; Calculate stays disabled while set. */
+    val inputError: NetworkResult.Error? = null,
     val isRangeMode: Boolean = false,
     val minIpInput: String = "",
     val maxIpInput: String = "",
@@ -78,6 +80,7 @@ class SubnetCalculatorViewModel @Inject constructor(
             sessionMemory.get<SubnetCalculatorUiState>(KEY_SESSION)?.also { savedStateHandle.writeInputs(it) }
                 ?: SubnetCalculatorUiState(
                     input = savedStateHandle.get<String>(KEY_INPUT).orEmpty(),
+                    inputError = useCase.cidrProblem(savedStateHandle.get<String>(KEY_INPUT).orEmpty()),
                     isRangeMode = savedStateHandle.get<Boolean>(KEY_RANGE_MODE) ?: false,
                     minIpInput = savedStateHandle.get<String>(KEY_MIN_IP).orEmpty(),
                     maxIpInput = savedStateHandle.get<String>(KEY_MAX_IP).orEmpty(),
@@ -96,13 +99,13 @@ class SubnetCalculatorViewModel @Inject constructor(
     }
 
     fun onInputChange(value: String) {
-        _uiState.value = _uiState.value.withoutResult().copy(input = value)
+        _uiState.value = _uiState.value.withoutResult().copy(input = value, inputError = useCase.cidrProblem(value))
         savedStateHandle.writeInputs(_uiState.value)
     }
 
     fun calculate() {
         val input = _uiState.value.input.trim()
-        if (input.isBlank()) return
+        if (input.isBlank() || _uiState.value.inputError != null) return
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(result = null, error = null)
             when (val res = useCase(input)) {
@@ -113,7 +116,7 @@ class SubnetCalculatorViewModel @Inject constructor(
     }
 
     fun setExample(example: String) {
-        _uiState.value = SubnetCalculatorUiState(input = example)
+        _uiState.value = SubnetCalculatorUiState(input = example, inputError = useCase.cidrProblem(example))
         savedStateHandle.writeInputs(_uiState.value)
         calculate()
     }
@@ -219,3 +222,9 @@ private fun SubnetCalculatorUiState.withoutResult(): SubnetCalculatorUiState =
         split = null,
         splitError = null,
     )
+
+/** A blank entry is not an error yet; anything else is checked with the same rules as Calculate. */
+private fun SubnetCalculatorUseCase.cidrProblem(value: String): NetworkResult.Error? {
+    val trimmed = value.trim()
+    return if (trimmed.isBlank()) null else cidrInputError(trimmed)
+}

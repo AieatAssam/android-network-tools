@@ -1032,7 +1032,6 @@
     <string name="subnet_idle_title">Enter an IPv4 address or network</string>
     <string name="subnet_idle_body">Supports CIDR (192.168.1.0/24), dot-decimal mask (192.168.1.0/255.255.255.0) or a bare IP (/32 assumed).</string>
     <string name="subnet_error_title">Invalid Input</string>
-    <string name="subnet_retry">Retry</string>
     <plurals name="subnet_overview_hosts">
         <item quantity="one">%1$s usable host</item>
         <item quantity="other">%1$s usable hosts</item>
@@ -1221,7 +1220,10 @@
     <string name="mdns_canceled_title">Discovery canceled</string>
     <string name="mdns_canceled_empty_body">No services were found before discovery stopped.</string>
     <string name="mdns_canceled_partial">Discovery canceled. Showing services found so far.</string>
-    <string name="mdns_partial_results_status">Some devices reported more than we show (%1$s). Showing the services found so far.</string>
+    <string name="mdns_partial_results_status">Some devices reported more than we show (%1$s).</string>
+    <string name="mdns_partial_results_notice">%1$s %2$s</string>
+    <string name="mdns_showing_so_far">Showing the services found so far.</string>
+    <string name="mdns_showing_all">Showing all services found.</string>
     <string name="mdns_limit_service_types">first %1$d service types</string>
     <string name="mdns_limit_services">first %1$d services</string>
     <string name="mdns_limit_addresses">first %1$d addresses per service</string>

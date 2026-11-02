@@ -11,6 +11,12 @@ class SubnetCalculatorUseCase(
 ) {
     suspend operator fun invoke(params: String): NetworkResult<SubnetInfo> = repository.calculate(params)
 
+    /**
+     * Synchronous check of a CIDR entry for as-you-type validation (V6B-02). Returns the typed input
+     * error, or null when the entry calculates.
+     */
+    fun cidrInputError(params: String): NetworkResult.Error? = repository.calculate(params) as? NetworkResult.Error
+
     suspend fun invokeRange(
         minIp: String,
         maxIp: String,

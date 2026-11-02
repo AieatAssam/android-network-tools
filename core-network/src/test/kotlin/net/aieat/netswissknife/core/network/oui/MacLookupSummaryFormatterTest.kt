@@ -50,13 +50,23 @@ class MacLookupSummaryFormatterTest {
         }
 
     @Test
+    fun `keeps the Input line when the pasted text is written differently from the address`() {
+        val entries = MacLookupEngine(raspberryOnly).lookupAll("b8-27-eb-11-22-33")
+
+        val text = MacLookupSummaryFormatter.format(entries, labels)
+
+        assertTrue(text.contains("Input: b8-27-eb-11-22-33"), text)
+        assertTrue(text.contains("Address: B8:27:EB:11:22:33"), text)
+    }
+
+    @Test
     fun `formats each entry with its address, type, vendor and block`() {
         val entries = MacLookupEngine(raspberryOnly).lookupAll("b8:27:eb:11:22:33")
 
         val text = MacLookupSummaryFormatter.format(entries, labels)
 
         assertTrue(text.startsWith("MAC Lookup"), text)
-        assertTrue(text.contains("Input: b8:27:eb:11:22:33"), text)
+        assertFalse(text.contains("Input:"), text)
         assertTrue(text.contains("Address: B8:27:EB:11:22:33"), text)
         assertTrue(text.contains("Type: Unicast"), text)
         assertTrue(text.contains("Locally administered: No"), text)

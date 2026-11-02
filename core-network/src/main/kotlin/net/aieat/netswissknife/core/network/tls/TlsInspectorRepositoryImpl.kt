@@ -9,6 +9,7 @@ import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.SystemMonotonicClock
 import net.aieat.netswissknife.core.network.elapsedMillisSince
+import net.aieat.netswissknife.core.network.resolverErrorMessage
 import net.aieat.netswissknife.core.network.net.NetworkBinder
 import net.aieat.netswissknife.core.network.net.NoOpNetworkBinder
 import net.aieat.netswissknife.core.network.operation.CancellationReason
@@ -179,9 +180,10 @@ class TlsInspectorRepositoryImpl(
                         descriptionKey = NOT_TLS_PORT_DESCRIPTION,
                     )
                 }
+                val message = resolverErrorMessage(failure, host) ?: failure.message ?: "TLS inspection failed"
                 NetworkResult.error(
                     ErrorCode.TLS_INSPECTION_FAILED,
-                    developerMessage = failure.message ?: "TLS inspection failed",
+                    developerMessage = message,
                     cause = failure,
                 )
             }

@@ -160,7 +160,7 @@ fun MdnsDiscoveryScreen(
                 )
 
                 if (uiState.truncationReasons.isNotEmpty()) {
-                    TruncationBanner(uiState.truncationReasons)
+                    TruncationBanner(uiState.truncationReasons, scanComplete = uiState.scanComplete)
                 }
 
                 ControlRow(
@@ -290,6 +290,8 @@ private fun HeroCard(
                 ),
         )
 
+    // Once results exist the hero folds to its title and counts, so the service list starts above the fold (V6B-07).
+    val compact = state.services.isNotEmpty()
     ElevatedCard(
         shape = AppShapes.large,
         modifier = Modifier.fillMaxWidth(),
@@ -299,14 +301,14 @@ private fun HeroCard(
                 Modifier
                     .fillMaxWidth()
                     .background(gradient)
-                    .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+                    .padding(if (compact) 12.dp else 20.dp),
+            verticalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 12.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     modifier =
                         Modifier
-                            .size(52.dp)
+                            .size(if (compact) 40.dp else 52.dp)
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
                     contentAlignment = Alignment.Center,
@@ -315,21 +317,21 @@ private fun HeroCard(
                         imageVector = Icons.Default.Devices,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(28.dp),
+                        modifier = Modifier.size(if (compact) 22.dp else 28.dp),
                     )
                 }
-                Spacer(Modifier.width(16.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    HeroTitleText(
-                        text = stringResource(R.string.mdns_screen_title),
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    )
-                    Text(
-                        text = stringResource(R.string.mdns_screen_subtitle),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
-                    )
-                }
+                Spacer(Modifier.width(12.dp))
+                HeroTitleText(
+                    text = stringResource(R.string.mdns_screen_title),
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.weight(1f),
+                    style =
+                        if (compact) {
+                            MaterialTheme.typography.headlineSmall
+                        } else {
+                            MaterialTheme.typography.displaySmall
+                        },
+                )
                 IconButton(onClick = onHelpClick) {
                     Icon(
                         imageVector = Icons.Default.Info,
@@ -337,6 +339,13 @@ private fun HeroCard(
                         tint = MaterialTheme.colorScheme.onPrimaryContainer,
                     )
                 }
+            }
+            if (!compact) {
+                Text(
+                    text = stringResource(R.string.mdns_screen_subtitle),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
+                )
             }
 
             // Stats badges
@@ -394,8 +403,15 @@ private fun StatBadge(
  */
 @Composable
 @Suppress("FunctionNaming", "ktlint:standard:function-naming")
-private fun TruncationBanner(reasons: Set<MdnsTruncationReason>) {
-    val limits = reasons.sortedBy { it.ordinal }.map { limitLabel(it) }
+private fun TruncationBanner(
+    reasons: Set<MdnsTruncationReason>,
+    scanComplete: Boolean,
+) {
+    val partial = stringResource(R.string.mdns_partial_results_status, limitsText(reasons))
+    val showing =
+        stringResource(
+            if (scanComplete) R.string.mdns_showing_all else R.string.mdns_showing_so_far,
+        )
     Row(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.Top,
@@ -408,11 +424,17 @@ private fun TruncationBanner(reasons: Set<MdnsTruncationReason>) {
             modifier = Modifier.size(18.dp),
         )
         Text(
-            text = stringResource(R.string.mdns_partial_results_status, limits.joinToString(", ")),
+            text = stringResource(R.string.mdns_partial_results_notice, partial, showing),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
+}
+
+@Composable
+private fun limitsText(reasons: Set<MdnsTruncationReason>): String {
+    val labels = reasons.sortedBy { it.ordinal }.map { limitLabel(it) }
+    return labels.joinToString(", ")
 }
 
 @Composable
@@ -638,7 +660,7 @@ internal fun buildMdnsShareText(
     isScanning: Boolean,
     isCanceling: Boolean,
     scanCanceled: Boolean,
-    truncationReasons: Set<MdnsTruncationReason>,
+    truncationNote: String?,
     filterQuery: String = "",
 ): String =
     buildString {
@@ -650,7 +672,7 @@ internal fun buildMdnsShareText(
             scanCanceled -> appendLine("Discovery canceled; partial results.")
             else -> appendLine("Discovery window complete.")
         }
-        if (truncationReasons.isNotEmpty()) appendLine("Truncated: ${truncationReasons.joinToString()}")
+        truncationNote?.let { appendLine(it) }
         services.sortedWith(compareBy({ it.serviceType }, { it.instanceName })).forEach { service ->
             appendLine("${service.displayName} (${service.serviceType}) · ${service.hostname}:${service.port}")
             if (service.ipAddresses.isNotEmpty()) appendLine("Addresses: ${service.ipAddresses.joinToString()}")
@@ -672,13 +694,17 @@ private fun ServiceList(
     var searchQuery by rememberSaveable { mutableStateOf("") }
     val filteredByType = filterMdnsServices(servicesByType, searchQuery)
     // Copy and Share export exactly what the list shows, so the filter is part of the report.
+    val truncationNote =
+        truncationReasons.takeIf { it.isNotEmpty() }?.let {
+            stringResource(R.string.mdns_partial_results_status, limitsText(it))
+        }
     val report =
         buildMdnsShareText(
             services = filteredByType.values.flatten(),
             isScanning = isScanning,
             isCanceling = isCanceling,
             scanCanceled = scanCanceled,
-            truncationReasons = truncationReasons,
+            truncationNote = truncationNote,
             filterQuery = searchQuery,
         )
     val context = LocalContext.current

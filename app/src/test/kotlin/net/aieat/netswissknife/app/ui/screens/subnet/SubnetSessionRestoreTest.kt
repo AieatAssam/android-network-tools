@@ -3,6 +3,7 @@ package net.aieat.netswissknife.app.ui.screens.subnet
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModelStore
 import io.mockk.coEvery
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -56,6 +57,7 @@ class SubnetSessionRestoreTest {
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
         useCase = mockk()
+        every { useCase.cidrInputError(any()) } returns null
         memory = ToolSessionMemory()
     }
 

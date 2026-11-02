@@ -151,19 +151,26 @@ class FormInputRestoreTest {
     @Test
     fun `Subnet restores its inputs but not a derived result`() {
         val handle = SavedStateHandle()
-        val first = SubnetCalculatorViewModel(mockk<SubnetCalculatorUseCase>(), savedStateHandle = handle)
+        val first = SubnetCalculatorViewModel(subnetUseCase(), savedStateHandle = handle)
         first.onSplitModeChange(SubnetSplitMode.BY_COUNT)
         first.onSplitInputChange("4")
         first.onInputChange("192.168.1.0/24")
 
         val returned =
             SubnetCalculatorViewModel(
-                mockk<SubnetCalculatorUseCase>(),
+                subnetUseCase(),
                 savedStateHandle = SavedStateHandle(handle.keys().associateWith { handle.get<Any>(it) }),
             )
         assertEquals("192.168.1.0/24", returned.uiState.value.input)
         assertEquals(SubnetSplitMode.BY_COUNT, returned.uiState.value.splitMode)
         assertEquals("4", returned.uiState.value.splitInput)
         assertNull(returned.uiState.value.result)
+    }
+
+    /** Subnet inputs are checked as they are typed, so the use case answers that check with no error. */
+    private fun subnetUseCase(): SubnetCalculatorUseCase {
+        val useCase = mockk<SubnetCalculatorUseCase>()
+        every { useCase.cidrInputError(any()) } returns null
+        return useCase
     }
 }

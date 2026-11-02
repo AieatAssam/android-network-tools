@@ -51,8 +51,12 @@ object MacLookupSummaryFormatter {
         labels: MacLookupSummaryLabels,
     ) {
         val info = entry.info
-        appendLine("${labels.input}: ${entry.input}")
-        appendLine("${labels.address}: ${info.format(MacNotation.COLON, uppercase = true)}")
+        val address = info.format(MacNotation.COLON, uppercase = true)
+        // The Input line only adds something when the pasted text is written differently (V6B-05).
+        if (!entry.input.trim().equals(address, ignoreCase = true)) {
+            appendLine("${labels.input}: ${entry.input}")
+        }
+        appendLine("${labels.address}: $address")
         appendLine("${labels.type}: ${labels.kindName(info.kind)}")
         appendLine("${labels.locallyAdministered}: ${localAdministrationText(info, labels)}")
         appendLine("${labels.vendor}: ${vendorText(info.vendor, labels)}")

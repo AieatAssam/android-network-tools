@@ -86,7 +86,6 @@ import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
-import net.aieat.netswissknife.app.ui.components.ToolRetryButton
 import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.components.ToolTextField
 import net.aieat.netswissknife.app.ui.components.hapticAction
@@ -100,6 +99,7 @@ import net.aieat.netswissknife.core.network.subnet.SubnetInfo
 @Composable
 fun SubnetCalculatorScreen(viewModel: SubnetCalculatorViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val inputErrorText = uiState.inputError?.let { ErrorTextMapper.map(it.info, it.message).asString() }
     val announcementPhase = when {
         uiState.error != null -> ToolAnnouncementPhase.ERROR
         uiState.result != null -> ToolAnnouncementPhase.FINISHED
@@ -162,7 +162,8 @@ fun SubnetCalculatorScreen(viewModel: SubnetCalculatorViewModel = hiltViewModel(
                                 onInputChange = viewModel::onInputChange,
                                 onCalculate = viewModel::calculate,
                                 onExampleSelected = viewModel::setExample,
-                                canCalculate = uiState.input.isNotBlank()
+                                inputError = inputErrorText,
+                                canCalculate = uiState.input.isNotBlank() && uiState.inputError == null,
                             )
                         }
                     }
@@ -182,7 +183,6 @@ fun SubnetCalculatorScreen(viewModel: SubnetCalculatorViewModel = hiltViewModel(
                     result != null -> SubnetResultContent(result, uiState, viewModel)
                     error != null  -> SubnetErrorCard(
                         message = ErrorTextMapper.map(error.info, error.message).asString(),
-                        onRetry = if (rangeMode) viewModel::calculateRange else viewModel::calculate
                     )
                     else           -> SubnetIdleCard(isRangeMode = rangeMode)
                 }
@@ -242,6 +242,7 @@ private fun SubnetCidrInputs(
     onInputChange: (String) -> Unit,
     onCalculate: () -> Unit,
     onExampleSelected: (String) -> Unit,
+    inputError: String?,
     canCalculate: Boolean
 ) {
     val dismissKeyboard = rememberDismissKeyboard()
@@ -259,8 +260,10 @@ private fun SubnetCidrInputs(
             placeholder = { Text(stringResource(R.string.subnet_input_placeholder)) },
             leadingIcon = { Icon(Icons.Default.Lan, contentDescription = null) },
             singleLine = true,
+            isError = inputError != null,
+            supportingText = inputError?.let { message -> { Text(message) } },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Done),
-            keyboardActions = KeyboardActions(onDone = { submit() })
+            keyboardActions = KeyboardActions(onDone = { if (canCalculate) submit() }),
         )
 
         Button(
@@ -390,7 +393,7 @@ private fun SubnetIdleCard(isRangeMode: Boolean) {
 // ── Error card ────────────────────────────────────────────────────────────────
 
 @Composable
-private fun SubnetErrorCard(message: String, onRetry: () -> Unit) {
+private fun SubnetErrorCard(message: String) {
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.elevatedCardColors(
@@ -419,7 +422,6 @@ private fun SubnetErrorCard(message: String, onRetry: () -> Unit) {
                 color = MaterialTheme.colorScheme.onErrorContainer,
                 textAlign = TextAlign.Center
             )
-            ToolRetryButton(text = stringResource(R.string.subnet_retry), onClick = onRetry)
         }
     }
 }

@@ -268,6 +268,19 @@ class TlsInspectorRepositoryFakeEngineTest {
     }
 
     @Test
+    fun `unresolvable host uses the shared resolver sentence instead of the JVM message`() {
+        runTest {
+            val engine = FakeEngine(onConnect = { throw java.net.UnknownHostException("no-such-host.invalid") })
+            val repository = repositoryWithEngine(engine)
+            val expected = "Could not find an address for no-such-host.invalid. Check the name, then try again."
+
+            val error = repository.inspect("no-such-host.invalid", 443, 5_000) as NetworkResult.Error
+
+            assertEquals(expected, error.message)
+        }
+    }
+
+    @Test
     fun `ordinary handshake failure keeps its generic message`() {
         runTest {
             val failure = SSLHandshakeException("Received fatal alert: handshake_failure")

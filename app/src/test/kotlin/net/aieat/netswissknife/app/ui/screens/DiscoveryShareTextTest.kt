@@ -23,7 +23,7 @@ class DiscoveryShareTextTest {
                 ipAddresses = listOf("192.168.1.2"),
                 txtRecords = mapOf("path" to "/status", "note" to "Office"),
             )
-        val report = buildMdnsShareText(listOf(service), false, false, true, emptySet())
+        val report = buildMdnsShareText(listOf(service), false, false, true, null)
         assertTrue(report.contains("canceled; partial results"))
         assertTrue(report.contains("TXT path=/status"))
         assertTrue(report.contains("TXT note=Office"))
