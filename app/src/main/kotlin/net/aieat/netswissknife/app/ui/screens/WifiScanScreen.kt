@@ -96,6 +96,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -938,6 +939,8 @@ private fun spectrumCenterFrequency(ap: WifiAccessPoint): Float {
     val gridColor = MaterialTheme.colorScheme.outlineVariant
     val labelColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
     val textMeasurer = rememberTextMeasurer()
+    // Spectrum labels sit on a backing of the card colour so they stay readable where a curve crosses them (PHA-20).
+    val labelBacking = MaterialTheme.colorScheme.surface
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val strongestAp = aps.maxByOrNull { it.rssi }
     val spectrumDescription =
@@ -1083,7 +1086,15 @@ private fun spectrumCenterFrequency(ap: WifiAccessPoint): Float {
                         plotBounds = plotBounds,
                     )
                 placements.forEach { placement ->
-                    drawText(measuredLabels[placement.id].second, topLeft = Offset(placement.left, placement.top))
+                    val text = measuredLabels[placement.id].second
+                    val pad = 2.dp.toPx()
+                    drawRoundRect(
+                        color = labelBacking.copy(alpha = 0.85f),
+                        topLeft = Offset(placement.left - pad, placement.top - pad / 2f),
+                        size = Size(text.size.width + pad * 2f, text.size.height + pad),
+                        cornerRadius = CornerRadius(pad, pad),
+                    )
+                    drawText(text, topLeft = Offset(placement.left, placement.top))
                 }
             }
         }

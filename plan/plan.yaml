@@ -814,7 +814,7 @@ work_packages:
     findings: [PHA-11, PHA-12, PHA-14, PHA-15, PHA-16, PHA-19, PHA-20, PHB-02, PHB-10, PHB-11, PHB-13, PHB-15, PHB-16, PHB-18, VERIFY-5/V5-01, VERIFY-5/V5-03, VERIFY-5/V5-04, VERIFY-5/V5-06]
     result:
       status: partial
-      commit: "fix(app): phone-round behaviour and error states (WP33)"
+      commit: "fix(app): phone-round behaviour and error states (WP33); WP33b follow-up in the next commit"
       gates: "./gradlew test (core-network and core-domain tests green after last edit; app unit suite green), ktlintCheck and detekt green, :app:assembleDebug, :app:compileDebugAndroidTestKotlin, :core-network:koverVerify, :core-domain:koverVerify, :app:koverVerify green. Separate foreground invocations, one at a time."
       baseline: "ktlint: app and core-network baselines regenerated. Per-rule diff vs HEAD: decreases for stale entries; increases remain only for WhoisScreen indent (+11) and TracerouteScreen indent (+3). Both are new lines inside indentation regions that HEAD already baselines (WhoisScreen 169-347, TracerouteScreen): the composables are not reindented to avoid a file-wide change. Recorded here as a disclosed exception to the no-new-entries rule. detekt baselines untouched; the LargeClass hit on PingViewModel was fixed by moving the unresolved-host builder to the pure PingRunOutcome.kt."
       changes:
@@ -843,9 +843,14 @@ work_packages:
         - "PHB-14 carried mDNS: see above."
       tests: "New pure tests: PingRunOutcomeTest (5), PingIntervalSnapTest (3), WhoisQueryValidityTest (3), TopologyConfigSubtitleTest (2), OuiInputKeyboardTest (1). Extended: PingRepositoryImplTest (2 resolver flag tests), TlsInspectorRepositoryImplTest (message), TracerouteViewModelTest (stoppedWhenLeft both ways), WhoisViewModelTest (as-you-type validity; old core-driven inputProblem tests replaced), WhoisShareTextTest (calendar dates), PortsScreenReportTest (human duration). Red: core tests were red at runtime (Ping 1 failure, TLS 3 failures) before the implementation; app tests were compile-red (missing new symbols) before implementation, not run red separately."
       device: "Tablet at density 480 (sw400dp confirmed via am get-config), portrait, light, font 1.0. Verified on device: Ping with nosuchhost.invalid shows 'Ping failed' with the plain message and Retry. Not verified on device in this round: WHOIS, Traceroute, Topology, Wi-Fi, Wake-on-LAN, mDNS, TLS, MAC Lookup, LAN, Network Info, HTTP Probe, Port Scanner export, phone-width 533 / font 1.3 / landscape / dark passes. Restored: density reset, size reset, auto-rotate 1, user_rotation 0, font 1.0, night no, location revoked."
+      wp33b:
+        - "Lint: the +11 WhoisScreen and +3 TracerouteScreen indent entries are removed. New lines were re-indented to ktlint's expected indent and the WHOIS error branch restored to the original shape. Per-(file, rule) diff vs f4c35e1: app 0 increases, core-network 0 increases."
+        - "PHA-20 spectrum: labels are drawn on a backing of the card colour (verified on device: 'Hidden Network' and 'Brilliant Radiator!' legible where curves cross)."
+        - "Traceroute: collapsed summary pluralised ('1 probe per hop')."
+        - "Device at 480 (sw400dp): Ping unresolved host, Ping stale banner (PHA-12 rejected), Traceroute finished layout (summary folded, Clear/Copy/Share row, hops then journey), Wi-Fi hero and spectrum, mDNS scanning (title intact), Wake-on-LAN single card. No packet sent."
+        - "Not device-checked in WP33b: WHOIS (navigation to the tile failed in the scroll budget; inline validation is unit-tested), Topology, TLS cancel card, MAC field, LAN and Network Info Copy/Share row, 533 with font 1.3, landscape (Wi-Fi, mDNS, WoL, WHOIS), dark (three screens). Coverage of the device checklist is therefore partial."
       deferred:
-        - "PHA-12 stale banner: still shown above the Statistics card; the 'hidden under the nav bar' placement was not re-checked on device."
-        - "PHA-20 spectrum labels overlapping curves and low-contrast yellow: not changed."
+        - "PHA-12 stale banner: rejected in WP33b. At 480 portrait the banner sits fully above the navigation bar (content is padded by contentBottomPadding); the disabled Start Ping reason is shown. Evidence: ping_stale2.png in the WP33 scratch folder."
         - "PHB-05 issuer repeat: rejected. The Leaf Issuer CN and the Intermediate card header carry the chain link (the intermediate's subject), not duplicated data."
         - "PHB-11 typo dedupe: not added (see changes)."
         - "PHA-19 Retry: the finding said no Retry; the card already has one at HEAD. Rejected as stale."

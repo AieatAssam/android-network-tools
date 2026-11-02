@@ -634,7 +634,11 @@
         <item quantity="one">Trace stopped when you left the screen. %1$d hop kept as a partial result.</item>
         <item quantity="other">Trace stopped when you left the screen. %1$d hops kept as partial results.</item>
     </plurals>
-    <string name="traceroute_settings_summary">%1$d hops · %2$d probes per hop · %3$d ms timeout</string>
+    <string name="traceroute_settings_summary">%1$d hops · %2$s · %3$d ms timeout</string>
+    <plurals name="traceroute_probes_per_hop">
+        <item quantity="one">%1$d probe per hop</item>
+        <item quantity="other">%1$d probes per hop</item>
+    </plurals>
     <string name="traceroute_settings_show">Show settings</string>
     <string name="traceroute_settings_hide">Hide settings</string>
     <plurals name="traceroute_running_subtitle">

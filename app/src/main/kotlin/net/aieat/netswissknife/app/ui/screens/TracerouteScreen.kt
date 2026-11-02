@@ -243,9 +243,9 @@ fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
                     onStart             = { requestLocalNetworkPermission(host) },
                     onStop              = viewModel::onStop,
                     onRemoveRecentHost  = viewModel::removeRecentHost,
-                    onClearRecentHosts  = viewModel::clearRecentHosts,
-                    settingsCollapsed = settingsCollapsed,
-                    onExpandSettings = { settingsExpanded = true },
+                onClearRecentHosts  = viewModel::clearRecentHosts,
+                settingsCollapsed = settingsCollapsed,
+                onExpandSettings = { settingsExpanded = true },
                 )
             }
 
@@ -271,7 +271,7 @@ fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
                             result = state.result,
                             viewMode = state.viewMode,
                             canceled = true,
-                            stoppedWhenLeft = state.stoppedWhenLeft,
+                        stoppedWhenLeft = state.stoppedWhenLeft,
                             onToggleMode = viewModel::onToggleViewMode,
                             onClear = viewModel::onClear,
                         )
@@ -388,6 +388,7 @@ private fun TracerouteSettingsSummary(
     timeoutMs: Int,
     onExpand: () -> Unit,
 ) {
+    val probesText = pluralStringResource(R.plurals.traceroute_probes_per_hop, probesPerHop, probesPerHop)
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
@@ -401,7 +402,7 @@ private fun TracerouteSettingsSummary(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text = stringResource(R.string.traceroute_settings_summary, maxHops, probesPerHop, timeoutMs),
+                    text = stringResource(R.string.traceroute_settings_summary, maxHops, probesText, timeoutMs),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

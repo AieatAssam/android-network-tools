@@ -10,18 +10,17 @@ import org.junit.jupiter.api.Test
 class PortsScreenReportTest {
     @Test
     fun `shared report includes discovered TLS subject`() {
-        val report =
-            buildScanReport(
-                durationText = "20 ms",
-                summary = PortScanSummary(
-                    host = "example.test",
-                    resolvedIp = "192.0.2.10",
-                    scannedPorts = listOf(443),
-                    openPorts = 1,
-                    closedPorts = 0,
-                    filteredPorts = 0,
-                    scanDurationMs = 20,
-                    results = listOf(
+        val summary =
+            PortScanSummary(
+                host = "example.test",
+                resolvedIp = "192.0.2.10",
+                scannedPorts = listOf(443),
+                openPorts = 1,
+                closedPorts = 0,
+                filteredPorts = 0,
+                scanDurationMs = 20,
+                results =
+                    listOf(
                         PortScanResult(
                             port = 443,
                             status = PortStatus.OPEN,
@@ -32,8 +31,8 @@ class PortsScreenReportTest {
                             tlsSubject = "example.test\r\nInjected port 1 OPEN",
                         ),
                     ),
-                ),
             )
+        val report = buildScanReport(summary, durationText = "20 ms")
 
         assertTrue(report.contains("TLS subject CN: example.test Injected port 1 OPEN"))
         assertTrue(!report.contains("\r"))

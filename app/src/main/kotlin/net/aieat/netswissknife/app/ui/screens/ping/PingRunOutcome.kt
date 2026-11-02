@@ -8,8 +8,10 @@ import net.aieat.netswissknife.core.network.ping.PingPacketResult
  * True when the run never reached a resolved address: every packet is the resolver failure.
  * Such a run is an error (the name is wrong or unknown), not a 100% loss result.
  */
-internal fun isUnresolvedHostRun(packets: List<PingPacketResult>): Boolean =
-    packets.isNotEmpty() && packets.all { it.unresolvedHost }
+internal fun isUnresolvedHostRun(packets: List<PingPacketResult>): Boolean {
+    if (packets.isEmpty()) return false
+    return packets.all { it.unresolvedHost }
+}
 
 /**
  * The error state for a name that does not resolve: a plain reason with Retry, not a loss figure.

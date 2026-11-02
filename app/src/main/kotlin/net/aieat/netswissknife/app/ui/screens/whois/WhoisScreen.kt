@@ -188,16 +188,18 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
             // ── Input card ─────────────────────────────────────────────────────
             ElevatedCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    val queryInvalidText = stringResource(R.string.whois_query_invalid)
-                    val queryInvalidSupport: @Composable () -> Unit = { Text(queryInvalidText) }
-                    val queryKeyboard =
-                        KeyboardOptions(
-                            capitalization = KeyboardCapitalization.None,
-                            autoCorrectEnabled = false,
-                            imeAction = ImeAction.Go,
-                        )
-                    val queryActions =
-                        KeyboardActions(onGo = { if (!uiState.isLoading && !uiState.queryInvalid) viewModel.lookup() })
+                        val queryInvalidText = stringResource(R.string.whois_query_invalid)
+                        val queryInvalidSupport: @Composable () -> Unit = { Text(queryInvalidText) }
+                        val queryKeyboard =
+                            KeyboardOptions(
+                                capitalization = KeyboardCapitalization.None,
+                                autoCorrectEnabled = false,
+                                imeAction = ImeAction.Go,
+                            )
+                        val queryActions =
+                            KeyboardActions(
+                                onGo = { if (!uiState.isLoading && !uiState.queryInvalid) viewModel.lookup() },
+                            )
                     ToolTextField(
                         value = uiState.query,
                         onValueChange = viewModel::onQueryChange,
@@ -206,12 +208,12 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
                         placeholder = { Text(stringResource(R.string.whois_query_placeholder)) },
                         leadingIcon = { Icon(Icons.AutoMirrored.Filled.ManageSearch, contentDescription = null) },
                         singleLine = true,
-                        enabled = !uiState.isLoading,
-                        isError = uiState.queryInvalid,
-                        supportingText = if (uiState.queryInvalid) queryInvalidSupport else null,
-                        // Domain names are not sentences: no capital letters or autocorrected spaces (PHB-10).
-                        keyboardOptions = queryKeyboard,
-                        keyboardActions = queryActions,
+                            enabled = !uiState.isLoading,
+                            isError = uiState.queryInvalid,
+                            supportingText = if (uiState.queryInvalid) queryInvalidSupport else null,
+                            // Domain names are not sentences: no capital letters or autocorrected spaces (PHB-10).
+                            keyboardOptions = queryKeyboard,
+                            keyboardActions = queryActions,
                     )
                     RecentHostsRow(
                         recentHosts = recentHosts,
@@ -246,7 +248,7 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
                     Button(
                         onClick = hapticAction(viewModel::lookup),
                         modifier = Modifier.fillMaxWidth(),
-                        enabled = !uiState.isLoading && uiState.query.isNotBlank() && !uiState.queryInvalid,
+                            enabled = !uiState.isLoading && uiState.query.isNotBlank() && !uiState.queryInvalid,
                     ) {
                         Text(stringResource(R.string.whois_lookup_button))
                     }
@@ -318,7 +320,7 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
                 },
                 label = "whois-content-state"
             ) { (isLoading, isCanceled, content) ->
-                val (result, errorMessage, isLifecyclePaused) = content
+                val (result, error, isLifecyclePaused) = content
                 when {
                     result != null -> {
                         val shareSubject = stringResource(R.string.share_subject_whois, result.query)
@@ -345,8 +347,12 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
                             onRetry = viewModel::lookup,
                         )
                     }
-                    errorMessage != null -> {
-                        WhoisFailureCard(errorMessage, uiState.hopStates, viewModel::lookup)
+                    error != null -> {
+                        ErrorCard(
+                                message = error,
+                            onRetry = viewModel::lookup,
+                            hopStates = uiState.hopStates
+                        )
                     }
                     isLoading -> {
                         // Chain visualiser is shown above; no additional content needed during loading
@@ -633,16 +639,6 @@ fun IdleCard(onExampleSelected: (String) -> Unit) {
 }
 
 // ── Error Card ────────────────────────────────────────────────────────────────
-
-@Composable
-@Suppress("FunctionNaming", "ktlint:standard:function-naming")
-private fun WhoisFailureCard(
-    message: String,
-    hopStates: List<HopUiState>,
-    onRetry: () -> Unit,
-) {
-    ErrorCard(message = message, onRetry = onRetry, hopStates = hopStates)
-}
 
 @Composable
 fun ErrorCard(message: String, onRetry: () -> Unit, hopStates: List<HopUiState>) {
