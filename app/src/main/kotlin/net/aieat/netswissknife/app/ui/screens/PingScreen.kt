@@ -118,6 +118,7 @@ import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
 import net.aieat.netswissknife.app.ui.components.ToolRetryButton
 import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.components.ToolStopButton
+import net.aieat.netswissknife.app.ui.components.DisabledActionHint
 import net.aieat.netswissknife.app.ui.components.ToolTextField
 import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.ui.components.messageRes
@@ -541,12 +542,8 @@ private fun PingInputCard(
                     Text(stringResource(R.string.ping_start_button))
                 }
                 if (!canStart) {
-                    // A disabled button needs its reason next to it (PHA-12).
-                    Text(
-                        text = stringResource(R.string.ping_start_disabled_hint),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    // A disabled button needs its reason next to it (PHA-12, V6A-12).
+                    DisabledActionHint(stringResource(R.string.ping_start_disabled_hint))
                 }
             }
         }

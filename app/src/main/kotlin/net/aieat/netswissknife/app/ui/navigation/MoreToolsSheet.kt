@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -41,7 +42,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -109,6 +109,7 @@ fun MoreToolsSheet(
                         .fillMaxWidth()
                         .fillMaxHeight()
                         .padding(scaffoldPadding)
+                        .navigationBarsPadding()
                         .padding(horizontal = 20.dp),
             ) {
                 // ── Header (non-scrolling) ────────────────────────────────────
@@ -178,26 +179,6 @@ fun MoreToolsSheet(
                         }
 
                         Spacer(Modifier.height(8.dp))
-                    }
-
-                    // Fade gradient hints that the list scrolls
-                    if (scrollState.canScrollForward) {
-                        Box(
-                            modifier =
-                                Modifier
-                                    .fillMaxWidth()
-                                    .height(40.dp)
-                                    .align(Alignment.BottomCenter)
-                                    .background(
-                                        Brush.verticalGradient(
-                                            colors =
-                                                listOf(
-                                                    MaterialTheme.colorScheme.surface.copy(alpha = 0f),
-                                                    MaterialTheme.colorScheme.surface,
-                                                ),
-                                        ),
-                                    ),
-                        )
                     }
                 }
 

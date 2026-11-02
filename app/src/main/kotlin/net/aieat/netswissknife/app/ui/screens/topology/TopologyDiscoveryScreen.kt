@@ -47,6 +47,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.platform.NetworkErrorKind
+import net.aieat.netswissknife.app.ui.components.DisabledActionHint
 import net.aieat.netswissknife.app.ui.components.HeroTitleText
 import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
 import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
@@ -595,6 +596,18 @@ private fun TopologyScreenContent(
                     Spacer(modifier = Modifier.width(8.dp))
                 }
                 Text(stringResource(R.string.topology_discover_button))
+            }
+
+            if (!canStartDiscovery && !isInProgress) {
+                DisabledActionHint(
+                    stringResource(
+                        if (normalizedTargetIp == null) {
+                            R.string.topology_discover_disabled_target
+                        } else {
+                            R.string.topology_discover_disabled_v3
+                        },
+                    ),
+                )
             }
 
             AnimatedVisibility(visible = isInProgress) {
@@ -1170,10 +1183,12 @@ private fun ErrorContent(
     onRetry: () -> Unit,
 ) {
     // Top-aligned: the failure card sits directly under Discover instead of floating mid-slot.
+    // Scrolls when the slot is short, so a long message is never cut off (V6A-05).
     Box(
         modifier =
             Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .padding(16.dp),
         contentAlignment = Alignment.TopCenter,
     ) {
@@ -1200,7 +1215,7 @@ private fun ErrorContent(
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
-                    text = "Discovery Failed",
+                    text = stringResource(R.string.topology_error_title),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onErrorContainer,

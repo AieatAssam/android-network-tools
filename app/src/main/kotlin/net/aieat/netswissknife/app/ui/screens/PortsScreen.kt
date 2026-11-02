@@ -1045,8 +1045,8 @@ private fun PortScanSummaryCard(
                 StatChip(
                     label = stringResource(R.string.ports_filtered_ports),
                     value = summary.filteredPorts.toString(),
-                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 StatChip(
                     label = stringResource(R.string.ports_total_scanned),

@@ -79,7 +79,8 @@ fun ToolErrorCard(
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
+                // Buttons keep a gap between them; without it Clear and Retry touched (V6A-03).
+                horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
                 verticalAlignment = Alignment.CenterVertically,
                 content = actions,
             )

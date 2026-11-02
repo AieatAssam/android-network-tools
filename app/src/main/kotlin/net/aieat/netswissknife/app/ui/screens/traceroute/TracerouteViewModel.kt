@@ -37,6 +37,7 @@ import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.operation.CancellationReason
 import net.aieat.netswissknife.core.network.operation.OperationRequirement
 import net.aieat.netswissknife.core.network.operation.OperationSession
+import net.aieat.netswissknife.core.network.resolverErrorMessage
 import net.aieat.netswissknife.core.network.traceroute.HopResult
 import net.aieat.netswissknife.core.network.traceroute.TracerouteOperation
 import net.aieat.netswissknife.core.network.traceroute.TracerouteProbeType
@@ -438,7 +439,7 @@ class TracerouteViewModel
                         // Cancellation is resolved from the operation reason after collection cleanup.
                         throw e
                     } catch (e: Exception) {
-                        terminalError = e.message ?: "Traceroute failed"
+                        terminalError = resolverErrorMessage(e, trimmedHost) ?: e.message ?: "Traceroute failed"
                     } finally {
                         val cancellationReason = session.cancellationReason
                         val current = _uiState.value

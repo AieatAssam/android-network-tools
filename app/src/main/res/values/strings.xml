@@ -615,6 +615,7 @@
     <string name="traceroute_mtu_discovery_label">MTU discovery (auto packet size)</string>
     <string name="traceroute_packet_size_label">Packet size</string>
     <string name="traceroute_start_button">Start Trace</string>
+    <string name="traceroute_start_disabled_hint">Enter a host to enable Start Trace.</string>
     <string name="traceroute_stop_button">Stop</string>
     <string name="traceroute_canceling_button">Stopping…</string>
     <string name="traceroute_retry_button">Retry</string>
@@ -725,6 +726,8 @@
     <string name="topology_reported_neighbor_label">Reported neighbor: %1$s</string>
     <string name="topology_reported_only">Reported only; device not queried</string>
     <string name="topology_discover_button">Discover Topology</string>
+    <string name="topology_discover_disabled_target">Enter a target IP to enable Discover Topology.</string>
+    <string name="topology_discover_disabled_v3">Choose the SNMPv3 authentication and privacy settings to enable Discover Topology.</string>
     <string name="topology_cancel_button">Cancel discovery</string>
     <string name="topology_canceling_button">Canceling…</string>
     <string name="topology_canceling_status">Canceling discovery. Keeping discovered nodes until cleanup finishes.</string>
@@ -747,6 +750,7 @@
     <string name="topology_node_detail_vlans">VLANs</string>
     <string name="topology_node_detail_neighbours">Neighbours</string>
     <string name="topology_error_retry">Retry</string>
+    <string name="topology_error_title">Discovery Failed</string>
     <string name="topology_fit_button_cd">Fit graph to screen</string>
     <string name="topology_search_nodes">Search nodes</string>
     <string name="topology_partial_results">Partial results. Some details were omitted because of resource limits or SNMP errors.</string>

@@ -87,6 +87,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
+import net.aieat.netswissknife.app.ui.components.DisabledActionHint
 import net.aieat.netswissknife.app.ui.components.ResultActionsRow
 import net.aieat.netswissknife.app.ui.format.humanDurationText
 import androidx.compose.foundation.layout.RowScope
@@ -607,17 +608,35 @@ private fun TracerouteInputCard(
                     )
                 }
             } else {
-                Button(
-                    onClick  = hapticAction { dismissKeyboard(); onStart() },
-                    enabled  = canStart && !isBusy,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(Icons.Default.Public, null)
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.traceroute_start_button))
-                }
+                TracerouteStartAction(
+                    canStart = canStart,
+                    isBusy = isBusy,
+                    onStart = { dismissKeyboard(); onStart() },
+                )
             }
         }
+    }
+}
+
+@Composable
+@Suppress("FunctionNaming", "ktlint:standard:function-naming")
+private fun TracerouteStartAction(
+    canStart: Boolean,
+    isBusy: Boolean,
+    onStart: () -> Unit,
+) {
+    Button(
+        onClick = hapticAction(onStart),
+        enabled = canStart && !isBusy,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Icon(Icons.Default.Public, null)
+        Spacer(Modifier.width(8.dp))
+        Text(stringResource(R.string.traceroute_start_button))
+    }
+    // A disabled button needs its reason next to it (V6A-12).
+    if (!canStart && !isBusy) {
+        DisabledActionHint(stringResource(R.string.traceroute_start_disabled_hint))
     }
 }
 
