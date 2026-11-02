@@ -810,6 +810,7 @@ work_packages:
   - id: WP33
     title: Phone-round behaviour and error-state fixes
     status: todo
+    carried_from_wp32: [PHB-19, PHB-08-timing-legend, PHB-05-issuer-repeat, PHB-14-mdns-status, PHB-12-LAN-and-NetworkInfo-copy-share-row]
     findings: [PHA-11, PHA-12, PHA-14, PHA-15, PHA-16, PHA-19, PHA-20, PHB-02, PHB-10, PHB-11, PHB-13, PHB-15, PHB-16, PHB-18, VERIFY-5/V5-01, VERIFY-5/V5-03, VERIFY-5/V5-04, VERIFY-5/V5-06]
   - id: WP34
     title: Phone-mode device verification of WP30-WP33 (density 480 / 533, landscape, dark, font 1.3)
