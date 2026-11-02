@@ -728,12 +728,24 @@ work_packages:
 
   - id: WP30
     title: LAN Scanner true summary, Network Map and result list de-duplication (phone round)
-    status: todo
+    status: done
     findings: [PHA-01, PHA-02, PHA-03, PHA-04, PHA-05, PHA-07, PHA-08, PHA-09, VERIFY-5/V5-02, VERIFY-5/V5-05, USER-REPORT-2026-11-02-lan-summary]
     notes: >
       User: the LAN end-of-run summary and the table show the same information; the summary must be a true summary, not a list of devices.
       Summary = status + one headline + subnet/duration once + uncertain-probe count (details behind a tap, not inline per-host text) + actions.
       No number or string shown twice on the screen (subnet, alive count, scanned count). Map must not repeat vendor/octet labels the table shows; make "+N more" tappable or drop it.
+    result:
+      status: done
+      commit: "fix(lan): true scan summary, de-duplicated map and list (WP30)"
+      gates: "./gradlew test ktlintCheck detekt :app:assembleDebug :app:compileDebugAndroidTestKotlin koverVerify x3 - all green, one foreground pass"
+      changes:
+        - "Summary card: status, headline 'N devices found', meta chips (subnet, addresses, duration) shown once; uncertain probes are a count line opening a bounded bottom sheet; stat tiles removed. Devices heading shows 'N of M' only when filtering."
+        - "Network Map: icon + hostname or octet, honours search/filter/sort, adaptive columns, tap scrolls to and expands the host row, '+N more' expands."
+        - "pingMs is Long? (set only from ICMP); 'No ping reply' when unmeasured; share text omits ms when null; latency sort puts unmeasured last."
+        - "Expanded host row no longer repeats header identity; Wake device in action row; paused subtitle reworded (V5-02)."
+      rejected: ["PHA-04 (no-results card renders on device; no change)", "PHA-08 teal tint (marks expanded state)", "PHA-07 recents chip (input history by design; wording only)"]
+      baseline: "ktlint app baseline 5229->5225, no (file,rule) count increased"
+      device: "checked at 480dp, 533dp+font 1.3, landscape, dark; settings restored"
   - id: WP31
     title: Shared phone layout - IME clipping, hero/landscape compaction, More sheet, consistent Retry/Copy/Share
     status: todo

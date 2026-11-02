@@ -45,4 +45,31 @@ class LanShareTextTest {
         assertFalse(text.contains("192.168.1.88"))
         assertFalse(text.contains("Connection refused"))
     }
+
+    @Test
+    fun `share omits latency for hosts without an icmp reply`() {
+        val summary =
+            LanScanSummary(
+                subnet = "192.168.1.0/24",
+                totalScanned = 254,
+                aliveHosts = 1,
+                scanDurationMs = 1_250,
+                hosts =
+                    listOf(
+                        LanHost(
+                            ip = "192.168.1.9",
+                            hostname = null,
+                            macAddress = null,
+                            vendor = null,
+                            openPorts = listOf(443),
+                            pingTimeMs = null,
+                        ),
+                    ),
+            )
+
+        val text = buildLanShareText(summary, durationText = "1.3 s")
+
+        assertTrue(text.contains("192.168.1.9 ports:443"))
+        assertFalse(text.contains("ms"))
+    }
 }

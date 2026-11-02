@@ -385,6 +385,7 @@
     <string name="lan_stop_button">Stop Scan</string>
     <string name="lan_rescan_button">Re-scan</string>
     <string name="lan_clear_button">Clear</string>
+    <string name="lan_share_button">Share</string>
     <string name="lan_retry_button">Retry</string>
 
     <!-- LAN States -->
@@ -394,7 +395,7 @@
     <string name="lan_canceling_title">Stopping scan…</string>
     <string name="lan_scan_complete_title">Scan Complete</string>
     <string name="lan_scan_paused_title">Scan paused</string>
-    <string name="lan_scan_paused_subtitle">These are partial results from the scan paused when the app went to the background.</string>
+    <string name="lan_scan_paused_subtitle">These are partial results from the scan paused when you left this screen.</string>
     <string name="lan_scan_canceled_title">Scan stopped</string>
     <string name="lan_scan_canceled_subtitle">These are partial results from the stopped scan.</string>
     <string name="lan_error_title">Scan failed</string>
@@ -406,21 +407,22 @@
         <item quantity="other">%1$d hosts found so far</item>
     </plurals>
     <string name="lan_live_hosts_header">Confirmed Hosts</string>
-    <string name="lan_hosts_header">Discovered Hosts (%1$d)</string>
-    <string name="lan_empty_title">No hosts found</string>
+    <string name="lan_devices_header">Devices</string>
+    <string name="lan_devices_filtered_count">%1$d of %2$d</string>
     <string name="lan_empty_body">No endpoints were confirmed during this scan. Inconclusive probe attempts may be available under diagnostics. Verify the network range and try increasing the timeout.</string>
-    <string name="lan_stat_scanned">Scanned</string>
-    <string name="lan_stat_alive">Confirmed</string>
-    <string name="lan_stat_subnet">Prefix</string>
-    <string name="lan_prefix_value_format">/%1$s</string>
     <plurals name="lan_summary_headline_format">
-        <item quantity="one">%1$d host confirmed of %2$d scanned</item>
-        <item quantity="other">%1$d hosts confirmed of %2$d scanned</item>
+        <item quantity="one">%1$d device found</item>
+        <item quantity="other">%1$d devices found</item>
     </plurals>
-    <string name="lan_summary_meta_format">%1$s · %2$s</string>
-    <string name="lan_settings_detail_format">%1$s · %2$s</string>
-    <string name="lan_show_diagnostics">Show uncertain probes (%1$d)</string>
-    <string name="lan_hide_diagnostics">Hide uncertain probes</string>
+    <plurals name="lan_addresses_count">
+        <item quantity="one">%1$d address</item>
+        <item quantity="other">%1$d addresses</item>
+    </plurals>
+    <plurals name="lan_uncertain_probes_count">
+        <item quantity="one">%1$d uncertain probe</item>
+        <item quantity="other">%1$d uncertain probes</item>
+    </plurals>
+    <string name="lan_uncertain_probes_body">Addresses that did not answer, refused the connection, or were unreachable. They are not counted as devices.</string>
     <string name="lan_diagnostic_entry">%1$s: %2$s%3$s</string>
     <string name="lan_diagnostic_port">, port %1$d</string>
     <string name="lan_diagnostic_tcp_refused">TCP connection refusal reported</string>
@@ -433,8 +435,8 @@
     <string name="duration_seconds_format">%1$.1f s</string>
     <string name="duration_minutes_format">%1$d min</string>
     <string name="duration_minutes_seconds_format">%1$d min %2$d s</string>
-    <string name="lan_ping_format">%1$d ms</string>
     <string name="lan_ping_status_format">Latency %1$d ms</string>
+    <string name="lan_ping_unavailable">No ping reply</string>
     <plurals name="lan_open_ports_count">
         <item quantity="one">%1$d port</item>
         <item quantity="other">%1$d ports</item>
@@ -446,6 +448,9 @@
     <!-- LAN Topology -->
     <string name="lan_topology_title">Network Map</string>
     <string name="lan_more_devices">more…</string>
+    <string name="lan_map_more_count">+%1$d</string>
+    <string name="lan_map_more_action">Show all devices on the map</string>
+    <string name="lan_map_node_action">Show %1$s in the device list</string>
 
     <!-- LAN Host Details -->
     <string name="lan_details_title">Device Details</string>
@@ -453,8 +458,6 @@
     <string name="lan_detail_hostname">Hostname</string>
     <string name="lan_detail_mac">MAC Address</string>
     <string name="lan_detail_vendor">Vendor</string>
-    <string name="lan_detail_ping">Ping</string>
-    <string name="lan_detail_role">Role</string>
     <string name="lan_mac_unavailable_api29">Not available on Android 10+ (ARP is restricted)</string>
     <string name="lan_action_scan_ports">Scan ports</string>
     <string name="lan_action_ping">Ping host</string>
@@ -467,8 +470,6 @@
     <string name="lan_discovery_netbios">NetBIOS</string>
     <string name="lan_discovery_mdns">mDNS</string>
     <string name="lan_discovery_rdns">rDNS</string>
-    <string name="lan_role_gateway">Gateway / Router</string>
-    <string name="lan_role_device">Network device</string>
     <string name="lan_open_ports_title">Open Ports (%1$d)</string>
     <string name="lan_no_open_ports">None detected</string>
 
@@ -477,13 +478,15 @@
     <string name="lan_filter_all">All</string>
     <string name="lan_filter_gateway">Gateway</string>
     <string name="lan_filter_has_ports">Has Ports</string>
+    <string name="lan_sort_by">Sort by</string>
     <string name="lan_sort_ip">IP</string>
     <string name="lan_sort_latency">Latency</string>
     <string name="lan_sort_hostname">Hostname</string>
     <string name="lan_sort_vendor">Vendor</string>
     <string name="lan_sort_open_ports">Port count</string>
-    <string name="lan_hosts_filtered_header">Results (%1$d of %2$d)</string>
     <string name="lan_no_search_results">No devices match your search</string>
+    <string name="lan_recent_remove">Remove recent subnet</string>
+    <string name="lan_recent_clear">Clear recent subnets</string>
     <string name="lan_no_filter_results">No devices match this filter</string>
     <string name="lan_no_search_filter_results">No devices match your search and filter</string>
     <string name="lan_show_all_devices">Show all devices</string>

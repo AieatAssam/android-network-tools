@@ -13,7 +13,8 @@ sealed interface PresenceEvidence {
 data class PresenceDecision(
     val confirmed: Boolean,
     val methods: Set<DiscoveryMethod> = emptySet(),
-    val pingMs: Long = 0L,
+    /** Round-trip time of an ICMP reply, or null when no ICMP reply was measured. */
+    val pingMs: Long? = null,
     val name: String? = null,
 )
 
@@ -25,7 +26,7 @@ object PresenceClassifier {
     fun classify(evidence: Iterable<PresenceEvidence>): PresenceDecision {
         val observations = evidence.toList()
         val methods = linkedSetOf<DiscoveryMethod>()
-        var pingMs = 0L
+        var pingMs: Long? = null
         var name: String? = null
         observations.forEach { observation ->
             when (observation) {

@@ -20,7 +20,7 @@ internal fun buildLanShareText(
             append(host.ip)
             host.hostname?.let { append(" ($it)") }
             host.vendor?.let { append(" [$it]") }
-            append(" ${host.pingTimeMs}ms")
+            host.pingTimeMs?.let { append(" ${it}ms") }
             if (host.openPorts.isNotEmpty()) append(" ports:${host.openPorts.joinToString(",")}")
             appendLine()
         }

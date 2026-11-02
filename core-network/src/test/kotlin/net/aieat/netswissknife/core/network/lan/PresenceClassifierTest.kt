@@ -2,6 +2,7 @@ package net.aieat.netswissknife.core.network.lan
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -47,5 +48,36 @@ class PresenceClassifierTest {
 
         assertFalse(decision.confirmed)
         assertTrue(decision.methods.isEmpty())
+    }
+
+    @Test
+    fun `tcp confirmation alone has no latency measurement`() {
+        val decision =
+            PresenceClassifier.classify(
+                listOf(PresenceEvidence.TcpConnection(port = 80)),
+            )
+
+        assertTrue(decision.confirmed)
+        assertNull(decision.pingMs)
+    }
+
+    @Test
+    fun `icmp reply records its round trip time`() {
+        val decision =
+            PresenceClassifier.classify(
+                listOf(PresenceEvidence.IcmpEcho(rttMs = 8)),
+            )
+
+        assertEquals(8L, decision.pingMs)
+    }
+
+    @Test
+    fun `a zero millisecond icmp reply is a measurement, not a missing value`() {
+        val decision =
+            PresenceClassifier.classify(
+                listOf(PresenceEvidence.IcmpEcho(rttMs = 0)),
+            )
+
+        assertEquals(0L, decision.pingMs)
     }
 }

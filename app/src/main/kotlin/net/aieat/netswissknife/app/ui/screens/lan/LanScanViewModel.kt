@@ -129,6 +129,21 @@ sealed interface LanScanUiState {
     ) : LanScanUiState
 }
 
+/**
+ * Returns [state] with [ip] expanded. A host that is already expanded keeps the same state
+ * instance, and states that have no host list are returned unchanged.
+ */
+internal fun expandHostState(
+    state: LanScanUiState,
+    ip: String,
+): LanScanUiState =
+    when (state) {
+        is LanScanUiState.Scanning -> if (state.expandedHostIp == ip) state else state.copy(expandedHostIp = ip)
+        is LanScanUiState.Finished -> if (state.expandedHostIp == ip) state else state.copy(expandedHostIp = ip)
+        is LanScanUiState.Canceled -> if (state.expandedHostIp == ip) state else state.copy(expandedHostIp = ip)
+        else -> state
+    }
+
 sealed interface LanNavEvent {
     data class NavigateToPorts(
         val host: String,
@@ -722,6 +737,11 @@ class LanScanViewModel
                         return
                     }
                 }
+        }
+
+        /** Expands [ip] for a map or list jump. Unlike [onToggleHostExpanded] it never collapses the host. */
+        fun onRevealHost(ip: String) {
+            _uiState.value = expandHostState(_uiState.value, ip)
         }
 
         fun onToggleDiagnostics() {

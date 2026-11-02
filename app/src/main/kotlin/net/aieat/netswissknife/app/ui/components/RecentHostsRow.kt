@@ -38,6 +38,8 @@ fun RecentHostsRow(
     modifier: Modifier = Modifier,
     selectionEnabled: Boolean = true,
     actionsEnabled: Boolean = true,
+    removeDescription: String = stringResource(R.string.action_remove_recent),
+    clearDescription: String = stringResource(R.string.action_clear_recents),
 ) {
     AnimatedVisibility(
         visible = recentHosts.isNotEmpty(),
@@ -92,7 +94,7 @@ fun RecentHostsRow(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Close,
-                                contentDescription = stringResource(R.string.action_remove_recent),
+                                contentDescription = removeDescription,
                                 modifier = Modifier.size(14.dp),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -107,7 +109,7 @@ fun RecentHostsRow(
             ) {
                 Icon(
                     imageVector = Icons.Default.DeleteSweep,
-                    contentDescription = stringResource(R.string.action_clear_recents),
+                    contentDescription = clearDescription,
                     modifier = Modifier.size(18.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )

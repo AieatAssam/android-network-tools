@@ -45,4 +45,15 @@ class LanHostSortTest {
         listOf(22, 25, 53, 80, 110, 143, 8080, 9000)
             .forEach { assertFalse(isLikelyTlsPort(it), "Unexpected TLS port $it") }
     }
+
+    @Test
+    fun `latency sort places hosts without a ping reply after measured hosts`() {
+        val unmeasured = LanHost("192.168.1.1", null, null, null, emptyList(), pingTimeMs = null)
+        val measured = LanHost("192.168.1.200", null, null, null, emptyList(), pingTimeMs = 900L)
+
+        assertEquals(
+            listOf("192.168.1.200", "192.168.1.1"),
+            sortLanHosts(listOf(unmeasured, measured), LanHostSortOrder.LATENCY).map { it.ip },
+        )
+    }
 }

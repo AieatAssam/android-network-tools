@@ -254,7 +254,7 @@ class LanScanScreenTest {
             .also { swipeContentUp() }
             .assertIsDisplayed()
         composeRule
-            .onNodeWithText(context.getString(R.string.lan_hosts_filtered_header, 0, 1))
+            .onNodeWithText(context.getString(R.string.lan_devices_filtered_count, 0, 1))
             .assertIsDisplayed()
 
         composeRule
@@ -272,7 +272,7 @@ class LanScanScreenTest {
             .performClick()
         composeRule.mainClock.advanceTimeBy(250L)
         composeRule
-            .onNodeWithText(context.getString(R.string.lan_hosts_header, 1))
+            .onNodeWithText(context.getString(R.string.lan_devices_header))
             .also { swipeContentUp() }
             .assertIsDisplayed()
         composeRule
@@ -321,7 +321,7 @@ class LanScanScreenTest {
 
         composeRule.mainClock.advanceTimeBy(1_000L)
         composeRule
-            .onNodeWithText(context.getString(R.string.lan_empty_title))
+            .onNodeWithText(context.getString(R.string.lan_empty_body))
             .performScrollTo()
             .assertIsDisplayed()
         composeRule
@@ -388,7 +388,7 @@ class LanScanScreenTest {
 
         assertEquals("", searchQuery.value)
         composeRule
-            .onNodeWithText(context.getString(R.string.lan_hosts_header, 1))
+            .onNodeWithText(context.getString(R.string.lan_devices_header))
             .also { swipeContentUp() }
             .assertIsDisplayed()
         composeRule
@@ -700,7 +700,7 @@ class LanScanScreenTest {
         // Uncertain/refused probes are excluded from the normal host list.
         composeRule.onAllNodesWithText(uncertainIp, substring = true).assertCountEquals(0)
         composeRule
-            .onAllNodesWithText(context.getString(R.string.lan_hosts_header, 1), substring = true)
+            .onAllNodesWithText(context.getString(R.string.lan_devices_header), substring = true)
             .assertCountEquals(1)
         val numericSummaryBefore =
             listOf("1", "2").associateWith { text ->
@@ -709,7 +709,7 @@ class LanScanScreenTest {
 
         composeRule.mainClock.autoAdvance = true
         composeRule
-            .onNodeWithText(context.getString(R.string.lan_show_diagnostics, 1))
+            .onNodeWithText(context.resources.getQuantityString(R.plurals.lan_uncertain_probes_count, 1, 1))
             .performScrollTo()
             .performClick()
         composeRule.mainClock.autoAdvance = false
@@ -722,12 +722,12 @@ class LanScanScreenTest {
             .onAllNodesWithText(context.getString(R.string.lan_diagnostic_tcp_refused), substring = true)
             .assertCountEquals(1)
         composeRule
-            .onAllNodesWithText(context.getString(R.string.lan_hide_diagnostics))
+            .onAllNodesWithText(context.getString(R.string.lan_uncertain_probes_body), substring = true)
             .assertCountEquals(1)
 
         // Revealing diagnostics does not add to confirmed hosts or alter scan totals.
         composeRule
-            .onAllNodesWithText(context.getString(R.string.lan_hosts_header, 1), substring = true)
+            .onAllNodesWithText(context.getString(R.string.lan_devices_header), substring = true)
             .assertCountEquals(1)
         val numericSummaryAfter =
             listOf("1", "2").associateWith { text ->
