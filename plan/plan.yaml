@@ -621,7 +621,6 @@ work_packages:
         - "IME-open rotation: focus restore does not hold in landscape on DNS (see device check 2). Needs a logcat-level look at when the flag is saved and when focus is requested."
         - "KeyboardDismissTest and RestoreFocusIfImeWasOpenTest are compile-only."
         - "copy-as-cURL of a restored HTTP Probe result omits request headers and body (they are not kept)."
-(1) DNS, Traceroute, WHOIS, Subnet Calculator, Wake-on-LAN, HTTP Probe forms and last results survive Back/forward via the existing ToolSessionMemory (never secrets); (2) Ping Advanced sliders (count, timeout, payload, TTL, interval) persist across return; (3) WoL saved-device name field restored; (4) with the IME open while typing, rotation should reopen the keyboard on the same field (WP24 closes it): save focused-field id via rememberSaveable and request focus for that field only when the IME was open."
   - id: WP26
     title: Result export and copy parity (Traceroute, DNS, Port Scanner, WHOIS, HTTP Probe, TLS, Wi-Fi)
     status: done
