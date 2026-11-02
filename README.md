@@ -36,6 +36,7 @@ Network path analysis with per-hop geolocation enrichment.
 - Dual protocol support: ICMP and UDP
 - Automatic MTU discovery or custom packet size (28–1,472 bytes)
 - Once a trace has a result, the configuration folds to one line (host, hops, probes, timeout) with a Show settings action; hop details come before the journey statistics
+- The result shows **Resolved IP** only when the name resolved to a different address; an IP target is not repeated
 - A trace that stops because you left the screen reads "Trace stopped when you left the screen" with its partial hops; a trace stopped with Stop reads "Trace canceled"
 - Hops show IP address, per-probe RTTs, and min/average/max when multiple probes are requested; reverse DNS and geolocation fill in asynchronously when available
 - Hop Details and Raw Output list hops in hop-number order; a timed-out hop is shown as `* * *` in both
@@ -88,10 +89,10 @@ Full DNS record resolution with multiple resolver options and protocol-level res
 - The domain field is checked as you type: names with spaces, empty labels or invalid characters show a plain-language message and Look up stays disabled. Names with leading underscores (SRV, TXT owner labels) are accepted
 - Editing the name, record type or server clears a finished result or error so an old answer is not shown for a new query
 - The name, record type and resolver survive rotation and process death. Leaving the tool with Back keeps them and the last finished result for the app session (in memory only); a lookup still running when you leave is not restored as running, and Stop or clearing the results is not restored either
-- An NXDOMAIN answer is shown as a neutral "Domain not found" card, not as a success. A NOERROR answer keeps the success styling; server failures and other RCODEs use the error styling
+- An NXDOMAIN answer is shown as a neutral "Domain not found" card, not as a success. A NOERROR answer keeps the success styling; server failures and other RCODEs use the error styling. The domain appears once, in the summary card; the card subtitles do not repeat it
 - Record types scroll sideways with a fade on each cut-off edge and a chevron beside the chips while more are off-screen
 - Look up is scrolled into view when the on-screen keyboard opens, so it is not covered by the keyboard. After rotation, dark mode or a font change the keyboard stays closed. If the keyboard is open when the screen rotates, the rotation closes it and focus is not restored; tap the field to reopen the keyboard
-- The Additional section starts collapsed, since it usually holds EDNS OPT pseudo-records (labelled `OPT`); an MX record of `0 .` is annotated as a null MX
+- Answer records are listed first under an **Answer** label. The Authority and Additional sections follow them, and the Additional section starts collapsed, since it usually holds EDNS OPT pseudo-records (labelled `OPT`); an MX record of `0 .` is annotated as a null MX
 - System DNS is never silently replaced with Cloudflare; when Android reports no resolver, the UI explains the failure and offers an explicit Cloudflare fallback. Private DNS status is shown when available.
 - IDN hostnames and trailing-dot FQDNs are normalized consistently across network tools.
 - Copy and Share at the foot of the result card send a plain-text summary: type, domain, server, query time, and every record with its TTL. Copy confirms with "Copied to clipboard". The result header names the server used once; each record shows its type once, in its badge. Per-record and raw-response copies are unchanged
@@ -101,7 +102,7 @@ Wi-Fi environment analysis with SSID grouping and spectrum visualisation.
 - The hero states the access-point count; the scan is started by a labelled **Scan** button, and the time of the last scan is in the Updated line
 - Access points grouped by SSID + security; mesh/dual-band routers appear as one entry with a per-BSSID drill-down
 - **Spectrum Analyser** — frequency-domain triangle chart per AP (X = MHz, Y = RSSI −100 to −30 dBm) with channel gridlines and one SSID label per network at its strongest peak. Labels are ellipsised to a fixed width and stacked upward when they would collide; a label with no free position is left off, and the network list below is the legend. Each network gets a stable accent colour derived from its SSID hash
-- Band tab-row switches between detected 2.4 / 5 / 6 GHz bands; spectrum and network list update per band
+- Band tab-row switches between detected 2.4 / 5 / 6 GHz bands; spectrum and network list update per band. The hero names the band only when a single band is detected, so each band is named once on the screen
 - Best-channel callout recommends the least-congested of channels 1, 6, and 11 when 2.4 GHz is active. Each candidate is scored from every 2.4 GHz AP whose channel overlaps it (±4 channels), including channels with no AP of their own, so a channel is not recommended just because nothing is on it. The callout is hidden when no 2.4 GHz AP was scanned
 - Search (SSID, BSSID or vendor) narrows both the network list and the spectrum; a search with no match shows a message. Clear empties the search and closes the keyboard
 - Expandable network cards show each BSSID with channel, width, RSSI, and vendor; tap any BSSID for full detail sheet. Reorders from a refresh animate, and expanding a network pins the order until every card is collapsed
