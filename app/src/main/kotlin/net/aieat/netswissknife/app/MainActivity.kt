@@ -7,6 +7,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -26,7 +27,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.WindowCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -36,7 +39,9 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import dagger.hilt.android.AndroidEntryPoint
 import net.aieat.netswissknife.app.ui.components.AdaptiveContentBounds
+import net.aieat.netswissknife.app.ui.components.BOTTOM_NAV_BAR_HEIGHT_DP
 import net.aieat.netswissknife.app.ui.components.FocusSinkHost
+import net.aieat.netswissknife.app.ui.components.imeOverlapAboveBottomBar
 import net.aieat.netswissknife.app.ui.navigation.AppNavHost
 import net.aieat.netswissknife.app.ui.navigation.AppNavigationViewModel
 import net.aieat.netswissknife.app.ui.navigation.MoreToolsSheet
@@ -97,17 +102,26 @@ fun NetSwissKnifeApp(navController: NavHostController) {
     val layoutType = NavigationSuiteScaffoldDefaults.calculateFromAdaptiveInfo(windowAdaptiveInfo)
     // The app draws edge-to-edge (setDecorFitsSystemWindows(false)), so adjustResize no longer
     // lifts content above the keyboard, and neither the system nav bar nor the status bar is
-    // reserved for us. Pad the content by the status bar (top) and by the larger of the nav bar
-    // (when a rail is shown, with no bottom bar to absorb it) and the IME while a text field is
-    // focused. union() takes the max per edge, so the keyboard inset, which also spans the nav
-    // bar, is not double counted. Without the status bar inset, scrolled content (for example the
-    // DNS record-type chips in landscape, VERIFY-4 V-15) ran under the clock and battery icons.
+    // reserved for us. Pad the content by the status bar (top) and, when a rail is shown (no bottom
+    // bar to absorb it), by the larger of the nav bar and the IME. union() takes the max per edge.
+    //
+    // With the bottom bar, the navigation suite already ends the content slot above the bar, so the
+    // keyboard only adds the part of its height that rises above the bar (PHB-01). Padding by the
+    // full IME height here cut every tool screen off just above the keyboard.
+    val density = LocalDensity.current
+    val isRail = layoutType == NavigationSuiteType.NavigationRail
+    val imeBottomPx = WindowInsets.ime.getBottom(density)
+    // The reserved band below the content slot is the bottom bar plus the system navigation bar inset.
+    val reservedBelowContentPx =
+        with(density) { BOTTOM_NAV_BAR_HEIGHT_DP.dp.roundToPx() } + WindowInsets.navigationBars.getBottom(density)
+    val imeOverlapPx = imeOverlapAboveBottomBar(imeBottomPx, reservedBelowContentPx)
     val contentInsets =
-        if (layoutType == NavigationSuiteType.NavigationRail) {
+        if (isRail) {
             WindowInsets.navigationBars.union(WindowInsets.ime).union(WindowInsets.statusBars)
         } else {
-            WindowInsets.ime.union(WindowInsets.statusBars)
+            WindowInsets.statusBars
         }
+    val contentBottomPadding = with(density) { (if (isRail) 0 else imeOverlapPx).toDp() }
     NavigationSuiteScaffold(
         layoutType = layoutType,
         navigationSuiteItems = {
@@ -121,7 +135,12 @@ fun NetSwissKnifeApp(navController: NavHostController) {
             )
         },
     ) {
-        AdaptiveContentBounds(modifier = Modifier.windowInsetsPadding(contentInsets)) {
+        AdaptiveContentBounds(
+            modifier =
+                Modifier
+                    .windowInsetsPadding(contentInsets)
+                    .padding(bottom = contentBottomPadding),
+        ) {
             AppNavHost(navController = navController)
         }
     }

@@ -11,17 +11,22 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.itemsIndexed
-import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -42,6 +47,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -50,10 +56,13 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.hapticAction
+import net.aieat.netswissknife.app.ui.components.homeGridColumns
+import net.aieat.netswissknife.app.ui.components.isCompactHeroHeight
 import net.aieat.netswissknife.app.ui.navigation.NavRoutes
 import net.aieat.netswissknife.app.ui.navigation.ToolInfo
 import net.aieat.netswissknife.app.ui.theme.AppMotion
@@ -85,7 +94,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
             visible = headerVisible,
             enter = fadeIn(AppMotion.enter(500)) + slideInVertically(AppMotion.enter(500)) { -40 },
         ) {
-            HeroHeader()
+            HeroHeader(compact = isCompactHeroHeight(LocalConfiguration.current.screenHeightDp))
         }
 
         AnimatedVisibility(
@@ -102,7 +111,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
 }
 
 @Composable
-private fun HeroHeader() {
+private fun HeroHeader(compact: Boolean) {
     Box(
         modifier =
             Modifier
@@ -114,38 +123,62 @@ private fun HeroHeader() {
                             MaterialTheme.colorScheme.background,
                         ),
                     ),
-                ).padding(horizontal = 24.dp, vertical = 28.dp),
+                ).padding(
+                    horizontal = 24.dp,
+                    vertical = if (compact) 8.dp else 28.dp,
+                ),
         contentAlignment = Alignment.Center,
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            HeroHeaderIcon()
+        // Compact (phone landscape): the icon and name share one row, and the tagline is dropped, so
+        // the tool grid starts above the fold (PHA-21, PHB-25).
+        if (compact) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                HeroHeaderIcon(size = 40.dp, iconSize = 22.dp)
+                Text(
+                    text = stringResource(R.string.app_name_full),
+                    style = MaterialTheme.typography.headlineSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+            }
+        } else {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                HeroHeaderIcon(size = 72.dp, iconSize = 40.dp)
 
-            Box(Modifier.height(12.dp))
+                Box(Modifier.height(12.dp))
 
-            Text(
-                text = stringResource(R.string.app_name_full),
-                style = MaterialTheme.typography.displaySmall,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                textAlign = TextAlign.Center,
-            )
+                Text(
+                    text = stringResource(R.string.app_name_full),
+                    style = MaterialTheme.typography.displaySmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    textAlign = TextAlign.Center,
+                )
 
-            Box(Modifier.height(4.dp))
+                Box(Modifier.height(4.dp))
 
-            Text(
-                text = stringResource(R.string.home_subtitle),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-            )
+                Text(
+                    text = stringResource(R.string.home_subtitle),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+            }
         }
     }
 }
 
 @Composable
 @Suppress("FunctionNaming", "ktlint:standard:function-naming")
-private fun HeroHeaderIcon() {
+private fun HeroHeaderIcon(
+    size: Dp,
+    iconSize: Dp,
+) {
     var iconReady by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { iconReady = true }
 
@@ -163,7 +196,7 @@ private fun HeroHeaderIcon() {
         modifier =
             Modifier
                 .scale(iconScale)
-                .size(72.dp)
+                .size(size)
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.primary),
         contentAlignment = Alignment.Center,
@@ -172,7 +205,7 @@ private fun HeroHeaderIcon() {
             imageVector = Icons.Outlined.Hub,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onPrimary,
-            modifier = Modifier.size(40.dp),
+            modifier = Modifier.size(iconSize),
         )
     }
 }
@@ -189,7 +222,7 @@ private fun ToolGrid(onNavigate: (String) -> Unit) {
         gridAppeared = true
     }
 
-    val gridState = rememberLazyGridState()
+    val listState = rememberLazyListState()
 
     Column(modifier = Modifier.fillMaxSize()) {
         Text(
@@ -198,31 +231,55 @@ private fun ToolGrid(onNavigate: (String) -> Unit) {
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
         )
-        LazyVerticalGrid(
-            state = gridState,
+        // Rows are laid out by hand so every tile in a row shares that row's height (PHA-22). A lazy
+        // grid measures each tile on its own, so tiles with longer descriptions left ragged row ends.
+        BoxWithConstraints(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .weight(1f)
-                    .testTag(HomeScreenTestTags.TOOL_GRID),
-            columns = GridCells.Adaptive(minSize = 160.dp),
-            contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+                    .weight(1f),
         ) {
-            itemsIndexed(NavRoutes.allTools, key = { _, tool -> tool.route }) { index, tool ->
-                AnimatedToolCard(
-                    tool = tool,
-                    delayMs = index * 60,
-                    skipEntrance = gridAppeared,
-                    onClick = hapticAction { onNavigate(tool.route) },
-                )
+            val columns = homeGridColumns(availableWidthDp = maxWidth.value.toInt() - 32)
+            val rows = NavRoutes.allTools.chunked(columns)
+            LazyColumn(
+                state = listState,
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .testTag(HomeScreenTestTags.TOOL_GRID),
+                contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                itemsIndexed(rows, key = { _, row -> row.first().route }) { rowIndex, row ->
+                    Row(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .height(IntrinsicSize.Min),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        row.forEachIndexed { column, tool ->
+                            AnimatedToolCard(
+                                tool = tool,
+                                delayMs = (rowIndex * columns + column) * 60,
+                                skipEntrance = gridAppeared,
+                                onClick = hapticAction { onNavigate(tool.route) },
+                                modifier =
+                                    Modifier
+                                        .weight(1f)
+                                        .fillMaxHeight(),
+                            )
+                        }
+                        // Keep a short last row at the same tile width as the full rows.
+                        repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
+                    }
+                }
             }
         }
 
         // The hint has its own slot below the grid. It never overlays a tile, and the slot keeps its
         // height whether or not the grid can scroll, so the grid does not resize when the hint appears.
-        HomeScrollHint(visible = gridState.canScrollForward)
+        HomeScrollHint(visible = listState.canScrollForward)
     }
 }
 
@@ -257,6 +314,7 @@ private fun AnimatedToolCard(
     delayMs: Int,
     skipEntrance: Boolean,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     var visible by remember { mutableStateOf(skipEntrance) }
     LaunchedEffect(Unit) {
@@ -280,8 +338,7 @@ private fun AnimatedToolCard(
     ElevatedCard(
         onClick = onClick,
         modifier =
-            Modifier
-                .fillMaxWidth()
+            modifier
                 .scale(cardScale)
                 .alpha(cardAlpha)
                 .semantics(mergeDescendants = true) { role = Role.Button },

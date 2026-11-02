@@ -4,22 +4,19 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import net.aieat.netswissknife.app.R
-import net.aieat.netswissknife.app.ui.components.ToolTouchTargetSize
-import net.aieat.netswissknife.app.ui.components.hapticAction
+import net.aieat.netswissknife.app.ui.components.ToolRetryButton
 import net.aieat.netswissknife.app.ui.theme.AppShapes
 
 private const val CARD_PADDING_DP = 16
@@ -96,9 +93,7 @@ internal fun OuiFailedCard(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onErrorContainer,
             )
-            TextButton(onClick = hapticAction(onRetry), modifier = Modifier.heightIn(min = ToolTouchTargetSize)) {
-                Text(stringResource(R.string.oui_retry), color = MaterialTheme.colorScheme.onErrorContainer)
-            }
+            ToolRetryButton(text = stringResource(R.string.oui_retry), onClick = onRetry)
         }
     }
 }

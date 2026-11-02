@@ -1,6 +1,8 @@
 package net.aieat.netswissknife.app.ui.components
 
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -11,12 +13,16 @@ import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import net.aieat.netswissknife.app.R
 
 /** Minimum touch target for icon-only controls inside tool forms and result cards. */
@@ -94,7 +100,7 @@ fun ToolTextField(
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
-        modifier = modifier,
+        modifier = modifier.scrollIntoViewOnFocus(),
         enabled = enabled,
         label = label,
         placeholder = placeholder,
@@ -110,4 +116,22 @@ fun ToolTextField(
         keyboardActions = keyboardActions,
         shape = shape,
     )
+}
+
+/**
+ * Scrolls the field that gains focus into view inside its scrolling parent (PHB-01). The request
+ * covers the field's supporting and error text, because they are part of the same layout. It does
+ * nothing when the field is already visible. Apply it to every text field in a tool form, whether it
+ * is a [ToolTextField] or a plain [androidx.compose.material3.OutlinedTextField].
+ */
+@Composable
+@Suppress("ktlint:standard:function-naming")
+fun Modifier.scrollIntoViewOnFocus(): Modifier {
+    val requester = remember { BringIntoViewRequester() }
+    val scope = rememberCoroutineScope()
+    return this
+        .bringIntoViewRequester(requester)
+        .onFocusChanged { state ->
+            if (state.isFocused) scope.launch { requester.bringIntoView() }
+        }
 }

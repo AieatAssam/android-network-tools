@@ -52,7 +52,6 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.NetworkCheck
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Stop
@@ -125,6 +124,7 @@ import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
 import net.aieat.netswissknife.app.ui.components.ToolErrorCard
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
+import net.aieat.netswissknife.app.ui.components.ToolRetryButton
 import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.components.ToolStopButton
 import net.aieat.netswissknife.app.ui.components.ToolTextField
@@ -316,7 +316,7 @@ fun PingScreen(
                 label = "ping_state"
             ) { state ->
                 when (state) {
-                    is PingUiState.Idle -> PingIdlePanel()
+                    is PingUiState.Idle -> PingIdlePanel(hasHost = host.isNotBlank())
                     is PingUiState.Running -> PingRunningPanel(state)
                     is PingUiState.Finished -> PingFinishedPanel(
                         state = state,
@@ -676,7 +676,7 @@ private fun PingTimeoutRow(timeoutMs: Int, onTimeoutChange: (Int) -> Unit, enabl
 // ── Idle panel ────────────────────────────────────────────────────────────────
 
 @Composable
-private fun PingIdlePanel() {
+private fun PingIdlePanel(hasHost: Boolean) {
     OutlinedCard(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier
@@ -691,13 +691,14 @@ private fun PingIdlePanel() {
                 tint = MaterialTheme.colorScheme.outline,
                 modifier = Modifier.size(48.dp)
             )
+            // The copy follows the field: a filled host is not "missing" (PHA-06).
             Text(
-                text = stringResource(R.string.ping_idle_title),
+                text = stringResource(if (hasHost) R.string.ping_idle_ready_title else R.string.ping_idle_title),
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
-                text = stringResource(R.string.ping_idle_subtitle),
+                text = stringResource(if (hasHost) R.string.ping_idle_ready_subtitle else R.string.ping_idle_subtitle),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.outline,
                 textAlign = TextAlign.Center
@@ -962,11 +963,7 @@ private fun PingErrorPanel(
         title = stringResource(R.string.ping_error_title),
         message = message,
     ) {
-        Button(onClick = onRetry) {
-            Icon(Icons.Default.Refresh, contentDescription = null)
-            Spacer(modifier = Modifier.width(4.dp))
-            Text(stringResource(R.string.ping_retry))
-        }
+        ToolRetryButton(text = stringResource(R.string.ping_retry), onClick = onRetry)
         TextButton(onClick = onClear) { Text(stringResource(R.string.clear)) }
     }
 }

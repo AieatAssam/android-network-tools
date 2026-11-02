@@ -113,6 +113,7 @@ import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
 import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
+import net.aieat.netswissknife.app.ui.components.ToolRetryButton
 import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
 import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
@@ -124,6 +125,7 @@ import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.RecentHostsRow
 import net.aieat.netswissknife.app.ui.components.ScrollEdgeFadeWidth
+import net.aieat.netswissknife.app.ui.components.scrollIntoViewOnFocus
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.ui.theme.AppShapes
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
@@ -690,7 +692,8 @@ private fun DnsServerSelector(
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
             modifier = Modifier
                 .fillMaxWidth()
-                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable, enabled = enabled),
+                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable, enabled = enabled)
+                .scrollIntoViewOnFocus(),
             shape = AppShapes.medium,
             colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors()
         )
@@ -872,20 +875,7 @@ private fun DnsErrorPanel(
         title = stringResource(R.string.dns_error_title),
         message = message,
     ) {
-            TextButton(
-                onClick = onRetry,
-                colors = ButtonDefaults.textButtonColors(
-                    contentColor = MaterialTheme.colorScheme.error
-                )
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Refresh,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(Modifier.width(4.dp))
-                Text(stringResource(R.string.dns_retry))
-            }
+            ToolRetryButton(text = stringResource(R.string.dns_retry), onClick = onRetry)
             if (canFallbackToCloudflare) {
                 TextButton(
                     onClick = onUseCloudflare,

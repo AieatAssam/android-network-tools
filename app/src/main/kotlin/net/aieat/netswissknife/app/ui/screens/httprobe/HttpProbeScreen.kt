@@ -44,7 +44,6 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Http
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
@@ -100,12 +99,15 @@ import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
 import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
+import net.aieat.netswissknife.app.ui.components.ToolRetryButton
 import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
 import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
 import net.aieat.netswissknife.app.ui.components.ToolErrorCard
 import net.aieat.netswissknife.app.ui.components.ToolTextField
 import net.aieat.netswissknife.app.ui.components.hapticAction
+import net.aieat.netswissknife.app.ui.components.scrollIntoViewOnFocus
+import net.aieat.netswissknife.app.ui.format.withSeparatorBreaks
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.theme.AccentBlueLight
@@ -634,7 +636,7 @@ private fun HttpProbeInputCard(
                                 enabled = formEnabled,
                                 label = { Text(stringResource(R.string.httprobe_header_key), style = MaterialTheme.typography.labelSmall) },
                                 singleLine = true,
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier.weight(1f).scrollIntoViewOnFocus(),
                                 textStyle = MaterialTheme.typography.bodySmall
                             )
                             OutlinedTextField(
@@ -643,7 +645,7 @@ private fun HttpProbeInputCard(
                                 enabled = formEnabled,
                                 label = { Text(stringResource(R.string.httprobe_header_value), style = MaterialTheme.typography.labelSmall) },
                                 singleLine = true,
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier.weight(1f).scrollIntoViewOnFocus(),
                                 textStyle = MaterialTheme.typography.bodySmall
                             )
                             IconButton(
@@ -831,11 +833,7 @@ private fun HttpProbeErrorContent(message: String, onRetry: () -> Unit) {
         title = stringResource(R.string.httprobe_error_title),
         message = message,
     ) {
-        TextButton(onClick = onRetry) {
-            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-            Spacer(Modifier.width(4.dp))
-            Text(stringResource(R.string.httprobe_retry))
-        }
+        ToolRetryButton(text = stringResource(R.string.httprobe_retry), onClick = onRetry)
     }
 }
 
@@ -1394,7 +1392,7 @@ private fun SecurityCheckRow(check: SecurityHeaderCheck) {
                 SecurityRatingIcon(check.rating, Modifier.size(18.dp))
 
                 Text(
-                    text = check.headerName,
+                    text = withSeparatorBreaks(check.headerName),
                     style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
                     fontWeight = FontWeight.Medium,
                     modifier = Modifier.weight(1f)

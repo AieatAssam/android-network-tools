@@ -748,9 +748,30 @@ work_packages:
       device: "checked at 480dp, 533dp+font 1.3, landscape, dark; settings restored"
   - id: WP31
     title: Shared phone layout - IME clipping, hero/landscape compaction, More sheet, consistent Retry/Copy/Share
-    status: todo
+    status: partial
     findings: [PHB-01, PHB-03, PHB-12, PHB-20, PHB-21, PHB-25, PHA-06, PHA-10, PHA-21, PHA-22, PHA-23]
     notes: "One shared pattern per job. Verify PHB-01 root cause (form card clipped under focused field with IME open) in source first."
+    result:
+      status: partial
+      commit: "fix(app): phone layout - IME clipping, compact landscape hero, consistent actions (WP31)"
+      gates: "./gradlew test ktlintCheck detekt :app:assembleDebug :app:compileDebugAndroidTestKotlin :core-network:koverVerify :core-domain:koverVerify :app:koverVerify - green (run as separate foreground invocations)"
+      changes:
+        - "PHB-01 root cause (measured on device): the navigation suite already ends the content slot above the 80dp bottom bar and the 68px navigation-bar inset, then MainActivity padded by the full IME height, so content stopped about 180dp above the keyboard. Now the IME padding is only the part of the keyboard above that reserved band (imeOverlapAboveBottomBar, unit-tested). Rail branch unchanged."
+        - "scrollIntoViewOnFocus() Modifier: bring-into-view on focus, applied to ToolTextField and to the raw OutlinedTextFields in TLS, HTTP Probe, Ports, Topology and the DNS custom server field."
+        - "PHA-21/22/23, PHB-25: homeGridColumns and isCompactHeroHeight (unit-tested). Home rows are laid out by hand with equal-height tiles; compact hero (under 480dp) on Home and ToolHeroHeader; subtitle hidden in compact mode, three lines otherwise (PHB-21)."
+        - "PHB-03: ToolRetryButton (filled tonal, refresh icon, haptic) replaces 20 per-tool Retry buttons; each tool keeps its label and test tags."
+        - "PHB-20: withSeparatorBreaks (display only, unit-tested) on cipher suite and HTTP security header names."
+        - "PHA-06 (Ping only): idle copy follows the host field (Ready to ping)."
+        - "PHA-10: MORE_TOOL_SECTIONS made internal; MoreToolsSheetCoverageTest asserts each allTools route appears in exactly one section."
+      rejected:
+        - "PHA-10 (Wake-on-LAN missing from More sheet): not reproducible on HEAD. After scrolling to the end, Wake-on-LAN is the last Utilities row (screenshot checked). QA dump was taken before the list reached its end."
+        - "PHA-06 LAN part: deferred, not rejected. The LAN idle copy sits inside the WP30 screen, which this package may only touch to adopt shared components."
+      deferred:
+        - "PHB-12 Copy/Share: one shared labelled pattern NOT implemented. Copy/Share placement and labels still differ per tool; exported text is unchanged. Needs its own pass across TLS, HTTP, WHOIS, MAC, Speed Test, mDNS, Subnet, Ping, Traceroute, Ports."
+        - "PHA-06 LAN idle copy (see rejected)."
+      baseline: "ktlint app baseline regenerated (line shifts only); per-rule counts: no rule increased (5225 -> 5209). detekt app baseline unchanged."
+      device: "tablet at density 480 (sw400dp), portrait and landscape 640x353: IME on TLS host (portrait and landscape) and Ping host (landscape) keeps field, error text and Recent row above the keyboard; landscape Home shows compact hero and equal-height tile rows; compact TLS hero in landscape. Restored with restore.sh (density reset, font 1.0, night no, auto-rotate on, location revoked)."
+      tests: "ImeClearanceTest, ScreenHeightModeTest, MoreToolsSheetCoverageTest, SeparatorBreaksTest (IME helper test written with the helper, not observed red)."
   - id: WP32
     title: Result-screen de-duplication across tools
     status: todo

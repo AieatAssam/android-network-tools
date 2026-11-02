@@ -92,7 +92,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-// collectAsState replaced by collectAsStateWithLifecycle below
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -126,6 +125,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.launch
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
 import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
+import net.aieat.netswissknife.app.ui.components.ToolRetryButton
 import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.components.ToolTextField
 import net.aieat.netswissknife.app.ui.format.humanDurationText
@@ -154,6 +154,7 @@ import net.aieat.netswissknife.core.network.lan.LanHost
 import net.aieat.netswissknife.core.network.lan.MacSource
 import net.aieat.netswissknife.core.network.lan.LanScanSummary
 import net.aieat.netswissknife.core.network.lan.LanScanDiagnosticReason
+// collectAsState replaced by collectAsStateWithLifecycle below
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
@@ -2128,9 +2129,11 @@ private fun LanErrorContent(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                FilledTonalButton(onClick = onRetry, modifier = Modifier.weight(1f)) {
-                    Text(stringResource(R.string.lan_retry_button))
-                }
+                ToolRetryButton(
+                    text = stringResource(R.string.lan_retry_button),
+                    onClick = onRetry,
+                    modifier = Modifier.weight(1f),
+                )
                 FilledTonalButton(onClick = onClear, modifier = Modifier.weight(1f)) {
                     Text(stringResource(R.string.lan_clear_button))
                 }

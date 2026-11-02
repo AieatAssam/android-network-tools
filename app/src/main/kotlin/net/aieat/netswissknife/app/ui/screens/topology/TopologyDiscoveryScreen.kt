@@ -52,11 +52,13 @@ import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
 import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
 import net.aieat.netswissknife.app.ui.components.RecentHostsRow
 import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
+import net.aieat.netswissknife.app.ui.components.ToolRetryButton
 import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.components.ToolTextField
 import net.aieat.netswissknife.app.ui.components.messageRes
 import net.aieat.netswissknife.app.ui.components.rememberDismissKeyboard
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
+import net.aieat.netswissknife.app.ui.components.scrollIntoViewOnFocus
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.ui.theme.AppShapes
 import net.aieat.netswissknife.app.util.shareText
@@ -423,7 +425,7 @@ private fun TopologyScreenContent(
                                 value = community,
                                 onValueChange = { community = it },
                                 label = { Text(stringResource(R.string.topology_community_label)) },
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier.fillMaxWidth().scrollIntoViewOnFocus(),
                                 singleLine = true,
                                 visualTransformation =
                                     if (showCommunityPassword) {
@@ -448,7 +450,7 @@ private fun TopologyScreenContent(
                                     value = v3Username,
                                     onValueChange = { v3Username = it },
                                     label = { Text(stringResource(R.string.topology_v3_username_label)) },
-                                    modifier = Modifier.fillMaxWidth(),
+                                    modifier = Modifier.fillMaxWidth().scrollIntoViewOnFocus(),
                                     singleLine = true,
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
@@ -467,7 +469,7 @@ private fun TopologyScreenContent(
                                         value = v3AuthPassword,
                                         onValueChange = { v3AuthPassword = it },
                                         label = { Text(stringResource(R.string.topology_v3_auth_password_label)) },
-                                        modifier = Modifier.fillMaxWidth(),
+                                        modifier = Modifier.fillMaxWidth().scrollIntoViewOnFocus(),
                                         singleLine = true,
                                         visualTransformation =
                                             if (showAuthPassword) {
@@ -512,7 +514,7 @@ private fun TopologyScreenContent(
                                         value = v3PrivPassword,
                                         onValueChange = { v3PrivPassword = it },
                                         label = { Text(stringResource(R.string.topology_v3_priv_password_label)) },
-                                        modifier = Modifier.fillMaxWidth(),
+                                        modifier = Modifier.fillMaxWidth().scrollIntoViewOnFocus(),
                                         singleLine = true,
                                         visualTransformation =
                                             if (showPrivPassword) {
@@ -854,7 +856,7 @@ private fun TopologyResultUtilities(
                 onValueChange = onNodeSearchChange,
                 label = { Text(stringResource(R.string.topology_search_nodes)) },
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().scrollIntoViewOnFocus(),
             )
             val matches =
                 graph.nodes.filter { node ->
@@ -1199,17 +1201,12 @@ private fun ErrorContent(
                     color = MaterialTheme.colorScheme.onErrorContainer,
                 )
                 Spacer(modifier = Modifier.height(16.dp))
-                Button(
+                ToolRetryButton(
+                    text = stringResource(R.string.topology_error_retry),
                     onClick = onRetry,
                     enabled = retryEnabled,
                     modifier = Modifier.testTag("topology_error_retry"),
-                    colors =
-                        ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.error,
-                        ),
-                ) {
-                    Text(stringResource(R.string.topology_error_retry))
-                }
+                )
             }
         }
     }

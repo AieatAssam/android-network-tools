@@ -54,12 +54,16 @@ import kotlinx.coroutines.launch
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.hapticAction
 
-private data class ToolSection(
+internal data class ToolSection(
     val labelRes: Int,
     val routes: List<String>,
 )
 
-private val TOOL_SECTIONS =
+/**
+ * Sections of the More sheet, in display order. Every entry of [NavRoutes.allTools] must appear in
+ * exactly one section, so no tool can drop out of the sheet (PHA-10). Enforced by a unit test.
+ */
+internal val MORE_TOOL_SECTIONS =
     listOf(
         ToolSection(R.string.more_section_diagnostics, listOf("ping", "traceroute", "ports", "dns", "netinfo")),
         ToolSection(R.string.more_section_wifi_lan, listOf("wifi_scan", "lan", "topology", "mdns", "oui")),
@@ -134,7 +138,7 @@ fun MoreToolsSheet(
                                 .verticalScroll(scrollState)
                                 .testTag(MoreToolsSheetTestTags.TOOL_LIST),
                     ) {
-                        TOOL_SECTIONS.forEach { section ->
+                        MORE_TOOL_SECTIONS.forEach { section ->
                             val sectionTools = NavRoutes.allTools.filter { it.route in section.routes }
                             if (sectionTools.isEmpty()) return@forEach
 

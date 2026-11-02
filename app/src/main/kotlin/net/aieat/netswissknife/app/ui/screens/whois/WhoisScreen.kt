@@ -101,6 +101,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
 import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
+import net.aieat.netswissknife.app.ui.components.ToolRetryButton
 import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.components.ToolTextField
 import net.aieat.netswissknife.app.ui.components.rememberCopyWithFeedback
@@ -399,9 +400,7 @@ private fun CanceledLookupCard(isLifecyclePaused: Boolean, onRetry: () -> Unit) 
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
-            Button(onClick = hapticAction(onRetry)) {
-                Text(stringResource(R.string.whois_retry))
-            }
+            ToolRetryButton(text = stringResource(R.string.whois_retry), onClick = onRetry)
         }
     }
 }
@@ -667,9 +666,7 @@ fun ErrorCard(message: String, onRetry: () -> Unit, hopStates: List<HopUiState>)
                     color = MaterialTheme.colorScheme.onErrorContainer,
                     textAlign = TextAlign.Center
                 )
-                Button(onClick = onRetry) {
-                    Text(stringResource(R.string.whois_retry))
-                }
+                ToolRetryButton(text = stringResource(R.string.whois_retry), onClick = onRetry)
             }
         }
     }

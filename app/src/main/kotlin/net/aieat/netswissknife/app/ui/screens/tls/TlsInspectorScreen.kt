@@ -30,7 +30,6 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Warning
@@ -62,7 +61,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.luminance
+import net.aieat.netswissknife.app.ui.components.ToolRetryButton
 import net.aieat.netswissknife.app.ui.components.messageRes
+import net.aieat.netswissknife.app.ui.components.scrollIntoViewOnFocus
+import net.aieat.netswissknife.app.ui.format.withSeparatorBreaks
 import net.aieat.netswissknife.app.ui.theme.StatusGoodDeep
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -364,7 +366,7 @@ private fun TlsInputSection(
                 } else null,
                 enabled       = !isLoading,
                 singleLine    = true,
-                modifier      = Modifier.fillMaxWidth(),
+                modifier      = Modifier.fillMaxWidth().scrollIntoViewOnFocus(),
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Number,
                     imeAction    = ImeAction.Done
@@ -408,7 +410,10 @@ private fun TlsInputSection(
                 supportingText = { Text(stringResource(R.string.tls_expected_pin_help)) },
                 enabled = !isLoading,
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth().testTag(TlsInspectorScreenTestTags.EXPECTED_PIN_FIELD),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(TlsInspectorScreenTestTags.EXPECTED_PIN_FIELD)
+                    .scrollIntoViewOnFocus(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii, imeAction = ImeAction.Done),
             )
 
@@ -542,11 +547,7 @@ private fun TlsErrorContent(message: String, descriptionKey: String?, onRetry: (
         title = stringResource(R.string.tls_error_title),
         message = visibleMessage,
     ) {
-        TextButton(onClick = onRetry) {
-            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-            Spacer(Modifier.width(4.dp))
-            Text(stringResource(R.string.tls_retry))
-        }
+        ToolRetryButton(text = stringResource(R.string.tls_retry), onClick = onRetry)
     }
 }
 
@@ -671,7 +672,7 @@ private fun ConnectionCard(result: TlsInspectorResult) {
                 )
                 LabeledValue(
                     label = stringResource(R.string.tls_cipher_suite),
-                    value = result.cipherSuite
+                    value = withSeparatorBreaks(result.cipherSuite)
                 )
                 LabeledValue(
                     label = stringResource(R.string.tls_handshake_time),

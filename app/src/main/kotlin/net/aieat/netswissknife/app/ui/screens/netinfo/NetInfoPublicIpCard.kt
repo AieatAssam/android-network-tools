@@ -16,7 +16,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -24,6 +23,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.ToolErrorCard
+import net.aieat.netswissknife.app.ui.components.ToolRetryButton
 import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.ui.theme.AppSpacing
 import net.aieat.netswissknife.core.network.NetworkResult
@@ -96,9 +96,7 @@ private fun PublicIpResult(
             message = stringResource(R.string.netinfo_public_error_body),
             modifier = Modifier.testTag(NetInfoPublicIpTestTags.ERROR),
         ) {
-            TextButton(onClick = hapticAction(onCheck)) {
-                Text(text = stringResource(R.string.netinfo_retry))
-            }
+            ToolRetryButton(text = stringResource(R.string.netinfo_retry), onClick = onCheck)
         }
         return
     }

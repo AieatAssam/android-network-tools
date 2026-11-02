@@ -46,7 +46,6 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Stop
@@ -60,7 +59,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -118,6 +116,7 @@ import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
 import net.aieat.netswissknife.app.ui.components.ToolErrorCard
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
+import net.aieat.netswissknife.app.ui.components.ToolRetryButton
 import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.components.ToolStopButton
 import net.aieat.netswissknife.app.ui.components.ToolTextField
@@ -126,6 +125,7 @@ import net.aieat.netswissknife.app.ui.components.messageRes
 import net.aieat.netswissknife.app.ui.components.rememberCopyWithFeedback
 import net.aieat.netswissknife.app.ui.components.rememberDismissKeyboard
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
+import net.aieat.netswissknife.app.ui.components.scrollIntoViewOnFocus
 import net.aieat.netswissknife.app.ui.format.humanDurationText
 import net.aieat.netswissknife.app.ui.i18n.asString
 import net.aieat.netswissknife.app.ui.i18n.uiText
@@ -653,7 +653,7 @@ private fun PortScanInputCard(
                                     null
                                 },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier.weight(1f).scrollIntoViewOnFocus(),
                         )
                         OutlinedTextField(
                             value = endPort,
@@ -668,7 +668,7 @@ private fun PortScanInputCard(
                                     null
                                 },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier.weight(1f).scrollIntoViewOnFocus(),
                         )
                     }
 
@@ -981,11 +981,7 @@ private fun PortScanErrorCard(
         title = stringResource(R.string.ports_error_title),
         message = message,
     ) {
-        FilledTonalButton(onClick = onRetry) {
-            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-            Spacer(Modifier.width(4.dp))
-            Text(stringResource(R.string.ports_retry_button))
-        }
+        ToolRetryButton(text = stringResource(R.string.ports_retry_button), onClick = onRetry)
         TextButton(onClick = onClear) {
             Text(stringResource(R.string.ports_clear_button))
         }

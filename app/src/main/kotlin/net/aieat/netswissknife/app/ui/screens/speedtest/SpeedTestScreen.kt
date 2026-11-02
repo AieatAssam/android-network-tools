@@ -39,7 +39,6 @@ import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.NetworkCheck
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Speed
@@ -90,6 +89,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import net.aieat.netswissknife.app.ui.components.ToolRetryButton
 import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.ui.components.rememberCopyWithFeedback
 import net.aieat.netswissknife.app.R
@@ -893,11 +893,11 @@ private fun SpeedTestResultContent(
                 Spacer(Modifier.width(8.dp))
                 Text(stringResource(R.string.speedtest_share))
             }
-            Button(onClick = onRetry, modifier = Modifier.weight(1f)) {
-                Icon(Icons.Default.Refresh, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.speedtest_retry))
-            }
+            ToolRetryButton(
+                text = stringResource(R.string.speedtest_retry),
+                onClick = onRetry,
+                modifier = Modifier.weight(1f),
+            )
         }
     }
 }
@@ -1031,11 +1031,7 @@ private fun SpeedTestErrorContent(state: SpeedTestUiState.Error, onRetry: () -> 
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )
             Spacer(Modifier.height(20.dp))
-            FilledTonalButton(onClick = onRetry) {
-                Icon(Icons.Default.Refresh, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.speedtest_retry))
-            }
+            ToolRetryButton(text = stringResource(R.string.speedtest_retry), onClick = onRetry)
         }
     }
 }

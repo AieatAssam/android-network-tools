@@ -260,6 +260,8 @@
     <!-- Ping States -->
     <string name="ping_idle_title">Enter a host to ping</string>
     <string name="ping_idle_subtitle">Supports hostnames and IPv4 addresses</string>
+    <string name="ping_idle_ready_title">Ready to ping</string>
+    <string name="ping_idle_ready_subtitle">Press Start Ping to run it</string>
     <string name="ping_running_title">Pinging…</string>
     <string name="ping_error_title">Ping failed</string>
 

@@ -81,6 +81,7 @@ import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
 import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
+import net.aieat.netswissknife.app.ui.components.ToolRetryButton
 import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.components.ToolTextField
 import net.aieat.netswissknife.app.ui.components.hapticAction
@@ -808,12 +809,7 @@ private fun WolErrorCard(message: String, onRetry: () -> Unit) {
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            Button(
-                onClick = hapticAction(onRetry),
-                modifier = Modifier.heightIn(min = MinTouchTarget),
-            ) {
-                Text(stringResource(R.string.wol_retry_button))
-            }
+            ToolRetryButton(text = stringResource(R.string.wol_retry_button), onClick = onRetry)
         }
     }
 }

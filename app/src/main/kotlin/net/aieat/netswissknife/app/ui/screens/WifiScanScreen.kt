@@ -133,6 +133,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
+import net.aieat.netswissknife.app.ui.components.ToolRetryButton
 import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.components.ToolTextField
 import net.aieat.netswissknife.app.ui.components.hapticAction
@@ -460,7 +461,7 @@ fun WifiScanScreen(viewModel: WifiScanViewModel = hiltViewModel()) {
         icon = { Icon(Icons.Default.SignalWifiOff, null, Modifier.size(48.dp), tint = MaterialTheme.colorScheme.tertiary) },
         title = stringResource(R.string.wifi_disabled_title),
         body = stringResource(R.string.wifi_disabled_body),
-        action = { Button(onRetry) { Text(stringResource(R.string.wifi_retry)) } },
+        action = { ToolRetryButton(text = stringResource(R.string.wifi_retry), onClick = onRetry) },
     )
 }
 
@@ -472,7 +473,7 @@ fun WifiScanScreen(viewModel: WifiScanViewModel = hiltViewModel()) {
         icon = { Icon(Icons.Default.WifiOff, null, Modifier.size(48.dp), tint = MaterialTheme.colorScheme.error) },
         title = stringResource(R.string.wifi_error_title),
         body = message,
-        action = { Button(onRetry) { Text(stringResource(R.string.wifi_retry)) } },
+        action = { ToolRetryButton(text = stringResource(R.string.wifi_retry), onClick = onRetry) },
     )
 }
 
@@ -526,7 +527,7 @@ fun WifiScanScreen(viewModel: WifiScanViewModel = hiltViewModel()) {
         icon = { Icon(Icons.Default.WifiOff, null, Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant) },
         title = stringResource(R.string.wifi_scan_cancelled_title),
         body = stringResource(R.string.wifi_scan_cancelled_body),
-        action = { Button(onRetry) { Text(stringResource(R.string.wifi_retry)) } },
+        action = { ToolRetryButton(text = stringResource(R.string.wifi_retry), onClick = onRetry) },
     )
 }
 
@@ -535,7 +536,7 @@ fun WifiScanScreen(viewModel: WifiScanViewModel = hiltViewModel()) {
         icon = { Icon(Icons.Default.WifiOff, null, Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant) },
         title = stringResource(R.string.wifi_scan_paused_title),
         body = stringResource(R.string.wifi_scan_paused_body),
-        action = { Button(onRetry) { Text(stringResource(R.string.wifi_retry)) } },
+        action = { ToolRetryButton(text = stringResource(R.string.wifi_retry), onClick = onRetry) },
     )
 }
 

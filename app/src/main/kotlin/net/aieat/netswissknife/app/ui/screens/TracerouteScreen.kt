@@ -48,7 +48,6 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FmdGood
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Public
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Router
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.automirrored.filled.TextSnippet
@@ -70,7 +69,6 @@ import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
-
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.DisposableEffect
@@ -98,6 +96,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
 import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
+import net.aieat.netswissknife.app.ui.components.ToolRetryButton
 import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
 import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
@@ -1549,10 +1548,10 @@ private fun TracerouteErrorPanel(
         FilledTonalButton(onClick = onClear, modifier = Modifier.testTag("traceroute_error_clear")) {
             Text(stringResource(R.string.traceroute_clear_button))
         }
-        Button(onClick = onRetry, modifier = Modifier.testTag("traceroute_error_retry")) {
-            Icon(Icons.Default.Refresh, null)
-            Spacer(Modifier.width(4.dp))
-            Text(stringResource(R.string.traceroute_retry_button))
-        }
+        ToolRetryButton(
+            text = stringResource(R.string.traceroute_retry_button),
+            onClick = onRetry,
+            modifier = Modifier.testTag("traceroute_error_retry"),
+        )
     }
 }

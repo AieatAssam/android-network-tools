@@ -87,6 +87,7 @@ import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
+import net.aieat.netswissknife.app.ui.components.ToolRetryButton
 import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.components.ToolTextField
 import net.aieat.netswissknife.app.ui.components.hapticAction
@@ -419,9 +420,7 @@ private fun SubnetErrorCard(message: String, onRetry: () -> Unit) {
                 color = MaterialTheme.colorScheme.onErrorContainer,
                 textAlign = TextAlign.Center
             )
-            Button(onClick = onRetry) {
-                Text(stringResource(R.string.subnet_retry))
-            }
+            ToolRetryButton(text = stringResource(R.string.subnet_retry), onClick = onRetry)
         }
     }
 }

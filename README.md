@@ -254,6 +254,15 @@ Identifies the vendor behind a MAC address or an OUI prefix, using the IEEE regi
 - Look up, Paste and choosing a recent lookup close the keyboard, and the results are scrolled into view
 - Copy all and Share produce a plain-text summary of every entry. The first 100 entries of a paste are analysed; the rest are reported as not looked up
 
+### Layout, keyboard and actions
+
+- **Keyboard**: the focused field scrolls into view above the on-screen keyboard, with its supporting and error text. The keyboard does not cover the field or the Recent row on any tool.
+- **Short landscape screens** (under 480dp high, such as a phone in landscape): the Home and tool hero headers collapse to a compact header, so the first tools or the tool's input start above the fold. Taller windows keep the full hero. Tablets keep the 640dp content cap.
+- **Home**: tools are laid out in rows of equal-height tiles (two columns on a phone).
+- **Retry**: every error card uses the same filled Retry button with a refresh icon.
+- **Result tables**: cipher suite names and HTTP security header names wrap at `_` and `-`, not mid-word. Exported text is unchanged.
+- **Ping**: when a host is typed but not yet run, the idle card says "Ready to ping" instead of asking for a host.
+
 ## Networking behavior
 
 LAN-directed sockets use the selected Wi-Fi or Ethernet network when the destination is within that network's subnet. This lets local discovery and device queries reach the LAN when a VPN is active; destinations outside the local subnet continue to use Android's normal route. mDNS joins the selected interface and can use an ephemeral query port when port 5353 is unavailable.
