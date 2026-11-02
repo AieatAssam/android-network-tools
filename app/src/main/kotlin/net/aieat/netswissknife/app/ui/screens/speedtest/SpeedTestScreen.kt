@@ -694,9 +694,9 @@ private fun ThroughputChart(samples: List<ThroughputSample>, accentColor: Color)
     ) {
         val chartWidth = size.width
         val chartHeight = size.height
-        val maxMbps = (samples.maxOfOrNull { it.instantMbps } ?: 1.0).coerceAtLeast(1.0)
-
         val gridLines = 4
+        val step = niceAxisStep((samples.maxOfOrNull { it.instantMbps } ?: 1.0).coerceAtLeast(1.0), gridLines - 1)
+        val maxMbps = step * (gridLines - 1)
         repeat(gridLines) { i ->
             val y = edgePad + (chartHeight - 2 * edgePad) * i / (gridLines - 1)
             drawLine(
@@ -705,8 +705,9 @@ private fun ThroughputChart(samples: List<ThroughputSample>, accentColor: Color)
                 end = Offset(chartWidth - edgePad, y),
                 strokeWidth = 1f
             )
-            val valueAtLine = maxMbps * (gridLines - 1 - i) / (gridLines - 1)
-            val measured = textMeasurer.measure("%.0f".format(valueAtLine), style = labelStyle)
+            val valueAtLine = step * (gridLines - 1 - i)
+            val label = if (step < 1.0) "%.1f".format(valueAtLine) else "%.0f".format(valueAtLine)
+            val measured = textMeasurer.measure(label, style = labelStyle)
             drawText(textLayoutResult = measured, topLeft = Offset(0f, y - measured.size.height / 2f))
         }
 

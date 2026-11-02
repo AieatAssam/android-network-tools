@@ -441,6 +441,7 @@
     <string name="duration_minutes_format">%1$d min</string>
     <string name="duration_minutes_seconds_format">%1$d min %2$d s</string>
     <string name="lan_ping_status_format">Latency %1$d ms</string>
+    <string name="lan_ping_under_1ms">Latency under 1 ms</string>
     <string name="lan_ping_unavailable">No ping reply</string>
     <plurals name="lan_open_ports_count">
         <item quantity="one">%1$d port</item>
@@ -896,8 +897,6 @@
     <string name="whois_hop_latency_ms">%1$d ms</string>
     <string name="whois_querying_server">Querying %1$s…</string>
     <string name="whois_raw_responses">Raw RDAP/WHOIS Responses</string>
-    <string name="whois_answered_by_rdap">Answered by RDAP</string>
-    <string name="whois_answered_by_whois">Answered by WHOIS (port 43)</string>
     <string name="whois_rdap_fallback_note">RDAP could not answer (%1$s), so WHOIS answered instead.</string>
     <string name="whois_lifecycle">Lifecycle</string>
     <string name="whois_registered">Registered</string>
@@ -918,7 +917,7 @@
 
     <!-- HTTP Probe Screen -->
     <string name="httprobe_screen_title">HTTP Probe</string>
-    <string name="httprobe_screen_subtitle">Test HTTPS requests with full header and security analysis. Plain HTTP is disabled in this release.</string>
+    <string name="httprobe_screen_subtitle">Test HTTPS requests with full header and security analysis.</string>
 
     <!-- HTTP Probe Input -->
     <string name="httprobe_url_label">URL</string>

@@ -67,7 +67,7 @@ Local network device discovery across IPv4 subnets.
 - Scans are capped at an estimated 10 minutes. When the detected network is too large for that at the current timeout and concurrency (for example a /16 on corporate Wi-Fi), the subnet field is pre-filled with the /24 around this device and a hint names the full network. An over-limit range entered by hand, including prefixes broader than /16, offers a one-tap scan of this device's /24 instead
 - Multi-method presence detection: successful ICMP, completed TCP connections, and correlated NetBIOS NBSTAT or mDNS replies; each confirmed host shows the method(s) that found it
 - Failed connects, timeouts, unreachable routes, and policy failures remain opt-in diagnostics and never inflate the confirmed device count or confirmed-device exports
-- Per-host details: IP, hostname, MAC address, OUI vendor name, open ports, and the gateway flag from the active default route. Latency is shown only when an ICMP reply was measured; a host confirmed by TCP, NetBIOS or mDNS shows **No ping reply** instead of a value
+- Per-host details: IP, hostname, MAC address, OUI vendor name, open ports, and the gateway flag from the active default route. Latency is shown only when an ICMP reply was measured (a reply under 1 ms reads **Latency under 1 ms**); a host confirmed by TCP, NetBIOS or mDNS shows **No ping reply** instead of a value
 - MAC resolution is best-effort: Android 10+ restricts the ARP source, so the UI explains when a MAC cannot be read
 - Concurrent host probes (1–500) with real-time progress streaming, post-probe ARP enrichment, and a final summary
 - Result summary: a status line (**Scan complete**, **Scan paused** or **Scan stopped**), one headline with the confirmed device count, and one meta line with the subnet, the scanned address count and the scan duration. Re-scan is the primary action; Copy, Share and Clear sit below it. While results are shown, the scan configuration card shows only timeout and concurrency, so the subnet appears once
@@ -211,7 +211,7 @@ IPv4 subnet calculator with binary breakdown, notation conversion, an "is this a
 - **Address Properties card**: IP class (A/B/C/D/E) and scope badge. The prefix length and host-bit count are shown once, in the binary breakdown legend. Each info icon explains its own field
 - **Is this address in the subnet?** card: type an IPv4 address to check it against the calculated subnet. The answer is yes or no, with the reason (usable host, network address, broadcast address, or the subnet range when it is outside)
 - **Split into equal subnets** card: divide the subnet either into a new prefix (for example `/26`) or into a number of subnets. A count is rounded up to a power of two, and the result says so (3 requested gives 4). Lists the networks with their first and last addresses, up to 256 rows; a larger split shows the first 256 and the total
-- **Copy** and **Share** sit together at the foot of the results and put a plain-text summary of the calculated subnet on the clipboard or into the share sheet. The CIDR appears once, as the result heading; the usable host count is shown once, under it
+- **Copy** and **Share** sit together directly under the result and put a plain-text summary of the calculated subnet on the clipboard or into the share sheet. The CIDR appears once, as the result heading; the usable host count is shown once, under it
 - Quick example chips for common subnets (`/8`, `/12`, `/16`, `/24`, `/30`, `/0`)
 - Network alignment warning when the entered IP is not on a network boundary, showing the corrected network address
 - Entered fields survive rotation and process death. Leaving the tool with Back keeps the fields and the last calculated result for the app session (in memory only)
@@ -221,7 +221,7 @@ Internet connection speed test measuring latency, download, and upload throughpu
 - Three-phase sequence: **latency** (10 round-trip probes), **download**, then **upload** — each streamed live as it runs
 - Animated phase stepper, live circular speed gauge, and a live throughput-over-time chart per phase
 - Start screen: download and upload stream counts are two equal buttons (1–8 and 1–4) that open a list of values
-- Final results: latency min/avg/max/jitter, download/upload avg & peak Mbps, and total data transferred, each with its own throughput chart
+- Final results: latency min/avg/max/jitter, download/upload avg & peak Mbps, and total data transferred, each with its own throughput chart. Chart axes use round ticks (for example 0, 10, 20, 30 Mbps)
 - Upload is time-boxed to the phase window and counts the bytes actually written, so a slow or briefly stalled uplink still produces a result; a stalled POST is retried on a new connection until the window ends
 - A stalled latency probe under load is skipped rather than failing the run
 - Failure keeps the latency and download results already measured, names the phase that failed, and offers Run again. The error text is a plain-language reason, not raw exception text

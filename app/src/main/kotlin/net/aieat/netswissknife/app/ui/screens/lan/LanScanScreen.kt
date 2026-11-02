@@ -1870,10 +1870,13 @@ private fun HostCompactHeader(
             val pingMs = host.pingTimeMs
             Text(
                 text =
-                    if (pingMs != null) {
-                        stringResource(R.string.lan_ping_status_format, pingMs)
-                    } else {
-                        stringResource(R.string.lan_ping_unavailable)
+                    when {
+                        pingMs == null -> stringResource(R.string.lan_ping_unavailable)
+
+                        // The RTT is rounded to whole ms, so a sub-millisecond reply reads 0 (V6B-09).
+                        pingMs == 0L -> stringResource(R.string.lan_ping_under_1ms)
+
+                        else -> stringResource(R.string.lan_ping_status_format, pingMs)
                     },
                 style = MaterialTheme.typography.labelSmall,
                 color =

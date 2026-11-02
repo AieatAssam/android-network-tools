@@ -111,7 +111,6 @@ import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.core.network.whois.WhoisProtocol
 import net.aieat.netswissknife.core.network.whois.WhoisQueryType
 import net.aieat.netswissknife.core.network.whois.WhoisResult
-import net.aieat.netswissknife.core.network.whois.answeringProtocol
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -693,19 +692,7 @@ fun WhoisResultsSection(
     onOpenUrl: (String) -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        // The query chain already names the answering server, so this line says only the protocol.
-        result.answeringProtocol()?.let { answeredBy ->
-            val labelRes = if (answeredBy == WhoisProtocol.RDAP) {
-                R.string.whois_answered_by_rdap
-            } else {
-                R.string.whois_answered_by_whois
-            }
-            Text(
-                text = stringResource(labelRes),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+        // The query chain already names the answering protocol and server, so no separate "Answered by" line.
         result.rdapFallbackReason?.let { reason ->
             Text(
                 text = stringResource(R.string.whois_rdap_fallback_note, reason),

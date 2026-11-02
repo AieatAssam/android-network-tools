@@ -439,6 +439,8 @@ private fun SubnetResultContent(
             SubnetAlignmentWarning(info)
         }
         SubnetOverviewCard(info)
+        // Copy and Share sit under the result they export, as on the other tools (V6B-14).
+        SubnetShareActions(info)
         SubnetBinaryVisualizerCard(info)
         SubnetNotationsCard(info)
         SubnetPropertiesCard(info)
@@ -457,7 +459,6 @@ private fun SubnetResultContent(
             onInputChange = viewModel::onSplitInputChange,
             onSplit = viewModel::splitNetwork,
         )
-        SubnetShareActions(info)
     }
 }
 
