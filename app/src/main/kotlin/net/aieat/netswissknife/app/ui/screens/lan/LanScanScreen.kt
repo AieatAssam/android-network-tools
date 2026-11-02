@@ -83,6 +83,9 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -94,7 +97,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -120,7 +122,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import kotlinx.coroutines.launch
 import net.aieat.netswissknife.app.ui.components.ResultActionsRow
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
 import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
@@ -316,7 +317,7 @@ fun LanScreen(
     }
 
     val listState = rememberLazyListState()
-    val scope = rememberCoroutineScope()
+    val resultView by viewModel.resultView.collectAsStateWithLifecycle()
     val completedSummary =
         when (val state = uiState) {
             is LanScanUiState.Finished -> state.summary
@@ -329,16 +330,24 @@ fun LanScreen(
             is LanScanUiState.Canceled -> state.expandedHostIp
             else -> null
         }
-    // Map taps and list jumps scroll to the device row first, then expand it. Expanding never collapses.
+    // A map tap expands the device and switches to the list. The scroll waits for the rows to compose,
+    // so it runs in an effect after that switch. Expanding never collapses.
+    var pendingRevealIp by remember { mutableStateOf<String?>(null) }
     val revealHost: (String) -> Unit = { ip ->
-        completedSummary?.let { summary ->
-            val index =
-                lanVisibleHosts(summary.hosts, searchQuery, activeFilter, hostSortOrder).indexOfFirst { it.ip == ip }
-            if (index >= 0) {
-                scope.launch { listState.animateScrollToItem(LAN_HOST_ITEMS_FIRST_INDEX + index) }
-            }
-        }
+        pendingRevealIp = ip
         viewModel.onRevealHost(ip)
+    }
+    LaunchedEffect(pendingRevealIp, resultView, completedSummary, searchQuery, activeFilter, hostSortOrder) {
+        val ip = pendingRevealIp ?: return@LaunchedEffect
+        if (resultView == LanResultView.LIST) {
+            completedSummary?.let { summary ->
+                val index =
+                    lanVisibleHosts(summary.hosts, searchQuery, activeFilter, hostSortOrder)
+                        .indexOfFirst { it.ip == ip }
+                if (index >= 0) listState.animateScrollToItem(LAN_HOST_ITEMS_FIRST_INDEX + index)
+            }
+            pendingRevealIp = null
+        }
     }
 
     // No pull-to-refresh here: a swipe at the top used to restart the scan and discard the
@@ -457,6 +466,8 @@ fun LanScreen(
                                 onRescan = viewModel::startScan,
                                 onToggleDiagnostics = viewModel::onToggleDiagnostics,
                                 onRevealHost = revealHost,
+                                resultView = resultView,
+                                onResultViewChange = viewModel::onResultViewChange,
                                 title = stringResource(R.string.lan_scan_canceled_title),
                                 subtitle = stringResource(R.string.lan_scan_canceled_subtitle),
                                 isCanceled = true,
@@ -479,6 +490,8 @@ fun LanScreen(
                                 onRescan = viewModel::startScan,
                                 onToggleDiagnostics = viewModel::onToggleDiagnostics,
                                 onRevealHost = revealHost,
+                                resultView = resultView,
+                                onResultViewChange = viewModel::onResultViewChange,
                                 title =
                                     stringResource(
                                         if (state.partial) {
@@ -514,7 +527,8 @@ fun LanScreen(
                         }
                     }
                 }
-                completedSummary?.let { summary ->
+                // The map and the list show the same filtered hosts, so only the selected view is composed.
+                completedSummary?.takeIf { resultView == LanResultView.LIST }?.let { summary ->
                     items(
                         items = lanVisibleHosts(summary.hosts, searchQuery, activeFilter, hostSortOrder),
                         key = { "host-${it.ip}" },
@@ -1093,6 +1107,8 @@ private fun LanFinishedContent(
     onRescan: () -> Unit,
     onToggleDiagnostics: () -> Unit,
     onRevealHost: (String) -> Unit,
+    resultView: LanResultView,
+    onResultViewChange: (LanResultView) -> Unit,
     title: String = stringResource(R.string.lan_scan_complete_title),
     subtitle: String? = null,
     isCanceled: Boolean = false,
@@ -1121,10 +1137,6 @@ private fun LanFinishedContent(
         if (summary.hosts.isEmpty()) {
             LanNoHostsCard()
         } else {
-            if (visibleHosts.isNotEmpty()) {
-                NetworkTopologyCard(hosts = visibleHosts, onNodeClick = onRevealHost)
-            }
-
             ToolTextField(
                 value = searchQuery,
                 onValueChange = onSearchQueryChange,
@@ -1135,7 +1147,12 @@ private fun LanFinishedContent(
             )
 
             HostFilterChips(activeFilter = activeFilter, onFilterChange = onFilterChange)
-            LanDevicesHeader(shown = visibleHosts.size, total = summary.hosts.size, filtered = filtered)
+            LanDevicesHeader(
+                shown = visibleHosts.size,
+                total = summary.hosts.size,
+                filtered = filtered,
+                trailing = { LanResultViewToggle(selected = resultView, onSelect = onResultViewChange) },
+            )
             HostSortMenu(activeSort = sortOrder, onSortChange = onSortOrderChange)
 
             if (visibleHosts.isEmpty()) {
@@ -1145,6 +1162,8 @@ private fun LanFinishedContent(
                     onSearchQueryChange = onSearchQueryChange,
                     onFilterChange = onFilterChange,
                 )
+            } else if (resultView == LanResultView.MAP) {
+                NetworkTopologyCard(hosts = visibleHosts, onNodeClick = onRevealHost)
             }
         }
     }
@@ -1462,6 +1481,7 @@ private fun LanDevicesHeader(
     shown: Int,
     total: Int,
     filtered: Boolean,
+    trailing: @Composable () -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
@@ -1473,11 +1493,41 @@ private fun LanDevicesHeader(
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
         )
-        if (filtered) {
-            Text(
-                text = stringResource(R.string.lan_devices_filtered_count, shown, total),
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (filtered) {
+                Text(
+                    text = stringResource(R.string.lan_devices_filtered_count, shown, total),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            trailing()
+        }
+    }
+}
+
+/** List or Map over the same filtered devices. One view is on screen at a time. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+@Suppress("FunctionNaming", "ktlint:standard:function-naming")
+private fun LanResultViewToggle(
+    selected: LanResultView,
+    onSelect: (LanResultView) -> Unit,
+) {
+    val views = LanResultView.entries
+    SingleChoiceSegmentedButtonRow {
+        views.forEachIndexed { index, view ->
+            SegmentedButton(
+                selected = selected == view,
+                onClick = { onSelect(view) },
+                shape = SegmentedButtonDefaults.itemShape(index = index, count = views.size),
+                label = {
+                    Text(
+                        stringResource(
+                            if (view == LanResultView.LIST) R.string.lan_view_list else R.string.lan_view_map,
+                        ),
+                    )
+                },
             )
         }
     }

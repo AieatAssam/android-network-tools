@@ -447,6 +447,8 @@
 
     <!-- LAN Topology -->
     <string name="lan_topology_title">Network Map</string>
+    <string name="lan_view_list">List</string>
+    <string name="lan_view_map">Map</string>
     <string name="lan_more_devices">more…</string>
     <string name="lan_map_more_count">+%1$d</string>
     <string name="lan_map_more_action">Show all devices on the map</string>

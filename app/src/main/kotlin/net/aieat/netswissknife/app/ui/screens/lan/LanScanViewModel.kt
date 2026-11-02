@@ -172,6 +172,7 @@ sealed interface LanNavEvent {
 private const val LAN_SUBNET_KEY = "lanSubnet"
 private const val LAN_TIMEOUT_KEY = "lanTimeoutMs"
 private const val LAN_CONCURRENCY_KEY = "lanConcurrency"
+private const val LAN_RESULT_VIEW_KEY = "lanResultView"
 
 /** [ToolSessionMemory] slot holding the last LAN form inputs and terminal result. */
 private const val LAN_SESSION_KEY = "lanSession"
@@ -186,6 +187,7 @@ internal data class LanScanSessionSnapshot(
     val timeoutMs: Int,
     val concurrency: Int,
     val state: LanScanUiState,
+    val resultView: LanResultView = LanResultView.DEFAULT,
 )
 
 @HiltViewModel
@@ -215,6 +217,11 @@ class LanScanViewModel
             savedStateHandle.get<Int>(LAN_TIMEOUT_KEY) ?: restoredSession?.timeoutMs
         private val restoredConcurrency: Int? =
             savedStateHandle.get<Int>(LAN_CONCURRENCY_KEY) ?: restoredSession?.concurrency
+
+        private val restoredResultView: LanResultView =
+            LanResultView.fromStoredName(
+                savedStateHandle.get<String>(LAN_RESULT_VIEW_KEY) ?: restoredSession?.resultView?.name,
+            )
 
         // A result is restored only for the subnet it was produced from.
         private val restoredResult: LanScanUiState? =
@@ -257,6 +264,11 @@ class LanScanViewModel
 
         private val _hostSortOrder = MutableStateFlow(LanHostSortOrder.IP)
         val hostSortOrder: StateFlow<LanHostSortOrder> = _hostSortOrder.asStateFlow()
+
+        private val _resultView = MutableStateFlow(restoredResultView)
+
+        /** List or map for the finished device list. The choice is kept when the tool is left. */
+        val resultView: StateFlow<LanResultView> = _resultView.asStateFlow()
 
         val recentSubnets: StateFlow<List<String>>
 
@@ -358,6 +370,15 @@ class LanScanViewModel
 
         fun onSearchQueryChange(value: String) {
             _searchQuery.value = value
+        }
+
+        fun onResultViewChange(view: LanResultView) {
+            setResultView(view)
+        }
+
+        private fun setResultView(view: LanResultView) {
+            _resultView.value = view
+            savedStateHandle[LAN_RESULT_VIEW_KEY] = view.name
         }
 
         fun onHostSortOrderChange(value: LanHostSortOrder) {
@@ -739,9 +760,13 @@ class LanScanViewModel
                 }
         }
 
-        /** Expands [ip] for a map or list jump. Unlike [onToggleHostExpanded] it never collapses the host. */
+        /**
+         * Expands [ip] for a map or list jump. Unlike [onToggleHostExpanded] it never collapses the host.
+         * The device row exists only in the list, so a reveal from the map switches to the list.
+         */
         fun onRevealHost(ip: String) {
             _uiState.value = expandHostState(_uiState.value, ip)
+            setResultView(_resultView.value.afterReveal())
         }
 
         fun onToggleDiagnostics() {
@@ -849,6 +874,7 @@ class LanScanViewModel
                     timeoutMs = _timeoutMs.value,
                     concurrency = _concurrency.value,
                     state = stateToKeep,
+                    resultView = _resultView.value,
                 ),
             )
         }

@@ -243,4 +243,35 @@ class LanScanSessionRestoreTest {
             assertEquals(40, fresh.concurrency.value)
             assertTrue(fresh.uiState.value is LanScanUiState.Idle)
         }
+
+    @Test
+    fun `the list or map choice is kept when the tool is left`() =
+        runTest {
+            val first = newViewModel()
+            assertEquals(LanResultView.LIST, first.resultView.value)
+            first.onResultViewChange(LanResultView.MAP)
+            leave(first)
+
+            val returned = newViewModel()
+
+            assertEquals(LanResultView.MAP, returned.resultView.value)
+        }
+
+    @Test
+    fun `a map tap expands the device and switches to the list`() =
+        runTest {
+            every { lanScanUseCase(any(), any()) } returns flowOf(LanScanFlowResult.ScanComplete(stubSummary))
+            val viewModel = newViewModel()
+            viewModel.onSubnetChange(subnet)
+            viewModel.startScan()
+            withContext(Dispatchers.Default) {
+                withTimeout(2_000) { viewModel.uiState.first { it is LanScanUiState.Finished } }
+            }
+            viewModel.onResultViewChange(LanResultView.MAP)
+
+            viewModel.onRevealHost(stubHost.ip)
+
+            assertEquals(LanResultView.LIST, viewModel.resultView.value)
+            assertEquals(stubHost.ip, (viewModel.uiState.value as LanScanUiState.Finished).expandedHostIp)
+        }
 }
