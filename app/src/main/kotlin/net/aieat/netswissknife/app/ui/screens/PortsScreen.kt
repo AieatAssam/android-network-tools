@@ -1,6 +1,6 @@
 package net.aieat.netswissknife.app.ui.screens
 
-import android.app.Activity
+import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
@@ -143,7 +143,7 @@ object PortsScreenTestTags {
 @Composable
 fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
     val lifecycleOwner = LocalLifecycleOwner.current
-    val activity = LocalContext.current as? Activity
+    val activity = LocalActivity.current
     // Rotation also pauses and disposes this screen. The Activity reports it through
     // isChangingConfigurations, and the scan must keep running across that recreation.
     DisposableEffect(lifecycleOwner) {

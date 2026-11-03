@@ -173,6 +173,15 @@ fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
     }
     ToolStateAnnouncer(stringResource(R.string.help_httprobe_title), announcementPhase)
     val context = LocalContext.current
+    val sourceLabel =
+        when (sourceContext) {
+            ToolSource.LAN -> stringResource(R.string.httprobe_source_lan)
+            ToolSource.MDNS -> stringResource(R.string.httprobe_source_mdns)
+            else -> null
+        }
+    val sourceText: String? =
+        plainHandoff?.let { stringResource(R.string.httprobe_plain_http_handoff, it.host, it.port) }
+            ?: sourceLabel
     val clipboard = LocalClipboard.current
     val clipboardScope = rememberCoroutineScope()
 
@@ -212,14 +221,6 @@ fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
                 }
             }
 
-            val sourceLabel = when (sourceContext) {
-                ToolSource.LAN -> R.string.httprobe_source_lan
-                ToolSource.MDNS -> R.string.httprobe_source_mdns
-                else -> null
-            }
-            val sourceText: String? =
-                plainHandoff?.let { context.getString(R.string.httprobe_plain_http_handoff, it.host, it.port) }
-                    ?: sourceLabel?.let { context.getString(it) }
             if (sourceText != null) {
                 item {
                     val isPlainNotice = plainHandoff != null

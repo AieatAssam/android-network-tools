@@ -60,19 +60,19 @@ private fun scopeBlock(
 // The blocks are disjoint, so at most one can contain a given subnet.
 private val SCOPE_BLOCKS: List<ScopeBlock> =
     listOf(
-        scopeBlock("0.0.0.0/8", Ipv4Scope.THIS_NETWORK),
-        scopeBlock("10.0.0.0/8", Ipv4Scope.PRIVATE),
-        scopeBlock("100.64.0.0/10", Ipv4Scope.SHARED),
-        scopeBlock("127.0.0.0/8", Ipv4Scope.LOOPBACK),
-        scopeBlock("169.254.0.0/16", Ipv4Scope.LINK_LOCAL),
-        scopeBlock("172.16.0.0/12", Ipv4Scope.PRIVATE),
-        scopeBlock("192.0.2.0/24", Ipv4Scope.DOCUMENTATION),
-        scopeBlock("192.168.0.0/16", Ipv4Scope.PRIVATE),
-        scopeBlock("198.18.0.0/15", Ipv4Scope.BENCHMARK),
-        scopeBlock("198.51.100.0/24", Ipv4Scope.DOCUMENTATION),
-        scopeBlock("203.0.113.0/24", Ipv4Scope.DOCUMENTATION),
-        scopeBlock("224.0.0.0/4", Ipv4Scope.MULTICAST),
-        scopeBlock("240.0.0.0/4", Ipv4Scope.RESERVED),
+        scopeBlock("0.0.0.0/8", Ipv4Scope.THIS_NETWORK), // NOSONAR: IANA special-purpose block (RFC 6890)
+        scopeBlock("10.0.0.0/8", Ipv4Scope.PRIVATE), // NOSONAR: IANA special-purpose block (RFC 6890)
+        scopeBlock("100.64.0.0/10", Ipv4Scope.SHARED), // NOSONAR: IANA special-purpose block (RFC 6890)
+        scopeBlock("127.0.0.0/8", Ipv4Scope.LOOPBACK), // NOSONAR: IANA special-purpose block (RFC 6890)
+        scopeBlock("169.254.0.0/16", Ipv4Scope.LINK_LOCAL), // NOSONAR: IANA special-purpose block (RFC 6890)
+        scopeBlock("172.16.0.0/12", Ipv4Scope.PRIVATE), // NOSONAR: IANA special-purpose block (RFC 6890)
+        scopeBlock("192.0.2.0/24", Ipv4Scope.DOCUMENTATION), // NOSONAR: IANA special-purpose block (RFC 6890)
+        scopeBlock("192.168.0.0/16", Ipv4Scope.PRIVATE), // NOSONAR: IANA special-purpose block (RFC 6890)
+        scopeBlock("198.18.0.0/15", Ipv4Scope.BENCHMARK), // NOSONAR: IANA special-purpose block (RFC 6890)
+        scopeBlock("198.51.100.0/24", Ipv4Scope.DOCUMENTATION), // NOSONAR: IANA special-purpose block (RFC 6890)
+        scopeBlock("203.0.113.0/24", Ipv4Scope.DOCUMENTATION), // NOSONAR: IANA special-purpose block (RFC 6890)
+        scopeBlock("224.0.0.0/4", Ipv4Scope.MULTICAST), // NOSONAR: IANA special-purpose block (RFC 6890)
+        scopeBlock("240.0.0.0/4", Ipv4Scope.RESERVED), // NOSONAR: IANA special-purpose block (RFC 6890)
     )
 
 /** Scope of the inclusive address range [first]..[last]. */

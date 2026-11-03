@@ -56,15 +56,15 @@ private fun ipv4Block(
 // Ordered most specific first only where blocks overlap; the table below is disjoint.
 private val IPV4_BLOCKS: List<Ipv4Block> =
     listOf(
-        ipv4Block("0.0.0.0/8", IpAddressScope.OTHER),
-        ipv4Block("10.0.0.0/8", IpAddressScope.PRIVATE),
-        ipv4Block("100.64.0.0/10", IpAddressScope.SHARED),
-        ipv4Block("127.0.0.0/8", IpAddressScope.LOOPBACK),
-        ipv4Block("169.254.0.0/16", IpAddressScope.LINK_LOCAL),
-        ipv4Block("172.16.0.0/12", IpAddressScope.PRIVATE),
-        ipv4Block("192.168.0.0/16", IpAddressScope.PRIVATE),
-        ipv4Block("224.0.0.0/4", IpAddressScope.MULTICAST),
-        ipv4Block("240.0.0.0/4", IpAddressScope.OTHER),
+        ipv4Block("0.0.0.0/8", IpAddressScope.OTHER), // NOSONAR: IANA special-purpose block (RFC 6890)
+        ipv4Block("10.0.0.0/8", IpAddressScope.PRIVATE), // NOSONAR: IANA special-purpose block (RFC 6890)
+        ipv4Block("100.64.0.0/10", IpAddressScope.SHARED), // NOSONAR: IANA special-purpose block (RFC 6890)
+        ipv4Block("127.0.0.0/8", IpAddressScope.LOOPBACK), // NOSONAR: IANA special-purpose block (RFC 6890)
+        ipv4Block("169.254.0.0/16", IpAddressScope.LINK_LOCAL), // NOSONAR: IANA special-purpose block (RFC 6890)
+        ipv4Block("172.16.0.0/12", IpAddressScope.PRIVATE), // NOSONAR: IANA special-purpose block (RFC 6890)
+        ipv4Block("192.168.0.0/16", IpAddressScope.PRIVATE), // NOSONAR: IANA special-purpose block (RFC 6890)
+        ipv4Block("224.0.0.0/4", IpAddressScope.MULTICAST), // NOSONAR: IANA special-purpose block (RFC 6890)
+        ipv4Block("240.0.0.0/4", IpAddressScope.OTHER), // NOSONAR: IANA special-purpose block (RFC 6890)
     )
 
 private const val IPV4_UNSPECIFIED = 0L

@@ -2,7 +2,6 @@ package net.aieat.netswissknife.app.ui.screens.netinfo
 
 import androidx.annotation.StringRes
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.core.network.netinfo.IpAddressScope
@@ -38,7 +37,8 @@ internal fun transportLabelRes(transport: NetworkTransport): Int =
 @Composable
 @Suppress("FunctionNaming", "ktlint:standard:function-naming")
 internal fun rememberNetInfoSummaryLabels(): NetInfoSummaryLabels {
-    val context = LocalContext.current
+    val scopeNames = IpAddressScope.entries.associateWith { stringResource(scopeLabelRes(it)) }
+    val transportNames = NetworkTransport.entries.associateWith { stringResource(transportLabelRes(it)) }
     return NetInfoSummaryLabels(
         title = stringResource(R.string.netinfo_screen_title),
         transports = stringResource(R.string.netinfo_transports),
@@ -71,7 +71,7 @@ internal fun rememberNetInfoSummaryLabels(): NetInfoSummaryLabels {
         notChecked = stringResource(R.string.netinfo_not_checked),
         notAvailable = stringResource(R.string.netinfo_not_available),
         noActiveNetwork = stringResource(R.string.netinfo_no_network_title),
-        scopeName = { scope -> context.getString(scopeLabelRes(scope)) },
-        transportName = { transport -> context.getString(transportLabelRes(transport)) },
+        scopeName = { scope -> scopeNames.getValue(scope) },
+        transportName = { transport -> transportNames.getValue(transport) },
     )
 }

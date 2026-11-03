@@ -1,10 +1,10 @@
 package net.aieat.netswissknife.app.ui.screens.lan
 
-import android.app.Activity
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
@@ -163,7 +163,7 @@ fun LanScreen(
     onNavigate: (String) -> Unit = {},
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
-    val activity = LocalContext.current as? Activity
+    val activity = LocalActivity.current
     // Rotation also stops and disposes this screen. The Activity reports it through
     // isChangingConfigurations, and the scan must keep running across that recreation.
     DisposableEffect(lifecycleOwner, viewModel) {
