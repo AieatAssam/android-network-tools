@@ -165,6 +165,7 @@ Domain, IP, and ASN registration lookup using RDAP with WHOIS fallback.
 
 ### HTTP Probe
 HTTPS request tester with security header analysis. Plain HTTP requests are disabled in this release.
+- The result tabs (Overview, Headers, Body, Security) scroll sideways with a fade on the cut-off edge; on a narrow screen with a large font the last tab may still need a swipe
 - Recent URLs hide the entry that is already in the URL field, so the row never repeats the typed value; the row is hidden when nothing else is left
 - Supports GET, POST, PUT, PATCH, DELETE, HEAD, and OPTIONS methods
 - Custom request headers: add/remove key-value pairs dynamically

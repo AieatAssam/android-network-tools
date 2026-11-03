@@ -41,6 +41,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -131,6 +132,9 @@ fun MoreToolsSheet(
 
                 // ── Scrollable tools area (expands to push footer down) ───────
                 val scrollState = rememberScrollState()
+                // On a short screen (landscape phone or tablet) the pinned footer takes most of the sheet,
+                // so Settings and Debug Logs scroll with the tools instead (V6B-12).
+                val inlineFooter = LocalConfiguration.current.screenHeightDp < COMPACT_SHEET_HEIGHT_DP
                 Box(modifier = Modifier.weight(1f)) {
                     Column(
                         modifier =
@@ -178,107 +182,16 @@ fun MoreToolsSheet(
                             }
                         }
 
+                        if (inlineFooter) {
+                            MoreSheetFooter(onSettingsClick = onSettingsClick, onDebugLogsClick = onDebugLogsClick)
+                        }
                         Spacer(Modifier.height(8.dp))
                     }
                 }
 
-                // ── Sticky footer: Settings + Debug ───────────────────────────
-                HorizontalDivider()
-
-                Spacer(Modifier.height(4.dp))
-
-                Row(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .clickable(onClick = onSettingsClick)
-                            .semantics(mergeDescendants = true) { role = Role.Button }
-                            .padding(vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Box(
-                        modifier =
-                            Modifier
-                                .size(44.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(MaterialTheme.colorScheme.secondaryContainer),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Settings,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                            modifier = Modifier.size(22.dp),
-                        )
-                    }
-                    Column(
-                        modifier =
-                            Modifier
-                                .weight(1f)
-                                .padding(horizontal = 14.dp),
-                    ) {
-                        Text(
-                            text = stringResource(R.string.settings_entry_label),
-                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                        Text(
-                            text = stringResource(R.string.settings_entry_subtitle),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                if (!inlineFooter) {
+                    MoreSheetFooter(onSettingsClick = onSettingsClick, onDebugLogsClick = onDebugLogsClick)
                 }
-
-                if (net.aieat.netswissknife.app.BuildConfig.DEBUG) {
-                    HorizontalDivider()
-
-                    Spacer(Modifier.height(4.dp))
-
-                    Row(
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .clickable(onClick = onDebugLogsClick)
-                                .semantics(mergeDescendants = true) { role = Role.Button }
-                                .padding(vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Box(
-                            modifier =
-                                Modifier
-                                    .size(44.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(MaterialTheme.colorScheme.errorContainer),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.BugReport,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onErrorContainer,
-                                modifier = Modifier.size(22.dp),
-                            )
-                        }
-                        Column(
-                            modifier =
-                                Modifier
-                                    .weight(1f)
-                                    .padding(horizontal = 14.dp),
-                        ) {
-                            Text(
-                                text = stringResource(R.string.debug_log_title),
-                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                                color = MaterialTheme.colorScheme.onSurface,
-                            )
-                            Text(
-                                text = stringResource(R.string.debug_log_subtitle),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                }
-
                 Spacer(Modifier.height(8.dp))
             }
         }
@@ -382,3 +295,120 @@ private fun ToolSheetRow(
         }
     }
 }
+
+@Composable
+@Suppress("FunctionNaming", "ktlint:standard:function-naming")
+private fun MoreSheetFooter(
+    onSettingsClick: () -> Unit,
+    onDebugLogsClick: () -> Unit,
+) {
+    HorizontalDivider()
+
+    Spacer(Modifier.height(4.dp))
+
+    SettingsRow(onSettingsClick)
+    if (net.aieat.netswissknife.app.BuildConfig.DEBUG) {
+        DebugLogsRow(onDebugLogsClick)
+    }
+}
+
+@Composable
+@Suppress("FunctionNaming", "ktlint:standard:function-naming")
+private fun SettingsRow(onSettingsClick: () -> Unit) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onSettingsClick)
+                .semantics(mergeDescendants = true) { role = Role.Button }
+                .padding(vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .size(44.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.secondaryContainer),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Default.Settings,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                modifier = Modifier.size(22.dp),
+            )
+        }
+        Column(
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .padding(horizontal = 14.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.settings_entry_label),
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = stringResource(R.string.settings_entry_subtitle),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+@Suppress("FunctionNaming", "ktlint:standard:function-naming")
+private fun DebugLogsRow(onDebugLogsClick: () -> Unit) {
+    HorizontalDivider()
+
+    Spacer(Modifier.height(4.dp))
+
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onDebugLogsClick)
+                .semantics(mergeDescendants = true) { role = Role.Button }
+                .padding(vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .size(44.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.errorContainer),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Default.BugReport,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onErrorContainer,
+                modifier = Modifier.size(22.dp),
+            )
+        }
+        Column(
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .padding(horizontal = 14.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.debug_log_title),
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = stringResource(R.string.debug_log_subtitle),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/** Below this screen height (dp) the More sheet footer scrolls with the tools. */
+private const val COMPACT_SHEET_HEIGHT_DP = 480

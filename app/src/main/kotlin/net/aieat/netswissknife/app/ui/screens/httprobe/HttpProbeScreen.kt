@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -103,6 +104,7 @@ import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
 import net.aieat.netswissknife.app.ui.components.ToolErrorCard
 import net.aieat.netswissknife.app.ui.components.ToolTextField
 import net.aieat.netswissknife.app.ui.components.hapticAction
+import net.aieat.netswissknife.app.ui.components.scrollEdgeFade
 import net.aieat.netswissknife.app.ui.components.scrollIntoViewOnFocus
 import net.aieat.netswissknife.app.ui.format.withSeparatorBreaks
 import net.aieat.netswissknife.app.ui.theme.AppMotion
@@ -867,8 +869,16 @@ private fun HttpProbeSuccessContent(
             stringResource(R.string.httprobe_tab_security)
         )
         ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+            // The tab row scrolls on a narrow screen; the edge fade shows when tabs lie beyond either edge (V7B-02).
+            val tabScrollState = rememberScrollState()
             PrimaryScrollableTabRow(
                 selectedTabIndex = selectedTab,
+                modifier =
+                    Modifier.scrollEdgeFade(
+                        canScrollBackward = tabScrollState.canScrollBackward,
+                        canScrollForward = tabScrollState.canScrollForward,
+                    ),
+                scrollState = tabScrollState,
                 edgePadding = 8.dp,
                 containerColor = MaterialTheme.colorScheme.surfaceVariant
             ) {
