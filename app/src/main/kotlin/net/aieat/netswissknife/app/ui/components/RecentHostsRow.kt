@@ -38,11 +38,13 @@ fun RecentHostsRow(
     modifier: Modifier = Modifier,
     selectionEnabled: Boolean = true,
     actionsEnabled: Boolean = true,
+    currentValue: String? = null,
     removeDescription: String = stringResource(R.string.action_remove_recent),
     clearDescription: String = stringResource(R.string.action_clear_recents),
 ) {
+    val shownHosts = recentHostsExcept(recentHosts, currentValue)
     AnimatedVisibility(
-        visible = recentHosts.isNotEmpty(),
+        visible = shownHosts.isNotEmpty(),
         enter = fadeIn(),
         exit = fadeOut(),
         modifier = modifier
@@ -50,7 +52,7 @@ fun RecentHostsRow(
         val listState = rememberLazyListState()
         // Keyed items keep their scroll offset when a new host is prepended, which left the
         // newest chip clipped at the start edge. Re-anchor to the first chip on every change.
-        LaunchedEffect(recentHosts.firstOrNull()) { listState.scrollToItem(0) }
+        LaunchedEffect(shownHosts.firstOrNull()) { listState.scrollToItem(0) }
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -73,7 +75,7 @@ fun RecentHostsRow(
                 contentPadding = PaddingValues(start = 4.dp, end = ScrollEdgeFadeWidth),
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                items(recentHosts, key = { it }) { host ->
+                items(shownHosts, key = { it }) { host ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         SuggestionChip(
                             enabled = selectionEnabled,
@@ -116,4 +118,14 @@ fun RecentHostsRow(
             }
         }
     }
+}
+
+/** Recents without the entry that is already in the field, so the row never repeats the typed value. */
+internal fun recentHostsExcept(
+    recentHosts: List<String>,
+    currentValue: String?,
+): List<String> {
+    val current = currentValue?.trim().orEmpty()
+    if (current.isEmpty()) return recentHosts
+    return recentHosts.filterNot { it.trim().equals(current, ignoreCase = true) }
 }

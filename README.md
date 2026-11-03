@@ -99,6 +99,7 @@ Full DNS record resolution with multiple resolver options and protocol-level res
 
 ### Wi-Fi Scanner
 Wi-Fi environment analysis with SSID grouping and spectrum visualisation.
+- A hidden network is named `<Hidden: BSSID>` once; no separate Hidden badge repeats it
 - The hero states the access-point count; the scan is started by a labelled **Scan** button, and the time of the last scan is in the Updated line
 - Access points grouped by SSID + security; mesh/dual-band routers appear as one entry with a per-BSSID drill-down
 - **Spectrum Analyser** — frequency-domain triangle chart per AP (X = MHz, Y = RSSI −100 to −30 dBm) with channel gridlines and one SSID label per network at its strongest peak. Labels are ellipsised to a fixed width and stacked upward when they would collide; a label with no free position is left off, and the network list below is the legend. Each network gets a stable accent colour derived from its SSID hash
@@ -164,6 +165,7 @@ Domain, IP, and ASN registration lookup using RDAP with WHOIS fallback.
 
 ### HTTP Probe
 HTTPS request tester with security header analysis. Plain HTTP requests are disabled in this release.
+- Recent URLs hide the entry that is already in the URL field, so the row never repeats the typed value; the row is hidden when nothing else is left
 - Supports GET, POST, PUT, PATCH, DELETE, HEAD, and OPTIONS methods
 - Custom request headers: add/remove key-value pairs dynamically
 - Request body editor for POST, PUT, and PATCH

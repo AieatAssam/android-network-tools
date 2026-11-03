@@ -542,6 +542,8 @@ private fun HttpProbeInputCard(
                 onRemoveHost = onRemoveRecentHost,
                 onClearAll = onClearRecentHosts,
                 selectionEnabled = formEnabled,
+                // A recent that is already in the field would only repeat it (PHB-08).
+                currentValue = url,
             )
 
             // Method selector

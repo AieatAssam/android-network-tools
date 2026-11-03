@@ -565,7 +565,6 @@
     <string name="wifi_scan_failed_cached">Scan failed; showing cached results</string>
     <string name="wifi_scan_permission_denied_cached">Scan permission unavailable; showing cached results</string>
     <string name="wifi_connected_badge">Connected</string>
-    <string name="wifi_hidden_badge">Hidden</string>
     <string name="wifi_detail_band">Band</string>
     <string name="wifi_detail_channel">Channel</string>
     <string name="wifi_detail_width">Width</string>

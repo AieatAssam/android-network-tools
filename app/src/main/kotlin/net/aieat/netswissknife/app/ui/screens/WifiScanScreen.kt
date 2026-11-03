@@ -1189,15 +1189,7 @@ private fun WifiSortRow(
                                 )
                             }
                         }
-                        if (network.ssid.isBlank()) {
-                            Badge(containerColor = MaterialTheme.colorScheme.surfaceVariant) {
-                                Text(
-                                    stringResource(R.string.wifi_hidden_badge),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
+                        // A hidden network's name already reads "<Hidden: BSSID>", so no separate badge (V7A-04).
                     }
                     Spacer(Modifier.height(4.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
