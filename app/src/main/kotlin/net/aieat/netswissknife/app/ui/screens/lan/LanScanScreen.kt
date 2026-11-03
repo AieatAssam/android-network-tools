@@ -37,7 +37,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.PaddingValues
@@ -79,7 +78,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
@@ -122,6 +120,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import net.aieat.netswissknife.app.ui.components.AppModalBottomSheet
 import net.aieat.netswissknife.app.ui.components.ResultActionsRow
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
 import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
@@ -1350,61 +1349,59 @@ private fun LanUncertainProbesSheet(
     summary: LanScanSummary,
     onDismiss: () -> Unit,
 ) {
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(
-            modifier = Modifier.padding(start = 24.dp, end = 24.dp, bottom = 24.dp),
+    AppModalBottomSheet(onDismissRequest = onDismiss) {
+        // One scrolling list for the whole sheet: a fixed inner box would clip the
+        // last rows in short landscape sheets. The nav bar inset comes from AppModalBottomSheet.
+        LazyColumn(
+            contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text(
-                text = stringResource(R.string.lan_uncertain_probes_title),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(
-                text = stringResource(R.string.lan_uncertain_probes_body),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            // Bounded: the list scrolls inside the sheet instead of growing the summary card.
-            LazyColumn(
-                modifier = Modifier.heightIn(max = LAN_UNCERTAIN_LIST_MAX_HEIGHT_DP.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                items(summary.uncertainHosts) { diagnostic ->
+            item {
+                Text(
+                    text = stringResource(R.string.lan_uncertain_probes_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+            item {
+                Text(
+                    text = stringResource(R.string.lan_uncertain_probes_body),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            items(summary.uncertainHosts) { diagnostic ->
+                Text(
+                    text =
+                        stringResource(
+                            R.string.lan_diagnostic_entry,
+                            diagnostic.ip,
+                            stringResource(diagnosticReasonLabel(diagnostic.reason)),
+                            diagnostic.port
+                                ?.let { stringResource(R.string.lan_diagnostic_port, it) }
+                                .orEmpty(),
+                        ),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (summary.uncertainCount > summary.uncertainHosts.size) {
+                item {
                     Text(
                         text =
                             stringResource(
-                                R.string.lan_diagnostic_entry,
-                                diagnostic.ip,
-                                stringResource(diagnosticReasonLabel(diagnostic.reason)),
-                                diagnostic.port
-                                    ?.let { stringResource(R.string.lan_diagnostic_port, it) }
-                                    .orEmpty(),
+                                R.string.lan_diagnostics_truncated,
+                                summary.uncertainHosts.size,
+                                summary.uncertainCount,
                             ),
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                }
-                if (summary.uncertainCount > summary.uncertainHosts.size) {
-                    item {
-                        Text(
-                            text =
-                                stringResource(
-                                    R.string.lan_diagnostics_truncated,
-                                    summary.uncertainHosts.size,
-                                    summary.uncertainCount,
-                                ),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
                 }
             }
         }
     }
 }
-
-private const val LAN_UNCERTAIN_LIST_MAX_HEIGHT_DP = 300
 
 @Composable
 @Suppress("FunctionNaming", "ktlint:standard:function-naming")

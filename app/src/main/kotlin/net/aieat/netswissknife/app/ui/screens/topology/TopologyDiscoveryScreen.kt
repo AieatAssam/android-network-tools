@@ -47,6 +47,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.platform.NetworkErrorKind
+import net.aieat.netswissknife.app.ui.components.AppModalBottomSheet
 import net.aieat.netswissknife.app.ui.components.DisabledActionHint
 import net.aieat.netswissknife.app.ui.components.HeroTitleText
 import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
@@ -1560,7 +1561,7 @@ private fun NodeDetailSheet(
     // scroll can't reveal them because the lazy list never laid them out to begin
     // with. Same fix as ToolHelpSheet.kt.
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+    AppModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         LazyColumn(
             modifier =
                 Modifier

@@ -28,7 +28,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
@@ -52,6 +51,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.ui.components.AppModalBottomSheet
 import net.aieat.netswissknife.app.ui.components.hapticAction
 
 internal data class ToolSection(
@@ -91,7 +91,7 @@ fun MoreToolsSheet(
     val coroutineScope = rememberCoroutineScope()
     val pinLimitMessage = pluralStringResource(R.plurals.more_pin_limit_reached, maxPinned, maxPinned)
 
-    ModalBottomSheet(
+    AppModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
     ) {
