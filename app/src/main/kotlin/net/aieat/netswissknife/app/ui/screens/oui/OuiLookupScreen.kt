@@ -8,7 +8,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -218,32 +217,31 @@ private fun OuiInputCard(
             verticalArrangement = Arrangement.spacedBy(INPUT_GAP_DP.dp),
         ) {
             OuiInputField(input, invalidCount, lookupEnabled, actions)
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(BUTTON_GAP_DP.dp)) {
-                OutlinedButton(
-                    onClick =
-                        hapticAction {
-                            dismiss()
-                            actions.onPaste()
-                        },
-                    modifier = Modifier.weight(1f).testTag(OuiLookupTestTags.PASTE),
-                ) {
-                    Icon(Icons.Default.ContentPaste, contentDescription = null)
-                    Spacer(Modifier.width(BUTTON_GAP_DP.dp))
-                    Text(stringResource(R.string.oui_action_paste))
-                }
-                Button(
-                    onClick =
-                        hapticAction {
-                            dismiss()
-                            actions.onLookup()
-                        },
-                    enabled = lookupEnabled,
-                    modifier = Modifier.weight(1f).testTag(OuiLookupTestTags.LOOKUP),
-                ) {
-                    Icon(Icons.Default.Search, contentDescription = null)
-                    Spacer(Modifier.width(BUTTON_GAP_DP.dp))
-                    Text(stringResource(R.string.oui_action_lookup))
-                }
+            // Full-width and stacked: side by side, the labels wrapped mid-word at 360 dp with font 1.3.
+            OutlinedButton(
+                onClick =
+                    hapticAction {
+                        dismiss()
+                        actions.onPaste()
+                    },
+                modifier = Modifier.fillMaxWidth().testTag(OuiLookupTestTags.PASTE),
+            ) {
+                Icon(Icons.Default.ContentPaste, contentDescription = null)
+                Spacer(Modifier.width(BUTTON_GAP_DP.dp))
+                Text(stringResource(R.string.oui_action_paste))
+            }
+            Button(
+                onClick =
+                    hapticAction {
+                        dismiss()
+                        actions.onLookup()
+                    },
+                enabled = lookupEnabled,
+                modifier = Modifier.fillMaxWidth().testTag(OuiLookupTestTags.LOOKUP),
+            ) {
+                Icon(Icons.Default.Search, contentDescription = null)
+                Spacer(Modifier.width(BUTTON_GAP_DP.dp))
+                Text(stringResource(R.string.oui_action_lookup))
             }
         }
     }

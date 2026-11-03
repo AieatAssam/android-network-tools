@@ -30,11 +30,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.ArrowDropUp
@@ -62,6 +61,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -147,6 +147,7 @@ fun MdnsDiscoveryScreen(
                 modifier =
                     Modifier
                         .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
                         .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
@@ -187,7 +188,7 @@ fun MdnsDiscoveryScreen(
                         fadeIn(AppMotion.enter(300)) togetherWith fadeOut(AppMotion.exit(200))
                     },
                     label = "mdns-state",
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.fillMaxWidth(),
                 ) { state ->
                     when (state) {
                         "idle" -> {
@@ -711,39 +712,33 @@ private fun ServiceList(
     val shareSubject = stringResource(R.string.mdns_screen_title)
     val noMatch = searchQuery.isNotBlank() && filteredByType.isEmpty() && servicesByType.isNotEmpty()
 
-    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        item {
-            ServiceSearchToolbar(
-                searchQuery = searchQuery,
-                onSearchChange = { searchQuery = it },
-            )
-        }
+    // Plain Column, not a LazyColumn: the whole screen scrolls and the result count is bounded
+    // (each service keeps at most 16 addresses), so nested scrolling is not needed.
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        ServiceSearchToolbar(
+            searchQuery = searchQuery,
+            onSearchChange = { searchQuery = it },
+        )
         if (noMatch) {
-            item {
-                NoMatchHint(query = searchQuery, onClear = { searchQuery = "" })
-            }
+            NoMatchHint(query = searchQuery, onClear = { searchQuery = "" })
         }
         if (scanCanceled) {
-            item {
-                Text(
-                    text = stringResource(R.string.mdns_canceled_partial),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(vertical = 4.dp),
-                )
-            }
-        }
-        if (isScanning) {
-            item { ServiceScanningStatus(isCanceling) }
-        }
-        serviceGroups(filteredByType, expandedTypes, onPingHost, onHttpProbe)
-        item {
-            ResultActionsRow(
-                copyText = report,
-                onShare = { context.shareText(report, shareSubject) },
+            Text(
+                text = stringResource(R.string.mdns_canceled_partial),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(vertical = 4.dp),
             )
         }
-        item { Spacer(Modifier.height(16.dp)) }
+        if (isScanning) {
+            ServiceScanningStatus(isCanceling)
+        }
+        ServiceGroups(filteredByType, expandedTypes, onPingHost, onHttpProbe)
+        ResultActionsRow(
+            copyText = report,
+            onShare = { context.shareText(report, shareSubject) },
+        )
+        Spacer(Modifier.height(16.dp))
     }
 }
 
@@ -805,7 +800,9 @@ private fun ServiceScanningStatus(isCanceling: Boolean) {
     }
 }
 
-private fun LazyListScope.serviceGroups(
+@Composable
+@Suppress("FunctionNaming", "ktlint:standard:function-naming")
+private fun ServiceGroups(
     servicesByType: Map<String, List<DiscoveredService>>,
     expandedTypes: MutableMap<String, Boolean>,
     onPingHost: (String) -> Unit,
@@ -813,22 +810,22 @@ private fun LazyListScope.serviceGroups(
 ) {
     servicesByType.forEach { (serviceType, services) ->
         val isExpanded = expandedTypes[serviceType] != false
-        item(key = serviceType) {
-            ServiceTypeHeader(
-                serviceType = serviceType,
-                count = services.size,
-                isExpanded = isExpanded,
-                onClick = { expandedTypes[serviceType] = !isExpanded },
-            )
-        }
+        ServiceTypeHeader(
+            serviceType = serviceType,
+            count = services.size,
+            isExpanded = isExpanded,
+            onClick = { expandedTypes[serviceType] = !isExpanded },
+        )
         if (isExpanded) {
-            items(services, key = { it.instanceName }) { service ->
-                AnimatedVisibility(
-                    visible = true,
-                    enter = fadeIn() + expandVertically(),
-                    exit = fadeOut() + shrinkVertically(),
-                ) {
-                    ServiceItem(service, onPingHost, onHttpProbe)
+            services.forEach { service ->
+                key(service.instanceName) {
+                    AnimatedVisibility(
+                        visible = true,
+                        enter = fadeIn() + expandVertically(),
+                        exit = fadeOut() + shrinkVertically(),
+                    ) {
+                        ServiceItem(service, onPingHost, onHttpProbe)
+                    }
                 }
             }
         }

@@ -195,7 +195,7 @@ LAN service discovery via multicast DNS (RFC 6762 / DNS-SD RFC 6763).
 - Search filters the list by service type, name, hostname, IP address, and TXT key or value; a search with no matches shows an empty-state message with a Clear search action
 - Copy and Share at the foot of the list export only the services currently shown (the active search is noted as a `Filter:` line)
 - Per-scan caps: 64 service types, 256 services, 16 addresses or 1 KB of addresses per service, 4 KB of TXT data per service, 1024 queries, and 512 records per packet. If a cap is reached, a neutral note names it and says whether all services found are shown; a complete scan that stays within the caps shows no note
-- Once services are found, the hero folds to its title and counts so the list starts near the top of the screen
+- Once services are found, the hero folds to its title and counts so the list starts near the top of the screen. The whole screen scrolls, including the results, so the list is never confined to a short inner window in landscape or at large font sizes
 - Requires Wi-Fi multicast lock (`CHANGE_WIFI_MULTICAST_STATE`) for reliable reception on Android
 
 ### Subnet Calculator

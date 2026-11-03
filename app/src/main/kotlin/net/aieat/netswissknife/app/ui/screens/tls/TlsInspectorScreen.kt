@@ -814,20 +814,18 @@ private fun CertificateCard(
                     )
                 }
 
-                // Subject CN
-                Text(
-                    text     = cert.subjectCN.ifBlank { stringResource(R.string.tls_unknown_cn) },
-                    style    = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier.weight(1f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-
-                Spacer(Modifier.width(8.dp))
-
-                // Expiry badge
-                ExpiryBadge(cert)
+                // Subject CN and expiry share one weighted column: the name keeps the row width
+                // (two lines before the ellipsis) instead of being squeezed beside the chip at 360 dp.
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = cert.subjectCN.ifBlank { stringResource(R.string.tls_unknown_cn) },
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    ExpiryBadge(cert)
+                }
 
                 // Expand/collapse toggle
                 IconButton(onClick = { expanded = !expanded }) {

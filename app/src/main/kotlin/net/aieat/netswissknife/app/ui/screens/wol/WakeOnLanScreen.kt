@@ -638,45 +638,48 @@ private fun WolSavedDeviceRow(
     val label = WolSavedDevices.displayName(device)
     val editDescription = stringResource(R.string.wol_edit_device_description, label)
     val deleteDescription = stringResource(R.string.wol_delete_device_description, label)
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
+    // The MAC gets the full row width (never wrapped mid-address); the actions sit on their own line.
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        if (label != device.mac) {
             Text(
-                text = label,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
+                text = device.mac,
+                style = MaterialTheme.typography.labelSmall,
+                fontFamily = FontFamily.Monospace,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
             )
-            if (label != device.mac) {
-                Text(
-                    text = device.mac,
-                    style = MaterialTheme.typography.labelSmall,
-                    fontFamily = FontFamily.Monospace,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.End,
+        ) {
+            TextButton(
+                onClick = hapticAction(onUse),
+                enabled = !isSending,
+                modifier = Modifier.heightIn(min = MinTouchTarget),
+            ) {
+                Text(stringResource(R.string.wol_use_device))
             }
-        }
-        TextButton(
-            onClick = hapticAction(onUse),
-            enabled = !isSending,
-            modifier = Modifier.heightIn(min = MinTouchTarget),
-        ) {
-            Text(stringResource(R.string.wol_use_device))
-        }
-        IconButton(
-            onClick = onEdit,
-            enabled = !isSending,
-            modifier = Modifier.semantics { contentDescription = editDescription },
-        ) {
-            Icon(Icons.Default.Edit, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-        }
-        IconButton(
-            onClick = onDelete,
-            enabled = !isSending,
-            modifier = Modifier.semantics { contentDescription = deleteDescription },
-        ) {
-            Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+            IconButton(
+                onClick = onEdit,
+                enabled = !isSending,
+                modifier = Modifier.semantics { contentDescription = editDescription },
+            ) {
+                Icon(Icons.Default.Edit, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            }
+            IconButton(
+                onClick = onDelete,
+                enabled = !isSending,
+                modifier = Modifier.semantics { contentDescription = deleteDescription },
+            ) {
+                Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+            }
         }
     }
 }
